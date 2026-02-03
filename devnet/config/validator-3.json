@@ -1,0 +1,35 @@
+{
+  "node": {
+    "name": "validator-3",
+    "dataDir": "/data",
+    "logLevel": "info"
+  },
+  "network": {
+    "listenAddresses": ["/ip4/0.0.0.0/tcp/26656"],
+    "bootstrapPeers": [
+      "/dns4/validator-1/tcp/26656"
+    ],
+    "maxPeers": 50
+  },
+  "rpc": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8545,
+    "cors": ["*"]
+  },
+  "websocket": {
+    "enabled": true,
+    "port": 8546
+  },
+  "validator": {
+    "enabled": true
+  },
+  "mempool": {
+    "maxSize": 10000,
+    "maxPerSender": 100
+  },
+  "telemetry": {
+    "enabled": true,
+    "prometheusPort": 9090
+  }
+}

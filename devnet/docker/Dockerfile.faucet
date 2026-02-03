@@ -1,0 +1,46 @@
+# Legible Money Faucet Service
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source
+COPY . .
+
+# Build TypeScript
+RUN npm run build
+
+# Production image
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install production dependencies only
+COPY package*.json ./
+RUN npm ci --production
+
+# Copy built files
+COPY --from=builder /app/dist ./dist
+
+# Create secrets directory
+RUN mkdir -p /secrets
+
+# Default environment
+ENV NODE_ENV=production
+ENV RPC_ENDPOINT=http://localhost:8545
+ENV FAUCET_AMOUNT=1000000000000000000000
+ENV COOLDOWN_MINUTES=60
+ENV PORT=8080
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget -qO- http://localhost:8080/health || exit 1
+
+# Run faucet
+CMD ["node", "dist/services/faucet.js"]

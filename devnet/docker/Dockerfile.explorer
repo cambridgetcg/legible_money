@@ -1,0 +1,43 @@
+# Legible Money Block Explorer
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source
+COPY . .
+
+# Build TypeScript and frontend
+RUN npm run build
+
+# Production image
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install production dependencies only
+COPY package*.json ./
+RUN npm ci --production
+
+# Copy built files
+COPY --from=builder /app/dist ./dist
+
+# Default environment
+ENV NODE_ENV=production
+ENV RPC_ENDPOINT=http://localhost:8545
+ENV WS_ENDPOINT=ws://localhost:8546
+ENV CHAIN_NAME=Legible Money
+ENV PORT=3000
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+
+# Run explorer
+CMD ["node", "dist/services/explorer.js"]

@@ -1,0 +1,93 @@
+{
+  "$schema": "./genesis.schema.json",
+  "network": {
+    "chainId": "lgm-devnet-1",
+    "name": "Legible Money Devnet",
+    "version": "0.1.0"
+  },
+  "consensus": {
+    "targetBlockTimeMs": 2521,
+    "verificationRoundBlocks": 10,
+    "commitPhaseBlocks": 4,
+    "revealPhaseBlocks": 4,
+    "minValidators": 3,
+    "maxValidators": 21,
+    "validatorQuorum": 0.66,
+    "acceptanceThreshold": 0.80,
+    "rejectionThreshold": 0.80,
+    "contestedThreshold": 0.60,
+    "minValidatorStake": "1000000000000000000000",
+    "minClaimStake": "100000000000000000000",
+    "blockReward": "10000000000000000000",
+    "verificationReward": "1000000000000000000",
+    "claimReward": "5000000000000000000",
+    "wrongVerificationSlash": 0.10,
+    "missedVerificationSlash": 0.05,
+    "invalidClaimSlash": 0.20
+  },
+  "initialValidators": [
+    {
+      "name": "validator-1",
+      "publicKey": "VALIDATOR_1_PUBKEY_PLACEHOLDER",
+      "stake": "10000000000000000000000",
+      "commission": 0.10
+    },
+    {
+      "name": "validator-2",
+      "publicKey": "VALIDATOR_2_PUBKEY_PLACEHOLDER",
+      "stake": "10000000000000000000000",
+      "commission": 0.10
+    },
+    {
+      "name": "validator-3",
+      "publicKey": "VALIDATOR_3_PUBKEY_PLACEHOLDER",
+      "stake": "10000000000000000000000",
+      "commission": 0.10
+    }
+  ],
+  "initialAccounts": [
+    {
+      "name": "faucet",
+      "did": "did:lgm:faucet",
+      "balance": "1000000000000000000000000000"
+    },
+    {
+      "name": "treasury",
+      "did": "did:lgm:treasury",
+      "balance": "500000000000000000000000000"
+    }
+  ],
+  "genesisAxioms": [
+    {
+      "id": "axiom:logic:identity",
+      "claim": "A = A (Law of Identity)",
+      "domain": "logic.foundational"
+    },
+    {
+      "id": "axiom:logic:non-contradiction",
+      "claim": "¬(A ∧ ¬A) (Law of Non-Contradiction)",
+      "domain": "logic.foundational"
+    },
+    {
+      "id": "axiom:logic:excluded-middle",
+      "claim": "A ∨ ¬A (Law of Excluded Middle)",
+      "domain": "logic.foundational"
+    },
+    {
+      "id": "axiom:math:zero",
+      "claim": "0 is a natural number",
+      "domain": "math.arithmetic"
+    },
+    {
+      "id": "axiom:math:successor",
+      "claim": "Every natural number has a unique successor",
+      "domain": "math.arithmetic"
+    },
+    {
+      "id": "axiom:math:induction",
+      "claim": "Mathematical induction is valid for natural numbers",
+      "domain": "math.arithmetic"
+    }
+  ],
+  "genesisTime": "2026-02-03T00:00:00Z"
+}

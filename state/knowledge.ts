@@ -1,0 +1,939 @@
+/**
+ * Knowledge State Tree
+ *
+ * Sparse Merkle Tree for verified facts (knowledge).
+ * This is the core state that distinguishes Legible Money.
+ *
+ * Key: hash(factId) - 32 bytes
+ * Value: serialized FactState
+ *
+ * Provides:
+ * - Cryptographic proof of knowledge existence
+ * - Knowledge graph structure via references
+ * - Challenge and dispute tracking
+ * - Confidence decay over time
+ */
+
+import { InMemorySMT, type MerkleRoot, type MerkleProofData } from '../core/crypto/merkle.js';
+import { sha512_256, sha512_256Hex } from '../core/crypto/hashing.js';
+import type { Confidence } from '../core/knowledge/types.js';
+import {
+  type FactState,
+  type FactReference,
+  type FactStatus,
+  type ReferenceType,
+  type DomainState,
+  type FactProof,
+  StateError,
+} from './types.js';
+
+// ============ Serialization ============
+
+function serializeFactState(fact: FactState): Uint8Array {
+  const json = JSON.stringify({
+    id: fact.id,
+    claim: fact.claim,
+    domain: fact.domain,
+    confidence: fact.confidence,
+    verifiedAt: fact.verifiedAt.toString(),
+    verifierCount: fact.verifierCount,
+    challengeCount: fact.challengeCount,
+    lastChallengedAt: fact.lastChallengedAt?.toString(),
+    status: fact.status,
+    referenceRoot: fact.referenceRoot,
+  });
+  return new TextEncoder().encode(json);
+}
+
+function deserializeFactState(bytes: Uint8Array): FactState {
+  const json = new TextDecoder().decode(bytes);
+  const obj = JSON.parse(json);
+  return {
+    id: obj.id,
+    claim: obj.claim,
+    domain: obj.domain,
+    confidence: obj.confidence as Confidence,
+    verifiedAt: BigInt(obj.verifiedAt),
+    verifierCount: obj.verifierCount,
+    challengeCount: obj.challengeCount,
+    lastChallengedAt: obj.lastChallengedAt ? BigInt(obj.lastChallengedAt) : undefined,
+    status: obj.status as FactStatus,
+    referenceRoot: obj.referenceRoot,
+  };
+}
+
+function serializeReference(ref: FactReference): Uint8Array {
+  const json = JSON.stringify({
+    fromFactId: ref.fromFactId,
+    toFactId: ref.toFactId,
+    referenceType: ref.referenceType,
+    strength: ref.strength,
+  });
+  return new TextEncoder().encode(json);
+}
+
+function deserializeReference(bytes: Uint8Array): FactReference {
+  const json = new TextDecoder().decode(bytes);
+  const obj = JSON.parse(json);
+  return {
+    fromFactId: obj.fromFactId,
+    toFactId: obj.toFactId,
+    referenceType: obj.referenceType as ReferenceType,
+    strength: obj.strength,
+  };
+}
+
+function factIdToKey(factId: string): Uint8Array {
+  return sha512_256(factId);
+}
+
+function referenceToKey(fromFactId: string, toFactId: string): Uint8Array {
+  return sha512_256(`${fromFactId}:${toFactId}`);
+}
+
+// ============ Knowledge State Tree ============
+
+export class KnowledgeStateTree {
+  private factSmt: InMemorySMT;
+  private referenceSmt: InMemorySMT;
+  private factCache: Map<string, FactState> = new Map();
+  private referenceCache: Map<string, FactReference> = new Map();
+
+  // Domain tracking
+  private domains: Map<string, DomainState> = new Map();
+
+  // Indexes for graph traversal
+  private outgoingRefs: Map<string, Set<string>> = new Map();  // factId -> toFactIds
+  private incomingRefs: Map<string, Set<string>> = new Map();  // factId -> fromFactIds
+
+  // Statistics
+  private factCount: number = 0;
+  private activeFactCount: number = 0;
+
+  constructor() {
+    this.factSmt = new InMemorySMT();
+    this.referenceSmt = new InMemorySMT();
+  }
+
+  // ============ Roots ============
+
+  getFactRoot(): MerkleRoot {
+    return this.factSmt.getRoot();
+  }
+
+  getReferenceRoot(): MerkleRoot {
+    return this.referenceSmt.getRoot();
+  }
+
+  /**
+   * Combined knowledge root
+   */
+  getKnowledgeRoot(): MerkleRoot {
+    const combined = `${this.getFactRoot()}:${this.getReferenceRoot()}`;
+    return sha512_256Hex(combined);
+  }
+
+  // ============ Fact Operations ============
+
+  /**
+   * Get fact by ID
+   */
+  getFact(factId: string): FactState | null {
+    const cached = this.factCache.get(factId);
+    if (cached) return cached;
+
+    const key = factIdToKey(factId);
+    const value = this.factSmt.get(key);
+    if (!value) return null;
+
+    const fact = deserializeFactState(value);
+    this.factCache.set(factId, fact);
+    return fact;
+  }
+
+  /**
+   * Check if fact exists
+   */
+  hasFact(factId: string): boolean {
+    return this.getFact(factId) !== null;
+  }
+
+  /**
+   * Check if fact is active (not revoked/superseded)
+   */
+  isActiveFact(factId: string): boolean {
+    const fact = this.getFact(factId);
+    return fact?.status === 'active';
+  }
+
+  /**
+   * Add a new verified fact
+   */
+  addFact(fact: Omit<FactState, 'referenceRoot'>): MerkleRoot {
+    if (this.hasFact(fact.id)) {
+      throw new StateError('Fact already exists', 'INVALID_TRANSITION', { factId: fact.id });
+    }
+
+    const factState: FactState = {
+      ...fact,
+      referenceRoot: '0'.repeat(64),  // Empty reference tree initially
+    };
+
+    const key = factIdToKey(fact.id);
+    const value = serializeFactState(factState);
+    const newRoot = this.factSmt.set(key, value);
+
+    this.factCache.set(fact.id, factState);
+    this.factCount++;
+    if (fact.status === 'active') {
+      this.activeFactCount++;
+    }
+
+    // Update domain stats
+    this.updateDomain(fact.domain, 1);
+
+    return newRoot;
+  }
+
+  /**
+   * Update fact state
+   */
+  updateFact(factId: string, update: Partial<FactState>): MerkleRoot {
+    const existing = this.getFact(factId);
+    if (!existing) {
+      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+    }
+
+    const wasActive = existing.status === 'active';
+    const updated: FactState = {
+      ...existing,
+      ...update,
+    };
+    const isActive = updated.status === 'active';
+
+    const key = factIdToKey(factId);
+    const value = serializeFactState(updated);
+    const newRoot = this.factSmt.set(key, value);
+
+    this.factCache.set(factId, updated);
+
+    // Update active count
+    if (wasActive && !isActive) {
+      this.activeFactCount--;
+    } else if (!wasActive && isActive) {
+      this.activeFactCount++;
+    }
+
+    return newRoot;
+  }
+
+  /**
+   * Challenge a fact
+   */
+  challengeFact(factId: string, blockNumber: bigint): MerkleRoot {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+    }
+
+    if (fact.status !== 'active') {
+      throw new StateError('Can only challenge active facts', 'INVALID_TRANSITION', {
+        factId,
+        status: fact.status,
+      });
+    }
+
+    return this.updateFact(factId, {
+      status: 'challenged',
+      challengeCount: fact.challengeCount + 1,
+      lastChallengedAt: blockNumber,
+    });
+  }
+
+  /**
+   * Resolve a challenge (fact upheld or revoked)
+   */
+  resolveChallenge(factId: string, upheld: boolean, newConfidence?: Confidence): MerkleRoot {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+    }
+
+    if (fact.status !== 'challenged') {
+      throw new StateError('Fact is not under challenge', 'INVALID_TRANSITION', {
+        factId,
+        status: fact.status,
+      });
+    }
+
+    if (upheld) {
+      return this.updateFact(factId, {
+        status: 'active',
+        confidence: newConfidence ?? fact.confidence,
+      });
+    } else {
+      return this.revokeFact(factId);
+    }
+  }
+
+  /**
+   * Revoke a fact (proven false)
+   */
+  revokeFact(factId: string): MerkleRoot {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+    }
+
+    // When revoking, we need to handle dependent facts
+    // Facts that rely solely on this one may need to be reconsidered
+    const dependents = this.getIncomingReferences(factId);
+    for (const dependent of dependents) {
+      const depFact = this.getFact(dependent);
+      if (depFact && depFact.status === 'active') {
+        // Mark dependent facts as needing review
+        // In practice, this would trigger re-verification
+        this.updateFact(dependent, {
+          confidence: Math.max(0, depFact.confidence - 0.2) as Confidence,
+        });
+      }
+    }
+
+    return this.updateFact(factId, {
+      status: 'revoked',
+    });
+  }
+
+  /**
+   * Supersede a fact with a newer one
+   */
+  supersedeFact(oldFactId: string, newFactId: string): MerkleRoot {
+    const oldFact = this.getFact(oldFactId);
+    if (!oldFact) {
+      throw new StateError('Old fact not found', 'FACT_NOT_FOUND', { factId: oldFactId });
+    }
+
+    const newFact = this.getFact(newFactId);
+    if (!newFact) {
+      throw new StateError('New fact not found', 'FACT_NOT_FOUND', { factId: newFactId });
+    }
+
+    // Mark old as superseded
+    this.updateFact(oldFactId, { status: 'superseded' });
+
+    // Add supersedes reference
+    this.addReference({
+      fromFactId: newFactId,
+      toFactId: oldFactId,
+      referenceType: 'extends',
+      strength: 1.0,
+    });
+
+    return this.getKnowledgeRoot();
+  }
+
+  // ============ Reference Operations ============
+
+  /**
+   * Get reference between two facts
+   */
+  getReference(fromFactId: string, toFactId: string): FactReference | null {
+    const cacheKey = `${fromFactId}:${toFactId}`;
+    const cached = this.referenceCache.get(cacheKey);
+    if (cached) return cached;
+
+    const key = referenceToKey(fromFactId, toFactId);
+    const value = this.referenceSmt.get(key);
+    if (!value) return null;
+
+    const ref = deserializeReference(value);
+    this.referenceCache.set(cacheKey, ref);
+    return ref;
+  }
+
+  /**
+   * Add a reference between facts
+   */
+  addReference(ref: FactReference): MerkleRoot {
+    // Verify both facts exist
+    if (!this.hasFact(ref.fromFactId)) {
+      throw new StateError('Source fact not found', 'FACT_NOT_FOUND', { factId: ref.fromFactId });
+    }
+    if (!this.hasFact(ref.toFactId)) {
+      throw new StateError('Target fact not found', 'FACT_NOT_FOUND', { factId: ref.toFactId });
+    }
+
+    const key = referenceToKey(ref.fromFactId, ref.toFactId);
+    const value = serializeReference(ref);
+    const newRoot = this.referenceSmt.set(key, value);
+
+    const cacheKey = `${ref.fromFactId}:${ref.toFactId}`;
+    this.referenceCache.set(cacheKey, ref);
+
+    // Update indexes
+    if (!this.outgoingRefs.has(ref.fromFactId)) {
+      this.outgoingRefs.set(ref.fromFactId, new Set());
+    }
+    this.outgoingRefs.get(ref.fromFactId)!.add(ref.toFactId);
+
+    if (!this.incomingRefs.has(ref.toFactId)) {
+      this.incomingRefs.set(ref.toFactId, new Set());
+    }
+    this.incomingRefs.get(ref.toFactId)!.add(ref.fromFactId);
+
+    return newRoot;
+  }
+
+  /**
+   * Get all outgoing references from a fact
+   */
+  getOutgoingReferences(factId: string): string[] {
+    return Array.from(this.outgoingRefs.get(factId) ?? []);
+  }
+
+  /**
+   * Get all incoming references to a fact
+   */
+  getIncomingReferences(factId: string): string[] {
+    return Array.from(this.incomingRefs.get(factId) ?? []);
+  }
+
+  /**
+   * Get facts that support a given fact
+   */
+  getSupportingFacts(factId: string): FactState[] {
+    const incoming = this.getIncomingReferences(factId);
+    const supporting: FactState[] = [];
+
+    for (const fromId of incoming) {
+      const ref = this.getReference(fromId, factId);
+      if (ref?.referenceType === 'supports') {
+        const fact = this.getFact(fromId);
+        if (fact && fact.status === 'active') {
+          supporting.push(fact);
+        }
+      }
+    }
+
+    return supporting;
+  }
+
+  /**
+   * Get facts that contradict a given fact
+   */
+  getContradictingFacts(factId: string): FactState[] {
+    const allRefs = [
+      ...this.getIncomingReferences(factId),
+      ...this.getOutgoingReferences(factId),
+    ];
+
+    const contradicting: FactState[] = [];
+    const seen = new Set<string>();
+
+    for (const otherId of allRefs) {
+      if (seen.has(otherId)) continue;
+      seen.add(otherId);
+
+      const ref = this.getReference(otherId, factId) ?? this.getReference(factId, otherId);
+      if (ref?.referenceType === 'contradicts') {
+        const fact = this.getFact(otherId);
+        if (fact && fact.status === 'active') {
+          contradicting.push(fact);
+        }
+      }
+    }
+
+    return contradicting;
+  }
+
+  // ============ Queries ============
+
+  /**
+   * Get facts by domain
+   */
+  getFactsByDomain(domain: string): FactState[] {
+    const facts: FactState[] = [];
+    for (const fact of this.factCache.values()) {
+      if (fact.domain === domain && fact.status === 'active') {
+        facts.push(fact);
+      }
+    }
+    return facts;
+  }
+
+  /**
+   * Get facts by status
+   */
+  getFactsByStatus(status: FactStatus): FactState[] {
+    const facts: FactState[] = [];
+    for (const fact of this.factCache.values()) {
+      if (fact.status === status) {
+        facts.push(fact);
+      }
+    }
+    return facts;
+  }
+
+  /**
+   * Search facts by claim text (simple substring match)
+   */
+  searchFacts(query: string): FactState[] {
+    const lowerQuery = query.toLowerCase();
+    const results: FactState[] = [];
+
+    for (const fact of this.factCache.values()) {
+      if (fact.claim.toLowerCase().includes(lowerQuery) && fact.status === 'active') {
+        results.push(fact);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get total fact count
+   */
+  getFactCount(): number {
+    return this.factCount;
+  }
+
+  /**
+   * Get active fact count
+   */
+  getActiveFactCount(): number {
+    return this.activeFactCount;
+  }
+
+  /**
+   * Get all domains
+   */
+  getDomains(): DomainState[] {
+    return Array.from(this.domains.values());
+  }
+
+  // ============ Proofs ============
+
+  /**
+   * Generate proof of fact existence
+   */
+  proveFact(factId: string, blockNumber: bigint): FactProof {
+    const fact = this.getFact(factId);
+    const key = factIdToKey(factId);
+    const proof = this.factSmt.prove(key);
+
+    if (!fact) {
+      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+    }
+
+    return {
+      factId,
+      fact,
+      stateRoot: this.getKnowledgeRoot(),
+      blockNumber,
+      proof,
+    };
+  }
+
+  /**
+   * Verify a fact proof
+   */
+  static verifyFactProof(proof: FactProof): boolean {
+    // Verify Merkle proof
+    const validProof = InMemorySMT.verify(proof.proof);
+    if (!validProof) return false;
+
+    // Verify fact content matches
+    if (proof.proof.value) {
+      const fact = deserializeFactState(proof.proof.value);
+      return fact.id === proof.fact.id &&
+             fact.claim === proof.fact.claim &&
+             fact.status === proof.fact.status;
+    }
+
+    return false;
+  }
+
+  // ============ Confidence Decay ============
+
+  /**
+   * Apply confidence decay to facts over time
+   * Facts need re-verification to maintain high confidence
+   */
+  applyConfidenceDecay(currentBlock: bigint, decayRate: number = 0.001): void {
+    for (const [factId, fact] of this.factCache) {
+      if (fact.status !== 'active') continue;
+
+      const age = currentBlock - fact.verifiedAt;
+      // Decay is logarithmic - fast initially, then slows
+      const decay = Math.log1p(Number(age)) * decayRate;
+      const newConfidence = Math.max(0.1, fact.confidence - decay);
+
+      if (newConfidence !== fact.confidence) {
+        this.updateFact(factId, {
+          confidence: newConfidence as Confidence,
+        });
+      }
+    }
+  }
+
+  // ============ Confidence Propagation ============
+
+  /**
+   * Propagation constants
+   */
+  private static readonly PROPAGATION_THRESHOLD = 0.05; // 5% change triggers propagation
+  private static readonly MAX_PROPAGATION_DEPTH = 10;   // Max hops in dependency chain
+
+  /**
+   * Propagate confidence change to derived facts
+   *
+   * When a fact's confidence changes, facts derived from it may need updating.
+   * Uses BFS to propagate changes up the dependency graph.
+   */
+  propagateConfidenceChange(
+    factId: string,
+    oldConfidence: Confidence,
+    newConfidence: Confidence
+  ): PropagationResult {
+    const changeMagnitude = Math.abs(newConfidence - oldConfidence);
+
+    // Only propagate significant changes
+    if (changeMagnitude < KnowledgeStateTree.PROPAGATION_THRESHOLD) {
+      return {
+        updatedFacts: [],
+        cyclesDetected: [],
+        depthReached: 0,
+      };
+    }
+
+    const result: PropagationResult = {
+      updatedFacts: [],
+      cyclesDetected: [],
+      depthReached: 0,
+    };
+
+    // BFS through derived facts
+    const visited = new Set<string>();
+    const queue: Array<{ id: string; depth: number }> = [];
+
+    // Start with facts that cite/derive from this one
+    const dependents = this.getIncomingReferences(factId);
+    for (const depId of dependents) {
+      queue.push({ id: depId, depth: 1 });
+    }
+
+    while (queue.length > 0) {
+      const { id, depth } = queue.shift()!;
+
+      // Skip if already visited (cycle detection)
+      if (visited.has(id)) {
+        if (!result.cyclesDetected.includes(id)) {
+          result.cyclesDetected.push(id);
+        }
+        continue;
+      }
+
+      // Respect depth limit
+      if (depth > KnowledgeStateTree.MAX_PROPAGATION_DEPTH) {
+        result.depthReached = depth;
+        continue;
+      }
+
+      visited.add(id);
+      result.depthReached = Math.max(result.depthReached, depth);
+
+      const depFact = this.getFact(id);
+      if (!depFact || depFact.status !== 'active') continue;
+
+      // Calculate new confidence for dependent fact
+      const newDepConfidence = this.calculateDerivedConfidence(id);
+
+      if (newDepConfidence !== null) {
+        const depChange = Math.abs(newDepConfidence - depFact.confidence);
+
+        if (depChange >= KnowledgeStateTree.PROPAGATION_THRESHOLD) {
+          // Update the fact
+          this.updateFact(id, {
+            confidence: newDepConfidence as Confidence,
+          });
+
+          result.updatedFacts.push({
+            factId: id,
+            oldConfidence: depFact.confidence,
+            newConfidence: newDepConfidence,
+            depth,
+          });
+
+          // Continue propagation to facts derived from this one
+          const nextDependents = this.getIncomingReferences(id);
+          for (const nextId of nextDependents) {
+            if (!visited.has(nextId)) {
+              queue.push({ id: nextId, depth: depth + 1 });
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Calculate confidence for a derived fact based on its premises
+   *
+   * Uses weakest-link principle: confidence = min(premise_confidences) × inference_strength
+   */
+  calculateDerivedConfidence(factId: string): Confidence | null {
+    const outgoing = this.getOutgoingReferences(factId);
+    if (outgoing.length === 0) return null;
+
+    // Get premise confidences
+    const premiseConfidences: number[] = [];
+    let inferenceStrength = 0.99; // Default to deductive
+
+    for (const toId of outgoing) {
+      const ref = this.getReference(factId, toId);
+      if (!ref) continue;
+
+      // Only consider supporting/extending references (derivation relationships)
+      if (ref.referenceType === 'supports' || ref.referenceType === 'extends') {
+        const premise = this.getFact(toId);
+        if (premise && premise.status === 'active') {
+          premiseConfidences.push(premise.confidence);
+          // Use lowest inference strength
+          inferenceStrength = Math.min(inferenceStrength, ref.strength);
+        }
+      }
+    }
+
+    if (premiseConfidences.length === 0) return null;
+
+    // Weakest link principle
+    const minPremise = Math.min(...premiseConfidences);
+    return (minPremise * inferenceStrength) as Confidence;
+  }
+
+  /**
+   * Detect circular dependencies starting from a fact
+   *
+   * Uses Tarjan's algorithm for cycle detection
+   */
+  detectCircularDependencies(startFactId: string): CircularDependencyInfo | null {
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+    const path: string[] = [];
+
+    const dfs = (factId: string): string[] | null => {
+      visited.add(factId);
+      recursionStack.add(factId);
+      path.push(factId);
+
+      const outgoing = this.getOutgoingReferences(factId);
+      for (const toId of outgoing) {
+        if (!visited.has(toId)) {
+          const cycle = dfs(toId);
+          if (cycle) return cycle;
+        } else if (recursionStack.has(toId)) {
+          // Found cycle - return path from cycle start
+          const cycleStart = path.indexOf(toId);
+          return path.slice(cycleStart);
+        }
+      }
+
+      path.pop();
+      recursionStack.delete(factId);
+      return null;
+    };
+
+    const cycle = dfs(startFactId);
+    if (cycle) {
+      return {
+        facts: cycle,
+        tightness: cycle.length <= 3 ? 1.0 : 1.0 / Math.log2(cycle.length),
+        penalty: 0.4 * (cycle.length <= 3 ? 1.0 : 1.0 / Math.log2(cycle.length)),
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Update fact confidence with propagation
+   *
+   * Higher-level API that handles both the update and propagation
+   */
+  updateFactConfidenceWithPropagation(
+    factId: string,
+    newConfidence: Confidence
+  ): {
+    root: MerkleRoot;
+    propagation: PropagationResult;
+  } {
+    const existing = this.getFact(factId);
+    if (!existing) {
+      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+    }
+
+    const oldConfidence = existing.confidence;
+
+    // Check for circular dependencies
+    const cycle = this.detectCircularDependencies(factId);
+    if (cycle) {
+      // Apply cycle penalty
+      newConfidence = Math.max(0.1, newConfidence * (1 - cycle.penalty)) as Confidence;
+    }
+
+    // Update the fact
+    const root = this.updateFact(factId, { confidence: newConfidence });
+
+    // Propagate to dependents
+    const propagation = this.propagateConfidenceChange(factId, oldConfidence, newConfidence);
+
+    return { root, propagation };
+  }
+
+  // ============ Domain Management ============
+
+  private updateDomain(domainId: string, factDelta: number): void {
+    const existing = this.domains.get(domainId);
+    if (existing) {
+      existing.factCount += factDelta;
+    } else {
+      this.domains.set(domainId, {
+        id: domainId,
+        name: domainId,
+        factCount: 1,
+      });
+    }
+  }
+
+  /**
+   * Create or update a domain
+   */
+  setDomain(domain: DomainState): void {
+    this.domains.set(domain.id, domain);
+  }
+
+  // ============ Utilities ============
+
+  /**
+   * Clone for speculative execution
+   */
+  clone(): KnowledgeStateTree {
+    const cloned = new KnowledgeStateTree();
+
+    for (const [factId, fact] of this.factCache) {
+      cloned.factCache.set(factId, { ...fact });
+      const key = factIdToKey(factId);
+      cloned.factSmt.set(key, serializeFactState(fact));
+    }
+
+    for (const [refKey, ref] of this.referenceCache) {
+      cloned.referenceCache.set(refKey, { ...ref });
+      const key = referenceToKey(ref.fromFactId, ref.toFactId);
+      cloned.referenceSmt.set(key, serializeReference(ref));
+    }
+
+    for (const [factId, refs] of this.outgoingRefs) {
+      cloned.outgoingRefs.set(factId, new Set(refs));
+    }
+
+    for (const [factId, refs] of this.incomingRefs) {
+      cloned.incomingRefs.set(factId, new Set(refs));
+    }
+
+    for (const [domainId, domain] of this.domains) {
+      cloned.domains.set(domainId, { ...domain });
+    }
+
+    cloned.factCount = this.factCount;
+    cloned.activeFactCount = this.activeFactCount;
+
+    return cloned;
+  }
+}
+
+// ============ Factory Functions ============
+
+/**
+ * Generate fact ID from claim content
+ */
+export function generateFactId(claim: string, domain: string, submitter: string): string {
+  return sha512_256Hex(`fact:${domain}:${claim}:${submitter}`);
+}
+
+/**
+ * Create knowledge tree with genesis axioms
+ */
+export function createKnowledgeTreeWithAxioms(
+  axioms: Array<{ id: string; claim: string; domain: string }>
+): KnowledgeStateTree {
+  const tree = new KnowledgeStateTree();
+
+  for (const axiom of axioms) {
+    tree.addFact({
+      id: axiom.id,
+      claim: axiom.claim,
+      domain: axiom.domain,
+      confidence: 1.0 as Confidence,  // Axioms have full confidence
+      verifiedAt: 0n,
+      verifierCount: 0,  // Axioms don't need verification
+      challengeCount: 0,
+      status: 'active',
+    });
+  }
+
+  return tree;
+}
+
+// ============ Constants ============
+
+/**
+ * Minimum confidence to consider a fact "established"
+ */
+export const ESTABLISHED_CONFIDENCE = 0.8;
+
+/**
+ * Confidence below which facts should be re-verified
+ */
+export const REVERIFICATION_THRESHOLD = 0.6;
+
+/**
+ * Maximum references per fact (to prevent spam)
+ */
+export const MAX_REFERENCES_PER_FACT = 100;
+
+// ============ Propagation Types ============
+
+/**
+ * Result of confidence propagation
+ */
+export interface PropagationResult {
+  /** Facts that were updated during propagation */
+  updatedFacts: Array<{
+    factId: string;
+    oldConfidence: Confidence;
+    newConfidence: Confidence;
+    depth: number;
+  }>;
+
+  /** Fact IDs where cycles were detected and skipped */
+  cyclesDetected: string[];
+
+  /** Maximum depth reached during propagation */
+  depthReached: number;
+}
+
+/**
+ * Information about circular dependencies
+ */
+export interface CircularDependencyInfo {
+  /** Fact IDs in the cycle */
+  facts: string[];
+
+  /** How tight the cycle is (smaller = tighter, more problematic) */
+  tightness: number;
+
+  /** Confidence penalty to apply (0-1) */
+  penalty: number;
+}

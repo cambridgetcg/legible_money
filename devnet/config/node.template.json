@@ -1,0 +1,54 @@
+{
+  "$schema": "./node.schema.json",
+  "node": {
+    "name": "${NODE_NAME}",
+    "dataDir": "/data",
+    "logLevel": "info"
+  },
+  "network": {
+    "listenAddresses": [
+      "/ip4/0.0.0.0/tcp/26656"
+    ],
+    "externalAddress": "/ip4/${EXTERNAL_IP}/tcp/26656",
+    "bootstrapPeers": [
+      "/ip4/validator-1/tcp/26656/p2p/${VALIDATOR_1_PEER_ID}",
+      "/ip4/validator-2/tcp/26656/p2p/${VALIDATOR_2_PEER_ID}",
+      "/ip4/validator-3/tcp/26656/p2p/${VALIDATOR_3_PEER_ID}"
+    ],
+    "maxPeers": 50,
+    "minPeers": 3
+  },
+  "rpc": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8545,
+    "cors": ["*"],
+    "rateLimit": {
+      "enabled": true,
+      "windowMs": 60000,
+      "maxRequests": 1000
+    }
+  },
+  "websocket": {
+    "enabled": true,
+    "port": 8546
+  },
+  "validator": {
+    "enabled": "${IS_VALIDATOR}",
+    "privateKeyPath": "/secrets/validator.key"
+  },
+  "mempool": {
+    "maxSize": 10000,
+    "maxPerSender": 100,
+    "minFee": "1000000000000"
+  },
+  "state": {
+    "pruning": "default",
+    "keepRecent": 1000,
+    "snapshotInterval": 100
+  },
+  "telemetry": {
+    "enabled": true,
+    "prometheusPort": 9090
+  }
+}

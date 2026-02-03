@@ -1,0 +1,62 @@
+# Legible Money Devnet Prometheus Configuration
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+  external_labels:
+    network: 'lgm-devnet'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Rule files
+rule_files: []
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Validator nodes
+  - job_name: 'validators'
+    static_configs:
+      - targets:
+          - 'validator-1:9090'
+          - 'validator-2:9090'
+          - 'validator-3:9090'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        target_label: node
+        replacement: '${1}'
+
+  # Full node
+  - job_name: 'fullnodes'
+    static_configs:
+      - targets:
+          - 'fullnode:9090'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        target_label: node
+        replacement: '${1}'
+
+  # Faucet service
+  - job_name: 'faucet'
+    static_configs:
+      - targets:
+          - 'faucet:8080'
+    metrics_path: '/metrics'
+
+  # Explorer service
+  - job_name: 'explorer'
+    static_configs:
+      - targets:
+          - 'explorer:3000'
+    metrics_path: '/metrics'
