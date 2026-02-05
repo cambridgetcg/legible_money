@@ -4,7 +4,7 @@
  * Block and state synchronization protocol.
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from "events";
 
 // ============ Types ============
 
@@ -13,7 +13,7 @@ export interface SyncStatus {
   highestBlock: bigint;
   startingBlock: bigint;
   syncing: boolean;
-  progress: number;  // 0.0 to 1.0
+  progress: number; // 0.0 to 1.0
 }
 
 export interface BlockRange {
@@ -29,20 +29,22 @@ export interface SyncPeer {
 }
 
 export interface SyncRequest {
-  type: 'status' | 'headers' | 'bodies' | 'state';
+  type: "status" | "headers" | "bodies" | "state";
   startBlock?: bigint;
   count?: number;
   stateRoot?: string;
 }
 
 export interface SyncResponse {
-  type: 'status' | 'headers' | 'bodies' | 'state';
+  type: "status" | "headers" | "bodies" | "state";
   data: unknown;
 }
 
 // ============ Protocol Constants ============
 
-export const SYNC_PROTOCOL = '/lgm/sync/1.0.0';
+import { PROTOCOL_IDS, networkReplacer, networkReviver } from "../config.js";
+
+export const SYNC_PROTOCOL = PROTOCOL_IDS.SYNC;
 
 export const SYNC_CONFIG = {
   // How many blocks to request at once
@@ -73,10 +75,10 @@ export class SyncManager extends EventEmitter {
   private aborted: boolean = false;
 
   constructor(
-    private currentBlock: bigint = 0n,
+    currentBlock: bigint = 0n,
     private getBlock: (num: bigint) => Promise<unknown>,
     private saveBlock: (block: unknown) => Promise<void>,
-    private validateBlock: (block: unknown) => Promise<boolean>
+    private validateBlock: (block: unknown) => Promise<boolean>,
   ) {
     super();
     this.status = {
@@ -101,7 +103,7 @@ export class SyncManager extends EventEmitter {
   addPeer(peer: SyncPeer): void {
     this.peers.set(peer.peerId, peer);
     this.updateHighestBlock();
-    this.emit('peer:added', peer);
+    this.emit("peer:added", peer);
 
     // Start sync if we're behind
     if (!this.syncing && this.status.highestBlock > this.status.currentBlock) {
@@ -117,7 +119,7 @@ export class SyncManager extends EventEmitter {
     if (peer) {
       this.peers.delete(peerId);
       this.updateHighestBlock();
-      this.emit('peer:removed', peer);
+      this.emit("peer:removed", peer);
     }
   }
 
@@ -143,16 +145,16 @@ export class SyncManager extends EventEmitter {
     this.status.syncing = true;
     this.status.startingBlock = this.status.currentBlock;
 
-    this.emit('sync:started', this.status);
+    this.emit("sync:started", this.status);
 
     try {
       await this.syncLoop();
     } catch (error) {
-      this.emit('sync:error', error);
+      this.emit("sync:error", error);
     } finally {
       this.syncing = false;
       this.status.syncing = false;
-      this.emit('sync:completed', this.status);
+      this.emit("sync:completed", this.status);
     }
   }
 
@@ -161,7 +163,7 @@ export class SyncManager extends EventEmitter {
    */
   stopSync(): void {
     this.aborted = true;
-    this.emit('sync:stopped');
+    this.emit("sync:stopped");
   }
 
   /**
@@ -169,14 +171,14 @@ export class SyncManager extends EventEmitter {
    */
   async handleRequest(request: SyncRequest): Promise<SyncResponse> {
     switch (request.type) {
-      case 'status':
+      case "status":
         return {
-          type: 'status',
+          type: "status",
           data: this.status,
         };
 
-      case 'headers':
-      case 'bodies':
+      case "headers":
+      case "bodies": {
         // Fetch requested blocks
         const blocks: unknown[] = [];
         const start = request.startBlock || 0n;
@@ -195,12 +197,19 @@ export class SyncManager extends EventEmitter {
           type: request.type,
           data: blocks,
         };
+      }
 
-      case 'state':
-        // State sync not implemented yet
+      case "state":
+        // B2 FIX: State sync now implemented via state_sync.ts
+        // This handler returns sync status; actual state sync uses STATE_SYNC_PROTOCOL
         return {
-          type: 'state',
-          data: null,
+          type: "state",
+          data: {
+            currentBlock: this.status.currentBlock.toString(),
+            stateRoot: request.stateRoot || null,
+            message:
+              "Use STATE_SYNC_PROTOCOL (/lgm/state-sync/1.0.0) for state synchronization",
+          },
         };
 
       default:
@@ -211,7 +220,10 @@ export class SyncManager extends EventEmitter {
   // ============ Private Methods ============
 
   private async syncLoop(): Promise<void> {
-    while (!this.aborted && this.status.currentBlock < this.status.highestBlock) {
+    while (
+      !this.aborted &&
+      this.status.currentBlock < this.status.highestBlock
+    ) {
       // Select best peer
       const peer = this.selectBestPeer();
       if (!peer) {
@@ -224,7 +236,7 @@ export class SyncManager extends EventEmitter {
       const startBlock = this.status.currentBlock + 1n;
       const endBlock = this.min(
         startBlock + BigInt(SYNC_CONFIG.BATCH_SIZE),
-        this.status.highestBlock + 1n
+        this.status.highestBlock + 1n,
       );
 
       try {
@@ -232,15 +244,19 @@ export class SyncManager extends EventEmitter {
       } catch (error) {
         // Penalize peer on failure
         peer.score -= 10;
-        this.emit('sync:peer_error', { peer, error });
+        this.emit("sync:peer_error", { peer, error });
       }
 
       this.updateProgress();
     }
   }
 
-  private async syncRange(peer: SyncPeer, start: bigint, end: bigint): Promise<void> {
-    this.emit('sync:range_start', { start, end, peer: peer.peerId });
+  private async syncRange(
+    peer: SyncPeer,
+    start: bigint,
+    end: bigint,
+  ): Promise<void> {
+    this.emit("sync:range_start", { start, end, peer: peer.peerId });
 
     // In real implementation, this would request blocks from peer
     // For now, just simulate
@@ -258,10 +274,10 @@ export class SyncManager extends EventEmitter {
       await this.saveBlock(block);
       this.status.currentBlock = i;
 
-      this.emit('sync:block', { number: i });
+      this.emit("sync:block", { number: i });
     }
 
-    this.emit('sync:range_complete', { start, end });
+    this.emit("sync:range_complete", { start, end });
   }
 
   private selectBestPeer(): SyncPeer | null {
@@ -290,7 +306,7 @@ export class SyncManager extends EventEmitter {
     const total = this.status.highestBlock - this.status.startingBlock;
     const done = this.status.currentBlock - this.status.startingBlock;
     this.status.progress = total > 0n ? Number(done) / Number(total) : 1.0;
-    this.emit('sync:progress', this.status.progress);
+    this.emit("sync:progress", this.status.progress);
   }
 
   private min(a: bigint, b: bigint): bigint {
@@ -298,7 +314,7 @@ export class SyncManager extends EventEmitter {
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -306,22 +322,36 @@ export class SyncManager extends EventEmitter {
    * This is injected by the network layer
    */
   setRequestFunction(
-    requestFn: (peerId: string, start: bigint, count: number) => Promise<unknown[]>
+    requestFn: (
+      peerId: string,
+      start: bigint,
+      count: number,
+    ) => Promise<unknown[]>,
   ): void {
     this.requestBlocks = requestFn;
   }
 
-  private requestBlocks?: (peerId: string, start: bigint, count: number) => Promise<unknown[]>;
+  private requestBlocks?: (
+    peerId: string,
+    start: bigint,
+    count: number,
+  ) => Promise<unknown[]>;
 
   /**
    * Sync blocks from a peer using the network request function
    */
-  async syncRangeFromPeer(peer: SyncPeer, start: bigint, end: bigint): Promise<void> {
+  async syncRangeFromPeer(
+    peer: SyncPeer,
+    start: bigint,
+    end: bigint,
+  ): Promise<void> {
     if (!this.requestBlocks) {
-      throw new Error('Request function not set - call setRequestFunction first');
+      throw new Error(
+        "Request function not set - call setRequestFunction first",
+      );
     }
 
-    this.emit('sync:range_start', { start, end, peer: peer.peerId });
+    this.emit("sync:range_start", { start, end, peer: peer.peerId });
 
     const count = Number(end - start);
     const blocks = await this.requestBlocks(peer.peerId, start, count);
@@ -340,18 +370,18 @@ export class SyncManager extends EventEmitter {
       await this.saveBlock(block);
       this.status.currentBlock = blockNumber;
 
-      this.emit('sync:block', { number: blockNumber, block });
+      this.emit("sync:block", { number: blockNumber, block });
     }
 
-    this.emit('sync:range_complete', { start, end });
+    this.emit("sync:range_complete", { start, end });
   }
 }
 
 // ============ Sync Protocol Handler ============
 
-import { pipe } from 'it-pipe';
-import * as lp from 'it-length-prefixed';
-import type { Stream } from '@libp2p/interface';
+import { pipe } from "it-pipe";
+import * as lp from "it-length-prefixed";
+import type { Stream } from "@libp2p/interface";
 
 /**
  * Protocol handler for sync requests/responses
@@ -368,38 +398,33 @@ export class SyncProtocolHandler {
       // Read request from stream
       let requestData: Uint8Array | undefined;
 
-      await pipe(
-        stream.source,
-        lp.decode,
-        async function (source) {
-          for await (const data of source) {
-            requestData = data.subarray();
-            break; // Only read first message
-          }
+      await pipe((stream as any).source, lp.decode, async function (source) {
+        for await (const data of source) {
+          requestData = data.subarray();
+          break; // Only read first message
         }
-      );
+      });
 
       if (!requestData) {
         console.warn(`[Sync] Empty request from ${peerId}`);
         return;
       }
 
-      // Parse request
+      // Parse request (with BigInt revival)
       const request: SyncRequest = JSON.parse(
-        new TextDecoder().decode(requestData)
+        new TextDecoder().decode(requestData),
+        networkReviver,
       );
 
       // Process request
       const response = await this.syncManager.handleRequest(request);
 
-      // Send response
-      const responseData = new TextEncoder().encode(JSON.stringify(response));
-
-      await pipe(
-        [responseData],
-        lp.encode,
-        stream.sink
+      // Send response (with BigInt serialization)
+      const responseData = new TextEncoder().encode(
+        JSON.stringify(response, networkReplacer),
       );
+
+      await pipe([responseData], lp.encode, (stream as any).sink);
     } catch (error) {
       console.error(`[Sync] Error handling stream from ${peerId}:`, error);
     }
@@ -409,13 +434,18 @@ export class SyncProtocolHandler {
    * Request blocks from a peer via network node
    */
   async requestBlocksFromPeer(
-    requestFn: <T>(peerId: string, protocol: string, request: unknown, timeout?: number) => Promise<T>,
+    requestFn: <T>(
+      peerId: string,
+      protocol: string,
+      request: unknown,
+      timeout?: number,
+    ) => Promise<T>,
     peerId: string,
     startBlock: bigint,
-    count: number
+    count: number,
   ): Promise<unknown[]> {
     const request: SyncRequest = {
-      type: 'bodies',
+      type: "bodies",
       startBlock,
       count,
     };
@@ -424,13 +454,13 @@ export class SyncProtocolHandler {
       peerId,
       SYNC_PROTOCOL,
       {
-        type: 'sync_request',
-        version: '1.0.0',
+        type: "sync_request",
+        version: "1.0.0",
         timestamp: Date.now(),
-        sender: '',
+        sender: "",
         payload: request,
       },
-      SYNC_CONFIG.REQUEST_TIMEOUT
+      SYNC_CONFIG.REQUEST_TIMEOUT,
     );
 
     return (response.data as unknown[]) || [];

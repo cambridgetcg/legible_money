@@ -14,9 +14,15 @@
  * - Confidence decay over time
  */
 
-import { InMemorySMT, type MerkleRoot, type MerkleProofData } from '../core/crypto/merkle.js';
-import { sha512_256, sha512_256Hex } from '../core/crypto/hashing.js';
-import type { Confidence } from '../core/knowledge/types.js';
+import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
+import { sha512_256, sha512_256Hex } from "../core/crypto/hashing.js";
+import {
+  type Confidence,
+  type EpistemicProfile,
+  EPISTEMIC_PROFILES,
+} from "../core/knowledge/types.js";
+import type { OntologicalStratum } from "../core/knowledge/ontology/types.js";
+import { calculateCategoryDecayedConfidence } from "../consensus/pot/confidence.js";
 import {
   type FactState,
   type FactReference,
@@ -24,8 +30,9 @@ import {
   type ReferenceType,
   type DomainState,
   type FactProof,
+  type DecayInfo,
   StateError,
-} from './types.js';
+} from "./types.js";
 
 // ============ Serialization ============
 
@@ -41,6 +48,15 @@ function serializeFactState(fact: FactState): Uint8Array {
     lastChallengedAt: fact.lastChallengedAt?.toString(),
     status: fact.status,
     referenceRoot: fact.referenceRoot,
+    // GAP-009: Expiration fields
+    expiresAt: fact.expiresAt?.toString(),
+    lastReverifiedAt: fact.lastReverifiedAt?.toString(),
+    // Citation economics
+    citationCount: fact.citationCount,
+    lastCitedBlock: fact.lastCitedBlock?.toString(),
+    totalCitationRewards: fact.totalCitationRewards?.toString(),
+    // Ontological metadata
+    stratum: fact.stratum,
   });
   return new TextEncoder().encode(json);
 }
@@ -56,9 +72,24 @@ function deserializeFactState(bytes: Uint8Array): FactState {
     verifiedAt: BigInt(obj.verifiedAt),
     verifierCount: obj.verifierCount,
     challengeCount: obj.challengeCount,
-    lastChallengedAt: obj.lastChallengedAt ? BigInt(obj.lastChallengedAt) : undefined,
+    lastChallengedAt: obj.lastChallengedAt
+      ? BigInt(obj.lastChallengedAt)
+      : undefined,
     status: obj.status as FactStatus,
     referenceRoot: obj.referenceRoot,
+    // GAP-009: Expiration fields
+    expiresAt: obj.expiresAt ? BigInt(obj.expiresAt) : undefined,
+    lastReverifiedAt: obj.lastReverifiedAt
+      ? BigInt(obj.lastReverifiedAt)
+      : undefined,
+    // Citation economics (backward compat: default citationCount to 0)
+    citationCount: obj.citationCount ?? 0,
+    lastCitedBlock: obj.lastCitedBlock ? BigInt(obj.lastCitedBlock) : undefined,
+    totalCitationRewards: obj.totalCitationRewards
+      ? BigInt(obj.totalCitationRewards)
+      : undefined,
+    // Ontological metadata
+    stratum: obj.stratum,
   };
 }
 
@@ -103,8 +134,8 @@ export class KnowledgeStateTree {
   private domains: Map<string, DomainState> = new Map();
 
   // Indexes for graph traversal
-  private outgoingRefs: Map<string, Set<string>> = new Map();  // factId -> toFactIds
-  private incomingRefs: Map<string, Set<string>> = new Map();  // factId -> fromFactIds
+  private outgoingRefs: Map<string, Set<string>> = new Map(); // factId -> toFactIds
+  private incomingRefs: Map<string, Set<string>> = new Map(); // factId -> fromFactIds
 
   // Statistics
   private factCount: number = 0;
@@ -163,20 +194,22 @@ export class KnowledgeStateTree {
    */
   isActiveFact(factId: string): boolean {
     const fact = this.getFact(factId);
-    return fact?.status === 'active';
+    return fact?.status === "active";
   }
 
   /**
    * Add a new verified fact
    */
-  addFact(fact: Omit<FactState, 'referenceRoot'>): MerkleRoot {
+  addFact(fact: Omit<FactState, "referenceRoot">): MerkleRoot {
     if (this.hasFact(fact.id)) {
-      throw new StateError('Fact already exists', 'INVALID_TRANSITION', { factId: fact.id });
+      throw new StateError("Fact already exists", "INVALID_TRANSITION", {
+        factId: fact.id,
+      });
     }
 
     const factState: FactState = {
       ...fact,
-      referenceRoot: '0'.repeat(64),  // Empty reference tree initially
+      referenceRoot: "0".repeat(64), // Empty reference tree initially
     };
 
     const key = factIdToKey(fact.id);
@@ -185,7 +218,7 @@ export class KnowledgeStateTree {
 
     this.factCache.set(fact.id, factState);
     this.factCount++;
-    if (fact.status === 'active') {
+    if (fact.status === "active") {
       this.activeFactCount++;
     }
 
@@ -201,15 +234,15 @@ export class KnowledgeStateTree {
   updateFact(factId: string, update: Partial<FactState>): MerkleRoot {
     const existing = this.getFact(factId);
     if (!existing) {
-      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
-    const wasActive = existing.status === 'active';
+    const wasActive = existing.status === "active";
     const updated: FactState = {
       ...existing,
       ...update,
     };
-    const isActive = updated.status === 'active';
+    const isActive = updated.status === "active";
 
     const key = factIdToKey(factId);
     const value = serializeFactState(updated);
@@ -227,24 +260,62 @@ export class KnowledgeStateTree {
     return newRoot;
   }
 
+  // ============ Citation Economics ============
+
+  /**
+   * Increment citation count when a fact is queried/used.
+   * Only increments for active facts (silently skips inactive).
+   */
+  incrementCitationCount(factId: string, blockNumber: bigint): MerkleRoot {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
+    }
+    // Only track citations for active facts
+    if (fact.status !== "active") {
+      return this.getKnowledgeRoot();
+    }
+    return this.updateFact(factId, {
+      citationCount: fact.citationCount + 1,
+      lastCitedBlock: blockNumber,
+    });
+  }
+
+  /**
+   * Record citation rewards earned by a fact.
+   */
+  recordCitationReward(factId: string, amount: bigint): MerkleRoot {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
+    }
+    return this.updateFact(factId, {
+      totalCitationRewards: (fact.totalCitationRewards ?? 0n) + amount,
+    });
+  }
+
   /**
    * Challenge a fact
    */
   challengeFact(factId: string, blockNumber: bigint): MerkleRoot {
     const fact = this.getFact(factId);
     if (!fact) {
-      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
-    if (fact.status !== 'active') {
-      throw new StateError('Can only challenge active facts', 'INVALID_TRANSITION', {
-        factId,
-        status: fact.status,
-      });
+    if (fact.status !== "active") {
+      throw new StateError(
+        "Can only challenge active facts",
+        "INVALID_TRANSITION",
+        {
+          factId,
+          status: fact.status,
+        },
+      );
     }
 
     return this.updateFact(factId, {
-      status: 'challenged',
+      status: "challenged",
       challengeCount: fact.challengeCount + 1,
       lastChallengedAt: blockNumber,
     });
@@ -253,22 +324,30 @@ export class KnowledgeStateTree {
   /**
    * Resolve a challenge (fact upheld or revoked)
    */
-  resolveChallenge(factId: string, upheld: boolean, newConfidence?: Confidence): MerkleRoot {
+  resolveChallenge(
+    factId: string,
+    upheld: boolean,
+    newConfidence?: Confidence,
+  ): MerkleRoot {
     const fact = this.getFact(factId);
     if (!fact) {
-      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
-    if (fact.status !== 'challenged') {
-      throw new StateError('Fact is not under challenge', 'INVALID_TRANSITION', {
-        factId,
-        status: fact.status,
-      });
+    if (fact.status !== "challenged") {
+      throw new StateError(
+        "Fact is not under challenge",
+        "INVALID_TRANSITION",
+        {
+          factId,
+          status: fact.status,
+        },
+      );
     }
 
     if (upheld) {
       return this.updateFact(factId, {
-        status: 'active',
+        status: "active",
         confidence: newConfidence ?? fact.confidence,
       });
     } else {
@@ -282,7 +361,7 @@ export class KnowledgeStateTree {
   revokeFact(factId: string): MerkleRoot {
     const fact = this.getFact(factId);
     if (!fact) {
-      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
     // When revoking, we need to handle dependent facts
@@ -290,7 +369,7 @@ export class KnowledgeStateTree {
     const dependents = this.getIncomingReferences(factId);
     for (const dependent of dependents) {
       const depFact = this.getFact(dependent);
-      if (depFact && depFact.status === 'active') {
+      if (depFact && depFact.status === "active") {
         // Mark dependent facts as needing review
         // In practice, this would trigger re-verification
         this.updateFact(dependent, {
@@ -300,7 +379,7 @@ export class KnowledgeStateTree {
     }
 
     return this.updateFact(factId, {
-      status: 'revoked',
+      status: "revoked",
     });
   }
 
@@ -310,22 +389,26 @@ export class KnowledgeStateTree {
   supersedeFact(oldFactId: string, newFactId: string): MerkleRoot {
     const oldFact = this.getFact(oldFactId);
     if (!oldFact) {
-      throw new StateError('Old fact not found', 'FACT_NOT_FOUND', { factId: oldFactId });
+      throw new StateError("Old fact not found", "FACT_NOT_FOUND", {
+        factId: oldFactId,
+      });
     }
 
     const newFact = this.getFact(newFactId);
     if (!newFact) {
-      throw new StateError('New fact not found', 'FACT_NOT_FOUND', { factId: newFactId });
+      throw new StateError("New fact not found", "FACT_NOT_FOUND", {
+        factId: newFactId,
+      });
     }
 
     // Mark old as superseded
-    this.updateFact(oldFactId, { status: 'superseded' });
+    this.updateFact(oldFactId, { status: "superseded" });
 
     // Add supersedes reference
     this.addReference({
       fromFactId: newFactId,
       toFactId: oldFactId,
-      referenceType: 'extends',
+      referenceType: "extends",
       strength: 1.0,
     });
 
@@ -357,10 +440,14 @@ export class KnowledgeStateTree {
   addReference(ref: FactReference): MerkleRoot {
     // Verify both facts exist
     if (!this.hasFact(ref.fromFactId)) {
-      throw new StateError('Source fact not found', 'FACT_NOT_FOUND', { factId: ref.fromFactId });
+      throw new StateError("Source fact not found", "FACT_NOT_FOUND", {
+        factId: ref.fromFactId,
+      });
     }
     if (!this.hasFact(ref.toFactId)) {
-      throw new StateError('Target fact not found', 'FACT_NOT_FOUND', { factId: ref.toFactId });
+      throw new StateError("Target fact not found", "FACT_NOT_FOUND", {
+        factId: ref.toFactId,
+      });
     }
 
     const key = referenceToKey(ref.fromFactId, ref.toFactId);
@@ -407,9 +494,9 @@ export class KnowledgeStateTree {
 
     for (const fromId of incoming) {
       const ref = this.getReference(fromId, factId);
-      if (ref?.referenceType === 'supports') {
+      if (ref?.referenceType === "supports") {
         const fact = this.getFact(fromId);
-        if (fact && fact.status === 'active') {
+        if (fact && fact.status === "active") {
           supporting.push(fact);
         }
       }
@@ -434,10 +521,12 @@ export class KnowledgeStateTree {
       if (seen.has(otherId)) continue;
       seen.add(otherId);
 
-      const ref = this.getReference(otherId, factId) ?? this.getReference(factId, otherId);
-      if (ref?.referenceType === 'contradicts') {
+      const ref =
+        this.getReference(otherId, factId) ??
+        this.getReference(factId, otherId);
+      if (ref?.referenceType === "contradicts") {
         const fact = this.getFact(otherId);
-        if (fact && fact.status === 'active') {
+        if (fact && fact.status === "active") {
           contradicting.push(fact);
         }
       }
@@ -454,7 +543,7 @@ export class KnowledgeStateTree {
   getFactsByDomain(domain: string): FactState[] {
     const facts: FactState[] = [];
     for (const fact of this.factCache.values()) {
-      if (fact.domain === domain && fact.status === 'active') {
+      if (fact.domain === domain && fact.status === "active") {
         facts.push(fact);
       }
     }
@@ -475,6 +564,13 @@ export class KnowledgeStateTree {
   }
 
   /**
+   * Get all references in the graph (for persistence)
+   */
+  getAllReferences(): FactReference[] {
+    return Array.from(this.referenceCache.values());
+  }
+
+  /**
    * Search facts by claim text (simple substring match)
    */
   searchFacts(query: string): FactState[] {
@@ -482,7 +578,10 @@ export class KnowledgeStateTree {
     const results: FactState[] = [];
 
     for (const fact of this.factCache.values()) {
-      if (fact.claim.toLowerCase().includes(lowerQuery) && fact.status === 'active') {
+      if (
+        fact.claim.toLowerCase().includes(lowerQuery) &&
+        fact.status === "active"
+      ) {
         results.push(fact);
       }
     }
@@ -522,7 +621,7 @@ export class KnowledgeStateTree {
     const proof = this.factSmt.prove(key);
 
     if (!fact) {
-      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
     return {
@@ -545,9 +644,11 @@ export class KnowledgeStateTree {
     // Verify fact content matches
     if (proof.proof.value) {
       const fact = deserializeFactState(proof.proof.value);
-      return fact.id === proof.fact.id &&
-             fact.claim === proof.fact.claim &&
-             fact.status === proof.fact.status;
+      return (
+        fact.id === proof.fact.id &&
+        fact.claim === proof.fact.claim &&
+        fact.status === proof.fact.status
+      );
     }
 
     return false;
@@ -561,7 +662,7 @@ export class KnowledgeStateTree {
    */
   applyConfidenceDecay(currentBlock: bigint, decayRate: number = 0.001): void {
     for (const [factId, fact] of this.factCache) {
-      if (fact.status !== 'active') continue;
+      if (fact.status !== "active") continue;
 
       const age = currentBlock - fact.verifiedAt;
       // Decay is logarithmic - fast initially, then slows
@@ -576,13 +677,346 @@ export class KnowledgeStateTree {
     }
   }
 
+  // ============ GAP-008: Lazy Confidence Decay ============
+
+  /**
+   * Mapping from ontological stratum to decay category
+   *
+   * Used for calculating time-decayed confidence values.
+   * Categories align with CATEGORY_DECAY in consensus/pot/confidence.ts.
+   */
+  private static readonly STRATUM_TO_DECAY_CATEGORY: Record<
+    OntologicalStratum,
+    string
+  > = {
+    fundamental: "analytic", // Eternal - fundamental truths don't decay
+    physical: "empirical", // ~3.2 days half-life - physical facts need reverification
+    chemical: "empirical", // ~3.2 days half-life
+    biological: "empirical", // ~3.2 days half-life
+    cognitive: "social", // ~1 day half-life - cognitive/opinion facts decay faster
+    social: "social", // ~1 day half-life - social consensus changes quickly
+    technological: "protocol", // Eternal - on-chain/protocol facts are permanent
+  };
+
+  /**
+   * Get effective (time-decayed) confidence for a fact
+   *
+   * GAP-008: Lazy decay calculation - doesn't modify stored values
+   *
+   * Following GAP-009's lazy evaluation pattern, this calculates the
+   * effective confidence based on time elapsed without modifying the
+   * stored confidence value. Consumers can use this to get accurate
+   * confidence while preserving the original verification record.
+   *
+   * @param fact - The fact to calculate decay for
+   * @param currentBlock - Current block number
+   * @returns Decay information including effective confidence
+   */
+  getEffectiveConfidence(fact: FactState, currentBlock: bigint): DecayInfo {
+    const blocksSinceVerification = Number(currentBlock - fact.verifiedAt);
+
+    // Map stratum to category for decay calculation
+    const category = fact.stratum
+      ? (KnowledgeStateTree.STRATUM_TO_DECAY_CATEGORY[fact.stratum] ??
+        "empirical")
+      : "empirical";
+
+    // Use category-aware decay from consensus module
+    const decay = calculateCategoryDecayedConfidence(
+      fact.confidence,
+      blocksSinceVerification,
+      category,
+    );
+
+    return {
+      storedConfidence: fact.confidence,
+      effectiveConfidence: decay.confidence,
+      decayFactor: decay.decayFactor,
+      isEternal: decay.isEternal,
+      blocksSinceVerification,
+      category,
+    };
+  }
+
+  /**
+   * Get fact with effective confidence calculated
+   *
+   * GAP-008: Convenience method that returns both the fact and its
+   * decay information in a single call.
+   *
+   * @param factId - ID of the fact to retrieve
+   * @param currentBlock - Current block number for decay calculation
+   * @returns Fact with decay info, or undefined if fact doesn't exist
+   */
+  getFactWithDecay(
+    factId: string,
+    currentBlock: bigint,
+  ): { fact: FactState; decayInfo: DecayInfo } | undefined {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      return undefined;
+    }
+
+    const decayInfo = this.getEffectiveConfidence(fact, currentBlock);
+    return { fact, decayInfo };
+  }
+
+  /**
+   * Get multiple facts with effective confidence
+   *
+   * GAP-008: Batch version of getFactWithDecay for efficiency.
+   *
+   * @param factIds - IDs of facts to retrieve
+   * @param currentBlock - Current block number for decay calculation
+   * @returns Array of facts with decay info (excludes missing facts)
+   */
+  getFactsWithDecay(
+    factIds: string[],
+    currentBlock: bigint,
+  ): Array<{ factId: string; fact: FactState; decayInfo: DecayInfo }> {
+    const results: Array<{
+      factId: string;
+      fact: FactState;
+      decayInfo: DecayInfo;
+    }> = [];
+
+    for (const factId of factIds) {
+      const result = this.getFactWithDecay(factId, currentBlock);
+      if (result) {
+        results.push({ factId, ...result });
+      }
+    }
+
+    return results;
+  }
+
+  // ============ GAP-009: Fact Expiration ============
+
+  /**
+   * Mapping from ontological stratum to epistemic profile
+   *
+   * This maps the stratum types used in FactState to the epistemic profiles
+   * that define decay rates and reverification requirements.
+   */
+  private static readonly STRATUM_TO_PROFILE: Partial<
+    Record<OntologicalStratum, EpistemicProfile>
+  > = {
+    fundamental: EPISTEMIC_PROFILES.formal,
+    technological: EPISTEMIC_PROFILES.protocol,
+    physical: EPISTEMIC_PROFILES.empirical,
+    cognitive: EPISTEMIC_PROFILES.historical,
+    social: EPISTEMIC_PROFILES.social,
+  };
+
+  /**
+   * Check if a fact is expired
+   *
+   * GAP-009: Expiration conditions (any triggers expiration):
+   * 1. Explicit expiration: expiresAt < currentBlock
+   * 2. Confidence decay: confidence < minConfidenceThreshold (0.3)
+   * 3. Reverification required but stale: age > 2 * decayHalfLife without reverification
+   *
+   * @param fact - The fact to check
+   * @param currentBlock - Current block number
+   * @param params - Expiration parameters (optional, defaults to DEFAULT_EXPIRATION_PARAMS)
+   * @returns ExpirationResult with expired status and reason
+   */
+  isFactExpired(
+    fact: FactState,
+    currentBlock: bigint,
+    params: ExpirationParams = DEFAULT_EXPIRATION_PARAMS,
+  ): ExpirationResult {
+    // Facts that are already not active cannot be "expired"
+    if (fact.status !== "active") {
+      return { expired: false };
+    }
+
+    // Condition 1: Explicit expiration
+    if (fact.expiresAt !== undefined && currentBlock >= fact.expiresAt) {
+      return {
+        expired: true,
+        reason: "explicit_expiration",
+        details: {
+          blocksFromExpiration: currentBlock - fact.expiresAt,
+        },
+      };
+    }
+
+    // Condition 2: Confidence below threshold
+    if (fact.confidence < params.minConfidenceThreshold) {
+      return {
+        expired: true,
+        reason: "confidence_decay",
+        details: {
+          currentConfidence: fact.confidence,
+          threshold: params.minConfidenceThreshold,
+        },
+      };
+    }
+
+    // Condition 3: Reverification required but stale
+    if (params.useStratumPolicy && fact.stratum) {
+      const profile = KnowledgeStateTree.STRATUM_TO_PROFILE[fact.stratum];
+
+      if (profile?.requiresReverification && profile.decayHalfLife !== null) {
+        // Use lastReverifiedAt if available, otherwise use verifiedAt
+        const lastVerification = fact.lastReverifiedAt ?? fact.verifiedAt;
+        const age = Number(currentBlock - lastVerification);
+        const staleThreshold =
+          profile.decayHalfLife * params.stalenessMultiplier;
+
+        if (age > staleThreshold) {
+          return {
+            expired: true,
+            reason: "reverification_required",
+            details: {
+              blocksFromExpiration: BigInt(Math.floor(age - staleThreshold)),
+              threshold: staleThreshold,
+            },
+          };
+        }
+      }
+    }
+
+    return { expired: false };
+  }
+
+  /**
+   * Mark a fact as expired
+   *
+   * @param factId - ID of the fact to expire
+   * @param blockNumber - Block number when expiration occurred
+   * @param reason - Reason for expiration
+   * @returns New merkle root
+   */
+  expireFact(
+    factId: string,
+    _blockNumber: bigint,
+    _reason: ExpirationReason,
+  ): MerkleRoot {
+    return this.updateFact(factId, {
+      status: "expired",
+    });
+  }
+
+  /**
+   * Get all facts that are expired or near expiration
+   *
+   * @param currentBlock - Current block number
+   * @param params - Expiration parameters
+   * @returns Array of expired facts with expiration details
+   */
+  getExpiredFacts(
+    currentBlock: bigint,
+    params: ExpirationParams = DEFAULT_EXPIRATION_PARAMS,
+  ): Array<{ fact: FactState; result: ExpirationResult }> {
+    const expired: Array<{ fact: FactState; result: ExpirationResult }> = [];
+
+    for (const [_factId, fact] of this.factCache) {
+      // Include already-expired facts
+      if (fact.status === "expired") {
+        expired.push({
+          fact,
+          result: { expired: true, reason: "explicit_expiration" },
+        });
+        continue;
+      }
+
+      // Check active facts for expiration
+      if (fact.status === "active") {
+        const result = this.isFactExpired(fact, currentBlock, params);
+        if (result.expired) {
+          expired.push({ fact, result });
+        }
+      }
+    }
+
+    return expired;
+  }
+
+  /**
+   * Get fact by ID with optional expiration checking
+   *
+   * GAP-009: When checkExpiration is true, this method will:
+   * 1. Check if the fact is expired
+   * 2. If expired and updateIfExpired is true, update the status to 'expired'
+   * 3. Return the fact (possibly with updated status)
+   *
+   * @param factId - ID of the fact to retrieve
+   * @param options - Options for expiration checking
+   * @returns Fact state or null if not found
+   */
+  getFactWithExpiration(
+    factId: string,
+    options: GetFactOptions,
+  ): FactState | null {
+    const fact = this.getFact(factId);
+    if (!fact) return null;
+
+    // If not checking expiration, return as-is
+    if (!options.checkExpiration || options.currentBlock === undefined) {
+      return fact;
+    }
+
+    const params = options.expirationParams ?? DEFAULT_EXPIRATION_PARAMS;
+    const result = this.isFactExpired(fact, options.currentBlock, params);
+
+    if (result.expired && fact.status === "active") {
+      // Lazily update status if requested
+      if (options.updateIfExpired && params.lazyExpiration) {
+        this.expireFact(factId, options.currentBlock, result.reason!);
+        return { ...fact, status: "expired" };
+      }
+    }
+
+    return fact;
+  }
+
+  /**
+   * Re-verify a fact (reset reverification timestamp)
+   *
+   * Called when a fact passes re-verification to reset its staleness clock.
+   *
+   * @param factId - ID of the fact
+   * @param blockNumber - Block number of re-verification
+   * @param newConfidence - Updated confidence (optional)
+   * @returns New merkle root
+   */
+  reverifyFact(
+    factId: string,
+    blockNumber: bigint,
+    newConfidence?: Confidence,
+  ): MerkleRoot {
+    const fact = this.getFact(factId);
+    if (!fact) {
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
+    }
+
+    const updates: Partial<FactState> = {
+      lastReverifiedAt: blockNumber,
+      verifierCount: fact.verifierCount + 1,
+    };
+
+    // If fact was expired, reactivate it
+    if (fact.status === "expired") {
+      updates.status = "active";
+    }
+
+    // Update confidence if provided
+    if (newConfidence !== undefined) {
+      updates.confidence = newConfidence;
+    }
+
+    return this.updateFact(factId, updates);
+  }
+
   // ============ Confidence Propagation ============
 
   /**
    * Propagation constants
    */
   private static readonly PROPAGATION_THRESHOLD = 0.05; // 5% change triggers propagation
-  private static readonly MAX_PROPAGATION_DEPTH = 10;   // Max hops in dependency chain
+  private static readonly MAX_PROPAGATION_DEPTH = 10; // Max hops in dependency chain
 
   /**
    * Propagate confidence change to derived facts
@@ -593,7 +1027,7 @@ export class KnowledgeStateTree {
   propagateConfidenceChange(
     factId: string,
     oldConfidence: Confidence,
-    newConfidence: Confidence
+    newConfidence: Confidence,
   ): PropagationResult {
     const changeMagnitude = Math.abs(newConfidence - oldConfidence);
 
@@ -643,7 +1077,7 @@ export class KnowledgeStateTree {
       result.depthReached = Math.max(result.depthReached, depth);
 
       const depFact = this.getFact(id);
-      if (!depFact || depFact.status !== 'active') continue;
+      if (!depFact || depFact.status !== "active") continue;
 
       // Calculate new confidence for dependent fact
       const newDepConfidence = this.calculateDerivedConfidence(id);
@@ -696,9 +1130,9 @@ export class KnowledgeStateTree {
       if (!ref) continue;
 
       // Only consider supporting/extending references (derivation relationships)
-      if (ref.referenceType === 'supports' || ref.referenceType === 'extends') {
+      if (ref.referenceType === "supports" || ref.referenceType === "extends") {
         const premise = this.getFact(toId);
-        if (premise && premise.status === 'active') {
+        if (premise && premise.status === "active") {
           premiseConfidences.push(premise.confidence);
           // Use lowest inference strength
           inferenceStrength = Math.min(inferenceStrength, ref.strength);
@@ -718,7 +1152,9 @@ export class KnowledgeStateTree {
    *
    * Uses Tarjan's algorithm for cycle detection
    */
-  detectCircularDependencies(startFactId: string): CircularDependencyInfo | null {
+  detectCircularDependencies(
+    startFactId: string,
+  ): CircularDependencyInfo | null {
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
     const path: string[] = [];
@@ -750,7 +1186,8 @@ export class KnowledgeStateTree {
       return {
         facts: cycle,
         tightness: cycle.length <= 3 ? 1.0 : 1.0 / Math.log2(cycle.length),
-        penalty: 0.4 * (cycle.length <= 3 ? 1.0 : 1.0 / Math.log2(cycle.length)),
+        penalty:
+          0.4 * (cycle.length <= 3 ? 1.0 : 1.0 / Math.log2(cycle.length)),
       };
     }
 
@@ -764,14 +1201,14 @@ export class KnowledgeStateTree {
    */
   updateFactConfidenceWithPropagation(
     factId: string,
-    newConfidence: Confidence
+    newConfidence: Confidence,
   ): {
     root: MerkleRoot;
     propagation: PropagationResult;
   } {
     const existing = this.getFact(factId);
     if (!existing) {
-      throw new StateError('Fact not found', 'FACT_NOT_FOUND', { factId });
+      throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
     const oldConfidence = existing.confidence;
@@ -780,14 +1217,21 @@ export class KnowledgeStateTree {
     const cycle = this.detectCircularDependencies(factId);
     if (cycle) {
       // Apply cycle penalty
-      newConfidence = Math.max(0.1, newConfidence * (1 - cycle.penalty)) as Confidence;
+      newConfidence = Math.max(
+        0.1,
+        newConfidence * (1 - cycle.penalty),
+      ) as Confidence;
     }
 
     // Update the fact
     const root = this.updateFact(factId, { confidence: newConfidence });
 
     // Propagate to dependents
-    const propagation = this.propagateConfidenceChange(factId, oldConfidence, newConfidence);
+    const propagation = this.propagateConfidenceChange(
+      factId,
+      oldConfidence,
+      newConfidence,
+    );
 
     return { root, propagation };
   }
@@ -858,7 +1302,11 @@ export class KnowledgeStateTree {
 /**
  * Generate fact ID from claim content
  */
-export function generateFactId(claim: string, domain: string, submitter: string): string {
+export function generateFactId(
+  claim: string,
+  domain: string,
+  submitter: string,
+): string {
   return sha512_256Hex(`fact:${domain}:${claim}:${submitter}`);
 }
 
@@ -866,7 +1314,7 @@ export function generateFactId(claim: string, domain: string, submitter: string)
  * Create knowledge tree with genesis axioms
  */
 export function createKnowledgeTreeWithAxioms(
-  axioms: Array<{ id: string; claim: string; domain: string }>
+  axioms: Array<{ id: string; claim: string; domain: string }>,
 ): KnowledgeStateTree {
   const tree = new KnowledgeStateTree();
 
@@ -875,11 +1323,12 @@ export function createKnowledgeTreeWithAxioms(
       id: axiom.id,
       claim: axiom.claim,
       domain: axiom.domain,
-      confidence: 1.0 as Confidence,  // Axioms have full confidence
+      confidence: 1.0 as Confidence, // Axioms have full confidence
       verifiedAt: 0n,
-      verifierCount: 0,  // Axioms don't need verification
+      verifierCount: 0, // Axioms don't need verification
       challengeCount: 0,
-      status: 'active',
+      citationCount: 0,
+      status: "active",
     });
   }
 
@@ -936,4 +1385,81 @@ export interface CircularDependencyInfo {
 
   /** Confidence penalty to apply (0-1) */
   penalty: number;
+}
+
+// ============ GAP-009: Expiration Types ============
+
+/**
+ * Reason why a fact is considered expired
+ */
+export type ExpirationReason =
+  | "explicit_expiration" // expiresAt < currentBlock
+  | "confidence_decay" // confidence < minConfidenceThreshold
+  | "reverification_required" // age > 2 * decayHalfLife without reverification
+  | "stratum_policy"; // Stratum-specific expiration policy
+
+/**
+ * Result of checking if a fact is expired
+ */
+export interface ExpirationResult {
+  /** Whether the fact is expired */
+  expired: boolean;
+
+  /** Reason for expiration (if expired) */
+  reason?: ExpirationReason;
+
+  /** Additional context about expiration */
+  details?: {
+    /** Blocks until/since expiration */
+    blocksFromExpiration?: bigint;
+    /** Current confidence level */
+    currentConfidence?: number;
+    /** Threshold that was violated */
+    threshold?: number;
+  };
+}
+
+/**
+ * Parameters controlling fact expiration behavior
+ */
+export interface ExpirationParams {
+  /** Minimum confidence before automatic expiration (default: 0.3) */
+  minConfidenceThreshold: number;
+
+  /** Multiplier on decayHalfLife for staleness check (default: 2.0) */
+  stalenessMultiplier: number;
+
+  /** Whether to update status lazily on query (default: true) */
+  lazyExpiration: boolean;
+
+  /** Whether to include stratum in expiration calculation (default: true) */
+  useStratumPolicy: boolean;
+}
+
+/**
+ * Default expiration parameters
+ * Aligned with DEFAULT_TRUTH_PARAMETERS.minConfidenceThreshold
+ */
+export const DEFAULT_EXPIRATION_PARAMS: ExpirationParams = {
+  minConfidenceThreshold: 0.3, // Facts below 30% confidence are expired
+  stalenessMultiplier: 2.0, // 2x half-life = ~25% original confidence
+  lazyExpiration: true, // Update status on query
+  useStratumPolicy: true, // Respect stratum-specific rules
+};
+
+/**
+ * Options for getFact with expiration checking
+ */
+export interface GetFactOptions {
+  /** Whether to check expiration status (default: false for backward compat) */
+  checkExpiration?: boolean;
+
+  /** Current block number (required if checkExpiration is true) */
+  currentBlock?: bigint;
+
+  /** Expiration parameters to use (defaults to DEFAULT_EXPIRATION_PARAMS) */
+  expirationParams?: ExpirationParams;
+
+  /** Whether to update fact status if expired (requires checkExpiration) */
+  updateIfExpired?: boolean;
 }

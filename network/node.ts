@@ -4,30 +4,34 @@
  * libp2p node setup and management for Legible Money P2P network.
  */
 
-import { EventEmitter } from 'events';
-import { createLibp2p, Libp2p } from 'libp2p';
-import { tcp } from '@libp2p/tcp';
-import { webSockets } from '@libp2p/websockets';
-import { noise } from '@chainsafe/libp2p-noise';
-import { yamux } from '@chainsafe/libp2p-yamux';
-import { gossipsub, GossipSub } from '@chainsafe/libp2p-gossipsub';
-import { kadDHT } from '@libp2p/kad-dht';
-import { mdns } from '@libp2p/mdns';
-import { bootstrap } from '@libp2p/bootstrap';
-import { identify } from '@libp2p/identify';
-import { multiaddr } from '@multiformats/multiaddr';
-import { pipe } from 'it-pipe';
-import * as lp from 'it-length-prefixed';
-import type { Stream } from '@libp2p/interface';
-import type { PeerId as Libp2pPeerId } from '@libp2p/interface';
+import { EventEmitter } from "events";
+import { createLibp2p, Libp2p } from "libp2p";
+import { tcp } from "@libp2p/tcp";
+import { webSockets } from "@libp2p/websockets";
+import { noise } from "@chainsafe/libp2p-noise";
+import { yamux } from "@chainsafe/libp2p-yamux";
+import { gossipsub, type GossipSub } from "@libp2p/gossipsub";
+import { kadDHT } from "@libp2p/kad-dht";
+import { mdns } from "@libp2p/mdns";
+import { bootstrap } from "@libp2p/bootstrap";
+import { identify } from "@libp2p/identify";
+import { ping } from "@libp2p/ping";
+import { multiaddr } from "@multiformats/multiaddr";
+import { pipe } from "it-pipe";
+import * as lp from "it-length-prefixed";
+import type { Stream } from "@libp2p/interface";
+import type { PeerId as Libp2pPeerId } from "@libp2p/interface";
 import {
   NetworkConfig,
   DEFAULT_NETWORK_CONFIG,
   PUBSUB_TOPICS,
   NetworkMessage,
-} from './config.js';
-import type { TopicManager, ValidationResult } from './pubsub/topics.js';
-import type { SyncManager } from './protocols/sync.js';
+  DEFAULT_PEER_SCORE_CONFIG,
+  type PeerScoreConfig,
+} from "./config.js";
+import type { TopicManager, ValidationResult } from "./pubsub/topics.js";
+import { MAX_MESSAGE_SIZE } from "./pubsub/topics.js";
+import type { SyncManager } from "./protocols/sync.js";
 
 // ============ Types ============
 
@@ -55,7 +59,7 @@ export interface NetworkStats {
 }
 
 export interface ConnectionEvent {
-  type: 'connect' | 'disconnect';
+  type: "connect" | "disconnect";
   peer: PeerInfo;
   timestamp: number;
 }
@@ -87,7 +91,7 @@ export class LegibleNode extends EventEmitter {
 
   // Component references for message routing
   private topicManager: TopicManager | null = null;
-  private syncManager: SyncManager | null = null;
+  private peerScoreConfig: PeerScoreConfig = DEFAULT_PEER_SCORE_CONFIG;
 
   constructor(config: Partial<NetworkConfig> = {}) {
     super();
@@ -102,10 +106,10 @@ export class LegibleNode extends EventEmitter {
    */
   async start(): Promise<void> {
     if (this.started) {
-      throw new Error('Node already started');
+      throw new Error("Node already started");
     }
 
-    console.log('[Network] Starting Legible Money node...');
+    console.log("[Network] Starting Legible Money node...");
 
     // Initialize libp2p
     await this.initLibp2p();
@@ -118,7 +122,7 @@ export class LegibleNode extends EventEmitter {
 
     this.started = true;
     this.stats.uptime = Date.now();
-    this.emit('started', { peerId: this.peerId });
+    this.emit("started", { peerId: this.peerId });
 
     console.log(`[Network] Node started with peer ID: ${this.peerId}`);
 
@@ -135,7 +139,7 @@ export class LegibleNode extends EventEmitter {
   async stop(): Promise<void> {
     if (!this.started) return;
 
-    console.log('[Network] Stopping node...');
+    console.log("[Network] Stopping node...");
 
     // Stop libp2p
     if (this.libp2p) {
@@ -145,9 +149,9 @@ export class LegibleNode extends EventEmitter {
 
     this.peers.clear();
     this.started = false;
-    this.emit('stopped');
+    this.emit("stopped");
 
-    console.log('[Network] Node stopped');
+    console.log("[Network] Node stopped");
   }
 
   /**
@@ -167,10 +171,26 @@ export class LegibleNode extends EventEmitter {
   }
 
   /**
-   * Set the sync manager for block synchronization
+   * Set the sync manager for block synchronization.
+   * Wires the node's request function so the sync manager can fetch blocks from peers.
    */
   setSyncManager(syncManager: SyncManager): void {
-    this.syncManager = syncManager;
+    syncManager.setRequestFunction(
+      (peerId: string, start: bigint, count: number) =>
+        this.request<unknown[]>(peerId, this.config.protocolVersions.sync, {
+          type: "sync_request",
+          version: "1.0.0",
+          timestamp: Date.now(),
+          sender: this.peerId || "",
+          payload: new TextEncoder().encode(
+            JSON.stringify({
+              type: "bodies",
+              startBlock: start.toString(),
+              count,
+            }),
+          ),
+        }),
+    );
   }
 
   /**
@@ -178,18 +198,21 @@ export class LegibleNode extends EventEmitter {
    */
   async registerProtocol(
     protocol: string,
-    handler: (stream: Stream, peerId: string) => Promise<void>
+    handler: (stream: Stream, peerId: string) => Promise<void>,
   ): Promise<void> {
     if (!this.libp2p) {
-      throw new Error('Node not initialized');
+      throw new Error("Node not initialized");
     }
 
-    await this.libp2p.handle(protocol, async ({ stream, connection }) => {
+    await this.libp2p.handle(protocol, async (stream, connection) => {
       const remotePeerId = connection.remotePeer.toString();
       try {
         await handler(stream, remotePeerId);
       } catch (error) {
-        console.error(`[Network] Protocol handler error for ${protocol}:`, error);
+        console.error(
+          `[Network] Protocol handler error for ${protocol}:`,
+          error,
+        );
       }
     });
 
@@ -210,7 +233,7 @@ export class LegibleNode extends EventEmitter {
    */
   getListenAddresses(): string[] {
     if (!this.libp2p) return [];
-    return this.libp2p.getMultiaddrs().map(ma => ma.toString());
+    return this.libp2p.getMultiaddrs().map((ma) => ma.toString());
   }
 
   /**
@@ -232,7 +255,7 @@ export class LegibleNode extends EventEmitter {
    */
   async connect(address: Multiaddr): Promise<PeerInfo | null> {
     if (!this.libp2p) {
-      throw new Error('Node not initialized');
+      throw new Error("Node not initialized");
     }
 
     console.log(`[Network] Connecting to: ${address}`);
@@ -254,7 +277,11 @@ export class LegibleNode extends EventEmitter {
           connectedAt: Date.now(),
         };
         this.peers.set(remotePeerId, peerInfo);
-        this.emit('peer:connect', { type: 'connect', peer: peerInfo, timestamp: Date.now() });
+        this.emit("peer:connect", {
+          type: "connect",
+          peer: peerInfo,
+          timestamp: Date.now(),
+        });
       }
 
       return peerInfo;
@@ -275,7 +302,9 @@ export class LegibleNode extends EventEmitter {
 
     try {
       // Get all connections to this peer and close them
-      const connections = this.libp2p.getConnections(peerId as unknown as Libp2pPeerId);
+      const connections = this.libp2p.getConnections(
+        peerId as unknown as Libp2pPeerId,
+      );
       for (const conn of connections) {
         await conn.close();
       }
@@ -285,7 +314,11 @@ export class LegibleNode extends EventEmitter {
 
     this.peers.delete(peerId);
     if (peer) {
-      this.emit('peer:disconnect', { type: 'disconnect', peer, timestamp: Date.now() });
+      this.emit("peer:disconnect", {
+        type: "disconnect",
+        peer,
+        timestamp: Date.now(),
+      });
     }
   }
 
@@ -296,7 +329,7 @@ export class LegibleNode extends EventEmitter {
    */
   async broadcast(topic: string, message: NetworkMessage): Promise<void> {
     if (!this.started || !this.libp2p) {
-      throw new Error('Node not started');
+      throw new Error("Node not started");
     }
 
     const pubsub = this.libp2p.services.pubsub as GossipSub;
@@ -309,15 +342,19 @@ export class LegibleNode extends EventEmitter {
 
     this.stats.messagesSent++;
     this.stats.bytesSent += BigInt(data.length);
-    this.emit('message:sent', { topic, message, timestamp: Date.now() });
+    this.emit("message:sent", { topic, message, timestamp: Date.now() });
   }
 
   /**
    * Send a direct message to a specific peer via protocol stream
    */
-  async send(peerId: PeerId, protocol: string, message: NetworkMessage): Promise<void> {
+  async send(
+    peerId: PeerId,
+    protocol: string,
+    message: NetworkMessage,
+  ): Promise<void> {
     if (!this.started || !this.libp2p) {
-      throw new Error('Node not started');
+      throw new Error("Node not started");
     }
 
     const peer = this.peers.get(peerId);
@@ -326,7 +363,9 @@ export class LegibleNode extends EventEmitter {
     }
 
     // Find a connection to this peer
-    const connections = this.libp2p.getConnections(peerId as unknown as Libp2pPeerId);
+    const connections = this.libp2p.getConnections(
+      peerId as unknown as Libp2pPeerId,
+    );
     if (connections.length === 0) {
       throw new Error(`No active connection to peer: ${peerId}`);
     }
@@ -337,15 +376,16 @@ export class LegibleNode extends EventEmitter {
     // Encode and send message
     const data = new TextEncoder().encode(JSON.stringify(message));
 
-    await pipe(
-      [data],
-      lp.encode,
-      stream.sink
-    );
+    await pipe([data], lp.encode, (stream as any).sink);
 
     this.stats.messagesSent++;
     this.stats.bytesSent += BigInt(data.length);
-    this.emit('message:sent', { to: peerId, protocol, message, timestamp: Date.now() });
+    this.emit("message:sent", {
+      to: peerId,
+      protocol,
+      message,
+      timestamp: Date.now(),
+    });
   }
 
   /**
@@ -355,20 +395,22 @@ export class LegibleNode extends EventEmitter {
     peerId: PeerId,
     protocol: string,
     request: NetworkMessage,
-    timeout: number = 10000
+    timeout: number = 10000,
   ): Promise<T> {
     if (!this.started || !this.libp2p) {
-      throw new Error('Node not started');
+      throw new Error("Node not started");
     }
 
-    return new Promise(async (resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error('Request timeout'));
+        reject(new Error("Request timeout"));
       }, timeout);
 
-      try {
+      const execute = async () => {
         // Find connection to peer
-        const connections = this.libp2p!.getConnections(peerId as unknown as Libp2pPeerId);
+        const connections = this.libp2p!.getConnections(
+          peerId as unknown as Libp2pPeerId,
+        );
         if (connections.length === 0) {
           clearTimeout(timer);
           reject(new Error(`No active connection to peer: ${peerId}`));
@@ -387,14 +429,14 @@ export class LegibleNode extends EventEmitter {
         await pipe(
           [requestData],
           lp.encode,
-          stream,
+          stream as any,
           lp.decode,
           async function (source) {
             for await (const data of source) {
               responseData = data.subarray();
               break; // Only read first response
             }
-          }
+          },
         );
 
         clearTimeout(timer);
@@ -403,12 +445,14 @@ export class LegibleNode extends EventEmitter {
           const decoded = JSON.parse(new TextDecoder().decode(responseData));
           resolve(decoded as T);
         } else {
-          reject(new Error('No response received'));
+          reject(new Error("No response received"));
         }
-      } catch (error) {
+      };
+
+      execute().catch((error) => {
         clearTimeout(timer);
         reject(error);
-      }
+      });
     });
   }
 
@@ -419,7 +463,7 @@ export class LegibleNode extends EventEmitter {
    */
   async subscribe(topic: string): Promise<void> {
     if (!this.libp2p) {
-      throw new Error('Node not initialized');
+      throw new Error("Node not initialized");
     }
 
     const pubsub = this.libp2p.services.pubsub as GossipSub;
@@ -448,7 +492,7 @@ export class LegibleNode extends EventEmitter {
   getStats(): NetworkStats {
     return {
       ...this.stats,
-      peerId: this.peerId || '',
+      peerId: this.peerId || "",
       connectedPeers: this.peers.size,
       uptime: this.stats.uptime > 0 ? Date.now() - this.stats.uptime : 0,
     };
@@ -460,9 +504,9 @@ export class LegibleNode extends EventEmitter {
     // Build libp2p services configuration
     const services: Record<string, unknown> = {
       identify: identify(),
+      ping: ping(),
       pubsub: gossipsub({
         emitSelf: false,
-        gossipIncoming: true,
         fallbackToFloodsub: false,
         allowPublishToZeroTopicPeers: true,
         scoreThresholds: this.config.pubsub.scoreThresholds,
@@ -484,9 +528,11 @@ export class LegibleNode extends EventEmitter {
     }
 
     if (this.config.bootstrapPeers.length > 0) {
-      peerDiscovery.push(bootstrap({
-        list: this.config.bootstrapPeers,
-      }));
+      peerDiscovery.push(
+        bootstrap({
+          list: this.config.bootstrapPeers,
+        }),
+      );
     }
 
     // Create libp2p node
@@ -495,17 +541,15 @@ export class LegibleNode extends EventEmitter {
         listen: this.config.listenAddresses,
         announce: this.config.announceAddresses || [],
       },
-      transports: [
-        tcp(),
-        webSockets(),
-      ],
+      transports: [tcp(), webSockets()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
-      services,
-      peerDiscovery: peerDiscovery.length > 0 ? peerDiscovery : undefined,
+      services: services as any,
+      peerDiscovery: (peerDiscovery.length > 0
+        ? peerDiscovery
+        : undefined) as any,
       connectionManager: {
         maxConnections: this.config.maxConnections,
-        minConnections: this.config.minConnections,
       },
     });
 
@@ -518,7 +562,7 @@ export class LegibleNode extends EventEmitter {
     if (!this.libp2p) return;
 
     // Peer connection events
-    this.libp2p.addEventListener('peer:connect', (event) => {
+    this.libp2p.addEventListener("peer:connect", (event) => {
       const remotePeer = event.detail;
       const peerId = remotePeer.toString();
 
@@ -532,86 +576,103 @@ export class LegibleNode extends EventEmitter {
           connectedAt: Date.now(),
         };
         this.peers.set(peerId, peerInfo);
-        this.emit('peer:connect', { type: 'connect', peer: peerInfo, timestamp: Date.now() });
+        this.emit("peer:connect", {
+          type: "connect",
+          peer: peerInfo,
+          timestamp: Date.now(),
+        });
         console.log(`[Network] Peer connected: ${peerId.slice(0, 16)}...`);
       }
     });
 
-    this.libp2p.addEventListener('peer:disconnect', (event) => {
+    this.libp2p.addEventListener("peer:disconnect", (event) => {
       const remotePeer = event.detail;
       const peerId = remotePeer.toString();
       const peer = this.peers.get(peerId);
 
       if (peer) {
         this.peers.delete(peerId);
-        this.emit('peer:disconnect', { type: 'disconnect', peer, timestamp: Date.now() });
+        this.emit("peer:disconnect", {
+          type: "disconnect",
+          peer,
+          timestamp: Date.now(),
+        });
         console.log(`[Network] Peer disconnected: ${peerId.slice(0, 16)}...`);
       }
     });
 
     // Peer discovery events
-    this.libp2p.addEventListener('peer:discovery', (event) => {
+    this.libp2p.addEventListener("peer:discovery", (event) => {
       const peerInfo = event.detail;
       this.stats.knownPeers++;
-      this.emit('peer:discovered', {
+      this.emit("peer:discovered", {
         peerId: peerInfo.id.toString(),
-        multiaddrs: peerInfo.multiaddrs.map(ma => ma.toString()),
-        timestamp: Date.now()
+        multiaddrs: peerInfo.multiaddrs.map((ma) => ma.toString()),
+        timestamp: Date.now(),
       });
     });
 
     // PubSub message events
     const pubsub = this.libp2p.services.pubsub as GossipSub;
-    pubsub.addEventListener('message', async (event) => {
-      const topic = event.detail.topic;
-      const data = event.detail.data;
-      const from = event.detail.from.toString();
+    pubsub.addEventListener("message", async (event) => {
+      const msg = event.detail;
+      const topic = msg.topic;
+      const data = msg.data;
+      const from = msg.type === "signed" ? msg.from.toString() : "unknown";
 
       this.stats.messagesReceived++;
       this.stats.bytesReceived += BigInt(data.length);
 
+      // Pre-parse size check — reject before allocating a parsed object
+      if (data.length > MAX_MESSAGE_SIZE) {
+        console.warn(
+          `[Network] Dropping oversized message on ${topic}: ${data.length} bytes`,
+        );
+        this.updatePeerScore(from, "reject");
+        return;
+      }
+
       try {
-        const message: NetworkMessage = JSON.parse(new TextDecoder().decode(data));
+        const message: NetworkMessage = JSON.parse(
+          new TextDecoder().decode(data),
+        );
         message.sender = from;
 
-        // Route to topic manager if available
+        // Route through TopicManager which applies VULN-019 base validation,
+        // handler-specific validation, stats tracking, and handler execution
         if (this.topicManager) {
-          const handler = this.topicManager.getHandler(topic);
-          if (handler) {
-            const result = await handler.validate(message);
-            this.updatePeerScore(from, result);
-
-            if (result === 'accept') {
-              await handler.handle(message);
-            }
-          }
+          const result = await this.topicManager.processMessage(topic, message);
+          this.updatePeerScore(from, result);
         }
 
-        this.emit('message:received', {
+        this.emit("message:received", {
           topic,
           message,
           from,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
       } catch (error) {
         console.warn(`[Network] Failed to process message on ${topic}:`, error);
-        this.updatePeerScore(from, 'reject');
+        this.updatePeerScore(from, "reject");
       }
     });
   }
 
-  private updatePeerScore(peerId: string, validationResult: ValidationResult): void {
+  private updatePeerScore(
+    peerId: string,
+    validationResult: ValidationResult,
+  ): void {
     const peer = this.peers.get(peerId);
     if (!peer) return;
 
     switch (validationResult) {
-      case 'accept':
-        peer.score += 1;
+      case "accept":
+        peer.score += this.peerScoreConfig.weights.validTransaction;
         break;
-      case 'reject':
-        peer.score -= 10;
+      case "reject":
+        peer.score -= this.peerScoreConfig.weights.invalidTransaction;
         break;
-      case 'ignore':
+      case "ignore":
         // No score change
         break;
     }
@@ -626,7 +687,7 @@ export class LegibleNode extends EventEmitter {
 
   private initStats(): NetworkStats {
     return {
-      peerId: '',
+      peerId: "",
       connectedPeers: 0,
       knownPeers: 0,
       bytesReceived: 0n,
@@ -645,9 +706,7 @@ export class LegibleNode extends EventEmitter {
  */
 export function createDevnetNode(port: number = 9000): LegibleNode {
   return new LegibleNode({
-    listenAddresses: [
-      `/ip4/127.0.0.1/tcp/${port}`,
-    ],
+    listenAddresses: [`/ip4/127.0.0.1/tcp/${port}`],
     enableMdns: true,
     bootstrapPeers: [],
   });

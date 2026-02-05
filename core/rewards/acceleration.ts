@@ -22,21 +22,21 @@ import {
   MAX_ACCELERATION,
   DECELERATION_FACTORS,
   VestingError,
-} from './types.js';
+} from "./types.js";
 
 // ============ Acceleration Types ============
 
 export type AccelerationType =
-  | 'defense'
-  | 'replication'
-  | 'corroboration'
-  | 'citation';
+  | "defense"
+  | "replication"
+  | "corroboration"
+  | "citation";
 
 export type DecelerationType =
-  | 'challenge'
-  | 'related_dispute'
-  | 'domain_audit'
-  | 'source_invalidated';
+  | "challenge"
+  | "related_dispute"
+  | "domain_audit"
+  | "source_invalidated";
 
 // ============ Acceleration Application ============
 
@@ -48,20 +48,20 @@ export type DecelerationType =
 export function applyAcceleration(
   vesting: RewardVesting,
   accelerationType: AccelerationType,
-  _currentBlock: bigint
+  _currentBlock: bigint,
 ): RewardVesting {
   // Check if vesting can be accelerated
-  if (vesting.status !== 'vesting') {
+  if (vesting.status !== "vesting") {
     throw new VestingError(
       `Cannot accelerate vesting in status: ${vesting.status}`,
-      'VESTING_COMPLETED'
+      "VESTING_COMPLETED",
     );
   }
 
   if (vesting.isPaused) {
     throw new VestingError(
-      'Cannot accelerate paused vesting',
-      'VESTING_PAUSED'
+      "Cannot accelerate paused vesting",
+      "VESTING_PAUSED",
     );
   }
 
@@ -99,16 +99,16 @@ export function applyAcceleration(
   };
 
   switch (accelerationType) {
-    case 'defense':
+    case "defense":
       newBreakdown.fromDefenses += appliedBonus;
       break;
-    case 'replication':
+    case "replication":
       newBreakdown.fromReplications += appliedBonus;
       break;
-    case 'corroboration':
+    case "corroboration":
       newBreakdown.fromCorroboration += appliedBonus;
       break;
-    case 'citation':
+    case "citation":
       newBreakdown.fromCitations += appliedBonus;
       break;
   }
@@ -117,9 +117,9 @@ export function applyAcceleration(
   let defenseCount = vesting.defenseCount;
   let replicationCount = vesting.replicationCount;
 
-  if (accelerationType === 'defense') {
+  if (accelerationType === "defense") {
     defenseCount++;
-  } else if (accelerationType === 'replication') {
+  } else if (accelerationType === "replication") {
     replicationCount++;
   }
 
@@ -138,13 +138,13 @@ export function applyAcceleration(
  */
 function getAccelerationBonus(type: AccelerationType): number {
   switch (type) {
-    case 'defense':
+    case "defense":
       return ACCELERATION_BONUSES.successfulDefense;
-    case 'replication':
+    case "replication":
       return ACCELERATION_BONUSES.independentReplication;
-    case 'corroboration':
+    case "corroboration":
       return ACCELERATION_BONUSES.crossDomainCorroboration;
-    case 'citation':
+    case "citation":
       return ACCELERATION_BONUSES.citationBonus;
   }
 }
@@ -152,15 +152,18 @@ function getAccelerationBonus(type: AccelerationType): number {
 /**
  * Get current acceleration amount for a specific type
  */
-function getTypeAcceleration(vesting: RewardVesting, type: AccelerationType): number {
+function getTypeAcceleration(
+  vesting: RewardVesting,
+  type: AccelerationType,
+): number {
   switch (type) {
-    case 'defense':
+    case "defense":
       return vesting.accelerationBreakdown.fromDefenses;
-    case 'replication':
+    case "replication":
       return vesting.accelerationBreakdown.fromReplications;
-    case 'corroboration':
+    case "corroboration":
       return vesting.accelerationBreakdown.fromCorroboration;
-    case 'citation':
+    case "citation":
       return vesting.accelerationBreakdown.fromCitations;
   }
 }
@@ -170,13 +173,13 @@ function getTypeAcceleration(vesting: RewardVesting, type: AccelerationType): nu
  */
 function getTypeAccelerationCap(type: AccelerationType): number {
   switch (type) {
-    case 'defense':
+    case "defense":
       return MAX_ACCELERATION.successfulDefense;
-    case 'replication':
+    case "replication":
       return MAX_ACCELERATION.independentReplication;
-    case 'corroboration':
+    case "corroboration":
       return MAX_ACCELERATION.crossDomainCorroboration;
-    case 'citation':
+    case "citation":
       return MAX_ACCELERATION.citationBonus;
   }
 }
@@ -185,17 +188,18 @@ function getTypeAccelerationCap(type: AccelerationType): number {
 
 /**
  * Apply deceleration to a vesting schedule
+ * GAP-014 FIX: Now tracks active deceleration types for proper removal
  */
 export function applyDeceleration(
   vesting: RewardVesting,
   decelerationType: DecelerationType,
-  _currentBlock: bigint
+  _currentBlock: bigint,
 ): RewardVesting {
   // Check if vesting can be decelerated
-  if (vesting.status !== 'vesting') {
+  if (vesting.status !== "vesting") {
     throw new VestingError(
       `Cannot decelerate vesting in status: ${vesting.status}`,
-      'VESTING_COMPLETED'
+      "VESTING_COMPLETED",
     );
   }
 
@@ -206,14 +210,42 @@ export function applyDeceleration(
     return pauseVesting(vesting, _currentBlock);
   }
 
-  // Apply deceleration (multiply existing factor)
-  const newFactor = vesting.decelerationFactor * factor;
+  // GAP-014 FIX: Track the active deceleration
+  const newActiveDecelerations = {
+    ...vesting.activeDecelerations,
+    [decelerationType]:
+      (vesting.activeDecelerations[decelerationType] || 0) + 1,
+  };
+
+  // GAP-014 FIX: Recalculate factor from all active decelerations
+  const newFactor = calculateCombinedDecelerationFactor(newActiveDecelerations);
 
   return {
     ...vesting,
     decelerationFactor: newFactor,
+    activeDecelerations: newActiveDecelerations,
     updatedAt: Date.now(),
   };
+}
+
+/**
+ * GAP-014 FIX: Calculate combined deceleration factor from all active types
+ */
+function calculateCombinedDecelerationFactor(
+  activeDecelerations: RewardVesting["activeDecelerations"],
+): number {
+  let factor = 1.0;
+
+  // Apply each active deceleration
+  for (const [type, count] of Object.entries(activeDecelerations)) {
+    if (count > 0) {
+      const typeFactor = getDecelerationFactor(type as DecelerationType);
+      // Apply the factor 'count' times (for multiple instances)
+      factor *= Math.pow(typeFactor, count);
+    }
+  }
+
+  return factor;
 }
 
 /**
@@ -221,25 +253,26 @@ export function applyDeceleration(
  */
 function getDecelerationFactor(type: DecelerationType): number {
   switch (type) {
-    case 'challenge':
+    case "challenge":
       return DECELERATION_FACTORS.activeChallenge;
-    case 'related_dispute':
+    case "related_dispute":
       return DECELERATION_FACTORS.relatedFactDisputed;
-    case 'domain_audit':
+    case "domain_audit":
       return DECELERATION_FACTORS.domainAudit;
-    case 'source_invalidated':
+    case "source_invalidated":
       return DECELERATION_FACTORS.sourceInvalidated;
   }
 }
 
 /**
  * Remove deceleration (restore to normal speed)
+ * GAP-014 FIX: Uses tracking to properly handle multiple deceleration types
  */
 export function removeDeceleration(
   vesting: RewardVesting,
-  decelerationType: DecelerationType
+  decelerationType: DecelerationType,
 ): RewardVesting {
-  if (vesting.status !== 'vesting') {
+  if (vesting.status !== "vesting") {
     return vesting;
   }
 
@@ -247,18 +280,31 @@ export function removeDeceleration(
 
   // If it was a pause (factor = 0), this should use resumeVesting instead
   if (factor === 0) {
+    throw new VestingError("Use resumeVesting to unpause", "VESTING_PAUSED");
+  }
+
+  // GAP-014 FIX: Check if this deceleration type is actually active
+  const currentCount = vesting.activeDecelerations[decelerationType] || 0;
+  if (currentCount === 0) {
     throw new VestingError(
-      'Use resumeVesting to unpause',
-      'VESTING_PAUSED'
+      `No active ${decelerationType} deceleration to remove`,
+      "DECELERATION_NOT_FOUND",
     );
   }
 
-  // Reverse the deceleration
-  const newFactor = Math.min(1.0, vesting.decelerationFactor / factor);
+  // GAP-014 FIX: Decrement the count for this type
+  const newActiveDecelerations = {
+    ...vesting.activeDecelerations,
+    [decelerationType]: currentCount - 1,
+  };
+
+  // GAP-014 FIX: Recalculate factor from remaining active decelerations
+  const newFactor = calculateCombinedDecelerationFactor(newActiveDecelerations);
 
   return {
     ...vesting,
     decelerationFactor: newFactor,
+    activeDecelerations: newActiveDecelerations,
     updatedAt: Date.now(),
   };
 }
@@ -270,19 +316,16 @@ export function removeDeceleration(
  */
 export function pauseVesting(
   vesting: RewardVesting,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): RewardVesting {
   if (vesting.isPaused) {
-    throw new VestingError(
-      'Vesting is already paused',
-      'ALREADY_PAUSED'
-    );
+    throw new VestingError("Vesting is already paused", "ALREADY_PAUSED");
   }
 
-  if (vesting.status !== 'vesting') {
+  if (vesting.status !== "vesting") {
     throw new VestingError(
       `Cannot pause vesting in status: ${vesting.status}`,
-      'VESTING_COMPLETED'
+      "VESTING_COMPLETED",
     );
   }
 
@@ -304,19 +347,16 @@ export function pauseVesting(
 export function resumeVesting(
   vesting: RewardVesting,
   currentBlock: bigint,
-  applyDefenseBonus: boolean = false
+  applyDefenseBonus: boolean = false,
 ): RewardVesting {
   if (!vesting.isPaused) {
-    throw new VestingError(
-      'Vesting is not paused',
-      'NOT_PAUSED'
-    );
+    throw new VestingError("Vesting is not paused", "NOT_PAUSED");
   }
 
-  if (vesting.status !== 'vesting') {
+  if (vesting.status !== "vesting") {
     throw new VestingError(
       `Cannot resume vesting in status: ${vesting.status}`,
-      'VESTING_COMPLETED'
+      "VESTING_COMPLETED",
     );
   }
 
@@ -335,7 +375,7 @@ export function resumeVesting(
   // Apply defense bonus if requested (successful defense)
   if (applyDefenseBonus) {
     updated.failedChallengeCount++;
-    updated = applyAcceleration(updated, 'defense', currentBlock);
+    updated = applyAcceleration(updated, "defense", currentBlock);
   }
 
   return updated;
@@ -364,7 +404,7 @@ export function calculateSpeedMultiplier(vesting: RewardVesting): number {
  */
 export function describeSpeed(vesting: RewardVesting): string {
   if (vesting.isPaused) {
-    return 'PAUSED';
+    return "PAUSED";
   }
 
   const multiplier = calculateSpeedMultiplier(vesting);
@@ -374,7 +414,7 @@ export function describeSpeed(vesting: RewardVesting): string {
   } else if (multiplier < 0.9) {
     return `Slowed (${(multiplier * 100).toFixed(0)}% speed)`;
   } else if (multiplier < 1.1) {
-    return 'Normal speed';
+    return "Normal speed";
   } else if (multiplier < 1.5) {
     return `Accelerated (${(multiplier * 100).toFixed(0)}% speed)`;
   } else {
@@ -387,14 +427,14 @@ export function describeSpeed(vesting: RewardVesting): string {
  */
 export function canAccelerate(
   vesting: RewardVesting,
-  accelerationType: AccelerationType
+  accelerationType: AccelerationType,
 ): { canAccelerate: boolean; reason?: string } {
-  if (vesting.status !== 'vesting') {
+  if (vesting.status !== "vesting") {
     return { canAccelerate: false, reason: `Vesting is ${vesting.status}` };
   }
 
   if (vesting.isPaused) {
-    return { canAccelerate: false, reason: 'Vesting is paused' };
+    return { canAccelerate: false, reason: "Vesting is paused" };
   }
 
   // Check type cap
@@ -406,7 +446,7 @@ export function canAccelerate(
 
   // Check total cap
   if (vesting.accelerationBonus >= MAX_ACCELERATION.total) {
-    return { canAccelerate: false, reason: 'At total acceleration cap' };
+    return { canAccelerate: false, reason: "At total acceleration cap" };
   }
 
   return { canAccelerate: true };
@@ -415,19 +455,25 @@ export function canAccelerate(
 /**
  * Get remaining acceleration capacity
  */
-export function getRemainingAccelerationCapacity(
-  vesting: RewardVesting
-): {
+export function getRemainingAccelerationCapacity(vesting: RewardVesting): {
   total: number;
   byType: Record<AccelerationType, number>;
 } {
   const totalRemaining = MAX_ACCELERATION.total - vesting.accelerationBonus;
 
   const byType: Record<AccelerationType, number> = {
-    defense: MAX_ACCELERATION.successfulDefense - vesting.accelerationBreakdown.fromDefenses,
-    replication: MAX_ACCELERATION.independentReplication - vesting.accelerationBreakdown.fromReplications,
-    corroboration: MAX_ACCELERATION.crossDomainCorroboration - vesting.accelerationBreakdown.fromCorroboration,
-    citation: MAX_ACCELERATION.citationBonus - vesting.accelerationBreakdown.fromCitations,
+    defense:
+      MAX_ACCELERATION.successfulDefense -
+      vesting.accelerationBreakdown.fromDefenses,
+    replication:
+      MAX_ACCELERATION.independentReplication -
+      vesting.accelerationBreakdown.fromReplications,
+    corroboration:
+      MAX_ACCELERATION.crossDomainCorroboration -
+      vesting.accelerationBreakdown.fromCorroboration,
+    citation:
+      MAX_ACCELERATION.citationBonus -
+      vesting.accelerationBreakdown.fromCitations,
   };
 
   return { total: totalRemaining, byType };

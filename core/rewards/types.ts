@@ -19,7 +19,7 @@
  * likely true than one that has survived 10 days."
  */
 
-import type { DID } from '../../agents/identity/did.js';
+import type { DID } from "../../core/agents/identity/did.js";
 
 // ============ Epistemic Categories ============
 
@@ -29,16 +29,16 @@ import type { DID } from '../../agents/identity/did.js';
  * historical knowledge stability data
  */
 export type VestingCategory =
-  | 'axiomatic'        // Mathematical axioms, logical tautologies
-  | 'formal_proof'     // Verified mathematical proofs
-  | 'on_chain'         // Blockchain-verifiable facts
-  | 'cryptographic'    // Cryptographic proofs
-  | 'computational'    // Computation results (reproducible)
-  | 'peer_reviewed'    // Published research
-  | 'replicated'       // IRL-replicated findings
-  | 'chainlink_feed'   // Oracle price feeds
-  | 'attestation'      // Human attestations
-  | 'contested';       // Claims with active disputes
+  | "axiomatic" // Mathematical axioms, logical tautologies
+  | "formal_proof" // Verified mathematical proofs
+  | "on_chain" // Blockchain-verifiable facts
+  | "cryptographic" // Cryptographic proofs
+  | "computational" // Computation results (reproducible)
+  | "peer_reviewed" // Published research
+  | "replicated" // IRL-replicated findings
+  | "chainlink_feed" // Oracle price feeds
+  | "attestation" // Human attestations
+  | "contested"; // Claims with active disputes
 
 // ============ Release Configuration ============
 
@@ -53,24 +53,24 @@ export type VestingCategory =
  */
 export const RELEASE_HALF_LIVES: Record<VestingCategory, bigint> = {
   // Formal systems - very slow release (high confidence, but reserve for errors)
-  axiomatic: 1_000_000n,        // ~1 year in blocks (at 2.5s/block)
-  formal_proof: 500_000n,       // ~6 months
+  axiomatic: 1_111_111n, // ~1.1 year in blocks
+  formal_proof: 555_555n, // ~6.5 months
 
   // Computational - medium-slow (verifiable but could have bugs)
-  on_chain: 200_000n,           // ~2.4 months
-  cryptographic: 250_000n,      // ~3 months
-  computational: 300_000n,      // ~3.6 months
+  on_chain: 222_222n, // ~2.6 months
+  cryptographic: 222_222n, // ~2.6 months
+  computational: 333_333n, // ~3.9 months
 
   // Empirical - faster release (more likely to be challenged)
-  peer_reviewed: 100_000n,      // ~5 weeks
-  replicated: 150_000n,         // ~7 weeks (IRL verified gets more time)
+  peer_reviewed: 111_111n, // ~5.4 weeks
+  replicated: 111_111n, // ~5.4 weeks
 
   // Oracle/External - fastest (most volatile)
-  chainlink_feed: 50_000n,      // ~2.5 weeks
-  attestation: 75_000n,         // ~3.5 weeks
+  chainlink_feed: 55_555n, // ~2.7 weeks
+  attestation: 77_777n, // ~3.8 weeks
 
   // Contested - very fast release but low ceiling
-  contested: 25_000n,           // ~1 week
+  contested: 22_222n, // ~1.1 week
 } as const;
 
 /**
@@ -78,16 +78,16 @@ export const RELEASE_HALF_LIVES: Record<VestingCategory, bigint> = {
  * The remainder is permanently reserved for late challengers
  */
 export const MAX_RELEASE_RATES: Record<VestingCategory, number> = {
-  axiomatic: 0.95,        // 5% permanent reserve
-  formal_proof: 0.92,     // 8% reserve
-  on_chain: 0.90,         // 10% reserve
-  cryptographic: 0.90,    // 10% reserve
-  computational: 0.88,    // 12% reserve
-  peer_reviewed: 0.85,    // 15% reserve
-  replicated: 0.88,       // 12% reserve (IRL verified = higher trust)
-  chainlink_feed: 0.80,   // 20% reserve (oracles are volatile)
-  attestation: 0.80,      // 20% reserve
-  contested: 0.60,        // 40% reserve (high uncertainty)
+  axiomatic: 0.95, // 5% permanent reserve
+  formal_proof: 0.92, // 8% reserve
+  on_chain: 0.9, // 10% reserve
+  cryptographic: 0.9, // 10% reserve
+  computational: 0.88, // 12% reserve
+  peer_reviewed: 0.85, // 15% reserve
+  replicated: 0.88, // 12% reserve (IRL verified = higher trust)
+  chainlink_feed: 0.8, // 20% reserve (oracles are volatile)
+  attestation: 0.8, // 20% reserve
+  contested: 0.6, // 40% reserve (high uncertainty)
 } as const;
 
 /**
@@ -95,16 +95,16 @@ export const MAX_RELEASE_RATES: Record<VestingCategory, number> = {
  * No rewards release during cliff - initial challenge window
  */
 export const CLIFF_PERIODS: Record<VestingCategory, bigint> = {
-  axiomatic: 10000n,      // ~7 hours - time to verify proof
-  formal_proof: 5000n,    // ~3.5 hours
-  on_chain: 1000n,        // ~42 minutes - quick verification
-  cryptographic: 3000n,   // ~2 hours
-  computational: 2000n,   // ~1.4 hours
-  peer_reviewed: 5000n,   // ~3.5 hours - time to review
-  replicated: 3000n,      // ~2 hours - already has IRL verification
-  chainlink_feed: 500n,   // ~21 minutes - oracle data is time-sensitive
-  attestation: 2000n,     // ~1.4 hours
-  contested: 1000n,       // ~42 minutes
+  axiomatic: 11111n, // ~7.8 hours - time to verify proof
+  formal_proof: 5555n, // ~3.9 hours
+  on_chain: 1111n, // ~46 minutes - quick verification
+  cryptographic: 3333n, // ~2.3 hours
+  computational: 2222n, // ~1.6 hours
+  peer_reviewed: 5555n, // ~3.9 hours - time to review
+  replicated: 3333n, // ~2.3 hours - already has IRL verification
+  chainlink_feed: 555n, // ~23 minutes - oracle data is time-sensitive
+  attestation: 2222n, // ~1.6 hours
+  contested: 1111n, // ~46 minutes
 } as const;
 
 // ============ Acceleration/Deceleration ============
@@ -114,10 +114,10 @@ export const CLIFF_PERIODS: Record<VestingCategory, bigint> = {
  */
 export const ACCELERATION_BONUSES = {
   /** Successful defense against challenge */
-  successfulDefense: 0.10,
+  successfulDefense: 0.11,
 
   /** Independent replication (research fund verified) */
-  independentReplication: 0.15,
+  independentReplication: 0.11,
 
   /** Cross-domain corroboration */
   crossDomainCorroboration: 0.05,
@@ -130,11 +130,11 @@ export const ACCELERATION_BONUSES = {
  * Maximum cumulative acceleration by type
  */
 export const MAX_ACCELERATION = {
-  successfulDefense: 0.50,      // Max +50% from defenses
-  independentReplication: 0.30, // Max +30% from replications
-  crossDomainCorroboration: 0.20,
-  citationBonus: 0.20,
-  total: 0.80,                  // Overall cap
+  successfulDefense: 0.55, // Max +55% from defenses
+  independentReplication: 0.33, // Max +33% from replications
+  crossDomainCorroboration: 0.22,
+  citationBonus: 0.22,
+  total: 0.77, // Overall cap
 } as const;
 
 /**
@@ -142,16 +142,16 @@ export const MAX_ACCELERATION = {
  */
 export const DECELERATION_FACTORS = {
   /** Active challenge against this claim */
-  activeChallenge: 0.0,         // Complete pause
+  activeChallenge: 0.0, // Complete pause
 
   /** Related fact is disputed */
-  relatedFactDisputed: 0.50,    // 50% slowdown
+  relatedFactDisputed: 0.55, // 45% slowdown
 
   /** Domain-wide audit in progress */
-  domainAudit: 0.75,            // 25% slowdown
+  domainAudit: 0.77, // 23% slowdown
 
   /** Source evidence invalidated */
-  sourceInvalidated: 0.0,       // Complete pause + review
+  sourceInvalidated: 0.0, // Complete pause + review
 } as const;
 
 // ============ Clawback Configuration ============
@@ -161,13 +161,13 @@ export const DECELERATION_FACTORS = {
  */
 export const CLAWBACK_RATES = {
   /** Portion of already-released rewards clawed back */
-  releasedClawback: 0.30,       // 30% of released
+  releasedClawback: 0.33, // 33% of released
 
   /** All unvested goes to challenger */
-  unvestedToChallenger: 1.00,   // 100%
+  unvestedToChallenger: 1.0, // 100%
 
   /** Reserve goes to challenger as bonus */
-  reserveToChallenger: 1.00,    // 100%
+  reserveToChallenger: 1.0, // 100%
 } as const;
 
 // ============ Vesting State Types ============
@@ -176,11 +176,11 @@ export const CLAWBACK_RATES = {
  * Status of a vesting schedule
  */
 export type VestingStatus =
-  | 'vesting'      // Active, releasing rewards
-  | 'paused'       // Paused due to challenge
-  | 'completed'    // Reached max release
-  | 'falsified'    // Claim was proven false
-  | 'abandoned';   // Recipient abandoned (rare)
+  | "vesting" // Active, releasing rewards
+  | "paused" // Paused due to challenge
+  | "completed" // Reached max release
+  | "falsified" // Claim was proven false
+  | "abandoned"; // Recipient abandoned (rare)
 
 /**
  * Main reward vesting record
@@ -229,6 +229,17 @@ export interface RewardVesting {
 
   /** Current deceleration factor (1.0 = normal, 0.5 = half speed, 0 = paused) */
   decelerationFactor: number;
+
+  /**
+   * GAP-014 FIX: Track active deceleration types
+   * Maps deceleration type to count (allows same type applied multiple times)
+   */
+  activeDecelerations: {
+    challenge: number;
+    related_dispute: number;
+    domain_audit: number;
+    source_invalidated: number;
+  };
 
   /** Is release currently paused? */
   isPaused: boolean;
@@ -389,7 +400,7 @@ export interface PauseVestingPayload {
   vestingId: string;
 
   /** Reason for pause */
-  reason: 'challenge' | 'audit' | 'source_invalidated';
+  reason: "challenge" | "audit" | "source_invalidated";
 
   /** Related entity ID (challenge ID, audit ID, etc.) */
   relatedEntityId?: string;
@@ -414,7 +425,7 @@ export interface AccelerateVestingPayload {
   vestingId: string;
 
   /** Type of acceleration */
-  accelerationType: 'defense' | 'replication' | 'corroboration' | 'citation';
+  accelerationType: "defense" | "replication" | "corroboration" | "citation";
 
   /** Related entity ID */
   relatedEntityId?: string;
@@ -440,14 +451,14 @@ export interface FalsifyVestingPayload {
  * Vesting event types
  */
 export type VestingEventType =
-  | 'vesting_created'
-  | 'rewards_claimed'
-  | 'vesting_paused'
-  | 'vesting_resumed'
-  | 'vesting_accelerated'
-  | 'vesting_decelerated'
-  | 'vesting_falsified'
-  | 'vesting_completed';
+  | "vesting_created"
+  | "rewards_claimed"
+  | "vesting_paused"
+  | "vesting_resumed"
+  | "vesting_accelerated"
+  | "vesting_decelerated"
+  | "vesting_falsified"
+  | "vesting_completed";
 
 /**
  * Vesting event
@@ -466,17 +477,18 @@ export interface VestingEvent {
  * Vesting error codes
  */
 export type VestingErrorCode =
-  | 'VESTING_NOT_FOUND'
-  | 'VESTING_PAUSED'
-  | 'VESTING_COMPLETED'
-  | 'VESTING_FALSIFIED'
-  | 'CLIFF_NOT_ENDED'
-  | 'NOTHING_TO_CLAIM'
-  | 'NOT_RECIPIENT'
-  | 'ALREADY_PAUSED'
-  | 'NOT_PAUSED'
-  | 'INVALID_CATEGORY'
-  | 'INVALID_AMOUNT';
+  | "VESTING_NOT_FOUND"
+  | "VESTING_PAUSED"
+  | "VESTING_COMPLETED"
+  | "VESTING_FALSIFIED"
+  | "CLIFF_NOT_ENDED"
+  | "NOTHING_TO_CLAIM"
+  | "NOT_RECIPIENT"
+  | "ALREADY_PAUSED"
+  | "NOT_PAUSED"
+  | "INVALID_CATEGORY"
+  | "DECELERATION_NOT_FOUND" // GAP-014 FIX: For tracking deceleration types
+  | "INVALID_AMOUNT";
 
 /**
  * Vesting error
@@ -485,9 +497,9 @@ export class VestingError extends Error {
   constructor(
     message: string,
     public code: VestingErrorCode,
-    public details?: Record<string, unknown>
+    public details?: Record<string, unknown>,
   ) {
     super(message);
-    this.name = 'VestingError';
+    this.name = "VestingError";
   }
 }

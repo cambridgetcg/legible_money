@@ -23,8 +23,8 @@ import {
   type ClawbackResult,
   CLAWBACK_RATES,
   VestingError,
-} from './types.js';
-import { calculateRelease } from './release_curve.js';
+} from "./types.js";
+import { calculateRelease } from "./release_curve.js";
 
 // ============ Clawback Calculation ============
 
@@ -40,17 +40,22 @@ import { calculateRelease } from './release_curve.js';
  */
 export function calculateClawback(
   vesting: RewardVesting,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): ClawbackResult {
   // Get current release state
   const release = calculateRelease(vesting, currentBlock);
 
   // Calculate unvested amount
   // Unvested = Total - Reserve - Released
-  const unvested = vesting.totalAmount - vesting.reserveAmount - release.totalReleased;
+  const unvested =
+    vesting.totalAmount - vesting.reserveAmount - release.totalReleased;
 
   // Calculate clawback from released (30% of released)
-  const clawbackFromReleased = (release.totalReleased * BigInt(Math.floor(CLAWBACK_RATES.releasedClawback * 100))) / 100n;
+  // GAP-020 FIX: Use 10000 basis points for better precision (100 caused 1 wei rounding errors)
+  const clawbackFromReleased =
+    (release.totalReleased *
+      BigInt(Math.floor(CLAWBACK_RATES.releasedClawback * 10000))) /
+    10000n;
 
   // Reserve goes to challenger
   const fromReserve = vesting.reserveAmount;
@@ -86,20 +91,17 @@ export function falsifyVesting(
   vesting: RewardVesting,
   _challengerDid: string,
   _disputeId: string,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): {
   updatedVesting: RewardVesting;
   clawback: ClawbackResult;
 } {
   // Validate vesting can be falsified
-  if (vesting.status === 'falsified') {
-    throw new VestingError(
-      'Vesting already falsified',
-      'VESTING_FALSIFIED'
-    );
+  if (vesting.status === "falsified") {
+    throw new VestingError("Vesting already falsified", "VESTING_FALSIFIED");
   }
 
-  if (vesting.status === 'completed') {
+  if (vesting.status === "completed") {
     // Can still falsify completed vesting - clawback from already released
     // But there's no unvested to redistribute
   }
@@ -110,7 +112,7 @@ export function falsifyVesting(
   // Update vesting to falsified status
   const updatedVesting: RewardVesting = {
     ...vesting,
-    status: 'falsified',
+    status: "falsified",
     statusChangedAtBlock: currentBlock,
     // Zero out remaining amounts
     claimableAmount: 0n,
@@ -139,15 +141,24 @@ export function falsifyVesting(
 export function calculatePartialClawback(
   vesting: RewardVesting,
   currentBlock: bigint,
-  impactRatio: number // 0-1, how much this claim was affected
+  impactRatio: number, // 0-1, how much this claim was affected
 ): ClawbackResult {
   // Calculate full clawback
   const fullClawback = calculateClawback(vesting, currentBlock);
 
   // Scale by impact ratio
-  const scaledUnvested = (fullClawback.breakdown.fromUnvested * BigInt(Math.floor(impactRatio * 100))) / 100n;
-  const scaledClawback = (fullClawback.breakdown.fromClawback * BigInt(Math.floor(impactRatio * 100))) / 100n;
-  const scaledReserve = (fullClawback.breakdown.fromReserve * BigInt(Math.floor(impactRatio * 100))) / 100n;
+  const scaledUnvested =
+    (fullClawback.breakdown.fromUnvested *
+      BigInt(Math.floor(impactRatio * 100))) /
+    100n;
+  const scaledClawback =
+    (fullClawback.breakdown.fromClawback *
+      BigInt(Math.floor(impactRatio * 100))) /
+    100n;
+  const scaledReserve =
+    (fullClawback.breakdown.fromReserve *
+      BigInt(Math.floor(impactRatio * 100))) /
+    100n;
 
   const challengerReward = scaledUnvested + scaledClawback + scaledReserve;
 
@@ -159,7 +170,9 @@ export function calculatePartialClawback(
       fromReserve: scaledReserve,
     },
     recipientPenalty: scaledClawback,
-    recipientKeeps: fullClawback.recipientKeeps + (fullClawback.recipientPenalty - scaledClawback),
+    recipientKeeps:
+      fullClawback.recipientKeeps +
+      (fullClawback.recipientPenalty - scaledClawback),
     protocolRecovery: 0n,
   };
 }
@@ -178,14 +191,14 @@ export function calculatePartialClawback(
 export function calculateReserveClaim(
   vesting: RewardVesting,
   currentBlock: bigint,
-  reserveReleaseThreshold: bigint // Blocks after which reserve partially releases
+  reserveReleaseThreshold: bigint, // Blocks after which reserve partially releases
 ): {
   claimableReserve: bigint;
   remainingReserve: bigint;
   canClaim: boolean;
 } {
   // Only vesting status can claim reserve
-  if (vesting.status !== 'vesting' && vesting.status !== 'completed') {
+  if (vesting.status !== "vesting" && vesting.status !== "completed") {
     return {
       claimableReserve: 0n,
       remainingReserve: vesting.reserveAmount,
@@ -210,10 +223,11 @@ export function calculateReserveClaim(
   const blocksAfterThreshold = blocksElapsed - reserveReleaseThreshold;
   const releaseRatio = Math.min(
     1.0,
-    Number(blocksAfterThreshold) / Number(reserveReleaseThreshold)
+    Number(blocksAfterThreshold) / Number(reserveReleaseThreshold),
   );
 
-  const claimableReserve = (maxReserveClaim * BigInt(Math.floor(releaseRatio * 100))) / 100n;
+  const claimableReserve =
+    (maxReserveClaim * BigInt(Math.floor(releaseRatio * 100))) / 100n;
   const remainingReserve = vesting.reserveAmount - claimableReserve;
 
   return {
@@ -230,7 +244,7 @@ export function calculateReserveClaim(
  */
 export function verifyClawback(
   vesting: RewardVesting,
-  clawback: ClawbackResult
+  clawback: ClawbackResult,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
@@ -241,16 +255,21 @@ export function verifyClawback(
   }
 
   // Breakdown should sum to challenger reward
-  const breakdownSum = clawback.breakdown.fromUnvested +
+  const breakdownSum =
+    clawback.breakdown.fromUnvested +
     clawback.breakdown.fromClawback +
     clawback.breakdown.fromReserve;
   if (breakdownSum !== clawback.challengerReward) {
-    errors.push(`Breakdown doesn't sum: ${breakdownSum} !== ${clawback.challengerReward}`);
+    errors.push(
+      `Breakdown doesn't sum: ${breakdownSum} !== ${clawback.challengerReward}`,
+    );
   }
 
   // Penalty should match clawback from released
   if (clawback.recipientPenalty !== clawback.breakdown.fromClawback) {
-    errors.push(`Penalty mismatch: ${clawback.recipientPenalty} !== ${clawback.breakdown.fromClawback}`);
+    errors.push(
+      `Penalty mismatch: ${clawback.recipientPenalty} !== ${clawback.breakdown.fromClawback}`,
+    );
   }
 
   return {
@@ -264,7 +283,7 @@ export function verifyClawback(
  */
 export function generateClawbackSummary(
   vesting: RewardVesting,
-  clawback: ClawbackResult
+  clawback: ClawbackResult,
 ): string {
   const lines: string[] = [
     `Clawback Summary for Vesting ${vesting.id}`,
@@ -282,16 +301,16 @@ export function generateClawbackSummary(
     `  - Loses (clawback): ${formatAmount(clawback.recipientPenalty)}`,
   ];
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
  * Format amount for display (assumes 18 decimals)
  */
 function formatAmount(amount: bigint): string {
-  const whole = amount / (10n ** 18n);
-  const fraction = amount % (10n ** 18n);
-  const fractionStr = fraction.toString().padStart(18, '0').slice(0, 4);
+  const whole = amount / 10n ** 18n;
+  const fraction = amount % 10n ** 18n;
+  const fractionStr = fraction.toString().padStart(18, "0").slice(0, 4);
   return `${whole}.${fractionStr} LGM`;
 }
 
@@ -302,7 +321,7 @@ function formatAmount(amount: bigint): string {
  */
 export function handleEarlyFalsification(
   vesting: RewardVesting,
-  _currentBlock: bigint
+  _currentBlock: bigint,
 ): ClawbackResult {
   // During cliff or very early, nothing released
   // All goes to challenger (or back to protocol if no challenger)
@@ -325,16 +344,20 @@ export function handleEarlyFalsification(
  */
 export function handleLateFalsification(
   vesting: RewardVesting,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): ClawbackResult {
   // Most has been released, but reserve is still available
   const release = calculateRelease(vesting, currentBlock);
 
   // Very little unvested
-  const unvested = vesting.totalAmount - vesting.reserveAmount - release.totalReleased;
+  const unvested =
+    vesting.totalAmount - vesting.reserveAmount - release.totalReleased;
 
   // Standard clawback from released
-  const clawbackFromReleased = (release.totalReleased * BigInt(Math.floor(CLAWBACK_RATES.releasedClawback * 100))) / 100n;
+  const clawbackFromReleased =
+    (release.totalReleased *
+      BigInt(Math.floor(CLAWBACK_RATES.releasedClawback * 100))) /
+    100n;
 
   // Reserve is the main value for late challengers
   const fromReserve = vesting.reserveAmount;

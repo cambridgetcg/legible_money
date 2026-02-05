@@ -5,30 +5,29 @@
  * Transactions are sorted by fee and validated before inclusion.
  */
 
-import { EventEmitter } from 'events';
-import { verify } from '../../core/crypto/signatures.js';
-import { sha512_256Hex } from '../../core/crypto/hashing.js';
-import type { PublicKey } from '../../core/crypto/keys.js';
-import type { Transaction, TransactionType } from '../pot/types.js';
+import { EventEmitter } from "events";
+import { verify } from "../../core/crypto/signatures.js";
+import { sha512_256Hex } from "../../core/crypto/hashing.js";
+import type { Transaction, TransactionType } from "../pot/types.js";
 
 // ============ Mempool Configuration ============
 
 export interface MempoolConfig {
-  maxSize: number;              // Maximum transactions
-  maxPerSender: number;         // Max transactions per sender
-  minFee: bigint;               // Minimum fee
-  maxTxSize: number;            // Maximum transaction size in bytes
-  evictionInterval: number;     // How often to evict old txs (ms)
-  maxTxAge: number;             // Maximum transaction age (ms)
+  maxSize: number; // Maximum transactions
+  maxPerSender: number; // Max transactions per sender
+  minFee: bigint; // Minimum fee
+  maxTxSize: number; // Maximum transaction size in bytes
+  evictionInterval: number; // How often to evict old txs (ms)
+  maxTxAge: number; // Maximum transaction age (ms)
 }
 
 export const DEFAULT_MEMPOOL_CONFIG: MempoolConfig = {
   maxSize: 10000,
   maxPerSender: 100,
-  minFee: 1000n,                // 0.000001 LGM
-  maxTxSize: 100000,            // 100 KB
-  evictionInterval: 60000,      // 1 minute
-  maxTxAge: 3600000,            // 1 hour
+  minFee: 1000n, // 0.000001 LGM
+  maxTxSize: 100000, // 100 KB
+  evictionInterval: 60000, // 1 minute
+  maxTxAge: 3600000, // 1 hour
 };
 
 // ============ Mempool Entry ============
@@ -47,7 +46,7 @@ export interface MempoolEntry {
 export class Mempool extends EventEmitter {
   private config: MempoolConfig;
   private pool: Map<string, MempoolEntry> = new Map();
-  private bySender: Map<string, Set<string>> = new Map();  // sender -> txHashes
+  private bySender: Map<string, Set<string>> = new Map(); // sender -> txHashes
   private evictionTimer: NodeJS.Timeout | null = null;
 
   constructor(config: Partial<MempoolConfig> = {}) {
@@ -61,7 +60,7 @@ export class Mempool extends EventEmitter {
   start(): void {
     this.evictionTimer = setInterval(
       () => this.evictExpired(),
-      this.config.evictionInterval
+      this.config.evictionInterval,
     );
   }
 
@@ -84,7 +83,7 @@ export class Mempool extends EventEmitter {
 
     // Check if already exists
     if (this.pool.has(txHash)) {
-      return { added: false, reason: 'Transaction already in pool' };
+      return { added: false, reason: "Transaction already in pool" };
     }
 
     // Validate transaction
@@ -98,14 +97,14 @@ export class Mempool extends EventEmitter {
       // Try to evict lower-fee transaction
       const evicted = this.evictLowestFee(tx.fee);
       if (!evicted) {
-        return { added: false, reason: 'Pool full, fee too low' };
+        return { added: false, reason: "Pool full, fee too low" };
       }
     }
 
     // Check per-sender limit
     const senderTxs = this.bySender.get(tx.sender) || new Set();
     if (senderTxs.size >= this.config.maxPerSender) {
-      return { added: false, reason: 'Too many transactions from sender' };
+      return { added: false, reason: "Too many transactions from sender" };
     }
 
     // Calculate size and fee per byte
@@ -130,7 +129,7 @@ export class Mempool extends EventEmitter {
     }
     this.bySender.get(tx.sender)!.add(txHash);
 
-    this.emit('tx:added', entry);
+    this.emit("tx:added", entry);
 
     return { added: true, txHash };
   }
@@ -153,7 +152,7 @@ export class Mempool extends EventEmitter {
       }
     }
 
-    this.emit('tx:removed', entry);
+    this.emit("tx:removed", entry);
 
     return true;
   }
@@ -180,7 +179,7 @@ export class Mempool extends EventEmitter {
     if (!txHashes) return [];
 
     return Array.from(txHashes)
-      .map(hash => this.pool.get(hash)?.tx)
+      .map((hash) => this.pool.get(hash)?.tx)
       .filter((tx): tx is Transaction => tx !== undefined);
   }
 
@@ -190,16 +189,15 @@ export class Mempool extends EventEmitter {
    */
   getForBlock(maxCount: number, maxSize: number): Transaction[] {
     // Get all entries sorted by fee per byte
-    const entries = Array.from(this.pool.values())
-      .sort((a, b) => {
-        // Sort by fee per byte (descending)
-        if (b.feePerByte > a.feePerByte) return 1;
-        if (b.feePerByte < a.feePerByte) return -1;
-        // Then by total fee
-        if (b.fee > a.fee) return 1;
-        if (b.fee < a.fee) return -1;
-        return 0;
-      });
+    const entries = Array.from(this.pool.values()).sort((a, b) => {
+      // Sort by fee per byte (descending)
+      if (b.feePerByte > a.feePerByte) return 1;
+      if (b.feePerByte < a.feePerByte) return -1;
+      // Then by total fee
+      if (b.fee > a.fee) return 1;
+      if (b.fee < a.fee) return -1;
+      return 0;
+    });
 
     const selected: Transaction[] = [];
     let totalSize = 0;
@@ -220,8 +218,8 @@ export class Mempool extends EventEmitter {
    */
   getByType(type: TransactionType): Transaction[] {
     return Array.from(this.pool.values())
-      .filter(entry => entry.tx.type === type)
-      .map(entry => entry.tx);
+      .filter((entry) => entry.tx.type === type)
+      .map((entry) => entry.tx);
   }
 
   /**
@@ -236,15 +234,18 @@ export class Mempool extends EventEmitter {
    */
   getStats(): MempoolStats {
     const entries = Array.from(this.pool.values());
-    const fees = entries.map(e => e.fee);
+    const fees = entries.map((e) => e.fee);
 
     return {
       size: this.pool.size,
       senders: this.bySender.size,
       totalFees: fees.reduce((a, b) => a + b, 0n),
-      minFee: fees.length > 0 ? fees.reduce((a, b) => a < b ? a : b) : 0n,
-      maxFee: fees.length > 0 ? fees.reduce((a, b) => a > b ? a : b) : 0n,
-      avgFee: fees.length > 0 ? fees.reduce((a, b) => a + b, 0n) / BigInt(fees.length) : 0n,
+      minFee: fees.length > 0 ? fees.reduce((a, b) => (a < b ? a : b)) : 0n,
+      maxFee: fees.length > 0 ? fees.reduce((a, b) => (a > b ? a : b)) : 0n,
+      avgFee:
+        fees.length > 0
+          ? fees.reduce((a, b) => a + b, 0n) / BigInt(fees.length)
+          : 0n,
     };
   }
 
@@ -254,21 +255,24 @@ export class Mempool extends EventEmitter {
   clear(): void {
     this.pool.clear();
     this.bySender.clear();
-    this.emit('cleared');
+    this.emit("cleared");
   }
 
   // ============ Private Methods ============
 
-  private validateTransaction(tx: Transaction): { valid: boolean; reason?: string } {
+  private validateTransaction(tx: Transaction): {
+    valid: boolean;
+    reason?: string;
+  } {
     // Check size
     const size = JSON.stringify(tx).length;
     if (size > this.config.maxTxSize) {
-      return { valid: false, reason: 'Transaction too large' };
+      return { valid: false, reason: "Transaction too large" };
     }
 
     // Check minimum fee
     if (tx.fee < this.config.minFee) {
-      return { valid: false, reason: 'Fee too low' };
+      return { valid: false, reason: "Fee too low" };
     }
 
     // Verify signature
@@ -276,24 +280,26 @@ export class Mempool extends EventEmitter {
     const valid = verify(
       new TextEncoder().encode(payload),
       tx.signature,
-      tx.sender
+      tx.sender,
     );
 
     if (!valid) {
-      return { valid: false, reason: 'Invalid signature' };
+      return { valid: false, reason: "Invalid signature" };
     }
 
     return { valid: true };
   }
 
   private hashTransaction(tx: Transaction): string {
-    return sha512_256Hex(JSON.stringify({
-      type: tx.type,
-      sender: tx.sender,
-      nonce: tx.nonce.toString(),
-      payload: tx.payload,
-      signature: tx.signature,
-    }));
+    return sha512_256Hex(
+      JSON.stringify({
+        type: tx.type,
+        sender: tx.sender,
+        nonce: tx.nonce.toString(),
+        payload: tx.payload,
+        signature: tx.signature,
+      }),
+    );
   }
 
   private evictLowestFee(newFee: bigint): boolean {
@@ -331,7 +337,7 @@ export class Mempool extends EventEmitter {
     }
 
     if (toRemove.length > 0) {
-      this.emit('evicted', toRemove.length);
+      this.emit("evicted", toRemove.length);
     }
   }
 }
@@ -353,18 +359,20 @@ export interface MempoolStats {
 export function createClaimPool(config: Partial<MempoolConfig> = {}): Mempool {
   return new Mempool({
     ...config,
-    maxSize: 1000,                // Fewer claims than general txs
-    maxPerSender: 10,             // Limit claims per agent
+    maxSize: 1000, // Fewer claims than general txs
+    maxPerSender: 10, // Limit claims per agent
   });
 }
 
 /**
  * Create a mempool for verification transactions
  */
-export function createVerificationPool(config: Partial<MempoolConfig> = {}): Mempool {
+export function createVerificationPool(
+  config: Partial<MempoolConfig> = {},
+): Mempool {
   return new Mempool({
     ...config,
     maxSize: 5000,
-    minFee: 0n,                   // Verifications may be fee-free
+    minFee: 0n, // Verifications may be fee-free
   });
 }

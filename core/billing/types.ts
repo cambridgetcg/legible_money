@@ -4,8 +4,8 @@
  * Types for usage-based billing with automatic knowledge distribution.
  */
 
-import type { DID } from '../../agents/identity/did.js';
-import type { CitationReward } from '../knowledge/types.js';
+import type { DID } from "../../core/agents/identity/did.js";
+import type { CitationReward } from "../knowledge/types.js";
 
 /**
  * API call record
@@ -67,7 +67,7 @@ export interface APIProvider {
 
   // Pricing
   basePricePerCall: bigint;
-  pricingModel: 'per_call' | 'per_token' | 'per_fact';
+  pricingModel: "per_call" | "per_token" | "per_fact";
 
   // SLA commitments
   maxLatency: number;
@@ -85,7 +85,7 @@ export interface APIProvider {
   pendingPayout: bigint;
 
   // Status
-  status: 'active' | 'suspended' | 'deregistered';
+  status: "active" | "suspended" | "deregistered";
   registeredAt: number;
 }
 
@@ -94,7 +94,7 @@ export interface APIProvider {
  */
 export interface APIEndpoint {
   path: string;
-  method: 'GET' | 'POST';
+  method: "GET" | "POST";
   description: string;
   knowledgeDomains: string[];
   priceMultiplier: number;
@@ -114,7 +114,7 @@ export interface PaymentChannel {
   available: bigint;
 
   // State
-  status: 'open' | 'closing' | 'closed';
+  status: "open" | "closing" | "closed";
   openedAt: number;
   expiresAt: number;
 
@@ -147,7 +147,7 @@ export interface APIQuote {
  * API settlement transaction
  */
 export interface APISettlement {
-  type: 'api_settlement';
+  type: "api_settlement";
   callId: string;
   timestamp: number;
   blockNumber: number;
@@ -160,7 +160,12 @@ export interface APISettlement {
   transfers: Array<{
     recipient: DID;
     amount: bigint;
-    reason: 'api_service' | 'fact_reward' | 'citation_reward' | 'protocol_burn' | 'protocol_treasury';
+    reason:
+      | "api_service"
+      | "fact_reward"
+      | "citation_reward"
+      | "protocol_burn"
+      | "protocol_treasury";
     factId?: string;
   }>;
 
@@ -174,20 +179,20 @@ export interface APISettlement {
  */
 export interface BillingParameters {
   // Distribution splits
-  apiProviderShare: number;     // Default: 0.60
-  knowledgePoolShare: number;   // Default: 0.30
-  protocolShare: number;        // Default: 0.10
+  apiProviderShare: number; // Default: 0.60
+  knowledgePoolShare: number; // Default: 0.30
+  protocolShare: number; // Default: 0.10
 
   // Protocol split
-  burnRate: number;             // Of protocol share: 0.50
-  treasuryRate: number;         // Of protocol share: 0.50
+  burnRate: number; // Of protocol share: 0.50
+  treasuryRate: number; // Of protocol share: 0.50
 
   // Research share (Protocol Research Repository)
   // Applied to ALL rewards before distribution
-  researchShareRate: number;    // Default: 0.22 (22%)
+  researchShareRate: number; // Default: 0.22 (22%)
 
   // Pricing
-  basePricePerCall: bigint;     // Minimum fee
+  basePricePerCall: bigint; // Minimum fee
   confidencePremiumRate: number; // Multiplier for high confidence
   fundamentalityPremiumRate: number;
   freshnessDiscountRate: number;
@@ -198,12 +203,12 @@ export interface BillingParameters {
 }
 
 export const DEFAULT_BILLING_PARAMETERS: BillingParameters = {
-  apiProviderShare: 0.60,
-  knowledgePoolShare: 0.30,
-  protocolShare: 0.10,
+  apiProviderShare: 0.6,
+  knowledgePoolShare: 0.3,
+  protocolShare: 0.1,
 
-  burnRate: 0.50,
-  treasuryRate: 0.50,
+  burnRate: 0.5,
+  treasuryRate: 0.5,
 
   // 22% of ALL rewards go to Protocol Research Repository
   researchShareRate: 0.22,
@@ -214,7 +219,7 @@ export const DEFAULT_BILLING_PARAMETERS: BillingParameters = {
   freshnessDiscountRate: 0.1,
 
   maxPricePerCall: 1000000000000000000n, // 1 LGM
-  minProviderStake: 1000n * 10n ** 18n,   // 1000 LGM
+  minProviderStake: 1000n * 10n ** 18n, // 1000 LGM
 };
 
 /**
@@ -222,41 +227,42 @@ export const DEFAULT_BILLING_PARAMETERS: BillingParameters = {
  */
 export interface KnowledgeDistributionParams {
   // Primary splits (must sum to 1.0)
-  submitterBaseShare: number;      // Default: 0.40
-  verifierPoolShare: number;       // Default: 0.25
-  ancestorPoolShare: number;       // Default: 0.25
-  referencePoolShare: number;      // Default: 0.05
-  challengePoolShare: number;      // Default: 0.05
+  submitterBaseShare: number; // Default: 0.40
+  verifierPoolShare: number; // Default: 0.25
+  ancestorPoolShare: number; // Default: 0.25
+  referencePoolShare: number; // Default: 0.05
+  challengePoolShare: number; // Default: 0.05
 
   // Submitter modifiers
-  maxSubmitterShare: number;       // Default: 0.60 (cap after bonuses)
+  maxSubmitterShare: number; // Default: 0.60 (cap after bonuses)
 
   // Ancestor decay
-  ancestorDecayRate: number;       // Default: 0.50
-  maxAncestorDepth: number;        // Default: 10
+  ancestorDecayRate: number; // Default: 0.50
+  maxAncestorDepth: number; // Default: 10
 
   // Bonuses
-  fundamentalityBonusMax: number;  // Default: 2.0
-  crossDomainBonus: number;        // Default: 1.2
-  accuracyBonusMax: number;        // Default: 1.5
+  fundamentalityBonusMax: number; // Default: 2.0
+  crossDomainBonus: number; // Default: 1.2
+  accuracyBonusMax: number; // Default: 1.5
 }
 
-export const DEFAULT_KNOWLEDGE_DISTRIBUTION_PARAMS: KnowledgeDistributionParams = {
-  submitterBaseShare: 0.40,
-  verifierPoolShare: 0.25,
-  ancestorPoolShare: 0.25,
-  referencePoolShare: 0.05,
-  challengePoolShare: 0.05,
+export const DEFAULT_KNOWLEDGE_DISTRIBUTION_PARAMS: KnowledgeDistributionParams =
+  {
+    submitterBaseShare: 0.4,
+    verifierPoolShare: 0.25,
+    ancestorPoolShare: 0.25,
+    referencePoolShare: 0.05,
+    challengePoolShare: 0.05,
 
-  maxSubmitterShare: 0.60,
+    maxSubmitterShare: 0.6,
 
-  ancestorDecayRate: 0.50,
-  maxAncestorDepth: 10,
+    ancestorDecayRate: 0.5,
+    maxAncestorDepth: 10,
 
-  fundamentalityBonusMax: 2.0,
-  crossDomainBonus: 1.2,
-  accuracyBonusMax: 1.5,
-};
+    fundamentalityBonusMax: 2.0,
+    crossDomainBonus: 1.2,
+    accuracyBonusMax: 1.5,
+  };
 
 /**
  * Detailed knowledge distribution result
@@ -321,6 +327,6 @@ export interface AncestorInfo {
  */
 export interface ChallengeInfo {
   challengeId: string;
-  status: 'pending' | 'upheld' | 'rejected';
+  status: "pending" | "upheld" | "rejected";
   defenders: DID[];
 }

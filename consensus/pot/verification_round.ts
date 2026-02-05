@@ -11,13 +11,26 @@
  * 4. COMPLETE: Final result recorded
  */
 
-import { sha512_256Hex, domainHash, HASH_DOMAINS } from '../../core/crypto/hashing.js';
-import { commit, verifyCommitment, commitVerdict, verifyVerdictCommitment } from '../../core/crypto/commitment.js';
-import { sign, verify, verifyDomainSeparated, signDomainSeparated } from '../../core/crypto/signatures.js';
-import { bytesToHex } from '../../core/crypto/keys.js';
-import { randomBytes } from '@noble/hashes/utils';
-import type { PublicKey, PrivateKey } from '../../core/crypto/keys.js';
-import type { ClaimSubmission, Confidence, Reference } from '../../core/knowledge/types.js';
+import {
+  sha512_256Hex,
+  domainHash,
+  HASH_DOMAINS,
+} from "../../core/crypto/hashing.js";
+import {
+  verifyDomainSeparated,
+  signDomainSeparated,
+} from "../../core/crypto/signatures.js";
+import { bytesToHex } from "../../core/crypto/keys.js";
+import { randomBytes } from "@noble/hashes/utils";
+// GAP-002 FIX: Import VRF verification for validator selection
+import { verifyValidatorVRFSelection } from "./validator_selection.js";
+import type { PublicKey, PrivateKey } from "../../core/crypto/keys.js";
+import type {
+  ClaimSubmission,
+  Confidence,
+} from "../../core/knowledge/types.js";
+import type { SchemaTiming } from "../../core/knowledge/schemas/types.js";
+import type { OntologicalStratum } from "../../core/knowledge/ontology/types.js";
 import type {
   VerificationRound,
   ValidatorSelection,
@@ -26,20 +39,97 @@ import type {
   VerificationResult,
   RoundPhase,
   ConsensusParams,
-} from './types.js';
+} from "./types.js";
+
+// Cross-Stratum Validation imports
+import type { CrossStratumValidationResult } from "../cross_stratum/types.js";
+import {
+  validateCrossStratumCoverage,
+  calculateCrossStratumConfidence,
+  CROSS_STRATUM_CONFIG,
+} from "../cross_stratum/index.js";
 
 // ============ Round Creation ============
 
 /**
+ * VULN-014 FIX: Generate unique claim ID that includes temporal context
+ * This prevents claim ID collisions when the same claim content is submitted
+ * at different times or by different submitters.
+ */
+export function generateClaimId(
+  claim: ClaimSubmission,
+  startBlock: number,
+  submitter?: string,
+): string {
+  // Include claim content, block number, and optional submitter for uniqueness
+  const claimData = {
+    claim: JSON.stringify(claim, (_, v) =>
+      typeof v === "bigint" ? v.toString() : v,
+    ),
+    startBlock,
+    submitter: submitter || "unknown",
+  };
+  return sha512_256Hex(JSON.stringify(claimData));
+}
+
+/**
+ * Round timing configuration
+ *
+ * Can come from schema (dynamic) or consensus params (default)
+ */
+export interface RoundTiming {
+  commitPhaseBlocks: number;
+  revealPhaseBlocks: number;
+  totalRoundBlocks: number;
+}
+
+/**
+ * Get timing for a verification round
+ *
+ * Uses schema timing if provided, otherwise falls back to consensus params
+ */
+export function getRoundTiming(
+  params: ConsensusParams,
+  schemaTiming?: SchemaTiming,
+): RoundTiming {
+  if (schemaTiming) {
+    return {
+      commitPhaseBlocks: schemaTiming.commitPhaseBlocks,
+      revealPhaseBlocks: schemaTiming.revealPhaseBlocks,
+      totalRoundBlocks: schemaTiming.totalRoundBlocks,
+    };
+  }
+
+  return {
+    commitPhaseBlocks: params.commitPhaseBlocks,
+    revealPhaseBlocks: params.revealPhaseBlocks,
+    totalRoundBlocks: params.verificationRoundBlocks,
+  };
+}
+
+/**
  * Create a new verification round for a claim
+ *
+ * @param claim - The claim to verify
+ * @param selectedValidators - Validators selected for this round
+ * @param startBlock - Block number when round starts
+ * @param params - Consensus parameters (default timing)
+ * @param submitter - Optional submitter for unique ID generation
+ * @param schemaTiming - Optional schema-specific timing (overrides params)
  */
 export function createVerificationRound(
   claim: ClaimSubmission,
   selectedValidators: ValidatorSelection[],
   startBlock: number,
-  params: ConsensusParams
+  params: ConsensusParams,
+  submitter?: string, // VULN-014 FIX: Optional submitter for unique ID generation
+  schemaTiming?: SchemaTiming, // Schema-based dynamic timing
 ): VerificationRound {
-  const claimId = sha512_256Hex(JSON.stringify(claim));
+  // VULN-014 FIX: Generate unique claim ID including block context
+  const claimId = generateClaimId(claim, startBlock, submitter);
+
+  // Get timing (schema overrides params)
+  const timing = getRoundTiming(params, schemaTiming);
 
   return {
     id: `round_${claimId}_${startBlock}`,
@@ -47,20 +137,24 @@ export function createVerificationRound(
     claim,
 
     startBlock,
-    commitDeadline: startBlock + params.commitPhaseBlocks,
-    revealDeadline: startBlock + params.commitPhaseBlocks + params.revealPhaseBlocks,
-    completionBlock: startBlock + params.verificationRoundBlocks,
+    commitDeadline: startBlock + timing.commitPhaseBlocks,
+    revealDeadline:
+      startBlock + timing.commitPhaseBlocks + timing.revealPhaseBlocks,
+    completionBlock: startBlock + timing.totalRoundBlocks,
 
     selectedValidators,
     requiredValidators: Math.max(
       params.minValidators,
-      Math.ceil(selectedValidators.length * params.validatorQuorum)
+      Math.ceil(selectedValidators.length * params.validatorQuorum),
     ),
 
-    phase: 'pending',
+    phase: "pending",
 
     commitments: new Map(),
     reveals: new Map(),
+
+    // Store schema info for validators
+    schemaId: claim.schemaId,
   };
 }
 
@@ -70,7 +164,7 @@ export function createVerificationRound(
 export function startRound(round: VerificationRound): VerificationRound {
   return {
     ...round,
-    phase: 'commit',
+    phase: "commit",
   };
 }
 
@@ -83,9 +177,9 @@ export function generateCommitment(
   validatorPrivateKey: PrivateKey,
   validatorPublicKey: PublicKey,
   roundId: string,
-  verdict: 'confirmed' | 'rejected' | 'uncertain',
+  verdict: "confirmed" | "rejected" | "uncertain",
   confidence: Confidence,
-  referencesChecked: string[]
+  referencesChecked: string[],
 ): {
   commitment: ValidatorCommitment;
   nonce: string;
@@ -102,13 +196,15 @@ export function generateCommitment(
     nonce,
   });
 
-  const commitmentHash = sha512_256Hex(domainHash(HASH_DOMAINS.COMMITMENT, commitData).toString());
+  const commitmentHash = sha512_256Hex(
+    domainHash(HASH_DOMAINS.COMMITMENT, commitData).toString(),
+  );
 
   // Sign the commitment
   const signature = signDomainSeparated(
-    'LGM.verification.commit.v1',
+    "LGM.verification.commit.v1",
     `${roundId}:${commitmentHash}`,
-    validatorPrivateKey
+    validatorPrivateKey,
   );
 
   return {
@@ -123,45 +219,80 @@ export function generateCommitment(
 }
 
 /**
- * Add a commitment to a round
+ * GAP-002 FIX: Add a commitment to a round with proper VRF verification
+ *
+ * This is the secure version that verifies the validator's VRF proof
+ * to ensure they are legitimately selected for this verification round.
  */
-export function addCommitment(
+export function addCommitmentWithVRF(
   round: VerificationRound,
   commitment: ValidatorCommitment,
-  currentBlock: number
-): { round: VerificationRound; accepted: boolean; reason?: string } {
+  currentBlock: number,
+  previousBlockHash: string,
+  validatorStake: bigint,
+  totalStake: bigint,
+  params: ConsensusParams,
+): {
+  round: VerificationRound;
+  accepted: boolean;
+  reason?: string;
+  priority?: bigint;
+} {
   // Check phase
-  if (round.phase !== 'commit') {
-    return { round, accepted: false, reason: 'Not in commit phase' };
+  if (round.phase !== "commit") {
+    return { round, accepted: false, reason: "Not in commit phase" };
   }
 
   // Check deadline
   if (currentBlock > round.commitDeadline) {
-    return { round, accepted: false, reason: 'Commit deadline passed' };
-  }
-
-  // Check validator is selected
-  const isSelected = round.selectedValidators.some(
-    v => v.validator === commitment.validator && v.selected
-  );
-  if (!isSelected) {
-    return { round, accepted: false, reason: 'Validator not selected' };
+    return { round, accepted: false, reason: "Commit deadline passed" };
   }
 
   // Check not already committed
   if (round.commitments.has(commitment.validator)) {
-    return { round, accepted: false, reason: 'Already committed' };
+    return { round, accepted: false, reason: "Already committed" };
+  }
+
+  // SECURITY: Require VRF proof for secure commitment verification
+  if (!commitment.vrfOutput || !commitment.vrfProof) {
+    return {
+      round,
+      accepted: false,
+      reason: "VRF output and proof required for secure commitment",
+    };
+  }
+
+  // GAP-002 FIX: Verify VRF-based selection
+  // This proves the validator is legitimately selected based on their stake-weighted probability
+  const vrfResult = verifyValidatorVRFSelection(
+    commitment.validator,
+    commitment.vrfOutput,
+    commitment.vrfProof,
+    round.claimId,
+    BigInt(round.startBlock),
+    previousBlockHash,
+    validatorStake,
+    totalStake,
+    params,
+  );
+
+  if (!vrfResult.valid) {
+    return {
+      round,
+      accepted: false,
+      reason: `VRF verification failed: ${vrfResult.reason}`,
+    };
   }
 
   // Verify signature
-  const valid = verifyDomainSeparated(
-    'LGM.verification.commit.v1',
+  const sigValid = verifyDomainSeparated(
+    "LGM.verification.commit.v1",
     `${round.id}:${commitment.commitment}`,
     commitment.signature,
-    commitment.validator
+    commitment.validator,
   );
-  if (!valid) {
-    return { round, accepted: false, reason: 'Invalid signature' };
+  if (!sigValid) {
+    return { round, accepted: false, reason: "Invalid signature" };
   }
 
   // Add commitment
@@ -171,17 +302,23 @@ export function addCommitment(
   return {
     round: { ...round, commitments: newCommitments },
     accepted: true,
+    priority: vrfResult.priority,
   };
 }
+
+// SECURITY: The deprecated addCommitment function has been removed.
+// It allowed commitments without VRF proof verification, enabling anyone
+// with minimal stake to participate in ALL verification rounds.
+// Use addCommitmentWithVRF instead which properly verifies VRF proofs.
 
 /**
  * Transition from commit to reveal phase
  */
 export function transitionToReveal(
   round: VerificationRound,
-  currentBlock: number
+  currentBlock: number,
 ): VerificationRound {
-  if (round.phase !== 'commit') {
+  if (round.phase !== "commit") {
     return round;
   }
 
@@ -191,7 +328,7 @@ export function transitionToReveal(
 
   return {
     ...round,
-    phase: 'reveal',
+    phase: "reveal",
   };
 }
 
@@ -204,11 +341,11 @@ export function generateReveal(
   validatorPrivateKey: PrivateKey,
   validatorPublicKey: PublicKey,
   roundId: string,
-  verdict: 'confirmed' | 'rejected' | 'uncertain',
+  verdict: "confirmed" | "rejected" | "uncertain",
   confidence: Confidence,
   nonce: string,
   referencesChecked: string[],
-  reasoning?: string
+  reasoning?: string,
 ): ValidatorReveal {
   // Sign the reveal
   const revealData = JSON.stringify({
@@ -221,9 +358,9 @@ export function generateReveal(
   });
 
   const signature = signDomainSeparated(
-    'LGM.verification.reveal.v1',
+    "LGM.verification.reveal.v1",
     revealData,
-    validatorPrivateKey
+    validatorPrivateKey,
   );
 
   return {
@@ -244,22 +381,26 @@ export function generateReveal(
 export function addReveal(
   round: VerificationRound,
   reveal: ValidatorReveal,
-  currentBlock: number
+  currentBlock: number,
 ): { round: VerificationRound; accepted: boolean; reason?: string } {
   // Check phase
-  if (round.phase !== 'reveal') {
-    return { round, accepted: false, reason: 'Not in reveal phase' };
+  if (round.phase !== "reveal") {
+    return { round, accepted: false, reason: "Not in reveal phase" };
   }
 
   // Check deadline
   if (currentBlock > round.revealDeadline) {
-    return { round, accepted: false, reason: 'Reveal deadline passed' };
+    return { round, accepted: false, reason: "Reveal deadline passed" };
   }
 
   // Check validator committed
   const commitment = round.commitments.get(reveal.validator);
   if (!commitment) {
-    return { round, accepted: false, reason: 'No commitment from this validator' };
+    return {
+      round,
+      accepted: false,
+      reason: "No commitment from this validator",
+    };
   }
 
   // Verify reveal matches commitment
@@ -270,10 +411,16 @@ export function addReveal(
     referencesChecked: reveal.referencesChecked.sort(),
     nonce: reveal.nonce,
   });
-  const expectedCommitment = sha512_256Hex(domainHash(HASH_DOMAINS.COMMITMENT, commitData).toString());
+  const expectedCommitment = sha512_256Hex(
+    domainHash(HASH_DOMAINS.COMMITMENT, commitData).toString(),
+  );
 
   if (expectedCommitment !== commitment.commitment) {
-    return { round, accepted: false, reason: 'Reveal does not match commitment' };
+    return {
+      round,
+      accepted: false,
+      reason: "Reveal does not match commitment",
+    };
   }
 
   // Verify signature
@@ -287,13 +434,13 @@ export function addReveal(
   });
 
   const valid = verifyDomainSeparated(
-    'LGM.verification.reveal.v1',
+    "LGM.verification.reveal.v1",
     revealData,
     reveal.signature,
-    reveal.validator
+    reveal.validator,
   );
   if (!valid) {
-    return { round, accepted: false, reason: 'Invalid signature' };
+    return { round, accepted: false, reason: "Invalid signature" };
   }
 
   // Add reveal
@@ -315,9 +462,9 @@ export function aggregateResults(
   round: VerificationRound,
   validatorStakes: Map<string, bigint>,
   currentBlock: number,
-  params: ConsensusParams
+  params: ConsensusParams,
 ): VerificationRound {
-  if (round.phase !== 'reveal' || currentBlock < round.revealDeadline) {
+  if (round.phase !== "reveal" || currentBlock < round.revealDeadline) {
     return round;
   }
 
@@ -336,69 +483,93 @@ export function aggregateResults(
     totalParticipatingStake += stake;
 
     switch (reveal.verdict) {
-      case 'confirmed':
+      case "confirmed":
         confirmedStake += stake;
         break;
-      case 'rejected':
+      case "rejected":
         rejectedStake += stake;
         break;
-      case 'uncertain':
+      case "uncertain":
         uncertainStake += stake;
         break;
     }
   }
 
   // Check for validators who committed but didn't reveal (slash them)
-  for (const [validator, commitment] of round.commitments) {
+  for (const [validator, _commitment] of round.commitments) {
     if (!round.reveals.has(validator)) {
       const stake = validatorStakes.get(validator) || 0n;
-      const slashAmount = (stake * BigInt(Math.floor(params.missedVerificationSlash * 10000))) / 10000n;
+      const slashAmount =
+        (stake * BigInt(Math.floor(params.missedVerificationSlash * 10000))) /
+        10000n;
       slashes.set(validator, slashAmount);
     }
   }
 
   // Determine outcome
-  let outcome: 'accepted' | 'rejected' | 'contested' | 'insufficient';
+  let outcome: "accepted" | "rejected" | "contested" | "insufficient";
   let finalConfidence: Confidence;
 
   const totalSelectedStake = round.selectedValidators.reduce(
     (sum, v) => sum + (validatorStakes.get(v.validator) || 0n),
-    0n
+    0n,
   );
 
-  const participationRate = Number(totalParticipatingStake) / Number(totalSelectedStake);
+  // Use bigint basis-point arithmetic to avoid Number() overflow on real stakes
+  // (1111 LGM = 1.111×10²¹ > Number.MAX_SAFE_INTEGER)
+  const participationBps =
+    totalSelectedStake > 0n
+      ? (totalParticipatingStake * 10000n) / totalSelectedStake
+      : 0n;
+  const quorumBps = BigInt(Math.floor(params.validatorQuorum * 10000));
 
-  if (participationRate < params.validatorQuorum) {
-    outcome = 'insufficient';
+  if (participationBps < quorumBps) {
+    outcome = "insufficient";
     finalConfidence = 0;
   } else {
-    const confirmedFraction = Number(confirmedStake) / Number(totalParticipatingStake);
-    const rejectedFraction = Number(rejectedStake) / Number(totalParticipatingStake);
+    const confirmedBps =
+      totalParticipatingStake > 0n
+        ? (confirmedStake * 10000n) / totalParticipatingStake
+        : 0n;
+    const rejectedBps =
+      totalParticipatingStake > 0n
+        ? (rejectedStake * 10000n) / totalParticipatingStake
+        : 0n;
+    const acceptanceBps = BigInt(
+      Math.floor(params.acceptanceThreshold * 10000),
+    );
+    const rejectionBps = BigInt(Math.floor(params.rejectionThreshold * 10000));
 
-    if (confirmedFraction >= params.acceptanceThreshold) {
-      outcome = 'accepted';
-      finalConfidence = calculateAggregatedConfidence(round.reveals, validatorStakes, 'confirmed');
-    } else if (rejectedFraction >= params.rejectionThreshold) {
-      outcome = 'rejected';
+    if (confirmedBps >= acceptanceBps) {
+      outcome = "accepted";
+      finalConfidence = calculateAggregatedConfidence(
+        round.reveals,
+        validatorStakes,
+        "confirmed",
+      );
+    } else if (rejectedBps >= rejectionBps) {
+      outcome = "rejected";
       finalConfidence = 0;
     } else {
-      outcome = 'contested';
+      outcome = "contested";
       finalConfidence = 0.5; // Maximum uncertainty
     }
   }
 
   // Calculate rewards and slashes based on outcome
-  if (outcome === 'accepted' || outcome === 'rejected') {
-    const consensusVerdict = outcome === 'accepted' ? 'confirmed' : 'rejected';
+  if (outcome === "accepted" || outcome === "rejected") {
+    const consensusVerdict = outcome === "accepted" ? "confirmed" : "rejected";
 
     for (const [validator, reveal] of round.reveals) {
       if (reveal.verdict === consensusVerdict) {
         // Reward for correct verification
         rewards.set(validator, params.verificationReward);
-      } else if (reveal.verdict !== 'uncertain') {
+      } else if (reveal.verdict !== "uncertain") {
         // Slash for wrong verification
         const stake = validatorStakes.get(validator) || 0n;
-        const slashAmount = (stake * BigInt(Math.floor(params.wrongVerificationSlash * 10000))) / 10000n;
+        const slashAmount =
+          (stake * BigInt(Math.floor(params.wrongVerificationSlash * 10000))) /
+          10000n;
         slashes.set(validator, (slashes.get(validator) || 0n) + slashAmount);
       }
       // Uncertain verdicts get no reward but no slash
@@ -410,16 +581,29 @@ export function aggregateResults(
     outcome,
     finalConfidence,
     confidenceBreakdown: {
-      confirmed: Number(confirmedStake) / Number(totalParticipatingStake || 1n),
-      rejected: Number(rejectedStake) / Number(totalParticipatingStake || 1n),
-      uncertain: Number(uncertainStake) / Number(totalParticipatingStake || 1n),
+      confirmed:
+        totalParticipatingStake > 0n
+          ? Number((confirmedStake * 10000n) / totalParticipatingStake) / 10000
+          : 0,
+      rejected:
+        totalParticipatingStake > 0n
+          ? Number((rejectedStake * 10000n) / totalParticipatingStake) / 10000
+          : 0,
+      uncertain:
+        totalParticipatingStake > 0n
+          ? Number((uncertainStake * 10000n) / totalParticipatingStake) / 10000
+          : 0,
     },
     totalValidators: round.selectedValidators.length,
     participatingValidators: round.reveals.size,
-    agreementLevel: Math.max(
-      Number(confirmedStake),
-      Number(rejectedStake)
-    ) / Number(totalParticipatingStake || 1n),
+    agreementLevel:
+      totalParticipatingStake > 0n
+        ? Number(
+            ((confirmedStake > rejectedStake ? confirmedStake : rejectedStake) *
+              10000n) /
+              totalParticipatingStake,
+          ) / 10000
+        : 0,
     rewards,
     slashes,
     recordedAt: currentBlock,
@@ -427,7 +611,7 @@ export function aggregateResults(
 
   return {
     ...round,
-    phase: 'complete',
+    phase: "complete",
     result,
   };
 }
@@ -438,20 +622,25 @@ export function aggregateResults(
 function calculateAggregatedConfidence(
   reveals: Map<string, ValidatorReveal>,
   stakes: Map<string, bigint>,
-  consensusVerdict: 'confirmed' | 'rejected'
+  consensusVerdict: "confirmed" | "rejected",
 ): Confidence {
-  let weightedConfidence = 0;
-  let totalWeight = 0;
+  // Use bigint basis-point arithmetic to avoid Number() overflow on large stakes.
+  // Confidence is 0.0–1.0; we scale to 0–10000 basis points for bigint math.
+  let weightedConfidenceBps = 0n;
+  let totalWeight = 0n;
 
   for (const [validator, reveal] of reveals) {
     if (reveal.verdict === consensusVerdict) {
-      const stake = Number(stakes.get(validator) || 0n);
-      weightedConfidence += reveal.confidence * stake;
+      const stake = stakes.get(validator) || 0n;
+      const confidenceBps = BigInt(Math.round(reveal.confidence * 10000));
+      weightedConfidenceBps += confidenceBps * stake;
       totalWeight += stake;
     }
   }
 
-  return totalWeight > 0 ? weightedConfidence / totalWeight : 0;
+  return totalWeight > 0n
+    ? Number(weightedConfidenceBps / totalWeight) / 10000
+    : 0;
 }
 
 // ============ Round Status ============
@@ -461,16 +650,16 @@ function calculateAggregatedConfidence(
  */
 export function getCurrentPhase(
   round: VerificationRound,
-  currentBlock: number
+  currentBlock: number,
 ): RoundPhase {
-  if (round.phase === 'complete') return 'complete';
+  if (round.phase === "complete") return "complete";
 
-  if (currentBlock < round.startBlock) return 'pending';
-  if (currentBlock <= round.commitDeadline) return 'commit';
-  if (currentBlock <= round.revealDeadline) return 'reveal';
-  if (currentBlock <= round.completionBlock) return 'aggregation';
+  if (currentBlock < round.startBlock) return "pending";
+  if (currentBlock <= round.commitDeadline) return "commit";
+  if (currentBlock <= round.revealDeadline) return "reveal";
+  if (currentBlock <= round.completionBlock) return "aggregation";
 
-  return 'complete';
+  return "complete";
 }
 
 /**
@@ -478,9 +667,10 @@ export function getCurrentPhase(
  */
 export function hasQuorum(
   round: VerificationRound,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): boolean {
-  return round.commits.size >= round.requiredValidators;
+  // GAP-001 FIX: Changed `commits` to `commitments` to match type definition
+  return round.commitments.size >= round.requiredValidators;
 }
 
 /**
@@ -505,5 +695,163 @@ export function getRoundSummary(round: VerificationRound): {
     required: round.requiredValidators,
     hasResult: !!round.result,
     outcome: round.result?.outcome,
+  };
+}
+
+// ============ Cross-Stratum Validation ============
+
+/**
+ * Extended verification round with cross-stratum requirements
+ */
+export interface CrossStratumVerificationRound extends VerificationRound {
+  /** Stratum of the claim being verified */
+  claimStratum: OntologicalStratum;
+
+  /** Cross-stratum validation status */
+  crossStratumValidation?: CrossStratumValidationResult;
+
+  /** Validators by stratum */
+  validatorStrata: Map<string, OntologicalStratum>;
+}
+
+/**
+ * Create a verification round with cross-stratum requirements
+ *
+ * For claims in higher strata (e.g., biology), this ensures
+ * validators from lower strata (e.g., chemistry) are included.
+ */
+export function createCrossStratumVerificationRound(
+  claim: ClaimSubmission,
+  claimStratum: OntologicalStratum,
+  selectedValidators: ValidatorSelection[],
+  validatorStrata: Map<string, OntologicalStratum>,
+  startBlock: number,
+  params: ConsensusParams,
+  submitter?: string,
+  schemaTiming?: SchemaTiming,
+): CrossStratumVerificationRound {
+  // Create base round
+  const baseRound = createVerificationRound(
+    claim,
+    selectedValidators,
+    startBlock,
+    params,
+    submitter,
+    schemaTiming,
+  );
+
+  // Validate cross-stratum coverage
+  // validateCrossStratumCoverage expects Map<validatorId, stratum>
+  const crossStratumValidation = validateCrossStratumCoverage(
+    claimStratum,
+    validatorStrata,
+  );
+
+  return {
+    ...baseRound,
+    claimStratum,
+    crossStratumValidation,
+    validatorStrata,
+  };
+}
+
+/**
+ * Aggregate results with cross-stratum confidence adjustment
+ *
+ * When lower stratum validators disagree with higher stratum validators,
+ * a confidence penalty is applied. When they agree, a bonus is applied.
+ */
+export function aggregateCrossStratumResults(
+  round: CrossStratumVerificationRound,
+  validatorStakes: Map<string, bigint>,
+  currentBlock: number,
+  params: ConsensusParams,
+): CrossStratumVerificationRound {
+  // First do base aggregation
+  const aggregatedRound = aggregateResults(
+    round,
+    validatorStakes,
+    currentBlock,
+    params,
+  );
+
+  if (aggregatedRound.phase !== "complete" || !aggregatedRound.result) {
+    return {
+      ...aggregatedRound,
+      claimStratum: round.claimStratum,
+      validatorStrata: round.validatorStrata,
+    };
+  }
+
+  // Convert validatorStakes to the format expected by calculateCrossStratumConfidence
+  const validatorsWithReputation = new Map<
+    string,
+    { stake: bigint; reputation: number }
+  >();
+  for (const [validatorId, stake] of validatorStakes) {
+    validatorsWithReputation.set(validatorId, { stake, reputation: 0.5 }); // Default reputation
+  }
+
+  // Calculate cross-stratum confidence adjustment
+  const crossStratumResult = calculateCrossStratumConfidence(
+    aggregatedRound.reveals,
+    round.validatorStrata,
+    round.claimStratum,
+    validatorsWithReputation,
+  );
+
+  // Apply cross-stratum adjustment to final confidence
+  const adjustedConfidence =
+    aggregatedRound.result.finalConfidence *
+    crossStratumResult.crossStratumAdjustment;
+
+  // Update result
+  const updatedResult: VerificationResult = {
+    ...aggregatedRound.result,
+    finalConfidence: adjustedConfidence,
+    // Add cross-stratum info to breakdown if needed
+    confidenceBreakdown: {
+      ...aggregatedRound.result.confidenceBreakdown,
+    },
+  };
+
+  return {
+    ...aggregatedRound,
+    claimStratum: round.claimStratum,
+    validatorStrata: round.validatorStrata,
+    crossStratumValidation: {
+      ...round.crossStratumValidation!,
+      lowerStratumAgreement: crossStratumResult.lowerStratumAgreement,
+      sameStratumAgreement: crossStratumResult.sameStratumAgreement,
+      crossStratumConfidenceAdjustment:
+        crossStratumResult.crossStratumAdjustment,
+    },
+    result: updatedResult,
+  };
+}
+
+/**
+ * Check if round meets cross-stratum requirements
+ *
+ * Returns false if the claim stratum requires lower stratum validators
+ * but they weren't included.
+ */
+export function meetsCrossStratumRequirements(
+  round: CrossStratumVerificationRound,
+): {
+  meets: boolean;
+  missingStrata: OntologicalStratum[];
+  confidencePenalty: number;
+} {
+  if (!round.crossStratumValidation) {
+    return { meets: true, missingStrata: [], confidencePenalty: 0 };
+  }
+
+  return {
+    meets: round.crossStratumValidation.meetsRequirements,
+    missingStrata: round.crossStratumValidation.missingStrata,
+    confidencePenalty: round.crossStratumValidation.meetsRequirements
+      ? 0
+      : CROSS_STRATUM_CONFIG.partialCoverageConfidencePenalty,
   };
 }

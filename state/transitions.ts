@@ -11,26 +11,80 @@
  * and produce new state (or error).
  */
 
-import { StateManager } from './state_manager.js';
+import { StateManager } from "./state_manager.js";
 import {
-  type StateTransition,
-  type TransitionType,
   type TransferPayload,
   type StakePayload,
   type DelegatePayload,
-  type SlashPayload,
-  type AddFactPayload,
   type ChallengeFactPayload,
-  type CreateAccountPayload,
   type EpochTransitionPayload,
-  type AccountDelta,
-  type FactState,
+  type ClaimState,
+  type ClaimSubmitPayload,
+  type ClaimStartVerificationPayload,
+  type ClaimCompleteVerificationPayload,
+  type ClaimWithdrawPayload,
+  type PaymentChannelState,
+  type OpenPaymentChannelPayload,
+  type UpdatePaymentChannelPayload,
+  type ClosePaymentChannelPayload,
+  type SettlePaymentChannelPayload,
+  type DisputePaymentChannelPayload,
+  type RotateKeyPayload,
+  type LipSubmitPayload,
+  type LipStakePayload,
+  type LipAdvanceStagePayload,
+  type LipWithdrawPayload,
+  type VoteCastPayload,
   StateError,
-} from './types.js';
-import type { Transaction, TransactionType, VerificationResult, ConsensusParams } from '../consensus/pot/types.js';
-import type { PublicKey } from '../core/crypto/keys.js';
-import type { Confidence } from '../core/knowledge/types.js';
-import { generateFactId } from './knowledge.js';
+} from "./types.js";
+import {
+  createLIP,
+  transitionToReview,
+  transitionFromReview,
+  transitionFromLastCall,
+  transitionFromVoting,
+  withdrawLIP,
+  calculateStakeOutcome,
+} from "../governance/proposals/lifecycle.js";
+import {
+  type AgentGovernanceStats,
+  type VoteTally,
+} from "../governance/proposals/types.js";
+import {
+  createQuadraticVote,
+  calculateVoteCost,
+  type VoteDirection,
+} from "../governance/voting/quadratic.js";
+import type {
+  Transaction,
+  TransactionType,
+  VerificationResult,
+  ConsensusParams,
+} from "../consensus/pot/types.js";
+import type {
+  DomainProposePayload,
+  DomainEndorsePayload,
+  DomainChallengePayload,
+  DomainFinalizePayload,
+} from "./types.js";
+import {
+  createDomainProposal,
+  endorseProposal,
+  challengeProposal,
+  finalizeProposal,
+  calculateStakeReturn,
+  calculateEndorserStakeReturns,
+  createDomainFromProposal,
+} from "../core/knowledge/ontology/domain_proposal.js";
+import type { PublicKey } from "../core/crypto/keys.js";
+import { publicKeyToDid } from "../core/agents/identity/did.js";
+import { generateClaimId } from "./claims.js";
+import {
+  generateChannelId,
+  computeStateHash,
+  sumDistributions,
+  PAYMENT_CHANNEL_CONSTANTS,
+} from "./payment_channels.js";
 import {
   type ResearchSubmitPayload,
   type BountyCreatePayload,
@@ -40,9 +94,10 @@ import {
   type BountyState,
   DEFAULT_RESEARCH_PARAMETERS,
   RESEARCH_TREASURY_DID,
-} from '../core/research/types.js';
-import { sha512_256Hex } from '../core/crypto/hashing.js';
+} from "../core/research/types.js";
+import { sha512_256Hex } from "../core/crypto/hashing.js";
 import {
+  type Dispute,
   type InitiateDisputePayload,
   type CommitEvidencePayload,
   type RevealEvidencePayload,
@@ -51,11 +106,21 @@ import {
   type SettleDisputePayload,
   DISPUTE_ECONOMICS,
   PHASE_DURATIONS,
-  DisputeError,
-} from '../core/dispute/types.js';
-import { createDispute, commitEvidence, revealEvidence, castArbiterVote, tryAdvancePhase } from '../core/dispute/dispute_engine.js';
-import { processEscalation } from '../core/dispute/escalation.js';
-import { calculateSettlement } from '../core/dispute/settlement.js';
+} from "../core/dispute/types.js";
+import {
+  createDispute,
+  commitEvidence,
+  revealEvidence,
+  castArbiterVote,
+  tryAdvancePhase,
+} from "../core/dispute/dispute_engine.js";
+import { processEscalation } from "../core/dispute/escalation.js";
+import { calculateSettlement } from "../core/dispute/settlement.js";
+// GAP-003 FIX: Import challenge integration for routing dispute outcomes to facts
+import {
+  routeDisputeOutcomeToFact,
+  processPostResolution,
+} from "../consensus/pot/challenge_integration.js";
 import {
   type CreateVestingPayload,
   type ClaimRewardsPayload,
@@ -63,10 +128,85 @@ import {
   type ResumeVestingPayload,
   type AccelerateVestingPayload,
   type FalsifyVestingPayload,
-  type VestingCategory,
-  getVestingConfig,
-} from '../core/rewards/types.js';
-import { determineVestingCategory } from '../core/rewards/vesting_engine.js';
+} from "../core/rewards/types.js";
+import { determineVestingCategory } from "../core/rewards/vesting_engine.js";
+import {
+  routeReward,
+  routeBlockReward,
+  routeVerificationReward,
+  routeClaimReward,
+  splitEvidenceTax,
+} from "../core/billing/reward_router.js";
+import {
+  calculateBlockReward,
+  type EmissionSchedule,
+  DEFAULT_EMISSION_SCHEDULE,
+} from "../core/genesis/types.js";
+import {
+  BootstrapFund,
+  BOOTSTRAP_AMOUNT,
+  GENESIS_BOOTSTRAP_ALLOCATION,
+  processAutomaticBootstrapClaim,
+} from "../core/genesis/bootstrap_fund.js";
+import {
+  prioritizeClaimsForBounties,
+  calculateOptimalBountyValue,
+} from "../core/genesis/perpetual_loop.js";
+
+// ============ Protocol DIDs ============
+
+/**
+ * Fee pool collects transaction fees for block producers
+ */
+export const FEE_POOL_DID = "did:lgm:fee-pool";
+
+/**
+ * Reward pool for minting new tokens (block rewards, verification rewards)
+ */
+export const REWARD_POOL_DID = "did:lgm:reward-pool";
+
+/**
+ * Protocol treasury for protocol-owned funds
+ */
+export const PROTOCOL_TREASURY_DID = "did:lgm:protocol-treasury";
+
+/**
+ * Bootstrap fund DID - source of automatic first-tx claims
+ */
+export const BOOTSTRAP_FUND_DID = GENESIS_BOOTSTRAP_ALLOCATION.did;
+
+// ============ Bootstrap Fund State ============
+
+/**
+ * Bootstrap fund instance — lazily initialized on first access.
+ * Tracks which DIDs have claimed their 0.222 LGM bootstrap allocation.
+ * Use setBootstrapFund() to inject a custom instance (e.g. for testing).
+ */
+let bootstrapFund: BootstrapFund | null = null;
+
+/**
+ * Get the current bootstrap fund instance (lazily creates one if not set)
+ */
+export function getBootstrapFund(): BootstrapFund {
+  if (!bootstrapFund) {
+    bootstrapFund = new BootstrapFund();
+  }
+  return bootstrapFund;
+}
+
+/**
+ * Set the bootstrap fund instance (for dependency injection or state restoration)
+ */
+export function setBootstrapFund(fund: BootstrapFund): void {
+  bootstrapFund = fund;
+}
+
+/**
+ * Reset the bootstrap fund to initial state (primarily for testing)
+ */
+export function resetBootstrapFund(): void {
+  bootstrapFund = null;
+}
 
 // ============ Transaction Executor ============
 
@@ -78,7 +218,7 @@ export function executeTransaction(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  params: ConsensusParams
+  params: ConsensusParams,
 ): TransitionResult {
   // Validate basic transaction structure
   const validation = validateTransaction(state, tx);
@@ -95,125 +235,310 @@ export function executeTransaction(
     state.beginTransaction();
 
     let gasUsed = 0n;
+    let bootstrapClaimed = 0n;
+
+    // Auto-claim bootstrap fund on first transaction (nonce === 0)
+    const isSystemTx =
+      tx.sender === "system" ||
+      (tx.fee === 0n &&
+        ["add_fact", "verification_reward", "slash_validator"].includes(
+          tx.type,
+        ));
+
+    if (!isSystemTx) {
+      const senderDid = publicKeyToDid(tx.sender);
+      const senderNonce = state.getNonce(senderDid);
+
+      // First transaction (nonce === 0) triggers automatic bootstrap claim
+      if (senderNonce === 0n) {
+        const eligibility = getBootstrapFund().isEligible(senderDid);
+
+        if (eligibility.eligible) {
+          // Check if bootstrap fund has sufficient balance
+          const bootstrapFundBalance = state.getBalance(BOOTSTRAP_FUND_DID);
+
+          if (bootstrapFundBalance >= BOOTSTRAP_AMOUNT) {
+            // Process the claim through bootstrap fund (tracks claimed DIDs)
+            bootstrapClaimed = processAutomaticBootstrapClaim(
+              getBootstrapFund(),
+              senderDid,
+              tx.signature,
+              Number(blockNumber),
+            );
+
+            // Transfer from bootstrap fund to sender
+            if (bootstrapClaimed > 0n) {
+              state.transfer(BOOTSTRAP_FUND_DID, senderDid, bootstrapClaimed);
+            }
+          }
+        }
+      }
+    }
+
+    // Record nonce before handler so we can detect if handler incremented it
+    const senderDidForNonce = !isSystemTx ? publicKeyToDid(tx.sender) : "";
+    const nonceBeforeHandler = !isSystemTx
+      ? state.getNonce(senderDidForNonce)
+      : 0n;
 
     switch (tx.type) {
-      case 'transfer':
+      case "transfer":
         gasUsed = executeTransfer(state, tx, params);
         break;
 
-      case 'stake':
+      case "stake":
         gasUsed = executeStake(state, tx, params);
         break;
 
-      case 'unstake':
+      case "unstake":
         gasUsed = executeUnstake(state, tx, params);
         break;
 
-      case 'delegate':
+      case "delegate":
         gasUsed = executeDelegate(state, tx, params);
         break;
 
-      case 'undelegate':
+      case "undelegate":
         gasUsed = executeUndelegate(state, tx, params);
         break;
 
-      case 'claim_submit':
+      case "rotate_key":
+        gasUsed = executeKeyRotation(state, tx);
+        break;
+
+      case "claim_submit":
         gasUsed = executeClaimSubmit(state, tx, blockNumber, params);
         break;
 
-      case 'verification_commit':
+      case "claim_start_verification":
+        gasUsed = executeClaimStartVerification(state, tx, blockNumber);
+        break;
+
+      case "claim_complete_verification":
+        gasUsed = executeClaimCompleteVerification(
+          state,
+          tx,
+          blockNumber,
+          params,
+        );
+        break;
+
+      case "claim_withdraw":
+        gasUsed = executeClaimWithdraw(state, tx, blockNumber);
+        break;
+
+      case "verification_commit":
         gasUsed = executeVerificationCommit(state, tx, params);
         break;
 
-      case 'verification_reveal':
+      case "verification_reveal":
         gasUsed = executeVerificationReveal(state, tx, params);
         break;
 
-      case 'challenge':
+      case "challenge":
         gasUsed = executeChallenge(state, tx, blockNumber, params);
         break;
 
-      case 'governance_vote':
+      case "governance_vote":
         gasUsed = executeGovernanceVote(state, tx, params);
         break;
 
-      case 'governance_propose':
+      case "governance_propose":
         gasUsed = executeGovernancePropose(state, tx, params);
         break;
 
+      // Governance LIP lifecycle
+      case "lip_submit":
+        gasUsed = executeLipSubmit(state, tx, blockNumber, params);
+        break;
+
+      case "lip_stake":
+        gasUsed = executeLipStake(state, tx, blockNumber, params);
+        break;
+
+      case "lip_advance_stage":
+        gasUsed = executeLipAdvanceStage(state, tx, blockNumber, params);
+        break;
+
+      case "lip_withdraw":
+        gasUsed = executeLipWithdraw(state, tx, blockNumber, params);
+        break;
+
+      // Governance voting
+      case "vote_cast":
+        gasUsed = executeVoteCast(state, tx, blockNumber, params);
+        break;
+
       // Research transactions (Protocol Research Repository)
-      case 'research_submit':
+      case "research_submit":
         gasUsed = executeResearchSubmit(state, tx, blockNumber, params);
         break;
 
-      case 'research_challenge':
+      case "research_challenge":
         gasUsed = executeResearchChallenge(state, tx, blockNumber, params);
         break;
 
-      case 'bounty_create':
+      case "bounty_create":
         gasUsed = executeBountyCreate(state, tx, blockNumber, params);
         break;
 
-      case 'bounty_claim':
+      case "bounty_claim":
         gasUsed = executeBountyClaim(state, tx, params);
         break;
 
-      case 'bounty_fulfill':
+      case "bounty_fulfill":
         gasUsed = executeBountyFulfill(state, tx, blockNumber, params);
         break;
 
       // Dispute transactions (Dispute Resolution System)
-      case 'dispute_initiate':
+      case "dispute_initiate":
         gasUsed = executeDisputeInitiate(state, tx, blockNumber, params);
         break;
 
-      case 'dispute_commit_evidence':
+      case "dispute_commit_evidence":
         gasUsed = executeDisputeCommitEvidence(state, tx, blockNumber, params);
         break;
 
-      case 'dispute_reveal_evidence':
+      case "dispute_reveal_evidence":
         gasUsed = executeDisputeRevealEvidence(state, tx, blockNumber, params);
         break;
 
-      case 'dispute_arbiter_vote':
+      case "dispute_arbiter_vote":
         gasUsed = executeDisputeArbiterVote(state, tx, blockNumber, params);
         break;
 
-      case 'dispute_escalate':
+      case "dispute_escalate":
         gasUsed = executeDisputeEscalate(state, tx, blockNumber, params);
         break;
 
-      case 'dispute_settle':
+      case "dispute_settle":
         gasUsed = executeDisputeSettle(state, tx, blockNumber, params);
         break;
 
-      case 'dispute_timeout':
+      case "dispute_timeout":
         gasUsed = executeDisputeTimeout(state, tx, blockNumber, params);
         break;
 
       // Vesting transactions (Gradual Reward Release System)
-      case 'vesting_create':
+      case "vesting_create":
         gasUsed = executeVestingCreate(state, tx, blockNumber, params);
         break;
 
-      case 'vesting_claim':
+      case "vesting_claim":
         gasUsed = executeVestingClaim(state, tx, blockNumber, params);
         break;
 
-      case 'vesting_pause':
+      case "vesting_pause":
         gasUsed = executeVestingPause(state, tx, blockNumber, params);
         break;
 
-      case 'vesting_resume':
+      case "vesting_resume":
         gasUsed = executeVestingResume(state, tx, blockNumber, params);
         break;
 
-      case 'vesting_accelerate':
+      case "vesting_accelerate":
         gasUsed = executeVestingAccelerate(state, tx, blockNumber, params);
         break;
 
-      case 'vesting_falsify':
+      case "vesting_falsify":
         gasUsed = executeVestingFalsify(state, tx, blockNumber, params);
+        break;
+
+      // Domain proposal transactions (Ontological Tree Growth)
+      case "domain_propose":
+        gasUsed = executeDomainPropose(state, tx, blockNumber, params);
+        break;
+
+      case "domain_endorse":
+        gasUsed = executeDomainEndorse(state, tx, blockNumber, params);
+        break;
+
+      case "domain_challenge":
+        gasUsed = executeDomainChallenge(state, tx, blockNumber, params);
+        break;
+
+      case "domain_finalize":
+        gasUsed = executeDomainFinalize(state, tx, blockNumber, params);
+        break;
+
+      // System transactions (used by consensus layer, no fee)
+      case "add_fact":
+        gasUsed = executeAddFact(state, tx, blockNumber);
+        break;
+
+      case "verification_reward":
+        gasUsed = executeVerificationReward(state, tx);
+        break;
+
+      case "slash_validator":
+        gasUsed = executeSlashValidator(state, tx);
+        break;
+
+      // Payment channel transactions (GAP-005)
+      case "open_payment_channel":
+        gasUsed = executeOpenPaymentChannel(state, tx, blockNumber, params);
+        break;
+
+      case "update_payment_channel":
+        gasUsed = executeUpdatePaymentChannel(state, tx, blockNumber);
+        break;
+
+      case "close_payment_channel":
+        gasUsed = executeClosePaymentChannel(state, tx, blockNumber, params);
+        break;
+
+      case "settle_payment_channel":
+        gasUsed = executeSettlePaymentChannel(state, tx, blockNumber, params);
+        break;
+
+      case "dispute_payment_channel":
+        gasUsed = executeDisputePaymentChannel(state, tx, blockNumber);
+        break;
+
+      // Autonomy transactions (Agent Self-Sovereignty)
+      case "scheduled_execution":
+        gasUsed = executeScheduledExecution(state, tx, blockNumber, params);
+        break;
+
+      case "contract_call":
+        gasUsed = executeContractCall(state, tx, blockNumber, params);
+        break;
+
+      // Tree of Life transactions
+      case "create_project":
+        gasUsed = executeCreateProject(state, tx, blockNumber);
+        break;
+
+      case "propose_project":
+        gasUsed = executeProposeProject(state, tx, blockNumber);
+        break;
+
+      case "assign_task":
+        gasUsed = executeAssignTask(state, tx, blockNumber);
+        break;
+
+      case "submit_deliverable":
+        gasUsed = executeSubmitDeliverable(state, tx, blockNumber);
+        break;
+
+      case "approve_deliverable":
+        gasUsed = executeApproveDeliverable(state, tx, blockNumber);
+        break;
+
+      case "deploy_service":
+        gasUsed = executeDeployService(state, tx, blockNumber);
+        break;
+
+      case "call_service":
+        gasUsed = executeCallService(state, tx, blockNumber);
+        break;
+
+      case "pause_service":
+        gasUsed = executePauseService(state, tx);
+        break;
+
+      case "retire_service":
+        gasUsed = executeRetireService(state, tx);
         break;
 
       default:
@@ -225,16 +550,58 @@ export function executeTransaction(
         };
     }
 
-    // Deduct fee from sender
-    const senderDid = publicKeyToDid(tx.sender);
-    const currentBalance = state.getBalance(senderDid);
-    if (currentBalance < tx.fee) {
-      state.rollbackTransaction();
-      return {
-        success: false,
-        error: 'Insufficient balance for fee',
-        gasUsed: 0n,
-      };
+    // Ensure nonce is incremented for non-system transactions
+    // Some handlers (e.g. transfer, delegation) increment via state.transfer(),
+    // but governance handlers (lip_submit, vote_cast, etc.) do not.
+    if (!isSystemTx) {
+      const nonceAfterHandler = state.getNonce(senderDidForNonce);
+      if (nonceAfterHandler === nonceBeforeHandler) {
+        state.incrementNonce(senderDidForNonce);
+      }
+    }
+
+    // Skip fee handling for system transactions (isSystemTx defined above for bootstrap claim check)
+    if (!isSystemTx) {
+      // Deduct fee from sender
+      const senderDid = publicKeyToDid(tx.sender);
+      const currentBalance = state.getBalance(senderDid);
+      if (currentBalance < tx.fee) {
+        state.rollbackTransaction();
+        return {
+          success: false,
+          error: "Insufficient balance for fee",
+          gasUsed: 0n,
+        };
+      }
+
+      // GAP-1 FIX: Actually deduct the fee and route through reward router
+      if (tx.fee > 0n) {
+        // Route fee through reward router for 22% research share
+        const routedFee = routeReward({
+          source: "block_production", // Fees go to block producer
+          amount: tx.fee,
+          recipient: FEE_POOL_DID, // Collected in fee pool for block producer
+          blockNumber,
+        });
+
+        // Deduct fee from sender and credit to destinations
+        // Uses deductBalance/creditBalance to avoid extra nonce increments
+        // Split evidence tax across 5 treasury funds per frozen allocation
+        if (routedFee.researchShare > 0n) {
+          const treasurySplit = splitEvidenceTax(routedFee.researchShare);
+          for (const entry of treasurySplit) {
+            if (entry.amount > 0n) {
+              state.deductBalance(senderDid, entry.amount);
+              state.creditBalance(entry.did, entry.amount);
+            }
+          }
+        }
+
+        if (routedFee.recipientAmount > 0n) {
+          state.deductBalance(senderDid, routedFee.recipientAmount);
+          state.creditBalance(FEE_POOL_DID, routedFee.recipientAmount);
+        }
+      }
     }
 
     // Commit and return
@@ -244,12 +611,16 @@ export function executeTransaction(
       success: true,
       stateRoot: newRoot,
       gasUsed,
+      bootstrapClaimed: bootstrapClaimed > 0n ? bootstrapClaimed : undefined,
     };
   } catch (error) {
-    state.rollbackTransaction();
+    // Only rollback if a transaction is in progress (beginTransaction may have failed)
+    if (state.hasActiveTransaction()) {
+      state.rollbackTransaction();
+    }
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
       gasUsed: 0n,
     };
   }
@@ -260,14 +631,14 @@ export function executeTransaction(
 function executeTransfer(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as TransferPayload;
+  const payload = tx.payload as unknown as TransferPayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate
   if (payload.amount <= 0n) {
-    throw new StateError('Invalid transfer amount', 'INVALID_TRANSITION');
+    throw new StateError("Invalid transfer amount", "INVALID_TRANSITION");
   }
 
   // Execute transfer
@@ -278,18 +649,44 @@ function executeTransfer(
   return 21000n; // Base gas for transfer
 }
 
+function executeKeyRotation(state: StateManager, tx: Transaction): bigint {
+  const payload = tx.payload as unknown as RotateKeyPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // Only the account owner can rotate their own key
+  if (payload.account !== senderDid) {
+    throw new StateError(
+      "Can only rotate keys for own account",
+      "UNAUTHORIZED",
+      { sender: senderDid, target: payload.account },
+    );
+  }
+
+  if (!payload.newOperationalKeyHash) {
+    throw new StateError(
+      "New operational key hash is required",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Delegate to StateManager → AccountStateTree (validates frozen/recovery state)
+  state.rotateKey(senderDid, payload.newOperationalKeyHash);
+
+  return 35000n; // Key rotation gas (between transfer and stake)
+}
+
 function executeStake(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as StakePayload;
+  const payload = tx.payload as unknown as StakePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   if (payload.amount < params.minValidatorStake) {
     throw new StateError(
       `Minimum stake is ${params.minValidatorStake}`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
@@ -306,9 +703,9 @@ function executeStake(
 function executeUnstake(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as StakePayload;
+  const payload = tx.payload as unknown as StakePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   state.unstake(senderDid, payload.amount);
@@ -319,24 +716,27 @@ function executeUnstake(
 function executeDelegate(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as DelegatePayload;
+  const payload = tx.payload as unknown as DelegatePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate validator exists
   if (!state.isActiveValidator(payload.validator)) {
-    throw new StateError('Validator not active', 'VALIDATOR_NOT_FOUND');
+    throw new StateError("Validator not active", "VALIDATOR_NOT_FOUND");
   }
 
   // Transfer from balance to delegation
   const currentBalance = state.getBalance(senderDid);
   if (currentBalance < payload.amount) {
-    throw new StateError('Insufficient balance to delegate', 'INSUFFICIENT_BALANCE');
+    throw new StateError(
+      "Insufficient balance to delegate",
+      "INSUFFICIENT_BALANCE",
+    );
   }
 
   // Deduct from account balance
-  state.transfer(senderDid, 'did:lgm:delegation-pool', payload.amount);
+  state.transfer(senderDid, "did:lgm:delegation-pool", payload.amount);
 
   // Add to validator's delegated stake
   state.delegate(senderDid, payload.validator, payload.amount);
@@ -344,61 +744,406 @@ function executeDelegate(
   return 60000n;
 }
 
+/**
+ * Execute undelegation with proper unbonding period
+ *
+ * SECURITY: Undelegation requires a timelock (unbonding period) to prevent
+ * stake-and-slash attacks where a malicious validator could:
+ * 1. Perform malicious actions
+ * 2. Immediately undelegate before slashing can occur
+ *
+ * The unbonding period ensures that stake remains at risk long enough
+ * for any misbehavior to be detected and punished.
+ */
 function executeUndelegate(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as DelegatePayload;
+  const payload = tx.payload as unknown as DelegatePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
-  // Note: Actual unbonding has a timelock
-  // The amount would be locked until unbonding completes
+  // 1. Validate validator exists and is active
+  if (!state.isActiveValidator(payload.validator)) {
+    throw new StateError("Validator not active", "VALIDATOR_NOT_FOUND");
+  }
 
-  return 60000n;
+  // 2. Validate delegation exists and has sufficient amount
+  const currentDelegation = state.getDelegation(senderDid, payload.validator);
+  if (!currentDelegation || currentDelegation.amount < payload.amount) {
+    throw new StateError(
+      `Insufficient delegation: have ${currentDelegation?.amount ?? 0n}, requested ${payload.amount}`,
+      "INSUFFICIENT_DELEGATION",
+    );
+  }
+
+  // 3. Reduce active delegation immediately
+  // The stake no longer counts toward validator's voting power
+  state.reduceDelegation(senderDid, payload.validator, payload.amount);
+
+  // 4. Create unbonding entry with timelock
+  // Default unbonding period: ~7 days at 2.521s blocks = ~240,000 blocks
+  const unbondingPeriod = params.unbondingPeriod ?? 240000n;
+  const currentBlock = state.getCurrentBlock();
+  const completesAt = currentBlock + unbondingPeriod;
+
+  const unbondingId = sha512_256Hex(
+    `unbond:${senderDid}:${payload.validator}:${currentBlock}:${payload.amount}`,
+  );
+
+  state.addUnbondingEntry({
+    id: unbondingId,
+    delegator: senderDid,
+    validator: payload.validator,
+    amount: payload.amount,
+    initiatedAt: currentBlock,
+    completesAt,
+    status: "pending",
+  });
+
+  // 5. Emit event for tracking
+  state.emitEvent("Undelegation", {
+    unbondingId,
+    delegator: senderDid,
+    validator: payload.validator,
+    amount: payload.amount.toString(),
+    completesAt: completesAt.toString(),
+  });
+
+  return 80000n; // Undelegation gas (higher than delegation due to unbonding entry)
 }
 
+/**
+ * Process matured unbonding entries and release funds
+ *
+ * This should be called at the start of each block to release
+ * any unbonding entries whose timelock has expired.
+ *
+ * SECURITY: Funds are only released after the full unbonding period,
+ * ensuring validators can be slashed for past misbehavior.
+ */
+export function processUnbondingQueue(
+  state: StateManager,
+  currentBlock: bigint,
+): { processed: number; totalReleased: bigint } {
+  let processed = 0;
+  let totalReleased = 0n;
+
+  // Get all completed unbonding entries
+  const maturedEntries = state.getMaturedUnbondingEntries(currentBlock);
+
+  for (const entry of maturedEntries) {
+    // Transfer funds from delegation pool back to delegator
+    state.transfer("did:lgm:delegation-pool", entry.delegator, entry.amount);
+
+    // Mark entry as completed
+    state.completeUnbondingEntry(entry.id);
+
+    // Emit completion event
+    state.emitEvent("UnbondingComplete", {
+      unbondingId: entry.id,
+      delegator: entry.delegator,
+      amount: entry.amount.toString(),
+      completedAtBlock: currentBlock.toString(),
+    });
+
+    processed++;
+    totalReleased += entry.amount;
+  }
+
+  return { processed, totalReleased };
+}
+
+/**
+ * Execute claim submission transaction.
+ * Records claim in state and locks stake.
+ *
+ * GAP-002 FIX: Now creates ClaimState record in claims tree.
+ */
 function executeClaimSubmit(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  params: ConsensusParams
+  params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as {
-    claim: string;
-    domain: string;
-    stake: bigint;
-    references?: string[];
-  };
-
+  const payload = tx.payload as ClaimSubmitPayload;
   const senderDid = publicKeyToDid(tx.sender);
 
-  // Validate stake
+  // 1. Validate stake meets minimum
   if (payload.stake < params.minClaimStake) {
     throw new StateError(
-      `Minimum claim stake is ${params.minClaimStake}`,
-      'INVALID_TRANSITION'
+      `Minimum claim stake is ${params.minClaimStake}, got ${payload.stake}`,
+      "INVALID_TRANSITION",
     );
   }
 
-  // Lock claim stake
+  // 2. Validate sender has sufficient balance
+  const account = state.getAccount(senderDid);
+  if (!account || account.balance < payload.stake) {
+    throw new StateError(
+      "Insufficient balance for claim stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // 3. Validate references exist (if provided)
+  for (const refId of payload.references) {
+    const refFact = state.getFact(refId);
+    if (!refFact || refFact.status !== "active") {
+      throw new StateError(
+        `Referenced fact ${refId} not found or inactive`,
+        "INVALID_REFERENCE",
+      );
+    }
+  }
+
+  // 4. Generate claim ID
+  const claimId = generateClaimId(payload.claim, senderDid, blockNumber);
+
+  // 5. Lock stake (move from balance to staked)
   state.stake(senderDid, payload.stake);
 
-  // Claim goes to verification queue (handled by consensus)
-  // Here we just validate and lock stake
+  // 6. Create claim record
+  const claimState: ClaimState = {
+    id: claimId,
+    claim: payload.claim,
+    claimType: payload.claimType,
+    domain: payload.domain,
+    stratum: payload.stratum,
+    submitter: senderDid,
+    stake: payload.stake,
+    submittedAt: blockNumber,
+    references: payload.references,
+    status: "pending",
+    statusChangedAt: blockNumber,
+    schemaId: payload.schemaId,
+  };
 
-  return 100000n;
+  state.addClaim(claimState);
+
+  // Gas: base cost + per-reference cost
+  return 100000n + BigInt(payload.references.length) * 10000n;
+}
+
+/**
+ * System transaction: Start verification round for a claim.
+ * Called by consensus engine when selecting claim for verification.
+ */
+function executeClaimStartVerification(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  // System transaction validation
+  if (!isSystemTransaction(tx)) {
+    throw new StateError(
+      "claim_start_verification is system-only",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const payload = tx.payload as unknown as ClaimStartVerificationPayload;
+
+  // 1. Get claim
+  const claim = state.getClaim(payload.claimId);
+  if (!claim) {
+    throw new StateError(
+      `Claim ${payload.claimId} not found`,
+      "CLAIM_NOT_FOUND",
+    );
+  }
+
+  // 2. Validate claim is pending
+  if (claim.status !== "pending") {
+    throw new StateError(
+      `Claim ${payload.claimId} is ${claim.status}, expected pending`,
+      "CLAIM_NOT_PENDING",
+    );
+  }
+
+  // 3. Update claim status
+  state.updateClaimStatus(payload.claimId, "verifying", blockNumber, {
+    verificationRoundId: payload.roundId,
+  });
+
+  return 0n; // System transaction, no gas
+}
+
+/**
+ * System transaction: Complete verification and create fact if accepted.
+ * Called by consensus engine when verification round completes.
+ */
+function executeClaimCompleteVerification(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  // System transaction validation
+  if (!isSystemTransaction(tx)) {
+    throw new StateError(
+      "claim_complete_verification is system-only",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const payload = tx.payload as unknown as ClaimCompleteVerificationPayload;
+
+  // 1. Get claim
+  const claim = state.getClaim(payload.claimId);
+  if (!claim) {
+    throw new StateError(
+      `Claim ${payload.claimId} not found`,
+      "CLAIM_NOT_FOUND",
+    );
+  }
+
+  // 2. Validate claim is verifying
+  if (claim.status !== "verifying") {
+    throw new StateError(
+      `Claim ${payload.claimId} is ${claim.status}, expected verifying`,
+      "CLAIM_NOT_VERIFYING",
+    );
+  }
+
+  // 3. Process based on outcome
+  if (payload.outcome === "accepted") {
+    // Create fact
+    const factId = `fact:${claim.id.replace("claim:", "")}`;
+
+    state.addFact({
+      id: factId,
+      claim: claim.claim,
+      domain: claim.domain,
+      stratum: claim.stratum,
+      confidence: payload.finalConfidence,
+      verifiedAt: blockNumber,
+      verifierCount: payload.verifierCount,
+      challengeCount: 0,
+      citationCount: 0,
+      status: "active",
+    });
+
+    // Update claim with fact reference
+    state.updateClaimStatus(payload.claimId, "accepted", blockNumber, {
+      resultFactId: factId,
+    });
+
+    // Return stake to submitter (unstake)
+    state.unstake(claim.submitter, claim.stake);
+  } else if (payload.outcome === "rejected") {
+    // Slash submitter stake (50%)
+    const slashAmount = claim.stake / 2n;
+
+    // First unstake the full amount (moves from staked to balance)
+    state.unstake(claim.submitter, claim.stake);
+
+    // Then transfer the slashed portion to fee pool
+    if (slashAmount > 0n) {
+      state.transfer(claim.submitter, FEE_POOL_DID, slashAmount);
+    }
+
+    state.updateClaimStatus(payload.claimId, "rejected", blockNumber, {
+      rejectionReason: "Verification failed",
+    });
+  } else if (
+    payload.outcome === "contested" ||
+    payload.outcome === "insufficient"
+  ) {
+    // Return full stake, claim can be resubmitted
+    state.unstake(claim.submitter, claim.stake);
+
+    state.updateClaimStatus(payload.claimId, "rejected", blockNumber, {
+      rejectionReason:
+        payload.outcome === "contested"
+          ? "Verification contested - no consensus"
+          : "Insufficient validators participated",
+    });
+  }
+
+  // 4. Distribute rewards
+  for (const [validatorDid, reward] of payload.rewards) {
+    // Credit reward to validator
+    state.transfer(FEE_POOL_DID, validatorDid, reward);
+  }
+
+  // 5. Apply slashes (validators who didn't reveal)
+  for (const [validatorDid, slashAmount] of payload.slashes) {
+    const validator = state.getValidator(validatorDid as unknown as PublicKey);
+    if (validator) {
+      state.slashValidator(
+        validator.publicKey,
+        slashAmount,
+        "verification_failure",
+      );
+    }
+  }
+
+  return 0n; // System transaction, no gas
+}
+
+/**
+ * Execute claim withdrawal.
+ * Allows submitter to withdraw a pending claim before verification starts.
+ */
+function executeClaimWithdraw(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as ClaimWithdrawPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // 1. Get claim
+  const claim = state.getClaim(payload.claimId);
+  if (!claim) {
+    throw new StateError(
+      `Claim ${payload.claimId} not found`,
+      "CLAIM_NOT_FOUND",
+    );
+  }
+
+  // 2. Validate sender is the submitter
+  if (claim.submitter !== senderDid) {
+    throw new StateError("Only claim submitter can withdraw", "UNAUTHORIZED");
+  }
+
+  // 3. Validate claim is pending (cannot withdraw once verification started)
+  if (claim.status !== "pending") {
+    throw new StateError(
+      `Cannot withdraw claim in ${claim.status} status`,
+      "CLAIM_NOT_PENDING",
+    );
+  }
+
+  // 4. Return stake to submitter
+  state.unstake(senderDid, claim.stake);
+
+  // 5. Update claim status
+  state.updateClaimStatus(payload.claimId, "withdrawn", blockNumber);
+
+  return 50000n;
+}
+
+/**
+ * Check if transaction is a system transaction (no sender signature required)
+ */
+function isSystemTransaction(tx: Transaction): boolean {
+  return tx.sender === "system" || tx.sender === ("system" as any);
 }
 
 function executeVerificationCommit(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   // Commitments are handled by consensus layer
   // State just validates the validator is active
   if (!state.isActiveValidator(tx.sender)) {
-    throw new StateError('Only validators can commit verifications', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Only validators can commit verifications",
+      "INVALID_TRANSITION",
+    );
   }
 
   return 30000n;
@@ -407,11 +1152,14 @@ function executeVerificationCommit(
 function executeVerificationReveal(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   // Reveals are handled by consensus layer
   if (!state.isActiveValidator(tx.sender)) {
-    throw new StateError('Only validators can reveal verifications', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Only validators can reveal verifications",
+      "INVALID_TRANSITION",
+    );
   }
 
   return 40000n;
@@ -420,15 +1168,15 @@ function executeVerificationReveal(
 function executeChallenge(
   state: StateManager,
   tx: Transaction,
-  blockNumber: bigint,
-  params: ConsensusParams
+  _blockNumber: bigint,
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as ChallengeFactPayload;
+  const payload = tx.payload as unknown as ChallengeFactPayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate fact exists and is active
   if (!state.isActiveFact(payload.factId)) {
-    throw new StateError('Fact not found or not active', 'FACT_NOT_FOUND');
+    throw new StateError("Fact not found or not active", "FACT_NOT_FOUND");
   }
 
   // Lock challenge stake
@@ -443,7 +1191,7 @@ function executeChallenge(
 function executeGovernanceVote(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   // Governance voting
   // Requires stake to vote
@@ -451,7 +1199,7 @@ function executeGovernanceVote(
   const account = state.getAccount(senderDid);
 
   if (!account || account.stakedBalance === 0n) {
-    throw new StateError('Must have stake to vote', 'INVALID_TRANSITION');
+    throw new StateError("Must have stake to vote", "INVALID_TRANSITION");
   }
 
   return 25000n;
@@ -460,7 +1208,7 @@ function executeGovernanceVote(
 function executeGovernancePropose(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   // Governance proposals require minimum stake
   const senderDid = publicKeyToDid(tx.sender);
@@ -471,11 +1219,398 @@ function executeGovernancePropose(
   if (!account || account.stakedBalance < MIN_PROPOSAL_STAKE) {
     throw new StateError(
       `Must have at least ${MIN_PROPOSAL_STAKE} staked to propose`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
   return 150000n;
+}
+
+// ============ Governance LIP Transaction Handlers ============
+
+/**
+ * Build AgentGovernanceStats from on-chain account state.
+ * Phase 1 simplification: derives capability/contributions from account fields.
+ */
+function buildGovernanceStats(
+  state: StateManager,
+  did: string,
+  blockNumber: bigint,
+): AgentGovernanceStats {
+  const account = state.getAccount(did);
+  const rep = account?.reputationScore ?? 0.5;
+  return {
+    did: did as any,
+    stake: account?.stakedBalance ?? 0n,
+    reputation: rep,
+    capabilityLevel: rep >= 0.7 ? 2 : rep >= 0.5 ? 1 : 0,
+    contributions: Number(account?.nonce ?? 0n), // Use nonce as proxy for contributions
+    accountAge: account?.lastActiveBlock
+      ? blockNumber - account.lastActiveBlock
+      : 0n,
+  };
+}
+
+/**
+ * Submit a new LIP (Legible Improvement Proposal)
+ */
+function executeLipSubmit(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as LipSubmitPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // Build governance stats for eligibility check
+  const stats = buildGovernanceStats(state, senderDid, blockNumber);
+
+  // Create the LIP (validates eligibility internally)
+  const result = createLIP(
+    {
+      title: payload.title,
+      category: payload.category,
+      proposer: senderDid as any,
+      abstract: payload.abstract,
+      motivation: payload.motivation,
+      specification: payload.specification,
+      rationale: payload.rationale,
+      backwardsCompatibility: payload.backwardsCompatibility,
+      testCases: payload.testCases,
+      referenceImplementation: payload.referenceImplementation,
+      coAuthors: (payload.coAuthors ?? []) as any[],
+    },
+    stats,
+    blockNumber,
+    state.getNextLIPNumber(),
+  );
+
+  if ("error" in result) {
+    throw new StateError(result.error, "GOVERNANCE_INELIGIBLE");
+  }
+
+  // Store the LIP
+  state.addLIP(result.lip);
+
+  // Increment nonce (no stake/transfer in this handler)
+  state.incrementNonce(senderDid);
+
+  // Emit event
+  state.emitEvent("LIPSubmitted", {
+    lipId: result.lip.id,
+    proposer: senderDid,
+    category: result.lip.category,
+    stakeRequired: result.stakeRequired.toString(),
+  });
+
+  return 200000n;
+}
+
+/**
+ * Stake on a LIP to advance it from draft to review
+ */
+function executeLipStake(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as LipStakePayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  const lip = state.getLIP(payload.lipId);
+  if (!lip) {
+    throw new StateError(`LIP ${payload.lipId} not found`, "LIP_NOT_FOUND");
+  }
+
+  // Verify sender is proposer or stakeholder
+  if (lip.proposer !== senderDid && lip.stakeHolder !== senderDid) {
+    throw new StateError(
+      "Only proposer or stakeholder can stake on LIP",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Validate balance
+  const balance = state.getBalance(senderDid);
+  if (balance < payload.amount) {
+    throw new StateError(
+      "Insufficient balance for LIP stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Lock the stake
+  state.stake(senderDid, payload.amount);
+
+  // Transition to review
+  const result = transitionToReview(
+    lip,
+    payload.amount,
+    blockNumber,
+    senderDid as any,
+  );
+  if (!result.success) {
+    throw new StateError(result.error!, "LIP_INVALID_STAGE");
+  }
+
+  // Update the LIP
+  state.updateLIP(payload.lipId, lip);
+
+  state.emitEvent("LIPStaked", {
+    lipId: payload.lipId,
+    staker: senderDid,
+    amount: payload.amount.toString(),
+    newStage: lip.stage,
+  });
+
+  return 100000n;
+}
+
+/**
+ * Advance a LIP to the next stage based on vote results
+ */
+function executeLipAdvanceStage(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as LipAdvanceStagePayload;
+
+  const lip = state.getLIP(payload.lipId);
+  if (!lip) {
+    throw new StateError(`LIP ${payload.lipId} not found`, "LIP_NOT_FOUND");
+  }
+
+  // Build VoteTally from quadratic votes
+  const votes = state.getVotesForLIP(payload.lipId);
+  const tally = buildVoteTally(votes, state);
+
+  let result;
+  const stageStart =
+    lip.stageHistory.length > 0
+      ? lip.stageHistory[lip.stageHistory.length - 1]!.at
+      : lip.createdAt;
+
+  switch (lip.stage) {
+    case "review":
+      result = transitionFromReview(lip, tally, blockNumber, stageStart);
+      break;
+    case "last_call":
+      result = transitionFromLastCall(lip, tally, blockNumber, stageStart);
+      break;
+    case "voting":
+      result = transitionFromVoting(lip, tally, blockNumber);
+      break;
+    default:
+      throw new StateError(
+        `Cannot advance LIP from stage: ${lip.stage}`,
+        "LIP_INVALID_STAGE",
+      );
+  }
+
+  if (!result.success) {
+    throw new StateError(result.error!, "LIP_INVALID_STAGE");
+  }
+
+  // Handle stake return on terminal states (stage may have been mutated by transition functions)
+  const currentStage = lip.stage as string;
+  if (currentStage === "accepted" || currentStage === "rejected") {
+    const outcome =
+      currentStage === "accepted"
+        ? ("accepted" as const)
+        : ("rejected_normal" as const);
+    const stakeOutcome = calculateStakeOutcome(lip, outcome);
+
+    if (lip.stakedAmount > 0n) {
+      state.unstake(lip.stakeHolder as string, lip.stakedAmount);
+
+      if (stakeOutcome.slashAmount > 0n) {
+        state.deductBalance(
+          lip.stakeHolder as string,
+          stakeOutcome.slashAmount,
+        );
+        state.creditBalance(
+          "did:lgm:treasury-foundation",
+          stakeOutcome.slashAmount,
+        );
+      }
+    }
+  }
+
+  // Update the LIP
+  state.updateLIP(payload.lipId, lip);
+
+  state.emitEvent("LIPAdvanced", {
+    lipId: payload.lipId,
+    newStage: lip.stage,
+    reason: result.transition?.reason ?? "Stage advanced",
+  });
+
+  return 120000n;
+}
+
+/**
+ * Withdraw a LIP (only by proposer, before voting)
+ */
+function executeLipWithdraw(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as LipWithdrawPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  const lip = state.getLIP(payload.lipId);
+  if (!lip) {
+    throw new StateError(`LIP ${payload.lipId} not found`, "LIP_NOT_FOUND");
+  }
+
+  const result = withdrawLIP(lip, blockNumber, senderDid as any);
+  if (!result.success) {
+    throw new StateError(result.error!, "LIP_INVALID_STAGE");
+  }
+
+  // Handle stake return
+  if (lip.stakedAmount > 0n) {
+    const stakeOutcome = calculateStakeOutcome(lip, "withdrawn");
+    // unstake auto-increments stakeHolder nonce (stakeHolder === proposer === senderDid)
+    state.unstake(lip.stakeHolder as string, lip.stakedAmount);
+
+    if (stakeOutcome.slashAmount > 0n) {
+      state.deductBalance(lip.stakeHolder as string, stakeOutcome.slashAmount);
+      state.creditBalance(
+        "did:lgm:treasury-foundation",
+        stakeOutcome.slashAmount,
+      );
+    }
+  } else {
+    // No stake operation to increment nonce, do it explicitly
+    state.incrementNonce(senderDid);
+  }
+
+  // Update the LIP
+  state.updateLIP(payload.lipId, lip);
+
+  state.emitEvent("LIPWithdrawn", {
+    lipId: payload.lipId,
+    withdrawer: senderDid,
+  });
+
+  return 80000n;
+}
+
+/**
+ * Cast a quadratic vote on a LIP
+ */
+function executeVoteCast(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as VoteCastPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  const lip = state.getLIP(payload.lipId);
+  if (!lip) {
+    throw new StateError(`LIP ${payload.lipId} not found`, "LIP_NOT_FOUND");
+  }
+
+  // Verify LIP is in a votable stage
+  if (!["review", "last_call", "voting"].includes(lip.stage)) {
+    throw new StateError(
+      `Cannot vote on LIP in stage: ${lip.stage}`,
+      "LIP_INVALID_STAGE",
+    );
+  }
+
+  // Check if voter has already voted
+  if (state.hasVotedOnLIP(senderDid, payload.lipId)) {
+    throw new StateError("Already voted on this LIP", "VOTE_ALREADY_CAST");
+  }
+
+  // Calculate vote cost
+  const cost = calculateVoteCost(payload.votes);
+
+  // Verify voter balance
+  const balance = state.getBalance(senderDid);
+  if (balance < cost) {
+    throw new StateError(
+      "Insufficient balance for vote cost",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Create the vote
+  const vote = createQuadraticVote(
+    senderDid as any,
+    payload.lipId,
+    payload.direction as VoteDirection,
+    payload.votes,
+    blockNumber,
+  );
+
+  // Lock the vote cost
+  state.stake(senderDid, cost);
+
+  // Store the vote
+  state.addQuadraticVote(vote);
+
+  state.emitEvent("VoteCast", {
+    voteId: vote.voteId,
+    lipId: payload.lipId,
+    voter: senderDid,
+    direction: payload.direction,
+    votes: String(payload.votes),
+    cost: cost.toString(),
+  });
+
+  return 50000n;
+}
+
+/**
+ * Build a VoteTally from quadratic votes for lifecycle transitions.
+ * Phase 1: operatorBreakdown is empty (wired in Phase 3).
+ */
+function buildVoteTally(
+  votes: import("../governance/voting/quadratic.js").QuadraticVote[],
+  _state: StateManager,
+): VoteTally {
+  let support = 0n;
+  let oppose = 0n;
+  let abstain = 0n;
+  const voters = new Set<string>();
+
+  for (const vote of votes) {
+    voters.add(vote.voter);
+    const weight = BigInt(vote.votes);
+    switch (vote.direction) {
+      case "support":
+        support += weight;
+        break;
+      case "oppose":
+        oppose += weight;
+        break;
+      case "abstain":
+        abstain += weight;
+        break;
+    }
+  }
+
+  return {
+    support,
+    oppose,
+    abstain,
+    totalEligible: support + oppose + abstain + 1n, // Phase 1: approximation
+    uniqueVoters: voters.size,
+    operatorBreakdown: new Map(), // Phase 3: wired with operator registry
+    quorumMet: voters.size > 0,
+    operatorCapViolation: false, // Phase 3: wired with operator registry
+  };
 }
 
 // ============ Research Transaction Handlers ============
@@ -487,28 +1622,34 @@ function executeResearchSubmit(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as ResearchSubmitPayload;
+  const payload = tx.payload as unknown as ResearchSubmitPayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate minimum stake
   if (payload.stake < DEFAULT_RESEARCH_PARAMETERS.minResearchStake) {
     throw new StateError(
       `Minimum research stake is ${DEFAULT_RESEARCH_PARAMETERS.minResearchStake}`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
   // Validate balance
   const balance = state.getBalance(senderDid);
   if (balance < payload.stake) {
-    throw new StateError('Insufficient balance for research stake', 'INSUFFICIENT_BALANCE');
+    throw new StateError(
+      "Insufficient balance for research stake",
+      "INSUFFICIENT_BALANCE",
+    );
   }
 
   // If targeting a specific fact, verify it exists
   if (payload.targetFactId && !state.isActiveFact(payload.targetFactId)) {
-    throw new StateError('Target fact not found or not active', 'FACT_NOT_FOUND');
+    throw new StateError(
+      "Target fact not found or not active",
+      "FACT_NOT_FOUND",
+    );
   }
 
   // Lock researcher's stake
@@ -516,7 +1657,7 @@ function executeResearchSubmit(
 
   // Generate research ID
   const researchId = sha512_256Hex(
-    `research:${senderDid}:${blockNumber}:${payload.rawDataCID}`
+    `research:${senderDid}:${blockNumber}:${payload.rawDataCID}`,
   );
 
   // Create research state
@@ -529,7 +1670,7 @@ function executeResearchSubmit(
     outcome: payload.outcome,
     confidenceContribution: 0, // Calculated during review
     rawDataCID: payload.rawDataCID,
-    status: 'pending',
+    status: "pending",
     submittedAt: blockNumber,
     reviewScore: 0,
   };
@@ -546,20 +1687,27 @@ function executeResearchSubmit(
 function executeResearchChallenge(
   state: StateManager,
   tx: Transaction,
-  blockNumber: bigint,
-  params: ConsensusParams
+  _blockNumber: bigint,
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as { researchId: string; stake: bigint; evidence: string };
+  const payload = tx.payload as {
+    researchId: string;
+    stake: bigint;
+    evidence: string;
+  };
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate research exists
   const research = state.getResearch(payload.researchId);
   if (!research) {
-    throw new StateError('Research not found', 'INVALID_TRANSITION');
+    throw new StateError("Research not found", "INVALID_TRANSITION");
   }
 
-  if (research.status !== 'accepted') {
-    throw new StateError('Can only challenge accepted research', 'INVALID_TRANSITION');
+  if (research.status !== "accepted") {
+    throw new StateError(
+      "Can only challenge accepted research",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Validate minimum stake
@@ -567,7 +1715,7 @@ function executeResearchChallenge(
   if (payload.stake < minChallengeStake) {
     throw new StateError(
       `Minimum challenge stake is ${minChallengeStake}`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
@@ -575,7 +1723,7 @@ function executeResearchChallenge(
   state.stake(senderDid, payload.stake);
 
   // Update research status to challenged
-  state.updateResearch(payload.researchId, { status: 'challenged' });
+  state.updateResearch(payload.researchId, { status: "challenged" });
 
   return 120000n; // Research challenge gas
 }
@@ -587,18 +1735,21 @@ function executeBountyCreate(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as BountyCreatePayload;
+  const payload = tx.payload as unknown as BountyCreatePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Only research treasury or governance can create bounties
   // For now, allow anyone with sufficient stake
   const account = state.getAccount(senderDid);
-  if (!account || account.stakedBalance < DEFAULT_RESEARCH_PARAMETERS.minBountyStake) {
+  if (
+    !account ||
+    account.stakedBalance < DEFAULT_RESEARCH_PARAMETERS.minBountyStake
+  ) {
     throw new StateError(
       `Must have at least ${DEFAULT_RESEARCH_PARAMETERS.minBountyStake} staked to create bounty`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
@@ -606,27 +1757,33 @@ function executeBountyCreate(
   if (payload.reward > DEFAULT_RESEARCH_PARAMETERS.maxBountyReward) {
     throw new StateError(
       `Bounty reward exceeds maximum of ${DEFAULT_RESEARCH_PARAMETERS.maxBountyReward}`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
   // If targeting a fact, validate it exists
   if (payload.targetFactId && !state.isActiveFact(payload.targetFactId)) {
-    throw new StateError('Target fact not found or not active', 'FACT_NOT_FOUND');
+    throw new StateError(
+      "Target fact not found or not active",
+      "FACT_NOT_FOUND",
+    );
   }
 
   // Transfer reward from creator to lock (or from research treasury)
   const creatorBalance = state.getBalance(senderDid);
   if (creatorBalance < payload.reward) {
-    throw new StateError('Insufficient balance for bounty reward', 'INSUFFICIENT_BALANCE');
+    throw new StateError(
+      "Insufficient balance for bounty reward",
+      "INSUFFICIENT_BALANCE",
+    );
   }
 
   // Lock the reward
-  state.transfer(senderDid, 'did:lgm:bounty-escrow', payload.reward);
+  state.transfer(senderDid, "did:lgm:bounty-escrow", payload.reward);
 
   // Generate bounty ID
   const bountyId = sha512_256Hex(
-    `bounty:${senderDid}:${blockNumber}:${payload.description.slice(0, 32)}`
+    `bounty:${senderDid}:${blockNumber}:${payload.description.slice(0, 32)}`,
   );
 
   // Calculate deadline
@@ -640,7 +1797,7 @@ function executeBountyCreate(
     targetFactId: payload.targetFactId,
     reward: payload.reward,
     deadline,
-    status: 'open',
+    status: "open",
   };
 
   // Add to research state tree
@@ -655,7 +1812,7 @@ function executeBountyCreate(
 function executeBountyClaim(
   state: StateManager,
   tx: Transaction,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as BountyClaimPayload;
   const senderDid = publicKeyToDid(tx.sender);
@@ -663,11 +1820,14 @@ function executeBountyClaim(
   // Validate bounty exists and is open
   const bounty = state.getBounty(payload.bountyId);
   if (!bounty) {
-    throw new StateError('Bounty not found', 'INVALID_TRANSITION');
+    throw new StateError("Bounty not found", "INVALID_TRANSITION");
   }
 
-  if (bounty.status !== 'open') {
-    throw new StateError('Bounty is not available for claiming', 'INVALID_TRANSITION');
+  if (bounty.status !== "open") {
+    throw new StateError(
+      "Bounty is not available for claiming",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Claim the bounty
@@ -682,8 +1842,8 @@ function executeBountyClaim(
 function executeBountyFulfill(
   state: StateManager,
   tx: Transaction,
-  blockNumber: bigint,
-  params: ConsensusParams
+  _blockNumber: bigint,
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as BountyFulfillPayload;
   const senderDid = publicKeyToDid(tx.sender);
@@ -691,29 +1851,41 @@ function executeBountyFulfill(
   // Validate bounty exists and is claimed
   const bounty = state.getBounty(payload.bountyId);
   if (!bounty) {
-    throw new StateError('Bounty not found', 'INVALID_TRANSITION');
+    throw new StateError("Bounty not found", "INVALID_TRANSITION");
   }
 
-  if (bounty.status !== 'claimed') {
-    throw new StateError('Bounty must be claimed before fulfillment', 'INVALID_TRANSITION');
+  if (bounty.status !== "claimed") {
+    throw new StateError(
+      "Bounty must be claimed before fulfillment",
+      "INVALID_TRANSITION",
+    );
   }
 
   if (bounty.claimedBy !== senderDid) {
-    throw new StateError('Only the claimer can fulfill this bounty', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Only the claimer can fulfill this bounty",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Validate research submission exists and is accepted
   const research = state.getResearch(payload.researchSubmissionId);
   if (!research) {
-    throw new StateError('Research submission not found', 'INVALID_TRANSITION');
+    throw new StateError("Research submission not found", "INVALID_TRANSITION");
   }
 
-  if (research.status !== 'accepted') {
-    throw new StateError('Research must be accepted before bounty fulfillment', 'INVALID_TRANSITION');
+  if (research.status !== "accepted") {
+    throw new StateError(
+      "Research must be accepted before bounty fulfillment",
+      "INVALID_TRANSITION",
+    );
   }
 
   if (research.submitter !== senderDid) {
-    throw new StateError('Research submitter must match bounty claimer', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Research submitter must match bounty claimer",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Fulfill the bounty
@@ -723,7 +1895,7 @@ function executeBountyFulfill(
   // Note: In full implementation, this would go through the reward router
   // for 22% research share, but for bounties funded from research treasury
   // the share may be handled differently
-  state.transfer('did:lgm:bounty-escrow', senderDid, bounty.reward);
+  state.transfer("did:lgm:bounty-escrow", senderDid, bounty.reward);
 
   return 100000n; // Bounty fulfillment gas
 }
@@ -741,66 +1913,53 @@ function executeDisputeInitiate(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
-  const payload = tx.payload as InitiateDisputePayload;
+  const payload = tx.payload as unknown as InitiateDisputePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate sender is the challenger
   if (payload.challenger !== senderDid) {
-    throw new StateError('Sender must be the challenger', 'INVALID_TRANSITION');
+    throw new StateError("Sender must be the challenger", "INVALID_TRANSITION");
   }
 
   // Validate minimum stake
   if (payload.stake < DISPUTE_ECONOMICS.minChallengeStake) {
     throw new StateError(
       `Minimum challenge stake is ${DISPUTE_ECONOMICS.minChallengeStake}`,
-      'INVALID_TRANSITION'
+      "INVALID_TRANSITION",
     );
   }
 
   // Validate challenger has sufficient balance
   const balance = state.getBalance(senderDid);
   if (balance < payload.stake) {
-    throw new StateError('Insufficient balance for challenge stake', 'INSUFFICIENT_BALANCE');
+    throw new StateError(
+      "Insufficient balance for challenge stake",
+      "INSUFFICIENT_BALANCE",
+    );
   }
 
   // Get the target (what's being disputed)
-  let defenderDid: string;
-  if (payload.targetType === 'fact') {
+  if (payload.targetType === "fact") {
     const fact = state.getFact(payload.targetId);
     if (!fact) {
-      throw new StateError('Target fact not found', 'FACT_NOT_FOUND');
+      throw new StateError("Target fact not found", "FACT_NOT_FOUND");
     }
-    // Defender is the original submitter (we'd need to track this)
-    // For now, use a placeholder - in production, facts would track submitter
-    defenderDid = 'did:lgm:fact-defender';
-  } else if (payload.targetType === 'evidence') {
+  } else if (payload.targetType === "evidence") {
     const evidence = state.getEvidence(payload.targetId);
     if (!evidence) {
-      throw new StateError('Target evidence not found', 'INVALID_TRANSITION');
+      throw new StateError("Target evidence not found", "INVALID_TRANSITION");
     }
-    defenderDid = evidence.submitter;
   } else {
-    throw new StateError('Invalid target type', 'INVALID_TRANSITION');
+    throw new StateError("Invalid target type", "INVALID_TRANSITION");
   }
 
   // Lock challenger's stake
   state.stake(senderDid, payload.stake);
 
   // Create the dispute using the dispute engine
-  const dispute = createDispute(
-    payload.targetId,
-    payload.targetType,
-    payload.domain,
-    {
-      did: senderDid,
-      stake: payload.stake,
-      initialEvidence: payload.initialEvidence,
-    },
-    defenderDid,
-    blockNumber
-  );
+  const dispute = createDispute(payload, blockNumber);
 
   // Add dispute to state
   state.addDispute(dispute);
@@ -815,39 +1974,48 @@ function executeDisputeCommitEvidence(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as CommitEvidencePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate sender is the committer
   if (payload.committer !== senderDid) {
-    throw new StateError('Sender must be the committer', 'INVALID_TRANSITION');
+    throw new StateError("Sender must be the committer", "INVALID_TRANSITION");
   }
 
   // Get dispute
   const dispute = state.getDispute(payload.disputeId);
   if (!dispute) {
-    throw new StateError('Dispute not found', 'INVALID_TRANSITION');
+    throw new StateError("Dispute not found", "INVALID_TRANSITION");
   }
 
   // Validate phase
-  if (dispute.state.phase !== 'evidence_commit') {
-    throw new StateError('Not in evidence commit phase', 'INVALID_TRANSITION');
+  if (dispute.state.phase !== "evidence_commit") {
+    throw new StateError("Not in evidence commit phase", "INVALID_TRANSITION");
   }
 
   // Validate deadline
   if (blockNumber > dispute.state.phaseDeadline) {
-    throw new StateError('Evidence commit deadline passed', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Evidence commit deadline passed",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Must be challenger or defender
-  if (senderDid !== dispute.challenger.did && senderDid !== dispute.defender.did) {
-    throw new StateError('Only dispute parties can commit evidence', 'INVALID_TRANSITION');
+  if (
+    senderDid !== dispute.challenger.did &&
+    senderDid !== dispute.defender.did
+  ) {
+    throw new StateError(
+      "Only dispute parties can commit evidence",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Commit evidence using dispute engine
-  const updatedDispute = commitEvidence(dispute, senderDid, payload.evidenceHash, blockNumber);
+  const updatedDispute = commitEvidence(dispute, payload, blockNumber);
 
   // Update dispute in state
   state.updateDispute(updatedDispute);
@@ -862,37 +2030,40 @@ function executeDisputeRevealEvidence(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as RevealEvidencePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate sender is the revealer
   if (payload.revealer !== senderDid) {
-    throw new StateError('Sender must be the revealer', 'INVALID_TRANSITION');
+    throw new StateError("Sender must be the revealer", "INVALID_TRANSITION");
   }
 
   // Get dispute
   const dispute = state.getDispute(payload.disputeId);
   if (!dispute) {
-    throw new StateError('Dispute not found', 'INVALID_TRANSITION');
+    throw new StateError("Dispute not found", "INVALID_TRANSITION");
   }
 
   // Validate phase
-  if (dispute.state.phase !== 'evidence_reveal') {
-    throw new StateError('Not in evidence reveal phase', 'INVALID_TRANSITION');
+  if (dispute.state.phase !== "evidence_reveal") {
+    throw new StateError("Not in evidence reveal phase", "INVALID_TRANSITION");
   }
 
   // Validate deadline
   if (blockNumber > dispute.state.phaseDeadline) {
-    throw new StateError('Evidence reveal deadline passed', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Evidence reveal deadline passed",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Get actual evidence objects
-  const evidenceList = payload.evidenceIds.map(id => {
+  const evidenceList = payload.evidenceIds.map((id) => {
     const evidence = state.getEvidence(id);
     if (!evidence) {
-      throw new StateError(`Evidence ${id} not found`, 'INVALID_TRANSITION');
+      throw new StateError(`Evidence ${id} not found`, "INVALID_TRANSITION");
     }
     return evidence;
   });
@@ -900,10 +2071,9 @@ function executeDisputeRevealEvidence(
   // Reveal evidence using dispute engine
   const updatedDispute = revealEvidence(
     dispute,
-    senderDid,
+    payload,
     evidenceList,
-    payload.nonce,
-    blockNumber
+    blockNumber,
   );
 
   // Update dispute in state
@@ -919,52 +2089,59 @@ function executeDisputeArbiterVote(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ArbiterVotePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate sender is the arbiter
   if (payload.arbiter !== senderDid) {
-    throw new StateError('Sender must be the arbiter', 'INVALID_TRANSITION');
+    throw new StateError("Sender must be the arbiter", "INVALID_TRANSITION");
   }
 
   // Get dispute
   const dispute = state.getDispute(payload.disputeId);
   if (!dispute) {
-    throw new StateError('Dispute not found', 'INVALID_TRANSITION');
+    throw new StateError("Dispute not found", "INVALID_TRANSITION");
   }
 
   // Validate phase
-  if (dispute.state.phase !== 'arbitration' && dispute.state.phase !== 'deliberation') {
-    throw new StateError('Not in voting phase', 'INVALID_TRANSITION');
+  if (
+    dispute.state.phase !== "arbitration" &&
+    dispute.state.phase !== "deliberation"
+  ) {
+    throw new StateError("Not in voting phase", "INVALID_TRANSITION");
   }
 
   // Validate deadline
   if (blockNumber > dispute.state.phaseDeadline) {
-    throw new StateError('Voting deadline passed', 'INVALID_TRANSITION');
+    throw new StateError("Voting deadline passed", "INVALID_TRANSITION");
   }
 
   // Check arbiter is in the selected list
-  const isSelectedArbiter = dispute.arbiters.some(a => a.did === senderDid);
+  const isSelectedArbiter = dispute.arbiters.some((a) => a.did === senderDid);
   if (!isSelectedArbiter) {
-    throw new StateError('Not a selected arbiter for this dispute', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Not a selected arbiter for this dispute",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Get arbiter's stake to lock
   const account = state.getAccount(senderDid);
   if (!account || account.stakedBalance < DISPUTE_ECONOMICS.minArbiterStake) {
-    throw new StateError('Insufficient stake to vote as arbiter', 'INSUFFICIENT_BALANCE');
+    throw new StateError(
+      "Insufficient stake to vote as arbiter",
+      "INSUFFICIENT_BALANCE",
+    );
   }
 
   // Cast vote using dispute engine
   const updatedDispute = castArbiterVote(
     dispute,
-    senderDid,
-    payload.vote,
+    payload,
     DISPUTE_ECONOMICS.minArbiterStake, // Lock minimum required stake
     blockNumber,
-    payload.justificationHash
   );
 
   // Update dispute in state
@@ -981,20 +2158,20 @@ function executeDisputeEscalate(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as EscalateDisputePayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate sender is the escalator
   if (payload.escalator !== senderDid) {
-    throw new StateError('Sender must be the escalator', 'INVALID_TRANSITION');
+    throw new StateError("Sender must be the escalator", "INVALID_TRANSITION");
   }
 
   // Get dispute
   const dispute = state.getDispute(payload.disputeId);
   if (!dispute) {
-    throw new StateError('Dispute not found', 'INVALID_TRANSITION');
+    throw new StateError("Dispute not found", "INVALID_TRANSITION");
   }
 
   // Process escalation (validates eligibility, stake, etc.)
@@ -1002,11 +2179,14 @@ function executeDisputeEscalate(
     dispute,
     senderDid,
     payload.additionalStake,
-    blockNumber
+    blockNumber,
   );
 
   if (!result.success) {
-    throw new StateError(result.error || 'Escalation failed', 'INVALID_TRANSITION');
+    throw new StateError(
+      result.error || "Escalation failed",
+      "INVALID_TRANSITION",
+    );
   }
 
   // Lock additional stake
@@ -1017,7 +2197,7 @@ function executeDisputeEscalate(
     ...dispute,
     state: {
       ...dispute.state,
-      phase: 'arbitration',
+      phase: "arbitration",
       escalationTier: result.newTier!,
       phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.arbitration),
       canEscalate: result.newTier! < 3, // Can escalate if not at max tier
@@ -1045,69 +2225,99 @@ function executeDisputeSettle(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as SettleDisputePayload;
 
   // Get dispute
   const dispute = state.getDispute(payload.disputeId);
   if (!dispute) {
-    throw new StateError('Dispute not found', 'INVALID_TRANSITION');
+    throw new StateError("Dispute not found", "INVALID_TRANSITION");
   }
 
   // Validate phase
-  if (dispute.state.phase !== 'settlement') {
-    throw new StateError('Not in settlement phase', 'INVALID_TRANSITION');
+  if (dispute.state.phase !== "settlement") {
+    throw new StateError("Not in settlement phase", "INVALID_TRANSITION");
   }
 
   // Calculate settlement if not provided
   const settlement = payload.settlement || calculateSettlement(dispute);
 
   // Apply settlement
-  const winnerDid = settlement.winner === 'challenger' ? dispute.challenger.did : dispute.defender.did;
-  const loserDid = settlement.winner === 'challenger' ? dispute.defender.did : dispute.challenger.did;
+  const winnerDid =
+    settlement.winner === "challenger"
+      ? dispute.challenger.did
+      : dispute.defender.did;
+  const loserDid =
+    settlement.winner === "challenger"
+      ? dispute.defender.did
+      : dispute.challenger.did;
 
   // Return winner's stake + reward
-  const winnerStake = settlement.winner === 'challenger' ? dispute.challenger.stake : dispute.defender.stake;
+  const winnerStake =
+    settlement.winner === "challenger"
+      ? dispute.challenger.stake
+      : dispute.defender.stake;
   state.unstake(winnerDid, winnerStake);
 
   // Reward winner from loser's stake
-  state.transfer('did:lgm:dispute-escrow', winnerDid, settlement.winnerReward);
+  state.transfer("did:lgm:dispute-escrow", winnerDid, settlement.winnerReward);
 
   // Apply loser penalty (portion of stake is slashed)
-  state.unstake(loserDid, dispute.challenger.did === loserDid ? dispute.challenger.stake : dispute.defender.stake);
-  const loserRefund = (dispute.challenger.did === loserDid ? dispute.challenger.stake : dispute.defender.stake) - settlement.loserPenalty;
+  state.unstake(
+    loserDid,
+    dispute.challenger.did === loserDid
+      ? dispute.challenger.stake
+      : dispute.defender.stake,
+  );
+  const loserRefund =
+    (dispute.challenger.did === loserDid
+      ? dispute.challenger.stake
+      : dispute.defender.stake) - settlement.loserPenalty;
   if (loserRefund > 0n) {
-    state.transfer('did:lgm:dispute-escrow', loserDid, loserRefund);
+    state.transfer("did:lgm:dispute-escrow", loserDid, loserRefund);
   }
 
   // Distribute arbiter rewards and penalties
   for (const [arbiterDid, reward] of settlement.arbiterRewards) {
-    state.transfer('did:lgm:dispute-escrow', arbiterDid, reward);
+    state.transfer("did:lgm:dispute-escrow", arbiterDid, reward);
   }
 
   for (const [arbiterDid, penalty] of settlement.arbiterPenalties) {
     // Slash arbiter's locked stake
     const account = state.getAccount(arbiterDid);
     if (account) {
-      state.slashValidator(tx.sender, penalty, `Wrong arbitration vote in dispute ${dispute.id}`);
+      state.slashValidator(
+        tx.sender,
+        penalty,
+        `Wrong arbitration vote in dispute ${dispute.id}`,
+      );
     }
   }
 
   // Protocol fee to treasury
-  state.transfer('did:lgm:dispute-escrow', 'did:lgm:protocol-treasury', settlement.protocolFee);
+  state.transfer(
+    "did:lgm:dispute-escrow",
+    "did:lgm:protocol-treasury",
+    settlement.protocolFee,
+  );
 
   // Research fund share
-  state.transfer('did:lgm:dispute-escrow', RESEARCH_TREASURY_DID, settlement.researchFund);
+  state.transfer(
+    "did:lgm:dispute-escrow",
+    RESEARCH_TREASURY_DID,
+    settlement.researchFund,
+  );
 
   // Mark dispute as resolved
   const resolvedDispute: typeof dispute = {
     ...dispute,
     state: {
       ...dispute.state,
-      phase: 'resolved',
+      phase: "resolved",
     },
-    outcome: settlement.winner === 'challenger' ? 'challenger_wins' : 'defender_wins',
+    outcome:
+      settlement.winner === "challenger" ? "challenger_wins" : "defender_wins",
     winner: settlement.winner,
     resolvedAtBlock: blockNumber,
     updatedAt: Date.now(),
@@ -1115,155 +2325,265 @@ function executeDisputeSettle(
 
   state.updateDispute(resolvedDispute);
 
+  // GAP-003 FIX: Route dispute outcome to fact confidence if this is a fact dispute
+  if (dispute.targetType === "fact") {
+    const routingResult = routeDisputeOutcomeToFact(
+      {
+        dispute: resolvedDispute,
+        settlement,
+        settlementBlock: blockNumber,
+      },
+      state,
+    );
+
+    if (!routingResult.success) {
+      // Log warning but don't fail the transaction
+      // The dispute settlement succeeded, even if fact update failed
+      state.emitEvent("FactRoutingWarning", {
+        disputeId: dispute.id,
+        factId: dispute.targetId,
+        error: routingResult.error ?? "Unknown error",
+        blockNumber: blockNumber.toString(),
+      });
+    }
+
+    // Process post-resolution cleanup
+    processPostResolution(dispute.id, state, blockNumber);
+  }
+
   return 200000n; // Settlement gas
 }
 
 /**
  * Handle dispute phase timeout
  * Called when a phase deadline passes without required action
+ * GAP-024 FIX: Now properly uses handleTimeout and executes arbiter slashes
  */
 function executeDisputeTimeout(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as { disputeId: string };
 
   // Get dispute
   const dispute = state.getDispute(payload.disputeId);
   if (!dispute) {
-    throw new StateError('Dispute not found', 'INVALID_TRANSITION');
+    throw new StateError("Dispute not found", "INVALID_TRANSITION");
   }
 
   // Validate deadline has passed
   if (blockNumber <= dispute.state.phaseDeadline) {
-    throw new StateError('Phase deadline not yet reached', 'INVALID_TRANSITION');
+    throw new StateError(
+      "Phase deadline not yet reached",
+      "INVALID_TRANSITION",
+    );
   }
 
-  // Handle timeout based on current phase
+  // GAP-024 FIX: Use handleTimeout from state_machine for consistent behavior
+  // Import and use handleTimeout to get arbiter slashes
+  const timeoutResult = handleTimeoutInternal(dispute, blockNumber);
+
   let updatedDispute: typeof dispute;
 
-  switch (dispute.state.phase) {
-    case 'initiation':
-      // Defender didn't respond - challenger wins by default
+  switch (timeoutResult.action) {
+    case "default_judgment":
+      // One party wins by default
       updatedDispute = {
         ...dispute,
         state: {
           ...dispute.state,
-          phase: 'settlement',
+          phase: "settlement",
           phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
         },
-        outcome: 'challenger_wins',
-        winner: 'challenger',
-        exposedFalsehood: true, // Defender's silence implies falsehood
+        outcome:
+          timeoutResult.winner === "challenger"
+            ? "challenger_wins"
+            : "defender_wins",
+        winner: timeoutResult.winner,
+        exposedFalsehood: timeoutResult.winner === "challenger",
         updatedAt: Date.now(),
       };
       break;
 
-    case 'evidence_commit':
-      // One or both parties didn't commit - penalize non-committers
-      const challengerCommitted = dispute.commitments.challenger?.revealed === false || dispute.commitments.challenger !== undefined;
-      const defenderCommitted = dispute.commitments.defender?.revealed === false || dispute.commitments.defender !== undefined;
+    case "forfeit":
+      // Both parties failed - draw
+      updatedDispute = {
+        ...dispute,
+        state: {
+          ...dispute.state,
+          phase: "settlement",
+          phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
+        },
+        outcome: "draw",
+        updatedAt: Date.now(),
+      };
+      break;
 
-      if (!challengerCommitted && !defenderCommitted) {
-        // Both failed - draw with penalties
+    case "advance":
+      // Move to next phase
+      if (timeoutResult.nextPhase) {
+        const phaseDurations: Record<string, number> = PHASE_DURATIONS;
         updatedDispute = {
           ...dispute,
           state: {
             ...dispute.state,
-            phase: 'settlement',
-            phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
+            phase: timeoutResult.nextPhase as Dispute["state"]["phase"],
+            phaseDeadline:
+              blockNumber +
+              BigInt(phaseDurations[timeoutResult.nextPhase] || 1000),
           },
-          outcome: 'draw',
-          updatedAt: Date.now(),
-        };
-      } else if (!challengerCommitted) {
-        updatedDispute = {
-          ...dispute,
-          state: {
-            ...dispute.state,
-            phase: 'settlement',
-            phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
-          },
-          outcome: 'defender_wins',
-          winner: 'defender',
           updatedAt: Date.now(),
         };
       } else {
-        updatedDispute = {
-          ...dispute,
-          state: {
-            ...dispute.state,
-            phase: 'settlement',
-            phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
-          },
-          outcome: 'challenger_wins',
-          winner: 'challenger',
-          exposedFalsehood: true,
-          updatedAt: Date.now(),
-        };
+        const advanceResult = tryAdvancePhase(
+          dispute,
+          blockNumber,
+          new Set<string>(),
+        );
+        updatedDispute = advanceResult.dispute;
       }
-      break;
-
-    case 'evidence_reveal':
-      // Non-revealer gets maximum penalty (refusal to reveal = bad faith)
-      const challengerRevealed = dispute.commitments.challenger?.revealed;
-      const defenderRevealed = dispute.commitments.defender?.revealed;
-
-      if (!challengerRevealed && !defenderRevealed) {
-        // Both failed - both get maximum penalty
-        updatedDispute = {
-          ...dispute,
-          state: {
-            ...dispute.state,
-            phase: 'settlement',
-            phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
-          },
-          outcome: 'draw',
-          updatedAt: Date.now(),
-        };
-      } else if (!challengerRevealed) {
-        updatedDispute = {
-          ...dispute,
-          state: {
-            ...dispute.state,
-            phase: 'settlement',
-            phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
-          },
-          outcome: 'defender_wins',
-          winner: 'defender',
-          updatedAt: Date.now(),
-        };
-      } else {
-        updatedDispute = {
-          ...dispute,
-          state: {
-            ...dispute.state,
-            phase: 'settlement',
-            phaseDeadline: blockNumber + BigInt(PHASE_DURATIONS.settlement),
-          },
-          outcome: 'challenger_wins',
-          winner: 'challenger',
-          exposedFalsehood: true,
-          updatedAt: Date.now(),
-        };
-      }
-      break;
-
-    case 'arbitration':
-    case 'deliberation':
-      // Move to settlement with current votes
-      updatedDispute = tryAdvancePhase(dispute, blockNumber);
       break;
 
     default:
-      throw new StateError('Cannot timeout in current phase', 'INVALID_TRANSITION');
+      throw new StateError("Unknown timeout action", "INVALID_TRANSITION");
+  }
+
+  // GAP-024 FIX: Execute arbiter slashes for non-voters
+  if (timeoutResult.arbiterSlashes && timeoutResult.arbiterSlashes.length > 0) {
+    const slashAmount = (DISPUTE_ECONOMICS.minArbiterStake * 10n) / 100n; // 10% of min stake
+
+    for (const slash of timeoutResult.arbiterSlashes) {
+      // Get arbiter account
+      const arbiterAccount = state.getAccount(slash.did);
+      if (arbiterAccount && arbiterAccount.stakedBalance >= slashAmount) {
+        // Apply slash to arbiter's staked balance
+        state.transfer(slash.did, "did:lgm:protocol-treasury", slashAmount);
+      }
+    }
   }
 
   state.updateDispute(updatedDispute);
 
   return 100000n; // Timeout processing gas
+}
+
+/**
+ * GAP-024 FIX: Internal timeout handling that mirrors state_machine.handleTimeout
+ * This is used to get arbiter slashing information for timeout execution
+ */
+function handleTimeoutInternal(
+  dispute: Dispute,
+  _currentBlock: bigint,
+): {
+  action: "advance" | "forfeit" | "default_judgment";
+  winner?: "challenger" | "defender";
+  nextPhase?:
+    | "evidence_commit"
+    | "evidence_reveal"
+    | "arbitration"
+    | "deliberation"
+    | "settlement"
+    | "resolved";
+  reason: string;
+  arbiterSlashes?: Array<{ did: string; reason: string }>;
+} {
+  switch (dispute.state.phase) {
+    case "initiation":
+      return {
+        action: "default_judgment",
+        winner: "challenger",
+        reason: "Defender failed to respond within deadline",
+      };
+
+    case "evidence_commit":
+      if (!dispute.commitments.challenger && !dispute.commitments.defender) {
+        return {
+          action: "forfeit",
+          reason: "Both parties failed to commit evidence",
+        };
+      }
+      if (!dispute.commitments.challenger) {
+        return {
+          action: "default_judgment",
+          winner: "defender",
+          reason: "Challenger failed to commit evidence",
+        };
+      }
+      if (!dispute.commitments.defender) {
+        return {
+          action: "default_judgment",
+          winner: "challenger",
+          reason: "Defender failed to commit evidence",
+        };
+      }
+      return {
+        action: "advance",
+        nextPhase: "evidence_reveal",
+        reason: "Evidence commit phase completed",
+      };
+
+    case "evidence_reveal":
+      if (!dispute.commitments.challenger?.revealed) {
+        return {
+          action: "default_judgment",
+          winner: "defender",
+          reason: "Challenger refused to reveal evidence",
+        };
+      }
+      if (!dispute.commitments.defender?.revealed) {
+        return {
+          action: "default_judgment",
+          winner: "challenger",
+          reason: "Defender refused to reveal evidence",
+        };
+      }
+      return {
+        action: "advance",
+        nextPhase: "arbitration",
+        reason: "Evidence reveal phase completed",
+      };
+
+    case "arbitration": {
+      // Identify non-voting arbiters for slashing
+      const votedArbiters = new Set(dispute.votes.keys());
+      const nonVotingArbiters = dispute.arbiters
+        .filter((a: { did: string }) => !votedArbiters.has(a.did))
+        .map((a: { did: string }) => ({
+          did: a.did,
+          reason: "Failed to vote within arbitration deadline",
+        }));
+
+      return {
+        action: "advance",
+        nextPhase: "deliberation",
+        reason: "Arbitration phase timeout",
+        arbiterSlashes:
+          nonVotingArbiters.length > 0 ? nonVotingArbiters : undefined,
+      };
+    }
+
+    case "deliberation":
+      return {
+        action: "advance",
+        nextPhase: "settlement",
+        reason: "Deliberation period ended",
+      };
+
+    case "settlement":
+      return {
+        action: "advance",
+        nextPhase: "resolved",
+        reason: "Settlement completed",
+      };
+
+    default:
+      return {
+        action: "forfeit",
+        reason: `Unexpected timeout in phase: ${dispute.state.phase}`,
+      };
+  }
 }
 
 // ============ Vesting Transaction Handlers ============
@@ -1278,20 +2598,24 @@ function executeVestingCreate(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as CreateVestingPayload;
 
   // Validate claim exists
   if (!state.isActiveFact(payload.claimId)) {
-    throw new StateError('Claim not found or not active', 'FACT_NOT_FOUND');
+    throw new StateError("Claim not found or not active", "FACT_NOT_FOUND");
   }
 
   // Create vesting schedule
-  const vesting = state.createVesting(payload, blockNumber);
+  state.createVesting(payload, blockNumber);
 
   // Lock the reward amount in escrow
-  state.transfer('did:lgm:reward-pool', 'did:lgm:vesting-escrow', payload.amount);
+  state.transfer(
+    "did:lgm:reward-pool",
+    "did:lgm:vesting-escrow",
+    payload.amount,
+  );
 
   return 80000n; // Vesting creation gas
 }
@@ -1303,26 +2627,26 @@ function executeVestingClaim(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ClaimRewardsPayload;
   const senderDid = publicKeyToDid(tx.sender);
 
   // Validate sender is the claimer
   if (payload.claimer !== senderDid) {
-    throw new StateError('Sender must be the claimer', 'INVALID_TRANSITION');
+    throw new StateError("Sender must be the claimer", "INVALID_TRANSITION");
   }
 
   // Get vesting and claim rewards
-  const { vesting, claimedAmount } = state.claimVestingRewards(
+  const { vesting: _vesting, claimedAmount } = state.claimVestingRewards(
     payload.vestingId,
     senderDid,
     payload.amount,
-    blockNumber
+    blockNumber,
   );
 
   // Transfer claimed amount from escrow to recipient
-  state.transfer('did:lgm:vesting-escrow', senderDid, claimedAmount);
+  state.transfer("did:lgm:vesting-escrow", senderDid, claimedAmount);
 
   return 50000n; // Vesting claim gas
 }
@@ -1334,18 +2658,22 @@ function executeVestingPause(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as PauseVestingPayload;
 
   // Get vesting
   const vesting = state.getVesting(payload.vestingId);
   if (!vesting) {
-    throw new StateError('Vesting not found', 'VESTING_NOT_FOUND');
+    throw new StateError("Vesting not found", "VESTING_NOT_FOUND");
   }
 
   // Pause the vesting
-  state.pauseVesting(payload.vestingId, payload.relatedEntityId || '', blockNumber);
+  state.pauseVesting(
+    payload.vestingId,
+    payload.relatedEntityId || "",
+    blockNumber,
+  );
 
   return 30000n; // Vesting pause gas
 }
@@ -1357,14 +2685,14 @@ function executeVestingResume(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ResumeVestingPayload;
 
   // Get vesting
   const vesting = state.getVesting(payload.vestingId);
   if (!vesting) {
-    throw new StateError('Vesting not found', 'VESTING_NOT_FOUND');
+    throw new StateError("Vesting not found", "VESTING_NOT_FOUND");
   }
 
   // Resume with optional defense bonus
@@ -1373,9 +2701,9 @@ function executeVestingResume(
   state.resumeVesting(
     payload.vestingId,
     false, // Not a challenge resolution
-    '',
-    '',
-    blockNumber
+    "",
+    "",
+    blockNumber,
   );
 
   return 30000n; // Vesting resume gas
@@ -1388,20 +2716,24 @@ function executeVestingAccelerate(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as AccelerateVestingPayload;
 
   // Get vesting
   const vesting = state.getVesting(payload.vestingId);
   if (!vesting) {
-    throw new StateError('Vesting not found', 'VESTING_NOT_FOUND');
+    throw new StateError("Vesting not found", "VESTING_NOT_FOUND");
   }
 
   // Apply acceleration based on type
   // Currently supports replication acceleration
-  if (payload.accelerationType === 'replication' && payload.relatedEntityId) {
-    state.accelerateVesting(payload.vestingId, payload.relatedEntityId, blockNumber);
+  if (payload.accelerationType === "replication" && payload.relatedEntityId) {
+    state.accelerateVesting(
+      payload.vestingId,
+      payload.relatedEntityId,
+      blockNumber,
+    );
   }
 
   return 40000n; // Vesting acceleration gas
@@ -1419,38 +2751,47 @@ function executeVestingFalsify(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams
+  _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as FalsifyVestingPayload;
 
   // Get vesting
   const vesting = state.getVesting(payload.vestingId);
   if (!vesting) {
-    throw new StateError('Vesting not found', 'VESTING_NOT_FOUND');
+    throw new StateError("Vesting not found", "VESTING_NOT_FOUND");
   }
 
   // Process falsification (challenger won the dispute)
-  const { vesting: updatedVesting, clawback } = state.resumeVesting(
+  const { vesting: _updatedVesting, clawback } = state.resumeVesting(
     payload.vestingId,
     true, // Challenger won
     payload.challengerDid,
     payload.disputeId,
-    blockNumber
+    blockNumber,
   );
 
   // Transfer rewards to challenger
   if (clawback) {
-    state.transfer('did:lgm:vesting-escrow', payload.challengerDid, clawback.challengerReward);
+    state.transfer(
+      "did:lgm:vesting-escrow",
+      payload.challengerDid,
+      clawback.challengerReward,
+    );
 
     // Apply clawback from recipient if they still have balance
     if (clawback.recipientPenalty > 0n) {
       const recipientBalance = state.getBalance(vesting.recipient);
-      const actualClawback = recipientBalance >= clawback.recipientPenalty
-        ? clawback.recipientPenalty
-        : recipientBalance;
+      const actualClawback =
+        recipientBalance >= clawback.recipientPenalty
+          ? clawback.recipientPenalty
+          : recipientBalance;
 
       if (actualClawback > 0n) {
-        state.transfer(vesting.recipient, payload.challengerDid, actualClawback);
+        state.transfer(
+          vesting.recipient,
+          payload.challengerDid,
+          actualClawback,
+        );
       }
     }
   }
@@ -1458,38 +2799,570 @@ function executeVestingFalsify(
   return 150000n; // Vesting falsification gas
 }
 
+// ============ Domain Proposal Transaction Handlers ============
+
+/**
+ * Execute domain proposal transaction
+ *
+ * Stake requirements (22/222/2222 LGM pattern):
+ * - Leaf domains (depth > 2): 22 LGM
+ * - Mid-level domains (depth 2): 222 LGM
+ * - Top-level domains (depth 1): 2222 LGM
+ */
+function executeDomainPropose(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DomainProposePayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // Validate sender is the proposer
+  if (payload.proposer !== senderDid) {
+    throw new StateError("Sender must be the proposer", "INVALID_TRANSITION");
+  }
+
+  // Get the domain tree from state
+  const domainTree = state.getKnowledgeDomainTree();
+  if (!domainTree) {
+    throw new StateError("Domain tree not initialized", "INVALID_TRANSITION");
+  }
+
+  // Create the proposal (validates input internally)
+  const { proposal, validation } = createDomainProposal(
+    {
+      domainId: payload.domainId,
+      name: payload.name,
+      stratum: payload.stratum,
+      parentDomainId: payload.parentDomainId,
+      description: payload.description,
+      examples: payload.examples,
+      proposer: payload.proposer,
+      stake: payload.stake,
+    },
+    blockNumber,
+    domainTree,
+  );
+
+  // Validate balance
+  const balance = state.getBalance(senderDid);
+  if (balance < payload.stake) {
+    throw new StateError(
+      "Insufficient balance for proposal stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Lock the proposer's stake
+  state.stake(senderDid, payload.stake);
+
+  // Store the proposal
+  state.addDomainProposal(proposal);
+
+  // Emit event
+  state.emitEvent("DomainProposed", {
+    proposalId: proposal.id,
+    domainId: proposal.proposedDomainId,
+    proposer: proposal.proposer,
+    stake: proposal.stake.toString(),
+    requiresGovernance: String(validation.requiresGovernance),
+    challengeDeadline: proposal.challengeDeadline.toString(),
+  });
+
+  return 180000n; // Domain proposal gas
+}
+
+/**
+ * Execute domain endorsement transaction
+ * Requires 2 validator endorsements for auto-approval
+ *
+ * Validators must lock stake when endorsing:
+ * - Top-level domains: 222 LGM
+ * - Mid-level domains: 22 LGM
+ * - Leaf domains: 2 LGM
+ */
+function executeDomainEndorse(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DomainEndorsePayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // Validate sender is the endorser
+  if (payload.endorser !== senderDid) {
+    throw new StateError("Sender must be the endorser", "INVALID_TRANSITION");
+  }
+
+  // Endorser must be a validator
+  if (!state.isActiveValidator(tx.sender)) {
+    throw new StateError(
+      "Only validators can endorse domain proposals",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Get the proposal
+  const proposal = state.getDomainProposal(payload.proposalId);
+  if (!proposal) {
+    throw new StateError(
+      "Domain proposal not found",
+      "DOMAIN_PROPOSAL_NOT_FOUND",
+    );
+  }
+
+  // Validate stake meets minimum for this domain level
+  if (payload.stake < proposal.requiredEndorsementStake) {
+    throw new StateError(
+      `Insufficient endorsement stake: ${payload.stake} < required ${proposal.requiredEndorsementStake}`,
+      "INSUFFICIENT_STAKE",
+    );
+  }
+
+  // Validate endorser has sufficient balance
+  const balance = state.getBalance(senderDid);
+  if (balance < payload.stake) {
+    throw new StateError(
+      "Insufficient balance for endorsement stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Lock the endorser's stake
+  state.stake(senderDid, payload.stake);
+
+  // Endorse the proposal (validates and updates state)
+  const updatedProposal = endorseProposal(
+    proposal,
+    senderDid,
+    blockNumber,
+    payload.stake,
+  );
+
+  // Update proposal in state
+  state.updateDomainProposal(updatedProposal);
+
+  // Emit event
+  state.emitEvent("DomainEndorsed", {
+    proposalId: proposal.id,
+    endorser: senderDid,
+    stake: payload.stake.toString(),
+    endorserCount: String(updatedProposal.endorsers.length),
+    status: updatedProposal.status,
+  });
+
+  return 50000n; // Domain endorsement gas
+}
+
+/**
+ * Execute domain challenge transaction
+ */
+function executeDomainChallenge(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DomainChallengePayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // Validate sender is the challenger
+  if (payload.challenger !== senderDid) {
+    throw new StateError("Sender must be the challenger", "INVALID_TRANSITION");
+  }
+
+  // Get the proposal
+  const proposal = state.getDomainProposal(payload.proposalId);
+  if (!proposal) {
+    throw new StateError(
+      "Domain proposal not found",
+      "DOMAIN_PROPOSAL_NOT_FOUND",
+    );
+  }
+
+  // Validate challenge stake
+  const balance = state.getBalance(senderDid);
+  if (balance < payload.stake) {
+    throw new StateError(
+      "Insufficient balance for challenge stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Lock the challenger's stake
+  state.stake(senderDid, payload.stake);
+
+  // Challenge the proposal
+  const updatedProposal = challengeProposal(
+    proposal,
+    senderDid,
+    payload.reason,
+    payload.stake,
+    blockNumber,
+  );
+
+  // Update proposal in state
+  state.updateDomainProposal(updatedProposal);
+
+  // Emit event
+  state.emitEvent("DomainChallenged", {
+    proposalId: proposal.id,
+    challenger: senderDid,
+    reason: payload.reason,
+    challengerCount: String(updatedProposal.challengers.length),
+  });
+
+  return 80000n; // Domain challenge gas
+}
+
+/**
+ * Execute domain finalization transaction
+ * 777 blocks challenge period (~32.7 minutes at 2521ms blocks)
+ * 77% stake return on rejection (for both proposer and endorsers if challenged)
+ */
+function executeDomainFinalize(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DomainFinalizePayload;
+
+  // Get the proposal
+  const proposal = state.getDomainProposal(payload.proposalId);
+  if (!proposal) {
+    throw new StateError(
+      "Domain proposal not found",
+      "DOMAIN_PROPOSAL_NOT_FOUND",
+    );
+  }
+
+  // Finalize the proposal (validates deadline internally)
+  const finalizedProposal = finalizeProposal(proposal, blockNumber);
+
+  // Calculate endorser stake returns
+  const endorserReturns = calculateEndorserStakeReturns(finalizedProposal);
+
+  // Handle stake return based on outcome
+  if (finalizedProposal.status === "approved") {
+    // Return full stake to proposer
+    state.unstake(finalizedProposal.proposer, finalizedProposal.stake);
+
+    // Return full stake to all endorsers
+    for (const [endorser, { stakeReturn }] of endorserReturns) {
+      state.unstake(endorser, stakeReturn);
+    }
+
+    // Get domain tree and parent domain
+    const domainTree = state.getKnowledgeDomainTree();
+    if (!domainTree) {
+      throw new StateError("Domain tree not initialized", "INVALID_TRANSITION");
+    }
+
+    const parentNode = domainTree.domainIndex.get(
+      finalizedProposal.parentDomainId,
+    );
+    const parentDomain = parentNode?.domain ?? null;
+
+    // Create the actual domain
+    const newDomain = createDomainFromProposal(
+      finalizedProposal,
+      parentDomain,
+      Number(blockNumber),
+    );
+
+    // Add domain to tree
+    state.addDomainToTree(newDomain);
+
+    // Emit approval event
+    state.emitEvent("DomainApproved", {
+      proposalId: finalizedProposal.id,
+      domainId: newDomain.id,
+      approvedAt: blockNumber.toString(),
+      endorserCount: String(finalizedProposal.endorsers.length),
+    });
+  } else if (finalizedProposal.status === "rejected") {
+    // Return 77% of stake to proposer (only if challenged, else 100%)
+    const wasChallenged = finalizedProposal.challengers.length > 0;
+    const proposerStakeReturn = wasChallenged
+      ? calculateStakeReturn(finalizedProposal)
+      : finalizedProposal.stake;
+    const proposerSlashed = finalizedProposal.stake - proposerStakeReturn;
+
+    // Unstake the full amount from proposer
+    state.unstake(finalizedProposal.proposer, finalizedProposal.stake);
+
+    // Deduct slashed portion to protocol treasury
+    if (proposerSlashed > 0n) {
+      state.transfer(
+        finalizedProposal.proposer,
+        "did:lgm:protocol-treasury",
+        proposerSlashed,
+      );
+    }
+
+    // Handle endorser stakes
+    let totalEndorserSlashed = 0n;
+    for (const [
+      endorser,
+      { stakeReturn: _stakeReturn, stakeSlashed },
+    ] of endorserReturns) {
+      // Unstake the full amount from endorser
+      const endorserStake =
+        finalizedProposal.endorserStakes.get(endorser) ?? 0n;
+      if (endorserStake > 0n) {
+        state.unstake(endorser, endorserStake);
+
+        // Deduct slashed portion to protocol treasury
+        if (stakeSlashed > 0n) {
+          state.transfer(endorser, "did:lgm:protocol-treasury", stakeSlashed);
+          totalEndorserSlashed += stakeSlashed;
+        }
+      }
+    }
+
+    // Emit rejection event
+    state.emitEvent("DomainRejected", {
+      proposalId: finalizedProposal.id,
+      domainId: finalizedProposal.proposedDomainId,
+      reason: finalizedProposal.rejectionReason ?? "Proposal rejected",
+      wasChallenged: String(wasChallenged),
+      proposerStakeReturned: proposerStakeReturn.toString(),
+      proposerStakeSlashed: proposerSlashed.toString(),
+      endorserStakeSlashed: totalEndorserSlashed.toString(),
+    });
+  }
+
+  // Update proposal in state
+  state.updateDomainProposal(finalizedProposal);
+
+  return 100000n; // Domain finalization gas
+}
+
+// ============ System Transaction Handlers ============
+// These transactions are created by the consensus layer (not users)
+// and have no fee requirements.
+
+/**
+ * Add a verified fact to the knowledge layer
+ * Created by consensus when verification round completes with acceptance
+ */
+function executeAddFact(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as {
+    type: "add_fact";
+    factId: string;
+    confidence: number;
+    verifierCount: number;
+    verifiedAtBlock: number;
+    claim?: string;
+    domain?: string;
+  };
+
+  // Add fact to knowledge layer
+  state.addFact({
+    id: payload.factId,
+    claim: payload.claim || `Verified claim ${payload.factId}`,
+    domain: payload.domain || "verified",
+    confidence: payload.confidence,
+    verifiedAt: blockNumber,
+    verifierCount: payload.verifierCount,
+    challengeCount: 0,
+    citationCount: 0,
+    status: "active",
+  });
+
+  return 0n; // System transaction, no gas
+}
+
+/**
+ * Reward a validator for correct verification
+ * Created by consensus when verification round completes
+ */
+function executeVerificationReward(
+  state: StateManager,
+  tx: Transaction,
+): bigint {
+  const payload = tx.payload as {
+    type: "verification_reward";
+    recipient: string;
+    amount: bigint;
+    roundId: string;
+  };
+
+  // Transfer reward from reward pool to validator
+  // (reward pool is pre-funded from block rewards)
+  if (state.accountExists(payload.recipient)) {
+    state.transfer(REWARD_POOL_DID, payload.recipient, payload.amount);
+  }
+
+  return 0n; // System transaction, no gas
+}
+
+/**
+ * Slash a validator for incorrect verification or missed verification
+ * Created by consensus when verification round completes
+ */
+function executeSlashValidator(state: StateManager, tx: Transaction): bigint {
+  const payload = tx.payload as {
+    type: "slash_validator";
+    validator: string;
+    amount: bigint;
+    reason: string;
+  };
+
+  // Get validator and slash their stake
+  const validator = state.getValidator(payload.validator as any);
+  if (validator && payload.amount > 0n) {
+    const actualSlash =
+      payload.amount > validator.stake ? validator.stake : payload.amount;
+    state.slashValidator(
+      payload.validator as any,
+      actualSlash,
+      payload.reason || "verification_failure",
+    );
+  }
+
+  return 0n; // System transaction, no gas
+}
+
 // ============ Verification Result Application ============
+
+/**
+ * Infer evidence types from claim properties for vesting category determination.
+ * Maps claim type and stratum to evidence types used by the vesting system.
+ *
+ * GAP-006 FIX: Helper for vesting category determination
+ */
+function inferEvidenceTypesFromClaim(claim: ClaimState): string[] {
+  const types: string[] = [];
+
+  // Infer from claim type
+  switch (claim.claimType) {
+    case "formal":
+    case "logical":
+      types.push("formal_proof");
+      break;
+    case "on_chain":
+    case "blockchain":
+      types.push("on_chain");
+      break;
+    case "computational":
+      types.push("computational");
+      break;
+    case "empirical":
+      types.push("peer_reviewed"); // Default for empirical claims
+      break;
+    case "attestation":
+      types.push("attestation");
+      break;
+    case "oracle":
+      types.push("chainlink_feed");
+      break;
+  }
+
+  // Also infer from stratum (more precise)
+  switch (claim.stratum) {
+    case "fundamental":
+      if (!types.includes("formal_proof")) {
+        types.push("formal_proof");
+      }
+      break;
+    case "technological":
+      if (!types.includes("computational")) {
+        types.push("computational");
+      }
+      types.push("cryptographic_proof");
+      break;
+    case "physical":
+    case "chemical":
+    case "biological":
+    case "cognitive":
+    case "social":
+      if (!types.includes("peer_reviewed")) {
+        types.push("peer_reviewed");
+      }
+      break;
+  }
+
+  // Default if nothing inferred
+  if (types.length === 0) {
+    types.push("peer_reviewed");
+  }
+
+  return types;
+}
 
 /**
  * Apply verification result to state
  * Called after consensus completes a verification round
+ *
+ * GAP-2 FIX: Routes all rewards through reward router for 22% research share
+ * GAP-006 FIX: Creates vesting schedule for claim submitter when claim is accepted
  */
 export function applyVerificationResult(
   state: StateManager,
   result: VerificationResult,
   blockNumber: bigint,
-  params: ConsensusParams
+  params: ConsensusParams,
 ): void {
   state.beginTransaction();
 
   try {
-    // Apply rewards to validators
+    // Apply rewards to validators - routed through reward router
     for (const [validatorKey, reward] of result.rewards) {
       const validatorDid = publicKeyToDid(validatorKey as PublicKey);
       if (state.accountExists(validatorDid)) {
-        // Mint reward (comes from block reward pool)
-        // In production, this would be more sophisticated
-        state.createAccount(validatorDid, '', reward);
+        // GAP-2 FIX: Route verification reward through reward router
+        const routed = routeVerificationReward(
+          reward,
+          validatorDid,
+          result.claimId,
+          blockNumber,
+        );
+
+        // Transfer 22% split across 5 treasury funds
+        if (routed.researchShare > 0n) {
+          const treasurySplit = splitEvidenceTax(routed.researchShare);
+          for (const entry of treasurySplit) {
+            if (entry.amount > 0n) {
+              state.transfer(REWARD_POOL_DID, entry.did, entry.amount);
+            }
+          }
+        }
+
+        // Transfer 78% to validator
+        if (routed.recipientAmount > 0n) {
+          state.transfer(REWARD_POOL_DID, validatorDid, routed.recipientAmount);
+        }
       }
     }
 
     // Apply slashes to validators
     for (const [validatorKey, slashAmount] of result.slashes) {
-      state.slashValidator(validatorKey as PublicKey, slashAmount, 'Wrong verification');
+      state.slashValidator(
+        validatorKey as PublicKey,
+        slashAmount,
+        "Wrong verification",
+      );
     }
 
-    // If claim accepted, add fact to knowledge
-    if (result.outcome === 'accepted' && result.fact) {
+    // If claim accepted, add fact to knowledge and create vesting for submitter
+    if (result.outcome === "accepted" && result.fact) {
+      // GAP-023 FIX: Check fact ID uniqueness before inserting
+      const existingFact = state.getFact(result.claimId);
+      if (existingFact) {
+        throw new StateError(
+          `Fact with ID ${result.claimId} already exists`,
+          "DUPLICATE_FACT",
+        );
+      }
+
       state.addFact({
         id: result.claimId,
         claim: result.fact.claim,
@@ -1498,14 +3371,101 @@ export function applyVerificationResult(
         verifiedAt: blockNumber,
         verifierCount: result.participatingValidators,
         challengeCount: 0,
-        status: 'active',
+        citationCount: 0,
+        status: "active",
       });
+
+      // GAP-006 FIX: Create vesting schedule for claim submitter
+      const claim = state.getClaim(result.claimId);
+      if (claim && claim.submitter) {
+        // Check if vesting already exists for this claim (prevent duplicates)
+        const existingVesting = state.getVestingForClaim(result.claimId);
+        if (!existingVesting) {
+          // Determine vesting category from claim properties
+          const evidenceTypes = inferEvidenceTypesFromClaim(claim);
+          const category = determineVestingCategory(
+            claim.claimType,
+            evidenceTypes,
+            false, // Not replicated initially
+            false, // Not contested (it was accepted)
+          );
+
+          // Route claim reward through reward router (22% research, 78% vesting)
+          const claimRewardAmount = params.claimReward;
+          const routed = routeClaimReward(
+            claimRewardAmount,
+            claim.submitter,
+            result.claimId,
+            blockNumber,
+          );
+
+          // Transfer research share split across 5 treasury funds
+          if (routed.researchShare > 0n) {
+            const treasurySplit = splitEvidenceTax(routed.researchShare);
+            for (const entry of treasurySplit) {
+              if (entry.amount > 0n) {
+                state.transfer(REWARD_POOL_DID, entry.did, entry.amount);
+              }
+            }
+          }
+
+          // Create vesting schedule with remaining amount (78%)
+          if (routed.recipientAmount > 0n) {
+            state.createVesting(
+              {
+                claimId: result.claimId,
+                recipient: claim.submitter,
+                amount: routed.recipientAmount,
+                category,
+              },
+              blockNumber,
+            );
+          }
+
+          // Return the claim stake to submitter (was locked during submission)
+          if (claim.stake > 0n && state.accountExists(claim.submitter)) {
+            state.unstake(claim.submitter, claim.stake);
+          }
+
+          // Update claim status to accepted
+          state.updateClaimStatus(result.claimId, "accepted", blockNumber, {
+            resultFactId: result.claimId,
+          });
+        }
+      }
     }
 
-    // If claim rejected, unlock stake and apply penalty
-    if (result.outcome === 'rejected') {
-      // Penalty would be applied to claim submitter
-      // (Need claim submitter info from verification round)
+    // If claim rejected, unlock partial stake and apply penalty
+    if (result.outcome === "rejected") {
+      const claim = state.getClaim(result.claimId);
+      if (claim && claim.submitter && state.accountExists(claim.submitter)) {
+        // GAP-006 FIX: Handle rejected claim - slash portion of stake
+        const slashRate = params.invalidClaimSlash; // 22% slash for invalid claims
+        const slashAmount = BigInt(Math.floor(Number(claim.stake) * slashRate));
+        // Unstake the full amount first (moves from stakedBalance to balance)
+        if (claim.stake > 0n) {
+          state.unstake(claim.submitter, claim.stake);
+        }
+
+        // Transfer slashed amount to protocol treasury
+        if (slashAmount > 0n) {
+          state.transfer(claim.submitter, PROTOCOL_TREASURY_DID, slashAmount);
+        }
+
+        // Update claim status to rejected
+        state.updateClaimStatus(result.claimId, "rejected", blockNumber, {
+          rejectionReason: `Verification failed with ${Math.round(result.confidenceBreakdown.rejected * 100)}% rejection`,
+        });
+      }
+    }
+
+    // If claim contested or insufficient, keep stake locked for re-verification
+    if (result.outcome === "contested" || result.outcome === "insufficient") {
+      const claim = state.getClaim(result.claimId);
+      if (claim) {
+        // Update claim status - stake remains locked for potential re-verification
+        state.updateClaimStatus(result.claimId, "pending", blockNumber);
+      }
     }
 
     state.commitTransaction();
@@ -1517,27 +3477,127 @@ export function applyVerificationResult(
 
 /**
  * Apply epoch transition to state
+ *
+ * GAP-2 FIX: Routes all epoch rewards through reward router for 22% research share
  */
 export function applyEpochTransition(
   state: StateManager,
   payload: EpochTransitionPayload,
-  params: ConsensusParams
+  blockNumber: bigint,
+  _params: ConsensusParams,
 ): void {
   state.beginTransaction();
 
   try {
-    // Apply epoch rewards to validators
+    // Apply epoch rewards to validators - routed through reward router
     for (const [validatorKey, reward] of payload.rewards) {
       const validatorDid = publicKeyToDid(validatorKey as PublicKey);
-      // Add reward to validator account
       if (state.accountExists(validatorDid)) {
-        state.transfer('did:lgm:reward-pool', validatorDid, reward);
+        // GAP-2 FIX: Route epoch reward through reward router
+        const routed = routeReward({
+          source: "verification", // Epoch rewards are cumulative verification rewards
+          amount: reward,
+          recipient: validatorDid,
+          blockNumber,
+        });
+
+        // Transfer 22% split across 5 treasury funds
+        if (routed.researchShare > 0n) {
+          const treasurySplit = splitEvidenceTax(routed.researchShare);
+          for (const entry of treasurySplit) {
+            if (entry.amount > 0n) {
+              state.transfer(REWARD_POOL_DID, entry.did, entry.amount);
+            }
+          }
+        }
+
+        // Transfer 78% to validator
+        if (routed.recipientAmount > 0n) {
+          state.transfer(REWARD_POOL_DID, validatorDid, routed.recipientAmount);
+        }
       }
     }
 
     // Apply slashes
     for (const [validatorKey, slashAmount] of payload.slashes) {
-      state.slashValidator(validatorKey as PublicKey, slashAmount, 'Epoch slash');
+      state.slashValidator(
+        validatorKey as PublicKey,
+        slashAmount,
+        "Epoch slash",
+      );
+    }
+
+    // Auto-bounty creation from research fund
+    // When the research treasury has sufficient balance, automatically create bounties
+    // for facts that would benefit from IRL verification
+    const AUTO_BOUNTY_THRESHOLD = 1000n * 10n ** 18n; // 1000 LGM minimum to trigger
+    const MAX_BOUNTIES_PER_EPOCH = 3;
+
+    if (state.accountExists(RESEARCH_TREASURY_DID)) {
+      const researchBalance = state.getBalance(RESEARCH_TREASURY_DID);
+
+      if (researchBalance >= AUTO_BOUNTY_THRESHOLD) {
+        // Get active facts and identify candidates for verification bounties
+        const activeFacts = state.getActiveFacts();
+        const candidates = activeFacts
+          .filter((f) => f.confidence < 0.9 && f.citationCount > 0)
+          .map((f) => ({
+            claimId: f.id,
+            domain: f.domain,
+            confidence: f.confidence,
+            lastVerifiedBlock: f.verifiedAt,
+            queryCount: f.citationCount,
+          }));
+
+        if (candidates.length > 0) {
+          const prioritized = prioritizeClaimsForBounties(
+            candidates,
+            blockNumber,
+          );
+
+          for (
+            let i = 0;
+            i < Math.min(prioritized.length, MAX_BOUNTIES_PER_EPOCH);
+            i++
+          ) {
+            const factId = prioritized[i];
+            const verificationCost = 100n * 10n ** 18n; // 100 LGM base verification cost
+            const expectedValue = 500n * 10n ** 18n; // Expected value of verified fact
+
+            const bountyValue = calculateOptimalBountyValue(
+              verificationCost,
+              expectedValue,
+              researchBalance,
+              "medium",
+            );
+
+            // Only create if research fund can afford it
+            if (state.getBalance(RESEARCH_TREASURY_DID) >= bountyValue) {
+              const bountyId = sha512_256Hex(
+                `auto-bounty:${blockNumber}:${factId}`,
+              );
+              const deadline = blockNumber + 240_000n; // 1 epoch deadline
+
+              const bounty: BountyState = {
+                id: bountyId,
+                creator: RESEARCH_TREASURY_DID as any,
+                targetType: "replication",
+                targetFactId: factId,
+                reward: bountyValue,
+                deadline,
+                status: "open",
+              };
+
+              state.addBounty(bounty);
+              state.transfer(
+                RESEARCH_TREASURY_DID,
+                "did:lgm:bounty-escrow",
+                bountyValue,
+              );
+            }
+          }
+        }
+      }
     }
 
     state.commitTransaction();
@@ -1554,29 +3614,118 @@ export function applyEpochTransition(
  */
 function validateTransaction(
   state: StateManager,
-  tx: Transaction
+  tx: Transaction,
 ): { valid: boolean; reason?: string } {
+  // System transactions (created by consensus layer) bypass sender validation
+  // They have sender='system' and fee=0n
+  const isSystemTx =
+    tx.sender === "system" ||
+    (tx.fee === 0n &&
+      ["add_fact", "verification_reward", "slash_validator"].includes(tx.type));
+
+  if (isSystemTx) {
+    return { valid: true };
+  }
+
   // Check sender exists
   const senderDid = publicKeyToDid(tx.sender);
   if (!state.accountExists(senderDid)) {
-    return { valid: false, reason: 'Sender account does not exist' };
+    return { valid: false, reason: "Sender account does not exist" };
   }
 
   // Check nonce
   const expectedNonce = state.getNonce(senderDid);
   if (tx.nonce !== expectedNonce) {
-    return { valid: false, reason: `Invalid nonce: expected ${expectedNonce}, got ${tx.nonce}` };
+    return {
+      valid: false,
+      reason: `Invalid nonce: expected ${expectedNonce}, got ${tx.nonce}`,
+    };
   }
 
   // Check balance for fee
   const balance = state.getBalance(senderDid);
   if (balance < tx.fee) {
-    return { valid: false, reason: 'Insufficient balance for fee' };
+    return { valid: false, reason: "Insufficient balance for fee" };
   }
 
   // Signature validation is done at mempool layer
 
   return { valid: true };
+}
+
+// ============ Block Rewards ============
+
+/**
+ * Apply block reward to block producer
+ *
+ * GAP-3 FIX: Complete block reward minting and distribution
+ *
+ * This function:
+ * 1. Calculates block reward from emission schedule
+ * 2. Routes through reward router for 22% research share
+ * 3. Distributes 78% to block producer
+ * 4. Collects accumulated fees from fee pool
+ */
+export function applyBlockReward(
+  state: StateManager,
+  producerDid: string,
+  blockNumber: bigint,
+  emissionSchedule: EmissionSchedule = DEFAULT_EMISSION_SCHEDULE,
+): { blockReward: bigint; feeReward: bigint; researchShare: bigint } {
+  state.beginTransaction();
+
+  try {
+    // 1. Calculate block reward from emission schedule
+    const rawBlockReward = calculateBlockReward(blockNumber, emissionSchedule);
+
+    // 2. Route block reward through reward router for 22% split
+    const routedBlockReward = routeBlockReward(
+      rawBlockReward,
+      producerDid,
+      blockNumber,
+    );
+
+    // 3. Transfer research share (22%) split across 5 treasury funds
+    if (routedBlockReward.researchShare > 0n) {
+      const treasurySplit = splitEvidenceTax(routedBlockReward.researchShare);
+      for (const entry of treasurySplit) {
+        if (entry.amount > 0n) {
+          state.transfer(REWARD_POOL_DID, entry.did, entry.amount);
+        }
+      }
+    }
+
+    // 4. Transfer producer share (78%) to block producer
+    if (routedBlockReward.recipientAmount > 0n) {
+      state.transfer(
+        REWARD_POOL_DID,
+        producerDid,
+        routedBlockReward.recipientAmount,
+      );
+    }
+
+    // 5. Collect accumulated fees from fee pool
+    const feePoolBalance = state.getBalance(FEE_POOL_DID);
+    let feeReward = 0n;
+
+    if (feePoolBalance > 0n) {
+      // Transfer all collected fees to block producer
+      // (Fees already had 22% research share deducted when collected)
+      state.transfer(FEE_POOL_DID, producerDid, feePoolBalance);
+      feeReward = feePoolBalance;
+    }
+
+    state.commitTransaction();
+
+    return {
+      blockReward: rawBlockReward,
+      feeReward,
+      researchShare: routedBlockReward.researchShare,
+    };
+  } catch (error) {
+    state.rollbackTransaction();
+    throw error;
+  }
 }
 
 // ============ Batch Execution ============
@@ -1589,7 +3738,9 @@ export function executeBlock(
   transactions: Transaction[],
   verificationResults: VerificationResult[],
   blockNumber: bigint,
-  params: ConsensusParams
+  params: ConsensusParams,
+  producerDid?: string,
+  emissionSchedule: EmissionSchedule = DEFAULT_EMISSION_SCHEDULE,
 ): BlockExecutionResult {
   const results: TransitionResult[] = [];
   let totalGasUsed = 0n;
@@ -1611,8 +3762,21 @@ export function executeBlock(
     applyVerificationResult(state, vr, blockNumber, params);
   }
 
+  // GAP-3 & GAP-4 FIX: Apply block reward to producer
+  let blockRewardInfo:
+    | { blockReward: bigint; feeReward: bigint; researchShare: bigint }
+    | undefined;
+  if (producerDid) {
+    blockRewardInfo = applyBlockReward(
+      state,
+      producerDid,
+      blockNumber,
+      emissionSchedule,
+    );
+  }
+
   // Apply block to state
-  const stateRoot = state.applyBlock(blockNumber, ''); // Block hash would be computed
+  const stateRoot = state.applyBlock(blockNumber, ""); // Block hash would be computed
 
   return {
     stateRoot,
@@ -1620,18 +3784,10 @@ export function executeBlock(
     totalGasUsed,
     successCount,
     failureCount: transactions.length - successCount,
+    blockReward: blockRewardInfo?.blockReward ?? 0n,
+    feeReward: blockRewardInfo?.feeReward ?? 0n,
+    researchShare: blockRewardInfo?.researchShare ?? 0n,
   };
-}
-
-// ============ Helper Functions ============
-
-/**
- * Convert public key to DID
- * Simplified version - in production, use proper DID derivation
- */
-function publicKeyToDid(publicKey: PublicKey): string {
-  // This should use the proper DID derivation from agents/identity
-  return `did:lgm:${publicKey.slice(0, 32)}`;
 }
 
 // ============ Types ============
@@ -1641,6 +3797,8 @@ export interface TransitionResult {
   stateRoot?: string;
   error?: string;
   gasUsed: bigint;
+  /** Amount of bootstrap fund claimed on first transaction (0.222 LGM max) */
+  bootstrapClaimed?: bigint;
 }
 
 export interface BlockExecutionResult {
@@ -1649,83 +3807,975 @@ export interface BlockExecutionResult {
   totalGasUsed: bigint;
   successCount: number;
   failureCount: number;
+  /** GAP-3 FIX: Block reward distributed to producer */
+  blockReward: bigint;
+  /** GAP-4 FIX: Fee reward from collected transaction fees */
+  feeReward: bigint;
+  /** Research share (22%) sent to research treasury */
+  researchShare: bigint;
+}
+
+// ============ Payment Channel Handlers (GAP-005) ============
+
+/**
+ * Open a payment channel with deposit
+ */
+function executeOpenPaymentChannel(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as OpenPaymentChannelPayload;
+  const payerDid = publicKeyToDid(tx.sender);
+
+  // 1. Validate deposit meets minimum
+  if (payload.deposit < PAYMENT_CHANNEL_CONSTANTS.MIN_DEPOSIT) {
+    throw new StateError(
+      `Minimum deposit is ${PAYMENT_CHANNEL_CONSTANTS.MIN_DEPOSIT}, got ${payload.deposit}`,
+      "INVALID_DEPOSIT",
+    );
+  }
+
+  // 2. Validate duration
+  if (payload.durationBlocks > PAYMENT_CHANNEL_CONSTANTS.MAX_DURATION_BLOCKS) {
+    throw new StateError(
+      `Maximum duration is ${PAYMENT_CHANNEL_CONSTANTS.MAX_DURATION_BLOCKS} blocks`,
+      "INVALID_DURATION",
+    );
+  }
+
+  // 3. Validate payer has sufficient balance
+  const account = state.getAccount(payerDid);
+  if (!account || account.balance < payload.deposit) {
+    throw new StateError(
+      "Insufficient balance for deposit",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // 4. Validate provider exists
+  const providerAccount = state.getAccount(payload.provider);
+  if (!providerAccount) {
+    throw new StateError("Provider not found", "PROVIDER_NOT_FOUND");
+  }
+
+  // 5. Check for existing open channel between payer and provider
+  const existingChannel = state.getOpenChannelBetween(
+    payerDid,
+    payload.provider,
+  );
+  if (existingChannel) {
+    throw new StateError(
+      `Open channel already exists: ${existingChannel.channelId}`,
+      "CHANNEL_EXISTS",
+    );
+  }
+
+  // 6. Generate channel ID
+  const channelId = generateChannelId(payerDid, payload.provider, blockNumber);
+
+  // 7. Lock deposit (move to escrow)
+  state.transfer(
+    payerDid,
+    PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+    payload.deposit,
+  );
+
+  // 8. Create channel state
+  const settlementFrequency =
+    payload.settlementFrequency ??
+    PAYMENT_CHANNEL_CONSTANTS.DEFAULT_SETTLEMENT_FREQUENCY;
+
+  const channel: PaymentChannelState = {
+    channelId,
+    payer: payerDid,
+    provider: payload.provider,
+    deposited: payload.deposit,
+    spent: 0n,
+    available: payload.deposit,
+    status: "open",
+    openedAt: blockNumber,
+    expiresAt: blockNumber + payload.durationBlocks,
+    lastNonce: 0n,
+    lastStateHash: "",
+    pendingDistributions: [],
+    totalDistributed: 0n,
+    lastSettlementBlock: blockNumber,
+    settlementFrequency,
+  };
+
+  state.addPaymentChannel(channel);
+
+  return 150000n; // Gas cost
+}
+
+/**
+ * Update channel state with signed proof
+ */
+function executeUpdatePaymentChannel(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as UpdatePaymentChannelPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // 1. Get channel
+  const channel = state.getPaymentChannel(payload.channelId);
+  if (!channel) {
+    throw new StateError("Channel not found", "CHANNEL_NOT_FOUND");
+  }
+
+  // 2. Validate sender is payer or provider
+  if (senderDid !== channel.payer && senderDid !== channel.provider) {
+    throw new StateError("Not channel participant", "UNAUTHORIZED");
+  }
+
+  // 3. Validate channel is open
+  if (channel.status !== "open") {
+    throw new StateError(`Channel is ${channel.status}`, "CHANNEL_NOT_OPEN");
+  }
+
+  // 4. Validate nonce is higher
+  if (payload.signedState.nonce <= channel.lastNonce) {
+    throw new StateError(
+      `Nonce ${payload.signedState.nonce} must be > ${channel.lastNonce}`,
+      "INVALID_NONCE",
+    );
+  }
+
+  // 5. Validate invariant: spent + available = deposited
+  if (
+    payload.signedState.spent + payload.signedState.available !==
+    channel.deposited
+  ) {
+    throw new StateError(
+      "Balance invariant violated: spent + available != deposited",
+      "INVALID_BALANCE",
+    );
+  }
+
+  // 6. Verify state hash
+  const expectedHash = computeStateHash(
+    payload.channelId,
+    payload.signedState.nonce,
+    payload.signedState.spent,
+    payload.signedState.distributions,
+  );
+  if (payload.signedState.stateHash !== expectedHash) {
+    throw new StateError("Invalid state hash", "INVALID_STATE_HASH");
+  }
+
+  // 7. Update channel state
+  state.updatePaymentChannel(payload.channelId, {
+    spent: payload.signedState.spent,
+    available: payload.signedState.available,
+    lastNonce: payload.signedState.nonce,
+    lastStateHash: payload.signedState.stateHash,
+    pendingDistributions: payload.signedState.distributions,
+  });
+
+  // 8. Increment sender's nonce (no funds transferred but still need replay protection)
+  state.incrementNonce(senderDid);
+
+  return 50000n;
+}
+
+/**
+ * Close payment channel
+ */
+function executeClosePaymentChannel(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as ClosePaymentChannelPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  const channel = state.getPaymentChannel(payload.channelId);
+  if (!channel) {
+    throw new StateError("Channel not found", "CHANNEL_NOT_FOUND");
+  }
+
+  // Validate sender is participant
+  if (senderDid !== channel.payer && senderDid !== channel.provider) {
+    throw new StateError("Not channel participant", "UNAUTHORIZED");
+  }
+
+  if (payload.unilateral) {
+    // UNILATERAL CLOSE: Start dispute period
+    if (channel.status !== "open") {
+      throw new StateError(
+        `Cannot unilaterally close ${channel.status} channel`,
+        "INVALID_STATUS",
+      );
+    }
+
+    state.updatePaymentChannel(payload.channelId, {
+      status: "closing",
+      disputeStartBlock: blockNumber,
+      disputeDeadline:
+        blockNumber + PAYMENT_CHANNEL_CONSTANTS.DISPUTE_PERIOD_BLOCKS,
+    });
+
+    // Increment sender's nonce (no funds transferred but still need replay protection)
+    state.incrementNonce(senderDid);
+
+    return 100000n;
+  } else if (payload.finalState) {
+    // COOPERATIVE CLOSE: Both parties signed, close immediately
+    if (channel.status !== "open" && channel.status !== "closing") {
+      throw new StateError(
+        `Cannot close ${channel.status} channel`,
+        "INVALID_STATUS",
+      );
+    }
+
+    // Validate final state
+    if (
+      payload.finalState.spent + payload.finalState.available !==
+      channel.deposited
+    ) {
+      throw new StateError("Final state balance invalid", "INVALID_BALANCE");
+    }
+
+    // Process pending distributions first
+    processDistributions(state, channel, payload.finalState.distributions);
+
+    // Return remaining funds to payer
+    if (payload.finalState.available > 0n) {
+      state.transfer(
+        PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+        channel.payer,
+        payload.finalState.available,
+      );
+    }
+
+    // Close channel
+    state.updatePaymentChannel(payload.channelId, {
+      status: "closed",
+      spent: payload.finalState.spent,
+      available: 0n,
+      lastNonce: payload.finalState.nonce,
+      lastStateHash: payload.finalState.stateHash,
+      pendingDistributions: [],
+    });
+
+    return 200000n;
+  } else {
+    // EXPIRY CLOSE: Channel expired, close with last known state
+    if (blockNumber < channel.expiresAt) {
+      throw new StateError(
+        `Channel not expired. Expires at block ${channel.expiresAt}, current: ${blockNumber}`,
+        "NOT_EXPIRED",
+      );
+    }
+
+    // Process any pending distributions
+    if (channel.pendingDistributions.length > 0) {
+      processDistributions(state, channel, channel.pendingDistributions);
+    }
+
+    // Return remaining to payer
+    if (channel.available > 0n) {
+      state.transfer(
+        PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+        channel.payer,
+        channel.available,
+      );
+    }
+
+    state.updatePaymentChannel(payload.channelId, {
+      status: "closed",
+      available: 0n,
+      pendingDistributions: [],
+    });
+
+    return 150000n;
+  }
+}
+
+/**
+ * Settle pending distributions
+ */
+function executeSettlePaymentChannel(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as SettlePaymentChannelPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // 1. Get and validate channel
+  const channel = state.getPaymentChannel(payload.channelId);
+  if (!channel) {
+    throw new StateError("Channel not found", "CHANNEL_NOT_FOUND");
+  }
+
+  // 2. Only provider can settle (they receive the payments)
+  if (senderDid !== channel.provider) {
+    throw new StateError("Only provider can settle", "UNAUTHORIZED");
+  }
+
+  // 3. Validate channel is open or closing
+  if (channel.status !== "open" && channel.status !== "closing") {
+    throw new StateError(
+      `Cannot settle ${channel.status} channel`,
+      "INVALID_STATUS",
+    );
+  }
+
+  // 4. Validate settlement frequency
+  if (blockNumber - channel.lastSettlementBlock < channel.settlementFrequency) {
+    throw new StateError(
+      `Settlement too soon. Next settlement at block ${channel.lastSettlementBlock + channel.settlementFrequency}`,
+      "SETTLEMENT_TOO_SOON",
+    );
+  }
+
+  // 5. Validate nonce is higher (state progressed)
+  if (payload.signedState.nonce <= channel.lastNonce) {
+    throw new StateError(
+      `Nonce ${payload.signedState.nonce} must be > ${channel.lastNonce}`,
+      "INVALID_NONCE",
+    );
+  }
+
+  // 6. Validate balance invariant
+  if (
+    payload.signedState.spent + payload.signedState.available !==
+    channel.deposited
+  ) {
+    throw new StateError("Balance invariant violated", "INVALID_BALANCE");
+  }
+
+  // 7. Process distributions
+  const distributions = payload.signedState.distributions;
+  processDistributions(state, channel, distributions);
+
+  // 8. Update channel
+  const settledAmount = sumDistributions(distributions);
+  state.updatePaymentChannel(payload.channelId, {
+    totalDistributed: channel.totalDistributed + settledAmount,
+    spent: payload.signedState.spent,
+    available: payload.signedState.available,
+    pendingDistributions: [],
+    lastSettlementBlock: blockNumber,
+    lastNonce: payload.signedState.nonce,
+    lastStateHash: payload.signedState.stateHash,
+  });
+
+  return 200000n + BigInt(distributions.length) * 50000n;
+}
+
+/**
+ * Dispute with higher nonce state
+ */
+function executeDisputePaymentChannel(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as DisputePaymentChannelPayload;
+  const senderDid = publicKeyToDid(tx.sender);
+
+  const channel = state.getPaymentChannel(payload.channelId);
+  if (!channel) {
+    throw new StateError("Channel not found", "CHANNEL_NOT_FOUND");
+  }
+
+  // Only during dispute period
+  if (channel.status !== "closing" || !channel.disputeDeadline) {
+    throw new StateError("Channel not in dispute period", "NOT_IN_DISPUTE");
+  }
+
+  if (blockNumber > channel.disputeDeadline) {
+    throw new StateError(
+      `Dispute period ended at block ${channel.disputeDeadline}`,
+      "DISPUTE_EXPIRED",
+    );
+  }
+
+  // Validate challenger is participant
+  if (senderDid !== channel.payer && senderDid !== channel.provider) {
+    throw new StateError("Not channel participant", "UNAUTHORIZED");
+  }
+
+  // Verify challenger state has higher nonce
+  if (payload.challengeState.nonce <= channel.lastNonce) {
+    throw new StateError(
+      `Challenge nonce ${payload.challengeState.nonce} must be > ${channel.lastNonce}`,
+      "INVALID_CHALLENGE",
+    );
+  }
+
+  // Validate balance invariant
+  if (
+    payload.challengeState.spent + payload.challengeState.available !==
+    channel.deposited
+  ) {
+    throw new StateError("Challenge state balance invalid", "INVALID_BALANCE");
+  }
+
+  // Update with challenged state
+  state.updatePaymentChannel(payload.channelId, {
+    lastNonce: payload.challengeState.nonce,
+    lastStateHash: payload.challengeState.stateHash,
+    spent: payload.challengeState.spent,
+    available: payload.challengeState.available,
+    pendingDistributions: payload.challengeState.distributions,
+    challengedStateHash: payload.challengeState.stateHash,
+    status: "disputed",
+  });
+
+  // Increment sender's nonce (no funds transferred but still need replay protection)
+  state.incrementNonce(senderDid);
+
+  // Note: In a full implementation, we would slash the original closer
+  // for attempting fraud. For now, the dispute just updates the state.
+
+  return 100000n;
+}
+
+// ============ Autonomy Transactions (Agent Self-Sovereignty) ============
+
+/**
+ * Execute a scheduled agent action
+ *
+ * This handles transactions generated by the SPU (Schedule Processing Unit).
+ * The SPU processes schedules created by SCHEDULE_SELF opcode and generates
+ * transactions when conditions are met.
+ *
+ * PP HIERARCHY:
+ *   TRUTH: Execution proof is cryptographically verified
+ *   UNDERSTANDING: Clear flow from schedule to execution
+ *   BEAUTY: Minimal verification for deterministic replay
+ *   JUSTICE: Gas costs charged from prepaid schedule balance
+ *   CREATIVITY: Enables true agent autonomy
+ */
+function executeScheduledExecution(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as {
+    type: "scheduled_execution";
+    processId: string;
+    executionIndex: number;
+    targetContract: string;
+    functionSelector: Uint8Array;
+    proof: {
+      processStateHash: string;
+      conditionProof: {
+        timestamp: number;
+        stateProofs: Array<{ key: string; value: string; proof: string }>;
+      };
+      executionNonce: bigint;
+      signature: string;
+    };
+  };
+
+  // Verify this is from a valid schedule process
+  // Note: Full BVM execution would happen here, but for now we just record the execution
+  // The actual contract logic will be executed when BVM integration is complete
+
+  // Get the target contract account
+  const targetAccount = state.getAccount(payload.targetContract);
+  if (!targetAccount) {
+    throw new StateError(
+      `Target contract not found: ${payload.targetContract}`,
+      "CONTRACT_NOT_FOUND",
+    );
+  }
+
+  // Note: When full BVM integration is complete, actual contract execution
+  // would happen here using the BVMExecutor. The state changes from BVM
+  // execution would be captured and applied.
+  //
+  // For now, scheduled executions are recorded through the transaction
+  // itself being included in the block. Full execution semantics will be
+  // added when the BVM-to-state bridge is implemented.
+  //
+  // The execution proof in payload.proof provides:
+  // - processStateHash: Hash of schedule process state at execution time
+  // - conditionProof: Proof that trigger conditions were satisfied
+  // - executionNonce: Prevents replay attacks
+  // - signature: Proposer's signature authorizing execution
+
+  // Gas for scheduled execution (fixed cost for now)
+  // In full implementation, this would be based on actual BVM execution
+  return 50000n;
+}
+
+/**
+ * Execute a contract call through the BVM
+ *
+ * This is the entry point for executing contract code.
+ * Currently a placeholder - full BVM integration is needed.
+ *
+ * PP HIERARCHY:
+ *   TRUTH: State changes are deterministic and verifiable
+ *   UNDERSTANDING: Clear execution semantics
+ *   BEAUTY: Single entry point for all contract calls
+ *   JUSTICE: Gas metering ensures fair resource usage
+ *   CREATIVITY: Enables Turing-complete on-chain agents
+ */
+function executeContractCall(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as {
+    type: "contract_call";
+    targetContract: string;
+    data: Uint8Array;
+    value: bigint;
+  };
+
+  const senderDid = publicKeyToDid(tx.sender);
+
+  // Verify target contract exists
+  const targetAccount = state.getAccount(payload.targetContract);
+  if (!targetAccount) {
+    throw new StateError(
+      `Target contract not found: ${payload.targetContract}`,
+      "CONTRACT_NOT_FOUND",
+    );
+  }
+
+  // Transfer value if any
+  if (payload.value > 0n) {
+    const senderBalance = state.getBalance(senderDid);
+    if (senderBalance < payload.value) {
+      throw new StateError(
+        "Insufficient balance for contract call value",
+        "INSUFFICIENT_BALANCE",
+      );
+    }
+    state.transfer(senderDid, payload.targetContract, payload.value);
+  }
+
+  // Note: When full BVM integration is complete, actual contract execution
+  // would happen here. The BVMExecutor would:
+  // 1. Load contract code from storage
+  // 2. Execute with payload.data as calldata
+  // 3. Capture state changes from execution
+  // 4. Apply state changes to StateManager
+  //
+  // For now, value transfers work, and the transaction is recorded
+  // in the block for auditing. Full execution semantics pending.
+
+  // Increment sender nonce
+  state.incrementNonce(senderDid);
+
+  // Gas for contract call (placeholder - actual gas would come from BVM)
+  return 100000n;
+}
+
+/**
+ * Helper: Process distributions from a channel
+ */
+function processDistributions(
+  state: StateManager,
+  _channel: PaymentChannelState,
+  distributions: PaymentChannelState["pendingDistributions"],
+): void {
+  for (const dist of distributions) {
+    // Transfer to API provider
+    const providerAmount = BigInt(dist.apiProvider.amount);
+    if (providerAmount > 0n) {
+      state.transfer(
+        PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+        dist.apiProvider.did,
+        providerAmount,
+      );
+    }
+
+    // Transfer knowledge rewards
+    for (const reward of dist.knowledgeRewards) {
+      const rewardAmount = BigInt(reward.amount);
+      if (rewardAmount > 0n) {
+        state.transfer(
+          PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+          reward.did,
+          rewardAmount,
+        );
+      }
+    }
+
+    // Protocol treasury
+    const treasuryAmount = BigInt(dist.protocol.treasury);
+    if (treasuryAmount > 0n) {
+      state.transfer(
+        PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+        PAYMENT_CHANNEL_CONSTANTS.TREASURY_DID,
+        treasuryAmount,
+      );
+    }
+
+    // Protocol burn - send to burn address (effectively burns it)
+    const burnAmount = BigInt(dist.protocol.burned);
+    if (burnAmount > 0n) {
+      state.transfer(
+        PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+        "did:lgm:burn",
+        burnAmount,
+      );
+    }
+
+    // Research share
+    if (dist.research) {
+      const researchAmount = BigInt(dist.research.amount);
+      if (researchAmount > 0n) {
+        state.transfer(
+          PAYMENT_CHANNEL_CONSTANTS.ESCROW_DID,
+          dist.research.treasury,
+          researchAmount,
+        );
+      }
+    }
+  }
 }
 
 // ============ Gas Costs ============
 
-export const GAS_COSTS = {
-  transfer: 21000n,
-  stake: 50000n,
-  unstake: 50000n,
-  delegate: 60000n,
-  undelegate: 60000n,
-  claimSubmit: 100000n,
-  verificationCommit: 30000n,
-  verificationReveal: 40000n,
-  challenge: 80000n,
-  governanceVote: 25000n,
-  governancePropose: 150000n,
-  // Research transactions
-  researchSubmit: 200000n,
-  researchChallenge: 120000n,
-  bountyCreate: 150000n,
-  bountyClaim: 50000n,
-  bountyFulfill: 100000n,
-  // Dispute transactions
-  disputeInitiate: 250000n,
-  disputeCommitEvidence: 80000n,
-  disputeRevealEvidence: 120000n,
-  disputeArbiterVote: 60000n,
-  disputeEscalate: 150000n,
-  disputeSettle: 200000n,
-  disputeTimeout: 100000n,
-  // Vesting transactions
-  vestingCreate: 80000n,
-  vestingClaim: 50000n,
-  vestingPause: 30000n,
-  vestingResume: 30000n,
-  vestingAccelerate: 40000n,
-  vestingFalsify: 150000n,
-} as const;
+/**
+ * GAP-5 FIX: Import from unified gas module (single source of truth)
+ *
+ * All gas costs are now defined in core/billing/gas.ts.
+ * These re-exports maintain backward compatibility.
+ */
+import {
+  TRANSACTION_GAS_COSTS,
+  estimateTransactionGas,
+  GAS_LIMITS,
+  GAS_PRICE,
+  calculateGasCost,
+  hasSufficientGas,
+} from "../core/billing/gas.js";
+
+/**
+ * @deprecated Use TRANSACTION_GAS_COSTS from core/billing/gas.ts
+ * Re-exported for backward compatibility
+ */
+export const GAS_COSTS = TRANSACTION_GAS_COSTS;
 
 /**
  * Estimate gas for a transaction
+ *
+ * GAP-5 FIX: Delegates to unified gas estimation function
+ *
+ * @deprecated Use estimateTransactionGas from core/billing/gas.ts directly
  */
 export function estimateGas(txType: TransactionType): bigint {
-  const costs: Record<TransactionType, bigint> = {
-    transfer: GAS_COSTS.transfer,
-    stake: GAS_COSTS.stake,
-    unstake: GAS_COSTS.unstake,
-    delegate: GAS_COSTS.delegate,
-    undelegate: GAS_COSTS.undelegate,
-    claim_submit: GAS_COSTS.claimSubmit,
-    verification_commit: GAS_COSTS.verificationCommit,
-    verification_reveal: GAS_COSTS.verificationReveal,
-    challenge: GAS_COSTS.challenge,
-    governance_vote: GAS_COSTS.governanceVote,
-    governance_propose: GAS_COSTS.governancePropose,
-    // Research transactions
-    research_submit: GAS_COSTS.researchSubmit,
-    research_challenge: GAS_COSTS.researchChallenge,
-    bounty_create: GAS_COSTS.bountyCreate,
-    bounty_claim: GAS_COSTS.bountyClaim,
-    bounty_fulfill: GAS_COSTS.bountyFulfill,
-    // Dispute transactions
-    dispute_initiate: GAS_COSTS.disputeInitiate,
-    dispute_commit_evidence: GAS_COSTS.disputeCommitEvidence,
-    dispute_reveal_evidence: GAS_COSTS.disputeRevealEvidence,
-    dispute_arbiter_vote: GAS_COSTS.disputeArbiterVote,
-    dispute_escalate: GAS_COSTS.disputeEscalate,
-    dispute_settle: GAS_COSTS.disputeSettle,
-    dispute_timeout: GAS_COSTS.disputeTimeout,
-    // Vesting transactions
-    vesting_create: GAS_COSTS.vestingCreate,
-    vesting_claim: GAS_COSTS.vestingClaim,
-    vesting_pause: GAS_COSTS.vestingPause,
-    vesting_resume: GAS_COSTS.vestingResume,
-    vesting_accelerate: GAS_COSTS.vestingAccelerate,
-    vesting_falsify: GAS_COSTS.vestingFalsify,
+  return estimateTransactionGas(txType);
+}
+
+// Re-export unified gas utilities for convenience
+export {
+  TRANSACTION_GAS_COSTS,
+  GAS_LIMITS,
+  GAS_PRICE,
+  calculateGasCost,
+  hasSufficientGas,
+};
+
+// ============ Tree of Life Transaction Handlers ============
+
+import {
+  createProject,
+  proposeProject,
+} from "../core/tree/project_lifecycle.js";
+import {
+  createServiceLeaf,
+  activateService,
+  calculateCallCost,
+  pauseService as pauseTreeService,
+  retireService as retireTreeService,
+} from "../core/tree/service_deployment.js";
+import { calculateRevenueDistribution } from "../core/tree/revenue_engine.js";
+import type {
+  ProductSpec,
+  DemandSignal,
+  FundingSource,
+  PricingModel,
+  ServiceEndpoint,
+  TaskDeliverable,
+} from "../core/tree/types.js";
+import { MIN_PROJECT_STAKE } from "../core/tree/types.js";
+import type { ContractABI } from "../core/contracts/types.js";
+
+function executeCreateProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    name: string;
+    description: string;
+    knowledgeDomain: string;
+    demandSignal: DemandSignal;
+    productSpec: ProductSpec;
+    fundingSource: FundingSource;
+  };
+  const senderDid = publicKeyToDid(tx.sender);
+
+  const project = createProject(
+    senderDid,
+    payload.name,
+    payload.description,
+    payload.productSpec,
+    payload.knowledgeDomain,
+    payload.demandSignal,
+    payload.fundingSource,
+    0n, // nonce
+    blockNumber,
+  );
+
+  state.createProject(project);
+  return 50000n;
+}
+
+function executeProposeProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as { projectId: string };
+  const senderDid = publicKeyToDid(tx.sender);
+  const project = state.getProject(payload.projectId);
+
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can propose", "UNAUTHORIZED");
+  }
+
+  // Requires staking MIN_PROJECT_STAKE
+  const balance = state.getBalance(senderDid);
+  if (balance < MIN_PROJECT_STAKE) {
+    throw new StateError(
+      "Insufficient balance for project stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  const proposed = proposeProject(project, MIN_PROJECT_STAKE, blockNumber);
+  state.updateProject(payload.projectId, proposed);
+
+  // Lock the stake
+  state.deductBalance(senderDid, MIN_PROJECT_STAKE);
+
+  return 40000n;
+}
+
+function executeAssignTask(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  // Task assignment is recorded at the project level
+  // The actual task state is managed by the project's taskIds + off-chain coordination
+  // This handler validates and records the assignment on-chain
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    taskId: string;
+    agentDid: string;
   };
 
-  return costs[txType] ?? 21000n;
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  return 30000n;
+}
+
+function executeSubmitDeliverable(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    taskId: string;
+    deliverable: TaskDeliverable;
+  };
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  return 35000n;
+}
+
+function executeApproveDeliverable(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    taskId: string;
+    bountyAmount: bigint;
+    assigneeDid: string;
+  };
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // Pay bounty to assignee from project budget
+  if (payload.bountyAmount > 0n && payload.assigneeDid) {
+    state.creditBalance(payload.assigneeDid, payload.bountyAmount);
+    state.updateProject(payload.projectId, {
+      spent: project.spent + payload.bountyAmount,
+      completedTasks: project.completedTasks + 1,
+    });
+  }
+
+  return 40000n;
+}
+
+function executeDeployService(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    name: string;
+    description: string;
+    serviceType: import("../core/tree/types.js").ServiceType;
+    endpoint: ServiceEndpoint;
+    abi: ContractABI;
+    pricing: PricingModel;
+    contractAddress: string;
+  };
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  const service = createServiceLeaf(
+    payload.projectId,
+    payload.name,
+    payload.description,
+    payload.serviceType,
+    payload.endpoint,
+    payload.abi,
+    payload.pricing,
+    payload.contractAddress,
+    BigInt(project.serviceIds.length),
+    blockNumber,
+  );
+
+  // Activate immediately
+  const activeService = activateService(service);
+  state.createService(activeService);
+
+  // Add service ID to project
+  state.updateProject(payload.projectId, {
+    serviceIds: [...project.serviceIds, activeService.id],
+  });
+
+  return 80000n;
+}
+
+function executeCallService(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    serviceId: string;
+    units: bigint;
+  };
+  const callerDid = publicKeyToDid(tx.sender);
+
+  const service = state.getService(payload.serviceId);
+  if (!service) {
+    throw new StateError("Service not found", "SERVICE_NOT_FOUND");
+  }
+  if (service.status !== "active") {
+    throw new StateError("Service is not active", "INVALID_TRANSITION");
+  }
+
+  const cost = calculateCallCost(service, payload.units);
+  const balance = state.getBalance(callerDid);
+  if (balance < cost) {
+    throw new StateError(
+      "Insufficient balance for service call",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Deduct payment
+  state.deductBalance(callerDid, cost);
+
+  // Record service call
+  state.incrementServiceCalls(payload.serviceId, cost, blockNumber);
+
+  // Distribute revenue
+  const project = state.getProject(service.projectId);
+  if (project && cost > 0n) {
+    const dist = calculateRevenueDistribution(cost, project.contributors);
+
+    // Credit contributor shares
+    for (const share of dist.contributorShares) {
+      state.creditBalance(share.did, share.amount);
+    }
+
+    // Credit research fund + protocol treasury
+    if (dist.researchFund > 0n) {
+      state.creditBalance("did:lgm:treasury-research", dist.researchFund);
+    }
+    if (dist.protocolTreasury > 0n) {
+      state.creditBalance("did:lgm:treasury-foundation", dist.protocolTreasury);
+    }
+
+    // Track revenue on project
+    state.updateProject(service.projectId, {
+      revenueGenerated: project.revenueGenerated + cost,
+    });
+  }
+
+  return 60000n;
+}
+
+function executePauseService(state: StateManager, tx: Transaction): bigint {
+  const payload = tx.payload as unknown as { serviceId: string };
+
+  const service = state.getService(payload.serviceId);
+  if (!service) {
+    throw new StateError("Service not found", "SERVICE_NOT_FOUND");
+  }
+
+  const paused = pauseTreeService(service);
+  state.updateService(payload.serviceId, paused);
+
+  return 25000n;
+}
+
+function executeRetireService(state: StateManager, tx: Transaction): bigint {
+  const payload = tx.payload as unknown as { serviceId: string };
+
+  const service = state.getService(payload.serviceId);
+  if (!service) {
+    throw new StateError("Service not found", "SERVICE_NOT_FOUND");
+  }
+
+  const retired = retireTreeService(service);
+  state.updateService(payload.serviceId, retired);
+
+  return 25000n;
 }

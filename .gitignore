@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Secrets - NEVER commit private keys
+devnet/secrets/*.key
+devnet/secrets/*.pem
+devnet/secrets/*.secret
+
+# Storage
+devnet/data/
+*.ldb
+
+# Claude Code
+.claude/
+
+# Debug
+npm-debug.log*

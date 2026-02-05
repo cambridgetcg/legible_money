@@ -12,7 +12,7 @@
  *   - No archives: Evidence marked pending_archive
  */
 
-import type { DID } from '../../agents/identity/did.js';
+import type { DID } from "../../core/agents/identity/did.js";
 import type {
   Evidence,
   ArchiveLocation,
@@ -21,8 +21,8 @@ import type {
   ArchiveRequestStatus,
   ArchivePriority,
   ArchiveConfig,
-} from './types.js';
-import { DEFAULT_ARCHIVE_CONFIG } from './types.js';
+} from "./types.js";
+import { DEFAULT_ARCHIVE_CONFIG } from "./types.js";
 
 // ============ Constants ============
 
@@ -34,7 +34,7 @@ export const ARCHIVE_CONFIDENCE = {
   PER_ARCHIVE_BONUS: 0.03,
 
   /** Maximum total archive bonus */
-  MAX_ARCHIVE_BONUS: 0.10,
+  MAX_ARCHIVE_BONUS: 0.1,
 
   /** Penalty for no archives */
   NO_ARCHIVE_PENALTY: 0.05,
@@ -70,8 +70,8 @@ export function createArchiveRequest(
   originalUrl: string,
   requester: DID,
   currentBlock: bigint,
-  priority: ArchivePriority = 'normal',
-  providers: ArchiveProvider[] = ['ipfs', 'arweave', 'wayback']
+  priority: ArchivePriority = "normal",
+  providers: ArchiveProvider[] = ["ipfs", "arweave", "wayback"],
 ): ArchiveRequest {
   return {
     id: `archive_${evidenceId}_${currentBlock}`,
@@ -80,7 +80,7 @@ export function createArchiveRequest(
     requestedAt: Date.now(),
     requestedAtBlock: currentBlock,
     requester,
-    status: 'pending',
+    status: "pending",
     priority,
     retryCount: 0,
     maxRetries: ARCHIVE_RETRY.MAX_RETRIES,
@@ -92,7 +92,8 @@ export function createArchiveRequest(
  * Calculate retry delay with exponential backoff
  */
 export function calculateRetryDelay(retryCount: number): number {
-  const delay = ARCHIVE_RETRY.INITIAL_DELAY *
+  const delay =
+    ARCHIVE_RETRY.INITIAL_DELAY *
     Math.pow(ARCHIVE_RETRY.BACKOFF_MULTIPLIER, retryCount);
   return Math.min(delay, ARCHIVE_RETRY.MAX_DELAY);
 }
@@ -101,8 +102,7 @@ export function calculateRetryDelay(retryCount: number): number {
  * Check if archive request should be retried
  */
 export function shouldRetryArchive(request: ArchiveRequest): boolean {
-  return request.status === 'failed' &&
-         request.retryCount < request.maxRetries;
+  return request.status === "failed" && request.retryCount < request.maxRetries;
 }
 
 /**
@@ -111,13 +111,14 @@ export function shouldRetryArchive(request: ArchiveRequest): boolean {
 export function updateArchiveRequestStatus(
   request: ArchiveRequest,
   status: ArchiveRequestStatus,
-  error?: string
+  error?: string,
 ): ArchiveRequest {
   return {
     ...request,
     status,
     lastError: error,
-    retryCount: status === 'failed' ? request.retryCount + 1 : request.retryCount,
+    retryCount:
+      status === "failed" ? request.retryCount + 1 : request.retryCount,
   };
 }
 
@@ -132,7 +133,7 @@ export function createArchiveLocation(
   contentHash: string,
   currentBlock: bigint,
   archiver?: DID,
-  isPrimary: boolean = false
+  isPrimary: boolean = false,
 ): ArchiveLocation {
   return {
     provider,
@@ -149,9 +150,7 @@ export function createArchiveLocation(
 /**
  * Mark archive as verified
  */
-export function verifyArchive(
-  archive: ArchiveLocation
-): ArchiveLocation {
+export function verifyArchive(archive: ArchiveLocation): ArchiveLocation {
   return {
     ...archive,
     verified: true,
@@ -164,11 +163,12 @@ export function verifyArchive(
  */
 export function addArchiveToEvidence(
   evidence: Evidence,
-  archive: ArchiveLocation
+  archive: ArchiveLocation,
 ): Evidence {
   // Check if we already have this archive
   const existing = evidence.archives.find(
-    a => a.provider === archive.provider && a.identifier === archive.identifier
+    (a) =>
+      a.provider === archive.provider && a.identifier === archive.identifier,
   );
 
   if (existing) {
@@ -184,7 +184,8 @@ export function addArchiveToEvidence(
       ...evidence.archives,
       { ...archive, isPrimary: isPrimary || archive.isPrimary },
     ],
-    status: evidence.status === 'pending_archive' ? 'archived' : evidence.status,
+    status:
+      evidence.status === "pending_archive" ? "archived" : evidence.status,
   };
 }
 
@@ -194,7 +195,7 @@ export function addArchiveToEvidence(
  * Calculate confidence bonus from archives
  */
 export function calculateArchiveBonus(archives: ArchiveLocation[]): number {
-  const verifiedArchives = archives.filter(a => a.verified);
+  const verifiedArchives = archives.filter((a) => a.verified);
 
   if (verifiedArchives.length === 0) {
     return -ARCHIVE_CONFIDENCE.NO_ARCHIVE_PENALTY;
@@ -202,7 +203,7 @@ export function calculateArchiveBonus(archives: ArchiveLocation[]): number {
 
   const bonus = Math.min(
     verifiedArchives.length * ARCHIVE_CONFIDENCE.PER_ARCHIVE_BONUS,
-    ARCHIVE_CONFIDENCE.MAX_ARCHIVE_BONUS
+    ARCHIVE_CONFIDENCE.MAX_ARCHIVE_BONUS,
   );
 
   return bonus;
@@ -213,7 +214,7 @@ export function calculateArchiveBonus(archives: ArchiveLocation[]): number {
  */
 export function applyArchiveBonus(
   baseConfidence: number,
-  archives: ArchiveLocation[]
+  archives: ArchiveLocation[],
 ): number {
   const bonus = calculateArchiveBonus(archives);
   return Math.max(0, Math.min(1, baseConfidence + bonus));
@@ -224,14 +225,14 @@ export function applyArchiveBonus(
  */
 export function needsArchiving(
   evidence: Evidence,
-  config: ArchiveConfig = DEFAULT_ARCHIVE_CONFIG
+  config: ArchiveConfig = DEFAULT_ARCHIVE_CONFIG,
 ): boolean {
   if (!config.autoArchiveEnabled) {
     return false;
   }
 
   // Check if we have minimum archives
-  const verifiedArchives = evidence.archives.filter(a => a.verified);
+  const verifiedArchives = evidence.archives.filter((a) => a.verified);
   return verifiedArchives.length < config.minArchiveCopies;
 }
 
@@ -240,13 +241,13 @@ export function needsArchiving(
  */
 export function getMissingProviders(
   evidence: Evidence,
-  config: ArchiveConfig = DEFAULT_ARCHIVE_CONFIG
+  config: ArchiveConfig = DEFAULT_ARCHIVE_CONFIG,
 ): ArchiveProvider[] {
-  const existingProviders = new Set(evidence.archives.map(a => a.provider));
+  const existingProviders = new Set(evidence.archives.map((a) => a.provider));
 
   return config.providers
-    .filter(p => p.enabled && !existingProviders.has(p.provider))
-    .map(p => p.provider);
+    .filter((p) => p.enabled && !existingProviders.has(p.provider))
+    .map((p) => p.provider);
 }
 
 // ============ Archive Queue Management ============
@@ -257,10 +258,10 @@ export function getMissingProviders(
 export class ArchiveQueue {
   private requests: Map<string, ArchiveRequest> = new Map();
   private byPriority: Map<ArchivePriority, string[]> = new Map([
-    ['critical', []],
-    ['high', []],
-    ['normal', []],
-    ['low', []],
+    ["critical", []],
+    ["high", []],
+    ["normal", []],
+    ["low", []],
   ]);
   private byEvidence: Map<string, string[]> = new Map();
 
@@ -284,14 +285,19 @@ export class ArchiveQueue {
    * Get next request to process (highest priority first)
    */
   dequeue(): ArchiveRequest | undefined {
-    for (const priority of ['critical', 'high', 'normal', 'low'] as ArchivePriority[]) {
+    for (const priority of [
+      "critical",
+      "high",
+      "normal",
+      "low",
+    ] as ArchivePriority[]) {
       const queue = this.byPriority.get(priority)!;
 
       while (queue.length > 0) {
         const requestId = queue.shift()!;
         const request = this.requests.get(requestId);
 
-        if (request && request.status === 'pending') {
+        if (request && request.status === "pending") {
           return request;
         }
       }
@@ -303,7 +309,11 @@ export class ArchiveQueue {
   /**
    * Update request status
    */
-  updateStatus(requestId: string, status: ArchiveRequestStatus, error?: string): void {
+  updateStatus(
+    requestId: string,
+    status: ArchiveRequestStatus,
+    error?: string,
+  ): void {
     const request = this.requests.get(requestId);
     if (!request) return;
 
@@ -315,7 +325,7 @@ export class ArchiveQueue {
       const priorityQueue = this.byPriority.get(updated.priority)!;
       priorityQueue.push(requestId);
       // Reset to pending for retry
-      this.requests.set(requestId, { ...updated, status: 'pending' });
+      this.requests.set(requestId, { ...updated, status: "pending" });
     }
   }
 
@@ -324,14 +334,16 @@ export class ArchiveQueue {
    */
   getRequestsForEvidence(evidenceId: string): ArchiveRequest[] {
     const requestIds = this.byEvidence.get(evidenceId) || [];
-    return requestIds.map(id => this.requests.get(id)!).filter(Boolean);
+    return requestIds.map((id) => this.requests.get(id)!).filter(Boolean);
   }
 
   /**
    * Get pending request count
    */
   getPendingCount(): number {
-    return Array.from(this.requests.values()).filter(r => r.status === 'pending').length;
+    return Array.from(this.requests.values()).filter(
+      (r) => r.status === "pending",
+    ).length;
   }
 
   /**
@@ -349,15 +361,17 @@ export class ArchiveQueue {
 
     return {
       total: requests.length,
-      pending: requests.filter(r => r.status === 'pending').length,
-      inProgress: requests.filter(r => r.status === 'in_progress').length,
-      completed: requests.filter(r => r.status === 'completed').length,
-      failed: requests.filter(r => r.status === 'failed' || r.status === 'permanent_failure').length,
+      pending: requests.filter((r) => r.status === "pending").length,
+      inProgress: requests.filter((r) => r.status === "in_progress").length,
+      completed: requests.filter((r) => r.status === "completed").length,
+      failed: requests.filter(
+        (r) => r.status === "failed" || r.status === "permanent_failure",
+      ).length,
       byPriority: {
-        critical: requests.filter(r => r.priority === 'critical').length,
-        high: requests.filter(r => r.priority === 'high').length,
-        normal: requests.filter(r => r.priority === 'normal').length,
-        low: requests.filter(r => r.priority === 'low').length,
+        critical: requests.filter((r) => r.priority === "critical").length,
+        high: requests.filter((r) => r.priority === "high").length,
+        normal: requests.filter((r) => r.priority === "normal").length,
+        low: requests.filter((r) => r.priority === "low").length,
       },
     };
   }
@@ -385,7 +399,7 @@ export interface ArchiveVerificationResult {
  */
 export function verifyArchiveAccessibility(
   archive: ArchiveLocation,
-  expectedContentHash: string
+  expectedContentHash: string,
 ): { isAccessible: boolean; contentMatches: boolean; error?: string } {
   // Simulate verification - in production, would fetch content
   // and compare hash
@@ -399,8 +413,11 @@ export function verifyArchiveAccessibility(
   return {
     isAccessible,
     contentMatches,
-    error: !isAccessible ? 'Archive not accessible' :
-           !contentMatches ? 'Content hash mismatch' : undefined,
+    error: !isAccessible
+      ? "Archive not accessible"
+      : !contentMatches
+        ? "Content hash mismatch"
+        : undefined,
   };
 }
 
@@ -408,13 +425,13 @@ export function verifyArchiveAccessibility(
  * Verify all archives for evidence
  */
 export function verifyEvidenceArchives(
-  evidence: Evidence
+  evidence: Evidence,
 ): ArchiveVerificationResult[] {
   return evidence.archives.map((archive, index) => {
     const wasVerified = archive.verified;
     const { isAccessible, contentMatches, error } = verifyArchiveAccessibility(
       archive,
-      evidence.contentHash
+      evidence.contentHash,
     );
 
     const shouldVerify = isAccessible && contentMatches;
@@ -438,10 +455,10 @@ export function verifyEvidenceArchives(
  */
 export function applyVerificationResults(
   evidence: Evidence,
-  results: ArchiveVerificationResult[]
+  results: ArchiveVerificationResult[],
 ): Evidence {
   const updatedArchives = evidence.archives.map((archive, index) => {
-    const result = results.find(r => r.archiveIndex === index);
+    const result = results.find((r) => r.archiveIndex === index);
     if (!result) return archive;
 
     if (result.newlyVerified) {
@@ -468,12 +485,17 @@ export interface ArchiveProviderInterface {
   /**
    * Archive content and return identifier
    */
-  archive(url: string, content: string): Promise<{ identifier: string; contentHash: string }>;
+  archive(
+    url: string,
+    content: string,
+  ): Promise<{ identifier: string; contentHash: string }>;
 
   /**
    * Verify archive is accessible
    */
-  verify(identifier: string): Promise<{ accessible: boolean; contentHash?: string }>;
+  verify(
+    identifier: string,
+  ): Promise<{ accessible: boolean; contentHash?: string }>;
 
   /**
    * Get archive URL for display
@@ -485,9 +507,12 @@ export interface ArchiveProviderInterface {
  * IPFS archive provider (stub - would use actual IPFS client)
  */
 export class IPFSArchiveProvider implements ArchiveProviderInterface {
-  readonly name: ArchiveProvider = 'ipfs';
+  readonly name: ArchiveProvider = "ipfs";
 
-  async archive(_url: string, content: string): Promise<{ identifier: string; contentHash: string }> {
+  async archive(
+    _url: string,
+    content: string,
+  ): Promise<{ identifier: string; contentHash: string }> {
     // In production: upload to IPFS, get CID
     const hash = this.simpleHash(content);
     const cid = `Qm${hash.substring(0, 44)}`; // Fake CID format
@@ -498,10 +523,12 @@ export class IPFSArchiveProvider implements ArchiveProviderInterface {
     };
   }
 
-  async verify(identifier: string): Promise<{ accessible: boolean; contentHash?: string }> {
+  async verify(
+    identifier: string,
+  ): Promise<{ accessible: boolean; contentHash?: string }> {
     // In production: check IPFS gateway
     return {
-      accessible: identifier.startsWith('Qm'),
+      accessible: identifier.startsWith("Qm"),
       contentHash: undefined,
     };
   }
@@ -514,10 +541,10 @@ export class IPFSArchiveProvider implements ArchiveProviderInterface {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
-    return Math.abs(hash).toString(16).padStart(64, '0');
+    return Math.abs(hash).toString(16).padStart(64, "0");
   }
 }
 
@@ -525,9 +552,12 @@ export class IPFSArchiveProvider implements ArchiveProviderInterface {
  * Arweave archive provider (stub)
  */
 export class ArweaveArchiveProvider implements ArchiveProviderInterface {
-  readonly name: ArchiveProvider = 'arweave';
+  readonly name: ArchiveProvider = "arweave";
 
-  async archive(_url: string, content: string): Promise<{ identifier: string; contentHash: string }> {
+  async archive(
+    _url: string,
+    content: string,
+  ): Promise<{ identifier: string; contentHash: string }> {
     // In production: upload to Arweave, get transaction ID
     const hash = this.simpleHash(content);
     const txId = hash.substring(0, 43);
@@ -538,7 +568,9 @@ export class ArweaveArchiveProvider implements ArchiveProviderInterface {
     };
   }
 
-  async verify(identifier: string): Promise<{ accessible: boolean; contentHash?: string }> {
+  async verify(
+    identifier: string,
+  ): Promise<{ accessible: boolean; contentHash?: string }> {
     // In production: check Arweave gateway
     return {
       accessible: identifier.length === 43,
@@ -554,10 +586,10 @@ export class ArweaveArchiveProvider implements ArchiveProviderInterface {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
-    return Math.abs(hash).toString(16).padStart(64, '0');
+    return Math.abs(hash).toString(16).padStart(64, "0");
   }
 }
 
@@ -565,23 +597,31 @@ export class ArweaveArchiveProvider implements ArchiveProviderInterface {
  * Wayback Machine archive provider (stub)
  */
 export class WaybackArchiveProvider implements ArchiveProviderInterface {
-  readonly name: ArchiveProvider = 'wayback';
+  readonly name: ArchiveProvider = "wayback";
 
-  async archive(url: string, _content: string): Promise<{ identifier: string; contentHash: string }> {
+  async archive(
+    url: string,
+    _content: string,
+  ): Promise<{ identifier: string; contentHash: string }> {
     // In production: submit to Wayback Machine Save Page Now API
-    const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').substring(0, 14);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:T.Z]/g, "")
+      .substring(0, 14);
     const archiveUrl = `https://web.archive.org/web/${timestamp}/${url}`;
 
     return {
       identifier: archiveUrl,
-      contentHash: '', // Wayback doesn't provide content hash
+      contentHash: "", // Wayback doesn't provide content hash
     };
   }
 
-  async verify(identifier: string): Promise<{ accessible: boolean; contentHash?: string }> {
+  async verify(
+    identifier: string,
+  ): Promise<{ accessible: boolean; contentHash?: string }> {
     // In production: check if archived page is accessible
     return {
-      accessible: identifier.includes('web.archive.org'),
+      accessible: identifier.includes("web.archive.org"),
       contentHash: undefined,
     };
   }

@@ -4,11 +4,23 @@
  * Validates blocks before applying them to state.
  */
 
-import { verify } from '../../core/crypto/signatures.js';
-import { verifyBlockProposer } from '../pot/validator_selection.js';
-import { hashBlockHeader, checkBlockLimits, BLOCK_LIMITS } from './producer.js';
-import type { PublicKey } from '../../core/crypto/keys.js';
-import type { Block, ValidatorSet, ConsensusParams } from '../pot/types.js';
+import { verify } from "../../core/crypto/signatures.js";
+import { verifyBlockProposer } from "../pot/validator_selection.js";
+import {
+  hashBlockHeader,
+  checkBlockLimits,
+  BLOCK_LIMITS,
+  computeTransactionsRoot,
+  computeVerificationsRoot,
+} from "./producer.js";
+import type { PublicKey } from "../../core/crypto/keys.js";
+import type {
+  Block,
+  ValidatorSet,
+  ConsensusParams,
+  Transaction,
+  VerificationResult,
+} from "../pot/types.js";
 
 // ============ Validation ============
 
@@ -31,7 +43,7 @@ export interface ValidationResult {
  */
 export function validateBlock(
   block: Block,
-  context: ValidationContext
+  context: ValidationContext,
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -45,19 +57,19 @@ export function validateBlock(
   // 2. Check block number
   if (block.header.number !== context.expectedBlockNumber) {
     errors.push(
-      `Invalid block number: expected ${context.expectedBlockNumber}, got ${block.header.number}`
+      `Invalid block number: expected ${context.expectedBlockNumber}, got ${block.header.number}`,
     );
   }
 
   // 3. Check previous hash
   if (block.header.previousHash !== context.previousBlockHash) {
-    errors.push('Invalid previous block hash');
+    errors.push("Invalid previous block hash");
   }
 
   // 4. Check timestamp
   const now = Date.now();
   if (block.header.timestamp > now + 60000) {
-    errors.push('Block timestamp too far in future');
+    errors.push("Block timestamp too far in future");
   }
 
   // 5. Validate proposer
@@ -97,7 +109,10 @@ export function validateBlock(
   }
 
   // 10. Validate attestations
-  const attestationsValidation = validateAttestations(block, context.validatorSet);
+  const attestationsValidation = validateAttestations(
+    block,
+    context.validatorSet,
+  );
   if (attestationsValidation.warnings.length > 0) {
     warnings.push(...attestationsValidation.warnings);
   }
@@ -114,18 +129,18 @@ export function validateBlock(
  */
 function validateProposer(
   block: Block,
-  context: ValidationContext
+  context: ValidationContext,
 ): { valid: boolean; reason?: string } {
   const validator = context.validatorSet.validators.get(block.header.proposer);
   if (!validator) {
-    return { valid: false, reason: 'Unknown proposer' };
+    return { valid: false, reason: "Unknown proposer" };
   }
 
   if (!validator.isActive) {
-    return { valid: false, reason: 'Proposer is not active' };
+    return { valid: false, reason: "Proposer is not active" };
   }
 
-  // Verify VRF proof
+  // Verify VRF proof (targetProposers = validator set size for fair scheduling)
   return verifyBlockProposer(
     block.header.proposer,
     block.header.proposerVrfOutput,
@@ -134,24 +149,28 @@ function validateProposer(
     context.currentEpoch,
     context.previousBlockHash,
     validator.stake + validator.delegatedStake,
-    context.validatorSet.totalStake
+    context.validatorSet.totalStake,
+    Math.max(1, context.validatorSet.validators.size),
   );
 }
 
 /**
  * Validate block signature
  */
-function validateBlockSignature(block: Block): { valid: boolean; reason?: string } {
+function validateBlockSignature(block: Block): {
+  valid: boolean;
+  reason?: string;
+} {
   const headerHash = hashBlockHeader(block.header);
   const valid = verify(
     new TextEncoder().encode(headerHash),
     block.signature,
-    block.header.proposer
+    block.header.proposer,
   );
 
   return valid
     ? { valid: true }
-    : { valid: false, reason: 'Invalid block signature' };
+    : { valid: false, reason: "Invalid block signature" };
 }
 
 /**
@@ -159,32 +178,115 @@ function validateBlockSignature(block: Block): { valid: boolean; reason?: string
  */
 function validateTransaction(
   tx: unknown,
-  context: ValidationContext
+  _context: ValidationContext,
 ): { valid: boolean; reason?: string } {
-  // Type checking and basic validation
-  // In production, this would be much more comprehensive
+  const transaction = tx as Transaction;
+
+  // Check required fields
+  if (!transaction.type || !transaction.sender || !transaction.signature) {
+    return { valid: false, reason: "Missing required transaction fields" };
+  }
+
+  // Check nonce is non-negative
+  if (typeof transaction.nonce !== "bigint" || transaction.nonce < 0n) {
+    return { valid: false, reason: "Invalid nonce" };
+  }
+
+  // Check fee is non-negative
+  if (typeof transaction.fee !== "bigint" || transaction.fee < 0n) {
+    return { valid: false, reason: "Invalid fee" };
+  }
+
+  // Verify transaction signature
+  const payload = JSON.stringify(transaction.payload);
+  const sigValid = verify(
+    new TextEncoder().encode(payload),
+    transaction.signature,
+    transaction.sender,
+  );
+
+  if (!sigValid) {
+    return { valid: false, reason: "Invalid transaction signature" };
+  }
+
   return { valid: true };
 }
 
 /**
  * Validate a verification result
  */
-function validateVerificationResult(
-  result: unknown
-): { valid: boolean; reason?: string } {
-  // Validate result structure and values
-  // In production, this would check that the result matches the round
+function validateVerificationResult(result: unknown): {
+  valid: boolean;
+  reason?: string;
+} {
+  const vr = result as VerificationResult;
+
+  // Check required fields
+  if (!vr.claimId) {
+    return { valid: false, reason: "Missing claimId" };
+  }
+
+  // Check valid outcome
+  const validOutcomes = ["accepted", "rejected", "contested", "insufficient"];
+  if (!validOutcomes.includes(vr.outcome)) {
+    return { valid: false, reason: `Invalid outcome: ${vr.outcome}` };
+  }
+
+  // Check confidence range
+  if (
+    typeof vr.finalConfidence !== "number" ||
+    vr.finalConfidence < 0 ||
+    vr.finalConfidence > 1
+  ) {
+    return { valid: false, reason: "Final confidence must be between 0 and 1" };
+  }
+
+  // Check breakdown sums are valid (allow small floating-point error)
+  if (vr.confidenceBreakdown) {
+    const sum =
+      vr.confidenceBreakdown.confirmed +
+      vr.confidenceBreakdown.rejected +
+      vr.confidenceBreakdown.uncertain;
+    if (sum > 1.01 || sum < 0) {
+      return { valid: false, reason: "Confidence breakdown fractions invalid" };
+    }
+  }
+
+  // Check participation
+  if (vr.participatingValidators > vr.totalValidators) {
+    return { valid: false, reason: "Participating validators exceeds total" };
+  }
+
   return { valid: true };
 }
 
 /**
  * Validate Merkle roots
+ *
+ * Recomputes transaction and verification Merkle roots from block contents
+ * and compares against the header values to detect tampering.
  */
-function validateMerkleRoots(block: Block): { valid: boolean; errors: string[] } {
+function validateMerkleRoots(block: Block): {
+  valid: boolean;
+  errors: string[];
+} {
   const errors: string[] = [];
 
-  // In production, recompute Merkle roots and compare
-  // This ensures the block proposer didn't tamper with the roots
+  // Recompute and verify transactions root
+  const expectedTxRoot = computeTransactionsRoot(block.transactions);
+  if (block.header.transactionsRoot !== expectedTxRoot) {
+    errors.push(
+      `Transactions root mismatch: header=${block.header.transactionsRoot}, computed=${expectedTxRoot}`,
+    );
+  }
+
+  // Recompute and verify verifications root
+  const expectedVrRoot = computeVerificationsRoot(block.verificationResults);
+  if (block.header.verificationsRoot !== expectedVrRoot) {
+    errors.push(
+      `Verifications root mismatch: header=${block.header.verificationsRoot}, computed=${expectedVrRoot}`,
+    );
+  }
 
   return { valid: errors.length === 0, errors };
 }
@@ -194,13 +296,13 @@ function validateMerkleRoots(block: Block): { valid: boolean; errors: string[] }
  */
 function validateAttestations(
   block: Block,
-  validatorSet: ValidatorSet
+  validatorSet: ValidatorSet,
 ): { valid: boolean; warnings: string[] } {
   const warnings: string[] = [];
 
   // Check attestation count
   if (block.attestations.length === 0) {
-    warnings.push('Block has no attestations');
+    warnings.push("Block has no attestations");
   }
 
   // Verify each attestation signature
@@ -215,7 +317,7 @@ function validateAttestations(
     const valid = verify(
       new TextEncoder().encode(headerHash),
       att.signature,
-      att.validator as PublicKey
+      att.validator as PublicKey,
     );
 
     if (!valid) {
@@ -235,27 +337,27 @@ function validateAttestations(
 export function quickValidateBlock(
   block: Block,
   expectedNumber: bigint,
-  previousHash: string
+  previousHash: string,
 ): { valid: boolean; reason?: string } {
   // Check block number
   if (block.header.number !== expectedNumber) {
-    return { valid: false, reason: 'Wrong block number' };
+    return { valid: false, reason: "Wrong block number" };
   }
 
   // Check previous hash
   if (block.header.previousHash !== previousHash) {
-    return { valid: false, reason: 'Wrong previous hash' };
+    return { valid: false, reason: "Wrong previous hash" };
   }
 
   // Check basic structure
   if (!block.header || !block.signature) {
-    return { valid: false, reason: 'Missing required fields' };
+    return { valid: false, reason: "Missing required fields" };
   }
 
   // Check size
   const size = JSON.stringify(block).length;
   if (size > BLOCK_LIMITS.MAX_BLOCK_SIZE_BYTES) {
-    return { valid: false, reason: 'Block too large' };
+    return { valid: false, reason: "Block too large" };
   }
 
   return { valid: true };
@@ -267,14 +369,14 @@ export function quickValidateBlock(
  * Validate a potential fork block
  */
 export function validateForkBlock(
-  block: Block,
+  _block: Block,
   forkPoint: bigint,
-  currentHead: bigint
+  currentHead: bigint,
 ): { valid: boolean; reason?: string } {
   // Check that fork isn't too deep
   const MAX_REORG_DEPTH = 100n;
   if (currentHead - forkPoint > MAX_REORG_DEPTH) {
-    return { valid: false, reason: 'Fork too deep' };
+    return { valid: false, reason: "Fork too deep" };
   }
 
   // Additional fork-specific validation

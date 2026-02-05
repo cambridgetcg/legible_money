@@ -4,5 +4,7 @@
  * Chain genesis and perpetual truth finding loop.
  */
 
-export * from './types.js';
-export * from './perpetual_loop.js';
+export * from "./types.js";
+export * from "./perpetual_loop.js";
+export * from "./bootstrap_fund.js";
+export * from "./loop_event_bridge.js";

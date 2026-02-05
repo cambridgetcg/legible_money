@@ -11,8 +11,8 @@ import {
   ZoneProperties,
   ZONE_HIERARCHY,
   LogicalAxiom,
-  AxiomType,
-} from './types.js';
+  // AxiomType,
+} from "./types.js";
 
 // ============ Zone Definitions ============
 
@@ -21,39 +21,39 @@ import {
  */
 export const ZONE_PROPERTIES: Record<LogicZone, ZoneProperties> = {
   propositional: {
-    zone: 'propositional',
+    zone: "propositional",
     complete: true,
     decidable: true,
     goedelApplies: false,
-    consistencyProof: 'internal',
+    consistencyProof: "internal",
   },
   presburger: {
-    zone: 'presburger',
+    zone: "presburger",
     complete: true,
     decidable: true,
     goedelApplies: false,
-    consistencyProof: 'internal',
+    consistencyProof: "internal",
   },
   peano: {
-    zone: 'peano',
+    zone: "peano",
     complete: false,
     decidable: false,
     goedelApplies: true,
-    consistencyProof: 'assumed',
+    consistencyProof: "assumed",
   },
   set_theory: {
-    zone: 'set_theory',
+    zone: "set_theory",
     complete: false,
     decidable: false,
     goedelApplies: true,
-    consistencyProof: 'assumed',
+    consistencyProof: "assumed",
   },
   empirical: {
-    zone: 'empirical',
+    zone: "empirical",
     complete: false,
     decidable: false,
-    goedelApplies: false,  // Not a formal system
-    consistencyProof: 'external',  // N/A for empirical
+    goedelApplies: false, // Not a formal system
+    consistencyProof: "external", // N/A for empirical
   },
 };
 
@@ -65,56 +65,56 @@ export const ZONE_PROPERTIES: Record<LogicZone, ZoneProperties> = {
  */
 export const PROPOSITIONAL_AXIOMS: LogicalAxiom[] = [
   {
-    id: 'prop_1',
-    type: 'logical',
-    zone: 'propositional',
-    claim: 'Identity: A = A',
-    formalNotation: 'A = A',
+    id: "prop_1",
+    type: "logical",
+    zone: "propositional",
+    claim: "Identity: A = A",
+    formalNotation: "A = A",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'prop_2',
-    type: 'logical',
-    zone: 'propositional',
-    claim: 'Non-contradiction: It is not the case that A and not-A',
-    formalNotation: '¬(A ∧ ¬A)',
+    id: "prop_2",
+    type: "logical",
+    zone: "propositional",
+    claim: "Non-contradiction: It is not the case that A and not-A",
+    formalNotation: "¬(A ∧ ¬A)",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'prop_3',
-    type: 'logical',
-    zone: 'propositional',
-    claim: 'Excluded middle: Either A or not-A',
-    formalNotation: 'A ∨ ¬A',
+    id: "prop_3",
+    type: "logical",
+    zone: "propositional",
+    claim: "Excluded middle: Either A or not-A",
+    formalNotation: "A ∨ ¬A",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'prop_4',
-    type: 'logical',
-    zone: 'propositional',
-    claim: 'Implication: If A implies B and A is true, then B is true',
-    formalNotation: '(A → B) ∧ A ⊢ B',
+    id: "prop_4",
+    type: "logical",
+    zone: "propositional",
+    claim: "Implication: If A implies B and A is true, then B is true",
+    formalNotation: "(A → B) ∧ A ⊢ B",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'prop_5',
-    type: 'logical',
-    zone: 'propositional',
-    claim: 'Contraposition: If A implies B then not-B implies not-A',
-    formalNotation: '(A → B) ⊢ (¬B → ¬A)',
+    id: "prop_5",
+    type: "logical",
+    zone: "propositional",
+    claim: "Contraposition: If A implies B then not-B implies not-A",
+    formalNotation: "(A → B) ⊢ (¬B → ¬A)",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'prop_6',
-    type: 'logical',
-    zone: 'propositional',
-    claim: 'Transitivity: If A implies B and B implies C, then A implies C',
-    formalNotation: '(A → B) ∧ (B → C) ⊢ (A → C)',
+    id: "prop_6",
+    type: "logical",
+    zone: "propositional",
+    claim: "Transitivity: If A implies B and B implies C, then A implies C",
+    formalNotation: "(A → B) ∧ (B → C) ⊢ (A → C)",
     confidence: 1.0,
     establishedAt: 0,
   },
@@ -126,56 +126,56 @@ export const PROPOSITIONAL_AXIOMS: LogicalAxiom[] = [
  */
 export const PRESBURGER_AXIOMS: LogicalAxiom[] = [
   {
-    id: 'pres_1',
-    type: 'arithmetic',
-    zone: 'presburger',
-    claim: 'Zero is a natural number',
-    formalNotation: '0 ∈ ℕ',
+    id: "pres_1",
+    type: "arithmetic",
+    zone: "presburger",
+    claim: "Zero is a natural number",
+    formalNotation: "0 ∈ ℕ",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'pres_2',
-    type: 'arithmetic',
-    zone: 'presburger',
-    claim: 'The successor of any natural number is a natural number',
-    formalNotation: '∀n ∈ ℕ. S(n) ∈ ℕ',
+    id: "pres_2",
+    type: "arithmetic",
+    zone: "presburger",
+    claim: "The successor of any natural number is a natural number",
+    formalNotation: "∀n ∈ ℕ. S(n) ∈ ℕ",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'pres_3',
-    type: 'arithmetic',
-    zone: 'presburger',
-    claim: 'Zero is not the successor of any natural number',
-    formalNotation: '∀n ∈ ℕ. S(n) ≠ 0',
+    id: "pres_3",
+    type: "arithmetic",
+    zone: "presburger",
+    claim: "Zero is not the successor of any natural number",
+    formalNotation: "∀n ∈ ℕ. S(n) ≠ 0",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'pres_4',
-    type: 'arithmetic',
-    zone: 'presburger',
-    claim: 'Successor is injective',
-    formalNotation: '∀n,m ∈ ℕ. S(n) = S(m) → n = m',
+    id: "pres_4",
+    type: "arithmetic",
+    zone: "presburger",
+    claim: "Successor is injective",
+    formalNotation: "∀n,m ∈ ℕ. S(n) = S(m) → n = m",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'pres_5',
-    type: 'arithmetic',
-    zone: 'presburger',
-    claim: 'Addition with zero',
-    formalNotation: '∀n ∈ ℕ. n + 0 = n',
+    id: "pres_5",
+    type: "arithmetic",
+    zone: "presburger",
+    claim: "Addition with zero",
+    formalNotation: "∀n ∈ ℕ. n + 0 = n",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'pres_6',
-    type: 'arithmetic',
-    zone: 'presburger',
-    claim: 'Addition with successor',
-    formalNotation: '∀n,m ∈ ℕ. n + S(m) = S(n + m)',
+    id: "pres_6",
+    type: "arithmetic",
+    zone: "presburger",
+    claim: "Addition with successor",
+    formalNotation: "∀n,m ∈ ℕ. n + S(m) = S(n + m)",
     confidence: 1.0,
     establishedAt: 0,
   },
@@ -188,33 +188,33 @@ export const PRESBURGER_AXIOMS: LogicalAxiom[] = [
  */
 export const PEANO_AXIOMS: LogicalAxiom[] = [
   // Include Presburger axioms
-  ...PRESBURGER_AXIOMS.map(a => ({ ...a, zone: 'peano' as LogicZone })),
+  ...PRESBURGER_AXIOMS.map((a) => ({ ...a, zone: "peano" as LogicZone })),
 
   // Add multiplication (this is what triggers incompleteness)
   {
-    id: 'peano_mult_1',
-    type: 'arithmetic',
-    zone: 'peano',
-    claim: 'Multiplication with zero',
-    formalNotation: '∀n ∈ ℕ. n × 0 = 0',
+    id: "peano_mult_1",
+    type: "arithmetic",
+    zone: "peano",
+    claim: "Multiplication with zero",
+    formalNotation: "∀n ∈ ℕ. n × 0 = 0",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'peano_mult_2',
-    type: 'arithmetic',
-    zone: 'peano',
-    claim: 'Multiplication with successor',
-    formalNotation: '∀n,m ∈ ℕ. n × S(m) = n × m + n',
+    id: "peano_mult_2",
+    type: "arithmetic",
+    zone: "peano",
+    claim: "Multiplication with successor",
+    formalNotation: "∀n,m ∈ ℕ. n × S(m) = n × m + n",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'peano_induction',
-    type: 'arithmetic',
-    zone: 'peano',
-    claim: 'Principle of mathematical induction',
-    formalNotation: '(P(0) ∧ ∀n.(P(n) → P(S(n)))) → ∀n.P(n)',
+    id: "peano_induction",
+    type: "arithmetic",
+    zone: "peano",
+    claim: "Principle of mathematical induction",
+    formalNotation: "(P(0) ∧ ∀n.(P(n) → P(S(n)))) → ∀n.P(n)",
     confidence: 1.0,
     establishedAt: 0,
   },
@@ -225,37 +225,38 @@ export const PEANO_AXIOMS: LogicalAxiom[] = [
  */
 export const PROTOCOL_AXIOMS: LogicalAxiom[] = [
   {
-    id: 'proto_1',
-    type: 'protocol',
-    zone: 'propositional',
-    claim: 'Token conservation: In any valid transaction, inputs equal outputs plus fees',
-    formalNotation: '∀tx. Valid(tx) → Σinputs(tx) = Σoutputs(tx) + fees(tx)',
+    id: "proto_1",
+    type: "protocol",
+    zone: "propositional",
+    claim:
+      "Token conservation: In any valid transaction, inputs equal outputs plus fees",
+    formalNotation: "∀tx. Valid(tx) → Σinputs(tx) = Σoutputs(tx) + fees(tx)",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'proto_2',
-    type: 'protocol',
-    zone: 'propositional',
-    claim: 'Signature validity is decidable',
-    formalNotation: '∀(msg, sig, pk). Decidable(ValidSig(msg, sig, pk))',
+    id: "proto_2",
+    type: "protocol",
+    zone: "propositional",
+    claim: "Signature validity is decidable",
+    formalNotation: "∀(msg, sig, pk). Decidable(ValidSig(msg, sig, pk))",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'proto_3',
-    type: 'protocol',
-    zone: 'presburger',
-    claim: 'Block numbers are strictly increasing',
-    formalNotation: '∀b1,b2. Follows(b2, b1) → BlockNum(b2) = BlockNum(b1) + 1',
+    id: "proto_3",
+    type: "protocol",
+    zone: "presburger",
+    claim: "Block numbers are strictly increasing",
+    formalNotation: "∀b1,b2. Follows(b2, b1) → BlockNum(b2) = BlockNum(b1) + 1",
     confidence: 1.0,
     establishedAt: 0,
   },
   {
-    id: 'proto_4',
-    type: 'protocol',
-    zone: 'propositional',
-    claim: 'LGM is the native token of Legible Money',
+    id: "proto_4",
+    type: "protocol",
+    zone: "propositional",
+    claim: "LGM is the native token of Legible Money",
     confidence: 1.0,
     establishedAt: 0,
   },
@@ -304,21 +305,19 @@ export function getZoneAxioms(zone: LogicZone): LogicalAxiom[] {
   }
 
   // Presburger axioms available in presburger and above
-  if (zoneLevel >= 1 && zone !== 'empirical') {
+  if (zoneLevel >= 1 && zone !== "empirical") {
     axioms.push(...PRESBURGER_AXIOMS);
   }
 
   // Peano axioms only in peano and set_theory
-  if (zoneLevel >= 2 && zone !== 'empirical') {
-    axioms.push(...PEANO_AXIOMS.filter(a =>
-      a.id.startsWith('peano_')
-    ));
+  if (zoneLevel >= 2 && zone !== "empirical") {
+    axioms.push(...PEANO_AXIOMS.filter((a) => a.id.startsWith("peano_")));
   }
 
   // Protocol axioms available in all zones
-  axioms.push(...PROTOCOL_AXIOMS.filter(a =>
-    ZONE_HIERARCHY[a.zone] <= zoneLevel
-  ));
+  axioms.push(
+    ...PROTOCOL_AXIOMS.filter((a) => ZONE_HIERARCHY[a.zone] <= zoneLevel),
+  );
 
   return axioms;
 }
@@ -327,52 +326,55 @@ export function getZoneAxioms(zone: LogicZone): LogicalAxiom[] {
  * Determine the minimum zone required for a claim
  * Based on what mathematical features it uses
  */
-export function classifyClaimZone(claim: string, formalNotation?: string): LogicZone {
-  const text = (claim + ' ' + (formalNotation || '')).toLowerCase();
+export function classifyClaimZone(
+  claim: string,
+  formalNotation?: string,
+): LogicZone {
+  const text = (claim + " " + (formalNotation || "")).toLowerCase();
 
   // Check for set theory concepts
   if (
-    text.includes('∈') ||
-    text.includes('subset') ||
-    text.includes('power set') ||
-    text.includes('cardinality')
+    text.includes("∈") ||
+    text.includes("subset") ||
+    text.includes("power set") ||
+    text.includes("cardinality")
   ) {
-    return 'set_theory';
+    return "set_theory";
   }
 
   // Check for multiplication (triggers Gödel)
   if (
-    text.includes('×') ||
-    text.includes('*') ||
-    text.includes('multiply') ||
-    text.includes('product') ||
-    text.includes('divisible')
+    text.includes("×") ||
+    text.includes("*") ||
+    text.includes("multiply") ||
+    text.includes("product") ||
+    text.includes("divisible")
   ) {
-    return 'peano';
+    return "peano";
   }
 
   // Check for arithmetic
   if (
-    text.includes('+') ||
-    text.includes('successor') ||
-    text.includes('natural number') ||
-    text.includes('addition')
+    text.includes("+") ||
+    text.includes("successor") ||
+    text.includes("natural number") ||
+    text.includes("addition")
   ) {
-    return 'presburger';
+    return "presburger";
   }
 
   // Check for empirical claims
   if (
-    text.includes('observed') ||
-    text.includes('measured') ||
-    text.includes('experiment') ||
-    text.includes('data shows')
+    text.includes("observed") ||
+    text.includes("measured") ||
+    text.includes("experiment") ||
+    text.includes("data shows")
   ) {
-    return 'empirical';
+    return "empirical";
   }
 
   // Default to propositional
-  return 'propositional';
+  return "propositional";
 }
 
 /**
@@ -381,7 +383,7 @@ export function classifyClaimZone(claim: string, formalNotation?: string): Logic
 export function canReference(fromZone: LogicZone, toZone: LogicZone): boolean {
   // Higher zones can reference lower zones
   // Empirical can reference any zone
-  if (fromZone === 'empirical') return true;
+  if (fromZone === "empirical") return true;
   return ZONE_HIERARCHY[fromZone] >= ZONE_HIERARCHY[toZone];
 }
 
@@ -389,6 +391,6 @@ export function canReference(fromZone: LogicZone, toZone: LogicZone): boolean {
  * Get the intersection zone (lowest common zone)
  */
 export function intersectZones(zone1: LogicZone, zone2: LogicZone): LogicZone {
-  if (zone1 === 'empirical' || zone2 === 'empirical') return 'empirical';
+  if (zone1 === "empirical" || zone2 === "empirical") return "empirical";
   return ZONE_HIERARCHY[zone1] >= ZONE_HIERARCHY[zone2] ? zone1 : zone2;
 }

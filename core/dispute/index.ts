@@ -41,7 +41,7 @@ export type {
   DisputeErrorCode,
   DisputeEventType,
   DisputeEvent,
-} from './types.js';
+} from "./types.js";
 
 // Constants
 export {
@@ -54,7 +54,7 @@ export {
   EXPERTISE_DECAY,
   ESCALATION_TIERS,
   DisputeError,
-} from './types.js';
+} from "./types.js";
 
 // Evidence Comparison
 export {
@@ -75,7 +75,7 @@ export {
   validateDisputeEvidence,
   generateEvidenceCommitment,
   verifyEvidenceCommitment,
-} from './evidence_comparison.js';
+} from "./evidence_comparison.js";
 
 // Arbitrator Selection
 export {
@@ -89,7 +89,7 @@ export {
   updateExpertise,
   getExpertiseDomains,
   isExpertInDomain,
-} from './arbitrator_selection.js';
+} from "./arbitrator_selection.js";
 
 // State Machine
 export {
@@ -112,7 +112,7 @@ export {
   isTerminal,
   isActive,
   getPhaseDisplayName,
-} from './state_machine.js';
+} from "./state_machine.js";
 
 // Settlement
 export {
@@ -131,7 +131,7 @@ export {
   validateSettlement,
   calculateDrawSettlement,
   generateSettlementSummary,
-} from './settlement.js';
+} from "./settlement.js";
 
 // Escalation
 export {
@@ -149,7 +149,7 @@ export {
   getMaxEscalation,
   processEscalation as processEscalationRequest,
   analyzeTierConsistency,
-} from './escalation.js';
+} from "./escalation.js";
 
 // Dispute Engine (Main API)
 export {
@@ -165,4 +165,31 @@ export {
   getDisputeSettlement,
   getDrawSettlement,
   updateArbiterExpertise,
-} from './dispute_engine.js';
+} from "./dispute_engine.js";
+
+// Challenge Integration (GAP-003 FIX)
+export type {
+  FactChallengeRequest,
+  FactChallengeResult,
+  DisputeOutcomeRoutingRequest,
+  DisputeOutcomeRoutingResult,
+  ConfidenceAdjustmentInput,
+  ConfidenceAdjustmentResult,
+  ActiveDisputeCheckRequest,
+  ActiveDisputeCheckResult,
+  FactConfidenceChangedEvent,
+  FactRetractedEvent,
+  ChallengeInitiatedEvent,
+  ChallengeIntegrationEvent,
+  ChallengeIntegrationErrorCode,
+} from "./challenge_integration.js";
+
+export {
+  CONFIDENCE_ADJUSTMENT_CONFIG,
+  DISPUTE_AWARE_CONFIG,
+  ChallengeIntegrationError,
+  isChallengerWin,
+  isDefenderWin,
+  isInconclusiveOutcome,
+  determineFinalFactStatus,
+} from "./challenge_integration.js";

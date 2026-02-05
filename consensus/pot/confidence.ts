@@ -15,22 +15,21 @@
  * - Multidimensional confidence output
  */
 
+import type { Confidence } from "../../core/knowledge/types.js";
+import type { ValidatorReveal } from "./types.js";
+import type { FactResearchSummary } from "../../core/research/types.js";
+import { RESEARCH_CONFIDENCE_MODIFIERS } from "../../core/research/types.js";
+
+// Domain Capture Defense imports
 import type {
-  Confidence,
-  Reference,
-  EpistemicCategory,
-  EpistemicProfile,
-  MultidimensionalConfidence,
-  EpistemicBasis,
-  ConfidenceProvenance,
-  TemporalStability,
-  SourceCoherence,
-  EVIDENCE_TYPE_STRENGTH,
-  EPISTEMIC_PROFILES,
-} from '../../core/knowledge/types.js';
-import type { ValidatorReveal, Validator } from './types.js';
-import type { FactResearchSummary } from '../../core/research/types.js';
-import { RESEARCH_CONFIDENCE_MODIFIERS } from '../../core/research/types.js';
+  IsolatedReputation,
+  EffectiveReputationResult,
+} from "../reputation_isolation/types.js";
+import type { DomainTree } from "../../core/knowledge/ontology/types.js";
+import {
+  getEffectiveReputation,
+  REPUTATION_ISOLATION_CONFIG,
+} from "../reputation_isolation/index.js";
 
 // ============ Confidence Calculation ============
 
@@ -45,18 +44,18 @@ import { RESEARCH_CONFIDENCE_MODIFIERS } from '../../core/research/types.js';
  * All weights are PUBLISHED:
  */
 export const CONFIDENCE_WEIGHTS = {
-  STAKE: 0.50,        // 50% weight on stake-weighted confidence
-  REPUTATION: 0.30,   // 30% weight on reputation-weighted confidence
-  AGREEMENT: 0.20,    // 20% bonus for high agreement levels
+  STAKE: 0.5, // 50% weight on stake-weighted confidence
+  REPUTATION: 0.3, // 30% weight on reputation-weighted confidence
+  AGREEMENT: 0.2, // 20% bonus for high agreement levels
 } as const;
 
 /**
  * Time decay parameters (legacy - use category-specific decay instead)
  */
 export const TIME_DECAY = {
-  HALF_LIFE_BLOCKS: 100000,     // Confidence halves every 100k blocks (~3 days)
-  MIN_CONFIDENCE: 0.30,         // Minimum confidence before fact expires
-  REVERIFICATION_BONUS: 0.10,   // Bonus for successful re-verification
+  HALF_LIFE_BLOCKS: 111111, // Confidence halves every ~111k blocks (~3.2 days)
+  MIN_CONFIDENCE: 0.33, // Minimum confidence before fact expires
+  REVERIFICATION_BONUS: 0.11, // Bonus for successful re-verification
 } as const;
 
 /**
@@ -69,51 +68,54 @@ export const TIME_DECAY = {
  * NEW: 'replicated' category for facts with successful IRL replication.
  * Replicated facts have very slow decay due to real-world verification.
  */
-export const CATEGORY_DECAY: Record<string, {
-  halfLifeBlocks: number | null;  // null = no decay
-  minConfidence: number;
-  reverificationBonus: number;
-}> = {
+export const CATEGORY_DECAY: Record<
+  string,
+  {
+    halfLifeBlocks: number | null; // null = no decay
+    minConfidence: number;
+    reverificationBonus: number;
+  }
+> = {
   analytic: {
-    halfLifeBlocks: null,       // Eternal - true by definition
+    halfLifeBlocks: null, // Eternal - true by definition
     minConfidence: 1.0,
     reverificationBonus: 0,
   },
   formal: {
-    halfLifeBlocks: null,       // Eternal - mathematically proven
+    halfLifeBlocks: null, // Eternal - mathematically proven
     minConfidence: 1.0,
     reverificationBonus: 0,
   },
   protocol: {
-    halfLifeBlocks: null,       // Eternal - constructed by protocol
+    halfLifeBlocks: null, // Eternal - constructed by protocol
     minConfidence: 1.0,
     reverificationBonus: 0,
   },
   empirical: {
-    halfLifeBlocks: 100000,     // ~3 days
-    minConfidence: 0.30,
-    reverificationBonus: 0.10,
+    halfLifeBlocks: 111111, // ~3.2 days
+    minConfidence: 0.33,
+    reverificationBonus: 0.11,
   },
   historical: {
-    halfLifeBlocks: 500000,     // ~15 days - slower decay
-    minConfidence: 0.25,
-    reverificationBonus: 0.08,
+    halfLifeBlocks: 555555, // ~16 days - slower decay
+    minConfidence: 0.22,
+    reverificationBonus: 0.11,
   },
   predictive: {
-    halfLifeBlocks: 20000,      // Fast decay until resolved
-    minConfidence: 0.20,
-    reverificationBonus: 0.15,
+    halfLifeBlocks: 22222, // Fast decay until resolved
+    minConfidence: 0.22,
+    reverificationBonus: 0.11,
   },
   social: {
-    halfLifeBlocks: 150000,     // ~5 days
-    minConfidence: 0.25,
-    reverificationBonus: 0.12,
+    halfLifeBlocks: 111111, // ~3.2 days
+    minConfidence: 0.22,
+    reverificationBonus: 0.11,
   },
-  // NEW: Replicated category for IRL-verified facts
+  // Replicated category for IRL-verified facts
   replicated: {
-    halfLifeBlocks: 1000000,    // ~30 days - very slow decay
-    minConfidence: 0.50,        // Higher floor due to real-world verification
-    reverificationBonus: 0.05,  // Less bonus needed (already verified IRL)
+    halfLifeBlocks: 1111111, // ~32 days - very slow decay
+    minConfidence: 0.55, // Higher floor due to real-world verification
+    reverificationBonus: 0.05, // Less bonus needed (already verified IRL)
   },
 };
 
@@ -123,19 +125,19 @@ export const CATEGORY_DECAY: Record<string, {
 export function calculateFinalConfidence(
   reveals: Map<string, ValidatorReveal>,
   validators: Map<string, { stake: bigint; reputation: number }>,
-  consensusVerdict: 'confirmed' | 'rejected'
+  consensusVerdict: "confirmed" | "rejected",
 ): {
   confidence: Confidence;
   breakdown: ConfidenceBreakdown;
 } {
   // Filter to consensus-matching reveals
   const matchingReveals = Array.from(reveals.values()).filter(
-    r => r.verdict === consensusVerdict
+    (r) => r.verdict === consensusVerdict,
   );
 
   if (matchingReveals.length === 0) {
     return {
-      confidence: consensusVerdict === 'rejected' ? 0 : 0.5,
+      confidence: consensusVerdict === "rejected" ? 0 : 0.5,
       breakdown: {
         stakeWeighted: 0,
         reputationWeighted: 0,
@@ -146,22 +148,22 @@ export function calculateFinalConfidence(
     };
   }
 
-  // Calculate stake-weighted confidence
-  let stakeWeightedSum = 0;
+  // Calculate stake-weighted confidence using bigint basis-point arithmetic
+  // to avoid Number() overflow on real stakes (1111 LGM = 1.111×10²¹)
+  let stakeWeightedBps = 0n;
   let totalStake = 0n;
 
   for (const reveal of matchingReveals) {
     const validator = validators.get(reveal.validator);
     if (validator) {
-      const stake = Number(validator.stake);
-      stakeWeightedSum += reveal.confidence * stake;
+      const confidenceBps = BigInt(Math.round(reveal.confidence * 10000));
+      stakeWeightedBps += confidenceBps * validator.stake;
       totalStake += validator.stake;
     }
   }
 
-  const stakeWeighted = totalStake > 0n
-    ? stakeWeightedSum / Number(totalStake)
-    : 0;
+  const stakeWeighted =
+    totalStake > 0n ? Number(stakeWeightedBps / totalStake) / 10000 : 0;
 
   // Calculate reputation-weighted confidence
   let reputationWeightedSum = 0;
@@ -175,14 +177,14 @@ export function calculateFinalConfidence(
     }
   }
 
-  const reputationWeighted = totalReputation > 0
-    ? reputationWeightedSum / totalReputation
-    : 0;
+  const reputationWeighted =
+    totalReputation > 0 ? reputationWeightedSum / totalReputation : 0;
 
   // Calculate agreement bonus
+  // GAP-011 FIX: Guard against division by zero
   const totalReveals = reveals.size;
   const matchingCount = matchingReveals.length;
-  const agreementLevel = matchingCount / totalReveals;
+  const agreementLevel = totalReveals > 0 ? matchingCount / totalReveals : 0;
 
   // Agreement bonus scales: 0 at 50% agreement, max at 100% agreement
   const agreementBonus = Math.max(0, (agreementLevel - 0.5) * 2);
@@ -223,10 +225,13 @@ export interface ConfidenceBreakdown {
  */
 export function calculateDecayedConfidence(
   initialConfidence: Confidence,
-  blocksSinceVerification: number
+  blocksSinceVerification: number,
 ): Confidence {
   // Exponential decay: C(t) = C_0 * 0.5^(t/half_life)
-  const decayFactor = Math.pow(0.5, blocksSinceVerification / TIME_DECAY.HALF_LIFE_BLOCKS);
+  const decayFactor = Math.pow(
+    0.5,
+    blocksSinceVerification / TIME_DECAY.HALF_LIFE_BLOCKS,
+  );
   const decayed = initialConfidence * decayFactor;
 
   return Math.max(TIME_DECAY.MIN_CONFIDENCE, decayed);
@@ -241,7 +246,7 @@ export function calculateDecayedConfidence(
 export function calculateCategoryDecayedConfidence(
   initialConfidence: Confidence,
   blocksSinceVerification: number,
-  category: string
+  category: string,
 ): {
   confidence: Confidence;
   decayFactor: number;
@@ -261,7 +266,7 @@ export function calculateCategoryDecayedConfidence(
   // Exponential decay: C(t) = C_0 * 0.5^(t/half_life)
   const decayFactor = Math.pow(
     0.5,
-    blocksSinceVerification / decayParams.halfLifeBlocks
+    blocksSinceVerification / decayParams.halfLifeBlocks,
   );
   const decayed = initialConfidence * decayFactor;
 
@@ -278,7 +283,7 @@ export function calculateCategoryDecayedConfidence(
 export function getDecayDescription(category: string): string {
   const params = CATEGORY_DECAY[category];
   if (!params || params.halfLifeBlocks === null) {
-    return 'eternal (no decay)';
+    return "eternal (no decay)";
   }
 
   const days = (params.halfLifeBlocks * 2.521) / (24 * 60 * 60 * 1000);
@@ -290,7 +295,7 @@ export function getDecayDescription(category: string): string {
  */
 export function needsReverification(
   currentConfidence: Confidence,
-  threshold: Confidence = 0.5
+  threshold: Confidence = 0.5,
 ): boolean {
   return currentConfidence < threshold;
 }
@@ -300,7 +305,7 @@ export function needsReverification(
  */
 export function applyReverificationBonus(
   currentConfidence: Confidence,
-  newVerificationConfidence: Confidence
+  newVerificationConfidence: Confidence,
 ): Confidence {
   // Take the higher of current and new, plus a small bonus
   const base = Math.max(currentConfidence, newVerificationConfidence);
@@ -315,16 +320,16 @@ export function applyReverificationBonus(
  * Evidence type strength hierarchy (imported from types, mirrored here for runtime)
  */
 const EVIDENCE_STRENGTH: Record<string, number> = {
-  on_chain: 1.00,
+  on_chain: 1.0,
   cryptographic_proof: 0.99,
   computational: 0.95,
   formal_proof: 0.95,
   peer_reviewed: 0.85,
-  institutional: 0.80,
-  oracle: 0.70,
-  archived_web: 0.60,
-  attestation: 0.50,
-  inference: 0.40,
+  institutional: 0.8,
+  oracle: 0.7,
+  archived_web: 0.6,
+  attestation: 0.5,
+  inference: 0.4,
 };
 
 /**
@@ -334,7 +339,7 @@ export function calculateEvidenceStrength(
   references: Array<{
     type: string;
     reliabilityScore: number;
-  }>
+  }>,
 ): number {
   if (references.length === 0) return 0;
 
@@ -365,8 +370,8 @@ export const DEFAULT_PRIOR = 0.5;
 export interface BayesianEvidence {
   id: string;
   type: string;
-  strength: number;           // Intrinsic strength (0-1)
-  direction: 'supporting' | 'contradicting' | 'neutral';
+  strength: number; // Intrinsic strength (0-1)
+  direction: "supporting" | "contradicting" | "neutral";
   independence: {
     sourceIndependence: number;
     methodIndependence: number;
@@ -387,20 +392,20 @@ export interface BayesianEvidence {
 export function calculateLikelihoodRatio(evidence: BayesianEvidence): number {
   const baseStrength = evidence.strength * evidence.reliabilityScore;
 
-  if (evidence.direction === 'neutral') {
+  if (evidence.direction === "neutral") {
     return 1.0; // No update
   }
 
-  if (evidence.direction === 'supporting') {
+  if (evidence.direction === "supporting") {
     // P(E|H) is high, P(E|¬H) is low
     // Stronger evidence = higher ratio
-    const pEgivenH = 0.5 + (baseStrength * 0.45); // 0.5 to 0.95
-    const pEgivenNotH = 0.5 - (baseStrength * 0.35); // 0.5 to 0.15
+    const pEgivenH = 0.5 + baseStrength * 0.45; // 0.5 to 0.95
+    const pEgivenNotH = 0.5 - baseStrength * 0.35; // 0.5 to 0.15
     return pEgivenH / pEgivenNotH;
   } else {
     // Contradicting: P(E|H) is low, P(E|¬H) is high
-    const pEgivenH = 0.5 - (baseStrength * 0.35);
-    const pEgivenNotH = 0.5 + (baseStrength * 0.45);
+    const pEgivenH = 0.5 - baseStrength * 0.35;
+    const pEgivenNotH = 0.5 + baseStrength * 0.45;
     return pEgivenH / pEgivenNotH;
   }
 }
@@ -412,7 +417,7 @@ export function calculateLikelihoodRatio(evidence: BayesianEvidence): number {
  * Correlated evidence: weighted geometric mean (weaker)
  */
 export function combineLikelihoodRatios(
-  evidenceItems: BayesianEvidence[]
+  evidenceItems: BayesianEvidence[],
 ): number {
   if (evidenceItems.length === 0) return 1.0;
   if (evidenceItems.length === 1) {
@@ -426,7 +431,7 @@ export function combineLikelihoodRatios(
     const ratio = calculateLikelihoodRatio(evidence);
 
     // Calculate independence from all previous evidence
-    let avgIndependence = evidence.independence.aggregateIndependence;
+    const avgIndependence = evidence.independence.aggregateIndependence;
 
     // For correlated evidence, dampen the effect
     // Independent: full multiplicative effect
@@ -461,10 +466,7 @@ function probToOdds(prob: number): number {
  *
  * posterior_odds = prior_odds × likelihood_ratio
  */
-export function bayesianUpdate(
-  prior: number,
-  likelihoodRatio: number
-): number {
+export function bayesianUpdate(prior: number, likelihoodRatio: number): number {
   const priorOdds = probToOdds(Math.max(0.001, Math.min(0.999, prior)));
   const posteriorOdds = priorOdds * likelihoodRatio;
   return oddsToProb(posteriorOdds);
@@ -478,7 +480,7 @@ export function bayesianUpdate(
  */
 export function handleContradiction(
   supportingStrength: number,
-  contradictingStrength: number
+  contradictingStrength: number,
 ): {
   netStrength: number;
   uncertaintyPenalty: number;
@@ -490,7 +492,7 @@ export function handleContradiction(
 
   // Cap max confidence based on contradiction level
   // Full contradiction (equal strength) caps at 0.7
-  const maxAchievableConfidence = 1.0 - (0.3 * uncertaintyPenalty);
+  const maxAchievableConfidence = 1.0 - 0.3 * uncertaintyPenalty;
 
   return {
     netStrength,
@@ -504,7 +506,7 @@ export function handleContradiction(
  */
 export function aggregateEvidenceBayesian(
   evidenceItems: BayesianEvidence[],
-  prior: number = DEFAULT_PRIOR
+  prior: number = DEFAULT_PRIOR,
 ): {
   posterior: number;
   supportingStrength: number;
@@ -513,24 +515,24 @@ export function aggregateEvidenceBayesian(
   effectiveConfidence: number;
 } {
   // Separate supporting and contradicting evidence
-  const supporting = evidenceItems.filter(e => e.direction === 'supporting');
-  const contradicting = evidenceItems.filter(e => e.direction === 'contradicting');
+  const supporting = evidenceItems.filter((e) => e.direction === "supporting");
+  const contradicting = evidenceItems.filter(
+    (e) => e.direction === "contradicting",
+  );
 
   // Calculate aggregate strength for each
-  const supportingStrength = supporting.reduce(
-    (sum, e) => sum + e.strength * e.reliabilityScore,
-    0
-  ) / Math.max(1, supporting.length);
+  const supportingStrength =
+    supporting.reduce((sum, e) => sum + e.strength * e.reliabilityScore, 0) /
+    Math.max(1, supporting.length);
 
-  const contradictingStrength = contradicting.reduce(
-    (sum, e) => sum + e.strength * e.reliabilityScore,
-    0
-  ) / Math.max(1, contradicting.length);
+  const contradictingStrength =
+    contradicting.reduce((sum, e) => sum + e.strength * e.reliabilityScore, 0) /
+    Math.max(1, contradicting.length);
 
   // Handle contradiction
   const { maxAchievableConfidence, uncertaintyPenalty } = handleContradiction(
     supporting.length > 0 ? supportingStrength : 0,
-    contradicting.length > 0 ? contradictingStrength : 0
+    contradicting.length > 0 ? contradictingStrength : 0,
   );
 
   // Calculate likelihood ratio from all evidence
@@ -560,7 +562,7 @@ export function aggregateEvidenceBayesian(
  */
 export function calculateDerivedConfidence(
   premiseConfidences: Confidence[],
-  inferenceStrength: number
+  inferenceStrength: number,
 ): Confidence {
   if (premiseConfidences.length === 0) return 0;
 
@@ -575,12 +577,12 @@ export function calculateDerivedConfidence(
  * Inference strength by type
  */
 export const INFERENCE_STRENGTHS: Record<string, number> = {
-  deductive: 0.99,   // If premises true, conclusion certain
+  deductive: 0.99, // If premises true, conclusion certain
   modus_ponens: 0.99,
   modus_tollens: 0.99,
-  inductive: 0.75,   // Pattern suggests conclusion
-  abductive: 0.60,   // Best explanation
-  analogy: 0.50,     // Similar cases
+  inductive: 0.77, // Pattern suggests conclusion
+  abductive: 0.55, // Best explanation
+  analogy: 0.55, // Similar cases
 };
 
 // ============ Confidence Queries ============
@@ -589,11 +591,11 @@ export const INFERENCE_STRENGTHS: Record<string, number> = {
  * Get confidence category
  */
 export function getConfidenceCategory(confidence: Confidence): string {
-  if (confidence >= 0.99) return 'near_certain';
-  if (confidence >= 0.95) return 'high';
-  if (confidence >= 0.80) return 'moderate';
-  if (confidence >= 0.50) return 'low';
-  return 'unreliable';
+  if (confidence >= 0.99) return "near_certain";
+  if (confidence >= 0.88) return "high";
+  if (confidence >= 0.77) return "moderate";
+  if (confidence >= 0.55) return "low";
+  return "unreliable";
 }
 
 /**
@@ -601,7 +603,7 @@ export function getConfidenceCategory(confidence: Confidence): string {
  */
 export function meetsConfidenceThreshold(
   confidence: Confidence,
-  threshold: Confidence
+  threshold: Confidence,
 ): boolean {
   return confidence >= threshold;
 }
@@ -632,7 +634,7 @@ export function createHistoryEntry(
   confidence: Confidence,
   blockNumber: number,
   reason: string,
-  roundId?: string
+  roundId?: string,
 ): ConfidenceHistoryEntry {
   return {
     timestamp: Date.now(),
@@ -647,18 +649,18 @@ export function createHistoryEntry(
  * Get confidence trend from history
  */
 export function getConfidenceTrend(
-  history: ConfidenceHistoryEntry[]
-): 'increasing' | 'decreasing' | 'stable' {
-  if (history.length < 2) return 'stable';
+  history: ConfidenceHistoryEntry[],
+): "increasing" | "decreasing" | "stable" {
+  if (history.length < 2) return "stable";
 
   const recent = history.slice(-5);
   const first = recent[0].confidence;
   const last = recent[recent.length - 1].confidence;
 
   const diff = last - first;
-  if (diff > 0.05) return 'increasing';
-  if (diff < -0.05) return 'decreasing';
-  return 'stable';
+  if (diff > 0.05) return "increasing";
+  if (diff < -0.05) return "decreasing";
+  return "stable";
 }
 
 // ============ Master Confidence Formula ============
@@ -672,7 +674,7 @@ const EPISTEMIC_CEILINGS: Record<string, number> = {
   protocol: 1.0,
   empirical: 0.99,
   historical: 0.95,
-  predictive: 0.90,
+  predictive: 0.9,
   social: 0.85,
   // NEW: Replicated empirical facts can reach higher confidence
   replicated: 0.995,
@@ -688,7 +690,7 @@ export interface ConfidenceCalculationInput {
   // Verification (from commit-reveal round)
   verificationReveals: Map<string, ValidatorReveal>;
   validators: Map<string, { stake: bigint; reputation: number }>;
-  consensusVerdict: 'confirmed' | 'rejected';
+  consensusVerdict: "confirmed" | "rejected";
 
   // Temporal
   category: string;
@@ -699,49 +701,57 @@ export interface ConfidenceCalculationInput {
   priorConfidence?: number;
 
   // Adversarial adjustments (from manipulation detection)
-  sybilAdjustment?: number;        // 0-1, 1 = no sybil detected
+  sybilAdjustment?: number; // 0-1, 1 = no sybil detected
   manipulationAdjustment?: number; // 0-1, 1 = no manipulation detected
 }
 
 /**
  * Determine temporal stability from history
  */
-function calculateStability(history: ConfidenceHistoryEntry[]): 'volatile' | 'unstable' | 'stable' | 'anchored' {
-  if (history.length < 3) return 'unstable';
+function calculateStability(
+  history: ConfidenceHistoryEntry[],
+): "volatile" | "unstable" | "stable" | "anchored" {
+  if (history.length < 3) return "unstable";
 
   const recent = history.slice(-10);
-  const values = recent.map(h => h.confidence);
+  const values = recent.map((h) => h.confidence);
   const variance = calculateVariance(values);
 
-  if (variance < 0.01) return 'anchored';
-  if (variance < 0.05) return 'stable';
-  if (variance < 0.15) return 'unstable';
-  return 'volatile';
+  if (variance < 0.01) return "anchored";
+  if (variance < 0.05) return "stable";
+  if (variance < 0.15) return "unstable";
+  return "volatile";
 }
 
 function calculateVariance(values: number[]): number {
   if (values.length === 0) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
+  const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
   return squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
 }
 
 /**
  * Determine source coherence from evidence
  */
-function calculateCoherence(evidence: BayesianEvidence[]): 'contradictory' | 'mixed' | 'consistent' | 'unanimous' {
-  const supporting = evidence.filter(e => e.direction === 'supporting').length;
-  const contradicting = evidence.filter(e => e.direction === 'contradicting').length;
+function calculateCoherence(
+  evidence: BayesianEvidence[],
+): "contradictory" | "mixed" | "consistent" | "unanimous" {
+  const supporting = evidence.filter(
+    (e) => e.direction === "supporting",
+  ).length;
+  const contradicting = evidence.filter(
+    (e) => e.direction === "contradicting",
+  ).length;
   const total = supporting + contradicting;
 
-  if (total === 0) return 'consistent';
+  if (total === 0) return "consistent";
 
   const agreementRatio = Math.max(supporting, contradicting) / total;
 
-  if (agreementRatio >= 1.0) return 'unanimous';
-  if (agreementRatio >= 0.9) return 'consistent';
-  if (agreementRatio >= 0.7) return 'mixed';
-  return 'contradictory';
+  if (agreementRatio >= 1.0) return "unanimous";
+  if (agreementRatio >= 0.9) return "consistent";
+  if (agreementRatio >= 0.7) return "mixed";
+  return "contradictory";
 }
 
 /**
@@ -760,7 +770,7 @@ function calculateCoherence(evidence: BayesianEvidence[]): 'contradictory' | 'mi
  */
 export function calculateMasterConfidence(
   input: ConfidenceCalculationInput,
-  history: ConfidenceHistoryEntry[] = []
+  history: ConfidenceHistoryEntry[] = [],
 ): {
   value: number;
   basis: {
@@ -777,8 +787,8 @@ export function calculateMasterConfidence(
     adversarialAdjustment: number;
     epistemicCeiling: number;
   };
-  stability: 'volatile' | 'unstable' | 'stable' | 'anchored';
-  coherence: 'contradictory' | 'mixed' | 'consistent' | 'unanimous';
+  stability: "volatile" | "unstable" | "stable" | "anchored";
+  coherence: "contradictory" | "mixed" | "consistent" | "unanimous";
   sensitivities: {
     toNewEvidence: number;
     toContradiction: number;
@@ -788,7 +798,8 @@ export function calculateMasterConfidence(
   calculatedAtBlock: number;
 } {
   // 1. Get epistemic ceiling
-  const epistemicCeiling = EPISTEMIC_CEILINGS[input.category] || EPISTEMIC_CEILINGS.empirical;
+  const epistemicCeiling =
+    EPISTEMIC_CEILINGS[input.category] || EPISTEMIC_CEILINGS.empirical;
 
   // 2. Calculate evidence-based confidence (Bayesian)
   const prior = input.priorConfidence ?? DEFAULT_PRIOR;
@@ -799,24 +810,25 @@ export function calculateMasterConfidence(
   const verificationResult = calculateFinalConfidence(
     input.verificationReveals,
     input.validators,
-    input.consensusVerdict
+    input.consensusVerdict,
   );
   const verificationConfidence = verificationResult.confidence;
 
   // 4. Combine evidence and verification
   // Weight: 40% evidence, 60% verification (verification is more robust to manipulation)
-  const EVIDENCE_WEIGHT = 0.40;
-  const VERIFICATION_WEIGHT = 0.60;
+  const EVIDENCE_WEIGHT = 0.4;
+  const VERIFICATION_WEIGHT = 0.6;
   const baseConfidence =
     evidenceConfidence * EVIDENCE_WEIGHT +
     verificationConfidence * VERIFICATION_WEIGHT;
 
   // 5. Apply temporal adjustment
-  const { confidence: decayedConfidence, decayFactor } = calculateCategoryDecayedConfidence(
-    baseConfidence,
-    input.blocksSinceLastVerification,
-    input.category
-  );
+  const { confidence: decayedConfidence, decayFactor } =
+    calculateCategoryDecayedConfidence(
+      baseConfidence,
+      input.blocksSinceLastVerification,
+      input.category,
+    );
   const temporalAdjustment = decayFactor;
 
   // 6. Apply adversarial adjustments
@@ -824,20 +836,26 @@ export function calculateMasterConfidence(
   const manipulationAdj = input.manipulationAdjustment ?? 1.0;
   const adversarialAdjustment = sybilAdj * manipulationAdj;
 
-  // 7. Compute final confidence
-  const computedConfidence = decayedConfidence * adversarialAdjustment;
+  // GAP-017 FIX: Apply epistemic ceiling BEFORE adversarial adjustment
+  // This ensures adversarial factors can reduce confidence below the ceiling
+  // (e.g., sybil detection should reduce even ceiling-level confidence)
 
-  // 8. Apply epistemic ceiling
-  const finalValue = Math.min(epistemicCeiling, computedConfidence);
+  // 7. Apply epistemic ceiling first
+  const ceiledConfidence = Math.min(epistemicCeiling, decayedConfidence);
+
+  // 8. Then apply adversarial adjustment
+  const finalValue = ceiledConfidence * adversarialAdjustment;
 
   // 9. Calculate metadata
   const stability = calculateStability(history);
   const coherence = calculateCoherence(input.evidence);
 
   // 10. Calculate sensitivities
-  const toNewEvidence = 1.0 - (input.evidence.length / 10); // More evidence = less sensitive
-  const toContradiction = coherence === 'unanimous' ? 0.9 : coherence === 'consistent' ? 0.6 : 0.3;
-  const decayParams = CATEGORY_DECAY[input.category] || CATEGORY_DECAY.empirical;
+  const toNewEvidence = 1.0 - input.evidence.length / 10; // More evidence = less sensitive
+  const toContradiction =
+    coherence === "unanimous" ? 0.9 : coherence === "consistent" ? 0.6 : 0.3;
+  const decayParams =
+    CATEGORY_DECAY[input.category] || CATEGORY_DECAY.empirical;
   const toTimeDecay = decayParams.halfLifeBlocks === null ? 0 : 0.5;
 
   return {
@@ -870,15 +888,15 @@ export function calculateMasterConfidence(
 
 function getCategoryMethod(category: string): string {
   const methods: Record<string, string> = {
-    analytic: 'definition',
-    formal: 'proof',
-    protocol: 'construction',
-    empirical: 'observation',
-    historical: 'records',
-    predictive: 'models',
-    social: 'consensus',
+    analytic: "definition",
+    formal: "proof",
+    protocol: "construction",
+    empirical: "observation",
+    historical: "records",
+    predictive: "models",
+    social: "consensus",
   };
-  return methods[category] || 'observation';
+  return methods[category] || "observation";
 }
 
 // ============ Research-Enhanced Confidence ============
@@ -898,7 +916,7 @@ function getCategoryMethod(category: string): string {
  */
 export function applyResearchEnhancement(
   baseConfidence: Confidence,
-  researchSummary: FactResearchSummary
+  researchSummary: FactResearchSummary,
 ): {
   enhancedConfidence: Confidence;
   modifier: number;
@@ -914,7 +932,7 @@ export function applyResearchEnhancement(
       modifier: RESEARCH_CONFIDENCE_MODIFIERS.FRAUD_DETECTED,
       shouldUpgradeCategory: false,
       fraudDetected: true,
-      reasoning: 'Fraud detected in research investigation - fact invalidated',
+      reasoning: "Fraud detected in research investigation - fact invalidated",
     };
   }
 
@@ -925,50 +943,71 @@ export function applyResearchEnhancement(
   if (researchSummary.successfulReplications > 0) {
     // First successful replication
     modifier += RESEARCH_CONFIDENCE_MODIFIERS.REPLICATION_SUCCESS;
-    reasons.push(`+${RESEARCH_CONFIDENCE_MODIFIERS.REPLICATION_SUCCESS} (first replication)`);
+    reasons.push(
+      `+${RESEARCH_CONFIDENCE_MODIFIERS.REPLICATION_SUCCESS} (first replication)`,
+    );
 
     // Additional replications (capped at MAX_REPLICATION_BONUS)
     const additionalReplications = Math.min(
       researchSummary.successfulReplications - 1,
-      5
+      5,
     );
-    const additionalBonus = additionalReplications * RESEARCH_CONFIDENCE_MODIFIERS.ADDITIONAL_REPLICATION;
+    const additionalBonus =
+      additionalReplications *
+      RESEARCH_CONFIDENCE_MODIFIERS.ADDITIONAL_REPLICATION;
     modifier += additionalBonus;
 
     if (additionalReplications > 0) {
-      reasons.push(`+${additionalBonus.toFixed(2)} (${additionalReplications} additional replications)`);
+      reasons.push(
+        `+${additionalBonus.toFixed(2)} (${additionalReplications} additional replications)`,
+      );
     }
   }
 
   // Penalize failed replications
   if (researchSummary.failedReplications > 0) {
-    const penalty = researchSummary.failedReplications * 0.10;
+    const penalty = researchSummary.failedReplications * 0.1;
     modifier -= penalty;
-    reasons.push(`-${penalty.toFixed(2)} (${researchSummary.failedReplications} failed replications)`);
+    reasons.push(
+      `-${penalty.toFixed(2)} (${researchSummary.failedReplications} failed replications)`,
+    );
   }
 
   // Bonus for passing fraud investigation
-  if (researchSummary.fraudInvestigations > 0 && !researchSummary.fraudDetected) {
+  if (
+    researchSummary.fraudInvestigations > 0 &&
+    !researchSummary.fraudDetected
+  ) {
     modifier += RESEARCH_CONFIDENCE_MODIFIERS.FRAUD_INVESTIGATION_CLEAN;
-    reasons.push(`+${RESEARCH_CONFIDENCE_MODIFIERS.FRAUD_INVESTIGATION_CLEAN} (passed fraud investigation)`);
+    reasons.push(
+      `+${RESEARCH_CONFIDENCE_MODIFIERS.FRAUD_INVESTIGATION_CLEAN} (passed fraud investigation)`,
+    );
   }
 
   // Cap modifier at MAX_REPLICATION_BONUS
-  modifier = Math.max(-1, Math.min(RESEARCH_CONFIDENCE_MODIFIERS.MAX_REPLICATION_BONUS, modifier));
+  modifier = Math.max(
+    -1,
+    Math.min(RESEARCH_CONFIDENCE_MODIFIERS.MAX_REPLICATION_BONUS, modifier),
+  );
 
   // Apply modifier to base confidence
-  const enhancedConfidence = Math.max(0, Math.min(1, baseConfidence + modifier));
+  const enhancedConfidence = Math.max(
+    0,
+    Math.min(1, baseConfidence + modifier),
+  );
 
   // Determine if fact should upgrade to 'replicated' category
-  const shouldUpgradeCategory = researchSummary.successfulReplications >= 2 && modifier > 0;
+  const shouldUpgradeCategory =
+    researchSummary.successfulReplications >= 2 && modifier > 0;
 
   return {
     enhancedConfidence,
     modifier,
     shouldUpgradeCategory,
-    newCategory: shouldUpgradeCategory ? 'replicated' : undefined,
+    newCategory: shouldUpgradeCategory ? "replicated" : undefined,
     fraudDetected: false,
-    reasoning: reasons.length > 0 ? reasons.join('; ') : 'No research evidence applied',
+    reasoning:
+      reasons.length > 0 ? reasons.join("; ") : "No research evidence applied",
   };
 }
 
@@ -982,7 +1021,7 @@ export function calculateResearchAdjustedConfidence(
   validatorConfidence: Confidence,
   category: string,
   researchSummary: FactResearchSummary | null,
-  blocksSinceVerification: number
+  blocksSinceVerification: number,
 ): {
   confidence: Confidence;
   effectiveCategory: string;
@@ -1003,11 +1042,12 @@ export function calculateResearchAdjustedConfidence(
   let researchApplied = false;
 
   // Apply research enhancement if available
-  if (researchSummary && (
-    researchSummary.successfulReplications > 0 ||
-    researchSummary.failedReplications > 0 ||
-    researchSummary.fraudInvestigations > 0
-  )) {
+  if (
+    researchSummary &&
+    (researchSummary.successfulReplications > 0 ||
+      researchSummary.failedReplications > 0 ||
+      researchSummary.fraudInvestigations > 0)
+  ) {
     const enhancement = applyResearchEnhancement(confidence, researchSummary);
     confidence = enhancement.enhancedConfidence;
     researchModifier = enhancement.modifier;
@@ -1020,11 +1060,12 @@ export function calculateResearchAdjustedConfidence(
   }
 
   // Apply temporal decay with effective category
-  const { confidence: decayedConfidence, decayFactor } = calculateCategoryDecayedConfidence(
-    confidence,
-    blocksSinceVerification,
-    effectiveCategory
-  );
+  const { confidence: decayedConfidence, decayFactor } =
+    calculateCategoryDecayedConfidence(
+      confidence,
+      blocksSinceVerification,
+      effectiveCategory,
+    );
 
   return {
     confidence: decayedConfidence,
@@ -1049,45 +1090,69 @@ export function needsResearchVerification(
   confidence: Confidence,
   category: string,
   challengeCount: number,
-  verifierCount: number
+  verifierCount: number,
 ): {
   needsResearch: boolean;
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  priority: "low" | "medium" | "high" | "critical";
   reason: string;
 } {
   // Analytic/formal/protocol don't need IRL verification
-  if (['analytic', 'formal', 'protocol'].includes(category)) {
-    return { needsResearch: false, priority: 'low', reason: 'Category does not require IRL verification' };
+  if (["analytic", "formal", "protocol"].includes(category)) {
+    return {
+      needsResearch: false,
+      priority: "low",
+      reason: "Category does not require IRL verification",
+    };
   }
 
   // High challenge count = needs investigation
   if (challengeCount >= 3) {
-    return { needsResearch: true, priority: 'critical', reason: 'Multiple challenges indicate disputed fact' };
+    return {
+      needsResearch: true,
+      priority: "critical",
+      reason: "Multiple challenges indicate disputed fact",
+    };
   }
 
   // Moderate confidence with challenges = medium priority
   if (confidence < 0.8 && challengeCount >= 1) {
-    return { needsResearch: true, priority: 'high', reason: 'Challenged fact with moderate confidence' };
+    return {
+      needsResearch: true,
+      priority: "high",
+      reason: "Challenged fact with moderate confidence",
+    };
   }
 
   // Low verifier count = may need additional verification
-  if (verifierCount < 5 && category === 'empirical') {
-    return { needsResearch: true, priority: 'medium', reason: 'Empirical fact with limited validator coverage' };
+  if (verifierCount < 5 && category === "empirical") {
+    return {
+      needsResearch: true,
+      priority: "medium",
+      reason: "Empirical fact with limited validator coverage",
+    };
   }
 
   // High confidence empirical facts benefit from replication
-  if (confidence > 0.9 && category === 'empirical') {
-    return { needsResearch: true, priority: 'low', reason: 'High-confidence empirical fact - replication recommended' };
+  if (confidence > 0.9 && category === "empirical") {
+    return {
+      needsResearch: true,
+      priority: "low",
+      reason: "High-confidence empirical fact - replication recommended",
+    };
   }
 
-  return { needsResearch: false, priority: 'low', reason: 'No immediate research needed' };
+  return {
+    needsResearch: false,
+    priority: "low",
+    reason: "No immediate research needed",
+  };
 }
 
 /**
  * Convert master calculation result to MultidimensionalConfidence type
  */
 export function toMultidimensionalConfidence(
-  result: ReturnType<typeof calculateMasterConfidence>
+  result: ReturnType<typeof calculateMasterConfidence>,
 ): {
   value: number;
   basis: {
@@ -1104,8 +1169,8 @@ export function toMultidimensionalConfidence(
     adversarialAdjustment: number;
     epistemicCeiling: number;
   };
-  stability: 'volatile' | 'unstable' | 'stable' | 'anchored';
-  coherence: 'contradictory' | 'mixed' | 'consistent' | 'unanimous';
+  stability: "volatile" | "unstable" | "stable" | "anchored";
+  coherence: "contradictory" | "mixed" | "consistent" | "unanimous";
   sensitivities: {
     toNewEvidence: number;
     toContradiction: number;
@@ -1115,4 +1180,166 @@ export function toMultidimensionalConfidence(
   calculatedAtBlock: number;
 } {
   return result;
+}
+
+// ============ Isolated Reputation-Aware Confidence ============
+
+/**
+ * Calculate final confidence using isolated (domain-specific) reputation
+ *
+ * This replaces the global reputation with domain-specific reputation,
+ * preventing reputation from one domain being used to gain influence
+ * in another domain.
+ *
+ * Key changes from calculateFinalConfidence:
+ * - Uses domain-specific reputation instead of global
+ * - Applies reputation discount based on source (domain=100%, stratum=70%, global=50%)
+ * - Factors in reputation confidence (sample size)
+ */
+export function calculateIsolatedReputationConfidence(
+  reveals: Map<string, ValidatorReveal>,
+  validators: Map<string, { stake: bigint; reputation: number }>,
+  isolatedReputations: Map<string, IsolatedReputation>,
+  domain: string,
+  domainTree: DomainTree,
+  consensusVerdict: "confirmed" | "rejected",
+): {
+  confidence: Confidence;
+  breakdown: IsolatedConfidenceBreakdown;
+} {
+  // Filter to consensus-matching reveals
+  const matchingReveals = Array.from(reveals.values()).filter(
+    (r) => r.verdict === consensusVerdict,
+  );
+
+  if (matchingReveals.length === 0) {
+    return {
+      confidence: consensusVerdict === "rejected" ? 0 : 0.5,
+      breakdown: {
+        stakeWeighted: 0,
+        reputationWeighted: 0,
+        agreementBonus: 0,
+        participantCount: 0,
+        totalStake: 0n,
+        reputationSources: { domain: 0, stratum: 0, global: 0 },
+        averageReputationConfidence: 0,
+      },
+    };
+  }
+
+  // Calculate stake-weighted confidence using bigint basis-point arithmetic
+  // to avoid Number() overflow on real stakes (1111 LGM = 1.111×10²¹)
+  let stakeWeightedBps = 0n;
+  let totalStake = 0n;
+
+  for (const reveal of matchingReveals) {
+    const validator = validators.get(reveal.validator);
+    if (validator) {
+      const confidenceBps = BigInt(Math.round(reveal.confidence * 10000));
+      stakeWeightedBps += confidenceBps * validator.stake;
+      totalStake += validator.stake;
+    }
+  }
+
+  const stakeWeighted =
+    totalStake > 0n ? Number(stakeWeightedBps / totalStake) / 10000 : 0;
+
+  // Calculate isolated reputation-weighted confidence
+  let reputationWeightedSum = 0;
+  let totalReputationWeight = 0;
+  let totalReputationConfidence = 0;
+
+  // Track reputation sources
+  const reputationSources = { domain: 0, stratum: 0, global: 0 };
+
+  for (const reveal of matchingReveals) {
+    const isolatedRep = isolatedReputations.get(reveal.validator);
+
+    // Get effective reputation for this domain
+    let effectiveRep: EffectiveReputationResult;
+    if (isolatedRep) {
+      effectiveRep = getEffectiveReputation(
+        reveal.validator,
+        domain,
+        isolatedRep,
+        domainTree,
+      );
+      reputationSources[effectiveRep.source]++;
+    } else {
+      // No isolated reputation - use global with maximum discount
+      effectiveRep = {
+        score: REPUTATION_ISOLATION_CONFIG.baseScore,
+        source: "global",
+        discount: REPUTATION_ISOLATION_CONFIG.globalReputationDiscount,
+        confidence: 0,
+      };
+      reputationSources.global++;
+    }
+
+    // Normalize score (0-1000 -> 0-1)
+    const normalizedScore =
+      effectiveRep.score / REPUTATION_ISOLATION_CONFIG.maxScore;
+
+    // Apply discount based on source
+    const effectiveScore = normalizedScore * effectiveRep.discount;
+
+    // Weight by reputation confidence (sample size)
+    const weight = 0.5 + effectiveRep.confidence * 0.5; // 0.5 to 1.0
+
+    reputationWeightedSum += reveal.confidence * effectiveScore * weight;
+    totalReputationWeight += weight;
+    totalReputationConfidence += effectiveRep.confidence;
+  }
+
+  const reputationWeighted =
+    totalReputationWeight > 0
+      ? reputationWeightedSum / totalReputationWeight
+      : 0;
+
+  const averageReputationConfidence =
+    matchingReveals.length > 0
+      ? totalReputationConfidence / matchingReveals.length
+      : 0;
+
+  // Calculate agreement bonus
+  const totalReveals = reveals.size;
+  const matchingCount = matchingReveals.length;
+  const agreementLevel = totalReveals > 0 ? matchingCount / totalReveals : 0;
+  const agreementBonus = Math.max(0, (agreementLevel - 0.5) * 2);
+
+  // Combine with weights
+  const confidence =
+    stakeWeighted * CONFIDENCE_WEIGHTS.STAKE +
+    reputationWeighted * CONFIDENCE_WEIGHTS.REPUTATION +
+    agreementBonus * CONFIDENCE_WEIGHTS.AGREEMENT;
+
+  // Clamp to [0, 1]
+  const finalConfidence = Math.max(0, Math.min(1, confidence));
+
+  return {
+    confidence: finalConfidence,
+    breakdown: {
+      stakeWeighted,
+      reputationWeighted,
+      agreementBonus,
+      participantCount: matchingCount,
+      totalStake,
+      reputationSources,
+      averageReputationConfidence,
+    },
+  };
+}
+
+/**
+ * Extended confidence breakdown including isolated reputation details
+ */
+export interface IsolatedConfidenceBreakdown extends ConfidenceBreakdown {
+  /** Count of validators using each reputation source */
+  reputationSources: {
+    domain: number;
+    stratum: number;
+    global: number;
+  };
+  /** Average reputation confidence (sample size confidence) */
+  averageReputationConfidence: number;
 }

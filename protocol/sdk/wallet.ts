@@ -6,15 +6,17 @@
  */
 
 import {
-  generateKeyPair,
+  generateKeypair,
+  generateKeypairFromSeed,
   type PublicKey,
   type PrivateKey,
-  bytesToHex,
   hexToBytes,
-} from '../../core/crypto/keys.js';
-import { sign, verify } from '../../core/crypto/signatures.js';
-import { domainHash, sha512_256Hex } from '../../core/crypto/hashing.js';
-import type { Wallet } from '../types.js';
+} from "../../core/crypto/keys.js";
+import { sign, verify } from "../../core/crypto/signatures.js";
+import { domainHash, sha512_256Hex } from "../../core/crypto/hashing.js";
+import { deriveOperationalKey } from "../../core/agents/identity/account.js";
+import { publicKeyToDid } from "../../core/agents/identity/did.js";
+import type { Wallet } from "../types.js";
 
 // ============ Agent Wallet ============
 
@@ -27,7 +29,11 @@ export class AgentWallet implements Wallet {
   readonly did: string;
   private readonly privateKey: PrivateKey;
 
-  private constructor(publicKey: PublicKey, privateKey: PrivateKey, did: string) {
+  private constructor(
+    publicKey: PublicKey,
+    privateKey: PrivateKey,
+    did: string,
+  ) {
     this.publicKey = publicKey;
     this.privateKey = privateKey;
     this.did = did;
@@ -40,14 +46,10 @@ export class AgentWallet implements Wallet {
   static fromAgentId(
     agentId: string,
     secret: string,
-    network: 'mainnet' | 'testnet' = 'mainnet'
+    network: "mainnet" | "testnet" = "mainnet",
   ): AgentWallet {
-    // Domain-separated key derivation
-    const domain = `LGM.${network}.agent.key.v1`;
-    const seed = domainHash(domain, `${agentId}:${secret}`);
-
-    // Generate keypair from seed
-    const { publicKey, privateKey } = generateKeyPair(seed.slice(0, 32));
+    // Delegate to canonical key derivation path (same as deriveOperationalKey in account.ts)
+    const { publicKey, privateKey } = deriveOperationalKey(agentId, secret);
 
     // Derive DID from public key
     const did = deriveDID(publicKey, network);
@@ -60,8 +62,10 @@ export class AgentWallet implements Wallet {
    */
   static fromPrivateKey(privateKey: PrivateKey): AgentWallet {
     // Derive public key from private key
-    const { publicKey } = generateKeyPair(hexToBytes(privateKey).slice(0, 32));
-    const did = deriveDID(publicKey, 'mainnet');
+    const { publicKey } = generateKeypairFromSeed(
+      hexToBytes(privateKey).slice(0, 32),
+    );
+    const did = deriveDID(publicKey, "mainnet");
 
     return new AgentWallet(publicKey, privateKey, did);
   }
@@ -70,10 +74,15 @@ export class AgentWallet implements Wallet {
    * Create wallet from mnemonic/seed phrase
    * (For human users who prefer mnemonic)
    */
-  static fromMnemonic(mnemonic: string, network: 'mainnet' | 'testnet' = 'mainnet'): AgentWallet {
+  static fromMnemonic(
+    mnemonic: string,
+    network: "mainnet" | "testnet" = "mainnet",
+  ): AgentWallet {
     const domain = `LGM.${network}.mnemonic.key.v1`;
     const seed = domainHash(domain, mnemonic);
-    const { publicKey, privateKey } = generateKeyPair(seed.slice(0, 32));
+    const { publicKey, privateKey } = generateKeypairFromSeed(
+      seed.slice(0, 32),
+    );
     const did = deriveDID(publicKey, network);
 
     return new AgentWallet(publicKey, privateKey, did);
@@ -104,8 +113,51 @@ export class AgentWallet implements Wallet {
   /**
    * Verify a signature (static helper)
    */
-  static verify(message: Uint8Array, signature: string, publicKey: PublicKey): boolean {
+  static verify(
+    message: Uint8Array,
+    signature: string,
+    publicKey: PublicKey,
+  ): boolean {
     return verify(message, signature, publicKey);
+  }
+
+  /**
+   * Build a signed key rotation request.
+   * Generates a new operational keypair and signs the rotation with the current key.
+   * Returns the RPC request payload and the new wallet instance.
+   */
+  async buildRotateKeyRequest(nonce: bigint): Promise<KeyRotationBundle> {
+    // Generate new operational keypair
+    const newKeypair = generateKeypair();
+    const newKeyHash = sha512_256Hex(newKeypair.publicKey);
+
+    // Build and sign the rotation payload (must match RPC handler expectation)
+    const payload = JSON.stringify({
+      did: this.did,
+      newOperationalKeyHash: newKeyHash,
+      action: "rotate_key",
+      nonce: nonce.toString(),
+    });
+    const signature = sign(new TextEncoder().encode(payload), this.privateKey);
+
+    // Build the new wallet with the rotated key
+    const newWallet = new AgentWallet(
+      newKeypair.publicKey,
+      newKeypair.privateKey,
+      this.did,
+    );
+
+    return {
+      request: {
+        did: this.did,
+        newOperationalKeyHash: newKeyHash,
+        nonce: nonce.toString(),
+        signature,
+        sender: this.publicKey,
+      },
+      newWallet,
+      newPublicKey: newKeypair.publicKey,
+    };
   }
 
   /**
@@ -117,7 +169,7 @@ export class AgentWallet implements Wallet {
       publicKey: this.publicKey,
       privateKey: this.privateKey,
       did: this.did,
-      warning: 'NEVER SHARE THIS INFORMATION',
+      warning: "NEVER SHARE THIS INFORMATION",
     };
   }
 }
@@ -146,7 +198,7 @@ export class SessionWallet implements Wallet {
     did: string,
     sessionId: string,
     capabilities: SessionCapabilities,
-    expiresAt: number
+    expiresAt: number,
   ) {
     this.publicKey = publicKey;
     this.privateKey = privateKey;
@@ -163,10 +215,17 @@ export class SessionWallet implements Wallet {
     parentDid: string,
     sessionId: string,
     capabilities: SessionCapabilities,
-    expiresAt: number
+    expiresAt: number,
   ): SessionWallet {
-    const { publicKey, privateKey } = generateKeyPair();
-    return new SessionWallet(publicKey, privateKey, parentDid, sessionId, capabilities, expiresAt);
+    const { publicKey, privateKey } = generateKeypair();
+    return new SessionWallet(
+      publicKey,
+      privateKey,
+      parentDid,
+      sessionId,
+      capabilities,
+      expiresAt,
+    );
   }
 
   /**
@@ -177,13 +236,25 @@ export class SessionWallet implements Wallet {
     parentDid: string,
     sessionId: string,
     capabilities: SessionCapabilities,
-    expiresAt: number
+    expiresAt: number,
   ): SessionWallet {
-    const seed = domainHash('LGM.session.derive.v1', `${parentDid}:${sessionId}`);
+    const seed = domainHash(
+      "LGM.session.derive.v1",
+      `${parentDid}:${sessionId}`,
+    );
     const sig = sign(seed, parentPrivateKey);
-    const { publicKey, privateKey } = generateKeyPair(hexToBytes(sig).slice(0, 32));
+    const { publicKey, privateKey } = generateKeypairFromSeed(
+      hexToBytes(sig).slice(0, 32),
+    );
 
-    return new SessionWallet(publicKey, privateKey, parentDid, sessionId, capabilities, expiresAt);
+    return new SessionWallet(
+      publicKey,
+      privateKey,
+      parentDid,
+      sessionId,
+      capabilities,
+      expiresAt,
+    );
   }
 
   /**
@@ -196,15 +267,22 @@ export class SessionWallet implements Wallet {
   /**
    * Check if action is allowed
    */
-  canPerform(action: string, amount?: bigint, currentBlock?: number): ValidationResult {
+  canPerform(
+    action: string,
+    amount?: bigint,
+    currentBlock?: number,
+  ): ValidationResult {
     // Check expiry
     if (currentBlock !== undefined && currentBlock >= this.expiresAt) {
-      return { valid: false, reason: 'Session expired' };
+      return { valid: false, reason: "Session expired" };
     }
 
     // Check usage count
-    if (this.capabilities.maxUsage && this.usageCount >= this.capabilities.maxUsage) {
-      return { valid: false, reason: 'Usage limit reached' };
+    if (
+      this.capabilities.maxUsage &&
+      this.usageCount >= this.capabilities.maxUsage
+    ) {
+      return { valid: false, reason: "Usage limit reached" };
     }
 
     // Check action whitelist
@@ -215,11 +293,11 @@ export class SessionWallet implements Wallet {
     // Check amount limits
     if (amount !== undefined) {
       if (amount > this.capabilities.maxSpendPerTx) {
-        return { valid: false, reason: 'Exceeds per-transaction limit' };
+        return { valid: false, reason: "Exceeds per-transaction limit" };
       }
 
       if (this.dailySpent + amount > this.capabilities.maxSpendPerDay) {
-        return { valid: false, reason: 'Exceeds daily limit' };
+        return { valid: false, reason: "Exceeds daily limit" };
       }
     }
 
@@ -264,8 +342,8 @@ export class SessionWallet implements Wallet {
 
   private isActionAllowed(action: string): boolean {
     const allowed = this.capabilities.allowedActions;
-    return allowed.some(pattern => {
-      if (pattern.endsWith('*')) {
+    return allowed.some((pattern) => {
+      if (pattern.endsWith("*")) {
         return action.startsWith(pattern.slice(0, -1));
       }
       return action === pattern;
@@ -276,12 +354,10 @@ export class SessionWallet implements Wallet {
 // ============ Helper Functions ============
 
 /**
- * Derive DID from public key
+ * Derive DID from public key using the canonical on-chain derivation.
  */
-function deriveDID(publicKey: PublicKey, network: string): string {
-  const prefix = network === 'mainnet' ? 'lgm' : 'lgm-test';
-  const hash = sha512_256Hex(publicKey).slice(0, 32);
-  return `did:${prefix}:${hash}`;
+function deriveDID(publicKey: PublicKey, _network: string): string {
+  return publicKeyToDid(publicKey);
 }
 
 // ============ Types ============
@@ -311,8 +387,18 @@ export interface WalletRecoveryInfo {
   warning: string;
 }
 
+export interface KeyRotationBundle {
+  request: {
+    did: string;
+    newOperationalKeyHash: string;
+    nonce: string;
+    signature: string;
+    sender: PublicKey;
+  };
+  newWallet: AgentWallet;
+  newPublicKey: PublicKey;
+}
+
 // ============ Exports ============
 
-export {
-  deriveDID,
-};
+export { deriveDID };

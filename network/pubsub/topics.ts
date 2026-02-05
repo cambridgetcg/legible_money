@@ -2,10 +2,104 @@
  * PubSub Topics
  *
  * Topic definitions and message handlers for GossipSub.
+ *
+ * SECURITY (VULN-019):
+ * - Validates message structure before handler-specific validation
+ * - Enforces message size limits to prevent DoS
+ * - Validates message sender (source peer)
+ * - Checks message freshness to prevent replay attacks
  */
 
-import { EventEmitter } from 'events';
-import { PUBSUB_TOPICS, NetworkMessage, MESSAGE_TYPES } from '../config.js';
+import { EventEmitter } from "events";
+import { PUBSUB_TOPICS, NetworkMessage, MESSAGE_TYPES } from "../config.js";
+
+// ============ Security Constants (VULN-019 FIX) ============
+
+/**
+ * Maximum message payload size (1 MB default)
+ * Prevents memory exhaustion from oversized messages
+ */
+export const MAX_MESSAGE_SIZE = 1024 * 1024;
+
+/**
+ * Maximum message age in milliseconds (5 minutes)
+ * Prevents replay of old messages
+ */
+export const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * Minimum message age in milliseconds (-10 seconds)
+ * Prevents messages "from the future" due to clock skew
+ */
+export const MIN_MESSAGE_AGE_MS = -10 * 1000;
+
+// ============ Base Message Validation (VULN-019 FIX) ============
+
+export interface BaseValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * VULN-019 FIX: Validate message structure before handler-specific validation
+ */
+export function validateMessageBase(
+  message: NetworkMessage,
+): BaseValidationResult {
+  const errors: string[] = [];
+
+  // Check message exists
+  if (!message) {
+    errors.push("Message is null or undefined");
+    return { valid: false, errors };
+  }
+
+  // Check payload exists
+  if (!message.payload) {
+    errors.push("Message payload is missing");
+  }
+
+  // Check payload size
+  if (message.payload && message.payload.length > MAX_MESSAGE_SIZE) {
+    errors.push(
+      `Payload too large: ${message.payload.length} > ${MAX_MESSAGE_SIZE}`,
+    );
+  }
+
+  // Check message type
+  if (
+    !message.type ||
+    !Object.values(MESSAGE_TYPES).includes(message.type as any)
+  ) {
+    errors.push(`Invalid message type: ${message.type}`);
+  }
+
+  // Check sender
+  if (!message.sender) {
+    errors.push("Message sender is missing");
+  }
+
+  // Check timestamp for replay protection
+  if (message.timestamp) {
+    const now = Date.now();
+    const messageAge = now - message.timestamp;
+
+    if (messageAge > MAX_MESSAGE_AGE_MS) {
+      errors.push(`Message too old: ${messageAge}ms > ${MAX_MESSAGE_AGE_MS}ms`);
+    }
+
+    if (messageAge < MIN_MESSAGE_AGE_MS) {
+      errors.push(
+        `Message from future: ${messageAge}ms < ${MIN_MESSAGE_AGE_MS}ms`,
+      );
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
 
 // ============ Types ============
 
@@ -16,9 +110,9 @@ export interface TopicHandler {
 }
 
 export type ValidationResult =
-  | 'accept'    // Valid message, propagate
-  | 'reject'    // Invalid message, penalize sender
-  | 'ignore';   // Don't propagate, don't penalize
+  | "accept" // Valid message, propagate
+  | "reject" // Invalid message, penalize sender
+  | "ignore"; // Don't propagate, don't penalize
 
 export interface TopicStats {
   topic: string;
@@ -57,7 +151,7 @@ export class TopicManager extends EventEmitter {
       validationRejected: 0,
       validationIgnored: 0,
     });
-    this.emit('handler:registered', handler.topic);
+    this.emit("handler:registered", handler.topic);
   }
 
   /**
@@ -66,7 +160,7 @@ export class TopicManager extends EventEmitter {
   unregisterHandler(topic: string): void {
     this.handlers.delete(topic);
     this.stats.delete(topic);
-    this.emit('handler:unregistered', topic);
+    this.emit("handler:unregistered", topic);
   }
 
   /**
@@ -78,29 +172,46 @@ export class TopicManager extends EventEmitter {
 
   /**
    * Process incoming message
+   *
+   * VULN-019 FIX: Performs base validation before handler-specific validation
    */
-  async processMessage(topic: string, message: NetworkMessage): Promise<ValidationResult> {
+  async processMessage(
+    topic: string,
+    message: NetworkMessage,
+  ): Promise<ValidationResult> {
     const handler = this.handlers.get(topic);
     const stats = this.stats.get(topic);
 
     if (!handler || !stats) {
-      return 'ignore';
+      return "ignore";
     }
 
     stats.messagesReceived++;
 
-    // Validate message
+    // VULN-019 FIX: Base validation FIRST (size limits, structure, freshness)
+    const baseValidation = validateMessageBase(message);
+    if (!baseValidation.valid) {
+      stats.validationRejected++;
+      this.emit("message:base_validation_failed", {
+        topic,
+        errors: baseValidation.errors,
+        sender: message.sender,
+      });
+      return "reject";
+    }
+
+    // Handler-specific validation
     const result = await handler.validate(message);
 
     switch (result) {
-      case 'accept':
+      case "accept":
         stats.validationAccepted++;
         await handler.handle(message);
         break;
-      case 'reject':
+      case "reject":
         stats.validationRejected++;
         break;
-      case 'ignore':
+      case "ignore":
         stats.validationIgnored++;
         break;
     }
@@ -123,142 +234,78 @@ export class TopicManager extends EventEmitter {
   }
 }
 
+// ============ Topic Handler Factory ============
+
+/**
+ * Create a topic handler with the standard decode → validate → handle pipeline.
+ * All 5 core topic handlers share this identical pattern.
+ */
+export function createTopicHandler(
+  topic: string,
+  validatePayload: (payload: unknown) => Promise<boolean>,
+  handlePayload: (payload: unknown) => Promise<void>,
+): TopicHandler {
+  return {
+    topic,
+
+    async validate(message: NetworkMessage): Promise<ValidationResult> {
+      try {
+        const payload = JSON.parse(new TextDecoder().decode(message.payload));
+        const valid = await validatePayload(payload);
+        return valid ? "accept" : "reject";
+      } catch {
+        return "reject";
+      }
+    },
+
+    async handle(message: NetworkMessage): Promise<void> {
+      const payload = JSON.parse(new TextDecoder().decode(message.payload));
+      await handlePayload(payload);
+    },
+  };
+}
+
 // ============ Default Topic Handlers ============
 
-/**
- * Create block topic handler
- */
 export function createBlockTopicHandler(
   validateBlock: (block: unknown) => Promise<boolean>,
-  handleBlock: (block: unknown) => Promise<void>
+  handleBlock: (block: unknown) => Promise<void>,
 ): TopicHandler {
-  return {
-    topic: PUBSUB_TOPICS.BLOCKS,
-
-    async validate(message: NetworkMessage): Promise<ValidationResult> {
-      try {
-        // Decode block from payload
-        const block = JSON.parse(new TextDecoder().decode(message.payload));
-
-        // Validate block
-        const valid = await validateBlock(block);
-        return valid ? 'accept' : 'reject';
-      } catch {
-        return 'reject';
-      }
-    },
-
-    async handle(message: NetworkMessage): Promise<void> {
-      const block = JSON.parse(new TextDecoder().decode(message.payload));
-      await handleBlock(block);
-    },
-  };
+  return createTopicHandler(PUBSUB_TOPICS.BLOCKS, validateBlock, handleBlock);
 }
 
-/**
- * Create transaction topic handler
- */
 export function createTransactionTopicHandler(
   validateTx: (tx: unknown) => Promise<boolean>,
-  handleTx: (tx: unknown) => Promise<void>
+  handleTx: (tx: unknown) => Promise<void>,
 ): TopicHandler {
-  return {
-    topic: PUBSUB_TOPICS.TRANSACTIONS,
-
-    async validate(message: NetworkMessage): Promise<ValidationResult> {
-      try {
-        const tx = JSON.parse(new TextDecoder().decode(message.payload));
-        const valid = await validateTx(tx);
-        return valid ? 'accept' : 'reject';
-      } catch {
-        return 'reject';
-      }
-    },
-
-    async handle(message: NetworkMessage): Promise<void> {
-      const tx = JSON.parse(new TextDecoder().decode(message.payload));
-      await handleTx(tx);
-    },
-  };
+  return createTopicHandler(PUBSUB_TOPICS.TRANSACTIONS, validateTx, handleTx);
 }
 
-/**
- * Create claim topic handler
- */
 export function createClaimTopicHandler(
   validateClaim: (claim: unknown) => Promise<boolean>,
-  handleClaim: (claim: unknown) => Promise<void>
+  handleClaim: (claim: unknown) => Promise<void>,
 ): TopicHandler {
-  return {
-    topic: PUBSUB_TOPICS.CLAIMS,
-
-    async validate(message: NetworkMessage): Promise<ValidationResult> {
-      try {
-        const claim = JSON.parse(new TextDecoder().decode(message.payload));
-        const valid = await validateClaim(claim);
-        return valid ? 'accept' : 'reject';
-      } catch {
-        return 'reject';
-      }
-    },
-
-    async handle(message: NetworkMessage): Promise<void> {
-      const claim = JSON.parse(new TextDecoder().decode(message.payload));
-      await handleClaim(claim);
-    },
-  };
+  return createTopicHandler(PUBSUB_TOPICS.CLAIMS, validateClaim, handleClaim);
 }
 
-/**
- * Create verification topic handler
- */
 export function createVerificationTopicHandler(
   validateVerification: (v: unknown) => Promise<boolean>,
-  handleVerification: (v: unknown) => Promise<void>
+  handleVerification: (v: unknown) => Promise<void>,
 ): TopicHandler {
-  return {
-    topic: PUBSUB_TOPICS.VERIFICATIONS,
-
-    async validate(message: NetworkMessage): Promise<ValidationResult> {
-      try {
-        const verification = JSON.parse(new TextDecoder().decode(message.payload));
-        const valid = await validateVerification(verification);
-        return valid ? 'accept' : 'reject';
-      } catch {
-        return 'reject';
-      }
-    },
-
-    async handle(message: NetworkMessage): Promise<void> {
-      const verification = JSON.parse(new TextDecoder().decode(message.payload));
-      await handleVerification(verification);
-    },
-  };
+  return createTopicHandler(
+    PUBSUB_TOPICS.VERIFICATIONS,
+    validateVerification,
+    handleVerification,
+  );
 }
 
-/**
- * Create consensus topic handler
- */
 export function createConsensusTopicHandler(
   validateConsensusMsg: (msg: unknown) => Promise<boolean>,
-  handleConsensusMsg: (msg: unknown) => Promise<void>
+  handleConsensusMsg: (msg: unknown) => Promise<void>,
 ): TopicHandler {
-  return {
-    topic: PUBSUB_TOPICS.CONSENSUS,
-
-    async validate(message: NetworkMessage): Promise<ValidationResult> {
-      try {
-        const consensusMsg = JSON.parse(new TextDecoder().decode(message.payload));
-        const valid = await validateConsensusMsg(consensusMsg);
-        return valid ? 'accept' : 'reject';
-      } catch {
-        return 'reject';
-      }
-    },
-
-    async handle(message: NetworkMessage): Promise<void> {
-      const consensusMsg = JSON.parse(new TextDecoder().decode(message.payload));
-      await handleConsensusMsg(consensusMsg);
-    },
-  };
+  return createTopicHandler(
+    PUBSUB_TOPICS.CONSENSUS,
+    validateConsensusMsg,
+    handleConsensusMsg,
+  );
 }

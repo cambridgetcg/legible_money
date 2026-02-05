@@ -1,0 +1,181 @@
+syntax = "proto3";
+package legible.knowledge.v1;
+
+option go_package = "github.com/legible-money/legible/x/knowledge/types";
+
+// ============================================================================
+// Stratum Definition
+// ============================================================================
+
+// StratumDefinition represents a complete ontological stratum.
+// This is the core type for the registry-based stratum system.
+message StratumDefinition {
+  // Unique identifier (e.g., 'fundamental', 'physical')
+  string id = 1;
+
+  // Human-readable name
+  string name = 2;
+
+  // Numeric level in hierarchy (lower = more fundamental)
+  uint32 level = 3;
+
+  // Maximum confidence achievable for facts in this stratum (0-1000000, 6 decimals)
+  // E.g., 1000000 = 1.0, 990000 = 0.99
+  uint32 confidence_ceiling = 4;
+
+  // Default logic zone for claims in this stratum
+  LogicZone default_logic_zone = 5;
+
+  // Default epistemic category for claims in this stratum
+  EpistemicCategory default_epistemic_category = 6;
+
+  // IDs of strata this stratum can depend on (empty for fundamental)
+  repeated string valid_dependencies = 7;
+
+  // Human-readable description
+  string description = 8;
+
+  // Example domain paths that belong to this stratum
+  repeated string example_domains = 9;
+
+  // Whether this stratum can reference all other strata (like 'technological')
+  bool can_reference_all = 10;
+
+  // Metadata about provenance
+  StratumMetadata metadata = 11;
+}
+
+// StratumMetadata tracks when/how a stratum was defined
+message StratumMetadata {
+  // Block height when this stratum definition was added (0 for genesis)
+  uint64 defined_at = 1;
+
+  // Governance proposal ID that added this stratum (empty for genesis)
+  string governance_proposal = 2;
+
+  // Schema version when this stratum was defined
+  uint32 schema_version = 3;
+
+  // Whether this is a genesis stratum (cannot be removed)
+  bool is_genesis = 4;
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+// LogicZone defines the decidability characteristics of claims
+enum LogicZone {
+  LOGIC_ZONE_UNSPECIFIED = 0;
+  LOGIC_ZONE_PROPOSITIONAL = 1;  // Decidable, complete
+  LOGIC_ZONE_PRESBURGER = 2;     // Decidable arithmetic
+  LOGIC_ZONE_PEANO = 3;          // Undecidable, incomplete
+  LOGIC_ZONE_EMPIRICAL = 4;      // Probabilistic
+}
+
+// EpistemicCategory defines the type of knowledge
+enum EpistemicCategory {
+  EPISTEMIC_CATEGORY_UNSPECIFIED = 0;
+  EPISTEMIC_CATEGORY_ANALYTIC = 1;   // True by definition
+  EPISTEMIC_CATEGORY_FORMAL = 2;     // Mathematically derived
+  EPISTEMIC_CATEGORY_EMPIRICAL = 3;  // Observationally verified
+  EPISTEMIC_CATEGORY_SOCIAL = 4;     // Socially constructed
+  EPISTEMIC_CATEGORY_PROTOCOL = 5;   // Protocol-defined
+  EPISTEMIC_CATEGORY_HISTORICAL = 6; // Historical record
+}
+
+// ============================================================================
+// Registry State
+// ============================================================================
+
+// StratumRegistry holds all stratum definitions
+message StratumRegistry {
+  // Schema version for migration support
+  uint32 schema_version = 1;
+
+  // All stratum definitions
+  repeated StratumDefinition strata = 2;
+
+  // Block height when last modified
+  uint64 last_modified = 3;
+
+  // Migration history
+  repeated MigrationRecord migrations = 4;
+}
+
+// MigrationRecord tracks schema migrations
+message MigrationRecord {
+  uint32 from_version = 1;
+  uint32 to_version = 2;
+  uint64 applied_at = 3;
+  string description = 4;
+  repeated StratumChange stratum_changes = 5;
+}
+
+// StratumChange records a single change during migration
+message StratumChange {
+  StratumChangeType type = 1;
+  string stratum_id = 2;
+  string new_stratum_id = 3;  // For renames
+}
+
+enum StratumChangeType {
+  STRATUM_CHANGE_TYPE_UNSPECIFIED = 0;
+  STRATUM_CHANGE_TYPE_ADDED = 1;
+  STRATUM_CHANGE_TYPE_REMOVED = 2;
+  STRATUM_CHANGE_TYPE_MODIFIED = 3;
+  STRATUM_CHANGE_TYPE_RENAMED = 4;
+}
+
+// ============================================================================
+// Cross-Stratum Dependencies
+// ============================================================================
+
+// StratumDependency represents how a fact depends on knowledge from other strata
+message StratumDependency {
+  // The fact that has this dependency
+  string fact_id = 1;
+
+  // The primary stratum of this fact
+  string primary_stratum = 2;
+
+  // Lower strata this fact depends on
+  repeated string dependent_strata = 3;
+
+  // Type of dependency
+  StratumDependencyType dependency_type = 4;
+
+  // Strength of the dependency (0-1000000, 6 decimals)
+  uint32 dependency_strength = 5;
+}
+
+enum StratumDependencyType {
+  STRATUM_DEPENDENCY_TYPE_UNSPECIFIED = 0;
+  STRATUM_DEPENDENCY_TYPE_EMERGENCE = 1;    // Higher-level behavior from lower rules
+  STRATUM_DEPENDENCY_TYPE_COMPOSITION = 2;  // Made of lower-level components
+  STRATUM_DEPENDENCY_TYPE_CONSTRAINT = 3;   // Limited by lower-level laws
+  STRATUM_DEPENDENCY_TYPE_APPLICATION = 4;  // Uses lower knowledge as tool
+}
+
+// ============================================================================
+// Cross-Stratum Validation
+// ============================================================================
+
+// CrossStratumRequirement defines validator requirements for a stratum
+message CrossStratumRequirement {
+  string claim_stratum = 1;
+  repeated string required_strata = 2;
+  map<string, uint32> min_validators_per_stratum = 3;
+  uint32 lower_stratum_weight_bonus = 4;  // 1000000 = 1.0
+}
+
+// CrossStratumValidationResult is the outcome of cross-stratum validation
+message CrossStratumValidationResult {
+  bool meets_requirements = 1;
+  map<string, uint32> stratum_coverage = 2;
+  repeated string missing_strata = 3;
+  uint32 lower_stratum_agreement = 4;     // 0-1000000
+  uint32 same_stratum_agreement = 5;      // 0-1000000
+  uint32 cross_stratum_confidence_adjustment = 6;  // 0-1000000
+  bool partial_coverage = 7;
+}

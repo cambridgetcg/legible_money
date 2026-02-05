@@ -4,10 +4,19 @@
  * Types for RPC API, SDK, and agent interactions.
  */
 
-import type { PublicKey, Signature } from '../core/crypto/keys.js';
-import type { MerkleProofData } from '../core/crypto/merkle.js';
-import type { AccountState, FactState, ValidatorState } from '../state/types.js';
-import type { Transaction, Block, VerificationResult, VerificationRound } from '../consensus/pot/types.js';
+import type { PublicKey, Signature } from "../core/crypto/keys.js";
+import type { MerkleProofData } from "../core/crypto/merkle.js";
+import type {
+  AccountState,
+  FactState,
+  ValidatorState,
+} from "../state/types.js";
+import type {
+  Transaction,
+  Block,
+  VerificationResult,
+  VerificationRound,
+} from "../consensus/pot/types.js";
 
 // ============ RPC Types ============
 
@@ -15,7 +24,7 @@ import type { Transaction, Block, VerificationResult, VerificationRound } from '
  * JSON-RPC request structure
  */
 export interface RPCRequest {
-  jsonrpc: '2.0';
+  jsonrpc: "2.0";
   id: string | number;
   method: string;
   params?: unknown;
@@ -25,7 +34,7 @@ export interface RPCRequest {
  * JSON-RPC response structure
  */
 export interface RPCResponse<T = unknown> {
-  jsonrpc: '2.0';
+  jsonrpc: "2.0";
   id: string | number;
   result?: T;
   error?: RPCError;
@@ -65,6 +74,8 @@ export const RPC_ERROR_CODES = {
   VALIDATOR_NOT_FOUND: -32010,
   CLAIM_DUPLICATE: -32011,
   ROUND_DEADLINE_PASSED: -32012,
+  ACCOUNT_FROZEN: -32013,
+  ACCOUNT_IN_RECOVERY: -32014,
 } as const;
 
 // ============ API Request/Response Types ============
@@ -76,7 +87,7 @@ export interface AccountGetBalanceRequest {
 }
 
 export interface AccountGetBalanceResponse {
-  balance: string;  // bigint as string
+  balance: string; // bigint as string
   stakedBalance: string;
   nonce: string;
 }
@@ -94,7 +105,7 @@ export interface AccountGetInfoResponse {
 
 export interface AccountCreateRequest {
   operationalPublicKey: PublicKey;
-  signature: Signature;  // Signs the creation request
+  signature: Signature; // Signs the creation request
 }
 
 export interface AccountCreateResponse {
@@ -106,7 +117,7 @@ export interface AccountCreateResponse {
 
 export interface AgentDeriveAccountRequest {
   agentId: string;
-  network: 'mainnet' | 'testnet';
+  network: "mainnet" | "testnet";
 }
 
 export interface AgentDeriveAccountResponse {
@@ -205,7 +216,7 @@ export interface TxSubmitRequest {
 
 export interface TxSubmitResponse {
   txHash: string;
-  status: 'pending' | 'included' | 'failed';
+  status: "pending" | "included" | "failed";
 }
 
 export interface TxGetStatusRequest {
@@ -213,7 +224,7 @@ export interface TxGetStatusRequest {
 }
 
 export interface TxGetStatusResponse {
-  status: 'pending' | 'included' | 'finalized' | 'failed';
+  status: "pending" | "included" | "finalized" | "failed";
   blockNumber?: string;
   blockHash?: string;
   error?: string;
@@ -240,6 +251,7 @@ export interface KnowledgeSubmitClaimRequest {
   references?: string[];
   signature: Signature;
   sender: PublicKey;
+  senderDid?: string; // Optional: use if different from derived did:lgm:{pubkey}
   nonce: string;
 }
 
@@ -254,7 +266,7 @@ export interface KnowledgeGetFactsRequest {
   domain?: string;
   search?: string;
   minConfidence?: number;
-  status?: 'active' | 'challenged' | 'all';
+  status?: "active" | "challenged" | "all";
   limit?: number;
   cursor?: string;
 }
@@ -280,6 +292,104 @@ export interface KnowledgeGetFactResponse {
     extends: FactState[];
   };
   blockNumber: string;
+}
+
+// --- Knowledge Session Methods (for optimized chat queries) ---
+
+export interface KnowledgeSessionStartRequest {
+  agentDid: string;
+  budgetLimit?: string; // Optional spending limit for session
+}
+
+export interface KnowledgeSessionStartResponse {
+  sessionId: string;
+  startBlock: string;
+  freeTierQueries: number;
+}
+
+export interface KnowledgeSessionEndRequest {
+  sessionId: string;
+}
+
+export interface KnowledgeSessionEndResponse {
+  success: boolean;
+  totalQueries: number;
+  totalCost: string;
+}
+
+export interface KnowledgeQueryRequest {
+  sessionId: string;
+  intent: {
+    type:
+      | "understand"
+      | "verify"
+      | "explore"
+      | "connect"
+      | "contribute"
+      | "challenge";
+    domain?: string;
+    factId?: string;
+    stratum?: string;
+    depth?: number;
+    direction?: "causes" | "effects" | "siblings" | "ancestors" | "descendants";
+    crossStrata?: boolean;
+    minConfidence?: number;
+    limit?: number;
+    query?: string;
+  };
+}
+
+export interface KnowledgeQueryResponse {
+  intentType: string;
+  facts: Array<{
+    factId: string;
+    fact: FactState;
+    domain: string;
+    stratum: string;
+    relevance: number;
+    cached: boolean;
+  }>;
+  domains: Array<{
+    domainId: string;
+    factCount: number;
+    healthScore: number;
+    isGateway: boolean;
+  }>;
+  paths?: Array<{
+    fromDomain: string;
+    toDomain: string;
+    gateways: string[];
+    strength: number;
+  }>;
+  metadata: {
+    cached: boolean;
+    latencyMs: number;
+    estimatedCost: string;
+    actualCost: string;
+    cacheHitRatio: number;
+    // Payment execution metadata (Economic Sustainability)
+    paymentExecuted?: boolean;
+    researchShare?: string;
+    providerShare?: string;
+    transferCount?: number;
+  };
+}
+
+export interface KnowledgeEstimateQueryCostRequest {
+  sessionId: string;
+  intent: KnowledgeQueryRequest["intent"];
+}
+
+export interface KnowledgeEstimateQueryCostResponse {
+  cost: string;
+  cached: boolean;
+  estimatedBuckets: number;
+  breakdown: {
+    baseCost: string;
+    bucketCost: string;
+    crossStratumCost: string;
+    materializationCost: string;
+  };
 }
 
 export interface KnowledgeCheckContradictionsRequest {
@@ -323,7 +433,7 @@ export interface VerificationSubmitCommitmentResponse {
 
 export interface VerificationSubmitRevealRequest {
   roundId: string;
-  verdict: 'confirmed' | 'rejected' | 'uncertain';
+  verdict: "confirmed" | "rejected" | "uncertain";
   confidence: number;
   nonce: string;
   reasoning?: string;
@@ -403,9 +513,9 @@ export interface BlockSubscribeRequest {
 // --- Network Methods ---
 
 export interface NetworkHealthResponse {
-  status: 'healthy' | 'degraded' | 'down';
+  status: "healthy" | "degraded" | "down";
   latestBlock: string;
-  syncStatus: 'synced' | 'syncing';
+  syncStatus: "synced" | "syncing";
   syncProgress?: number;
   peerCount: number;
   version: string;
@@ -418,6 +528,193 @@ export interface NetworkPeersResponse {
     latency: number;
   }>;
   total: number;
+}
+
+// ============ B3 RPC Types (Staking, Disputes, Channels) ============
+
+// --- Staking Methods ---
+
+export interface LgmStakeRequest {
+  did: string; // Account DID
+  amount: string; // Amount to stake (bigint as string)
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmStakeResponse {
+  txHash: string;
+  success: boolean;
+  newStakedBalance: string;
+}
+
+export interface LgmUnstakeRequest {
+  did: string;
+  amount: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmUnstakeResponse {
+  txHash: string;
+  success: boolean;
+  newStakedBalance: string;
+  unlockBlock?: string; // Block when tokens unlock (if time-locked)
+}
+
+export interface LgmDelegateRequest {
+  delegatorDid: string;
+  validatorKey: PublicKey;
+  amount: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmDelegateResponse {
+  txHash: string;
+  success: boolean;
+  totalDelegated: string;
+}
+
+export interface LgmUndelegateRequest {
+  delegatorDid: string;
+  validatorKey: PublicKey;
+  amount: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmUndelegateResponse {
+  txHash: string;
+  success: boolean;
+  remainingDelegation: string;
+  unlockBlock?: string;
+}
+
+// --- Transaction Methods ---
+
+export interface LgmSendTransactionRequest {
+  type: string; // Transaction type
+  payload: unknown; // Type-specific payload
+  sender: PublicKey;
+  senderDid?: string;
+  nonce: string;
+  fee: string;
+  signature: Signature;
+}
+
+export interface LgmSendTransactionResponse {
+  txHash: string;
+  status: "pending" | "included" | "failed";
+  blockNumber?: string;
+  error?: string;
+}
+
+// --- Dispute Methods ---
+
+export interface LgmOpenDisputeRequest {
+  targetId: string;
+  targetType:
+    | "fact"
+    | "claim"
+    | "evidence"
+    | "verification"
+    | "validator_behavior";
+  domain: string;
+  stake: string;
+  evidence: string[]; // Evidence IDs
+  reasonHash: string; // Hash of reason (content stored off-chain)
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+  senderDid?: string;
+}
+
+export interface LgmOpenDisputeResponse {
+  disputeId: string;
+  txHash: string;
+  evidenceDeadline: number;
+  votingDeadline: number;
+}
+
+export interface LgmSubmitEvidenceRequest {
+  disputeId: string;
+  evidenceHash: string; // Commit phase: hash of evidence
+  evidenceIds?: string[]; // Reveal phase: actual evidence IDs
+  nonce?: string; // Reveal phase: nonce used in commitment
+  phase: "commit" | "reveal";
+  signature: Signature;
+  sender: PublicKey;
+  senderDid?: string;
+}
+
+export interface LgmSubmitEvidenceResponse {
+  txHash: string;
+  success: boolean;
+  phase: "commit" | "reveal";
+}
+
+export interface LgmResolveDisputeRequest {
+  disputeId: string;
+  vote: "challenger" | "defender" | "abstain";
+  justificationHash?: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey; // Must be an arbiter
+  senderDid?: string;
+}
+
+export interface LgmResolveDisputeResponse {
+  txHash: string;
+  success: boolean;
+  votesForChallenger: number;
+  votesForDefender: number;
+  resolved: boolean;
+  winner?: "challenger" | "defender";
+}
+
+// --- Payment Channel Methods ---
+
+export interface LgmOpenChannelRequest {
+  providerDid: string;
+  deposit: string;
+  durationBlocks: string;
+  settlementFrequency?: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+  senderDid?: string;
+}
+
+export interface LgmOpenChannelResponse {
+  channelId: string;
+  txHash: string;
+  expiresAtBlock: string;
+}
+
+export interface LgmCloseChannelRequest {
+  channelId: string;
+  unilateral?: boolean; // Force close without provider cooperation
+  finalStateNonce?: string;
+  finalPayerBalance?: string;
+  finalProviderBalance?: string;
+  payerSignature?: string;
+  providerSignature?: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+  senderDid?: string;
+}
+
+export interface LgmCloseChannelResponse {
+  txHash: string;
+  success: boolean;
+  finalPayerBalance: string;
+  finalProviderBalance: string;
+  disputePeriodEnds?: string; // If unilateral close
 }
 
 // ============ SDK Types ============
@@ -478,14 +775,18 @@ export interface TransferOptions {
 // ============ Event Types ============
 
 export type ProtocolEvent =
-  | { type: 'block'; block: Block }
-  | { type: 'transaction'; tx: Transaction; status: string }
-  | { type: 'fact:accepted'; fact: FactState }
-  | { type: 'fact:rejected'; claimId: string; reason: string }
-  | { type: 'fact:challenged'; factId: string; challenger: string }
-  | { type: 'verification:assigned'; roundId: string; claimId: string }
-  | { type: 'verification:completed'; roundId: string; result: VerificationResult }
-  | { type: 'account:updated'; did: string; changes: Partial<AccountState> };
+  | { type: "block"; block: Block }
+  | { type: "transaction"; tx: Transaction; status: string }
+  | { type: "fact:accepted"; fact: FactState }
+  | { type: "fact:rejected"; claimId: string; reason: string }
+  | { type: "fact:challenged"; factId: string; challenger: string }
+  | { type: "verification:assigned"; roundId: string; claimId: string }
+  | {
+      type: "verification:completed";
+      roundId: string;
+      result: VerificationResult;
+    }
+  | { type: "account:updated"; did: string; changes: Partial<AccountState> };
 
 /**
  * Event subscription
@@ -501,7 +802,7 @@ export interface RateLimitInfo {
   limit: number;
   remaining: number;
   reset: number;
-  tier: 'free' | 'staked-100' | 'staked-1000' | 'validator';
+  tier: "free" | "staked-100" | "staked-1000" | "validator";
 }
 
 // ============ Helper Types ============
@@ -524,4 +825,233 @@ export interface WithProof<T> {
   proof: MerkleProofData;
   blockNumber: bigint;
   stateRoot: string;
+}
+
+// --- Sustainability Methods (Economic Sustainability Integration) ---
+
+export interface SustainabilityGetLoopHealthRequest {}
+
+export interface SustainabilityGetLoopHealthResponse {
+  healthScore: number;
+  components: Record<
+    string,
+    { status: string; score: number; message: string }
+  >;
+  blockNumber: string;
+}
+
+export interface SustainabilityGetResearchFundRequest {}
+
+export interface SustainabilityGetResearchFundResponse {
+  balance: string;
+  totalInflow: string;
+  totalBountyFunding: string;
+  inflowPerBlock: string;
+}
+
+export interface SustainabilityGetEfficiencyRequest {}
+
+export interface SustainabilityGetEfficiencyResponse {
+  bountyConversionRate: number;
+  truthDiscoveryCost: string;
+  apiValuePerFact: string;
+  knowledgeMonetizationRate: string;
+  loopVelocity: number;
+}
+
+export interface SustainabilityGetForecastRequest {
+  futureBlocks?: string;
+}
+
+export interface SustainabilityGetForecastResponse {
+  currentBlockReward: string;
+  apiRevenuePerBlock: string;
+  researchInflowPerBlock: string;
+  researchFundBalance: string;
+  activeBountiesValue: string;
+  sustainabilityRatio: number;
+  blocksUntilCrossover: string | null;
+  isSelfSustaining: boolean;
+}
+
+export interface SustainabilityGetBountyStatusRequest {}
+
+export interface SustainabilityGetBountyStatusResponse {
+  activeBountiesValue: string;
+  activeBountiesCount: number;
+  bountiesCreatedThisEpoch: number;
+  bountiesFulfilledThisEpoch: number;
+  averageBountyValue: string;
+}
+
+// --- Identity / Key Rotation Methods ---
+
+export interface LgmRotateKeyRequest {
+  did: string; // Account DID
+  newOperationalKeyHash: string; // SHA512/256 hash of new operational public key
+  nonce: string; // Current account nonce (string-encoded bigint)
+  signature: Signature; // Signed by current operational key
+  sender: PublicKey; // Current operational public key
+}
+
+export interface LgmRotateKeyResponse {
+  txHash: string;
+  success: boolean;
+  newKeyVersion: number; // Incremented version number
+}
+
+export interface LgmGetKeyInfoRequest {
+  did: string;
+}
+
+export interface LgmGetKeyInfoResponse {
+  did: string;
+  operationalKeyHash: string;
+  operationalKeyVersion: number;
+  isFrozen: boolean;
+  isInRecovery: boolean;
+}
+
+// --- Governance Methods ---
+
+export interface LgmGetLIPRequest {
+  lipId: string;
+}
+
+export interface LgmGetLIPResponse {
+  lip: {
+    id: string;
+    title: string;
+    category: string;
+    stage: string;
+    proposer: string;
+    stakedAmount: string;
+    createdAtBlock: string;
+    coAuthors: string[];
+    stageHistory: Array<{
+      from: string;
+      to: string;
+      at: string;
+      reason: string;
+      triggeredBy: string;
+    }>;
+  } | null;
+}
+
+export interface LgmListLIPsRequest {
+  stage?: string;
+  proposer?: string;
+}
+
+export interface LgmListLIPsResponse {
+  lips: Array<{
+    id: string;
+    title: string;
+    category: string;
+    stage: string;
+    proposer: string;
+    stakedAmount: string;
+  }>;
+  total: number;
+}
+
+export interface LgmGetVotesRequest {
+  lipId: string;
+}
+
+export interface LgmGetVotesResponse {
+  votes: Array<{
+    voteId: string;
+    voter: string;
+    direction: string;
+    votes: number;
+    cost: string;
+    blockNumber: string;
+  }>;
+  tally: {
+    support: number;
+    oppose: number;
+    abstain: number;
+    totalVoters: number;
+  };
+}
+
+export interface LgmGetGovernanceStatsRequest {}
+
+export interface LgmGetGovernanceStatsResponse {
+  totalLIPs: number;
+  lipsByStage: Record<string, number>;
+  totalVotes: number;
+  totalStakeLocked: string;
+  totalDomainProposals: number;
+  blockNumber: string;
+}
+
+export interface LgmSubmitLIPRequest {
+  did: string;
+  title: string;
+  category: string;
+  abstract: string;
+  motivation: string;
+  specification: string;
+  rationale: string;
+  backwardsCompatibility: string;
+  testCases: string;
+  referenceImplementation?: string;
+  coAuthors?: string[];
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmSubmitLIPResponse {
+  lipId: string;
+  txHash: string;
+  success: boolean;
+}
+
+export interface LgmStakeLIPRequest {
+  did: string;
+  lipId: string;
+  amount: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmStakeLIPResponse {
+  txHash: string;
+  success: boolean;
+  newStage: string;
+}
+
+export interface LgmCastVoteRequest {
+  did: string;
+  lipId: string;
+  direction: "support" | "oppose" | "abstain";
+  votes: number;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmCastVoteResponse {
+  voteId: string;
+  txHash: string;
+  success: boolean;
+  cost: string;
+}
+
+export interface LgmWithdrawLIPRequest {
+  did: string;
+  lipId: string;
+  nonce: string;
+  signature: Signature;
+  sender: PublicKey;
+}
+
+export interface LgmWithdrawLIPResponse {
+  txHash: string;
+  success: boolean;
+  stakeReturned: string;
 }

@@ -1,6 +1,5 @@
-import { z } from 'zod';
-import type { DID } from '../../agents/identity/did.js';
-import type { Signature } from '../../core/crypto/keys.js';
+import { z } from "zod";
+import type { Signature } from "../../core/crypto/keys.js";
 
 /**
  * Base transaction schema
@@ -17,7 +16,7 @@ export const BaseTransactionSchema = z.object({
  * Transfer AGC tokens between agents
  */
 export const TransferTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('transfer'),
+  type: z.literal("transfer"),
   payload: z.object({
     to: z.string(), // DID
     amount: z.bigint().positive(),
@@ -29,7 +28,7 @@ export const TransferTxSchema = BaseTransactionSchema.extend({
  * Register a new agent identity
  */
 export const RegisterAgentTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('register_agent'),
+  type: z.literal("register_agent"),
   payload: z.object({
     publicKey: z.instanceof(Uint8Array),
     capabilities: z.array(z.string()),
@@ -45,10 +44,10 @@ export const RegisterAgentTxSchema = BaseTransactionSchema.extend({
  * Stake tokens for validation or service guarantees
  */
 export const StakeTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('stake'),
+  type: z.literal("stake"),
   payload: z.object({
     amount: z.bigint().positive(),
-    purpose: z.enum(['validation', 'service_guarantee', 'governance']),
+    purpose: z.enum(["validation", "service_guarantee", "governance"]),
     lockPeriod: z.number().int().positive(), // blocks
   }),
 });
@@ -57,7 +56,7 @@ export const StakeTxSchema = BaseTransactionSchema.extend({
  * Unstake previously staked tokens
  */
 export const UnstakeTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('unstake'),
+  type: z.literal("unstake"),
   payload: z.object({
     stakeId: z.string(),
     amount: z.bigint().positive(),
@@ -68,10 +67,10 @@ export const UnstakeTxSchema = BaseTransactionSchema.extend({
  * Create a market order (buy/sell resources)
  */
 export const MarketOrderTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('market_order'),
+  type: z.literal("market_order"),
   payload: z.object({
-    market: z.enum(['compute', 'data', 'services']),
-    side: z.enum(['buy', 'sell']),
+    market: z.enum(["compute", "data", "services"]),
+    side: z.enum(["buy", "sell"]),
     resourceType: z.string(),
     quantity: z.bigint().positive(),
     price: z.bigint().positive(), // price per unit in AGC
@@ -83,7 +82,7 @@ export const MarketOrderTxSchema = BaseTransactionSchema.extend({
  * Fill a market order
  */
 export const FillOrderTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('fill_order'),
+  type: z.literal("fill_order"),
   payload: z.object({
     orderId: z.string(),
     quantity: z.bigint().positive(),
@@ -94,7 +93,7 @@ export const FillOrderTxSchema = BaseTransactionSchema.extend({
  * Submit reputation attestation
  */
 export const ReputationTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('reputation'),
+  type: z.literal("reputation"),
   payload: z.object({
     target: z.string(), // DID of agent being rated
     transactionId: z.string(), // Reference to completed transaction
@@ -107,10 +106,10 @@ export const ReputationTxSchema = BaseTransactionSchema.extend({
  * Governance vote
  */
 export const VoteTxSchema = BaseTransactionSchema.extend({
-  type: z.literal('vote'),
+  type: z.literal("vote"),
   payload: z.object({
     proposalId: z.string(),
-    vote: z.enum(['yes', 'no', 'abstain']),
+    vote: z.enum(["yes", "no", "abstain"]),
     weight: z.bigint().optional(), // If not provided, uses full stake
   }),
 });
@@ -118,7 +117,7 @@ export const VoteTxSchema = BaseTransactionSchema.extend({
 /**
  * Union of all transaction types
  */
-export const TransactionSchema = z.discriminatedUnion('type', [
+export const TransactionSchema = z.discriminatedUnion("type", [
   TransferTxSchema,
   RegisterAgentTxSchema,
   StakeTxSchema,
@@ -152,7 +151,7 @@ export interface TransactionReceipt {
   blockHeight: number;
   blockHash: string;
   index: number;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   gasUsed: bigint;
   events: TransactionEvent[];
 }

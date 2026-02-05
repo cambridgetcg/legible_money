@@ -12,9 +12,12 @@
  * - Nonce management
  */
 
-import { InMemorySMT, type MerkleRoot, type MerkleProofData } from '../core/crypto/merkle.js';
-import { sha512_256, sha512_256Hex, domainHash } from '../core/crypto/hashing.js';
-import { hexToBytes, bytesToHex } from '../core/crypto/keys.js';
+import {
+  InMemorySMT,
+  type MerkleRoot,
+  type MerkleProofData,
+} from "../core/crypto/merkle.js";
+import { sha512_256 } from "../core/crypto/hashing.js";
 import {
   type AccountState,
   type AccountDelta,
@@ -22,7 +25,7 @@ import {
   type AccountKey,
   type BalanceProof,
   StateError,
-} from './types.js';
+} from "./types.js";
 
 // ============ Serialization ============
 
@@ -166,10 +169,12 @@ export class AccountStateTree {
   createAccount(
     did: string,
     operationalKeyHash: string,
-    initialBalance: bigint = 0n
+    initialBalance: bigint = 0n,
   ): MerkleRoot {
     if (this.exists(did)) {
-      throw new StateError('Account already exists', 'INVALID_TRANSITION', { did });
+      throw new StateError("Account already exists", "INVALID_TRANSITION", {
+        did,
+      });
     }
 
     const account: AccountState = {
@@ -205,7 +210,7 @@ export class AccountStateTree {
   updateAccount(did: string, update: Partial<AccountState>): MerkleRoot {
     const existing = this.getAccount(did);
     if (!existing) {
-      throw new StateError('Account not found', 'ACCOUNT_NOT_FOUND', { did });
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", { did });
     }
 
     const updated: AccountState = {
@@ -222,19 +227,57 @@ export class AccountStateTree {
   }
 
   /**
+   * Rotate the operational key for an account.
+   * Updates the key hash and increments the version.
+   */
+  rotateKey(did: string, newOperationalKeyHash: string): MerkleRoot {
+    const existing = this.getAccount(did);
+    if (!existing) {
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", { did });
+    }
+
+    if (existing.flags.frozen) {
+      throw new StateError("Account is frozen", "ACCOUNT_FROZEN", { did });
+    }
+
+    if (existing.flags.inRecovery) {
+      throw new StateError(
+        "Account is in recovery; use recovery flow instead",
+        "ACCOUNT_IN_RECOVERY",
+        { did },
+      );
+    }
+
+    if (newOperationalKeyHash === existing.operationalKeyHash) {
+      throw new StateError(
+        "New key must differ from current key",
+        "INVALID_TRANSITION",
+        { did },
+      );
+    }
+
+    return this.updateAccount(did, {
+      operationalKeyHash: newOperationalKeyHash,
+      operationalKeyVersion: existing.operationalKeyVersion + 1,
+    });
+  }
+
+  /**
    * Apply a delta to an account
    */
   applyDelta(delta: AccountDelta): MerkleRoot {
     const existing = this.getAccount(delta.did);
     if (!existing) {
-      throw new StateError('Account not found', 'ACCOUNT_NOT_FOUND', { did: delta.did });
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", {
+        did: delta.did,
+      });
     }
 
     let newBalance = existing.balance;
     if (delta.balanceChange !== undefined) {
       newBalance = existing.balance + delta.balanceChange;
       if (newBalance < 0n) {
-        throw new StateError('Insufficient balance', 'INSUFFICIENT_BALANCE', {
+        throw new StateError("Insufficient balance", "INSUFFICIENT_BALANCE", {
           did: delta.did,
           balance: existing.balance.toString(),
           requested: (-delta.balanceChange).toString(),
@@ -246,11 +289,15 @@ export class AccountStateTree {
     if (delta.stakedChange !== undefined) {
       newStaked = existing.stakedBalance + delta.stakedChange;
       if (newStaked < 0n) {
-        throw new StateError('Insufficient staked balance', 'INSUFFICIENT_BALANCE', {
-          did: delta.did,
-          staked: existing.stakedBalance.toString(),
-          requested: (-delta.stakedChange).toString(),
-        });
+        throw new StateError(
+          "Insufficient staked balance",
+          "INSUFFICIENT_BALANCE",
+          {
+            did: delta.did,
+            staked: existing.stakedBalance.toString(),
+            requested: (-delta.stakedChange).toString(),
+          },
+        );
       }
     }
 
@@ -259,9 +306,13 @@ export class AccountStateTree {
       balance: newBalance,
       stakedBalance: newStaked,
       nonce: delta.nonceIncrement ? existing.nonce + 1n : existing.nonce,
-      reputationScore: delta.reputationChange !== undefined
-        ? Math.max(0, Math.min(1, existing.reputationScore + delta.reputationChange))
-        : existing.reputationScore,
+      reputationScore:
+        delta.reputationChange !== undefined
+          ? Math.max(
+              0,
+              Math.min(1, existing.reputationScore + delta.reputationChange),
+            )
+          : existing.reputationScore,
       flags: delta.setFlags
         ? { ...existing.flags, ...delta.setFlags }
         : existing.flags,
@@ -280,20 +331,26 @@ export class AccountStateTree {
    */
   transfer(from: string, to: string, amount: bigint): MerkleRoot {
     if (amount <= 0n) {
-      throw new StateError('Invalid transfer amount', 'INVALID_TRANSITION', { amount: amount.toString() });
+      throw new StateError("Invalid transfer amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
     }
 
     const fromAccount = this.getAccount(from);
     if (!fromAccount) {
-      throw new StateError('Sender not found', 'ACCOUNT_NOT_FOUND', { did: from });
+      throw new StateError("Sender not found", "ACCOUNT_NOT_FOUND", {
+        did: from,
+      });
     }
 
     if (fromAccount.flags.frozen) {
-      throw new StateError('Sender account is frozen', 'INVALID_TRANSITION', { did: from });
+      throw new StateError("Sender account is frozen", "INVALID_TRANSITION", {
+        did: from,
+      });
     }
 
     if (fromAccount.balance < amount) {
-      throw new StateError('Insufficient balance', 'INSUFFICIENT_BALANCE', {
+      throw new StateError("Insufficient balance", "INSUFFICIENT_BALANCE", {
         did: from,
         balance: fromAccount.balance.toString(),
         requested: amount.toString(),
@@ -304,17 +361,72 @@ export class AccountStateTree {
     let toAccount = this.getAccount(to);
     if (!toAccount) {
       // For transfers to new accounts, create with minimal state
-      this.createAccount(to, '', 0n);
+      this.createAccount(to, "", 0n);
       toAccount = this.getAccount(to)!;
     }
 
     if (toAccount.flags.frozen) {
-      throw new StateError('Recipient account is frozen', 'INVALID_TRANSITION', { did: to });
+      throw new StateError(
+        "Recipient account is frozen",
+        "INVALID_TRANSITION",
+        { did: to },
+      );
     }
 
     // Apply deltas
-    this.applyDelta({ did: from, balanceChange: -amount, nonceIncrement: true });
+    this.applyDelta({
+      did: from,
+      balanceChange: -amount,
+      nonceIncrement: true,
+    });
     return this.applyDelta({ did: to, balanceChange: amount });
+  }
+
+  /**
+   * Deduct balance without incrementing nonce
+   * Used for fee routing where nonce should not change
+   */
+  deductBalance(did: string, amount: bigint): MerkleRoot {
+    if (amount <= 0n) {
+      throw new StateError("Invalid deduct amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
+    }
+
+    const account = this.getAccount(did);
+    if (!account) {
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", { did });
+    }
+
+    if (account.balance < amount) {
+      throw new StateError("Insufficient balance", "INSUFFICIENT_BALANCE", {
+        did,
+        balance: account.balance.toString(),
+        requested: amount.toString(),
+      });
+    }
+
+    return this.applyDelta({ did, balanceChange: -amount });
+  }
+
+  /**
+   * Credit balance without incrementing nonce
+   * Used for fee routing where nonce should not change
+   * Auto-creates recipient if it doesn't exist
+   */
+  creditBalance(did: string, amount: bigint): MerkleRoot {
+    if (amount <= 0n) {
+      throw new StateError("Invalid credit amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
+    }
+
+    // Create recipient if doesn't exist
+    if (!this.exists(did)) {
+      this.createAccount(did, "", 0n);
+    }
+
+    return this.applyDelta({ did, balanceChange: amount });
   }
 
   /**
@@ -322,20 +434,26 @@ export class AccountStateTree {
    */
   stake(did: string, amount: bigint): MerkleRoot {
     if (amount <= 0n) {
-      throw new StateError('Invalid stake amount', 'INVALID_TRANSITION', { amount: amount.toString() });
+      throw new StateError("Invalid stake amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
     }
 
     const account = this.getAccount(did);
     if (!account) {
-      throw new StateError('Account not found', 'ACCOUNT_NOT_FOUND', { did });
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", { did });
     }
 
     if (account.balance < amount) {
-      throw new StateError('Insufficient balance to stake', 'INSUFFICIENT_BALANCE', {
-        did,
-        balance: account.balance.toString(),
-        requested: amount.toString(),
-      });
+      throw new StateError(
+        "Insufficient balance to stake",
+        "INSUFFICIENT_BALANCE",
+        {
+          did,
+          balance: account.balance.toString(),
+          requested: amount.toString(),
+        },
+      );
     }
 
     return this.applyDelta({
@@ -352,26 +470,48 @@ export class AccountStateTree {
    */
   unstake(did: string, amount: bigint): MerkleRoot {
     if (amount <= 0n) {
-      throw new StateError('Invalid unstake amount', 'INVALID_TRANSITION', { amount: amount.toString() });
+      throw new StateError("Invalid unstake amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
     }
 
     const account = this.getAccount(did);
     if (!account) {
-      throw new StateError('Account not found', 'ACCOUNT_NOT_FOUND', { did });
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", { did });
     }
 
     if (account.stakedBalance < amount) {
-      throw new StateError('Insufficient staked balance', 'INSUFFICIENT_BALANCE', {
-        did,
-        staked: account.stakedBalance.toString(),
-        requested: amount.toString(),
-      });
+      throw new StateError(
+        "Insufficient staked balance",
+        "INSUFFICIENT_BALANCE",
+        {
+          did,
+          staked: account.stakedBalance.toString(),
+          requested: amount.toString(),
+        },
+      );
     }
 
     return this.applyDelta({
       did,
       balanceChange: amount,
       stakedChange: -amount,
+      nonceIncrement: true,
+    });
+  }
+
+  /**
+   * Increment account nonce without balance change
+   * Used for transactions that don't transfer/stake but still need nonce protection
+   */
+  incrementNonce(did: string): MerkleRoot {
+    const account = this.getAccount(did);
+    if (!account) {
+      throw new StateError("Account not found", "ACCOUNT_NOT_FOUND", { did });
+    }
+
+    return this.applyDelta({
+      did,
       nonceIncrement: true,
     });
   }
@@ -481,15 +621,15 @@ export class AccountStateTree {
  * Create account tree from snapshot
  */
 export function createAccountTreeFromSnapshot(
-  accounts: AccountState[]
+  accounts: AccountState[],
 ): AccountStateTree {
   const tree = new AccountStateTree();
 
   for (const account of accounts) {
     const key = didToKey(account.did);
     const value = serializeAccountState(account);
-    tree['smt'].set(key, value);
-    tree['accountCache'].set(account.did, account);
+    tree["smt"].set(key, value);
+    tree["accountCache"].set(account.did, account);
   }
 
   return tree;
@@ -504,7 +644,7 @@ export function defaultAccountState(did: string): AccountState {
     balance: 0n,
     stakedBalance: 0n,
     nonce: 0n,
-    operationalKeyHash: '',
+    operationalKeyHash: "",
     operationalKeyVersion: 0,
     sessionKeyCount: 0,
     reputationScore: 0.5,

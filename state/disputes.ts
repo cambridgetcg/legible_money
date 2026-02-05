@@ -13,9 +13,9 @@
  * - Results-based justice, not intent-based
  */
 
-import { InMemorySMT, type MerkleRoot } from '../core/crypto/merkle.js';
-import { sha512_256, sha512_256Hex } from '../core/crypto/hashing.js';
-import type { DID } from '../agents/identity/did.js';
+import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
+import { sha512_256, sha512_256Hex } from "../core/crypto/hashing.js";
+import type { DID } from "../core/agents/identity/did.js";
 import type {
   Dispute,
   DisputePhase,
@@ -25,8 +25,8 @@ import type {
   ArbiterVote,
   SelectedArbiter,
   EvidenceCommitment,
-} from '../core/dispute/types.js';
-import { StateError } from './types.js';
+} from "../core/dispute/types.js";
+import { StateError } from "./types.js";
 
 // ============ Serialization ============
 
@@ -51,7 +51,7 @@ function serializeDispute(dispute: Dispute): Uint8Array {
       phaseDeadline: dispute.state.phaseDeadline.toString(),
       canEscalate: dispute.state.canEscalate,
       escalationTier: dispute.state.escalationTier,
-      previousTierResults: dispute.state.previousTierResults?.map(r => ({
+      previousTierResults: dispute.state.previousTierResults?.map((r) => ({
         ...r,
         resolvedAtBlock: r.resolvedAtBlock.toString(),
       })),
@@ -60,17 +60,19 @@ function serializeDispute(dispute: Dispute): Uint8Array {
       challenger: dispute.commitments.challenger
         ? {
             ...dispute.commitments.challenger,
-            committedAtBlock: dispute.commitments.challenger.committedAtBlock.toString(),
+            committedAtBlock:
+              dispute.commitments.challenger.committedAtBlock.toString(),
           }
         : undefined,
       defender: dispute.commitments.defender
         ? {
             ...dispute.commitments.defender,
-            committedAtBlock: dispute.commitments.defender.committedAtBlock.toString(),
+            committedAtBlock:
+              dispute.commitments.defender.committedAtBlock.toString(),
           }
         : undefined,
     },
-    arbiters: dispute.arbiters.map(a => ({
+    arbiters: dispute.arbiters.map((a) => ({
       ...a,
       stakedAmount: a.stakedAmount.toString(),
     })),
@@ -117,23 +119,27 @@ function deserializeDispute(bytes: Uint8Array): Dispute {
       phaseDeadline: BigInt(obj.state.phaseDeadline),
       canEscalate: obj.state.canEscalate,
       escalationTier: obj.state.escalationTier as EscalationTier,
-      previousTierResults: obj.state.previousTierResults?.map((r: Record<string, unknown>) => ({
-        ...r,
-        resolvedAtBlock: BigInt(r.resolvedAtBlock as string),
-      })),
+      previousTierResults: obj.state.previousTierResults?.map(
+        (r: Record<string, unknown>) => ({
+          ...r,
+          resolvedAtBlock: BigInt(r.resolvedAtBlock as string),
+        }),
+      ),
     },
     commitments: {
       challenger: obj.commitments.challenger
-        ? {
+        ? ({
             ...obj.commitments.challenger,
-            committedAtBlock: BigInt(obj.commitments.challenger.committedAtBlock),
-          } as EvidenceCommitment
+            committedAtBlock: BigInt(
+              obj.commitments.challenger.committedAtBlock,
+            ),
+          } as EvidenceCommitment)
         : undefined,
       defender: obj.commitments.defender
-        ? {
+        ? ({
             ...obj.commitments.defender,
             committedAtBlock: BigInt(obj.commitments.defender.committedAtBlock),
-          } as EvidenceCommitment
+          } as EvidenceCommitment)
         : undefined,
     },
     arbiters: obj.arbiters.map((a: Record<string, unknown>) => ({
@@ -148,13 +154,15 @@ function deserializeDispute(bytes: Uint8Array): Dispute {
           votedAtBlock: BigInt(vote.votedAtBlock as string),
           lockedStake: BigInt(vote.lockedStake as string),
         } as ArbiterVote,
-      ])
+      ]),
     ),
     outcome: obj.outcome,
     winner: obj.winner,
     exposedFalsehood: obj.exposedFalsehood,
     initiatedAtBlock: BigInt(obj.initiatedAtBlock),
-    resolvedAtBlock: obj.resolvedAtBlock ? BigInt(obj.resolvedAtBlock) : undefined,
+    resolvedAtBlock: obj.resolvedAtBlock
+      ? BigInt(obj.resolvedAtBlock)
+      : undefined,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
   };
@@ -162,10 +170,10 @@ function deserializeDispute(bytes: Uint8Array): Dispute {
 
 function serializeExpertise(expertise: DomainExpertise[]): Uint8Array {
   const json = JSON.stringify(
-    expertise.map(e => ({
+    expertise.map((e) => ({
       ...e,
       lastActiveBlock: e.lastActiveBlock.toString(),
-    }))
+    })),
   );
   return new TextEncoder().encode(json);
 }
@@ -220,14 +228,14 @@ export class DisputeStateTree {
 
     // Initialize phase index
     const phases: DisputePhase[] = [
-      'initiation',
-      'evidence_commit',
-      'evidence_reveal',
-      'arbitration',
-      'deliberation',
-      'settlement',
-      'escalated',
-      'resolved',
+      "initiation",
+      "evidence_commit",
+      "evidence_reveal",
+      "arbitration",
+      "deliberation",
+      "settlement",
+      "escalated",
+      "resolved",
     ];
     for (const phase of phases) {
       this.phaseIndex.set(phase, new Set());
@@ -241,7 +249,7 @@ export class DisputeStateTree {
    */
   createDispute(dispute: Dispute): void {
     if (this.disputeCache.has(dispute.id)) {
-      throw new StateError('Dispute already exists', 'DUPLICATE_EVIDENCE', {
+      throw new StateError("Dispute already exists", "DUPLICATE_EVIDENCE", {
         disputeId: dispute.id,
       });
     }
@@ -295,7 +303,7 @@ export class DisputeStateTree {
   updateDispute(dispute: Dispute): void {
     const existing = this.getDispute(dispute.id);
     if (!existing) {
-      throw new StateError('Dispute not found', 'DISPUTE_NOT_FOUND', {
+      throw new StateError("Dispute not found", "DISPUTE_NOT_FOUND", {
         disputeId: dispute.id,
       });
     }
@@ -306,14 +314,14 @@ export class DisputeStateTree {
       this.addToPhaseIndex(dispute.id, dispute.state.phase);
 
       // Update active index if resolved
-      if (dispute.state.phase === 'resolved') {
+      if (dispute.state.phase === "resolved") {
         this.activeDisputeIndex.delete(dispute.id);
         this.resolvedCount++;
 
         // Track winner stats
-        if (dispute.winner === 'challenger') {
+        if (dispute.winner === "challenger") {
           this.challengerWins++;
-        } else if (dispute.winner === 'defender') {
+        } else if (dispute.winner === "defender") {
           this.defenderWins++;
         }
       }
@@ -519,7 +527,10 @@ export class DisputeStateTree {
     totalToResearch: bigint;
     byPhase: Record<DisputePhase, number>;
   } {
-    const byPhase: Record<DisputePhase, number> = {} as Record<DisputePhase, number>;
+    const byPhase: Record<DisputePhase, number> = {} as Record<
+      DisputePhase,
+      number
+    >;
     for (const [phase, ids] of this.phaseIndex) {
       byPhase[phase] = ids.size;
     }

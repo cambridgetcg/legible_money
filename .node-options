@@ -1,0 +1,25 @@
+# Node.js Options - Optimized for Apple M4 Max
+#
+# Hardware: 14 CPU cores, 32 GPU cores, 36GB unified memory
+#
+# Usage: Set NODE_OPTIONS="$(cat .node-options)" or use .env
+
+# Memory allocation (use 75% of 36GB = 27GB max)
+--max-old-space-size=27648
+
+# Enable experimental features for performance
+--experimental-vm-modules
+
+# Optimize garbage collection
+--expose-gc
+--optimize-for-size=false
+--max-semi-space-size=128
+
+# Enable worker threads (uses all cores)
+--experimental-worker
+
+# Native ESM loader
+--experimental-specifier-resolution=node
+
+# Disable warnings in production
+--no-warnings

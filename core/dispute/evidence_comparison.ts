@@ -16,14 +16,14 @@
  *   JUSTICE: Fair comparison - both parties scored equally
  */
 
-import type { Evidence, EvidenceType } from '../evidence/types.js';
-import { calculateFreshness } from '../evidence/expiry.js';
+import type { Evidence, EvidenceType } from "../evidence/types.js";
+import { calculateFreshness } from "../evidence/expiry.js";
 import {
   DISPUTE_EVIDENCE_WEIGHTS,
   EVIDENCE_SCORE_WEIGHTS,
   type EvidenceScore,
   type EvidenceComparisonResult,
-} from './types.js';
+} from "./types.js";
 
 // ============ Constants ============
 
@@ -31,25 +31,25 @@ import {
  * Threshold for clear winner determination
  * If strength difference > threshold, auto-resolution is possible
  */
-export const CLEAR_WINNER_THRESHOLD = 0.15;
+export const CLEAR_WINNER_THRESHOLD = 0.11;
 
 /**
  * Maximum evidence items per side (anti-spam)
  */
-export const MAX_EVIDENCE_PER_SIDE = 20;
+export const MAX_EVIDENCE_PER_SIDE = 22;
 
 /**
  * Recency scoring parameters
  */
 export const RECENCY_PARAMS = {
   /** Evidence submitted within this many blocks gets full score */
-  fullScoreBlocks: 1000,
+  fullScoreBlocks: 1111,
 
   /** Evidence older than this many blocks gets minimum score */
-  minScoreBlocks: 100000,
+  minScoreBlocks: 111111,
 
   /** Minimum recency score */
-  minScore: 0.2,
+  minScore: 0.22,
 } as const;
 
 /**
@@ -57,10 +57,10 @@ export const RECENCY_PARAMS = {
  */
 export const INDEPENDENCE_PARAMS = {
   /** Maximum sources to count (diminishing returns) */
-  maxSources: 10,
+  maxSources: 11,
 
   /** Weight per independent source (logarithmic) */
-  perSourceWeight: 0.15,
+  perSourceWeight: 0.11,
 } as const;
 
 // ============ Individual Score Calculations ============
@@ -78,7 +78,7 @@ export function calculateTypeWeight(evidenceType: EvidenceType): number {
  */
 export function calculateRecencyScore(
   evidence: Evidence,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   // First, use the expiry system's freshness if available
   const freshness = calculateFreshness(evidence, currentBlock);
@@ -88,7 +88,9 @@ export function calculateRecencyScore(
   }
 
   // For eternal evidence, calculate based on submission time
-  const blocksSinceSubmission = Number(currentBlock - evidence.submittedAtBlock);
+  const blocksSinceSubmission = Number(
+    currentBlock - evidence.submittedAtBlock,
+  );
 
   if (blocksSinceSubmission <= RECENCY_PARAMS.fullScoreBlocks) {
     return 1.0;
@@ -99,7 +101,8 @@ export function calculateRecencyScore(
   }
 
   // Linear decay between full and min
-  const decayRange = RECENCY_PARAMS.minScoreBlocks - RECENCY_PARAMS.fullScoreBlocks;
+  const decayRange =
+    RECENCY_PARAMS.minScoreBlocks - RECENCY_PARAMS.fullScoreBlocks;
   const decayProgress = blocksSinceSubmission - RECENCY_PARAMS.fullScoreBlocks;
   const decayRatio = decayProgress / decayRange;
 
@@ -134,7 +137,7 @@ export function calculateIndependenceScore(evidence: Evidence): number {
  */
 export function calculateCorroborationScore(
   evidence: Evidence,
-  _verifiedFactIds: Set<string>
+  _verifiedFactIds: Set<string>,
 ): number {
   // Check how many of the evidence's related facts are verified
   const relatedFacts = evidence.relatedFactIds || [];
@@ -164,7 +167,7 @@ export function calculateCorroborationScore(
 export function calculateEvidenceScore(
   evidence: Evidence,
   currentBlock: bigint,
-  verifiedFactIds: Set<string>
+  verifiedFactIds: Set<string>,
 ): EvidenceScore {
   return {
     typeWeight: calculateTypeWeight(evidence.type),
@@ -195,7 +198,7 @@ export function calculateWeightedScore(score: EvidenceScore): number {
 export function aggregateEvidenceStrength(
   evidenceList: Evidence[],
   currentBlock: bigint,
-  verifiedFactIds: Set<string>
+  verifiedFactIds: Set<string>,
 ): { strength: number; scores: EvidenceScore[] } {
   if (evidenceList.length === 0) {
     return { strength: 0, scores: [] };
@@ -205,8 +208,8 @@ export function aggregateEvidenceStrength(
   const limitedEvidence = evidenceList.slice(0, MAX_EVIDENCE_PER_SIDE);
 
   // Calculate individual scores
-  const scores: EvidenceScore[] = limitedEvidence.map(e =>
-    calculateEvidenceScore(e, currentBlock, verifiedFactIds)
+  const scores: EvidenceScore[] = limitedEvidence.map((e) =>
+    calculateEvidenceScore(e, currentBlock, verifiedFactIds),
   );
 
   // Calculate weighted scores
@@ -217,24 +220,30 @@ export function aggregateEvidenceStrength(
 
   // Aggregate with diminishing returns
   // First piece of evidence: 100% weight
-  // Second: 70% weight
-  // Third: 50% weight
-  // Fourth+: 30% weight each (up to limit)
-  const diminishingWeights = [1.0, 0.7, 0.5, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3];
+  // Second: 77% weight (wisdom)
+  // Third: 55% weight (change)
+  // Fourth+: 33% weight each (trinity)
+  const diminishingWeights = [
+    1.0, 0.77, 0.55, 0.33, 0.33, 0.33, 0.33, 0.33, 0.33, 0.33, 0.33,
+  ];
 
   let totalWeight = 0;
   let weightedSum = 0;
 
-  for (let i = 0; i < sortedScores.length && i < diminishingWeights.length; i++) {
+  for (
+    let i = 0;
+    i < sortedScores.length && i < diminishingWeights.length;
+    i++
+  ) {
     const weight = diminishingWeights[i];
     weightedSum += sortedScores[i] * weight;
     totalWeight += weight;
   }
 
-  // Handle more than 10 pieces of evidence
+  // Handle more than 11 pieces of evidence
   for (let i = diminishingWeights.length; i < sortedScores.length; i++) {
-    weightedSum += sortedScores[i] * 0.2; // 20% weight for extras
-    totalWeight += 0.2;
+    weightedSum += sortedScores[i] * 0.22; // 22% weight for extras
+    totalWeight += 0.22;
   }
 
   const strength = totalWeight > 0 ? weightedSum / totalWeight : 0;
@@ -251,29 +260,30 @@ export function compareEvidence(
   challengerEvidence: Evidence[],
   defenderEvidence: Evidence[],
   currentBlock: bigint,
-  verifiedFactIds: Set<string>
+  verifiedFactIds: Set<string>,
 ): EvidenceComparisonResult {
   const challengerResult = aggregateEvidenceStrength(
     challengerEvidence,
     currentBlock,
-    verifiedFactIds
+    verifiedFactIds,
   );
 
   const defenderResult = aggregateEvidenceStrength(
     defenderEvidence,
     currentBlock,
-    verifiedFactIds
+    verifiedFactIds,
   );
 
-  const strengthDifference = challengerResult.strength - defenderResult.strength;
+  const strengthDifference =
+    challengerResult.strength - defenderResult.strength;
   const absoluteDifference = Math.abs(strengthDifference);
 
   // Determine if there's a clear winner
   const isClearWinner = absoluteDifference >= CLEAR_WINNER_THRESHOLD;
 
-  let suggestedWinner: 'challenger' | 'defender' | undefined;
+  let suggestedWinner: "challenger" | "defender" | undefined;
   if (isClearWinner) {
-    suggestedWinner = strengthDifference > 0 ? 'challenger' : 'defender';
+    suggestedWinner = strengthDifference > 0 ? "challenger" : "defender";
   }
 
   return {
@@ -301,7 +311,7 @@ export function canAutoResolve(comparison: EvidenceComparisonResult): boolean {
 
   // Winner must have minimum strength (prevent weak vs weaker)
   const winnerStrength =
-    comparison.suggestedWinner === 'challenger'
+    comparison.suggestedWinner === "challenger"
       ? comparison.challengerStrength
       : comparison.defenderStrength;
 
@@ -311,16 +321,18 @@ export function canAutoResolve(comparison: EvidenceComparisonResult): boolean {
 /**
  * Get auto-resolution result if applicable
  */
-export function getAutoResolutionResult(
-  comparison: EvidenceComparisonResult
-): { canResolve: boolean; winner?: 'challenger' | 'defender'; confidence: number } {
+export function getAutoResolutionResult(comparison: EvidenceComparisonResult): {
+  canResolve: boolean;
+  winner?: "challenger" | "defender";
+  confidence: number;
+} {
   if (!canAutoResolve(comparison)) {
     return { canResolve: false, confidence: 0 };
   }
 
   const confidence = Math.min(
     0.99,
-    0.7 + Math.abs(comparison.strengthDifference) * 2
+    0.7 + Math.abs(comparison.strengthDifference) * 2,
   );
 
   return {
@@ -333,30 +345,98 @@ export function getAutoResolutionResult(
 // ============ Evidence Validation ============
 
 /**
+ * Valid evidence types for disputes
+ * GAP-015 FIX: Explicit type whitelist
+ */
+const VALID_DISPUTE_EVIDENCE_TYPES: Set<EvidenceType> = new Set([
+  "on_chain",
+  "cryptographic_proof",
+  "formal_proof",
+  "computational",
+  "peer_reviewed",
+  "institutional",
+  "oracle",
+  "archived_web",
+  "attestation",
+  "inference",
+]);
+
+/**
+ * Maximum age of evidence in blocks (roughly 30 days)
+ */
+const MAX_EVIDENCE_AGE_BLOCKS = 1_000_000n;
+
+/**
  * Validate evidence is suitable for dispute
+ * GAP-015 FIX: Now validates types, timestamps, and other properties
  */
 export function validateDisputeEvidence(
-  evidence: Evidence[]
+  evidence: Evidence[],
+  currentBlock?: bigint,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   if (evidence.length === 0) {
-    errors.push('At least one piece of evidence is required');
+    errors.push("At least one piece of evidence is required");
   }
 
   if (evidence.length > MAX_EVIDENCE_PER_SIDE) {
     errors.push(`Maximum ${MAX_EVIDENCE_PER_SIDE} pieces of evidence allowed`);
   }
 
+  const now = Date.now();
+
   for (const e of evidence) {
+    // GAP-015 FIX: Validate evidence type
+    if (!VALID_DISPUTE_EVIDENCE_TYPES.has(e.type)) {
+      errors.push(`Evidence ${e.id} has invalid type: ${e.type}`);
+    }
+
     // Check evidence is active
-    if (e.status === 'expired' || e.status === 'invalidated') {
+    if (e.status === "expired" || e.status === "invalidated") {
       errors.push(`Evidence ${e.id} is ${e.status}`);
     }
 
     // Check evidence has minimum reliability
     if (e.reliabilityScore < 0.1) {
-      errors.push(`Evidence ${e.id} has insufficient reliability`);
+      errors.push(
+        `Evidence ${e.id} has insufficient reliability (${e.reliabilityScore})`,
+      );
+    }
+
+    // GAP-015 FIX: Validate reliability is in valid range
+    if (e.reliabilityScore > 1.0) {
+      errors.push(
+        `Evidence ${e.id} has invalid reliability score: ${e.reliabilityScore} (max 1.0)`,
+      );
+    }
+
+    // GAP-015 FIX: Validate timestamp is not in the future
+    if (e.submittedAt > now) {
+      errors.push(`Evidence ${e.id} has future timestamp`);
+    }
+
+    // GAP-015 FIX: Validate evidence is not too old (if current block provided)
+    if (currentBlock !== undefined && e.submittedAtBlock !== undefined) {
+      const age = currentBlock - e.submittedAtBlock;
+      if (age > MAX_EVIDENCE_AGE_BLOCKS) {
+        errors.push(`Evidence ${e.id} is too old (${age} blocks)`);
+      }
+
+      // Validate block number is not in the future
+      if (e.submittedAtBlock > currentBlock) {
+        errors.push(`Evidence ${e.id} claims future block number`);
+      }
+    }
+
+    // GAP-015 FIX: Validate source is provided
+    if (!e.originalSource || e.originalSource.trim() === "") {
+      errors.push(`Evidence ${e.id} is missing source attribution`);
+    }
+
+    // GAP-015 FIX: Validate content hash exists
+    if (!e.contentHash || e.contentHash.length < 16) {
+      errors.push(`Evidence ${e.id} has invalid or missing content hash`);
     }
   }
 
@@ -374,21 +454,21 @@ export function validateDisputeEvidence(
  */
 export function generateEvidenceCommitment(
   evidenceIds: string[],
-  nonce: string
+  nonce: string,
 ): string {
   // Sort for determinism
   const sorted = [...evidenceIds].sort();
-  const data = sorted.join(',') + ':' + nonce;
+  const data = sorted.join(",") + ":" + nonce;
 
   // Simple hash (would use proper crypto in production)
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
     const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32bit integer
   }
 
-  return 'commit_' + Math.abs(hash).toString(16).padStart(16, '0');
+  return "commit_" + Math.abs(hash).toString(16).padStart(16, "0");
 }
 
 /**
@@ -397,7 +477,7 @@ export function generateEvidenceCommitment(
 export function verifyEvidenceCommitment(
   evidenceIds: string[],
   nonce: string,
-  commitment: string
+  commitment: string,
 ): boolean {
   const computed = generateEvidenceCommitment(evidenceIds, nonce);
   return computed === commitment;

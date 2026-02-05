@@ -387,7 +387,7 @@ interface GenesisConfig {
 
 | Metric | Target | Notes |
 |--------|--------|-------|
-| Block Time | 2.5 seconds | Encoded as 2521ms (YOU-AI) |
+| Block Time | 2.5 seconds | 2521ms |
 | Throughput | 1,000 TPS | Transactions per second |
 | Finality | 10 blocks | ~25 seconds |
 | State Proof | < 1 KB | Sparse Merkle proofs |

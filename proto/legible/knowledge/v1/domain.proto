@@ -1,0 +1,250 @@
+syntax = "proto3";
+package legible.knowledge.v1;
+
+option go_package = "github.com/legible-money/legible/x/knowledge/types";
+
+import "legible/knowledge/v1/stratum.proto";
+
+// ============================================================================
+// Ontological Domain
+// ============================================================================
+
+// OntologicalDomain represents a branch in the knowledge tree
+message OntologicalDomain {
+  // Unique identifier using dot notation: 'physics.mechanics.quantum'
+  string id = 1;
+
+  // Human-readable name: 'Quantum Mechanics'
+  string name = 2;
+
+  // Which ontological stratum this domain belongs to
+  string stratum = 3;
+
+  // Parent domain ID, empty for root domains
+  string parent_domain = 4;
+
+  // IDs of child domains
+  repeated string child_domains = 5;
+
+  // Which lower strata this domain's facts may depend on
+  repeated string depends_on_strata = 6;
+
+  // Default logic zone for claims in this domain
+  LogicZone logic_zone_default = 7;
+
+  // Default epistemic category for claims in this domain
+  EpistemicCategory epistemic_category_default = 8;
+
+  // Description of what this domain covers
+  string description = 9;
+
+  // Example claims that belong in this domain
+  repeated string examples = 10;
+
+  // Number of facts currently in this domain
+  uint64 fact_count = 11;
+
+  // Number of axioms (confidence 1.0 facts) in this domain
+  uint64 axiom_count = 12;
+
+  // Genesis fact ID that established this domain (if any)
+  string root_fact_id = 13;
+
+  // Block number when domain was created
+  uint64 created_at = 14;
+
+  // Governance proposal that created this domain (if not genesis)
+  string governance_proposal = 15;
+}
+
+// ============================================================================
+// Domain Tree
+// ============================================================================
+
+// DomainTree holds the complete domain hierarchy
+message DomainTree {
+  // Root domain
+  DomainNode root = 1;
+
+  // Total number of domains in the tree
+  uint32 domain_count = 2;
+
+  // Maximum depth of the tree
+  uint32 max_depth = 3;
+}
+
+// DomainNode is a node in the domain tree
+message DomainNode {
+  // The domain data
+  OntologicalDomain domain = 1;
+
+  // Child nodes
+  repeated DomainNode children = 2;
+
+  // Depth from root (root = 0)
+  uint32 depth = 3;
+
+  // Path from root: ['physics', 'mechanics', 'quantum']
+  repeated string path = 4;
+}
+
+// SerializedDomainTree is for storage/transmission
+message SerializedDomainTree {
+  repeated OntologicalDomain domains = 1;
+  uint32 version = 2;
+}
+
+// ============================================================================
+// Domain Registration
+// ============================================================================
+
+// DomainRegistrationInput is input for registering a new domain
+message DomainRegistrationInput {
+  string id = 1;
+  string name = 2;
+  string stratum = 3;
+  string parent_domain = 4;
+  repeated string depends_on_strata = 5;
+  LogicZone logic_zone_default = 6;
+  EpistemicCategory epistemic_category_default = 7;
+  string description = 8;
+  repeated string examples = 9;
+}
+
+// DomainRegistrationResult is the result of domain registration
+message DomainRegistrationResult {
+  // The created domain
+  OntologicalDomain domain = 1;
+
+  // Whether governance approval is required
+  bool requires_governance = 2;
+
+  // Minimum stake required for registration (in base units)
+  string minimum_stake = 3;
+
+  // Validation errors (if any)
+  repeated string errors = 4;
+}
+
+// ============================================================================
+// Confidence Calculation
+// ============================================================================
+
+// OntologicalConfidenceResult is the result of confidence calculation
+message OntologicalConfidenceResult {
+  // Original confidence before ontological adjustments (0-1000000)
+  uint32 base_confidence = 1;
+
+  // Maximum confidence allowed by this stratum (0-1000000)
+  uint32 stratum_ceiling = 2;
+
+  // Maximum confidence inherited from parent domains (0-1000000)
+  uint32 inherited_ceiling = 3;
+
+  // Discount factor from cross-stratum dependencies (0-1000000)
+  uint32 stratum_discount = 4;
+
+  // Final effective confidence (0-1000000)
+  uint32 effective_confidence = 5;
+
+  // Details of dependencies that affected the calculation
+  repeated DependencyDetail dependencies = 6;
+}
+
+// DependencyDetail describes how a dependency affects confidence
+message DependencyDetail {
+  string stratum = 1;
+  StratumDependencyType type = 2;
+  uint32 strength = 3;  // 0-1000000
+}
+
+// ============================================================================
+// Validation
+// ============================================================================
+
+// OntologicalValidationResult is the result of validating a reference
+message OntologicalValidationResult {
+  // Whether the reference is valid
+  bool valid = 1;
+
+  // Reason for invalidity (if invalid)
+  string reason = 2;
+
+  // The from domain's stratum level
+  uint32 from_level = 3;
+
+  // The to domain's stratum level
+  uint32 to_level = 4;
+}
+
+// ReferenceType defines types of references between facts
+enum ReferenceType {
+  REFERENCE_TYPE_UNSPECIFIED = 0;
+  REFERENCE_TYPE_SUPPORTS = 1;
+  REFERENCE_TYPE_CONTRADICTS = 2;
+  REFERENCE_TYPE_EXTENDS = 3;
+  REFERENCE_TYPE_SPECIALIZES = 4;
+  REFERENCE_TYPE_GENERALIZES = 5;
+}
+
+// ============================================================================
+// Domain Proposal
+// ============================================================================
+
+// DomainProposalStatus tracks the lifecycle of a domain proposal
+enum DomainProposalStatus {
+  DOMAIN_PROPOSAL_STATUS_UNSPECIFIED = 0;
+  DOMAIN_PROPOSAL_STATUS_PENDING = 1;
+  DOMAIN_PROPOSAL_STATUS_ENDORSED = 2;
+  DOMAIN_PROPOSAL_STATUS_CHALLENGED = 3;
+  DOMAIN_PROPOSAL_STATUS_APPROVED = 4;
+  DOMAIN_PROPOSAL_STATUS_REJECTED = 5;
+  DOMAIN_PROPOSAL_STATUS_EXPIRED = 6;
+}
+
+// DomainProposal represents a proposal to add a new domain
+message DomainProposal {
+  // Unique proposal ID
+  string id = 1;
+
+  // The proposed domain
+  OntologicalDomain proposed_domain = 2;
+
+  // Proposer's address
+  string proposer = 3;
+
+  // Stake locked by proposer (in base units)
+  string stake = 4;
+
+  // Current status
+  DomainProposalStatus status = 5;
+
+  // Block when proposed
+  uint64 proposed_at = 6;
+
+  // Block when voting ends
+  uint64 voting_ends_at = 7;
+
+  // Total endorsement stake
+  string endorsement_stake = 8;
+
+  // Total challenge stake
+  string challenge_stake = 9;
+}
+
+// DomainEndorsement is a validator endorsement of a domain proposal
+message DomainEndorsement {
+  string proposal_id = 1;
+  string endorser = 2;
+  string stake = 3;
+  uint64 endorsed_at = 4;
+}
+
+// DomainChallenge is a challenge to a domain proposal
+message DomainChallenge {
+  string proposal_id = 1;
+  string challenger = 2;
+  string stake = 3;
+  string reason = 4;
+  uint64 challenged_at = 5;
+}

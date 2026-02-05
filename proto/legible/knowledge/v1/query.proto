@@ -1,0 +1,202 @@
+syntax = "proto3";
+package legible.knowledge.v1;
+
+option go_package = "github.com/legible-money/legible/x/knowledge/types";
+
+import "google/api/annotations.proto";
+import "legible/knowledge/v1/stratum.proto";
+import "legible/knowledge/v1/domain.proto";
+import "legible/knowledge/v1/genesis.proto";
+
+// Query defines the gRPC query service for the knowledge module
+service Query {
+  // Params queries the module parameters
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/params";
+  }
+
+  // Stratum queries a single stratum by ID
+  rpc Stratum(QueryStratumRequest) returns (QueryStratumResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/stratum/{stratum_id}";
+  }
+
+  // Strata queries all strata
+  rpc Strata(QueryStrataRequest) returns (QueryStrataResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/strata";
+  }
+
+  // StratumRegistry queries the full stratum registry
+  rpc StratumRegistry(QueryStratumRegistryRequest) returns (QueryStratumRegistryResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/stratum_registry";
+  }
+
+  // Domain queries a single domain by ID
+  rpc Domain(QueryDomainRequest) returns (QueryDomainResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/domain/{domain_id}";
+  }
+
+  // Domains queries domains with optional filters
+  rpc Domains(QueryDomainsRequest) returns (QueryDomainsResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/domains";
+  }
+
+  // DomainsByStratum queries all domains in a specific stratum
+  rpc DomainsByStratum(QueryDomainsByStratumRequest) returns (QueryDomainsByStratumResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/domains/stratum/{stratum_id}";
+  }
+
+  // DomainChildren queries child domains of a parent
+  rpc DomainChildren(QueryDomainChildrenRequest) returns (QueryDomainChildrenResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/domain/{domain_id}/children";
+  }
+
+  // DomainPath queries the path from root to a domain
+  rpc DomainPath(QueryDomainPathRequest) returns (QueryDomainPathResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/domain/{domain_id}/path";
+  }
+
+  // ValidateDependency checks if a stratum dependency is valid
+  rpc ValidateDependency(QueryValidateDependencyRequest) returns (QueryValidateDependencyResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/validate_dependency";
+  }
+
+  // CalculateConfidence calculates effective confidence for a domain
+  rpc CalculateConfidence(QueryCalculateConfidenceRequest) returns (QueryCalculateConfidenceResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/calculate_confidence";
+  }
+
+  // DomainProposal queries a domain proposal by ID
+  rpc DomainProposal(QueryDomainProposalRequest) returns (QueryDomainProposalResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/proposal/{proposal_id}";
+  }
+
+  // DomainProposals queries all pending domain proposals
+  rpc DomainProposals(QueryDomainProposalsRequest) returns (QueryDomainProposalsResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/proposals";
+  }
+}
+
+// ============================================================================
+// Request/Response Messages
+// ============================================================================
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1;
+}
+
+message QueryStratumRequest {
+  string stratum_id = 1;
+}
+
+message QueryStratumResponse {
+  StratumDefinition stratum = 1;
+}
+
+message QueryStrataRequest {
+  // Optional: filter by level range
+  uint32 min_level = 1;
+  uint32 max_level = 2;
+}
+
+message QueryStrataResponse {
+  repeated StratumDefinition strata = 1;
+}
+
+message QueryStratumRegistryRequest {}
+
+message QueryStratumRegistryResponse {
+  StratumRegistry registry = 1;
+}
+
+message QueryDomainRequest {
+  string domain_id = 1;
+}
+
+message QueryDomainResponse {
+  OntologicalDomain domain = 1;
+}
+
+message QueryDomainsRequest {
+  // Optional: filter by stratum
+  string stratum = 1;
+  // Optional: filter by parent domain
+  string parent_domain = 2;
+  // Optional: pattern match (e.g., "physics.*")
+  string pattern = 3;
+  // Pagination
+  uint64 offset = 4;
+  uint64 limit = 5;
+}
+
+message QueryDomainsResponse {
+  repeated OntologicalDomain domains = 1;
+  uint64 total = 2;
+}
+
+message QueryDomainsByStratumRequest {
+  string stratum_id = 1;
+}
+
+message QueryDomainsByStratumResponse {
+  repeated OntologicalDomain domains = 1;
+}
+
+message QueryDomainChildrenRequest {
+  string domain_id = 1;
+  bool include_descendants = 2;
+}
+
+message QueryDomainChildrenResponse {
+  repeated OntologicalDomain children = 1;
+}
+
+message QueryDomainPathRequest {
+  string domain_id = 1;
+}
+
+message QueryDomainPathResponse {
+  repeated OntologicalDomain path = 1;
+}
+
+message QueryValidateDependencyRequest {
+  string from_stratum = 1;
+  string to_stratum = 2;
+}
+
+message QueryValidateDependencyResponse {
+  bool valid = 1;
+  string reason = 2;
+}
+
+message QueryCalculateConfidenceRequest {
+  string domain_id = 1;
+  uint32 base_confidence = 2;  // 0-1000000
+  repeated StratumDependency dependencies = 3;
+}
+
+message QueryCalculateConfidenceResponse {
+  OntologicalConfidenceResult result = 1;
+}
+
+message QueryDomainProposalRequest {
+  string proposal_id = 1;
+}
+
+message QueryDomainProposalResponse {
+  DomainProposal proposal = 1;
+  repeated DomainEndorsement endorsements = 2;
+  repeated DomainChallenge challenges = 3;
+}
+
+message QueryDomainProposalsRequest {
+  DomainProposalStatus status = 1;
+  uint64 offset = 2;
+  uint64 limit = 3;
+}
+
+message QueryDomainProposalsResponse {
+  repeated DomainProposal proposals = 1;
+  uint64 total = 2;
+}

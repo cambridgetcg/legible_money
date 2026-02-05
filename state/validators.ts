@@ -11,15 +11,20 @@
  * - Performance metrics
  */
 
-import { InMemorySMT, type MerkleRoot, type MerkleProofData } from '../core/crypto/merkle.js';
-import { sha512_256, sha512_256Hex } from '../core/crypto/hashing.js';
-import type { PublicKey } from '../core/crypto/keys.js';
+import {
+  InMemorySMT,
+  type MerkleRoot,
+  type MerkleProofData,
+} from "../core/crypto/merkle.js";
+import { sha512_256 } from "../core/crypto/hashing.js";
+import type { PublicKey } from "../core/crypto/keys.js";
 import {
   type ValidatorState,
   type DelegationState,
   type ValidatorSetState,
+  type UnbondingEntry,
   StateError,
-} from './types.js';
+} from "./types.js";
 
 // ============ Serialization ============
 
@@ -103,6 +108,10 @@ export class ValidatorStateTree {
   private validatorCache: Map<string, ValidatorState> = new Map();
   private delegationCache: Map<string, DelegationState> = new Map();
 
+  // Unbonding queue for tracking pending undelegations
+  // SECURITY: Tracks stake being undelegated to enforce unbonding period
+  private unbondingQueue: Map<string, UnbondingEntry> = new Map();
+
   // Aggregate stats
   private totalStake: bigint = 0n;
   private activeCount: number = 0;
@@ -163,10 +172,14 @@ export class ValidatorStateTree {
     publicKey: PublicKey,
     did: string,
     initialStake: bigint,
-    blockNumber: bigint
+    blockNumber: bigint,
   ): MerkleRoot {
     if (this.isValidator(publicKey)) {
-      throw new StateError('Validator already registered', 'INVALID_TRANSITION', { publicKey });
+      throw new StateError(
+        "Validator already registered",
+        "INVALID_TRANSITION",
+        { publicKey },
+      );
     }
 
     const validator: ValidatorState = {
@@ -200,10 +213,15 @@ export class ValidatorStateTree {
   /**
    * Update validator state
    */
-  updateValidator(publicKey: PublicKey, update: Partial<ValidatorState>): MerkleRoot {
+  updateValidator(
+    publicKey: PublicKey,
+    update: Partial<ValidatorState>,
+  ): MerkleRoot {
     const existing = this.getValidator(publicKey);
     if (!existing) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { publicKey });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        publicKey,
+      });
     }
 
     // Track stake changes
@@ -213,7 +231,9 @@ export class ValidatorStateTree {
     const updated: ValidatorState = {
       ...existing,
       ...update,
-      totalStake: (update.stake ?? existing.stake) + (update.delegatedStake ?? existing.delegatedStake),
+      totalStake:
+        (update.stake ?? existing.stake) +
+        (update.delegatedStake ?? existing.delegatedStake),
     };
 
     const key = validatorToKey(publicKey);
@@ -238,7 +258,9 @@ export class ValidatorStateTree {
   addStake(publicKey: PublicKey, amount: bigint): MerkleRoot {
     const validator = this.getValidator(publicKey);
     if (!validator) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { publicKey });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        publicKey,
+      });
     }
 
     return this.updateValidator(publicKey, {
@@ -252,11 +274,13 @@ export class ValidatorStateTree {
   removeStake(publicKey: PublicKey, amount: bigint): MerkleRoot {
     const validator = this.getValidator(publicKey);
     if (!validator) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { publicKey });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        publicKey,
+      });
     }
 
     if (validator.stake < amount) {
-      throw new StateError('Insufficient stake', 'INSUFFICIENT_BALANCE', {
+      throw new StateError("Insufficient stake", "INSUFFICIENT_BALANCE", {
         publicKey,
         stake: validator.stake.toString(),
         requested: amount.toString(),
@@ -288,10 +312,16 @@ export class ValidatorStateTree {
   /**
    * Slash a validator
    */
-  slashValidator(publicKey: PublicKey, amount: bigint, reason: string): MerkleRoot {
+  slashValidator(
+    publicKey: PublicKey,
+    amount: bigint,
+    _reason: string,
+  ): MerkleRoot {
     const validator = this.getValidator(publicKey);
     if (!validator) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { publicKey });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        publicKey,
+      });
     }
 
     const slashFromStake = amount > validator.stake ? validator.stake : amount;
@@ -311,7 +341,9 @@ export class ValidatorStateTree {
   recordBlockProposal(publicKey: PublicKey, blockNumber: bigint): MerkleRoot {
     const validator = this.getValidator(publicKey);
     if (!validator) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { publicKey });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        publicKey,
+      });
     }
 
     return this.updateValidator(publicKey, {
@@ -326,12 +358,14 @@ export class ValidatorStateTree {
   recordVerification(publicKey: PublicKey, correct: boolean): MerkleRoot {
     const validator = this.getValidator(publicKey);
     if (!validator) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { publicKey });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        publicKey,
+      });
     }
 
     const newCorrect = validator.verificationsCorrect + (correct ? 1 : 0);
     const newTotal = validator.verificationsCompleted + 1;
-    const accuracy = newTotal > 0 ? newCorrect / newTotal : 0;
+    // accuracy = newTotal > 0 ? newCorrect / newTotal : 0 (available for future metrics)
 
     // Reputation adjustment
     const reputationDelta = correct ? 0.001 : -0.005;
@@ -339,7 +373,10 @@ export class ValidatorStateTree {
     return this.updateValidator(publicKey, {
       verificationsCompleted: newTotal,
       verificationsCorrect: newCorrect,
-      reputation: Math.max(0, Math.min(1, validator.reputation + reputationDelta)),
+      reputation: Math.max(
+        0,
+        Math.min(1, validator.reputation + reputationDelta),
+      ),
     });
   }
 
@@ -348,7 +385,10 @@ export class ValidatorStateTree {
   /**
    * Get delegation
    */
-  getDelegation(delegator: string, validator: PublicKey): DelegationState | null {
+  getDelegation(
+    delegator: string,
+    validator: PublicKey,
+  ): DelegationState | null {
     const cacheKey = `${delegator}:${validator}`;
     const cached = this.delegationCache.get(cacheKey);
     if (cached) return cached;
@@ -365,10 +405,17 @@ export class ValidatorStateTree {
   /**
    * Create or update delegation
    */
-  delegate(delegator: string, validator: PublicKey, amount: bigint, blockNumber: bigint): MerkleRoot {
+  delegate(
+    delegator: string,
+    validator: PublicKey,
+    amount: bigint,
+    blockNumber: bigint,
+  ): MerkleRoot {
     const validatorState = this.getValidator(validator);
     if (!validatorState) {
-      throw new StateError('Validator not found', 'VALIDATOR_NOT_FOUND', { validator });
+      throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
+        validator,
+      });
     }
 
     const existing = this.getDelegation(delegator, validator);
@@ -404,15 +451,18 @@ export class ValidatorStateTree {
     validator: PublicKey,
     amount: bigint,
     currentBlock: bigint,
-    unbondingPeriod: bigint
+    unbondingPeriod: bigint,
   ): MerkleRoot {
     const delegation = this.getDelegation(delegator, validator);
     if (!delegation) {
-      throw new StateError('Delegation not found', 'INVALID_TRANSITION', { delegator, validator });
+      throw new StateError("Delegation not found", "INVALID_TRANSITION", {
+        delegator,
+        validator,
+      });
     }
 
     if (delegation.amount < amount) {
-      throw new StateError('Insufficient delegation', 'INSUFFICIENT_BALANCE', {
+      throw new StateError("Insufficient delegation", "INSUFFICIENT_BALANCE", {
         delegator,
         validator,
         delegated: delegation.amount.toString(),
@@ -450,6 +500,122 @@ export class ValidatorStateTree {
     return this.getDelegationRoot();
   }
 
+  /**
+   * Reduce delegation amount without full undelegation logic
+   * SECURITY: Used when starting undelegation - removes stake from active delegation
+   */
+  reduceDelegation(
+    delegator: string,
+    validator: PublicKey,
+    amount: bigint,
+  ): void {
+    const delegation = this.getDelegation(delegator, validator);
+    if (!delegation) {
+      throw new StateError("Delegation not found", "INSUFFICIENT_DELEGATION", {
+        delegator,
+        validator,
+      });
+    }
+
+    if (delegation.amount < amount) {
+      throw new StateError(
+        "Insufficient delegation",
+        "INSUFFICIENT_DELEGATION",
+        {
+          delegator,
+          validator,
+          delegated: delegation.amount.toString(),
+          requested: amount.toString(),
+        },
+      );
+    }
+
+    // Update validator's delegated stake
+    const validatorState = this.getValidator(validator);
+    if (validatorState) {
+      this.updateValidator(validator, {
+        delegatedStake: validatorState.delegatedStake - amount,
+      });
+    }
+
+    // Update or remove delegation record
+    const newAmount = delegation.amount - amount;
+    if (newAmount === 0n) {
+      const key = delegationToKey(delegator, validator);
+      this.delegationSmt.delete(key);
+      this.delegationCache.delete(`${delegator}:${validator}`);
+    } else {
+      const updated: DelegationState = {
+        ...delegation,
+        amount: newAmount,
+      };
+
+      const key = delegationToKey(delegator, validator);
+      const value = serializeDelegation(updated);
+      this.delegationSmt.set(key, value);
+      this.delegationCache.set(`${delegator}:${validator}`, updated);
+    }
+  }
+
+  /**
+   * Add unbonding entry to track pending undelegation
+   * SECURITY: Creates a time-locked record that prevents immediate stake withdrawal
+   */
+  addUnbondingEntry(entry: UnbondingEntry): void {
+    this.unbondingQueue.set(entry.id, entry);
+  }
+
+  /**
+   * Get all unbonding entries that have matured (timelock expired)
+   * SECURITY: Only returns entries whose completesAt block has passed
+   */
+  getMaturedUnbondingEntries(currentBlock: bigint): UnbondingEntry[] {
+    const matured: UnbondingEntry[] = [];
+
+    for (const entry of this.unbondingQueue.values()) {
+      if (entry.status === "pending" && currentBlock >= entry.completesAt) {
+        matured.push(entry);
+      }
+    }
+
+    return matured;
+  }
+
+  /**
+   * Mark unbonding entry as completed
+   * SECURITY: Called after funds have been released to delegator
+   */
+  completeUnbondingEntry(entryId: string): void {
+    const entry = this.unbondingQueue.get(entryId);
+    if (entry) {
+      entry.status = "completed";
+      // Optionally remove from queue after completion
+      // this.unbondingQueue.delete(entryId);
+    }
+  }
+
+  /**
+   * Get unbonding entry by ID
+   */
+  getUnbondingEntry(entryId: string): UnbondingEntry | undefined {
+    return this.unbondingQueue.get(entryId);
+  }
+
+  /**
+   * Get all pending unbonding entries for a delegator
+   */
+  getPendingUnbondingEntries(delegator: string): UnbondingEntry[] {
+    const entries: UnbondingEntry[] = [];
+
+    for (const entry of this.unbondingQueue.values()) {
+      if (entry.delegator === delegator && entry.status === "pending") {
+        entries.push(entry);
+      }
+    }
+
+    return entries;
+  }
+
   // ============ Queries ============
 
   /**
@@ -478,7 +644,7 @@ export class ValidatorStateTree {
    */
   getActiveValidators(): ValidatorState[] {
     return Array.from(this.validatorCache.values())
-      .filter(v => v.isActive)
+      .filter((v) => v.isActive)
       .sort((a, b) => {
         if (b.totalStake > a.totalStake) return 1;
         if (b.totalStake < a.totalStake) return -1;
@@ -518,7 +684,7 @@ export class ValidatorStateTree {
   processEpochTransition(
     newEpoch: bigint,
     rewards: Map<string, bigint>,
-    currentBlock: bigint
+    _currentBlock: bigint,
   ): ValidatorSetState {
     this.currentEpoch = newEpoch;
 
@@ -555,7 +721,7 @@ export class ValidatorStateTree {
 
     for (const [key, delegation] of this.delegationCache) {
       cloned.delegationCache.set(key, { ...delegation });
-      const [delegator, validator] = key.split(':');
+      const [delegator, validator] = key.split(":");
       const smtKey = delegationToKey(delegator, validator as PublicKey);
       cloned.delegationSmt.set(smtKey, serializeDelegation(delegation));
     }
@@ -569,18 +735,18 @@ export class ValidatorStateTree {
 /**
  * Minimum stake required to be a validator
  */
-export const MIN_VALIDATOR_STAKE = 1000n * 10n ** 18n;  // 1000 LGM
+export const MIN_VALIDATOR_STAKE = 1000n * 10n ** 18n; // 1000 LGM
 
 /**
  * Unbonding period in blocks
  */
-export const UNBONDING_PERIOD = 7n * 24n * 60n * 60n * 1000n / 2521n;  // ~7 days at 2521ms blocks
+export const UNBONDING_PERIOD = (7n * 24n * 60n * 60n * 1000n) / 2521n; // ~7 days at 2521ms blocks
 
 /**
  * Create initial validator set from genesis
  */
 export function createValidatorSetFromGenesis(
-  validators: Array<{ publicKey: PublicKey; did: string; stake: bigint }>
+  validators: Array<{ publicKey: PublicKey; did: string; stake: bigint }>,
 ): ValidatorStateTree {
   const tree = new ValidatorStateTree();
 

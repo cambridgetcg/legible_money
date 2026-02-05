@@ -1,0 +1,17 @@
+[
+  {
+    "name": "validator-1",
+    "peerId": "617f9421397029b13002f177080c62b3",
+    "address": "/dns4/validator-1/tcp/26656/p2p/617f9421397029b13002f177080c62b3"
+  },
+  {
+    "name": "validator-2",
+    "peerId": "83c6c01fd4c018876fe78dcfa67d969c",
+    "address": "/dns4/validator-2/tcp/26656/p2p/83c6c01fd4c018876fe78dcfa67d969c"
+  },
+  {
+    "name": "validator-3",
+    "peerId": "d18309f443eece292ecc1b3d52df186b",
+    "address": "/dns4/validator-3/tcp/26656/p2p/d18309f443eece292ecc1b3d52df186b"
+  }
+]

@@ -8,9 +8,13 @@
  * Value: serialized ResearchState/BountyState
  */
 
-import { InMemorySMT, type MerkleRoot, type MerkleProofData } from '../core/crypto/merkle.js';
-import { sha512_256, sha512_256Hex } from '../core/crypto/hashing.js';
-import type { DID } from '../agents/identity/did.js';
+import {
+  InMemorySMT,
+  type MerkleRoot,
+  type MerkleProofData,
+} from "../core/crypto/merkle.js";
+import { sha512_256, sha512_256Hex } from "../core/crypto/hashing.js";
+import type { DID } from "../core/agents/identity/did.js";
 import type {
   ResearchState,
   BountyState,
@@ -20,8 +24,8 @@ import type {
   BountyStatus,
   ResearchQuery,
   FactResearchSummary,
-} from '../core/research/types.js';
-import { StateError } from './types.js';
+} from "../core/research/types.js";
+import { StateError } from "./types.js";
 
 // ============ Serialization ============
 
@@ -108,10 +112,10 @@ export class ResearchStateTree {
   private bountyCache: Map<string, BountyState> = new Map();
 
   // Indexes for efficient queries
-  private factResearchIndex: Map<string, Set<string>> = new Map();  // factId -> researchIds
+  private factResearchIndex: Map<string, Set<string>> = new Map(); // factId -> researchIds
   private domainResearchIndex: Map<string, Set<string>> = new Map(); // domain -> researchIds
-  private submitterIndex: Map<string, Set<string>> = new Map();     // submitter -> researchIds
-  private openBountyIndex: Set<string> = new Set();                  // bountyIds with status 'open'
+  private submitterIndex: Map<string, Set<string>> = new Map(); // submitter -> researchIds
+  private openBountyIndex: Set<string> = new Set(); // bountyIds with status 'open'
 
   // Statistics
   private researchCount: number = 0;
@@ -172,7 +176,9 @@ export class ResearchStateTree {
    */
   addResearch(research: ResearchState): MerkleRoot {
     if (this.hasResearch(research.id)) {
-      throw new StateError('Research already exists', 'INVALID_TRANSITION', { id: research.id });
+      throw new StateError("Research already exists", "INVALID_TRANSITION", {
+        id: research.id,
+      });
     }
 
     const key = researchIdToKey(research.id);
@@ -182,7 +188,7 @@ export class ResearchStateTree {
     this.researchCache.set(research.id, research);
     this.researchCount++;
 
-    if (research.status === 'accepted') {
+    if (research.status === "accepted") {
       this.acceptedCount++;
     }
 
@@ -213,15 +219,15 @@ export class ResearchStateTree {
   updateResearch(id: string, update: Partial<ResearchState>): MerkleRoot {
     const existing = this.getResearch(id);
     if (!existing) {
-      throw new StateError('Research not found', 'RESEARCH_NOT_FOUND', { id });
+      throw new StateError("Research not found", "RESEARCH_NOT_FOUND", { id });
     }
 
-    const wasAccepted = existing.status === 'accepted';
+    const wasAccepted = existing.status === "accepted";
     const updated: ResearchState = {
       ...existing,
       ...update,
     };
-    const isAccepted = updated.status === 'accepted';
+    const isAccepted = updated.status === "accepted";
 
     const key = researchIdToKey(id);
     const value = serializeResearchState(updated);
@@ -263,16 +269,23 @@ export class ResearchStateTree {
   getFactResearchSummary(factId: string): FactResearchSummary {
     const research = this.getResearchForFact(factId);
 
-    const replications = research.filter(r =>
-      r.researchType === 'replication' && r.status === 'accepted'
+    const replications = research.filter(
+      (r) => r.researchType === "replication" && r.status === "accepted",
     );
-    const successfulReplications = replications.filter(r => r.outcome === 'confirms');
-    const failedReplications = replications.filter(r => r.outcome === 'refutes');
+    const successfulReplications = replications.filter(
+      (r) => r.outcome === "confirms",
+    );
+    const failedReplications = replications.filter(
+      (r) => r.outcome === "refutes",
+    );
 
-    const fraudInvestigations = research.filter(r =>
-      r.researchType === 'fraud_investigation' && r.status === 'accepted'
+    const fraudInvestigations = research.filter(
+      (r) =>
+        r.researchType === "fraud_investigation" && r.status === "accepted",
     );
-    const fraudDetected = fraudInvestigations.some(r => r.outcome === 'fraud_detected');
+    const fraudDetected = fraudInvestigations.some(
+      (r) => r.outcome === "fraud_detected",
+    );
 
     // Calculate net confidence modifier
     let netModifier = 0;
@@ -286,14 +299,14 @@ export class ResearchStateTree {
 
     // Failed replications penalty
     if (failedReplications.length > 0) {
-      netModifier -= failedReplications.length * 0.10;
+      netModifier -= failedReplications.length * 0.1;
     }
 
     // Fraud investigation bonuses/penalties
     if (fraudDetected) {
       netModifier = -1.0; // Immediate invalidation
     } else if (fraudInvestigations.length > 0) {
-      netModifier += 0.10; // Clean investigation bonus
+      netModifier += 0.1; // Clean investigation bonus
     }
 
     return {
@@ -303,7 +316,7 @@ export class ResearchStateTree {
       failedReplications: failedReplications.length,
       fraudInvestigations: fraudInvestigations.length,
       fraudDetected,
-      netConfidenceModifier: Math.max(-1, Math.min(0.40, netModifier)),
+      netConfidenceModifier: Math.max(-1, Math.min(0.4, netModifier)),
       latestResearch: research[0],
     };
   }
@@ -340,17 +353,17 @@ export class ResearchStateTree {
 
     // Apply filters
     if (query.researchType) {
-      results = results.filter(r => r.researchType === query.researchType);
+      results = results.filter((r) => r.researchType === query.researchType);
     }
     if (query.outcome) {
-      results = results.filter(r => r.outcome === query.outcome);
+      results = results.filter((r) => r.outcome === query.outcome);
     }
     if (query.status) {
-      results = results.filter(r => r.status === query.status);
+      results = results.filter((r) => r.status === query.status);
     }
     if (query.minConfidenceContribution !== undefined) {
-      results = results.filter(r =>
-        r.confidenceContribution >= query.minConfidenceContribution!
+      results = results.filter(
+        (r) => r.confidenceContribution >= query.minConfidenceContribution!,
       );
     }
 
@@ -393,7 +406,9 @@ export class ResearchStateTree {
    */
   addBounty(bounty: BountyState): MerkleRoot {
     if (this.hasBounty(bounty.id)) {
-      throw new StateError('Bounty already exists', 'INVALID_TRANSITION', { id: bounty.id });
+      throw new StateError("Bounty already exists", "INVALID_TRANSITION", {
+        id: bounty.id,
+      });
     }
 
     const key = bountyIdToKey(bounty.id);
@@ -404,7 +419,7 @@ export class ResearchStateTree {
     this.bountyCount++;
     this.totalResearchFunding += bounty.reward;
 
-    if (bounty.status === 'open') {
+    if (bounty.status === "open") {
       this.openBountyIndex.add(bounty.id);
     }
 
@@ -417,15 +432,15 @@ export class ResearchStateTree {
   updateBounty(id: string, update: Partial<BountyState>): MerkleRoot {
     const existing = this.getBounty(id);
     if (!existing) {
-      throw new StateError('Bounty not found', 'BOUNTY_NOT_FOUND', { id });
+      throw new StateError("Bounty not found", "BOUNTY_NOT_FOUND", { id });
     }
 
-    const wasOpen = existing.status === 'open';
+    const wasOpen = existing.status === "open";
     const updated: BountyState = {
       ...existing,
       ...update,
     };
-    const isOpen = updated.status === 'open';
+    const isOpen = updated.status === "open";
 
     const key = bountyIdToKey(id);
     const value = serializeBountyState(updated);
@@ -449,18 +464,18 @@ export class ResearchStateTree {
   claimBounty(id: string, claimer: DID): MerkleRoot {
     const bounty = this.getBounty(id);
     if (!bounty) {
-      throw new StateError('Bounty not found', 'BOUNTY_NOT_FOUND', { id });
+      throw new StateError("Bounty not found", "BOUNTY_NOT_FOUND", { id });
     }
 
-    if (bounty.status !== 'open') {
-      throw new StateError('Bounty is not open', 'INVALID_TRANSITION', {
+    if (bounty.status !== "open") {
+      throw new StateError("Bounty is not open", "INVALID_TRANSITION", {
         id,
         status: bounty.status,
       });
     }
 
     return this.updateBounty(id, {
-      status: 'claimed',
+      status: "claimed",
       claimedBy: claimer,
     });
   }
@@ -471,22 +486,25 @@ export class ResearchStateTree {
   fulfillBounty(id: string, fulfiller: DID): MerkleRoot {
     const bounty = this.getBounty(id);
     if (!bounty) {
-      throw new StateError('Bounty not found', 'BOUNTY_NOT_FOUND', { id });
+      throw new StateError("Bounty not found", "BOUNTY_NOT_FOUND", { id });
     }
 
-    if (bounty.status !== 'claimed') {
-      throw new StateError('Bounty is not claimed', 'INVALID_TRANSITION', {
+    if (bounty.status !== "claimed") {
+      throw new StateError("Bounty is not claimed", "INVALID_TRANSITION", {
         id,
         status: bounty.status,
       });
     }
 
     if (bounty.claimedBy !== fulfiller) {
-      throw new StateError('Only claimer can fulfill', 'UNAUTHORIZED', { id, fulfiller });
+      throw new StateError("Only claimer can fulfill", "UNAUTHORIZED", {
+        id,
+        fulfiller,
+      });
     }
 
     return this.updateBounty(id, {
-      status: 'fulfilled',
+      status: "fulfilled",
       fulfilledBy: fulfiller,
     });
   }
@@ -498,7 +516,7 @@ export class ResearchStateTree {
     const results: BountyState[] = [];
     for (const id of this.openBountyIndex) {
       const bounty = this.getBounty(id);
-      if (bounty && bounty.status === 'open') {
+      if (bounty && bounty.status === "open") {
         results.push(bounty);
       }
     }
@@ -526,7 +544,7 @@ export class ResearchStateTree {
     for (const id of this.openBountyIndex) {
       const bounty = this.getBounty(id);
       if (bounty && bounty.deadline < currentBlock) {
-        this.updateBounty(id, { status: 'expired' });
+        this.updateBounty(id, { status: "expired" });
         expired++;
       }
     }
@@ -623,7 +641,7 @@ export class ResearchStateTree {
 export function generateResearchId(
   submitter: string,
   targetDomain: string,
-  timestamp: number
+  timestamp: number,
 ): string {
   return sha512_256Hex(`research:${submitter}:${targetDomain}:${timestamp}`);
 }
@@ -634,7 +652,7 @@ export function generateResearchId(
 export function generateBountyId(
   creator: string,
   targetType: string,
-  timestamp: number
+  timestamp: number,
 ): string {
   return sha512_256Hex(`bounty:${creator}:${targetType}:${timestamp}`);
 }

@@ -10,16 +10,16 @@
  * Independent tasks are independent. Let them run in parallel.
  */
 
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from "@noble/hashes/sha512";
 import {
   DAGNode,
   DAGNodeType,
   Task,
   TaskState,
   ValidationResult,
-  WorkProof,
-} from './types.js';
-import { bytesToHex } from '../crypto/keys.js';
+  // WorkProof,
+} from "./types.js";
+import { bytesToHex } from "../crypto/keys.js";
 
 // ============================================================================
 // DAG NODE OPERATIONS
@@ -29,7 +29,9 @@ import { bytesToHex } from '../crypto/keys.js';
  * Create a unique node ID from its contents
  * This ensures content-addressability: same content = same ID
  */
-export function createNodeId(node: Omit<DAGNode, 'nodeId' | 'confirmations' | 'isConfirmed' | 'isFinal'>): string {
+export function createNodeId(
+  node: Omit<DAGNode, "nodeId" | "confirmations" | "isConfirmed" | "isFinal">,
+): string {
   const encoder = new TextEncoder();
   const content = encoder.encode(
     JSON.stringify({
@@ -38,7 +40,7 @@ export function createNodeId(node: Omit<DAGNode, 'nodeId' | 'confirmations' | 'i
       payload: node.payload,
       submitter: node.submitter,
       logicalTime: node.logicalTime.toString(),
-    })
+    }),
   );
 
   const hash = sha512(content);
@@ -48,7 +50,10 @@ export function createNodeId(node: Omit<DAGNode, 'nodeId' | 'confirmations' | 'i
 /**
  * Validate that a node is well-formed
  */
-export function validateNode(node: DAGNode, getNode: (id: string) => DAGNode | null): {
+export function validateNode(
+  node: DAGNode,
+  getNode: (id: string) => DAGNode | null,
+): {
   valid: boolean;
   errors: string[];
 } {
@@ -70,7 +75,7 @@ export function validateNode(node: DAGNode, getNode: (id: string) => DAGNode | n
       if (parent.logicalTime >= node.logicalTime) {
         errors.push(
           `Logical time violation: parent ${parentId} has time ${parent.logicalTime}, ` +
-          `but node has time ${node.logicalTime}`
+            `but node has time ${node.logicalTime}`,
         );
       }
     }
@@ -78,12 +83,12 @@ export function validateNode(node: DAGNode, getNode: (id: string) => DAGNode | n
 
   // 4. Check signature (placeholder - would verify against submitter's public key)
   if (!node.signature || node.signature.length === 0) {
-    errors.push('Missing signature');
+    errors.push("Missing signature");
   }
 
   // 5. Check work proof exists
   if (!node.workProof) {
-    errors.push('Missing work proof');
+    errors.push("Missing work proof");
   }
 
   return {
@@ -110,7 +115,7 @@ export class ExecutionDAG {
 
   constructor(
     private readonly confirmationThreshold: number = 0.67,
-    private readonly finalityBlocks: number = 4
+    private readonly finalityBlocks: number = 4,
   ) {}
 
   /**
@@ -120,12 +125,12 @@ export class ExecutionDAG {
     // Validate the node
     const validation = validateNode(node, (id) => this.nodes.get(id) ?? null);
     if (!validation.valid) {
-      return { success: false, error: validation.errors.join('; ') };
+      return { success: false, error: validation.errors.join("; ") };
     }
 
     // Check for duplicate
     if (this.nodes.has(node.nodeId)) {
-      return { success: false, error: 'Node already exists' };
+      return { success: false, error: "Node already exists" };
     }
 
     // Add node
@@ -138,8 +143,9 @@ export class ExecutionDAG {
     }
 
     // Index by task
-    if ('taskId' in node.payload || (node.payload as any).task?.taskId) {
-      const taskId = (node.payload as any).taskId ?? (node.payload as any).task.taskId;
+    if ("taskId" in node.payload || (node.payload as any).task?.taskId) {
+      const taskId =
+        (node.payload as any).taskId ?? (node.payload as any).task.taskId;
       const existing = this.byTask.get(taskId) ?? [];
       existing.push(node.nodeId);
       this.byTask.set(taskId, existing);
@@ -184,13 +190,13 @@ export class ExecutionDAG {
 
     // Find the task creation node
     const creationNode = nodes.find(
-      (n) => n.nodeType === DAGNodeType.TASK_CREATED
+      (n) => n.nodeType === DAGNodeType.TASK_CREATED,
     );
-    if (!creationNode || creationNode.payload.type !== 'task_created') {
+    if (!creationNode || creationNode.payload.type !== "task_created") {
       return null;
     }
 
-    let task = { ...creationNode.payload.task };
+    const task = { ...creationNode.payload.task };
 
     // Apply subsequent state changes
     for (const node of nodes) {
@@ -201,7 +207,7 @@ export class ExecutionDAG {
           break;
 
         case DAGNodeType.TASK_EXECUTED:
-          if (node.payload.type === 'task_executed') {
+          if (node.payload.type === "task_executed") {
             task.state = TaskState.EXECUTED;
             task.outputHash = node.payload.outputHash;
             task.outputURI = node.payload.outputURI;
@@ -213,7 +219,7 @@ export class ExecutionDAG {
           break;
 
         case DAGNodeType.SETTLEMENT:
-          if (node.payload.type === 'settlement') {
+          if (node.payload.type === "settlement") {
             task.state = TaskState.COMPLETED;
             task.verifiedAtBlock = node.logicalTime;
           }
@@ -260,7 +266,11 @@ export class ExecutionDAG {
   /**
    * Check if a node is final (confirmed + finality blocks passed)
    */
-  isFinal(nodeId: string, currentBlock: bigint, totalValidators: number): boolean {
+  isFinal(
+    nodeId: string,
+    currentBlock: bigint,
+    totalValidators: number,
+  ): boolean {
     const node = this.nodes.get(nodeId);
     if (!node) return false;
 
@@ -290,7 +300,7 @@ export class ExecutionDAG {
 
       // Check if all parents are satisfied
       const allParentsSatisfied = node.parents.every((p) =>
-        satisfiedDeps.has(p)
+        satisfiedDeps.has(p),
       );
 
       if (allParentsSatisfied) {
@@ -378,14 +388,17 @@ export function createTaskNode(
   submitter: string,
   parents: string[],
   logicalTime: bigint,
-  signature: Uint8Array
+  signature: Uint8Array,
 ): DAGNode {
-  const node: Omit<DAGNode, 'nodeId' | 'confirmations' | 'isConfirmed' | 'isFinal'> = {
+  const node: Omit<
+    DAGNode,
+    "nodeId" | "confirmations" | "isConfirmed" | "isFinal"
+  > = {
     nodeType: DAGNodeType.TASK_CREATED,
     parents,
-    payload: { type: 'task_created', task },
+    payload: { type: "task_created", task },
     workProof: {
-      proofType: 'execution',
+      proofType: "execution",
       data: new Uint8Array(),
       metadata: { escrowTx: task.payment.escrowId },
     },
@@ -411,13 +424,16 @@ export function createValidationNode(
   submitter: string,
   parents: string[],
   logicalTime: bigint,
-  signature: Uint8Array
+  signature: Uint8Array,
 ): DAGNode {
-  const node: Omit<DAGNode, 'nodeId' | 'confirmations' | 'isConfirmed' | 'isFinal'> = {
+  const node: Omit<
+    DAGNode,
+    "nodeId" | "confirmations" | "isConfirmed" | "isFinal"
+  > = {
     nodeType: DAGNodeType.VALIDATION,
     parents,
     payload: {
-      type: 'validation',
+      type: "validation",
       taskId: validation.taskId,
       validator: validation.validator,
       score: validation.score,
@@ -429,7 +445,7 @@ export function createValidationNode(
       reveal: validation.reveal,
     },
     workProof: {
-      proofType: 'validation',
+      proofType: "validation",
       data: new Uint8Array(), // Would contain actual proof
       metadata: { validationType: validation.evidenceType },
     },

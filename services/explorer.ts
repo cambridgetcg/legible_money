@@ -6,15 +6,15 @@
  * Simple block explorer with real-time updates via WebSocket.
  */
 
-import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { LegibleClient } from '../protocol/sdk/client.js';
+import { createServer, IncomingMessage, ServerResponse } from "http";
+import { LegibleClient } from "../protocol/sdk/client.js";
 
 // ============ Configuration ============
 
-const PORT = parseInt(process.env.PORT || '3000');
-const RPC_ENDPOINT = process.env.RPC_ENDPOINT || 'http://localhost:8545';
-const WS_ENDPOINT = process.env.WS_ENDPOINT || 'ws://localhost:8546';
-const CHAIN_NAME = process.env.CHAIN_NAME || 'Legible Money';
+const PORT = parseInt(process.env.PORT || "3000");
+const RPC_ENDPOINT = process.env.RPC_ENDPOINT || "http://localhost:8545";
+const WS_ENDPOINT = process.env.WS_ENDPOINT || "ws://localhost:8546";
+const CHAIN_NAME = process.env.CHAIN_NAME || "Legible Money";
 
 // ============ State ============
 
@@ -27,7 +27,7 @@ interface ExplorerStats {
 }
 
 let client: LegibleClient;
-let stats: ExplorerStats = {
+const stats: ExplorerStats = {
   latestBlock: 0,
   totalTransactions: 0,
   totalFacts: 0,
@@ -42,9 +42,9 @@ async function getOverview(): Promise<object> {
 
   return {
     network: CHAIN_NAME,
-    chainId: health.chainId || 'lgm-devnet-1',
+    chainId: health.chainId || "lgm-devnet-1",
     latestBlock: stats.latestBlock,
-    blockTime: '2.521s',
+    blockTime: "2.521s",
     totalTransactions: stats.totalTransactions,
     totalFacts: stats.totalFacts,
     activeValidators: stats.activeValidators,
@@ -53,7 +53,10 @@ async function getOverview(): Promise<object> {
   };
 }
 
-async function getBlocks(limit: number = 10, offset: number = 0): Promise<object[]> {
+async function getBlocks(
+  limit: number = 10,
+  offset: number = 0,
+): Promise<object[]> {
   const blocks = [];
   const latest = stats.latestBlock;
 
@@ -64,10 +67,10 @@ async function getBlocks(limit: number = 10, offset: number = 0): Promise<object
         blocks.push({
           number: block.header.number,
           timestamp: block.header.timestamp,
-          proposer: block.header.proposer.slice(0, 16) + '...',
+          proposer: block.header.proposer.slice(0, 16) + "...",
           transactions: block.transactions.length,
           verifications: block.verificationResults.length,
-          hash: block.hash.slice(0, 16) + '...',
+          hash: block.hash.slice(0, 16) + "...",
         });
       }
     } catch {
@@ -81,7 +84,7 @@ async function getBlocks(limit: number = 10, offset: number = 0): Promise<object
 async function getBlock(query: string): Promise<object | null> {
   try {
     let block;
-    if (query.startsWith('0x') || query.length === 64) {
+    if (query.startsWith("0x") || query.length === 64) {
       block = await client.getBlock(query);
     } else {
       block = await client.getBlock(BigInt(query));
@@ -97,14 +100,14 @@ async function getBlock(query: string): Promise<object | null> {
       stateRoot: block.header.stateRoot,
       knowledgeRoot: block.header.knowledgeRoot,
       previousHash: block.header.previousHash,
-      transactions: block.transactions.map(tx => ({
+      transactions: block.transactions.map((tx) => ({
         hash: tx.hash,
         type: tx.type,
         from: tx.from,
         to: tx.to,
         amount: tx.amount?.toString(),
       })),
-      verifications: block.verificationResults.map(v => ({
+      verifications: block.verificationResults.map((v) => ({
         claimId: v.claimId,
         outcome: v.outcome,
         confidence: v.confidence,
@@ -133,10 +136,13 @@ async function getAccount(did: string): Promise<object | null> {
   }
 }
 
-async function getFacts(domain?: string, limit: number = 20): Promise<object[]> {
+async function getFacts(
+  domain?: string,
+  limit: number = 20,
+): Promise<object[]> {
   try {
     const facts = await client.searchFacts({ domain, limit });
-    return facts.map(f => ({
+    return facts.map((f) => ({
       id: f.id,
       claim: f.claim,
       domain: f.domain,
@@ -173,11 +179,11 @@ async function getFact(factId: string): Promise<object | null> {
 async function getValidators(): Promise<object[]> {
   try {
     const validators = await client.getValidators();
-    return validators.map(v => ({
-      publicKey: v.publicKey.slice(0, 16) + '...',
+    return validators.map((v) => ({
+      publicKey: v.publicKey.slice(0, 16) + "...",
       did: v.did,
       stake: v.stake.toString(),
-      delegatedStake: v.delegatedStake?.toString() || '0',
+      delegatedStake: v.delegatedStake?.toString() || "0",
       commission: v.commission,
       blocksProduced: v.blocksProduced,
       verificationAccuracy: v.verificationAccuracy,
@@ -190,91 +196,95 @@ async function getValidators(): Promise<object[]> {
 
 // ============ HTTP Server ============
 
-async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     res.writeHead(204);
     res.end();
     return;
   }
 
-  const url = new URL(req.url || '/', `http://${req.headers.host}`);
+  const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
   try {
     // API routes
-    if (url.pathname === '/api/overview' || url.pathname === '/') {
+    if (url.pathname === "/api/overview" || url.pathname === "/") {
       const data = await getOverview();
       sendJson(res, 200, data);
       return;
     }
 
-    if (url.pathname === '/api/blocks') {
-      const limit = parseInt(url.searchParams.get('limit') || '10');
-      const offset = parseInt(url.searchParams.get('offset') || '0');
+    if (url.pathname === "/api/blocks") {
+      const limit = parseInt(url.searchParams.get("limit") || "10");
+      const offset = parseInt(url.searchParams.get("offset") || "0");
       const data = await getBlocks(limit, offset);
       sendJson(res, 200, { blocks: data });
       return;
     }
 
-    if (url.pathname.startsWith('/api/block/')) {
-      const query = url.pathname.replace('/api/block/', '');
+    if (url.pathname.startsWith("/api/block/")) {
+      const query = url.pathname.replace("/api/block/", "");
       const data = await getBlock(query);
       if (data) {
         sendJson(res, 200, data);
       } else {
-        sendJson(res, 404, { error: 'Block not found' });
+        sendJson(res, 404, { error: "Block not found" });
       }
       return;
     }
 
-    if (url.pathname.startsWith('/api/account/')) {
-      const did = decodeURIComponent(url.pathname.replace('/api/account/', ''));
+    if (url.pathname.startsWith("/api/account/")) {
+      const did = decodeURIComponent(url.pathname.replace("/api/account/", ""));
       const data = await getAccount(did);
       if (data) {
         sendJson(res, 200, data);
       } else {
-        sendJson(res, 404, { error: 'Account not found' });
+        sendJson(res, 404, { error: "Account not found" });
       }
       return;
     }
 
-    if (url.pathname === '/api/facts') {
-      const domain = url.searchParams.get('domain') || undefined;
-      const limit = parseInt(url.searchParams.get('limit') || '20');
+    if (url.pathname === "/api/facts") {
+      const domain = url.searchParams.get("domain") || undefined;
+      const limit = parseInt(url.searchParams.get("limit") || "20");
       const data = await getFacts(domain, limit);
       sendJson(res, 200, { facts: data });
       return;
     }
 
-    if (url.pathname.startsWith('/api/fact/')) {
-      const factId = url.pathname.replace('/api/fact/', '');
+    if (url.pathname.startsWith("/api/fact/")) {
+      const factId = url.pathname.replace("/api/fact/", "");
       const data = await getFact(factId);
       if (data) {
         sendJson(res, 200, data);
       } else {
-        sendJson(res, 404, { error: 'Fact not found' });
+        sendJson(res, 404, { error: "Fact not found" });
       }
       return;
     }
 
-    if (url.pathname === '/api/validators') {
+    if (url.pathname === "/api/validators") {
       const data = await getValidators();
       sendJson(res, 200, { validators: data });
       return;
     }
 
-    if (url.pathname === '/health') {
-      sendJson(res, 200, { status: 'healthy', uptime: process.uptime() });
+    if (url.pathname === "/health") {
+      sendJson(res, 200, { status: "healthy", uptime: process.uptime() });
       return;
     }
 
-    if (url.pathname === '/metrics') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end(`
+    if (url.pathname === "/metrics") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(
+        `
 # HELP explorer_latest_block Latest block number
 # TYPE explorer_latest_block gauge
 explorer_latest_block ${stats.latestBlock}
@@ -286,26 +296,27 @@ explorer_total_facts ${stats.totalFacts}
 # HELP explorer_active_validators Active validators
 # TYPE explorer_active_validators gauge
 explorer_active_validators ${stats.activeValidators}
-`.trim());
+`.trim(),
+      );
       return;
     }
 
     // Simple HTML interface
-    if (url.pathname === '/ui') {
-      res.writeHead(200, { 'Content-Type': 'text/html' });
+    if (url.pathname === "/ui") {
+      res.writeHead(200, { "Content-Type": "text/html" });
       res.end(getHtmlInterface());
       return;
     }
 
-    sendJson(res, 404, { error: 'Not found' });
+    sendJson(res, 404, { error: "Not found" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Internal error';
+    const message = error instanceof Error ? error.message : "Internal error";
     sendJson(res, 500, { error: message });
   }
 }
 
 function sendJson(res: ServerResponse, status: number, data: object): void {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data, null, 2));
 }
 
@@ -364,8 +375,11 @@ async function updateStats(): Promise<void> {
     stats.latestBlock = Number(blockNumber);
 
     const validators = await client.getValidators();
-    stats.activeValidators = validators.filter(v => v.isActive).length;
-    stats.totalStaked = validators.reduce((sum, v) => sum + BigInt(v.stake), 0n);
+    stats.activeValidators = validators.filter((v) => v.isActive).length;
+    stats.totalStaked = validators.reduce(
+      (sum, v) => sum + BigInt(v.stake),
+      0n,
+    );
   } catch {
     // Ignore errors in background task
   }
@@ -375,7 +389,7 @@ async function updateStats(): Promise<void> {
 
 async function main(): Promise<void> {
   console.log(`${CHAIN_NAME} Explorer`);
-  console.log('='.repeat(CHAIN_NAME.length + 9) + '\n');
+  console.log("=".repeat(CHAIN_NAME.length + 9) + "\n");
 
   // Initialize client
   client = new LegibleClient({
@@ -398,20 +412,20 @@ async function main(): Promise<void> {
   });
 
   // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('\nShutting down...');
+  process.on("SIGINT", () => {
+    console.log("\nShutting down...");
     server.close();
     process.exit(0);
   });
 
-  process.on('SIGTERM', () => {
-    console.log('\nShutting down...');
+  process.on("SIGTERM", () => {
+    console.log("\nShutting down...");
     server.close();
     process.exit(0);
   });
 }
 
 main().catch((error) => {
-  console.error('Fatal error:', error);
+  console.error("Fatal error:", error);
   process.exit(1);
 });

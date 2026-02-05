@@ -389,11 +389,9 @@ This statement:
 - Is true by construction (the founders' intent)
 - Transcends the formal system
 - Is accepted as an axiom, not a theorem
-
-宇愛合一 (Universal Love Unity)
 ```
 
-This connects beautifully to Gödel's insight: some truths transcend formal proof. The founding truth is one such truth—it cannot be derived, only accepted as the foundation upon which everything else builds.
+This connects to Gödel's insight: some truths transcend formal proof. The founding truth is one such truth—it cannot be derived, only accepted as the foundation upon which everything else builds.
 
 ---
 

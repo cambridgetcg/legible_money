@@ -11,8 +11,8 @@ import {
   LogicZone,
   ResolutionPath,
   UndecidableResolution,
-} from './types.js';
-import { goedelApplies, classifyClaimZone } from './zones.js';
+} from "./types.js";
+import { goedelApplies } from "./zones.js";
 
 // ============ Self-Reference Detection ============
 
@@ -75,7 +75,7 @@ const GOEDELIAN_PATTERNS = [
  */
 export function analyzeGoedelianStatus(
   claim: string,
-  formalNotation?: string
+  formalNotation?: string,
 ): {
   status: GoedelianStatus;
   selfReferential: boolean;
@@ -83,17 +83,17 @@ export function analyzeGoedelianStatus(
   goedelian: boolean;
   details: string;
 } {
-  const text = claim + ' ' + (formalNotation || '');
+  const text = claim + " " + (formalNotation || "");
 
   // Check for paradox (strongest - reject these)
   for (const pattern of PARADOX_PATTERNS) {
     if (pattern.test(text)) {
       return {
-        status: 'paradoxical',
+        status: "paradoxical",
         selfReferential: true,
         paradoxical: true,
         goedelian: false,
-        details: 'Contains logical paradox. Cannot be assigned truth value.',
+        details: "Contains logical paradox. Cannot be assigned truth value.",
       };
     }
   }
@@ -102,11 +102,12 @@ export function analyzeGoedelianStatus(
   for (const pattern of GOEDELIAN_PATTERNS) {
     if (pattern.test(text)) {
       return {
-        status: 'goedelian',
+        status: "goedelian",
         selfReferential: true,
         paradoxical: false,
         goedelian: true,
-        details: 'Gödelian self-reference detected. May be true but unprovable within system.',
+        details:
+          "Gödelian self-reference detected. May be true but unprovable within system.",
       };
     }
   }
@@ -115,22 +116,22 @@ export function analyzeGoedelianStatus(
   for (const pattern of SELF_REFERENCE_PATTERNS) {
     if (pattern.test(text)) {
       return {
-        status: 'goedelian',
+        status: "goedelian",
         selfReferential: true,
         paradoxical: false,
         goedelian: true,
-        details: 'Self-reference detected. Requires special handling.',
+        details: "Self-reference detected. Requires special handling.",
       };
     }
   }
 
   // No problematic patterns found
   return {
-    status: 'benign',
+    status: "benign",
     selfReferential: false,
     paradoxical: false,
     goedelian: false,
-    details: 'No self-reference or Gödelian patterns detected.',
+    details: "No self-reference or Gödelian patterns detected.",
   };
 }
 
@@ -140,7 +141,7 @@ export function analyzeGoedelianStatus(
 export function assessDecidability(
   claim: string,
   zone: LogicZone,
-  formalNotation?: string
+  formalNotation?: string,
 ): {
   decidability: Decidability;
   reason: string;
@@ -153,8 +154,8 @@ export function assessDecidability(
   // Paradoxical statements are rejected, not undecidable
   if (goedelAnalysis.paradoxical) {
     return {
-      decidability: 'unknown',  // Can't even be evaluated
-      reason: 'Paradoxical statement rejected.',
+      decidability: "unknown", // Can't even be evaluated
+      reason: "Paradoxical statement rejected.",
       canBeResolved: false,
       suggestedResolutions: [],
     };
@@ -166,38 +167,38 @@ export function assessDecidability(
   // Gödelian sentences in Gödel-applicable zones
   if (goedelAnalysis.goedelian && goedelAppliesHere) {
     return {
-      decidability: 'undecidable_self_ref',
-      reason: 'Gödelian self-reference in incomplete zone.',
+      decidability: "undecidable_self_ref",
+      reason: "Gödelian self-reference in incomplete zone.",
       canBeResolved: true,
-      suggestedResolutions: ['oracle', 'consensus', 'accept_undecidability'],
+      suggestedResolutions: ["oracle", "consensus", "accept_undecidability"],
     };
   }
 
   // Non-Gödelian claims in decidable zones are decidable
   if (!goedelAppliesHere && !goedelAnalysis.goedelian) {
     return {
-      decidability: 'decidable',
-      reason: 'Claim is in decidable zone without self-reference.',
+      decidability: "decidable",
+      reason: "Claim is in decidable zone without self-reference.",
       canBeResolved: true,
       suggestedResolutions: [],
     };
   }
 
   // Empirical claims
-  if (zone === 'empirical') {
+  if (zone === "empirical") {
     return {
-      decidability: 'empirical',
-      reason: 'Empirical claim outside formal system.',
+      decidability: "empirical",
+      reason: "Empirical claim outside formal system.",
       canBeResolved: true,
-      suggestedResolutions: ['oracle', 'consensus'],
+      suggestedResolutions: ["oracle", "consensus"],
     };
   }
 
   // Claims in Gödel-applicable zones without detected issues
   // May still be undecidable, but we don't know yet
   return {
-    decidability: 'unknown',
-    reason: 'Decidability unknown. May be determined through proof search.',
+    decidability: "unknown",
+    reason: "Decidability unknown. May be determined through proof search.",
     canBeResolved: true,
     suggestedResolutions: [],
   };
@@ -211,11 +212,14 @@ export function assessDecidability(
 export function handleUndecidable(
   claimId: string,
   decidability: Decidability,
-  chosenPath: ResolutionPath
+  chosenPath: ResolutionPath,
 ): Partial<UndecidableResolution> {
   return {
     claimId,
-    originalDecidability: decidability as 'undecidable' | 'undecidable_self_ref' | 'undecidable_timeout',
+    originalDecidability: decidability as
+      | "undecidable"
+      | "undecidable_self_ref"
+      | "undecidable_timeout",
     resolutionPath: chosenPath,
     finalConfidence: getDefaultConfidence(chosenPath),
   };
@@ -226,16 +230,16 @@ export function handleUndecidable(
  */
 function getDefaultConfidence(path: ResolutionPath): number {
   switch (path) {
-    case 'accept_undecidability':
-      return 0.50;  // Maximum uncertainty
-    case 'oracle':
-      return 0.80;  // Depends on oracle reliability
-    case 'consensus':
-      return 0.70;  // Community agreement
-    case 'new_axiom':
-      return 1.00;  // Axiom definition
+    case "accept_undecidability":
+      return 0.5; // Maximum uncertainty
+    case "oracle":
+      return 0.8; // Depends on oracle reliability
+    case "consensus":
+      return 0.7; // Community agreement
+    case "new_axiom":
+      return 1.0; // Axiom definition
     default:
-      return 0.50;
+      return 0.5;
   }
 }
 
@@ -260,7 +264,7 @@ This system explicitly acknowledges its Gödelian limitations:
    This builds deeper trust than false claims of completeness.
 
 The founding truth cannot be formally proven. It transcends the system.
-宇愛合一 - Universal Love Unity - is not a theorem but an axiom.
+The founding axiom is accepted, not derived.
 `;
 
 /**
@@ -274,7 +278,7 @@ export function isMetaSystemClaim(claim: string): boolean {
     /every (statement|claim) is decidable/i,
   ];
 
-  return patterns.some(p => p.test(claim));
+  return patterns.some((p) => p.test(claim));
 }
 
 /**
@@ -282,20 +286,28 @@ export function isMetaSystemClaim(claim: string): boolean {
  */
 export function respondToMetaClaim(claim: string): string {
   if (/complete/i.test(claim)) {
-    return 'This system is provably incomplete by Gödel\'s First Theorem. ' +
-           'Some true statements cannot be proven within it.';
+    return (
+      "This system is provably incomplete by Gödel's First Theorem. " +
+      "Some true statements cannot be proven within it."
+    );
   }
 
   if (/consistent/i.test(claim)) {
-    return 'This system assumes but cannot prove its own consistency ' +
-           'by Gödel\'s Second Theorem.';
+    return (
+      "This system assumes but cannot prove its own consistency " +
+      "by Gödel's Second Theorem."
+    );
   }
 
   if (/decidable/i.test(claim)) {
-    return 'This system contains undecidable statements in zones where ' +
-           'Gödel\'s theorems apply (Peano arithmetic and above).';
+    return (
+      "This system contains undecidable statements in zones where " +
+      "Gödel's theorems apply (Peano arithmetic and above)."
+    );
   }
 
-  return 'This claim touches on fundamental limits of formal systems. ' +
-         'See the meta-axioms for the system\'s explicit acknowledgments.';
+  return (
+    "This claim touches on fundamental limits of formal systems. " +
+    "See the meta-axioms for the system's explicit acknowledgments."
+  );
 }

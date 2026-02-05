@@ -19,9 +19,9 @@
  * Spreading falsehoods - whether through malice or negligence - pollutes the knowledge base.
  */
 
-import type { DID } from '../../agents/identity/did.js';
-import type { PublicKey } from '../crypto/keys.js';
-import type { Evidence, EvidenceType } from '../evidence/types.js';
+import type { DID } from "../../core/agents/identity/did.js";
+import type { PublicKey } from "../crypto/keys.js";
+import type { Evidence, EvidenceType } from "../evidence/types.js";
 
 // ============ Economic Constants ============
 
@@ -30,36 +30,36 @@ import type { Evidence, EvidenceType } from '../evidence/types.js';
  */
 export const PUNISHMENT_RATES = {
   /** False claim submitted - polluted knowledge base */
-  falseClaimSlash: 0.50,
+  falseClaimSlash: 0.55,
 
   /** Failed challenge - wasted everyone's time */
-  failedChallengeSlash: 0.30,
+  failedChallengeSlash: 0.33,
 
   /** Wrong arbitration vote - failed duty */
-  wrongArbitrationSlash: 0.15,
+  wrongArbitrationSlash: 0.11,
 
   /** Refused to reveal evidence - bad faith actor */
-  refusalToRevealSlash: 1.00,
+  refusalToRevealSlash: 1.0,
 
   /** Tampered with evidence - maximum penalty */
-  evidenceTamperingSlash: 1.00,
+  evidenceTamperingSlash: 1.0,
 } as const;
 
 /**
  * Reward rates - GENEROUS for truth discovery
  */
 export const REWARD_RATES = {
-  /** Winner gets 60% of loser's stake */
-  winnerShare: 0.60,
+  /** Winner gets 66% of loser's stake */
+  winnerShare: 0.66,
 
-  /** +50% bonus for exposing falsehood */
-  truthBonusMultiplier: 1.50,
+  /** +55% bonus for exposing falsehood */
+  truthBonusMultiplier: 1.55,
 
-  /** 10% bonus for correct arbitration vote */
-  arbiterCorrectBonus: 0.10,
+  /** 11% bonus for correct arbitration vote */
+  arbiterCorrectBonus: 0.11,
 
-  /** +20% for catching falsehood early (within 1000 blocks) */
-  earlyDetectionBonus: 0.20,
+  /** +22% for catching falsehood early (within 1111 blocks) */
+  earlyDetectionBonus: 0.22,
 } as const;
 
 /**
@@ -67,19 +67,19 @@ export const REWARD_RATES = {
  */
 export const DISPUTE_ECONOMICS = {
   /** Minimum stake to initiate challenge */
-  minChallengeStake: 100n * 10n ** 18n, // 100 LGM
+  minChallengeStake: 111n * 10n ** 18n, // 111 LGM
 
   /** Defender must match challenger stake */
-  minDefenseStake: 100n * 10n ** 18n, // 100 LGM
+  minDefenseStake: 111n * 10n ** 18n, // 111 LGM
 
   /** Minimum stake to be eligible as arbiter */
-  minArbiterStake: 50n * 10n ** 18n, // 50 LGM
+  minArbiterStake: 77n * 10n ** 18n, // 77 LGM
 
   /** Stake multipliers by escalation tier */
   tierMultipliers: {
-    1: 1.0, // Validators - standard
-    2: 2.0, // Domain experts - 2x required
-    3: 5.0, // Governance - 5x required
+    1: 1.1, // Validators - standard
+    2: 2.2, // Domain experts - 2.2x required
+    3: 5.5, // Governance - 5.5x required
   } as const,
 
   /** Research fund share of dispute penalties */
@@ -93,12 +93,12 @@ export const DISPUTE_ECONOMICS = {
  * Phase durations in blocks (~2.5 sec per block)
  */
 export const PHASE_DURATIONS = {
-  initiation: 100, // ~4 min
-  evidence_commit: 500, // ~21 min
-  evidence_reveal: 250, // ~10 min
-  arbitration: 1000, // ~42 min
-  deliberation: 500, // ~21 min
-  settlement: 50, // ~2 min
+  initiation: 111, // ~4.6 min
+  evidence_commit: 555, // ~23 min
+  evidence_reveal: 333, // ~14 min
+  arbitration: 1111, // ~46 min
+  deliberation: 555, // ~23 min
+  settlement: 77, // ~3.2 min
 } as const;
 
 // ============ Dispute Phases ============
@@ -107,24 +107,43 @@ export const PHASE_DURATIONS = {
  * 8-phase dispute state machine
  */
 export type DisputePhase =
-  | 'initiation' // Challenger submits stake + initial evidence
-  | 'evidence_commit' // Both parties commit evidence hashes
-  | 'evidence_reveal' // Reveal and compare evidence
-  | 'arbitration' // VRF-selected arbiters vote
-  | 'deliberation' // Arbiters discuss, reach consensus
-  | 'settlement' // Distribute rewards/punishments
-  | 'escalated' // Moved to higher tier
-  | 'resolved'; // Final state
+  | "initiation" // Challenger submits stake + initial evidence
+  | "evidence_commit" // Both parties commit evidence hashes
+  | "evidence_reveal" // Reveal and compare evidence
+  | "arbitration" // VRF-selected arbiters vote
+  | "deliberation" // Arbiters discuss, reach consensus
+  | "settlement" // Distribute rewards/punishments
+  | "escalated" // Moved to higher tier
+  | "resolved"; // Final state
 
 /**
  * Dispute resolution outcome
  */
-export type DisputeOutcome = 'challenger_wins' | 'defender_wins' | 'draw' | 'timeout';
+export type DisputeOutcome =
+  | "challenger_wins"
+  | "defender_wins"
+  | "draw"
+  | "timeout";
 
 /**
  * Escalation tier levels
  */
 export type EscalationTier = 1 | 2 | 3;
+
+/**
+ * Types of targets that can be disputed
+ */
+export type DisputeTargetType =
+  | "evidence"
+  | "fact"
+  | "claim"
+  // Governance dispute types
+  | "lip_proposal" // Dispute a LIP's validity
+  | "lip_review" // Dispute a review's accuracy
+  | "governance_vote" // Dispute vote validity
+  | "operator_disclosure" // Dispute undisclosed agents
+  | "code_change" // Dispute a code contribution
+  | "deployment_decision"; // Dispute deployment approval
 
 // ============ Evidence Scoring ============
 
@@ -136,17 +155,17 @@ export const DISPUTE_EVIDENCE_WEIGHTS: Record<EvidenceType, number> = {
   on_chain: 0.95,
   formal_proof: 0.93,
   cryptographic_proof: 0.92,
-  chainlink_price_feed: 0.90,
+  chainlink_price_feed: 0.9,
   chainlink_por: 0.89,
   chainlink_ccip: 0.88,
   computational: 0.87,
   chainlink_functions: 0.85,
   peer_reviewed: 0.85,
   institutional: 0.75,
-  oracle: 0.70,
-  archived_web: 0.70,
+  oracle: 0.7,
+  archived_web: 0.7,
   attestation: 0.65,
-  inference: 0.50,
+  inference: 0.5,
 };
 
 /**
@@ -174,10 +193,10 @@ export interface EvidenceScore {
  */
 export const EVIDENCE_SCORE_WEIGHTS = {
   type: 0.25,
-  reliability: 0.30,
+  reliability: 0.3,
   recency: 0.15,
-  independence: 0.20,
-  corroboration: 0.10,
+  independence: 0.2,
+  corroboration: 0.1,
 } as const;
 
 /**
@@ -197,7 +216,7 @@ export interface EvidenceComparisonResult {
   isClearWinner: boolean;
 
   /** Suggested winner if clear */
-  suggestedWinner?: 'challenger' | 'defender';
+  suggestedWinner?: "challenger" | "defender";
 
   /** Individual evidence scores */
   challengerScores: EvidenceScore[];
@@ -230,14 +249,14 @@ export interface DomainExpertise {
  * Expertise decay configuration
  */
 export const EXPERTISE_DECAY = {
-  /** Half-life in blocks (~3 days) */
-  halfLifeBlocks: 100000n,
+  /** Half-life in blocks (~3.2 days) */
+  halfLifeBlocks: 111111n,
 
   /** Minimum votes to be considered expert */
-  minVotesForExpertise: 5,
+  minVotesForExpertise: 7,
 
   /** Minimum accuracy to be considered expert */
-  minAccuracyForExpertise: 0.60,
+  minAccuracyForExpertise: 0.66,
 } as const;
 
 /**
@@ -315,22 +334,22 @@ export const ESCALATION_TIERS: Record<EscalationTier, EscalationConfig> = {
   1: {
     tier: 1,
     arbiterCount: 7,
-    quorumRequirement: 0.5, // Simple majority
-    stakeMultiplier: 1.0,
-    appealWindow: 500, // ~21 min
+    quorumRequirement: 0.55, // Simple majority
+    stakeMultiplier: 1.1,
+    appealWindow: 555, // ~23 min
   },
   2: {
     tier: 2,
     arbiterCount: 11,
-    quorumRequirement: 0.67, // 2/3 supermajority
-    stakeMultiplier: 2.0,
-    appealWindow: 1000, // ~42 min
+    quorumRequirement: 0.66, // 2/3 supermajority
+    stakeMultiplier: 2.2,
+    appealWindow: 1111, // ~46 min
   },
   3: {
     tier: 3,
-    arbiterCount: 21,
-    quorumRequirement: 0.75, // 3/4 supermajority
-    stakeMultiplier: 5.0,
+    arbiterCount: 22,
+    quorumRequirement: 0.77, // 3/4 supermajority
+    stakeMultiplier: 5.5,
     appealWindow: 0, // No appeal - final
   },
 };
@@ -365,7 +384,7 @@ export interface ArbiterVote {
   arbiter: DID;
 
   /** Vote: who wins */
-  vote: 'challenger' | 'defender' | 'abstain';
+  vote: "challenger" | "defender" | "abstain";
 
   /** Optional justification hash (stored off-chain) */
   justificationHash?: string;
@@ -405,7 +424,7 @@ export interface TierResult {
   tier: EscalationTier;
 
   /** Winner according to this tier */
-  winner: 'challenger' | 'defender' | 'draw';
+  winner: "challenger" | "defender" | "draw";
 
   /** Vote counts */
   challengerVotes: number;
@@ -430,7 +449,7 @@ export interface Dispute {
   targetId: string;
 
   /** Type of target being disputed */
-  targetType: 'evidence' | 'fact' | 'claim';
+  targetType: DisputeTargetType;
 
   /** Knowledge domain */
   domain: string;
@@ -471,7 +490,7 @@ export interface Dispute {
   outcome?: DisputeOutcome;
 
   /** Final winner */
-  winner?: 'challenger' | 'defender';
+  winner?: "challenger" | "defender";
 
   /** Whether falsehood was exposed (for bonus) */
   exposedFalsehood: boolean;
@@ -499,7 +518,7 @@ export interface DisputeSettlement {
   disputeId: string;
 
   /** Winner */
-  winner: 'challenger' | 'defender';
+  winner: "challenger" | "defender";
 
   /** Winner's total reward */
   winnerReward: bigint;
@@ -543,7 +562,7 @@ export interface DisputeSettlement {
 export interface InitiateDisputePayload {
   /** Target being disputed */
   targetId: string;
-  targetType: 'evidence' | 'fact' | 'claim';
+  targetType: DisputeTargetType;
 
   /** Domain */
   domain: string;
@@ -603,7 +622,7 @@ export interface ArbiterVotePayload {
   arbiter: DID;
 
   /** Vote */
-  vote: 'challenger' | 'defender' | 'abstain';
+  vote: "challenger" | "defender" | "abstain";
 
   /** Optional justification hash */
   justificationHash?: string;
@@ -640,19 +659,19 @@ export interface SettleDisputePayload {
  * Dispute-specific error codes
  */
 export type DisputeErrorCode =
-  | 'DISPUTE_NOT_FOUND'
-  | 'INVALID_PHASE'
-  | 'INSUFFICIENT_STAKE'
-  | 'NOT_AUTHORIZED'
-  | 'ALREADY_COMMITTED'
-  | 'COMMITMENT_MISMATCH'
-  | 'ALREADY_VOTED'
-  | 'NOT_ARBITER'
-  | 'CANNOT_ESCALATE'
-  | 'DEADLINE_PASSED'
-  | 'DEADLINE_NOT_REACHED'
-  | 'ALREADY_RESOLVED'
-  | 'INVALID_EVIDENCE';
+  | "DISPUTE_NOT_FOUND"
+  | "INVALID_PHASE"
+  | "INSUFFICIENT_STAKE"
+  | "NOT_AUTHORIZED"
+  | "ALREADY_COMMITTED"
+  | "COMMITMENT_MISMATCH"
+  | "ALREADY_VOTED"
+  | "NOT_ARBITER"
+  | "CANNOT_ESCALATE"
+  | "DEADLINE_PASSED"
+  | "DEADLINE_NOT_REACHED"
+  | "ALREADY_RESOLVED"
+  | "INVALID_EVIDENCE";
 
 /**
  * Dispute error
@@ -661,10 +680,10 @@ export class DisputeError extends Error {
   constructor(
     message: string,
     public code: DisputeErrorCode,
-    public details?: Record<string, unknown>
+    public details?: Record<string, unknown>,
   ) {
     super(message);
-    this.name = 'DisputeError';
+    this.name = "DisputeError";
   }
 }
 
@@ -674,15 +693,15 @@ export class DisputeError extends Error {
  * Dispute event types for logging/hooks
  */
 export type DisputeEventType =
-  | 'dispute_initiated'
-  | 'evidence_committed'
-  | 'evidence_revealed'
-  | 'arbiters_selected'
-  | 'vote_cast'
-  | 'phase_advanced'
-  | 'dispute_escalated'
-  | 'dispute_settled'
-  | 'dispute_resolved';
+  | "dispute_initiated"
+  | "evidence_committed"
+  | "evidence_revealed"
+  | "arbiters_selected"
+  | "vote_cast"
+  | "phase_advanced"
+  | "dispute_escalated"
+  | "dispute_settled"
+  | "dispute_resolved";
 
 /**
  * Dispute event

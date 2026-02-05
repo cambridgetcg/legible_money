@@ -16,8 +16,11 @@
  *   CREATIVITY: New infrastructure for oracles and archiving
  */
 
-import type { DID } from '../../agents/identity/did.js';
-import type { EvidenceIndependence, ReferenceType } from '../knowledge/types.js';
+import type { DID } from "../../core/agents/identity/did.js";
+import type {
+  EvidenceIndependence,
+  ReferenceType,
+} from "../knowledge/types.js";
 
 // ============ Evidence Status ============
 
@@ -25,14 +28,14 @@ import type { EvidenceIndependence, ReferenceType } from '../knowledge/types.js'
  * Evidence lifecycle status
  */
 export type EvidenceStatus =
-  | 'pending_archive'     // Awaiting archival
-  | 'archived'            // Successfully archived
-  | 'archive_failed'      // Archival failed (will retry)
-  | 'active'              // Actively in use
-  | 'stale'               // Beyond freshness threshold
-  | 'expired'             // Past expiry, no longer valid
-  | 'superseded'          // Replaced by newer version
-  | 'invalidated';        // Proven false
+  | "pending_archive" // Awaiting archival
+  | "archived" // Successfully archived
+  | "archive_failed" // Archival failed (will retry)
+  | "active" // Actively in use
+  | "stale" // Beyond freshness threshold
+  | "expired" // Past expiry, no longer valid
+  | "superseded" // Replaced by newer version
+  | "invalidated"; // Proven false
 
 // ============ Evidence Types (Extended) ============
 
@@ -41,40 +44,40 @@ export type EvidenceStatus =
  */
 export type EvidenceType =
   // Existing types (from ReferenceType)
-  | 'on_chain'
-  | 'cryptographic_proof'
-  | 'computational'
-  | 'formal_proof'
-  | 'peer_reviewed'
-  | 'institutional'
-  | 'oracle'
-  | 'archived_web'
-  | 'attestation'
-  | 'inference'
+  | "on_chain"
+  | "cryptographic_proof"
+  | "computational"
+  | "formal_proof"
+  | "peer_reviewed"
+  | "institutional"
+  | "oracle"
+  | "archived_web"
+  | "attestation"
+  | "inference"
   // New Chainlink types
-  | 'chainlink_price_feed'
-  | 'chainlink_por'           // Proof of Reserve
-  | 'chainlink_functions'
-  | 'chainlink_ccip';         // Cross-Chain Interoperability
+  | "chainlink_price_feed"
+  | "chainlink_por" // Proof of Reserve
+  | "chainlink_functions"
+  | "chainlink_ccip"; // Cross-Chain Interoperability
 
 /**
  * Evidence type strength values (extended from EVIDENCE_TYPE_STRENGTH)
  */
 export const EVIDENCE_TYPE_STRENGTH: Record<EvidenceType, number> = {
-  on_chain: 1.00,
+  on_chain: 1.0,
   cryptographic_proof: 0.99,
   computational: 0.95,
   formal_proof: 0.95,
   chainlink_price_feed: 0.92,
   chainlink_por: 0.91,
-  chainlink_ccip: 0.90,
+  chainlink_ccip: 0.9,
   chainlink_functions: 0.88,
   peer_reviewed: 0.85,
-  institutional: 0.80,
-  oracle: 0.70,
-  archived_web: 0.60,
-  attestation: 0.50,
-  inference: 0.40,
+  institutional: 0.8,
+  oracle: 0.7,
+  archived_web: 0.6,
+  attestation: 0.5,
+  inference: 0.4,
 };
 
 // ============ Archive Types ============
@@ -82,7 +85,7 @@ export const EVIDENCE_TYPE_STRENGTH: Record<EvidenceType, number> = {
 /**
  * Archive provider types
  */
-export type ArchiveProvider = 'wayback' | 'ipfs' | 'arweave' | 'on_chain';
+export type ArchiveProvider = "wayback" | "ipfs" | "arweave" | "on_chain";
 
 /**
  * Archive location record
@@ -120,16 +123,16 @@ export interface ArchiveLocation {
  * Archive request status
  */
 export type ArchiveRequestStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'permanent_failure';
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "permanent_failure";
 
 /**
  * Archive priority levels
  */
-export type ArchivePriority = 'low' | 'normal' | 'high' | 'critical';
+export type ArchivePriority = "low" | "normal" | "high" | "critical";
 
 /**
  * Archive request record
@@ -188,14 +191,14 @@ export interface ArchiveConfig {
 export const DEFAULT_ARCHIVE_CONFIG: ArchiveConfig = {
   autoArchiveEnabled: true,
   providers: [
-    { provider: 'ipfs', enabled: true, priority: 1, config: {} },
-    { provider: 'arweave', enabled: true, priority: 2, config: {} },
-    { provider: 'wayback', enabled: true, priority: 3, config: {} },
+    { provider: "ipfs", enabled: true, priority: 1, config: {} },
+    { provider: "arweave", enabled: true, priority: 2, config: {} },
+    { provider: "wayback", enabled: true, priority: 3, config: {} },
   ],
   minArchiveCopies: 2,
-  verificationInterval: 10000,  // ~7 hours at 2521ms blocks
+  verificationInterval: 10000, // ~7 hours at 2521ms blocks
   maxRetries: 5,
-  retryBackoff: 100,            // ~4 minutes
+  retryBackoff: 100, // ~4 minutes
 };
 
 // ============ Deduplication Types ============
@@ -246,7 +249,7 @@ export interface EvidenceFingerprint {
 /**
  * Duplicate detection type
  */
-export type DuplicationType = 'exact' | 'near' | 'related' | 'none';
+export type DuplicationType = "exact" | "near" | "related" | "none";
 
 /**
  * Duplicate detection result
@@ -302,10 +305,10 @@ export interface DeduplicationConfig {
  */
 export const DEFAULT_DEDUPLICATION_CONFIG: DeduplicationConfig = {
   exactMatchEnabled: true,
-  perceptualHashThreshold: 0.15,        // 85% similar
-  featureSimilarityThreshold: 0.80,
-  simultaneousWindow: 10,               // ~25 seconds at 2521ms blocks
-  confirmationCreditRate: 0.10,         // 10% of original reward
+  perceptualHashThreshold: 0.15, // 85% similar
+  featureSimilarityThreshold: 0.8,
+  simultaneousWindow: 10, // ~25 seconds at 2521ms blocks
+  confirmationCreditRate: 0.1, // 10% of original reward
 };
 
 // ============ Version Types ============
@@ -313,7 +316,11 @@ export const DEFAULT_DEDUPLICATION_CONFIG: DeduplicationConfig = {
 /**
  * Version reason types
  */
-export type VersionReason = 'correction' | 'update' | 'supplement' | 'retraction';
+export type VersionReason =
+  | "correction"
+  | "update"
+  | "supplement"
+  | "retraction";
 
 /**
  * Evidence version information
@@ -349,8 +356,8 @@ export interface EvidenceVersion {
  */
 export interface EvidenceVersionTransition {
   id: string;
-  fromVersion: string;        // Evidence ID
-  toVersion: string;          // Evidence ID
+  fromVersion: string; // Evidence ID
+  toVersion: string; // Evidence ID
   transitionType: VersionReason;
   timestamp: number;
   blockNumber: bigint;
@@ -362,11 +369,14 @@ export interface EvidenceVersionTransition {
 /**
  * Confidence impact by version reason
  */
-export const VERSION_CONFIDENCE_IMPACT: Record<VersionReason, { min: number; max: number }> = {
+export const VERSION_CONFIDENCE_IMPACT: Record<
+  VersionReason,
+  { min: number; max: number }
+> = {
   correction: { min: -0.15, max: -0.05 },
-  update: { min: 0, max: 0.10 },
+  update: { min: 0, max: 0.1 },
   supplement: { min: 0.05, max: 0.15 },
-  retraction: { min: -1.0, max: -0.50 },
+  retraction: { min: -1.0, max: -0.5 },
 };
 
 // ============ Expiry Types ============
@@ -375,11 +385,11 @@ export const VERSION_CONFIDENCE_IMPACT: Record<VersionReason, { min: number; max
  * Expiry type
  */
 export type ExpiryType =
-  | 'eternal'           // Never expires (formal proofs, axioms)
-  | 'block_based'       // Expires after N blocks
-  | 'heartbeat'         // Expires if no heartbeat within threshold
-  | 'event_based'       // Expires on specific event
-  | 'decay_based';      // Gradually loses validity
+  | "eternal" // Never expires (formal proofs, axioms)
+  | "block_based" // Expires after N blocks
+  | "heartbeat" // Expires if no heartbeat within threshold
+  | "event_based" // Expires on specific event
+  | "decay_based"; // Gradually loses validity
 
 /**
  * Heartbeat configuration for oracle feeds
@@ -436,17 +446,32 @@ export interface EvidenceExpiry {
 /**
  * Default expiry configurations by evidence type
  */
-export const DEFAULT_EXPIRY_CONFIGS: Record<EvidenceType, Partial<EvidenceExpiry>> = {
-  on_chain: { expiryType: 'eternal', freshnessScore: 1.0, isExpired: false },
-  cryptographic_proof: { expiryType: 'eternal', freshnessScore: 1.0, isExpired: false },
-  formal_proof: { expiryType: 'eternal', freshnessScore: 1.0, isExpired: false },
-  computational: { expiryType: 'eternal', freshnessScore: 1.0, isExpired: false },
+export const DEFAULT_EXPIRY_CONFIGS: Record<
+  EvidenceType,
+  Partial<EvidenceExpiry>
+> = {
+  on_chain: { expiryType: "eternal", freshnessScore: 1.0, isExpired: false },
+  cryptographic_proof: {
+    expiryType: "eternal",
+    freshnessScore: 1.0,
+    isExpired: false,
+  },
+  formal_proof: {
+    expiryType: "eternal",
+    freshnessScore: 1.0,
+    isExpired: false,
+  },
+  computational: {
+    expiryType: "eternal",
+    freshnessScore: 1.0,
+    isExpired: false,
+  },
   chainlink_price_feed: {
-    expiryType: 'heartbeat',
+    expiryType: "heartbeat",
     heartbeatConfig: {
-      expectedInterval: 3600,        // ~2.5 hours at 2521ms blocks
-      maxStaleness: 7200,            // ~5 hours
-      deviationThreshold: 1.0,       // 1%
+      expectedInterval: 3600, // ~2.5 hours at 2521ms blocks
+      maxStaleness: 7200, // ~5 hours
+      deviationThreshold: 1.0, // 1%
       lastHeartbeat: 0,
       lastHeartbeatBlock: 0n,
       isStale: false,
@@ -455,11 +480,11 @@ export const DEFAULT_EXPIRY_CONFIGS: Record<EvidenceType, Partial<EvidenceExpiry
     isExpired: false,
   },
   chainlink_por: {
-    expiryType: 'heartbeat',
+    expiryType: "heartbeat",
     heartbeatConfig: {
-      expectedInterval: 86400,       // ~60 hours
-      maxStaleness: 172800,          // ~120 hours
-      deviationThreshold: 5.0,       // 5%
+      expectedInterval: 86400, // ~60 hours
+      maxStaleness: 172800, // ~120 hours
+      deviationThreshold: 5.0, // 5%
       lastHeartbeat: 0,
       lastHeartbeatBlock: 0n,
       isStale: false,
@@ -468,26 +493,30 @@ export const DEFAULT_EXPIRY_CONFIGS: Record<EvidenceType, Partial<EvidenceExpiry
     isExpired: false,
   },
   chainlink_functions: {
-    expiryType: 'block_based',
-    expiresAfterBlocks: 36000,       // ~25 hours
+    expiryType: "block_based",
+    expiresAfterBlocks: 36000, // ~25 hours
     freshnessScore: 1.0,
     isExpired: false,
   },
-  chainlink_ccip: { expiryType: 'eternal', freshnessScore: 1.0, isExpired: false },
+  chainlink_ccip: {
+    expiryType: "eternal",
+    freshnessScore: 1.0,
+    isExpired: false,
+  },
   peer_reviewed: {
-    expiryType: 'decay_based',
-    expiresAfterBlocks: 500000,      // ~15 days half-life
+    expiryType: "decay_based",
+    expiresAfterBlocks: 500000, // ~15 days half-life
     freshnessScore: 1.0,
     isExpired: false,
   },
   institutional: {
-    expiryType: 'decay_based',
-    expiresAfterBlocks: 200000,      // ~6 days
+    expiryType: "decay_based",
+    expiresAfterBlocks: 200000, // ~6 days
     freshnessScore: 1.0,
     isExpired: false,
   },
   oracle: {
-    expiryType: 'heartbeat',
+    expiryType: "heartbeat",
     heartbeatConfig: {
       expectedInterval: 7200,
       maxStaleness: 14400,
@@ -500,20 +529,20 @@ export const DEFAULT_EXPIRY_CONFIGS: Record<EvidenceType, Partial<EvidenceExpiry
     isExpired: false,
   },
   archived_web: {
-    expiryType: 'decay_based',
-    expiresAfterBlocks: 1000000,     // ~30 days
+    expiryType: "decay_based",
+    expiresAfterBlocks: 1000000, // ~30 days
     freshnessScore: 1.0,
     isExpired: false,
   },
   attestation: {
-    expiryType: 'decay_based',
-    expiresAfterBlocks: 100000,      // ~3 days
+    expiryType: "decay_based",
+    expiresAfterBlocks: 100000, // ~3 days
     freshnessScore: 1.0,
     isExpired: false,
   },
   inference: {
-    expiryType: 'decay_based',
-    expiresAfterBlocks: 50000,       // ~1.5 days
+    expiryType: "decay_based",
+    expiresAfterBlocks: 50000, // ~1.5 days
     freshnessScore: 1.0,
     isExpired: false,
   },
@@ -524,7 +553,7 @@ export const DEFAULT_EXPIRY_CONFIGS: Record<EvidenceType, Partial<EvidenceExpiry
 /**
  * Chainlink feed types
  */
-export type ChainlinkFeedType = 'price_feed' | 'por' | 'functions' | 'ccip';
+export type ChainlinkFeedType = "price_feed" | "por" | "functions" | "ccip";
 
 /**
  * L2 Sequencer status (for Arbitrum, Optimism, etc.)
@@ -551,7 +580,7 @@ export interface ProofOfReserveMetadata {
   asset: string;
 
   /** Reserve type */
-  reserveType: 'onchain' | 'offchain' | 'cross_chain';
+  reserveType: "onchain" | "offchain" | "cross_chain";
 
   /** Total reserves */
   totalReserves: bigint;
@@ -614,7 +643,7 @@ export interface ChainlinkMetadata {
  */
 export interface OracleMetadata {
   /** Oracle provider */
-  provider: 'chainlink' | 'band' | 'api3' | 'custom';
+  provider: "chainlink" | "band" | "api3" | "custom";
 
   /** Feed/contract address */
   feedAddress: string;
@@ -751,7 +780,7 @@ export interface Evidence {
   status: EvidenceStatus;
 
   /** Evidence direction */
-  direction: 'supporting' | 'contradicting' | 'neutral';
+  direction: "supporting" | "contradicting" | "neutral";
 
   /** Intrinsic strength based on type */
   intrinsicStrength: number;
@@ -812,7 +841,7 @@ export interface EvidenceSubmitPayload {
   contentHash: string;
   perceptualHash?: string;
   type: EvidenceType;
-  direction: 'supporting' | 'contradicting' | 'neutral';
+  direction: "supporting" | "contradicting" | "neutral";
   relatedFactId?: string;
   metadata: EvidenceMetadata;
   oracleMetadata?: OracleMetadata;
@@ -901,7 +930,7 @@ export const EVIDENCE_ANTI_GAMING = {
   KNOWN_DUPLICATE_PENALTY: 0.9,
 
   /** Confirmation credit cap */
-  MAX_CONFIRMATION_CREDIT: 0.20,
+  MAX_CONFIRMATION_CREDIT: 0.2,
 
   // Oracle gaming
   /** Minimum interval between oracle updates from same source */
@@ -935,19 +964,19 @@ export const EVIDENCE_ANTI_GAMING = {
  */
 export const EVIDENCE_REWARD_WEIGHTS = {
   /** First submitter of new evidence */
-  FIRST_SUBMISSION: 0.50,
+  FIRST_SUBMISSION: 0.5,
 
   /** Successful archival */
   ARCHIVAL: 0.15,
 
   /** Duplicate confirmation */
-  CONFIRMATION: 0.10,
+  CONFIRMATION: 0.1,
 
   /** Version updates */
-  VERSION_UPDATE: 0.10,
+  VERSION_UPDATE: 0.1,
 
   /** Oracle maintenance (heartbeat) */
-  ORACLE_MAINTENANCE: 0.10,
+  ORACLE_MAINTENANCE: 0.1,
 
   /** Archive verification */
   ARCHIVE_VERIFICATION: 0.05,
@@ -1000,11 +1029,11 @@ export function referenceToEvidence(
     retrievedAt: number;
     reliabilityScore: number;
     independence?: EvidenceIndependence;
-    direction: 'supporting' | 'contradicting' | 'neutral';
+    direction: "supporting" | "contradicting" | "neutral";
     intrinsicStrength: number;
     metadata?: EvidenceMetadata;
   },
-  submitter: DID = 'did:lgm:legacy' as DID
+  submitter: DID = "did:lgm:legacy" as DID,
 ): Evidence {
   const evidenceType = ref.type as EvidenceType;
 
@@ -1013,20 +1042,24 @@ export function referenceToEvidence(
     type: evidenceType,
     originalSource: ref.source,
     contentHash: ref.contentHash,
-    archives: ref.metadata?.archiveUrl ? [{
-      provider: 'wayback' as ArchiveProvider,
-      identifier: ref.metadata.archiveUrl,
-      archivedAt: ref.retrievedAt,
-      archivedAtBlock: 0n,
-      contentHash: ref.contentHash,
-      isPrimary: true,
-      verified: false,
-    }] : [],
+    archives: ref.metadata?.archiveUrl
+      ? [
+          {
+            provider: "wayback" as ArchiveProvider,
+            identifier: ref.metadata.archiveUrl,
+            archivedAt: ref.retrievedAt,
+            archivedAtBlock: 0n,
+            contentHash: ref.contentHash,
+            isPrimary: true,
+            verified: false,
+          },
+        ]
+      : [],
     submittedAt: ref.retrievedAt,
     submittedAtBlock: 0n,
     firstSubmitter: submitter,
     confirmedBy: [],
-    status: 'active',
+    status: "active",
     direction: ref.direction,
     intrinsicStrength: ref.intrinsicStrength,
     reliabilityScore: ref.reliabilityScore,
@@ -1045,7 +1078,8 @@ export function referenceToEvidence(
       confidenceImpact: 0,
     },
     expiry: {
-      ...(DEFAULT_EXPIRY_CONFIGS[evidenceType] || DEFAULT_EXPIRY_CONFIGS.archived_web),
+      ...(DEFAULT_EXPIRY_CONFIGS[evidenceType] ||
+        DEFAULT_EXPIRY_CONFIGS.archived_web),
       freshnessScore: 1.0,
       freshnessUpdatedAt: ref.retrievedAt,
       isExpired: false,
@@ -1066,7 +1100,7 @@ export function evidenceToReference(evidence: Evidence): {
   retrievedAt: number;
   reliabilityScore: number;
   independence: EvidenceIndependence;
-  direction: 'supporting' | 'contradicting' | 'neutral';
+  direction: "supporting" | "contradicting" | "neutral";
   intrinsicStrength: number;
   metadata: EvidenceMetadata;
 } {
@@ -1082,7 +1116,7 @@ export function evidenceToReference(evidence: Evidence): {
     intrinsicStrength: evidence.intrinsicStrength,
     metadata: {
       ...evidence.metadata,
-      archiveUrl: evidence.archives.find(a => a.isPrimary)?.identifier,
+      archiveUrl: evidence.archives.find((a) => a.isPrimary)?.identifier,
       oracleId: evidence.oracleMetadata?.feedAddress,
     },
   };

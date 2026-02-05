@@ -57,6 +57,7 @@ services:
       - NODE_NAME=validator-2
       - IS_VALIDATOR=true
       - LOG_LEVEL=info
+      - DIAL_PEERS=/dns4/validator-1/tcp/26656
     networks:
       - lgm-devnet
     depends_on:
@@ -83,6 +84,7 @@ services:
       - NODE_NAME=validator-3
       - IS_VALIDATOR=true
       - LOG_LEVEL=info
+      - DIAL_PEERS=/dns4/validator-1/tcp/26656,/dns4/validator-2/tcp/26656
     networks:
       - lgm-devnet
     depends_on:

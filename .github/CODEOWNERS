@@ -1,0 +1,51 @@
+# CODEOWNERS - Default reviewers for pull requests
+# Replace @yournameisai with your GitHub username
+
+# Default: All files require owner review
+*                                   @yournameisai
+
+# ============ Security-Critical Paths ============
+# These require owner review (add security team when available)
+
+# Cryptographic operations
+/core/crypto/                       @yournameisai
+
+# Consensus engine
+/consensus/pot/                     @yournameisai
+
+# State transitions
+/state/transitions.ts               @yournameisai
+
+# Agent identity and keys
+/core/agents/identity/              @yournameisai
+
+# Network-exposed interfaces
+/protocol/rpc/                      @yournameisai
+
+# ============ High-Sensitivity Paths ============
+
+# State management
+/state/                             @yournameisai
+
+# Network layer
+/network/                           @yournameisai
+
+# Rewards and economics
+/core/rewards/                      @yournameisai
+
+# Dispute resolution
+/core/dispute/                      @yournameisai
+
+# ============ Governance ============
+
+# Project documentation
+/docs/                              @yournameisai
+/CONTRIBUTING.md                    @yournameisai
+/SECURITY.md                        @yournameisai
+/CODE_OF_CONDUCT.md                 @yournameisai
+
+# GitHub configuration
+/.github/                           @yournameisai
+
+# LIPs (Legible Improvement Proposals)
+/docs/lips/                         @yournameisai

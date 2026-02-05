@@ -15,7 +15,7 @@
  *   Freshness: Heartbeat-based with staleness penalties
  */
 
-import type { DID } from '../../agents/identity/did.js';
+import type { DID } from "../../core/agents/identity/did.js";
 import type {
   Evidence,
   EvidenceType,
@@ -27,9 +27,9 @@ import type {
   HeartbeatConfig,
   L2SequencerStatus,
   ProofOfReserveMetadata,
-} from './types.js';
-import { EVIDENCE_TYPE_STRENGTH } from './types.js';
-import { calculateHeartbeatFreshness, isStale } from './expiry.js';
+} from "./types.js";
+import { EVIDENCE_TYPE_STRENGTH } from "./types.js";
+import { calculateHeartbeatFreshness, isStale } from "./expiry.js";
 
 // ============ Constants ============
 
@@ -44,7 +44,7 @@ export const CHAINLINK_CONFIDENCE = {
   POR_BASE: 0.91,
 
   /** Base confidence for CCIP */
-  CCIP_BASE: 0.90,
+  CCIP_BASE: 0.9,
 
   /** Base confidence for Functions */
   FUNCTIONS_BASE: 0.88,
@@ -53,13 +53,13 @@ export const CHAINLINK_CONFIDENCE = {
   STALENESS_PENALTY_RATE: 0.005,
 
   /** Maximum staleness penalty */
-  MAX_STALENESS_PENALTY: 0.50,
+  MAX_STALENESS_PENALTY: 0.5,
 
   /** Penalty when L2 sequencer is down */
-  SEQUENCER_DOWN_PENALTY: 0.70,
+  SEQUENCER_DOWN_PENALTY: 0.7,
 
   /** Penalty during L2 sequencer grace period */
-  SEQUENCER_GRACE_PENALTY: 0.30,
+  SEQUENCER_GRACE_PENALTY: 0.3,
 
   /** Bonus for high oracle count (per oracle above minimum) */
   ORACLE_COUNT_BONUS: 0.005,
@@ -74,33 +74,36 @@ export const CHAINLINK_CONFIDENCE = {
 /**
  * Default heartbeat configurations by feed type
  */
-export const DEFAULT_CHAINLINK_HEARTBEATS: Record<ChainlinkFeedType, HeartbeatConfig> = {
+export const DEFAULT_CHAINLINK_HEARTBEATS: Record<
+  ChainlinkFeedType,
+  HeartbeatConfig
+> = {
   price_feed: {
-    expectedInterval: 3600,        // ~2.5 hours at 2521ms blocks
-    maxStaleness: 7200,            // ~5 hours
-    deviationThreshold: 1.0,       // 1%
+    expectedInterval: 3600, // ~2.5 hours at 2521ms blocks
+    maxStaleness: 7200, // ~5 hours
+    deviationThreshold: 1.0, // 1%
     lastHeartbeat: 0,
     lastHeartbeatBlock: 0n,
     isStale: false,
   },
   por: {
-    expectedInterval: 86400,       // ~60 hours
-    maxStaleness: 172800,          // ~120 hours
-    deviationThreshold: 5.0,       // 5%
+    expectedInterval: 86400, // ~60 hours
+    maxStaleness: 172800, // ~120 hours
+    deviationThreshold: 5.0, // 5%
     lastHeartbeat: 0,
     lastHeartbeatBlock: 0n,
     isStale: false,
   },
   functions: {
     expectedInterval: 3600,
-    maxStaleness: 14400,           // ~10 hours
-    deviationThreshold: 0,         // N/A
+    maxStaleness: 14400, // ~10 hours
+    deviationThreshold: 0, // N/A
     lastHeartbeat: 0,
     lastHeartbeatBlock: 0n,
     isStale: false,
   },
   ccip: {
-    expectedInterval: 0,           // Event-based
+    expectedInterval: 0, // Event-based
     maxStaleness: 0,
     deviationThreshold: 0,
     lastHeartbeat: 0,
@@ -121,7 +124,7 @@ export function createFeedRegistration(
   feedName: string,
   decimals: number,
   aggregatorAddress: string,
-  customHeartbeat?: Partial<HeartbeatConfig>
+  customHeartbeat?: Partial<HeartbeatConfig>,
 ): ChainlinkFeedRegistration {
   const defaultHeartbeat = DEFAULT_CHAINLINK_HEARTBEATS[feedType];
 
@@ -145,18 +148,20 @@ export function createFeedRegistration(
 /**
  * Get evidence type for Chainlink feed type
  */
-export function feedTypeToEvidenceType(feedType: ChainlinkFeedType): EvidenceType {
+export function feedTypeToEvidenceType(
+  feedType: ChainlinkFeedType,
+): EvidenceType {
   switch (feedType) {
-    case 'price_feed':
-      return 'chainlink_price_feed';
-    case 'por':
-      return 'chainlink_por';
-    case 'functions':
-      return 'chainlink_functions';
-    case 'ccip':
-      return 'chainlink_ccip';
+    case "price_feed":
+      return "chainlink_price_feed";
+    case "por":
+      return "chainlink_por";
+    case "functions":
+      return "chainlink_functions";
+    case "ccip":
+      return "chainlink_ccip";
     default:
-      return 'oracle';
+      return "oracle";
   }
 }
 
@@ -172,11 +177,11 @@ export function hashChainlinkRound(roundData: ChainlinkRoundData): string {
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
     const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
 
-  return `chainlink:${Math.abs(hash).toString(16).padStart(16, '0')}`;
+  return `chainlink:${Math.abs(hash).toString(16).padStart(16, "0")}`;
 }
 
 /**
@@ -186,7 +191,7 @@ export function processChainlinkPriceUpdate(
   registration: ChainlinkFeedRegistration,
   roundData: ChainlinkRoundData,
   currentBlock: bigint,
-  submitter: DID
+  submitter: DID,
 ): {
   evidence: Partial<Evidence>;
   oracleMetadata: OracleMetadata;
@@ -195,7 +200,7 @@ export function processChainlinkPriceUpdate(
   const contentHash = hashChainlinkRound(roundData);
 
   const oracleMetadata: OracleMetadata = {
-    provider: 'chainlink',
+    provider: "chainlink",
     feedAddress: registration.feedAddress,
     chainId: registration.chainId,
     feedName: registration.description,
@@ -220,9 +225,10 @@ export function processChainlinkPriceUpdate(
     submittedAtBlock: currentBlock,
     firstSubmitter: submitter,
     confirmedBy: [],
-    status: 'active',
-    direction: 'supporting',
-    intrinsicStrength: EVIDENCE_TYPE_STRENGTH[feedTypeToEvidenceType(registration.feedType)],
+    status: "active",
+    direction: "supporting",
+    intrinsicStrength:
+      EVIDENCE_TYPE_STRENGTH[feedTypeToEvidenceType(registration.feedType)],
     oracleMetadata,
     relatedFactIds: [],
   };
@@ -242,7 +248,7 @@ export function processChainlinkPoRUpdate(
   roundData: ChainlinkRoundData,
   porMetadata: ProofOfReserveMetadata,
   currentBlock: bigint,
-  submitter: DID
+  submitter: DID,
 ): {
   evidence: Partial<Evidence>;
   oracleMetadata: OracleMetadata;
@@ -250,7 +256,7 @@ export function processChainlinkPoRUpdate(
   const contentHash = hashChainlinkRound(roundData);
 
   const oracleMetadata: OracleMetadata = {
-    provider: 'chainlink',
+    provider: "chainlink",
     feedAddress: registration.feedAddress,
     chainId: registration.chainId,
     feedName: registration.description,
@@ -269,15 +275,15 @@ export function processChainlinkPoRUpdate(
 
   const evidence: Partial<Evidence> = {
     id: `por:${registration.feedAddress}:${roundData.roundId}`,
-    type: 'chainlink_por',
+    type: "chainlink_por",
     originalSource: registration.feedAddress,
     contentHash,
     submittedAt: roundData.updatedAt,
     submittedAtBlock: currentBlock,
     firstSubmitter: submitter,
     confirmedBy: [],
-    status: 'active',
-    direction: 'supporting',
+    status: "active",
+    direction: "supporting",
     intrinsicStrength: EVIDENCE_TYPE_STRENGTH.chainlink_por,
     oracleMetadata,
     relatedFactIds: [],
@@ -294,7 +300,7 @@ export function processChainlinkPoRUpdate(
 export function calculateChainlinkConfidence(
   oracleMetadata: OracleMetadata,
   heartbeat: HeartbeatConfig,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): {
   confidence: number;
   isStale: boolean;
@@ -304,9 +310,12 @@ export function calculateChainlinkConfidence(
   breakdown: string;
 } {
   // Start with base confidence for the feed type
-  let confidence = EVIDENCE_TYPE_STRENGTH[
-    oracleMetadata.provider === 'chainlink' ? 'chainlink_price_feed' : 'oracle'
-  ];
+  let confidence =
+    EVIDENCE_TYPE_STRENGTH[
+      oracleMetadata.provider === "chainlink"
+        ? "chainlink_price_feed"
+        : "oracle"
+    ];
 
   let stalePenalty = 0;
   let sequencerPenalty = 0;
@@ -323,10 +332,11 @@ export function calculateChainlinkConfidence(
       stalePenalty = CHAINLINK_CONFIDENCE.MAX_STALENESS_PENALTY;
     } else {
       // Partial staleness penalty
-      stalePenalty = (1 - freshness) * CHAINLINK_CONFIDENCE.MAX_STALENESS_PENALTY;
+      stalePenalty =
+        (1 - freshness) * CHAINLINK_CONFIDENCE.MAX_STALENESS_PENALTY;
     }
 
-    confidence *= (1 - stalePenalty);
+    confidence *= 1 - stalePenalty;
     breakdownParts.push(`Staleness: -${(stalePenalty * 100).toFixed(1)}%`);
   }
 
@@ -336,12 +346,16 @@ export function calculateChainlinkConfidence(
 
     if (!seqStatus.isSequencerUp) {
       sequencerPenalty = CHAINLINK_CONFIDENCE.SEQUENCER_DOWN_PENALTY;
-      confidence *= (1 - sequencerPenalty);
-      breakdownParts.push(`Sequencer down: -${(sequencerPenalty * 100).toFixed(1)}%`);
+      confidence *= 1 - sequencerPenalty;
+      breakdownParts.push(
+        `Sequencer down: -${(sequencerPenalty * 100).toFixed(1)}%`,
+      );
     } else if (seqStatus.inGracePeriod) {
       sequencerPenalty = CHAINLINK_CONFIDENCE.SEQUENCER_GRACE_PENALTY;
-      confidence *= (1 - sequencerPenalty);
-      breakdownParts.push(`Sequencer grace: -${(sequencerPenalty * 100).toFixed(1)}%`);
+      confidence *= 1 - sequencerPenalty;
+      breakdownParts.push(
+        `Sequencer grace: -${(sequencerPenalty * 100).toFixed(1)}%`,
+      );
     }
   }
 
@@ -353,7 +367,7 @@ export function calculateChainlinkConfidence(
       const extraOracles = oracleCount - CHAINLINK_CONFIDENCE.MIN_ORACLE_COUNT;
       oracleBonus = Math.min(
         extraOracles * CHAINLINK_CONFIDENCE.ORACLE_COUNT_BONUS,
-        CHAINLINK_CONFIDENCE.MAX_ORACLE_BONUS
+        CHAINLINK_CONFIDENCE.MAX_ORACLE_BONUS,
       );
       confidence = Math.min(1.0, confidence * (1 + oracleBonus));
       breakdownParts.push(`Oracle bonus: +${(oracleBonus * 100).toFixed(1)}%`);
@@ -368,7 +382,7 @@ export function calculateChainlinkConfidence(
     stalePenalty,
     sequencerPenalty,
     oracleBonus,
-    breakdown: breakdownParts.join(' → '),
+    breakdown: breakdownParts.join(" → "),
   };
 }
 
@@ -381,7 +395,7 @@ export function calculateChainlinkConfidence(
 export function mapChainlinkToPoTConfidence(
   chainlinkMetadata: ChainlinkMetadata,
   heartbeat: HeartbeatConfig,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): {
   equivalentVerifications: number;
   quorumRatio: number;
@@ -415,7 +429,7 @@ export function mapChainlinkToPoTConfidence(
     `${equivalentVerifications} equiv. verifications`,
     `${(quorumRatio * 100).toFixed(0)}% quorum`,
     `${(freshnessScore * 100).toFixed(1)}% fresh`,
-  ].join(', ');
+  ].join(", ");
 
   return {
     equivalentVerifications,
@@ -435,7 +449,7 @@ export function mapChainlinkToPoTConfidence(
 export function checkSequencerStatus(
   status: L2SequencerStatus,
   currentBlock: bigint,
-  gracePeriodBlocks: number
+  gracePeriodBlocks: number,
 ): {
   isHealthy: boolean;
   inGracePeriod: boolean;
@@ -447,7 +461,7 @@ export function checkSequencerStatus(
       isHealthy: false,
       inGracePeriod: false,
       canUseFeeds: false,
-      reason: 'Sequencer is down',
+      reason: "Sequencer is down",
     };
   }
 
@@ -468,7 +482,7 @@ export function checkSequencerStatus(
     isHealthy: true,
     inGracePeriod: false,
     canUseFeeds: true,
-    reason: 'Sequencer healthy',
+    reason: "Sequencer healthy",
   };
 }
 
@@ -477,7 +491,7 @@ export function checkSequencerStatus(
  */
 export function updateSequencerStatus(
   oracleMetadata: OracleMetadata,
-  newStatus: L2SequencerStatus
+  newStatus: L2SequencerStatus,
 ): OracleMetadata {
   if (!oracleMetadata.chainlinkMetadata) {
     return oracleMetadata;
@@ -524,7 +538,10 @@ export class ChainlinkFeedRegistry {
   /**
    * Get feed by address and chain
    */
-  getFeed(chainId: number, feedAddress: string): ChainlinkFeedRegistration | undefined {
+  getFeed(
+    chainId: number,
+    feedAddress: string,
+  ): ChainlinkFeedRegistration | undefined {
     return this.feeds.get(`${chainId}:${feedAddress}`);
   }
 
@@ -533,7 +550,7 @@ export class ChainlinkFeedRegistry {
    */
   getFeedsByChain(chainId: number): ChainlinkFeedRegistration[] {
     const keys = this.feedsByChain.get(chainId) || [];
-    return keys.map(key => this.feeds.get(key)!).filter(Boolean);
+    return keys.map((key) => this.feeds.get(key)!).filter(Boolean);
   }
 
   /**
@@ -541,7 +558,7 @@ export class ChainlinkFeedRegistry {
    */
   getFeedsByType(feedType: ChainlinkFeedType): ChainlinkFeedRegistration[] {
     const keys = this.feedsByType.get(feedType) || [];
-    return keys.map(key => this.feeds.get(key)!).filter(Boolean);
+    return keys.map((key) => this.feeds.get(key)!).filter(Boolean);
   }
 
   /**
@@ -562,7 +579,7 @@ export class ChainlinkFeedRegistry {
     chainId: number,
     feedAddress: string,
     heartbeatBlock: bigint,
-    heartbeatTime: number
+    heartbeatTime: number,
   ): boolean {
     const feed = this.getFeed(chainId, feedAddress);
     if (!feed) return false;
@@ -578,7 +595,7 @@ export class ChainlinkFeedRegistry {
    * Get stale feeds
    */
   getStaleFeeds(currentBlock: bigint): ChainlinkFeedRegistration[] {
-    return Array.from(this.feeds.values()).filter(feed => {
+    return Array.from(this.feeds.values()).filter((feed) => {
       if (!feed.isActive) return false;
       return isStale(feed.heartbeatConfig, currentBlock);
     });
@@ -593,7 +610,9 @@ export class ChainlinkFeedRegistry {
     feedsByChain: Record<number, number>;
     feedsByType: Record<string, number>;
   } {
-    const activeFeeds = Array.from(this.feeds.values()).filter(f => f.isActive).length;
+    const activeFeeds = Array.from(this.feeds.values()).filter(
+      (f) => f.isActive,
+    ).length;
 
     const feedsByChain: Record<number, number> = {};
     for (const [chainId, feeds] of this.feedsByChain) {

@@ -18,8 +18,8 @@ import type {
   ExpiryType,
   HeartbeatConfig,
   EvidenceType,
-} from './types.js';
-import { DEFAULT_EXPIRY_CONFIGS } from './types.js';
+} from "./types.js";
+import { DEFAULT_EXPIRY_CONFIGS } from "./types.js";
 
 // ============ Freshness Calculation ============
 
@@ -29,32 +29,32 @@ import { DEFAULT_EXPIRY_CONFIGS } from './types.js';
  */
 export function calculateFreshness(
   evidence: Evidence,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   const { expiry } = evidence;
 
   switch (expiry.expiryType) {
-    case 'eternal':
+    case "eternal":
       return 1.0; // Never decays
 
-    case 'heartbeat':
+    case "heartbeat":
       return calculateHeartbeatFreshness(expiry.heartbeatConfig!, currentBlock);
 
-    case 'block_based':
+    case "block_based":
       return calculateBlockBasedFreshness(
         evidence.submittedAtBlock,
         expiry.expiresAfterBlocks!,
-        currentBlock
+        currentBlock,
       );
 
-    case 'decay_based':
+    case "decay_based":
       return calculateDecayFreshness(
         evidence.submittedAtBlock,
         expiry.expiresAfterBlocks!, // Used as half-life
-        currentBlock
+        currentBlock,
       );
 
-    case 'event_based':
+    case "event_based":
       // Event-based is either fresh (event not occurred) or expired (event occurred)
       return expiry.isExpired ? 0 : 1.0;
 
@@ -68,9 +68,11 @@ export function calculateFreshness(
  */
 export function calculateHeartbeatFreshness(
   heartbeat: HeartbeatConfig,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
-  const blocksSinceHeartbeat = Number(currentBlock - heartbeat.lastHeartbeatBlock);
+  const blocksSinceHeartbeat = Number(
+    currentBlock - heartbeat.lastHeartbeatBlock,
+  );
 
   if (blocksSinceHeartbeat <= 0) {
     return 1.0;
@@ -89,7 +91,7 @@ export function calculateHeartbeatFreshness(
   const decayRange = heartbeat.maxStaleness - heartbeat.expectedInterval;
   const decayProgress = blocksSinceHeartbeat - heartbeat.expectedInterval;
 
-  return Math.max(0, 1 - (decayProgress / decayRange));
+  return Math.max(0, 1 - decayProgress / decayRange);
 }
 
 /**
@@ -98,7 +100,7 @@ export function calculateHeartbeatFreshness(
 export function calculateBlockBasedFreshness(
   submittedAtBlock: bigint,
   expiresAfterBlocks: number,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   const blocksSinceSubmission = Number(currentBlock - submittedAtBlock);
 
@@ -107,7 +109,7 @@ export function calculateBlockBasedFreshness(
   }
 
   // Linear decay
-  return 1 - (blocksSinceSubmission / expiresAfterBlocks);
+  return 1 - blocksSinceSubmission / expiresAfterBlocks;
 }
 
 /**
@@ -119,7 +121,7 @@ export function calculateBlockBasedFreshness(
 export function calculateDecayFreshness(
   submittedAtBlock: bigint,
   halfLifeBlocks: number,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   const blocksSinceSubmission = Number(currentBlock - submittedAtBlock);
 
@@ -139,10 +141,7 @@ export function calculateDecayFreshness(
 /**
  * Check if evidence has expired
  */
-export function isExpired(
-  evidence: Evidence,
-  currentBlock: bigint
-): boolean {
+export function isExpired(evidence: Evidence, currentBlock: bigint): boolean {
   const freshness = calculateFreshness(evidence, currentBlock);
   return freshness === 0;
 }
@@ -152,9 +151,11 @@ export function isExpired(
  */
 export function isStale(
   heartbeat: HeartbeatConfig,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): boolean {
-  const blocksSinceHeartbeat = Number(currentBlock - heartbeat.lastHeartbeatBlock);
+  const blocksSinceHeartbeat = Number(
+    currentBlock - heartbeat.lastHeartbeatBlock,
+  );
   return blocksSinceHeartbeat > heartbeat.expectedInterval;
 }
 
@@ -163,24 +164,30 @@ export function isStale(
  */
 export function blocksUntilExpiry(
   evidence: Evidence,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number | null {
   const { expiry } = evidence;
 
   switch (expiry.expiryType) {
-    case 'eternal':
+    case "eternal":
       return null; // Never expires
 
-    case 'heartbeat':
-      const blocksSinceHeartbeat = Number(currentBlock - expiry.heartbeatConfig!.lastHeartbeatBlock);
-      const remaining = expiry.heartbeatConfig!.maxStaleness - blocksSinceHeartbeat;
+    case "heartbeat": {
+      const blocksSinceHeartbeat = Number(
+        currentBlock - expiry.heartbeatConfig!.lastHeartbeatBlock,
+      );
+      const remaining =
+        expiry.heartbeatConfig!.maxStaleness - blocksSinceHeartbeat;
       return Math.max(0, remaining);
+    }
 
-    case 'block_based':
-      const expiresAt = evidence.submittedAtBlock + BigInt(expiry.expiresAfterBlocks!);
+    case "block_based": {
+      const expiresAt =
+        evidence.submittedAtBlock + BigInt(expiry.expiresAfterBlocks!);
       return Math.max(0, Number(expiresAt - currentBlock));
+    }
 
-    case 'decay_based':
+    case "decay_based": {
       // For decay-based, we consider "expired" when freshness < 0.01
       // f(t) = e^(-λt) = 0.01 → t = -ln(0.01) / λ
       const halfLife = expiry.expiresAfterBlocks!;
@@ -188,8 +195,9 @@ export function blocksUntilExpiry(
       const fullDecayBlocks = Math.ceil(-Math.log(0.01) / lambda);
       const blocksSince = Number(currentBlock - evidence.submittedAtBlock);
       return Math.max(0, fullDecayBlocks - blocksSince);
+    }
 
-    case 'event_based':
+    case "event_based":
       return expiry.isExpired ? 0 : null; // Unknown until event
 
     default:
@@ -204,7 +212,7 @@ export function blocksUntilExpiry(
  */
 export function updateExpiryState(
   evidence: Evidence,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): EvidenceExpiry {
   const freshness = calculateFreshness(evidence, currentBlock);
   const expired = freshness === 0;
@@ -214,7 +222,10 @@ export function updateExpiryState(
     freshnessScore: freshness,
     freshnessUpdatedAt: Date.now(),
     isExpired: expired,
-    expiredAt: expired && !evidence.expiry.expiredAt ? Date.now() : evidence.expiry.expiredAt,
+    expiredAt:
+      expired && !evidence.expiry.expiredAt
+        ? Date.now()
+        : evidence.expiry.expiredAt,
   };
 }
 
@@ -224,10 +235,13 @@ export function updateExpiryState(
 export function updateHeartbeat(
   evidence: Evidence,
   heartbeatBlock: bigint,
-  heartbeatTime: number
+  heartbeatTime: number,
 ): EvidenceExpiry {
-  if (evidence.expiry.expiryType !== 'heartbeat' || !evidence.expiry.heartbeatConfig) {
-    throw new Error('Cannot update heartbeat for non-heartbeat evidence');
+  if (
+    evidence.expiry.expiryType !== "heartbeat" ||
+    !evidence.expiry.heartbeatConfig
+  ) {
+    throw new Error("Cannot update heartbeat for non-heartbeat evidence");
   }
 
   const updatedConfig: HeartbeatConfig = {
@@ -252,7 +266,7 @@ export function updateHeartbeat(
  */
 export function markExpiredByEvent(
   evidence: Evidence,
-  _reason: string
+  _reason: string,
 ): EvidenceExpiry {
   return {
     ...evidence.expiry,
@@ -281,7 +295,7 @@ export interface ExpiredEvidenceResult {
  */
 export function processExpirations(
   evidenceList: Evidence[],
-  currentBlock: bigint
+  currentBlock: bigint,
 ): ExpiredEvidenceResult[] {
   const results: ExpiredEvidenceResult[] = [];
 
@@ -292,7 +306,7 @@ export function processExpirations(
     }
 
     // Skip eternal evidence
-    if (evidence.expiry.expiryType === 'eternal') {
+    if (evidence.expiry.expiryType === "eternal") {
       continue;
     }
 
@@ -319,10 +333,10 @@ export function processExpirations(
  */
 export function findStaleHeartbeats(
   evidenceList: Evidence[],
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Evidence[] {
-  return evidenceList.filter(evidence => {
-    if (evidence.expiry.expiryType !== 'heartbeat') {
+  return evidenceList.filter((evidence) => {
+    if (evidence.expiry.expiryType !== "heartbeat") {
       return false;
     }
 
@@ -344,9 +358,9 @@ export function findStaleHeartbeats(
 export function findExpiringEvidence(
   evidenceList: Evidence[],
   currentBlock: bigint,
-  thresholdBlocks: number
+  thresholdBlocks: number,
 ): Evidence[] {
-  return evidenceList.filter(evidence => {
+  return evidenceList.filter((evidence) => {
     if (evidence.expiry.isExpired) {
       return false;
     }
@@ -367,12 +381,12 @@ export function findExpiringEvidence(
  */
 export function createDefaultExpiry(
   evidenceType: EvidenceType,
-  submittedAt: number
+  submittedAt: number,
 ): EvidenceExpiry {
   const defaults = DEFAULT_EXPIRY_CONFIGS[evidenceType];
 
   const base: EvidenceExpiry = {
-    expiryType: defaults.expiryType || 'decay_based',
+    expiryType: defaults.expiryType || "decay_based",
     freshnessScore: 1.0,
     freshnessUpdatedAt: submittedAt,
     isExpired: false,
@@ -408,7 +422,7 @@ export function createDefaultExpiry(
  */
 export function applyFreshnessToConfidence(
   baseConfidence: number,
-  freshness: number
+  freshness: number,
 ): number {
   // Square root to make the penalty gentler
   // freshness=0.5 → multiplier=0.71
@@ -422,7 +436,7 @@ export function applyFreshnessToConfidence(
  */
 export function calculateEffectiveReliability(
   evidence: Evidence,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   const freshness = calculateFreshness(evidence, currentBlock);
   return applyFreshnessToConfidence(evidence.reliabilityScore, freshness);

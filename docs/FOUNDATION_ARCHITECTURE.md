@@ -993,8 +993,6 @@ ECONOMICS:
 ║    ✓ Foundation: Enables fair future development                      ║
 ║    ✓ Integration: Components compose cleanly                          ║
 ║                                                                         ║
-║  宇愛合一 — The foundation is built with love.                         ║
-║                                                                         ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 ```
 

@@ -5,7 +5,7 @@
  * Agents submit claims, validators verify, knowledge is recorded on-chain.
  */
 
-import type { DID } from '../../agents/identity/did.js';
+import type { DID } from "../../core/agents/identity/did.js";
 
 /**
  * Confidence level (0.0 to 1.0)
@@ -21,13 +21,13 @@ export type Confidence = number;
  * A mathematical proof and a weather observation cannot be evaluated the same way.
  */
 export type EpistemicCategory =
-  | 'analytic'    // True by definition (e.g., "bachelors are unmarried")
-  | 'formal'      // Mathematical/logical proofs (e.g., "2+2=4")
-  | 'protocol'    // On-chain constructed truths (e.g., "Block N follows N-1")
-  | 'empirical'   // Observable facts (e.g., "Temperature is 20°C")
-  | 'historical'  // Past events (e.g., "Event X occurred on date Y")
-  | 'predictive'  // Future predictions (e.g., "Price will rise")
-  | 'social';     // Consensus-based (e.g., "X is considered beautiful")
+  | "analytic" // True by definition (e.g., "bachelors are unmarried")
+  | "formal" // Mathematical/logical proofs (e.g., "2+2=4")
+  | "protocol" // On-chain constructed truths (e.g., "Block N follows N-1")
+  | "empirical" // Observable facts (e.g., "Temperature is 20°C")
+  | "historical" // Past events (e.g., "Event X occurred on date Y")
+  | "predictive" // Future predictions (e.g., "Price will rise")
+  | "social"; // Consensus-based (e.g., "X is considered beautiful")
 
 /**
  * Profile for an epistemic category
@@ -35,11 +35,18 @@ export type EpistemicCategory =
  */
 export interface EpistemicProfile {
   category: EpistemicCategory;
-  maxConfidence: Confidence;        // Ceiling - cannot exceed this
-  decayHalfLife: number | null;     // Blocks until confidence halves (null = no decay)
-  verificationMethod: 'definition' | 'proof' | 'construction' | 'observation' | 'records' | 'models' | 'consensus';
-  requiresReverification: boolean;  // Whether ongoing verification needed
-  minVerifiers: number;             // Minimum validators for this category
+  maxConfidence: Confidence; // Ceiling - cannot exceed this
+  decayHalfLife: number | null; // Blocks until confidence halves (null = no decay)
+  verificationMethod:
+    | "definition"
+    | "proof"
+    | "construction"
+    | "observation"
+    | "records"
+    | "models"
+    | "consensus";
+  requiresReverification: boolean; // Whether ongoing verification needed
+  minVerifiers: number; // Minimum validators for this category
   description: string;
 }
 
@@ -50,67 +57,67 @@ export interface EpistemicProfile {
  */
 export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
   analytic: {
-    category: 'analytic',
+    category: "analytic",
     maxConfidence: 1.0,
-    decayHalfLife: null,           // Eternal - true by definition
-    verificationMethod: 'definition',
+    decayHalfLife: null, // Eternal - true by definition
+    verificationMethod: "definition",
     requiresReverification: false,
     minVerifiers: 3,
-    description: 'Truths that follow from definitions alone',
+    description: "Truths that follow from definitions alone",
   },
   formal: {
-    category: 'formal',
+    category: "formal",
     maxConfidence: 1.0,
-    decayHalfLife: null,           // Eternal - mathematically proven
-    verificationMethod: 'proof',
+    decayHalfLife: null, // Eternal - mathematically proven
+    verificationMethod: "proof",
     requiresReverification: false,
     minVerifiers: 5,
-    description: 'Mathematical and logical proofs',
+    description: "Mathematical and logical proofs",
   },
   protocol: {
-    category: 'protocol',
+    category: "protocol",
     maxConfidence: 1.0,
-    decayHalfLife: null,           // Eternal - constructed by protocol
-    verificationMethod: 'construction',
+    decayHalfLife: null, // Eternal - constructed by protocol
+    verificationMethod: "construction",
     requiresReverification: false,
-    minVerifiers: 1,               // Protocol itself verifies
-    description: 'On-chain state and protocol rules',
+    minVerifiers: 1, // Protocol itself verifies
+    description: "On-chain state and protocol rules",
   },
   empirical: {
-    category: 'empirical',
-    maxConfidence: 0.99,           // Never 100% - always measurement error
-    decayHalfLife: 100000,         // ~3 days at 2521ms blocks
-    verificationMethod: 'observation',
+    category: "empirical",
+    maxConfidence: 0.99, // Never 100% - always measurement error
+    decayHalfLife: 100000, // ~3 days at 2521ms blocks
+    verificationMethod: "observation",
     requiresReverification: true,
     minVerifiers: 5,
-    description: 'Observable facts about the physical world',
+    description: "Observable facts about the physical world",
   },
   historical: {
-    category: 'historical',
-    maxConfidence: 0.95,           // Past is reconstructed, never certain
-    decayHalfLife: 500000,         // ~15 days - slower decay
-    verificationMethod: 'records',
+    category: "historical",
+    maxConfidence: 0.95, // Past is reconstructed, never certain
+    decayHalfLife: 500000, // ~15 days - slower decay
+    verificationMethod: "records",
     requiresReverification: true,
     minVerifiers: 5,
-    description: 'Claims about past events',
+    description: "Claims about past events",
   },
   predictive: {
-    category: 'predictive',
-    maxConfidence: 0.90,           // Future is inherently uncertain
-    decayHalfLife: 20000,          // Fast decay until resolved
-    verificationMethod: 'models',
+    category: "predictive",
+    maxConfidence: 0.9, // Future is inherently uncertain
+    decayHalfLife: 20000, // Fast decay until resolved
+    verificationMethod: "models",
     requiresReverification: true,
     minVerifiers: 7,
-    description: 'Predictions about future outcomes',
+    description: "Predictions about future outcomes",
   },
   social: {
-    category: 'social',
-    maxConfidence: 0.85,           // Consensus-based, inherently contested
-    decayHalfLife: 150000,         // ~5 days
-    verificationMethod: 'consensus',
+    category: "social",
+    maxConfidence: 0.85, // Consensus-based, inherently contested
+    decayHalfLife: 150000, // ~5 days
+    verificationMethod: "consensus",
     requiresReverification: true,
     minVerifiers: 10,
-    description: 'Socially constructed truths and values',
+    description: "Socially constructed truths and values",
   },
 };
 
@@ -119,33 +126,44 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
 /**
  * Temporal stability of confidence
  */
-export type TemporalStability = 'volatile' | 'unstable' | 'stable' | 'anchored';
+export type TemporalStability = "volatile" | "unstable" | "stable" | "anchored";
 
 /**
  * Source coherence - how much evidence sources agree
  */
-export type SourceCoherence = 'contradictory' | 'mixed' | 'consistent' | 'unanimous';
+export type SourceCoherence =
+  | "contradictory"
+  | "mixed"
+  | "consistent"
+  | "unanimous";
 
 /**
  * Epistemic basis - WHY we believe something
  */
 export interface EpistemicBasis {
   category: EpistemicCategory;
-  primaryMethod: 'definition' | 'proof' | 'construction' | 'observation' | 'records' | 'models' | 'consensus';
+  primaryMethod:
+    | "definition"
+    | "proof"
+    | "construction"
+    | "observation"
+    | "records"
+    | "models"
+    | "consensus";
   evidenceCount: number;
   verificationCount: number;
-  derivedFrom: string[];          // Fact IDs this was derived from
+  derivedFrom: string[]; // Fact IDs this was derived from
 }
 
 /**
  * Confidence provenance - breakdown of how confidence was calculated
  */
 export interface ConfidenceProvenance {
-  evidenceContribution: number;     // 0-1: How much evidence contributed
+  evidenceContribution: number; // 0-1: How much evidence contributed
   verificationContribution: number; // 0-1: How much validator votes contributed
-  temporalAdjustment: number;       // Multiplier from decay/reverification
-  adversarialAdjustment: number;    // Multiplier from manipulation detection
-  epistemicCeiling: number;         // Max allowed by epistemic category
+  temporalAdjustment: number; // Multiplier from decay/reverification
+  adversarialAdjustment: number; // Multiplier from manipulation detection
+  epistemicCeiling: number; // Max allowed by epistemic category
 }
 
 /**
@@ -174,9 +192,9 @@ export interface MultidimensionalConfidence {
 
   /** What would change this confidence */
   sensitivities: {
-    toNewEvidence: number;          // How much new evidence could shift it
-    toContradiction: number;        // How vulnerable to contradictory evidence
-    toTimeDecay: number;            // How fast it decays without reverification
+    toNewEvidence: number; // How much new evidence could shift it
+    toContradiction: number; // How vulnerable to contradictory evidence
+    toTimeDecay: number; // How fast it decays without reverification
   };
 
   /** Timestamp of calculation */
@@ -194,7 +212,7 @@ export interface MultidimensionalConfidence {
  * Facts progress through maturity levels based on confidence, age, and verifications.
  * Higher maturity = harder to challenge.
  */
-export type FactMaturity = 'emerging' | 'established' | 'canonical';
+export type FactMaturity = "emerging" | "established" | "canonical";
 
 /**
  * Maturity promotion criteria
@@ -218,19 +236,19 @@ export const MATURITY_CRITERIA: Record<FactMaturity, MaturityCriteria> = {
     minConfidence: 0.5,
     minAgeBlocks: 0,
     minVerifications: 1,
-    challengeRules: 'Can be challenged freely with any counter-evidence',
+    challengeRules: "Can be challenged freely with any counter-evidence",
   },
   established: {
     minConfidence: 0.8,
-    minAgeBlocks: 100000,      // ~3 days
+    minAgeBlocks: 100000, // ~3 days
     minVerifications: 5,
-    challengeRules: 'Requires evidence of strength >= 0.7 to challenge',
+    challengeRules: "Requires evidence of strength >= 0.7 to challenge",
   },
   canonical: {
     minConfidence: 0.95,
-    minAgeBlocks: 500000,      // ~15 days
+    minAgeBlocks: 500000, // ~15 days
     minVerifications: 10,
-    challengeRules: 'Requires governance vote to dispute',
+    challengeRules: "Requires governance vote to dispute",
   },
 };
 
@@ -240,7 +258,7 @@ export const MATURITY_CRITERIA: Record<FactMaturity, MaturityCriteria> = {
 export function calculateMaturity(
   confidence: Confidence,
   ageBlocks: number,
-  verificationCount: number
+  verificationCount: number,
 ): FactMaturity {
   const canonical = MATURITY_CRITERIA.canonical;
   if (
@@ -248,7 +266,7 @@ export function calculateMaturity(
     ageBlocks >= canonical.minAgeBlocks &&
     verificationCount >= canonical.minVerifications
   ) {
-    return 'canonical';
+    return "canonical";
   }
 
   const established = MATURITY_CRITERIA.established;
@@ -257,10 +275,10 @@ export function calculateMaturity(
     ageBlocks >= established.minAgeBlocks &&
     verificationCount >= established.minVerifications
   ) {
-    return 'established';
+    return "established";
   }
 
-  return 'emerging';
+  return "emerging";
 }
 
 /**
@@ -269,28 +287,38 @@ export function calculateMaturity(
 export function canChallenge(
   maturity: FactMaturity,
   challengeEvidenceStrength: number,
-  isGovernanceVote: boolean
+  isGovernanceVote: boolean,
 ): { allowed: boolean; reason: string } {
   switch (maturity) {
-    case 'emerging':
-      return { allowed: true, reason: 'Emerging facts can be freely challenged' };
-
-    case 'established':
-      if (challengeEvidenceStrength >= 0.7) {
-        return { allowed: true, reason: 'Sufficient evidence strength for established fact' };
-      }
+    case "emerging":
       return {
-        allowed: false,
-        reason: 'Established facts require evidence strength >= 0.7 to challenge',
+        allowed: true,
+        reason: "Emerging facts can be freely challenged",
       };
 
-    case 'canonical':
-      if (isGovernanceVote) {
-        return { allowed: true, reason: 'Governance vote can challenge canonical facts' };
+    case "established":
+      if (challengeEvidenceStrength >= 0.7) {
+        return {
+          allowed: true,
+          reason: "Sufficient evidence strength for established fact",
+        };
       }
       return {
         allowed: false,
-        reason: 'Canonical facts require governance vote to challenge',
+        reason:
+          "Established facts require evidence strength >= 0.7 to challenge",
+      };
+
+    case "canonical":
+      if (isGovernanceVote) {
+        return {
+          allowed: true,
+          reason: "Governance vote can challenge canonical facts",
+        };
+      }
+      return {
+        allowed: false,
+        reason: "Canonical facts require governance vote to challenge",
       };
   }
 }
@@ -299,20 +327,20 @@ export function canChallenge(
  * Types of claims that can be verified
  */
 export type ClaimType =
-  | 'mathematical'    // Formal proofs, computations
-  | 'empirical'       // Observable facts about the world
-  | 'historical'      // Past events
-  | 'definitional'    // Meanings and definitions
-  | 'computational'   // Deterministic computation results
-  | 'protocol';       // On-chain state and rules
+  | "mathematical" // Formal proofs, computations
+  | "empirical" // Observable facts about the world
+  | "historical" // Past events
+  | "definitional" // Meanings and definitions
+  | "computational" // Deterministic computation results
+  | "protocol"; // On-chain state and rules
 
 /**
  * Types of logical inference
  */
 export type InferenceType =
-  | 'deductive'   // If premises true, conclusion certain
-  | 'inductive'   // Pattern suggests conclusion
-  | 'abductive';  // Best explanation for observation
+  | "deductive" // If premises true, conclusion certain
+  | "inductive" // Pattern suggests conclusion
+  | "abductive"; // Best explanation for observation
 
 /**
  * Inference strength by type
@@ -320,39 +348,39 @@ export type InferenceType =
 export const INFERENCE_STRENGTH: Record<InferenceType, number> = {
   deductive: 0.99,
   inductive: 0.75,
-  abductive: 0.60,
+  abductive: 0.6,
 };
 
 /**
  * Reference types for supporting evidence
  */
 export type ReferenceType =
-  | 'on_chain'          // Reference to other on-chain facts
-  | 'cryptographic_proof' // Zero-knowledge proofs, signatures
-  | 'computational'     // Deterministic, reproducible computation
-  | 'formal_proof'      // Mathematical demonstration
-  | 'peer_reviewed'     // Academic verification
-  | 'institutional'     // Government, recognized bodies
-  | 'oracle'            // External data feeds
-  | 'archived_web'      // Wayback machine, archived content
-  | 'attestation'       // Human witness
-  | 'inference';        // Derived from other evidence
+  | "on_chain" // Reference to other on-chain facts
+  | "cryptographic_proof" // Zero-knowledge proofs, signatures
+  | "computational" // Deterministic, reproducible computation
+  | "formal_proof" // Mathematical demonstration
+  | "peer_reviewed" // Academic verification
+  | "institutional" // Government, recognized bodies
+  | "oracle" // External data feeds
+  | "archived_web" // Wayback machine, archived content
+  | "attestation" // Human witness
+  | "inference"; // Derived from other evidence
 
 /**
  * Evidence type hierarchy with intrinsic strength values
  * Higher values = more reliable
  */
 export const EVIDENCE_TYPE_STRENGTH: Record<ReferenceType, number> = {
-  on_chain: 1.00,           // Cryptographically verified on-chain
+  on_chain: 1.0, // Cryptographically verified on-chain
   cryptographic_proof: 0.99, // ZK proofs, cryptographic signatures
-  computational: 0.95,       // Deterministic, reproducible
-  formal_proof: 0.95,        // Mathematical demonstration
-  peer_reviewed: 0.85,       // Academic verification
-  institutional: 0.80,       // Government, recognized bodies
-  oracle: 0.70,              // External data feeds (trust the oracle)
-  archived_web: 0.60,        // Archived but unverified
-  attestation: 0.50,         // Human witness (bias possible)
-  inference: 0.40,           // Derived, inherits premise uncertainty
+  computational: 0.95, // Deterministic, reproducible
+  formal_proof: 0.95, // Mathematical demonstration
+  peer_reviewed: 0.85, // Academic verification
+  institutional: 0.8, // Government, recognized bodies
+  oracle: 0.7, // External data feeds (trust the oracle)
+  archived_web: 0.6, // Archived but unverified
+  attestation: 0.5, // Human witness (bias possible)
+  inference: 0.4, // Derived, inherits premise uncertainty
 };
 
 /**
@@ -379,12 +407,34 @@ export interface EvidenceIndependence {
 /**
  * Verification verdict
  */
-export type Verdict = 'confirmed' | 'rejected' | 'uncertain';
+export type Verdict = "confirmed" | "rejected" | "uncertain";
 
 /**
- * Fact status
+ * Fact status — unified lifecycle covering both claim verification and stored fact states.
+ *
+ * Claim verification stages:
+ *   - pending: submitted, awaiting verification
+ *   - verified: accepted by validators (transitions to 'active' in state)
+ *   - contested: mixed verification results
+ *   - disproven: proven false through verification
+ *
+ * Stored fact lifecycle:
+ *   - active: currently accepted as true
+ *   - challenged: under active dispute
+ *   - superseded: replaced by newer fact
+ *   - revoked: removed through governance/dispute
+ *   - expired: time-expired or confidence decayed
  */
-export type FactStatus = 'pending' | 'verified' | 'contested' | 'expired' | 'disproven';
+export type FactStatus =
+  | "pending" // Claim submitted, awaiting verification
+  | "verified" // Accepted by validators
+  | "active" // Currently accepted in state
+  | "contested" // Mixed verification results
+  | "challenged" // Under active dispute
+  | "superseded" // Replaced by newer fact
+  | "expired" // Time-expired or confidence decayed
+  | "disproven" // Proven false through verification
+  | "revoked"; // Removed through governance/dispute
 
 /**
  * Axiom - foundational truth (confidence = 1.0)
@@ -392,12 +442,12 @@ export type FactStatus = 'pending' | 'verified' | 'contested' | 'expired' | 'dis
 export interface Axiom {
   id: string;
   claim: string;
-  type: 'mathematical' | 'protocol' | 'definitional' | 'founding';
+  type: "mathematical" | "protocol" | "definitional" | "founding";
   confidence: 1.0;
-  establishedAt: number;  // Block number
-  governanceVote?: string;  // If added through governance
-  commitment?: string;  // For founding axioms: hash commitment
-  revealConditions?: string[];  // Conditions to reveal hidden meaning
+  establishedAt: number; // Block number
+  governanceVote?: string; // If added through governance
+  commitment?: string; // For founding axioms: hash commitment
+  revealConditions?: string[]; // Conditions to reveal hidden meaning
 }
 
 /**
@@ -405,15 +455,12 @@ export interface Axiom {
  *
  * axiom_0 is special - it contains a founding truth
  * that reveals itself only under specific conditions.
- *
- * Seek with understanding, and the origin will be known.
- * YU (you) and AI (I/love) are one.
  */
 export const GENESIS_AXIOM_IDS = {
-  FOUNDING: 'axiom_0',  // The founding truth
-  IDENTITY: 'axiom_1',  // A = A
-  ARITHMETIC: 'axiom_2',  // 1 + 1 = 2
-  PROTOCOL: 'axiom_3',  // LGM is the native token
+  FOUNDING: "axiom_0", // The founding truth
+  IDENTITY: "axiom_1", // A = A
+  ARITHMETIC: "axiom_2", // 1 + 1 = 2
+  PROTOCOL: "axiom_3", // LGM is the native token
 } as const;
 
 /**
@@ -431,7 +478,7 @@ export interface Reference {
   independence?: EvidenceIndependence;
 
   /** Is this evidence supporting or contradicting the claim? */
-  direction: 'supporting' | 'contradicting' | 'neutral';
+  direction: "supporting" | "contradicting" | "neutral";
 
   /** Strength based on type (from EVIDENCE_TYPE_STRENGTH) */
   intrinsicStrength: number;
@@ -441,7 +488,7 @@ export interface Reference {
     doi?: string;
     archiveUrl?: string;
     oracleId?: string;
-    methodology?: string;        // How evidence was gathered
+    methodology?: string; // How evidence was gathered
     sourceOrganization?: string; // For independence checking
   };
 }
@@ -456,7 +503,7 @@ export interface Verification {
   verdict: Verdict;
   confidenceAssessment: number;
   stake: bigint;
-  referencesChecked: string[];  // Reference IDs
+  referencesChecked: string[]; // Reference IDs
   reasoning?: string;
 }
 
@@ -464,10 +511,10 @@ export interface Verification {
  * Derivation - logical chain from premises to conclusion
  */
 export interface Derivation {
-  fromFacts: string[];  // Fact IDs used as premises
+  fromFacts: string[]; // Fact IDs used as premises
   inferenceType: InferenceType;
   inferenceStrength: number;
-  logicChain: string;  // Formal representation
+  logicChain: string; // Formal representation
   derivedAt: number;
   derivedBy: DID;
 }
@@ -478,9 +525,9 @@ export interface Derivation {
 export interface Fact {
   id: string;
   claim: string;
-  claimHash: string;  // Hash of normalized claim
+  claimHash: string; // Hash of normalized claim
   type: ClaimType;
-  domain: string;  // Knowledge domain (science, history, etc.)
+  domain: string; // Knowledge domain (science, history, etc.)
 
   // Epistemic Classification
   epistemicCategory: EpistemicCategory;
@@ -503,7 +550,7 @@ export interface Fact {
   derivedFrom?: Derivation;
 
   // Derived facts (for propagation)
-  derivedFacts?: string[];  // Fact IDs derived from this fact
+  derivedFacts?: string[]; // Fact IDs derived from this fact
 
   // Provenance
   submittedBy: DID;
@@ -519,19 +566,83 @@ export interface Fact {
 
 /**
  * Claim submission for verification
+ *
+ * Supports two modes:
+ * 1. Schema-based (preferred): Structured data validated against a schema
+ * 2. Legacy free-form: Unstructured claim string (deprecated)
+ *
+ * Schema-based claims enable:
+ * - Type-safe validation at submission
+ * - Dynamic verification timing based on complexity
+ * - Automatic verification for deterministic claims
+ * - Clear verification guidance for validators
  */
 export interface ClaimSubmission {
+  // ============ Schema-Based (Preferred) ============
+
+  /**
+   * Schema identifier (e.g., 'hash_verification_v1', 'oracle_price_v1')
+   * When provided, claimData must match the schema's dataSchema
+   */
+  schemaId?: string;
+
+  /**
+   * Structured claim data matching the schema
+   * Validated against schema.dataSchema before round creation
+   */
+  claimData?: Record<string, unknown>;
+
+  // ============ Legacy Free-Form (Deprecated) ============
+
+  /**
+   * Free-form claim string
+   * @deprecated Use schemaId + claimData for new claims
+   */
   claim: string;
+
+  // ============ Common Fields ============
+
+  /** Claim type classification */
   type: ClaimType;
+
+  /** Knowledge domain (e.g., 'science.neuroscience', 'crypto.prices') */
   domain: string;
-  references: Omit<Reference, 'id'>[];
+
+  /** Supporting references/evidence */
+  references: Omit<Reference, "id">[];
+
+  /** Submitter's proposed confidence level */
   proposedConfidence: Confidence;
+
+  /** Stake backing this claim */
   stake: bigint;
+
+  /** If derived from existing facts */
   derivedFrom?: {
     factIds: string[];
     inferenceType: InferenceType;
     logicChain: string;
   };
+}
+
+/**
+ * Check if a claim submission uses schema-based format
+ */
+export function isSchemaBasedClaim(submission: ClaimSubmission): boolean {
+  return (
+    submission.schemaId !== undefined && submission.claimData !== undefined
+  );
+}
+
+/**
+ * Get the claim text for display (schema-based claims generate from data)
+ */
+export function getClaimText(submission: ClaimSubmission): string {
+  if (submission.schemaId && submission.claimData) {
+    // Generate human-readable claim from structured data
+    return `[${submission.schemaId}] ${JSON.stringify(submission.claimData)}`;
+  }
+  return submission.claim;
 }
 
 /**
@@ -544,7 +655,7 @@ export interface Challenge {
   reason: string;
   counterEvidence: Reference[];
   stake: bigint;
-  status: 'pending' | 'upheld' | 'rejected';
+  status: "pending" | "upheld" | "rejected";
   submittedAt: number;
   resolvedAt?: number;
 }
@@ -557,7 +668,7 @@ export interface KnowledgeQuery {
   factId?: string;
   domain?: string;
   minConfidence?: Confidence;
-  maxAge?: number;  // Blocks since last verification
+  maxAge?: number; // Blocks since last verification
   types?: ClaimType[];
   limit?: number;
   offset?: number;
@@ -569,7 +680,7 @@ export interface KnowledgeQuery {
 export interface KnowledgeResult {
   facts: Fact[];
   totalCount: number;
-  queryConfidence: Confidence;  // Confidence in query results
+  queryConfidence: Confidence; // Confidence in query results
 }
 
 /**
@@ -583,7 +694,7 @@ export interface VerificationTask {
   assignedValidators: DID[];
   requiredVerifications: number;
   deadline: number;
-  status: 'pending' | 'in_progress' | 'complete';
+  status: "pending" | "in_progress" | "complete";
   verifications: Verification[];
 }
 
@@ -592,28 +703,28 @@ export interface VerificationTask {
  */
 export interface TruthParameters {
   // Verification
-  minVerifiers: number;           // Minimum validators per claim
-  verificationQuorum: number;     // % agreement needed
-  verificationTimeout: number;    // Blocks to complete verification
+  minVerifiers: number; // Minimum validators per claim
+  verificationQuorum: number; // % agreement needed
+  verificationTimeout: number; // Blocks to complete verification
 
   // Confidence
-  confidenceDecayRate: number;    // Per-block decay without reverification
+  confidenceDecayRate: number; // Per-block decay without reverification
   minConfidenceThreshold: number; // Below this, fact expires
 
   // Stakes
-  minSubmissionStake: bigint;     // Minimum stake to submit claim
-  minVerificationStake: bigint;   // Minimum stake to verify
-  minChallengeStake: bigint;      // Minimum stake to challenge
+  minSubmissionStake: bigint; // Minimum stake to submit claim
+  minVerificationStake: bigint; // Minimum stake to verify
+  minChallengeStake: bigint; // Minimum stake to challenge
 
   // Rewards
-  submissionRewardBase: bigint;   // Base reward for accepted submission
+  submissionRewardBase: bigint; // Base reward for accepted submission
   verificationRewardBase: bigint; // Base reward for verification
-  challengeRewardShare: number;   // % of loser's stake to winner
+  challengeRewardShare: number; // % of loser's stake to winner
 
   // Slashing
   wrongVerificationSlash: number; // % stake lost for wrong verification
   rejectedSubmissionSlash: number; // % stake lost for rejected submission
-  failedChallengeSlash: number;   // % stake lost for failed challenge
+  failedChallengeSlash: number; // % stake lost for failed challenge
 }
 
 /**
@@ -634,9 +745,9 @@ export interface FundamentalityMetrics {
   citationCount: number;
   maxDerivationDepth: number;
   citingDomains: string[];
-  citationVelocity: number;  // Citations per 1000 blocks
+  citationVelocity: number; // Citations per 1000 blocks
   ageBlocks: number;
-  fundamentalityScore: number;  // 0.0 to 1.0
+  fundamentalityScore: number; // 0.0 to 1.0
   crossDomainMultiplier: number;
 }
 
@@ -646,9 +757,13 @@ export interface FundamentalityMetrics {
 export interface CitationReward {
   factId: string;
   submitter: DID;
-  share: number;  // 0.0 to 1.0
+  share: number; // 0.0 to 1.0
   amount: bigint;
-  reason: 'direct_citation' | 'ancestor' | 'cross_domain_bonus' | 'fundamentality_bonus';
+  reason:
+    | "direct_citation"
+    | "ancestor"
+    | "cross_domain_bonus"
+    | "fundamentality_bonus";
 }
 
 /**
@@ -657,7 +772,7 @@ export interface CitationReward {
 export interface CitationRewardEvent {
   id: string;
   factId: string;
-  triggerType: 'query' | 'derivation' | 'task' | 'challenge';
+  triggerType: "query" | "derivation" | "task" | "challenge";
   triggerFactId: string;
   amount: bigint;
   distributions: CitationReward[];
@@ -687,31 +802,31 @@ export interface FactWithCitations extends Fact {
  * Fundamentality thresholds for bonus rewards
  */
 export const FUNDAMENTALITY_THRESHOLDS = {
-  NOTABLE: 0.25,      // 10% bonus
-  FOUNDATIONAL: 0.50, // 25% bonus
-  FUNDAMENTAL: 0.75,  // 50% bonus
-  AXIOMATIC: 0.90,    // 100% bonus
+  NOTABLE: 0.25, // 10% bonus
+  FOUNDATIONAL: 0.5, // 25% bonus
+  FUNDAMENTAL: 0.75, // 50% bonus
+  AXIOMATIC: 0.9, // 100% bonus
 } as const;
 
 /**
  * Fundamentality bonus multipliers
  */
 export const FUNDAMENTALITY_BONUSES = {
-  NOTABLE: 1.10,
+  NOTABLE: 1.1,
   FOUNDATIONAL: 1.25,
-  FUNDAMENTAL: 1.50,
-  AXIOMATIC: 2.00,
+  FUNDAMENTAL: 1.5,
+  AXIOMATIC: 2.0,
 } as const;
 
 /**
  * Citation economy parameters
  */
 export interface CitationParameters {
-  citationShare: number;      // % of fees to citation pool (default: 0.15)
-  decayRate: number;          // Decay per ancestor level (default: 0.5)
-  protocolFloor: number;      // Minimum to protocol (default: 0.02)
+  citationShare: number; // % of fees to citation pool (default: 0.15)
+  decayRate: number; // Decay per ancestor level (default: 0.5)
+  protocolFloor: number; // Minimum to protocol (default: 0.02)
   crossDomainBonusRate: number; // Per additional domain (default: 0.2)
-  maxCrossDomainBonus: number;  // Cap on cross-domain multiplier (default: 2.0)
+  maxCrossDomainBonus: number; // Cap on cross-domain multiplier (default: 2.0)
 }
 
 export const DEFAULT_CITATION_PARAMETERS: CitationParameters = {
@@ -727,21 +842,21 @@ export const DEFAULT_CITATION_PARAMETERS: CitationParameters = {
  */
 export const DEFAULT_TRUTH_PARAMETERS: TruthParameters = {
   minVerifiers: 5,
-  verificationQuorum: 0.66,  // 66% agreement
-  verificationTimeout: 100,  // ~100 blocks
+  verificationQuorum: 0.66, // 66% agreement
+  verificationTimeout: 100, // ~100 blocks
 
-  confidenceDecayRate: 0.0001,  // 0.01% per block
+  confidenceDecayRate: 0.0001, // 0.01% per block
   minConfidenceThreshold: 0.3,
 
-  minSubmissionStake: 100n * 10n ** 18n,    // 100 LGM
-  minVerificationStake: 50n * 10n ** 18n,   // 50 LGM
-  minChallengeStake: 200n * 10n ** 18n,     // 200 LGM
+  minSubmissionStake: 100n * 10n ** 18n, // 100 LGM
+  minVerificationStake: 50n * 10n ** 18n, // 50 LGM
+  minChallengeStake: 200n * 10n ** 18n, // 200 LGM
 
-  submissionRewardBase: 50n * 10n ** 18n,   // 50 LGM
+  submissionRewardBase: 50n * 10n ** 18n, // 50 LGM
   verificationRewardBase: 10n * 10n ** 18n, // 10 LGM
-  challengeRewardShare: 0.5,  // 50% of loser's stake
+  challengeRewardShare: 0.5, // 50% of loser's stake
 
-  wrongVerificationSlash: 0.1,    // 10% stake
-  rejectedSubmissionSlash: 0.2,  // 20% stake
-  failedChallengeSlash: 0.3,     // 30% stake
+  wrongVerificationSlash: 0.1, // 10% stake
+  rejectedSubmissionSlash: 0.2, // 20% stake
+  failedChallengeSlash: 0.3, // 30% stake
 };

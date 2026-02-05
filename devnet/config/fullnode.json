@@ -4,6 +4,10 @@
     "dataDir": "/data",
     "logLevel": "info"
   },
+  "storage": {
+    "type": "leveldb",
+    "path": "/data/state"
+  },
   "network": {
     "listenAddresses": ["/ip4/0.0.0.0/tcp/26656"],
     "bootstrapPeers": [

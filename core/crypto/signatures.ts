@@ -5,14 +5,19 @@
  * All protocol messages and transactions are signed.
  */
 
-import { ed25519 } from '@noble/curves/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
-import { bytesToHex, hexToBytes, type PublicKey, type PrivateKey } from './keys.js';
-import { domainHash, HASH_DOMAINS } from './hashing.js';
+import { ed25519 } from "@noble/curves/ed25519";
+
+import {
+  bytesToHex,
+  hexToBytes,
+  type PublicKey,
+  type PrivateKey,
+} from "./keys.js";
+import { domainHash, HASH_DOMAINS } from "./hashing.js";
 
 // ============ Types ============
 
-export type Signature = string;  // Hex-encoded signature (128 chars = 64 bytes)
+export type Signature = string; // Hex-encoded signature (128 chars = 64 bytes)
 export type SignatureBytes = Uint8Array;
 
 export interface SignedMessage<T> {
@@ -52,7 +57,7 @@ export function signString(message: string, privateKey: PrivateKey): Signature {
 export function signDomainSeparated(
   domain: string,
   message: Uint8Array | string,
-  privateKey: PrivateKey
+  privateKey: PrivateKey,
 ): Signature {
   const hash = domainHash(domain, message);
   return sign(hash, privateKey);
@@ -63,9 +68,12 @@ export function signDomainSeparated(
  */
 export function signTransaction(
   transaction: object,
-  privateKey: PrivateKey
+  privateKey: PrivateKey,
 ): Signature {
-  const serialized = JSON.stringify(transaction, Object.keys(transaction).sort());
+  const serialized = JSON.stringify(
+    transaction,
+    Object.keys(transaction).sort(),
+  );
   return signDomainSeparated(HASH_DOMAINS.TRANSACTION, serialized, privateKey);
 }
 
@@ -74,9 +82,12 @@ export function signTransaction(
  */
 export function signBlock(
   blockHeader: object,
-  privateKey: PrivateKey
+  privateKey: PrivateKey,
 ): Signature {
-  const serialized = JSON.stringify(blockHeader, Object.keys(blockHeader).sort());
+  const serialized = JSON.stringify(
+    blockHeader,
+    Object.keys(blockHeader).sort(),
+  );
   return signDomainSeparated(HASH_DOMAINS.BLOCK, serialized, privateKey);
 }
 
@@ -88,7 +99,7 @@ export function signBlock(
 export function verify(
   message: Uint8Array,
   signature: Signature,
-  publicKey: PublicKey
+  publicKey: PublicKey,
 ): boolean {
   try {
     const sigBytes = hexToBytes(signature);
@@ -105,7 +116,7 @@ export function verify(
 export function verifyString(
   message: string,
   signature: Signature,
-  publicKey: PublicKey
+  publicKey: PublicKey,
 ): boolean {
   const messageBytes = new TextEncoder().encode(message);
   return verify(messageBytes, signature, publicKey);
@@ -118,7 +129,7 @@ export function verifyDomainSeparated(
   domain: string,
   message: Uint8Array | string,
   signature: Signature,
-  publicKey: PublicKey
+  publicKey: PublicKey,
 ): boolean {
   const hash = domainHash(domain, message);
   return verify(hash, signature, publicKey);
@@ -130,10 +141,18 @@ export function verifyDomainSeparated(
 export function verifyTransaction(
   transaction: object,
   signature: Signature,
-  publicKey: PublicKey
+  publicKey: PublicKey,
 ): boolean {
-  const serialized = JSON.stringify(transaction, Object.keys(transaction).sort());
-  return verifyDomainSeparated(HASH_DOMAINS.TRANSACTION, serialized, publicKey);
+  const serialized = JSON.stringify(
+    transaction,
+    Object.keys(transaction).sort(),
+  );
+  return verifyDomainSeparated(
+    HASH_DOMAINS.TRANSACTION,
+    serialized,
+    signature,
+    publicKey,
+  );
 }
 
 /**
@@ -142,36 +161,56 @@ export function verifyTransaction(
 export function verifyBlock(
   blockHeader: object,
   signature: Signature,
-  publicKey: PublicKey
+  publicKey: PublicKey,
 ): boolean {
-  const serialized = JSON.stringify(blockHeader, Object.keys(blockHeader).sort());
-  return verifyDomainSeparated(HASH_DOMAINS.BLOCK, serialized, publicKey);
+  const serialized = JSON.stringify(
+    blockHeader,
+    Object.keys(blockHeader).sort(),
+  );
+  return verifyDomainSeparated(
+    HASH_DOMAINS.BLOCK,
+    serialized,
+    signature,
+    publicKey,
+  );
 }
 
 // ============ Batch Verification ============
 
 /**
- * Batch verify multiple signatures (more efficient)
+ * Batch verify multiple signatures
  * Returns true only if ALL signatures are valid
+ *
+ * SECURITY NOTE: Ed25519 does not support true batch verification like BLS.
+ * This function verifies each signature individually with early termination
+ * on first failure. For high-throughput scenarios requiring batch verification,
+ * consider migrating to BLS signatures (future enhancement).
+ *
+ * Performance: O(n) where n is number of signatures, but fails fast on invalid.
  */
 export function batchVerify(
   items: Array<{
     message: Uint8Array;
     signature: Signature;
     publicKey: PublicKey;
-  }>
+  }>,
 ): boolean {
-  // Ed25519 batch verification
-  // Note: noble/curves supports this natively
-  try {
-    const messages = items.map(i => i.message);
-    const signatures = items.map(i => hexToBytes(i.signature));
-    const publicKeys = items.map(i => hexToBytes(i.publicKey));
+  if (items.length === 0) {
+    return true; // Empty batch is valid
+  }
 
-    // Use batch verification when available
-    // Falls back to individual verification
-    for (let i = 0; i < items.length; i++) {
-      if (!ed25519.verify(signatures[i], messages[i], publicKeys[i])) {
+  try {
+    // Pre-convert all items to avoid repeated conversions on success path
+    const converted = items.map((item) => ({
+      message: item.message,
+      signature: hexToBytes(item.signature),
+      publicKey: hexToBytes(item.publicKey),
+    }));
+
+    // Verify each signature with early termination on failure
+    // Ed25519 verification is CPU-bound, so parallelization doesn't help
+    for (const { message, signature, publicKey } of converted) {
+      if (!ed25519.verify(signature, message, publicKey)) {
         return false;
       }
     }
@@ -179,6 +218,44 @@ export function batchVerify(
   } catch {
     return false;
   }
+}
+
+/**
+ * Batch verify with detailed results
+ * Returns which signatures failed for debugging/logging
+ */
+export function batchVerifyWithResults(
+  items: Array<{
+    message: Uint8Array;
+    signature: Signature;
+    publicKey: PublicKey;
+  }>,
+): { allValid: boolean; results: boolean[]; firstInvalidIndex: number | null } {
+  const results: boolean[] = [];
+  let firstInvalidIndex: number | null = null;
+
+  for (let i = 0; i < items.length; i++) {
+    try {
+      const sig = hexToBytes(items[i].signature);
+      const pk = hexToBytes(items[i].publicKey);
+      const valid = ed25519.verify(sig, items[i].message, pk);
+      results.push(valid);
+      if (!valid && firstInvalidIndex === null) {
+        firstInvalidIndex = i;
+      }
+    } catch {
+      results.push(false);
+      if (firstInvalidIndex === null) {
+        firstInvalidIndex = i;
+      }
+    }
+  }
+
+  return {
+    allValid: firstInvalidIndex === null,
+    results,
+    firstInvalidIndex,
+  };
 }
 
 // ============ Signed Message Helpers ============
@@ -189,7 +266,7 @@ export function batchVerify(
 export function createSignedMessage<T>(
   message: T,
   privateKey: PrivateKey,
-  publicKey: PublicKey
+  publicKey: PublicKey,
 ): SignedMessage<T> {
   const serialized = JSON.stringify(message);
   const signature = signString(serialized, privateKey);
@@ -205,10 +282,14 @@ export function createSignedMessage<T>(
  * Verify a signed message
  */
 export function verifySignedMessage<T>(
-  signedMessage: SignedMessage<T>
+  signedMessage: SignedMessage<T>,
 ): SignatureVerification {
   const serialized = JSON.stringify(signedMessage.message);
-  const valid = verifyString(serialized, signedMessage.signature, signedMessage.signer);
+  const valid = verifyString(
+    serialized,
+    signedMessage.signature,
+    signedMessage.signer,
+  );
 
   return {
     valid,
@@ -225,7 +306,7 @@ export function verifySignedMessage<T>(
 export interface AggregatedSignature {
   signatures: Signature[];
   signers: PublicKey[];
-  bitmap: Uint8Array;  // Which validators signed
+  bitmap: Uint8Array; // Which validators signed
 }
 
 /**
@@ -234,7 +315,7 @@ export interface AggregatedSignature {
  * but we can concatenate for now and upgrade later
  */
 export function aggregateSignatures(
-  signatures: Array<{ signature: Signature; signer: PublicKey }>
+  signatures: Array<{ signature: Signature; signer: PublicKey }>,
 ): AggregatedSignature {
   const bitmap = new Uint8Array(Math.ceil(signatures.length / 8));
 
@@ -243,8 +324,8 @@ export function aggregateSignatures(
   });
 
   return {
-    signatures: signatures.map(s => s.signature),
-    signers: signatures.map(s => s.signer),
+    signatures: signatures.map((s) => s.signature),
+    signers: signatures.map((s) => s.signer),
     bitmap,
   };
 }
@@ -254,7 +335,7 @@ export function aggregateSignatures(
  */
 export function verifyAggregatedSignature(
   message: Uint8Array,
-  aggregated: AggregatedSignature
+  aggregated: AggregatedSignature,
 ): boolean {
   // Verify each signature individually
   for (let i = 0; i < aggregated.signatures.length; i++) {

@@ -5,13 +5,16 @@
  * Handles key derivation, signing, and RPC communication.
  */
 
-import { EventEmitter } from 'events';
-import { AgentWallet, SessionWallet, type SessionCapabilities } from './wallet.js';
+import { EventEmitter } from "events";
+import {
+  AgentWallet,
+  SessionWallet,
+  type SessionCapabilities,
+} from "./wallet.js";
 import type {
   ClientConfig,
   RPCRequest,
   RPCResponse,
-  RPCError,
   AccountGetBalanceResponse,
   AccountGetInfoResponse,
   AgentGetStatusResponse,
@@ -23,17 +26,16 @@ import type {
   VerificationGetPendingResponse,
   VerificationSubmitCommitmentResponse,
   VerificationSubmitRevealResponse,
-  ValidatorGetInfoResponse,
   NetworkHealthResponse,
   ClaimOptions,
   TransferOptions,
   ProtocolEvent,
   Subscription,
   RateLimitInfo,
-} from '../types.js';
-import type { FactState, ValidatorState } from '../../state/types.js';
-import type { Block, Transaction } from '../../consensus/pot/types.js';
-import { createCommitment } from '../../core/crypto/commitment.js';
+} from "../types.js";
+import type { FactState } from "../../state/types.js";
+import type { Block } from "../../consensus/pot/types.js";
+import { commit } from "../../core/crypto/commitment.js";
 
 // ============ Client ============
 
@@ -47,18 +49,19 @@ export class LegibleClient extends EventEmitter {
   private nonce: bigint = 0n;
   private rateLimit: RateLimitInfo | null = null;
   private ws: WebSocket | null = null;
-  private subscriptions: Map<string, (event: ProtocolEvent) => void> = new Map();
+  private subscriptions: Map<string, (event: ProtocolEvent) => void> =
+    new Map();
 
   constructor(config: ClientConfig) {
     super();
 
     this.config = {
       endpoint: config.endpoint,
-      wsEndpoint: config.wsEndpoint || config.endpoint.replace('http', 'ws'),
-      agentId: config.agentId || '',
-      secret: config.secret || '',
-      privateKey: config.privateKey || '',
-      sessionKey: config.sessionKey || '',
+      wsEndpoint: config.wsEndpoint || config.endpoint.replace("http", "ws"),
+      agentId: config.agentId || "",
+      secret: config.secret || "",
+      privateKey: config.privateKey || "",
+      sessionKey: config.sessionKey || "",
       timeout: config.timeout || 30000,
       retries: config.retries || 3,
     };
@@ -68,7 +71,7 @@ export class LegibleClient extends EventEmitter {
       this.wallet = AgentWallet.fromAgentId(
         config.agentId,
         config.secret,
-        this.isTestnet() ? 'testnet' : 'mainnet'
+        this.isTestnet() ? "testnet" : "mainnet",
       );
     } else if (config.privateKey) {
       this.wallet = AgentWallet.fromPrivateKey(config.privateKey);
@@ -82,16 +85,25 @@ export class LegibleClient extends EventEmitter {
    */
   async getBalance(did?: string): Promise<bigint> {
     const targetDid = did || this.requireDid();
-    const result = await this.call<AccountGetBalanceResponse>('account_getBalance', { did: targetDid });
+    const result = await this.call<AccountGetBalanceResponse>(
+      "account_getBalance",
+      { did: targetDid },
+    );
     return BigInt(result.balance);
   }
 
   /**
    * Get full account info
    */
-  async getAccount(did?: string, includeProof = false): Promise<AccountGetInfoResponse> {
+  async getAccount(
+    did?: string,
+    includeProof = false,
+  ): Promise<AccountGetInfoResponse> {
     const targetDid = did || this.requireDid();
-    return this.call<AccountGetInfoResponse>('account_getInfo', { did: targetDid, includeProof });
+    return this.call<AccountGetInfoResponse>("account_getInfo", {
+      did: targetDid,
+      includeProof,
+    });
   }
 
   /**
@@ -99,7 +111,10 @@ export class LegibleClient extends EventEmitter {
    */
   async getNonce(did?: string): Promise<bigint> {
     const targetDid = did || this.requireDid();
-    const result = await this.call<AccountGetBalanceResponse>('account_getBalance', { did: targetDid });
+    const result = await this.call<AccountGetBalanceResponse>(
+      "account_getBalance",
+      { did: targetDid },
+    );
     this.nonce = BigInt(result.nonce);
     return this.nonce;
   }
@@ -109,7 +124,9 @@ export class LegibleClient extends EventEmitter {
    */
   async accountExists(did?: string): Promise<boolean> {
     const targetDid = did || this.requireDid();
-    const result = await this.call<{ exists: boolean }>('agent_checkAccount', { did: targetDid });
+    const result = await this.call<{ exists: boolean }>("agent_checkAccount", {
+      did: targetDid,
+    });
     return result.exists;
   }
 
@@ -127,8 +144,11 @@ export class LegibleClient extends EventEmitter {
     }
 
     // Create account
-    const signature = await wallet.signTransaction({ action: 'create_account', publicKey: wallet.publicKey });
-    await this.call('account_create', {
+    const signature = await wallet.signTransaction({
+      action: "create_account",
+      publicKey: wallet.publicKey,
+    });
+    await this.call("account_create", {
       operationalPublicKey: wallet.publicKey,
       signature,
     });
@@ -141,7 +161,9 @@ export class LegibleClient extends EventEmitter {
    */
   async getAgentStatus(did?: string): Promise<AgentGetStatusResponse> {
     const targetDid = did || this.requireDid();
-    return this.call<AgentGetStatusResponse>('agent_getStatus', { did: targetDid });
+    return this.call<AgentGetStatusResponse>("agent_getStatus", {
+      did: targetDid,
+    });
   }
 
   // ============ Transfer Methods ============
@@ -154,7 +176,7 @@ export class LegibleClient extends EventEmitter {
     await this.refreshNonce();
 
     const payload = {
-      type: 'transfer',
+      type: "transfer",
       from: wallet.did,
       to: options.to,
       amount: options.amount.toString(),
@@ -164,7 +186,7 @@ export class LegibleClient extends EventEmitter {
 
     const signature = await wallet.signTransaction(payload);
 
-    const result = await this.call<TxTransferResponse>('tx_transfer', {
+    const result = await this.call<TxTransferResponse>("tx_transfer", {
       ...payload,
       signature,
     });
@@ -181,15 +203,20 @@ export class LegibleClient extends EventEmitter {
     await this.refreshNonce();
 
     const payload = {
-      type: 'stake',
+      type: "stake",
       account: wallet.did,
       amount: amount.toString(),
       nonce: this.nonce.toString(),
     };
 
     const signature = await wallet.signTransaction(payload);
-    const result = await this.call<TxSubmitResponse>('tx_submit', {
-      transaction: { ...payload, signature, sender: wallet.publicKey, fee: '1000000000000000' },
+    const result = await this.call<TxSubmitResponse>("tx_submit", {
+      transaction: {
+        ...payload,
+        signature,
+        sender: wallet.publicKey,
+        fee: "1000000000000000",
+      },
     });
 
     this.nonce++;
@@ -204,15 +231,20 @@ export class LegibleClient extends EventEmitter {
     await this.refreshNonce();
 
     const payload = {
-      type: 'unstake',
+      type: "unstake",
       account: wallet.did,
       amount: amount.toString(),
       nonce: this.nonce.toString(),
     };
 
     const signature = await wallet.signTransaction(payload);
-    const result = await this.call<TxSubmitResponse>('tx_submit', {
-      transaction: { ...payload, signature, sender: wallet.publicKey, fee: '1000000000000000' },
+    const result = await this.call<TxSubmitResponse>("tx_submit", {
+      transaction: {
+        ...payload,
+        signature,
+        sender: wallet.publicKey,
+        fee: "1000000000000000",
+      },
     });
 
     this.nonce++;
@@ -224,7 +256,9 @@ export class LegibleClient extends EventEmitter {
   /**
    * Submit a claim for verification
    */
-  async submitClaim(options: ClaimOptions): Promise<KnowledgeSubmitClaimResponse> {
+  async submitClaim(
+    options: ClaimOptions,
+  ): Promise<KnowledgeSubmitClaimResponse> {
     const wallet = this.requireWallet();
     await this.refreshNonce();
 
@@ -238,11 +272,14 @@ export class LegibleClient extends EventEmitter {
 
     const signature = await wallet.signTransaction(payload);
 
-    const result = await this.call<KnowledgeSubmitClaimResponse>('knowledge_submitClaim', {
-      ...payload,
-      signature,
-      sender: wallet.publicKey,
-    });
+    const result = await this.call<KnowledgeSubmitClaimResponse>(
+      "knowledge_submitClaim",
+      {
+        ...payload,
+        signature,
+        sender: wallet.publicKey,
+      },
+    );
 
     this.nonce++;
     return result;
@@ -251,19 +288,28 @@ export class LegibleClient extends EventEmitter {
   /**
    * Wait for claim verification to complete
    */
-  async waitForVerification(claimId: string, timeoutMs = 60000): Promise<FactState | null> {
+  async waitForVerification(
+    claimId: string,
+    timeoutMs = 60000,
+  ): Promise<FactState | null> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
-      const result = await this.call<KnowledgeGetFactResponse>('knowledge_getFact', { factId: claimId });
+      const result = await this.call<KnowledgeGetFactResponse>(
+        "knowledge_getFact",
+        { factId: claimId },
+      );
 
       if (result.fact) {
         return result.fact;
       }
 
       // Check if rejected
-      const round = await this.call<{ result?: { outcome: string } }>('verification_getRound', { roundId: claimId });
-      if (round.result?.outcome === 'rejected') {
+      const round = await this.call<{ result?: { outcome: string } }>(
+        "verification_getRound",
+        { roundId: claimId },
+      );
+      if (round.result?.outcome === "rejected") {
         return null;
       }
 
@@ -271,7 +317,7 @@ export class LegibleClient extends EventEmitter {
       await sleep(2521); // One block time
     }
 
-    throw new Error('Verification timeout');
+    throw new Error("Verification timeout");
   }
 
   /**
@@ -283,23 +329,38 @@ export class LegibleClient extends EventEmitter {
     minConfidence?: number;
     limit?: number;
   }): Promise<FactState[]> {
-    const result = await this.call<KnowledgeGetFactsResponse>('knowledge_getFacts', query);
+    const result = await this.call<KnowledgeGetFactsResponse>(
+      "knowledge_getFacts",
+      query,
+    );
     return result.facts;
   }
 
   /**
    * Get a specific fact
    */
-  async getFact(factId: string, includeProof = false): Promise<FactState | null> {
-    const result = await this.call<KnowledgeGetFactResponse>('knowledge_getFact', { factId, includeProof });
+  async getFact(
+    factId: string,
+    includeProof = false,
+  ): Promise<FactState | null> {
+    const result = await this.call<KnowledgeGetFactResponse>(
+      "knowledge_getFact",
+      { factId, includeProof },
+    );
     return result.fact;
   }
 
   /**
    * Check if a claim contradicts existing knowledge
    */
-  async checkContradictions(claim: string, domain: string): Promise<FactState[]> {
-    const result = await this.call<{ contradictions: FactState[] }>('knowledge_checkContradictions', { claim, domain });
+  async checkContradictions(
+    claim: string,
+    domain: string,
+  ): Promise<FactState[]> {
+    const result = await this.call<{ contradictions: FactState[] }>(
+      "knowledge_checkContradictions",
+      { claim, domain },
+    );
     return result.contradictions;
   }
 
@@ -313,14 +374,14 @@ export class LegibleClient extends EventEmitter {
     await this.refreshNonce();
 
     const payload = {
-      type: 'register_validator',
+      type: "register_validator",
       publicKey: wallet.publicKey,
       stake: stake.toString(),
       nonce: this.nonce.toString(),
     };
 
     const signature = await wallet.signTransaction(payload);
-    const result = await this.call<{ txHash: string }>('validator_register', {
+    const result = await this.call<{ txHash: string }>("validator_register", {
       ...payload,
       signature,
     });
@@ -332,11 +393,16 @@ export class LegibleClient extends EventEmitter {
   /**
    * Get pending verification assignments
    */
-  async getPendingVerifications(): Promise<VerificationGetPendingResponse['assignments']> {
+  async getPendingVerifications(): Promise<
+    VerificationGetPendingResponse["assignments"]
+  > {
     const wallet = this.requireWallet();
-    const result = await this.call<VerificationGetPendingResponse>('verification_getPending', {
-      validatorKey: wallet.publicKey,
-    });
+    const result = await this.call<VerificationGetPendingResponse>(
+      "verification_getPending",
+      {
+        validatorKey: wallet.publicKey,
+      },
+    );
     return result.assignments;
   }
 
@@ -345,24 +411,27 @@ export class LegibleClient extends EventEmitter {
    */
   async submitCommitment(
     roundId: string,
-    verdict: 'confirmed' | 'rejected' | 'uncertain',
-    confidence: number
+    verdict: "confirmed" | "rejected" | "uncertain",
+    confidence: number,
   ): Promise<{ commitment: string; nonce: string }> {
     const wallet = this.requireWallet();
 
     // Create commitment
     const nonce = Math.random().toString(36).slice(2);
     const message = `${verdict}:${confidence}:${nonce}`;
-    const { commitment } = createCommitment(new TextEncoder().encode(message));
+    const { commitment } = commit(new TextEncoder().encode(message));
 
     const payload = { roundId, commitment };
     const signature = await wallet.signTransaction(payload);
 
-    await this.call<VerificationSubmitCommitmentResponse>('verification_submitCommitment', {
-      ...payload,
-      validatorKey: wallet.publicKey,
-      signature,
-    });
+    await this.call<VerificationSubmitCommitmentResponse>(
+      "verification_submitCommitment",
+      {
+        ...payload,
+        validatorKey: wallet.publicKey,
+        signature,
+      },
+    );
 
     return { commitment, nonce };
   }
@@ -372,21 +441,24 @@ export class LegibleClient extends EventEmitter {
    */
   async submitReveal(
     roundId: string,
-    verdict: 'confirmed' | 'rejected' | 'uncertain',
+    verdict: "confirmed" | "rejected" | "uncertain",
     confidence: number,
     nonce: string,
-    reasoning?: string
+    reasoning?: string,
   ): Promise<void> {
     const wallet = this.requireWallet();
 
     const payload = { roundId, verdict, confidence, nonce, reasoning };
     const signature = await wallet.signTransaction(payload);
 
-    await this.call<VerificationSubmitRevealResponse>('verification_submitReveal', {
-      ...payload,
-      validatorKey: wallet.publicKey,
-      signature,
-    });
+    await this.call<VerificationSubmitRevealResponse>(
+      "verification_submitReveal",
+      {
+        ...payload,
+        validatorKey: wallet.publicKey,
+        signature,
+      },
+    );
   }
 
   /**
@@ -394,27 +466,33 @@ export class LegibleClient extends EventEmitter {
    */
   async startValidator(
     verifyFn: (claim: { claim: string; domain: string }) => Promise<{
-      verdict: 'confirmed' | 'rejected' | 'uncertain';
+      verdict: "confirmed" | "rejected" | "uncertain";
       confidence: number;
       reasoning?: string;
-    }>
+    }>,
   ): Promise<void> {
-    const commitments = new Map<string, { verdict: string; confidence: number; nonce: string }>();
+    const commitments = new Map<
+      string,
+      { verdict: string; confidence: number; nonce: string }
+    >();
 
     // Subscribe to assignments
-    this.on('verification:assigned', async (event: any) => {
+    this.on("verification:assigned", async (event: any) => {
       try {
         // Get claim details
         const assignment = event;
 
         // Run verification logic
-        const result = await verifyFn({ claim: assignment.claim, domain: assignment.domain });
+        const result = await verifyFn({
+          claim: assignment.claim,
+          domain: assignment.domain,
+        });
 
         // Submit commitment
         const { nonce } = await this.submitCommitment(
           assignment.roundId,
           result.verdict,
-          result.confidence
+          result.confidence,
         );
 
         // Store for reveal phase
@@ -424,7 +502,7 @@ export class LegibleClient extends EventEmitter {
           nonce,
         });
       } catch (error) {
-        this.emit('error', error);
+        this.emit("error", error);
       }
     });
 
@@ -433,27 +511,30 @@ export class LegibleClient extends EventEmitter {
       for (const [roundId, data] of commitments) {
         try {
           // Check if reveal phase
-          const round = await this.call<{ round: { phase: string } }>('verification_getRound', { roundId });
+          const round = await this.call<{ round: { phase: string } }>(
+            "verification_getRound",
+            { roundId },
+          );
 
-          if (round.round?.phase === 'reveal') {
+          if (round.round?.phase === "reveal") {
             await this.submitReveal(
               roundId,
               data.verdict as any,
               data.confidence,
-              data.nonce
+              data.nonce,
             );
             commitments.delete(roundId);
-          } else if (round.round?.phase === 'complete') {
+          } else if (round.round?.phase === "complete") {
             commitments.delete(roundId);
           }
         } catch (error) {
-          this.emit('error', error);
+          this.emit("error", error);
         }
       }
     }, 2521); // Check each block
 
     // Start listening
-    await this.subscribe('verification:assigned');
+    await this.subscribe("verification:assigned");
   }
 
   // ============ Session Methods ============
@@ -461,7 +542,9 @@ export class LegibleClient extends EventEmitter {
   /**
    * Create a session key for limited operations
    */
-  async createSession(capabilities: SessionCapabilities): Promise<SessionWallet> {
+  async createSession(
+    capabilities: SessionCapabilities,
+  ): Promise<SessionWallet> {
     const wallet = this.requireWallet();
     const currentBlock = await this.getBlockNumber();
     const expiresAt = currentBlock + BigInt(capabilities.maxUsage || 10000);
@@ -473,7 +556,7 @@ export class LegibleClient extends EventEmitter {
       wallet.did,
       sessionId,
       capabilities,
-      Number(expiresAt)
+      Number(expiresAt),
     );
 
     // Register session on-chain
@@ -489,7 +572,10 @@ export class LegibleClient extends EventEmitter {
     };
 
     const signature = await wallet.signTransaction(payload);
-    await this.call('session_create', { ...payload, operationalSignature: signature });
+    await this.call("session_create", {
+      ...payload,
+      operationalSignature: signature,
+    });
 
     return this.session;
   }
@@ -507,7 +593,10 @@ export class LegibleClient extends EventEmitter {
    * Get current block number
    */
   async getBlockNumber(): Promise<bigint> {
-    const result = await this.call<{ block: Block; number: string }>('block_getLatest', {});
+    const result = await this.call<{ block: Block; number: string }>(
+      "block_getLatest",
+      {},
+    );
     return BigInt(result.number);
   }
 
@@ -515,10 +604,14 @@ export class LegibleClient extends EventEmitter {
    * Get block by number or hash
    */
   async getBlock(numberOrHash: string | bigint): Promise<Block | null> {
-    const params = typeof numberOrHash === 'bigint'
-      ? { number: numberOrHash.toString() }
-      : { hash: numberOrHash };
-    const result = await this.call<{ block: Block | null }>('block_get', params);
+    const params =
+      typeof numberOrHash === "bigint"
+        ? { number: numberOrHash.toString() }
+        : { hash: numberOrHash };
+    const result = await this.call<{ block: Block | null }>(
+      "block_get",
+      params,
+    );
     return result.block;
   }
 
@@ -526,7 +619,7 @@ export class LegibleClient extends EventEmitter {
    * Get network health
    */
   async getNetworkHealth(): Promise<NetworkHealthResponse> {
-    return this.call<NetworkHealthResponse>('network_health', {});
+    return this.call<NetworkHealthResponse>("network_health", {});
   }
 
   // ============ Subscription Methods ============
@@ -540,22 +633,26 @@ export class LegibleClient extends EventEmitter {
     const id = `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     // Send subscription request
-    this.ws!.send(JSON.stringify({
-      jsonrpc: '2.0',
-      id,
-      method: 'subscribe',
-      params: { event: eventType },
-    }));
+    this.ws!.send(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "subscribe",
+        params: { event: eventType },
+      }),
+    );
 
     return {
       id,
       unsubscribe: () => {
-        this.ws?.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id: `unsub-${id}`,
-          method: 'unsubscribe',
-          params: { subscriptionId: id },
-        }));
+        this.ws?.send(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: `unsub-${id}`,
+            method: "unsubscribe",
+            params: { subscriptionId: id },
+          }),
+        );
         this.subscriptions.delete(id);
       },
     };
@@ -564,7 +661,10 @@ export class LegibleClient extends EventEmitter {
   /**
    * Watch an account for changes
    */
-  async watchAccount(did: string, callback: (event: ProtocolEvent) => void): Promise<Subscription> {
+  async watchAccount(
+    did: string,
+    callback: (event: ProtocolEvent) => void,
+  ): Promise<Subscription> {
     const sub = await this.subscribe(`account:${did}`);
     this.subscriptions.set(sub.id, callback);
     return sub;
@@ -590,7 +690,7 @@ export class LegibleClient extends EventEmitter {
    * Check if connected to testnet
    */
   isTestnet(): boolean {
-    return this.config.endpoint.includes('testnet');
+    return this.config.endpoint.includes("testnet");
   }
 
   /**
@@ -605,13 +705,16 @@ export class LegibleClient extends EventEmitter {
    */
   async requestFaucet(amount: bigint = 1000n * 10n ** 18n): Promise<string> {
     if (!this.isTestnet()) {
-      throw new Error('Faucet only available on testnet');
+      throw new Error("Faucet only available on testnet");
     }
 
     const wallet = this.requireWallet();
-    const signature = await wallet.signTransaction({ action: 'faucet', amount: amount.toString() });
+    const signature = await wallet.signTransaction({
+      action: "faucet",
+      amount: amount.toString(),
+    });
 
-    const result = await this.call<{ txHash: string }>('agent_requestFaucet', {
+    const result = await this.call<{ txHash: string }>("agent_requestFaucet", {
       did: wallet.did,
       amount: amount.toString(),
       signature,
@@ -624,7 +727,7 @@ export class LegibleClient extends EventEmitter {
 
   private async call<T>(method: string, params: unknown): Promise<T> {
     const request: RPCRequest = {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id: Date.now(),
       method,
       params,
@@ -635,9 +738,9 @@ export class LegibleClient extends EventEmitter {
     for (let attempt = 0; attempt < this.config.retries; attempt++) {
       try {
         const response = await fetch(this.config.endpoint, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(request),
           signal: AbortSignal.timeout(this.config.timeout),
@@ -645,20 +748,22 @@ export class LegibleClient extends EventEmitter {
 
         // Parse rate limit headers
         this.rateLimit = {
-          limit: parseInt(response.headers.get('X-RateLimit-Limit') || '60'),
-          remaining: parseInt(response.headers.get('X-RateLimit-Remaining') || '60'),
-          reset: parseInt(response.headers.get('X-RateLimit-Reset') || '0'),
-          tier: (response.headers.get('X-RateLimit-Tier') || 'free') as any,
+          limit: parseInt(response.headers.get("X-RateLimit-Limit") || "60"),
+          remaining: parseInt(
+            response.headers.get("X-RateLimit-Remaining") || "60",
+          ),
+          reset: parseInt(response.headers.get("X-RateLimit-Reset") || "0"),
+          tier: (response.headers.get("X-RateLimit-Tier") || "free") as any,
         };
 
-        const result: RPCResponse<T> = await response.json();
+        const result = (await response.json()) as RPCResponse<T>;
 
         if (result.error) {
           const error = new LegibleError(
             result.error.message,
-            result.error.data?.errorCode || 'UNKNOWN',
+            result.error.data?.errorCode || "UNKNOWN",
             result.error.data?.retryable || false,
-            result.error.data?.retryAfter
+            result.error.data?.retryAfter,
           );
 
           if (!error.retryable) {
@@ -671,7 +776,6 @@ export class LegibleClient extends EventEmitter {
         }
 
         return result.result as T;
-
       } catch (error) {
         if (error instanceof LegibleError && !error.retryable) {
           throw error;
@@ -681,7 +785,7 @@ export class LegibleClient extends EventEmitter {
       }
     }
 
-    throw lastError || new Error('Request failed after retries');
+    throw lastError || new Error("Request failed after retries");
   }
 
   private async ensureWebSocket(): Promise<void> {
@@ -698,7 +802,7 @@ export class LegibleClient extends EventEmitter {
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.method === 'subscription') {
+          if (data.method === "subscription") {
             const callback = this.subscriptions.get(data.params.subscriptionId);
             if (callback) {
               callback(data.params.event);
@@ -706,7 +810,7 @@ export class LegibleClient extends EventEmitter {
             this.emit(data.params.event.type, data.params.event);
           }
         } catch (e) {
-          this.emit('error', e);
+          this.emit("error", e);
         }
       };
     });
@@ -714,7 +818,9 @@ export class LegibleClient extends EventEmitter {
 
   private requireWallet(): AgentWallet {
     if (!this.wallet) {
-      throw new Error('Wallet not initialized. Provide agentId/secret or privateKey.');
+      throw new Error(
+        "Wallet not initialized. Provide agentId/secret or privateKey.",
+      );
     }
     return this.wallet;
   }
@@ -722,7 +828,7 @@ export class LegibleClient extends EventEmitter {
   private requireDid(): string {
     const did = this.getDid();
     if (!did) {
-      throw new Error('DID not available. Initialize wallet first.');
+      throw new Error("DID not available. Initialize wallet first.");
     }
     return did;
   }
@@ -741,15 +847,15 @@ export class LegibleError extends Error {
     message: string,
     public readonly code: string,
     public readonly retryable: boolean,
-    public readonly retryAfter?: number
+    public readonly retryAfter?: number,
   ) {
     super(message);
-    this.name = 'LegibleError';
+    this.name = "LegibleError";
   }
 }
 
 // ============ Helpers ============
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

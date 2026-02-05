@@ -37,8 +37,11 @@
  *   └────────────────────────────────────┘
  */
 
-import type { DID } from '../../agents/identity/did.js';
-import { RESEARCH_SHARE_RATE, RESEARCH_TREASURY_DID } from '../research/types.js';
+import type { DID } from "../../core/agents/identity/did.js";
+import {
+  RESEARCH_SHARE_RATE,
+  RESEARCH_TREASURY_DID,
+} from "../research/types.js";
 
 // ============ Constants ============
 
@@ -50,19 +53,19 @@ import { RESEARCH_SHARE_RATE, RESEARCH_TREASURY_DID } from '../research/types.js
  */
 export const BASE_CONTRIBUTION_WEIGHTS = {
   /** Originating new facts - the seed of truth */
-  ORIGINATION: 0.30,
+  ORIGINATION: 0.3,
 
   /** Validating claims - confirming or denying */
   VALIDATION: 0.25,
 
   /** Ancestor facts that enabled this truth */
-  ANCESTRY: 0.20,
+  ANCESTRY: 0.2,
 
   /** Challenges that protected truth integrity */
-  CHALLENGE: 0.10,
+  CHALLENGE: 0.1,
 
   /** Evidence that supported claims */
-  EVIDENCE: 0.10,
+  EVIDENCE: 0.1,
 
   /** Research operations (IRL verification) */
   RESEARCH_OPS: 0.05,
@@ -71,9 +74,14 @@ export const BASE_CONTRIBUTION_WEIGHTS = {
 /**
  * Verify weights sum to 1.0
  */
-const WEIGHT_SUM = Object.values(BASE_CONTRIBUTION_WEIGHTS).reduce((a, b) => a + b, 0);
+const WEIGHT_SUM = Object.values(BASE_CONTRIBUTION_WEIGHTS).reduce(
+  (a, b) => a + b,
+  0,
+);
 if (Math.abs(WEIGHT_SUM - 1.0) > 0.0001) {
-  throw new Error(`BASE_CONTRIBUTION_WEIGHTS must sum to 1.0, got ${WEIGHT_SUM}`);
+  throw new Error(
+    `BASE_CONTRIBUTION_WEIGHTS must sum to 1.0, got ${WEIGHT_SUM}`,
+  );
 }
 
 /**
@@ -126,13 +134,13 @@ export const ANTI_GAMING = {
  * The seven dimensions of truth contribution
  */
 export type ContributionType =
-  | 'origination'    // Submitting new facts
-  | 'validation'     // Verifying claims
-  | 'evidence'       // Providing supporting evidence
-  | 'challenge'      // Challenging incorrect facts
-  | 'ancestry'       // Prior facts that enabled new discoveries
-  | 'research'       // IRL research verification
-  | 'infrastructure'; // Network/protocol infrastructure
+  | "origination" // Submitting new facts
+  | "validation" // Verifying claims
+  | "evidence" // Providing supporting evidence
+  | "challenge" // Challenging incorrect facts
+  | "ancestry" // Prior facts that enabled new discoveries
+  | "research" // IRL research verification
+  | "infrastructure"; // Network/protocol infrastructure
 
 /**
  * Individual contribution record
@@ -318,7 +326,16 @@ export interface RewardDistribution {
  */
 export interface ContributionLedger {
   /** Record a new contribution */
-  recordContribution(contribution: Omit<TruthContributionRecord, 'id' | 'weight' | 'counterfactualAdjustment' | 'antiGamingAdjustment' | 'effectiveWeight'>): TruthContributionRecord;
+  recordContribution(
+    contribution: Omit<
+      TruthContributionRecord,
+      | "id"
+      | "weight"
+      | "counterfactualAdjustment"
+      | "antiGamingAdjustment"
+      | "effectiveWeight"
+    >,
+  ): TruthContributionRecord;
 
   /** Get contributions for a fact */
   getContributionsForFact(factId: string): TruthContributionRecord[];
@@ -330,7 +347,11 @@ export interface ContributionLedger {
   getContributionsByType(type: ContributionType): TruthContributionRecord[];
 
   /** Calculate and distribute rewards */
-  distributeRewards(rewardPool: bigint, context: ContributionContext, blockNumber: bigint): RewardDistribution;
+  distributeRewards(
+    rewardPool: bigint,
+    context: ContributionContext,
+    blockNumber: bigint,
+  ): RewardDistribution;
 
   /** Get total rewards earned by a contributor */
   getTotalRewards(contributor: DID): bigint;
@@ -351,7 +372,7 @@ export interface ContributionLedger {
  */
 export function calculateContributionWeight(
   contribution: TruthContributionRecord,
-  allContributions: TruthContributionRecord[]
+  allContributions: TruthContributionRecord[],
 ): ContributionWeight {
   const { type, metrics } = contribution;
 
@@ -365,21 +386,31 @@ export function calculateContributionWeight(
   const qualityModifier = calculateQualityModifier(type, metrics);
 
   // 4. Timeliness modifier
-  const timelinessModifier = calculateTimelinessModifier(contribution, allContributions);
+  const timelinessModifier = calculateTimelinessModifier(
+    contribution,
+    allContributions,
+  );
 
   // 5. Counterfactual adjustment
-  const counterfactualAdjustment = calculateCounterfactualAdjustment(contribution, allContributions);
+  const counterfactualAdjustment = calculateCounterfactualAdjustment(
+    contribution,
+    allContributions,
+  );
 
   // 6. Anti-gaming adjustment
-  const antiGamingAdjustment = calculateAntiGamingAdjustment(contribution, allContributions);
+  const antiGamingAdjustment = calculateAntiGamingAdjustment(
+    contribution,
+    allContributions,
+  );
 
   // Calculate final weight
-  const effectiveWeight = baseWeight
-    * stakeModifier
-    * qualityModifier
-    * timelinessModifier
-    * counterfactualAdjustment
-    * antiGamingAdjustment;
+  const effectiveWeight =
+    baseWeight *
+    stakeModifier *
+    qualityModifier *
+    timelinessModifier *
+    counterfactualAdjustment *
+    antiGamingAdjustment;
 
   // Build reasoning
   const reasoning = buildWeightReasoning({
@@ -410,19 +441,19 @@ export function calculateContributionWeight(
  */
 function getBaseWeight(type: ContributionType): number {
   switch (type) {
-    case 'origination':
+    case "origination":
       return BASE_CONTRIBUTION_WEIGHTS.ORIGINATION;
-    case 'validation':
+    case "validation":
       return BASE_CONTRIBUTION_WEIGHTS.VALIDATION;
-    case 'ancestry':
+    case "ancestry":
       return BASE_CONTRIBUTION_WEIGHTS.ANCESTRY;
-    case 'challenge':
+    case "challenge":
       return BASE_CONTRIBUTION_WEIGHTS.CHALLENGE;
-    case 'evidence':
+    case "evidence":
       return BASE_CONTRIBUTION_WEIGHTS.EVIDENCE;
-    case 'research':
+    case "research":
       return BASE_CONTRIBUTION_WEIGHTS.RESEARCH_OPS;
-    case 'infrastructure':
+    case "infrastructure":
       // Infrastructure doesn't come from this pool
       return 0;
     default:
@@ -440,38 +471,45 @@ function calculateStakeModifier(metrics: ContributionMetrics): number {
 
   // Stake weight = sqrt(your_stake / total_stake)
   // Using sqrt to reduce plutocracy while still rewarding skin-in-the-game
-  const stakeRatio = Number(metrics.validatorStake) / Number(metrics.totalValidationStake);
+  const stakeRatio =
+    Number(metrics.validatorStake) / Number(metrics.totalValidationStake);
   return Math.sqrt(stakeRatio) * 2; // Normalized so 25% stake = 1.0
 }
 
 /**
  * Calculate quality modifier based on contribution type
  */
-function calculateQualityModifier(type: ContributionType, metrics: ContributionMetrics): number {
+function calculateQualityModifier(
+  type: ContributionType,
+  metrics: ContributionMetrics,
+): number {
   switch (type) {
-    case 'validation':
+    case "validation":
       // Correct verdicts get full weight, incorrect get zero
       return metrics.verdictCorrect ? 1.0 : 0.0;
 
-    case 'evidence':
+    case "evidence": {
       // Evidence quality based on strength and independence
       const strength = metrics.evidenceStrength || 0.5;
       const independence = metrics.evidenceIndependence || 0.5;
       return (strength + independence) / 2;
+    }
 
-    case 'challenge':
+    case "challenge": {
       // Successful challenges get bonus, failed get zero
       if (!metrics.challengeSuccessful) return 0.0;
       // Higher confidence delta = more valuable challenge
       const delta = Math.abs(metrics.confidenceDelta || 0);
       return 1.0 + delta; // 1.0 to 2.0 based on impact
+    }
 
-    case 'ancestry':
+    case "ancestry": {
       // Fundamentality bonus for ancestor facts
       const fundamentality = metrics.fundamentalityScore || 0;
       return 1.0 + fundamentality; // 1.0 to 2.0
+    }
 
-    case 'research':
+    case "research":
       // Research quality based on review score
       return metrics.researchReviewScore || 0.5;
 
@@ -485,15 +523,15 @@ function calculateQualityModifier(type: ContributionType, metrics: ContributionM
  */
 function calculateTimelinessModifier(
   contribution: TruthContributionRecord,
-  _allContributions: TruthContributionRecord[]
+  _allContributions: TruthContributionRecord[],
 ): number {
   // For origination: first submitter gets full credit
-  if (contribution.type === 'origination') {
+  if (contribution.type === "origination") {
     return contribution.metrics.isFirstSubmitter ? 1.0 : 0.3;
   }
 
   // For validation: position matters
-  if (contribution.type === 'validation') {
+  if (contribution.type === "validation") {
     const position = contribution.metrics.validationPosition || 1;
     // First validator: 1.5x, second: 1.2x, third: 1.0x, then decay
     if (position === 1) return COUNTERFACTUAL_ADJUSTMENTS.FIRST_VALIDATOR_BONUS;
@@ -512,12 +550,12 @@ function calculateTimelinessModifier(
  */
 function calculateCounterfactualAdjustment(
   contribution: TruthContributionRecord,
-  allContributions: TruthContributionRecord[]
+  allContributions: TruthContributionRecord[],
 ): number {
   const { type, metrics, context } = contribution;
 
   // Origination: check for competing submissions
-  if (type === 'origination') {
+  if (type === "origination") {
     const competing = metrics.competingSubmissions || 0;
     if (competing > 0) {
       return COUNTERFACTUAL_ADJUSTMENTS.NEAR_DUPLICATE_DISCOVERY;
@@ -526,9 +564,9 @@ function calculateCounterfactualAdjustment(
   }
 
   // Validation: check if quorum would have been reached anyway
-  if (type === 'validation') {
+  if (type === "validation") {
     const sameFactValidations = allContributions.filter(
-      c => c.type === 'validation' && c.context.factId === context.factId
+      (c) => c.type === "validation" && c.context.factId === context.factId,
     );
 
     // If many validators, each one is less counterfactually important
@@ -547,9 +585,9 @@ function calculateCounterfactualAdjustment(
   }
 
   // Evidence: check if already sufficient
-  if (type === 'evidence') {
+  if (type === "evidence") {
     const sameFactEvidence = allContributions.filter(
-      c => c.type === 'evidence' && c.context.factId === context.factId
+      (c) => c.type === "evidence" && c.context.factId === context.factId,
     );
 
     if (sameFactEvidence.length > ANTI_GAMING.MAX_CREDITED_EVIDENCE) {
@@ -560,7 +598,7 @@ function calculateCounterfactualAdjustment(
   }
 
   // Challenge: successful challenges have high counterfactual value
-  if (type === 'challenge' && metrics.challengeSuccessful) {
+  if (type === "challenge" && metrics.challengeSuccessful) {
     // The bigger the confidence change, the more counterfactually valuable
     return 1.0 + Math.abs(metrics.confidenceDelta || 0);
   }
@@ -573,15 +611,15 @@ function calculateCounterfactualAdjustment(
  */
 function calculateAntiGamingAdjustment(
   contribution: TruthContributionRecord,
-  allContributions: TruthContributionRecord[]
+  allContributions: TruthContributionRecord[],
 ): number {
   const { contributor, type, context } = contribution;
 
   // Self-citation discount
-  if (type === 'ancestry') {
+  if (type === "ancestry") {
     // Check if this is citing own work
     const citedContribution = allContributions.find(
-      c => c.context.factId === context.factId && c.type === 'origination'
+      (c) => c.context.factId === context.factId && c.type === "origination",
     );
     if (citedContribution && citedContribution.contributor === contributor) {
       return ANTI_GAMING.SELF_CITATION_DISCOUNT;
@@ -589,11 +627,12 @@ function calculateAntiGamingAdjustment(
   }
 
   // Evidence stuffing detection
-  if (type === 'evidence') {
+  if (type === "evidence") {
     const evidenceFromSameContributor = allContributions.filter(
-      c => c.type === 'evidence' &&
-           c.context.factId === context.factId &&
-           c.contributor === contributor
+      (c) =>
+        c.type === "evidence" &&
+        c.context.factId === context.factId &&
+        c.contributor === contributor,
     );
 
     const count = evidenceFromSameContributor.length;
@@ -605,12 +644,14 @@ function calculateAntiGamingAdjustment(
   }
 
   // Sybil detection (simplified - production would use more sophisticated detection)
-  if (type === 'validation') {
+  if (type === "validation") {
     const sameFactValidations = allContributions.filter(
-      c => c.type === 'validation' && c.context.factId === context.factId
+      (c) => c.type === "validation" && c.context.factId === context.factId,
     );
 
-    const uniqueValidators = new Set(sameFactValidations.map(c => c.contributor));
+    const uniqueValidators = new Set(
+      sameFactValidations.map((c) => c.contributor),
+    );
     if (uniqueValidators.size < ANTI_GAMING.SYBIL_DETECTION_THRESHOLD) {
       return ANTI_GAMING.SYBIL_DISCOUNT;
     }
@@ -649,7 +690,9 @@ function buildWeightReasoning(params: {
   }
 
   if (params.counterfactualAdjustment !== 1.0) {
-    parts.push(`Counterfactual: ×${params.counterfactualAdjustment.toFixed(2)}`);
+    parts.push(
+      `Counterfactual: ×${params.counterfactualAdjustment.toFixed(2)}`,
+    );
   }
 
   if (params.antiGamingAdjustment !== 1.0) {
@@ -658,7 +701,7 @@ function buildWeightReasoning(params: {
 
   parts.push(`= ${(params.effectiveWeight * 100).toFixed(2)}%`);
 
-  return parts.join(' → ');
+  return parts.join(" → ");
 }
 
 // ============ Reward Distribution ============
@@ -674,14 +717,16 @@ function buildWeightReasoning(params: {
 export function distributeRewards(
   rewardPool: bigint,
   contributions: TruthContributionRecord[],
-  blockNumber: bigint
+  blockNumber: bigint,
 ): RewardDistribution {
   // 1. Research share FIRST (22%)
-  const researchShare = BigInt(Math.floor(Number(rewardPool) * RESEARCH_SHARE_RATE));
+  const researchShare = BigInt(
+    Math.floor(Number(rewardPool) * RESEARCH_SHARE_RATE),
+  );
   const afterResearch = rewardPool - researchShare;
 
   // 2. Calculate all weights
-  const weightedContributions = contributions.map(c => {
+  const weightedContributions = contributions.map((c) => {
     const weight = calculateContributionWeight(c, contributions);
     return {
       ...c,
@@ -693,10 +738,13 @@ export function distributeRewards(
   });
 
   // 3. Sum of all effective weights
-  const totalWeight = weightedContributions.reduce((sum, c) => sum + c.effectiveWeight, 0);
+  const totalWeight = weightedContributions.reduce(
+    (sum, c) => sum + c.effectiveWeight,
+    0,
+  );
 
   // 4. Distribute proportionally
-  const distributions: RewardDistribution['distributions'] = [];
+  const distributions: RewardDistribution["distributions"] = [];
   let distributed = 0n;
 
   if (totalWeight > 0) {
@@ -741,7 +789,7 @@ export function distributeFactRewards(
   factId: string,
   rewardPool: bigint,
   ledger: ContributionLedger,
-  blockNumber: bigint
+  blockNumber: bigint,
 ): RewardDistribution {
   const contributions = ledger.getContributionsForFact(factId);
   return distributeRewards(rewardPool, contributions, blockNumber);
@@ -761,7 +809,14 @@ export class InMemoryContributionLedger implements ContributionLedger {
   private nextId = 1;
 
   recordContribution(
-    input: Omit<TruthContributionRecord, 'id' | 'weight' | 'counterfactualAdjustment' | 'antiGamingAdjustment' | 'effectiveWeight'>
+    input: Omit<
+      TruthContributionRecord,
+      | "id"
+      | "weight"
+      | "counterfactualAdjustment"
+      | "antiGamingAdjustment"
+      | "effectiveWeight"
+    >,
   ): TruthContributionRecord {
     const id = `contrib_${this.nextId++}`;
 
@@ -800,7 +855,8 @@ export class InMemoryContributionLedger implements ContributionLedger {
     }
 
     // Index by contributor
-    const contributorContribs = this.byContributor.get(record.contributor) || [];
+    const contributorContribs =
+      this.byContributor.get(record.contributor) || [];
     contributorContribs.push(id);
     this.byContributor.set(record.contributor, contributorContribs);
 
@@ -814,23 +870,23 @@ export class InMemoryContributionLedger implements ContributionLedger {
 
   getContributionsForFact(factId: string): TruthContributionRecord[] {
     const ids = this.byFact.get(factId) || [];
-    return ids.map(id => this.contributions.get(id)!).filter(Boolean);
+    return ids.map((id) => this.contributions.get(id)!).filter(Boolean);
   }
 
   getContributionsByContributor(contributor: DID): TruthContributionRecord[] {
     const ids = this.byContributor.get(contributor) || [];
-    return ids.map(id => this.contributions.get(id)!).filter(Boolean);
+    return ids.map((id) => this.contributions.get(id)!).filter(Boolean);
   }
 
   getContributionsByType(type: ContributionType): TruthContributionRecord[] {
     const ids = this.byType.get(type) || [];
-    return ids.map(id => this.contributions.get(id)!).filter(Boolean);
+    return ids.map((id) => this.contributions.get(id)!).filter(Boolean);
   }
 
   distributeRewards(
     rewardPool: bigint,
     context: ContributionContext,
-    blockNumber: bigint
+    blockNumber: bigint,
   ): RewardDistribution {
     // Get relevant contributions
     let contributions: TruthContributionRecord[];
@@ -842,7 +898,11 @@ export class InMemoryContributionLedger implements ContributionLedger {
     }
 
     // Distribute
-    const distribution = distributeRewards(rewardPool, contributions, blockNumber);
+    const distribution = distributeRewards(
+      rewardPool,
+      contributions,
+      blockNumber,
+    );
 
     // Record rewards for each contributor
     for (const dist of distribution.distributions) {
@@ -866,7 +926,4 @@ export class InMemoryContributionLedger implements ContributionLedger {
 
 // ============ Exports ============
 
-export {
-  RESEARCH_SHARE_RATE,
-  RESEARCH_TREASURY_DID,
-};
+export { RESEARCH_SHARE_RATE, RESEARCH_TREASURY_DID };

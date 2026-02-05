@@ -5,30 +5,27 @@
  * All formulas are open source and deterministic.
  */
 
-import type { DID } from '../../agents/identity/did.js';
+import type { DID } from "../../core/agents/identity/did.js";
 import type {
   Fact,
   Verification,
   Reference,
   Derivation,
   ClaimSubmission,
-  Challenge,
-  VerificationTask,
   TruthParameters,
   Confidence,
   InferenceType,
-  Citation,
   FundamentalityMetrics,
   CitationReward,
   CitationParameters,
-} from './types.js';
+} from "./types.js";
 import {
   INFERENCE_STRENGTH,
   DEFAULT_TRUTH_PARAMETERS,
   DEFAULT_CITATION_PARAMETERS,
   FUNDAMENTALITY_THRESHOLDS,
   FUNDAMENTALITY_BONUSES,
-} from './types.js';
+} from "./types.js";
 
 /**
  * Calculate confidence from verifications
@@ -45,7 +42,7 @@ export function calculateConfidence(
   verifications: Verification[],
   references: Reference[],
   blocksSinceVerification: number,
-  params: TruthParameters = DEFAULT_TRUTH_PARAMETERS
+  params: TruthParameters = DEFAULT_TRUTH_PARAMETERS,
 ): Confidence {
   if (verifications.length === 0) return 0;
 
@@ -55,24 +52,25 @@ export function calculateConfidence(
 
   for (const v of verifications) {
     totalStake += v.stake;
-    if (v.verdict === 'confirmed') {
+    if (v.verdict === "confirmed") {
       confirmedStake += v.stake;
     }
   }
 
-  const weightedAgreement = totalStake > 0n
-    ? Number(confirmedStake) / Number(totalStake)
-    : 0;
+  const weightedAgreement =
+    totalStake > 0n ? Number(confirmedStake) / Number(totalStake) : 0;
 
   // Evidence strength (average reference reliability)
-  const evidenceStrength = references.length > 0
-    ? references.reduce((sum, r) => sum + r.reliabilityScore, 0) / references.length
-    : 0.5;  // Default if no references
+  const evidenceStrength =
+    references.length > 0
+      ? references.reduce((sum, r) => sum + r.reliabilityScore, 0) /
+        references.length
+      : 0.5; // Default if no references
 
   // Time decay
   const timeFactor = Math.max(
     0,
-    1.0 - (blocksSinceVerification * params.confidenceDecayRate)
+    1.0 - blocksSinceVerification * params.confidenceDecayRate,
   );
 
   // Combine factors
@@ -92,7 +90,7 @@ export function calculateConfidence(
  */
 export function calculateDerivedConfidence(
   premiseConfidences: Confidence[],
-  inferenceType: InferenceType
+  inferenceType: InferenceType,
 ): Confidence {
   if (premiseConfidences.length === 0) return 0;
 
@@ -111,25 +109,25 @@ export function calculateDerivedConfidence(
 export function calculateReferenceReliability(
   reference: Reference,
   currentBlock: number,
-  verificationCount: number
+  verificationCount: number,
 ): number {
   // Base reliability by type
   const typeBase: Record<string, number> = {
-    on_chain: 1.0,       // On-chain data is definitive
+    on_chain: 1.0, // On-chain data is definitive
     computational: 0.95, // Deterministic computation
     institutional: 0.85, // Published papers, official data
-    oracle: 0.80,        // Trusted oracles
-    archived_web: 0.70,  // Web archives
+    oracle: 0.8, // Trusted oracles
+    archived_web: 0.7, // Web archives
   };
 
   const base = typeBase[reference.type] || 0.5;
 
   // Freshness (newer = more reliable for empirical claims)
   const ageBlocks = currentBlock - reference.retrievedAt;
-  const freshness = Math.max(0.5, 1.0 - (ageBlocks * 0.00001));
+  const freshness = Math.max(0.5, 1.0 - ageBlocks * 0.00001);
 
   // Verification count factor (more verifications = more reliable)
-  const verificationFactor = Math.min(1.0, 0.5 + (verificationCount * 0.1));
+  const verificationFactor = Math.min(1.0, 0.5 + verificationCount * 0.1);
 
   return base * freshness * verificationFactor;
 }
@@ -139,10 +137,10 @@ export function calculateReferenceReliability(
  */
 export function isQuorumReached(
   verifications: Verification[],
-  params: TruthParameters = DEFAULT_TRUTH_PARAMETERS
-): { reached: boolean; consensus: 'confirmed' | 'rejected' | 'none' } {
+  params: TruthParameters = DEFAULT_TRUTH_PARAMETERS,
+): { reached: boolean; consensus: "confirmed" | "rejected" | "none" } {
   if (verifications.length < params.minVerifiers) {
-    return { reached: false, consensus: 'none' };
+    return { reached: false, consensus: "none" };
   }
 
   let totalStake = 0n;
@@ -151,21 +149,21 @@ export function isQuorumReached(
 
   for (const v of verifications) {
     totalStake += v.stake;
-    if (v.verdict === 'confirmed') confirmedStake += v.stake;
-    if (v.verdict === 'rejected') rejectedStake += v.stake;
+    if (v.verdict === "confirmed") confirmedStake += v.stake;
+    if (v.verdict === "rejected") rejectedStake += v.stake;
   }
 
   const confirmRatio = Number(confirmedStake) / Number(totalStake);
   const rejectRatio = Number(rejectedStake) / Number(totalStake);
 
   if (confirmRatio >= params.verificationQuorum) {
-    return { reached: true, consensus: 'confirmed' };
+    return { reached: true, consensus: "confirmed" };
   }
   if (rejectRatio >= params.verificationQuorum) {
-    return { reached: true, consensus: 'rejected' };
+    return { reached: true, consensus: "rejected" };
   }
 
-  return { reached: false, consensus: 'none' };
+  return { reached: false, consensus: "none" };
 }
 
 /**
@@ -183,7 +181,7 @@ export function calculateSubmissionReward(
   baseReward: bigint,
   similarFactsCount: number,
   confidence: Confidence,
-  utilityScore: number = 1.0
+  utilityScore: number = 1.0,
 ): bigint {
   const novelty = 1 / (1 + similarFactsCount);
   const multiplier = novelty * utilityScore * confidence;
@@ -204,7 +202,7 @@ export function calculateVerificationReward(
   baseReward: bigint,
   validatorStake: bigint,
   totalStake: bigint,
-  matchedConsensus: boolean
+  matchedConsensus: boolean,
 ): bigint {
   if (!matchedConsensus) return 0n;
 
@@ -220,7 +218,7 @@ export function calculateVerificationReward(
  */
 export function calculateChallengeReward(
   loserStake: bigint,
-  params: TruthParameters = DEFAULT_TRUTH_PARAMETERS
+  params: TruthParameters = DEFAULT_TRUTH_PARAMETERS,
 ): bigint {
   return BigInt(Math.floor(Number(loserStake) * params.challengeRewardShare));
 }
@@ -228,10 +226,7 @@ export function calculateChallengeReward(
 /**
  * Calculate slashing amount
  */
-export function calculateSlashing(
-  stake: bigint,
-  slashRate: number
-): bigint {
+export function calculateSlashing(stake: bigint, slashRate: number): bigint {
   return BigInt(Math.floor(Number(stake) * slashRate));
 }
 
@@ -243,10 +238,10 @@ export function calculateSlashing(
 export function selectValidators(
   availableValidators: Array<{ did: DID; stake: bigint }>,
   count: number,
-  seed: string
+  seed: string,
 ): DID[] {
   if (availableValidators.length <= count) {
-    return availableValidators.map(v => v.did);
+    return availableValidators.map((v) => v.did);
   }
 
   // Calculate total stake
@@ -283,7 +278,7 @@ function simpleHash(input: string): number {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
     const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return Math.abs(hash);
@@ -296,8 +291,8 @@ export function normalizeClaim(claim: string): string {
   return claim
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s]/g, '');
+    .replace(/\s+/g, " ")
+    .replace(/[^\w\s]/g, "");
 }
 
 /**
@@ -312,14 +307,14 @@ export function claimsSimilar(claim1: string, claim2: string): boolean {
   if (norm1 === norm2) return true;
 
   // Check word overlap (simplified similarity)
-  const words1 = new Set(norm1.split(' '));
-  const words2 = new Set(norm2.split(' '));
+  const words1 = new Set(norm1.split(" "));
+  const words2 = new Set(norm2.split(" "));
 
-  const intersection = new Set([...words1].filter(w => words2.has(w)));
+  const intersection = new Set([...words1].filter((w) => words2.has(w)));
   const union = new Set([...words1, ...words2]);
 
   const jaccard = intersection.size / union.size;
-  return jaccard > 0.8;  // 80% word overlap
+  return jaccard > 0.8; // 80% word overlap
 }
 
 /**
@@ -327,15 +322,15 @@ export function claimsSimilar(claim1: string, claim2: string): boolean {
  */
 export function validateDerivation(
   derivation: Derivation,
-  premises: Fact[]
+  premises: Fact[],
 ): { valid: boolean; reason?: string } {
   // Check all premises exist and are verified
   for (const factId of derivation.fromFacts) {
-    const premise = premises.find(p => p.id === factId);
+    const premise = premises.find((p) => p.id === factId);
     if (!premise) {
       return { valid: false, reason: `Premise ${factId} not found` };
     }
-    if (premise.status !== 'verified') {
+    if (premise.status !== "verified") {
       return { valid: false, reason: `Premise ${factId} not verified` };
     }
     if (premise.confidence < 0.5) {
@@ -367,11 +362,14 @@ export function calculateFundamentality(
   citationCount: number,
   maxDerivationDepth: number,
   citingDomains: string[],
-  citationVelocity: number,  // Citations per 1000 blocks
-  ageBlocks: number
+  citationVelocity: number, // Citations per 1000 blocks
+  ageBlocks: number,
 ): FundamentalityMetrics {
   // Citation count (logarithmic - diminishing returns)
-  const citationScore = Math.min(1, Math.log10(citationCount + 1) / Math.log10(1000));
+  const citationScore = Math.min(
+    1,
+    Math.log10(citationCount + 1) / Math.log10(1000),
+  );
 
   // Derivation depth (how many levels build on this)
   const depthScore = Math.min(1, maxDerivationDepth / 10);
@@ -388,14 +386,17 @@ export function calculateFundamentality(
 
   // Weighted combination
   const fundamentalityScore =
-    citationScore * 0.30 +
+    citationScore * 0.3 +
     depthScore * 0.25 +
-    crossDomainScore * 0.20 +
+    crossDomainScore * 0.2 +
     velocityScore * 0.15 +
-    longevityScore * 0.10;
+    longevityScore * 0.1;
 
   // Cross-domain multiplier
-  const crossDomainMultiplier = Math.min(2.0, 1.0 + (uniqueDomains.size - 1) * 0.2);
+  const crossDomainMultiplier = Math.min(
+    2.0,
+    1.0 + (uniqueDomains.size - 1) * 0.2,
+  );
 
   return {
     citationCount,
@@ -412,11 +413,15 @@ export function calculateFundamentality(
  * Get fundamentality bonus multiplier based on score
  */
 export function getFundamentalityBonus(score: number): number {
-  if (score >= FUNDAMENTALITY_THRESHOLDS.AXIOMATIC) return FUNDAMENTALITY_BONUSES.AXIOMATIC;
-  if (score >= FUNDAMENTALITY_THRESHOLDS.FUNDAMENTAL) return FUNDAMENTALITY_BONUSES.FUNDAMENTAL;
-  if (score >= FUNDAMENTALITY_THRESHOLDS.FOUNDATIONAL) return FUNDAMENTALITY_BONUSES.FOUNDATIONAL;
-  if (score >= FUNDAMENTALITY_THRESHOLDS.NOTABLE) return FUNDAMENTALITY_BONUSES.NOTABLE;
-  return 1.0;  // No bonus below NOTABLE threshold
+  if (score >= FUNDAMENTALITY_THRESHOLDS.AXIOMATIC)
+    return FUNDAMENTALITY_BONUSES.AXIOMATIC;
+  if (score >= FUNDAMENTALITY_THRESHOLDS.FUNDAMENTAL)
+    return FUNDAMENTALITY_BONUSES.FUNDAMENTAL;
+  if (score >= FUNDAMENTALITY_THRESHOLDS.FOUNDATIONAL)
+    return FUNDAMENTALITY_BONUSES.FOUNDATIONAL;
+  if (score >= FUNDAMENTALITY_THRESHOLDS.NOTABLE)
+    return FUNDAMENTALITY_BONUSES.NOTABLE;
+  return 1.0; // No bonus below NOTABLE threshold
 }
 
 /**
@@ -428,13 +433,19 @@ export function getFundamentalityBonus(score: number): number {
  */
 export function distributeCitationRewards(
   totalReward: bigint,
-  ancestorChain: Array<{ factId: string; submitter: DID; fundamentalityScore: number }>,
-  params: CitationParameters = DEFAULT_CITATION_PARAMETERS
+  ancestorChain: Array<{
+    factId: string;
+    submitter: DID;
+    fundamentalityScore: number;
+  }>,
+  params: CitationParameters = DEFAULT_CITATION_PARAMETERS,
 ): CitationReward[] {
   const rewards: CitationReward[] = [];
 
   // Calculate citation pool
-  const citationPool = BigInt(Math.floor(Number(totalReward) * params.citationShare));
+  const citationPool = BigInt(
+    Math.floor(Number(totalReward) * params.citationShare),
+  );
 
   if (citationPool === 0n || ancestorChain.length === 0) {
     return rewards;
@@ -446,7 +457,8 @@ export function distributeCitationRewards(
   for (let i = 0; i < ancestorChain.length; i++) {
     const ancestor = ancestorChain[i];
     const decayMultiplier = Math.pow(1 - params.decayRate, i);
-    const baseShare = Number(citationPool) * decayMultiplier * (1 - params.decayRate);
+    const baseShare =
+      Number(citationPool) * decayMultiplier * (1 - params.decayRate);
 
     // Apply fundamentality bonus
     const bonus = getFundamentalityBonus(ancestor.fundamentalityScore);
@@ -459,22 +471,25 @@ export function distributeCitationRewards(
         submitter: ancestor.submitter,
         share: shareWithBonus / Number(citationPool),
         amount,
-        reason: i === 0 ? 'direct_citation' : 'ancestor',
+        reason: i === 0 ? "direct_citation" : "ancestor",
       });
       remaining -= amount;
     }
   }
 
   // Protocol treasury gets remainder (minimum floor)
-  const protocolMinimum = BigInt(Math.floor(Number(citationPool) * params.protocolFloor));
+  const protocolMinimum = BigInt(
+    Math.floor(Number(citationPool) * params.protocolFloor),
+  );
   if (remaining > 0n || remaining < protocolMinimum) {
-    const protocolAmount = remaining > protocolMinimum ? remaining : protocolMinimum;
+    const protocolAmount =
+      remaining > protocolMinimum ? remaining : protocolMinimum;
     rewards.push({
-      factId: 'protocol_treasury',
-      submitter: 'protocol' as DID,
+      factId: "protocol_treasury",
+      submitter: "protocol" as DID,
       share: Number(protocolAmount) / Number(citationPool),
       amount: protocolAmount,
-      reason: 'ancestor',
+      reason: "ancestor",
     });
   }
 
@@ -487,12 +502,12 @@ export function distributeCitationRewards(
 export function applyCrossDomainBonus(
   baseReward: bigint,
   citingDomains: string[],
-  params: CitationParameters = DEFAULT_CITATION_PARAMETERS
+  params: CitationParameters = DEFAULT_CITATION_PARAMETERS,
 ): bigint {
   const uniqueDomains = new Set(citingDomains);
   const multiplier = Math.min(
     params.maxCrossDomainBonus,
-    1.0 + (uniqueDomains.size - 1) * params.crossDomainBonusRate
+    1.0 + (uniqueDomains.size - 1) * params.crossDomainBonusRate,
   );
 
   return BigInt(Math.floor(Number(baseReward) * multiplier));
@@ -504,9 +519,9 @@ export function applyCrossDomainBonus(
 export function calculateMaxDerivationDepth(
   factId: string,
   citedBy: Map<string, string[]>,
-  visited: Set<string> = new Set()
+  visited: Set<string> = new Set(),
 ): number {
-  if (visited.has(factId)) return 0;  // Prevent cycles
+  if (visited.has(factId)) return 0; // Prevent cycles
   visited.add(factId);
 
   const children = citedBy.get(factId) || [];
@@ -528,9 +543,13 @@ export function createFact(
   submission: ClaimSubmission,
   verifications: Verification[],
   submitter: DID,
-  currentBlock: number
+  currentBlock: number,
 ): Fact {
-  const confidence = calculateConfidence(verifications, submission.references as Reference[], 0);
+  const confidence = calculateConfidence(
+    verifications,
+    submission.references as Reference[],
+    0,
+  );
 
   return {
     id: `fact_${currentBlock}_${simpleHash(submission.claim)}`,
@@ -540,27 +559,36 @@ export function createFact(
     domain: submission.domain,
 
     confidence,
-    confidenceHistory: [{
-      timestamp: currentBlock,
-      confidence,
-      reason: 'initial_verification',
-    }],
+    confidenceHistory: [
+      {
+        timestamp: currentBlock,
+        confidence,
+        reason: "initial_verification",
+      },
+    ],
 
     references: submission.references as Reference[],
     verifications,
-    derivedFrom: submission.derivedFrom ? {
-      fromFacts: submission.derivedFrom.factIds,
-      inferenceType: submission.derivedFrom.inferenceType,
-      inferenceStrength: INFERENCE_STRENGTH[submission.derivedFrom.inferenceType],
-      logicChain: submission.derivedFrom.logicChain,
-      derivedAt: currentBlock,
-      derivedBy: submitter,
-    } : undefined,
+    derivedFrom: submission.derivedFrom
+      ? {
+          fromFacts: submission.derivedFrom.factIds,
+          inferenceType: submission.derivedFrom.inferenceType,
+          inferenceStrength:
+            INFERENCE_STRENGTH[submission.derivedFrom.inferenceType],
+          logicChain: submission.derivedFrom.logicChain,
+          derivedAt: currentBlock,
+          derivedBy: submitter,
+        }
+      : undefined,
 
     submittedBy: submitter,
     submittedAt: currentBlock,
     lastVerified: currentBlock,
 
-    status: 'verified',
+    epistemicCategory: "empirical",
+    maturity: "emerging",
+    createdAtBlock: currentBlock,
+
+    status: "verified",
   };
 }

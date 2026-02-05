@@ -1,13 +1,13 @@
 /**
- * Storage Layer Types
+ * BVM Storage Types
  *
- * Defines the interface for persistent storage backends.
- * Supports LevelDB, RocksDB, and in-memory implementations.
+ * Defines the interface for BVM state persistence.
+ * Provides a clean abstraction over different storage backends.
  *
  * PP HIERARCHY:
- *   TRUTH: Storage is the ground of truth persistence
- *   UNDERSTANDING: Clear interfaces for different storage needs
- *   BEAUTY: Elegant abstraction over multiple backends
+ *   TRUTH: Durable state persistence for BVM
+ *   UNDERSTANDING: Clear interfaces for state operations
+ *   BEAUTY: Elegant abstraction over storage complexity
  *   JUSTICE: Fair resource management, proper cleanup
  *   CREATIVITY: Extensible for new storage backends
  */
@@ -15,10 +15,10 @@
 // ============ Core Storage Interface ============
 
 /**
- * Key-value storage interface
+ * Low-level key-value state store interface
  * All storage backends must implement this
  */
-export interface KVStore {
+export interface StateStore {
   /** Get a value by key */
   get(key: Uint8Array): Promise<Uint8Array | null>;
 
@@ -26,521 +26,241 @@ export interface KVStore {
   put(key: Uint8Array, value: Uint8Array): Promise<void>;
 
   /** Delete a key */
-  delete(key: Uint8Array): Promise<void>;
-
-  /** Check if key exists */
-  has(key: Uint8Array): Promise<boolean>;
+  del(key: Uint8Array): Promise<void>;
 
   /** Batch operations for atomicity */
-  batch(): WriteBatch;
-
-  /** Create an iterator over keys */
-  iterator(options?: IteratorOptions): AsyncIterator<KVPair>;
+  batch(ops: BatchOp[]): Promise<void>;
 
   /** Close the store */
   close(): Promise<void>;
 
-  /** Get storage stats */
-  stats(): Promise<StorageStats>;
+  /** Check if key exists */
+  has?(key: Uint8Array): Promise<boolean>;
+
+  /** Get storage statistics */
+  stats?(): Promise<StorageStats>;
 }
 
 /**
- * Write batch for atomic operations
+ * Batch operation for atomic writes
  */
-export interface WriteBatch {
-  /** Add a put operation */
-  put(key: Uint8Array, value: Uint8Array): WriteBatch;
-
-  /** Add a delete operation */
-  delete(key: Uint8Array): WriteBatch;
-
-  /** Clear all operations */
-  clear(): WriteBatch;
-
-  /** Execute all operations atomically */
-  write(): Promise<void>;
-}
-
-/**
- * Iterator options
- */
-export interface IteratorOptions {
-  /** Start key (inclusive) */
-  gte?: Uint8Array;
-
-  /** End key (exclusive) */
-  lt?: Uint8Array;
-
-  /** Reverse iteration */
-  reverse?: boolean;
-
-  /** Maximum entries to return */
-  limit?: number;
-
-  /** Keys only (skip values) */
-  keys?: boolean;
-
-  /** Values only (skip keys) */
-  values?: boolean;
-}
-
-/**
- * Key-value pair
- */
-export interface KVPair {
+export interface BatchOp {
+  type: "put" | "del";
   key: Uint8Array;
-  value: Uint8Array;
+  value?: Uint8Array;
 }
+
+/**
+ * Persistence configuration
+ */
+export interface PersistenceConfig {
+  /** Path to the storage directory */
+  path: string;
+
+  /** LRU cache size in bytes (default: 8MB) */
+  cacheSize?: number;
+
+  /** Enable compression (default: true) */
+  compression?: boolean;
+
+  /** Write buffer size in bytes (default: 4MB) */
+  writeBufferSize?: number;
+
+  /** Maximum number of open files (default: 1000) */
+  maxOpenFiles?: number;
+}
+
+/**
+ * Default persistence configuration
+ */
+export const DEFAULT_PERSISTENCE_CONFIG: PersistenceConfig = {
+  path: "./data/bvm",
+  cacheSize: 8 * 1024 * 1024, // 8MB
+  compression: true,
+  writeBufferSize: 4 * 1024 * 1024, // 4MB
+  maxOpenFiles: 1000,
+};
 
 /**
  * Storage statistics
  */
 export interface StorageStats {
-  /** Total keys stored */
+  /** Total number of keys */
   keyCount: bigint;
 
   /** Total size in bytes */
   sizeBytes: bigint;
 
-  /** Disk usage (may differ from sizeBytes due to compression) */
+  /** Disk usage (may differ due to compression) */
   diskUsageBytes: bigint;
 
   /** Number of SST files (for LSM stores) */
   sstFileCount?: number;
-
-  /** Compaction stats */
-  compactionStats?: CompactionStats;
 }
+
+// ============ State Key Prefixes ============
 
 /**
- * Compaction statistics for LSM-based stores
+ * Storage key prefixes for different BVM state types
+ * These ensure proper key separation and efficient range queries
  */
-export interface CompactionStats {
-  /** Number of compactions completed */
-  compactionsCompleted: number;
+export const BVM_STORAGE_PREFIXES = {
+  /** Contract bytecode (CB 131311) */
+  CONTRACT: new Uint8Array([0x01]),
 
-  /** Pending compaction bytes */
-  pendingBytes: bigint;
+  /** Contract storage slots (CVS 131312) */
+  STORAGE: new Uint8Array([0x02]),
 
-  /** Current level stats */
-  levels: LevelStats[];
-}
+  /** Account state (AS 131314) */
+  ACCOUNT: new Uint8Array([0x03]),
 
-export interface LevelStats {
-  level: number;
-  fileCount: number;
-  sizeBytes: bigint;
-}
+  /** Agent state (AGS 131315) */
+  AGENT: new Uint8Array([0x04]),
 
-// ============ Namespaced Storage ============
+  /** Knowledge access state (KAS 131316) */
+  KNOWLEDGE_ACCESS: new Uint8Array([0x05]),
 
-/**
- * Storage namespaces for different data types
- */
-export const STORAGE_NAMESPACES = {
-  /** Account state tree */
-  ACCOUNTS: new Uint8Array([0x01]),
-
-  /** Validator state tree */
-  VALIDATORS: new Uint8Array([0x02]),
-
-  /** Knowledge/facts state tree */
-  KNOWLEDGE: new Uint8Array([0x03]),
-
-  /** Evidence state tree */
-  EVIDENCE: new Uint8Array([0x04]),
-
-  /** Dispute state tree */
-  DISPUTES: new Uint8Array([0x05]),
-
-  /** Vesting state tree */
-  VESTING: new Uint8Array([0x06]),
-
-  /** Research state tree */
-  RESEARCH: new Uint8Array([0x07]),
-
-  /** Block headers */
-  BLOCK_HEADERS: new Uint8Array([0x10]),
-
-  /** Block bodies (transactions) */
-  BLOCK_BODIES: new Uint8Array([0x11]),
-
-  /** Block receipts */
-  BLOCK_RECEIPTS: new Uint8Array([0x12]),
-
-  /** Transaction index */
-  TX_INDEX: new Uint8Array([0x13]),
+  /** Schedule process state (SPS 131313) */
+  SCHEDULE: new Uint8Array([0x06]),
 
   /** State snapshots */
-  SNAPSHOTS: new Uint8Array([0x20]),
+  SNAPSHOT: new Uint8Array([0x10]),
 
-  /** Snapshot metadata */
-  SNAPSHOT_META: new Uint8Array([0x21]),
+  /** State metadata */
+  METADATA: new Uint8Array([0xf0]),
 
-  /** Archive data (historical states) */
-  ARCHIVE: new Uint8Array([0x30]),
-
-  /** Light client proofs */
-  PROOFS: new Uint8Array([0x40]),
-
-  /** Configuration and metadata */
-  CONFIG: new Uint8Array([0xF0]),
+  /** State roots */
+  STATE_ROOT: new Uint8Array([0xf1]),
 } as const;
 
-export type StorageNamespace = (typeof STORAGE_NAMESPACES)[keyof typeof STORAGE_NAMESPACES];
+export type BVMStoragePrefix =
+  (typeof BVM_STORAGE_PREFIXES)[keyof typeof BVM_STORAGE_PREFIXES];
+
+// ============ Key Construction Utilities ============
 
 /**
- * Create a namespaced key
+ * Create a namespaced key by prepending a prefix
  */
-export function namespacedKey(namespace: StorageNamespace, key: Uint8Array): Uint8Array {
-  const result = new Uint8Array(namespace.length + key.length);
-  result.set(namespace, 0);
-  result.set(key, namespace.length);
+export function createKey(prefix: Uint8Array, key: Uint8Array): Uint8Array {
+  const result = new Uint8Array(prefix.length + key.length);
+  result.set(prefix, 0);
+  result.set(key, prefix.length);
   return result;
 }
 
 /**
- * Extract the key from a namespaced key
+ * Create a key from a string address
  */
-export function extractKey(namespace: StorageNamespace, namespacedKey: Uint8Array): Uint8Array {
-  return namespacedKey.slice(namespace.length);
-}
-
-// ============ Snapshot Types ============
-
-/**
- * State snapshot for fast sync and recovery
- */
-export interface StateSnapshot {
-  /** Unique snapshot ID */
-  id: string;
-
-  /** Block number this snapshot represents */
-  blockNumber: bigint;
-
-  /** Block hash at this snapshot */
-  blockHash: string;
-
-  /** State root at this snapshot */
-  stateRoot: string;
-
-  /** Timestamp when snapshot was created */
-  createdAt: number;
-
-  /** Snapshot format version */
-  formatVersion: number;
-
-  /** Compressed size in bytes */
-  compressedSize: bigint;
-
-  /** Uncompressed size in bytes */
-  uncompressedSize: bigint;
-
-  /** Number of chunks */
-  chunkCount: number;
-
-  /** Chunk hashes for verification */
-  chunkHashes: string[];
-
-  /** Whether this is a full or incremental snapshot */
-  snapshotType: 'full' | 'incremental';
-
-  /** Parent snapshot ID (for incremental) */
-  parentSnapshotId?: string;
+export function addressToKey(prefix: Uint8Array, address: string): Uint8Array {
+  const addressBytes = new TextEncoder().encode(address);
+  return createKey(prefix, addressBytes);
 }
 
 /**
- * Snapshot chunk for streaming
+ * Create a storage slot key: PREFIX + ADDRESS + SLOT_KEY
  */
-export interface SnapshotChunk {
-  /** Snapshot ID this chunk belongs to */
-  snapshotId: string;
-
-  /** Chunk index */
-  chunkIndex: number;
-
-  /** Compressed chunk data */
-  data: Uint8Array;
-
-  /** Hash of this chunk */
-  hash: string;
+export function storageSlotKey(
+  address: string,
+  slotKey: Uint8Array,
+): Uint8Array {
+  const addressBytes = new TextEncoder().encode(address);
+  const combined = new Uint8Array(addressBytes.length + 1 + slotKey.length);
+  combined.set(addressBytes, 0);
+  combined[addressBytes.length] = 0x00; // Separator
+  combined.set(slotKey, addressBytes.length + 1);
+  return createKey(BVM_STORAGE_PREFIXES.STORAGE, combined);
 }
 
 /**
- * Snapshot configuration
+ * Create a block height key (8 bytes big-endian)
  */
-export interface SnapshotConfig {
-  /** How often to create snapshots (in blocks) */
-  intervalBlocks: bigint;
-
-  /** Maximum number of snapshots to keep */
-  maxSnapshots: number;
-
-  /** Compression algorithm */
-  compression: 'none' | 'snappy' | 'zstd' | 'lz4';
-
-  /** Compression level (1-9) */
-  compressionLevel: number;
-
-  /** Maximum chunk size in bytes */
-  maxChunkSize: number;
-
-  /** Enable incremental snapshots */
-  enableIncremental: boolean;
-}
-
-export const DEFAULT_SNAPSHOT_CONFIG: SnapshotConfig = {
-  intervalBlocks: 10000n,
-  maxSnapshots: 5,
-  compression: 'zstd',
-  compressionLevel: 3,
-  maxChunkSize: 64 * 1024 * 1024, // 64 MB
-  enableIncremental: true,
-};
-
-// ============ Pruning Types ============
-
-/**
- * Pruning strategy
- */
-export type PruningStrategy =
-  | ArchivePruning      // Keep everything
-  | RetentionPruning    // Keep N blocks
-  | SnapshotPruning;    // Keep snapshots only
-
-export interface ArchivePruning {
-  type: 'archive';
-  // Keep all historical data
-}
-
-export interface RetentionPruning {
-  type: 'retention';
-  /** Number of recent blocks to keep full state for */
-  retainBlocks: bigint;
-  /** Keep state roots for pruned blocks (enables light client proofs) */
-  keepStateRoots: boolean;
-}
-
-export interface SnapshotPruning {
-  type: 'snapshot';
-  /** Only keep snapshot states */
-  snapshotInterval: bigint;
-  /** Number of snapshots to retain */
-  retainSnapshots: number;
+export function heightToKey(height: bigint): Uint8Array {
+  const buffer = new ArrayBuffer(8);
+  const view = new DataView(buffer);
+  view.setBigUint64(0, height, false); // big-endian for proper sorting
+  return new Uint8Array(buffer);
 }
 
 /**
- * Pruning configuration
+ * Parse a block height from key bytes
  */
-export interface PruningConfig {
-  /** Pruning strategy */
-  strategy: PruningStrategy;
-
-  /** Run pruning automatically */
-  autoPrune: boolean;
-
-  /** How often to run pruning (in blocks) */
-  pruneIntervalBlocks: bigint;
-
-  /** Maximum disk usage before forced pruning (bytes) */
-  maxDiskUsage?: bigint;
-
-  /** Protect certain block numbers from pruning */
-  protectedBlocks?: bigint[];
+export function keyToHeight(key: Uint8Array): bigint {
+  const view = new DataView(key.buffer, key.byteOffset, key.byteLength);
+  return view.getBigUint64(0, false);
 }
 
-export const DEFAULT_PRUNING_CONFIG: PruningConfig = {
-  strategy: {
-    type: 'retention',
-    retainBlocks: 100000n, // ~3 days at 2521ms blocks
-    keepStateRoots: true,
-  },
-  autoPrune: true,
-  pruneIntervalBlocks: 1000n,
-};
-
-// ============ Migration Types ============
+// ============ Serialization Utilities ============
 
 /**
- * Storage migration for schema changes
+ * BigInt-safe JSON replacer
  */
-export interface StorageMigration {
-  /** Migration version */
-  version: number;
-
-  /** Migration name */
-  name: string;
-
-  /** Migration description */
-  description: string;
-
-  /** Run the migration */
-  up(store: KVStore): Promise<void>;
-
-  /** Rollback the migration */
-  down(store: KVStore): Promise<void>;
-}
-
-/**
- * Migration state
- */
-export interface MigrationState {
-  /** Current schema version */
-  currentVersion: number;
-
-  /** Applied migrations */
-  appliedMigrations: AppliedMigration[];
-}
-
-export interface AppliedMigration {
-  version: number;
-  name: string;
-  appliedAt: number;
-  duration: number;
-}
-
-// ============ Storage Provider Types ============
-
-/**
- * Storage provider configuration
- */
-export type StorageProviderConfig =
-  | LevelDBConfig
-  | RocksDBConfig
-  | MemoryConfig;
-
-export interface LevelDBConfig {
-  type: 'leveldb';
-  path: string;
-  cacheSize?: number;
-  writeBufferSize?: number;
-  maxOpenFiles?: number;
-  compression?: boolean;
-}
-
-export interface RocksDBConfig {
-  type: 'rocksdb';
-  path: string;
-  cacheSize?: number;
-  writeBufferSize?: number;
-  maxOpenFiles?: number;
-  compression?: 'none' | 'snappy' | 'zstd' | 'lz4';
-  maxBackgroundCompactions?: number;
-}
-
-export interface MemoryConfig {
-  type: 'memory';
-  maxSize?: number;
-}
-
-// ============ Light Client Types ============
-
-/**
- * State proof for light clients
- */
-export interface StateProof {
-  /** The key being proved */
-  key: Uint8Array;
-
-  /** The value (null if proving non-existence) */
-  value: Uint8Array | null;
-
-  /** Merkle proof path */
-  proof: ProofNode[];
-
-  /** State root this proof is against */
-  stateRoot: string;
-
-  /** Block number */
-  blockNumber: bigint;
-}
-
-export interface ProofNode {
-  /** Node hash */
-  hash: string;
-
-  /** Position in tree (left or right sibling) */
-  position: 'left' | 'right';
-}
-
-/**
- * Block header for light client sync
- */
-export interface LightBlockHeader {
-  number: bigint;
-  hash: string;
-  parentHash: string;
-  stateRoot: string;
-  knowledgeRoot: string;
-  timestamp: number;
-  proposer: string;
-  validatorSetHash: string;
-}
-
-// ============ Storage Events ============
-
-/**
- * Storage event types
- */
-export type StorageEvent =
-  | { type: 'put'; key: Uint8Array; value: Uint8Array }
-  | { type: 'delete'; key: Uint8Array }
-  | { type: 'batch_complete'; operations: number }
-  | { type: 'compaction_start'; level: number }
-  | { type: 'compaction_complete'; level: number; duration: number }
-  | { type: 'snapshot_created'; snapshot: StateSnapshot }
-  | { type: 'pruning_complete'; freedBytes: bigint }
-  | { type: 'migration_applied'; migration: AppliedMigration };
-
-/**
- * Storage event listener
- */
-export type StorageEventListener = (event: StorageEvent) => void;
-
-// ============ Utility Types ============
-
-/**
- * Encoding for values
- */
-export type ValueEncoding = 'binary' | 'json' | 'msgpack';
-
-/**
- * Encode a value
- */
-export function encodeValue(value: unknown, encoding: ValueEncoding): Uint8Array {
-  switch (encoding) {
-    case 'binary':
-      if (value instanceof Uint8Array) return value;
-      throw new Error('Binary encoding requires Uint8Array');
-    case 'json':
-      return new TextEncoder().encode(JSON.stringify(value, bigIntReplacer));
-    case 'msgpack':
-      // Would use msgpack library
-      throw new Error('msgpack encoding not implemented');
+export function bigIntReplacer(_key: string, value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return { __bigint__: value.toString() };
   }
-}
-
-/**
- * Decode a value
- */
-export function decodeValue<T>(data: Uint8Array, encoding: ValueEncoding): T {
-  switch (encoding) {
-    case 'binary':
-      return data as unknown as T;
-    case 'json':
-      return JSON.parse(new TextDecoder().decode(data), bigIntReviver);
-    case 'msgpack':
-      throw new Error('msgpack encoding not implemented');
-  }
-}
-
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? { __bigint__: value.toString() } : value;
-}
-
-function bigIntReviver(_key: string, value: unknown): unknown {
-  if (typeof value === 'object' && value !== null && '__bigint__' in value) {
-    return BigInt((value as { __bigint__: string }).__bigint__);
+  if (value instanceof Map) {
+    return {
+      __map__: Array.from(value.entries()).map(([k, v]) => [k, v]),
+    };
   }
   return value;
 }
+
+/**
+ * BigInt-safe JSON reviver
+ */
+export function bigIntReviver(_key: string, value: unknown): unknown {
+  if (typeof value === "object" && value !== null) {
+    if ("__bigint__" in value) {
+      return BigInt((value as { __bigint__: string }).__bigint__);
+    }
+    if ("__map__" in value) {
+      return new Map((value as { __map__: [unknown, unknown][] }).__map__);
+    }
+  }
+  return value;
+}
+
+/**
+ * Encode a value to bytes using JSON serialization
+ */
+export function encodeValue(value: unknown): Uint8Array {
+  const json = JSON.stringify(value, bigIntReplacer);
+  return new TextEncoder().encode(json);
+}
+
+/**
+ * Decode bytes to a value using JSON deserialization
+ */
+export function decodeValue<T>(data: Uint8Array): T {
+  const json = new TextDecoder().decode(data);
+  return JSON.parse(json, bigIntReviver) as T;
+}
+
+// ============ Error Types ============
+
+/**
+ * BVM storage error
+ */
+export class BVMStorageError extends Error {
+  constructor(
+    message: string,
+    public code: BVMStorageErrorCode,
+    public details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "BVMStorageError";
+  }
+}
+
+export type BVMStorageErrorCode =
+  | "STORE_CLOSED"
+  | "KEY_NOT_FOUND"
+  | "SERIALIZATION_ERROR"
+  | "DESERIALIZATION_ERROR"
+  | "BATCH_FAILED"
+  | "SNAPSHOT_NOT_FOUND"
+  | "ROLLBACK_FAILED"
+  | "COMMIT_FAILED"
+  | "CORRUPTION_DETECTED"
+  | "INVALID_STATE";

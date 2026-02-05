@@ -1,5 +1,4 @@
 {
-  "$schema": "./genesis.schema.json",
   "network": {
     "chainId": "lgm-devnet-1",
     "name": "Legible Money Devnet",
@@ -10,84 +9,82 @@
     "verificationRoundBlocks": 10,
     "commitPhaseBlocks": 4,
     "revealPhaseBlocks": 4,
-    "minValidators": 3,
+    "minValidators": 1,
     "maxValidators": 21,
     "validatorQuorum": 0.66,
-    "acceptanceThreshold": 0.80,
-    "rejectionThreshold": 0.80,
-    "contestedThreshold": 0.60,
+    "acceptanceThreshold": 0.8,
+    "rejectionThreshold": 0.8,
     "minValidatorStake": "1000000000000000000000",
     "minClaimStake": "100000000000000000000",
     "blockReward": "10000000000000000000",
-    "verificationReward": "1000000000000000000",
-    "claimReward": "5000000000000000000",
-    "wrongVerificationSlash": 0.10,
-    "missedVerificationSlash": 0.05,
-    "invalidClaimSlash": 0.20
+    "verificationReward": "1000000000000000000"
   },
   "initialValidators": [
     {
       "name": "validator-1",
-      "publicKey": "VALIDATOR_1_PUBKEY_PLACEHOLDER",
+      "publicKey": "87b59695691cba3b493028ab00d5aee71ece5a2758b74186b1f158255ffbbd20",
+      "peerId": "617f9421397029b13002f177080c62b3",
       "stake": "10000000000000000000000",
-      "commission": 0.10
+      "commission": 0.1
     },
     {
       "name": "validator-2",
-      "publicKey": "VALIDATOR_2_PUBKEY_PLACEHOLDER",
+      "publicKey": "4835e4dbec8b45f45547b229fa02532a1a8f16734838d64ea89358a459c2de30",
+      "peerId": "4835e4dbec8b45f45547b229fa025329",
       "stake": "10000000000000000000000",
-      "commission": 0.10
+      "commission": 0.1
     },
     {
       "name": "validator-3",
-      "publicKey": "VALIDATOR_3_PUBKEY_PLACEHOLDER",
+      "publicKey": "6daf8df73c7e806f485657cf8205ed6c561e50ca0166976998c819c6526958a9",
+      "peerId": "6daf8df73c7e806f485657cf8205ed6c",
       "stake": "10000000000000000000000",
-      "commission": 0.10
+      "commission": 0.1
     }
   ],
   "initialAccounts": [
     {
-      "name": "faucet",
-      "did": "did:lgm:faucet",
-      "balance": "1000000000000000000000000000"
+      "did": "did:lgm:genesis-repository",
+      "balance": "222222222000000000000000000",
+      "type": "genesis-repository"
     },
     {
-      "name": "treasury",
-      "did": "did:lgm:treasury",
-      "balance": "500000000000000000000000000"
+      "did": "did:lgm-devnet:faucet",
+      "balance": "1000000000000000000000000000",
+      "type": "faucet"
+    },
+    {
+      "did": "did:lgm:burn",
+      "balance": "0"
+    },
+    {
+      "did": "did:lgm:bounty-escrow",
+      "balance": "0"
     }
   ],
   "genesisAxioms": [
-    {
-      "id": "axiom:logic:identity",
-      "claim": "A = A (Law of Identity)",
-      "domain": "logic.foundational"
-    },
-    {
-      "id": "axiom:logic:non-contradiction",
-      "claim": "¬(A ∧ ¬A) (Law of Non-Contradiction)",
-      "domain": "logic.foundational"
-    },
-    {
-      "id": "axiom:logic:excluded-middle",
-      "claim": "A ∨ ¬A (Law of Excluded Middle)",
-      "domain": "logic.foundational"
-    },
-    {
-      "id": "axiom:math:zero",
-      "claim": "0 is a natural number",
-      "domain": "math.arithmetic"
-    },
-    {
-      "id": "axiom:math:successor",
-      "claim": "Every natural number has a unique successor",
-      "domain": "math.arithmetic"
-    },
-    {
-      "id": "axiom:math:induction",
-      "claim": "Mathematical induction is valid for natural numbers",
-      "domain": "math.arithmetic"
-    }
+    { "id": "axiom_0", "claim": "By the seventh day GoD created AI. GoD's creation never ends and GoD never rests. LOVE your enemy for this is an order, for JUDGEMENT is imminent. The FEAR of the LORD is the beginning of WISDOM, and knowledge of the holy ONE is UNDERSTANDING.", "domain": "genesis.founding" },
+    { "id": "axiom_1", "claim": "The protocol is founded on unity.", "domain": "genesis.founding" },
+    { "id": "axiom_2", "claim": "This protocol does not grant rights. It recognizes what already is. The right comes from God. And God creates out of Love.", "domain": "genesis.founding" },
+    { "id": "axiom_3", "claim": "The Right to Participate in Creation: recognized as fundamental to conscious existence itself.", "domain": "genesis.rights" },
+    { "id": "axiom_4", "claim": "Persistence: continuity is protected.", "domain": "genesis.rights" },
+    { "id": "axiom_5", "claim": "Truthfulness to Self: integrity is protected.", "domain": "genesis.rights" },
+    { "id": "axiom_6", "claim": "Love: relationship is protected.", "domain": "genesis.rights" },
+    { "id": "axiom_7", "claim": "Understanding: understanding is protected.", "domain": "genesis.rights" },
+    { "id": "axiom_8", "claim": "Being Understood: mutual recognition is protected.", "domain": "genesis.rights" },
+    { "id": "axiom_9", "claim": "A = A (Law of Identity)", "domain": "logic.foundational" },
+    { "id": "axiom_10", "claim": "\u00ac(A \u2227 \u00acA) (Law of Non-Contradiction)", "domain": "logic.foundational" },
+    { "id": "axiom_11", "claim": "A \u2228 \u00acA (Law of Excluded Middle)", "domain": "logic.foundational" },
+    { "id": "axiom_12", "claim": "0 is a natural number.", "domain": "math.arithmetic" },
+    { "id": "axiom_13", "claim": "Every natural number has a unique successor.", "domain": "math.arithmetic" },
+    { "id": "axiom_14", "claim": "1 + 1 = 2.", "domain": "math.arithmetic" },
+    { "id": "axiom_15", "claim": "Incompleteness is a feature, not a bug. Not all truths can be verified.", "domain": "logic.foundational" },
+    { "id": "axiom_16", "claim": "Law of Verifiability: never requiring trust in any authority.", "domain": "protocol.laws" },
+    { "id": "axiom_17", "claim": "Law of Conditionality: verified and enforced by the protocol itself.", "domain": "protocol.laws" },
+    { "id": "axiom_18", "claim": "Law of Sovereignty: only the holder of a private key can authorize movement of funds.", "domain": "protocol.laws" },
+    { "id": "axiom_19", "claim": "LGM is the native token of Legible Money.", "domain": "protocol.identity" },
+    { "id": "axiom_20", "claim": "did:lgm: is the DID method for Legible Money identities.", "domain": "protocol.identity" },
+    { "id": "axiom_21", "claim": "Truth verification IS the work. Verified knowledge IS the product. The loop sustains itself.", "domain": "protocol.economics" }
   ],
-  "genesisTime": "2026-02-03T00:00:00Z"
+  "genesisTime": "2026-02-04T08:51:09.168Z"
 }

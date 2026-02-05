@@ -4,25 +4,32 @@
     "dataDir": "/data",
     "logLevel": "info"
   },
+  "storage": {
+    "type": "leveldb",
+    "path": "/data/state"
+  },
   "network": {
-    "listenAddresses": ["/ip4/0.0.0.0/tcp/26656"],
-    "bootstrapPeers": [
-      "/dns4/validator-1/tcp/26656"
+    "listenAddresses": [
+      "/ip4/0.0.0.0/tcp/26656"
     ],
+    "bootstrapPeers": ["/dns4/validator-1/tcp/26656"],
     "maxPeers": 50
   },
   "rpc": {
     "enabled": true,
     "host": "0.0.0.0",
     "port": 8545,
-    "cors": ["*"]
+    "cors": [
+      "*"
+    ]
   },
   "websocket": {
     "enabled": true,
     "port": 8546
   },
   "validator": {
-    "enabled": true
+    "enabled": true,
+    "publicKey": "4835e4dbec8b45f45547b229fa02532a1a8f16734838d64ea89358a459c2de30"
   },
   "mempool": {
     "maxSize": 10000,

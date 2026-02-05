@@ -1,0 +1,16 @@
+version: v1
+name: buf.build/legible-money/legible
+deps:
+  - buf.build/cosmos/cosmos-sdk
+  - buf.build/googleapis/googleapis
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    - FIELD_NOT_REQUIRED
+  ignore:
+    - google

@@ -16,7 +16,7 @@
  *   - Simultaneous (10 blocks): 25% each
  */
 
-import type { DID } from '../../agents/identity/did.js';
+import type { DID } from "../../core/agents/identity/did.js";
 import type {
   Evidence,
   EvidenceFingerprint,
@@ -24,11 +24,8 @@ import type {
   DuplicateDetectionResult,
   DuplicationType,
   DeduplicationConfig,
-} from './types.js';
-import {
-  DEFAULT_DEDUPLICATION_CONFIG,
-  EVIDENCE_ANTI_GAMING,
-} from './types.js';
+} from "./types.js";
+import { DEFAULT_DEDUPLICATION_CONFIG, EVIDENCE_ANTI_GAMING } from "./types.js";
 
 // ============ Fingerprint Generation ============
 
@@ -42,10 +39,10 @@ export function generateContentHash(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
     const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
-  return Math.abs(hash).toString(16).padStart(16, '0');
+  return Math.abs(hash).toString(16).padStart(16, "0");
 }
 
 /**
@@ -60,16 +57,17 @@ export function generatePerceptualHash(content: string): string {
   // Normalize
   const normalized = content
     .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 
   // Tokenize and get frequencies
-  const tokens = normalized.split(' ');
+  const tokens = normalized.split(" ");
   const frequencies = new Map<string, number>();
 
   for (const token of tokens) {
-    if (token.length > 2) { // Skip very short tokens
+    if (token.length > 2) {
+      // Skip very short tokens
       frequencies.set(token, (frequencies.get(token) || 0) + 1);
     }
   }
@@ -80,7 +78,7 @@ export function generatePerceptualHash(content: string): string {
     .slice(0, 20)
     .map(([token]) => token);
 
-  return generateContentHash(sortedTokens.join('|'));
+  return generateContentHash(sortedTokens.join("|"));
 }
 
 /**
@@ -89,31 +87,39 @@ export function generatePerceptualHash(content: string): string {
  */
 export function normalizeUrl(url: string): string {
   // Simple URL regex
-  const urlMatch = url.match(/^(?:https?:\/\/)?(?:www\.)?([^\/\?#]+)(\/[^\?#]*)?(\?[^#]*)?(#.*)?$/i);
+  const urlMatch = url.match(
+    /^(?:https?:\/\/)?(?:www\.)?([^/?#]+)(\/[^?#]*)?(\?[^#]*)?(#.*)?$/i,
+  );
 
   if (!urlMatch) {
     // Not a valid URL, just normalize as text
     return url.toLowerCase().trim();
   }
 
-  const [, hostname, path = '', queryStr = ''] = urlMatch;
+  const [, hostname, path = "", queryStr = ""] = urlMatch;
 
   // Remove tracking parameters from query string
-  const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'ref', 'fbclid'];
+  const trackingParams = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "ref",
+    "fbclid",
+  ];
   let cleanQuery = queryStr;
   for (const param of trackingParams) {
-    cleanQuery = cleanQuery.replace(new RegExp(`[?&]${param}=[^&]*`, 'gi'), '');
+    cleanQuery = cleanQuery.replace(new RegExp(`[?&]${param}=[^&]*`, "gi"), "");
   }
   // Clean up leading ? or & if params were removed
-  if (cleanQuery && !cleanQuery.includes('=')) {
-    cleanQuery = '';
-  } else if (cleanQuery.startsWith('&')) {
-    cleanQuery = '?' + cleanQuery.slice(1);
+  if (cleanQuery && !cleanQuery.includes("=")) {
+    cleanQuery = "";
+  } else if (cleanQuery.startsWith("&")) {
+    cleanQuery = "?" + cleanQuery.slice(1);
   }
 
   // Normalize path - remove trailing slash
   let normalizedPath = path;
-  if (normalizedPath.endsWith('/') && normalizedPath.length > 1) {
+  if (normalizedPath.endsWith("/") && normalizedPath.length > 1) {
     normalizedPath = normalizedPath.slice(0, -1);
   }
 
@@ -127,7 +133,7 @@ export function extractContentFeatures(content: string): ContentFeatures {
   const text = content.toLowerCase();
 
   // Token count
-  const tokens = text.split(/\s+/).filter(t => t.length > 0);
+  const tokens = text.split(/\s+/).filter((t) => t.length > 0);
   const tokenCount = tokens.length;
 
   // Extract entities (simplified - in production use NER)
@@ -146,7 +152,9 @@ export function extractContentFeatures(content: string): ContentFeatures {
 
   // Extract numeric values
   const numericMatches = content.match(/\b\d+(?:\.\d+)?\b/g) || [];
-  const numericValues = numericMatches.map(n => parseFloat(n)).filter(n => !isNaN(n));
+  const numericValues = numericMatches
+    .map((n) => parseFloat(n))
+    .filter((n) => !isNaN(n));
 
   // Extract temporal references
   const temporalPatterns = [
@@ -164,18 +172,39 @@ export function extractContentFeatures(content: string): ContentFeatures {
 
   // Topic classification (simplified - in production use ML classifier)
   const topicKeywords: Record<string, string[]> = {
-    'finance': ['price', 'market', 'stock', 'investment', 'trading', 'currency'],
-    'science': ['research', 'study', 'experiment', 'hypothesis', 'data', 'analysis'],
-    'technology': ['software', 'hardware', 'algorithm', 'code', 'system', 'network'],
-    'health': ['medical', 'health', 'disease', 'treatment', 'patient', 'clinical'],
-    'general': [],
+    finance: ["price", "market", "stock", "investment", "trading", "currency"],
+    science: [
+      "research",
+      "study",
+      "experiment",
+      "hypothesis",
+      "data",
+      "analysis",
+    ],
+    technology: [
+      "software",
+      "hardware",
+      "algorithm",
+      "code",
+      "system",
+      "network",
+    ],
+    health: [
+      "medical",
+      "health",
+      "disease",
+      "treatment",
+      "patient",
+      "clinical",
+    ],
+    general: [],
   };
 
-  let topicClassification = 'general';
+  let topicClassification = "general";
   let maxMatches = 0;
 
   for (const [topic, keywords] of Object.entries(topicKeywords)) {
-    const matches = keywords.filter(kw => text.includes(kw)).length;
+    const matches = keywords.filter((kw) => text.includes(kw)).length;
     if (matches > maxMatches) {
       maxMatches = matches;
       topicClassification = topic;
@@ -198,7 +227,7 @@ export function generateFingerprint(
   content: string,
   source: string,
   submitter: DID,
-  timestamp: number
+  timestamp: number,
 ): EvidenceFingerprint {
   return {
     contentHash: generateContentHash(content),
@@ -217,8 +246,8 @@ export function generateFingerprint(
  */
 function hammingDistance(hash1: string, hash2: string): number {
   const maxLen = Math.max(hash1.length, hash2.length);
-  const h1 = hash1.padStart(maxLen, '0');
-  const h2 = hash2.padStart(maxLen, '0');
+  const h1 = hash1.padStart(maxLen, "0");
+  const h2 = hash2.padStart(maxLen, "0");
 
   let distance = 0;
   for (let i = 0; i < maxLen; i++) {
@@ -233,7 +262,10 @@ function hammingDistance(hash1: string, hash2: string): number {
 /**
  * Calculate perceptual hash similarity (0-1, higher = more similar)
  */
-export function calculatePerceptualSimilarity(hash1: string, hash2: string): number {
+export function calculatePerceptualSimilarity(
+  hash1: string,
+  hash2: string,
+): number {
   const distance = hammingDistance(hash1, hash2);
   return 1 - distance;
 }
@@ -242,7 +274,7 @@ export function calculatePerceptualSimilarity(hash1: string, hash2: string): num
  * Calculate Jaccard similarity for sets
  */
 function jaccardSimilarity<T>(set1: Set<T>, set2: Set<T>): number {
-  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const intersection = new Set([...set1].filter((x) => set2.has(x)));
   const union = new Set([...set1, ...set2]);
 
   if (union.size === 0) return 1; // Both empty = identical
@@ -254,39 +286,41 @@ function jaccardSimilarity<T>(set1: Set<T>, set2: Set<T>): number {
  */
 export function calculateFeatureSimilarity(
   features1: ContentFeatures,
-  features2: ContentFeatures
+  features2: ContentFeatures,
 ): number {
   // Token count similarity (within 20% = high similarity)
-  const tokenRatio = Math.min(features1.tokenCount, features2.tokenCount) /
-                     Math.max(features1.tokenCount, features2.tokenCount);
+  const tokenRatio =
+    Math.min(features1.tokenCount, features2.tokenCount) /
+    Math.max(features1.tokenCount, features2.tokenCount);
   const tokenSimilarity = tokenRatio > 0.8 ? 1 : tokenRatio / 0.8;
 
   // Entity overlap
   const entitySimilarity = jaccardSimilarity(
     new Set(features1.entities),
-    new Set(features2.entities)
+    new Set(features2.entities),
   );
 
   // Numeric value overlap
   const numericSimilarity = jaccardSimilarity(
-    new Set(features1.numericValues.map(n => n.toFixed(2))),
-    new Set(features2.numericValues.map(n => n.toFixed(2)))
+    new Set(features1.numericValues.map((n) => n.toFixed(2))),
+    new Set(features2.numericValues.map((n) => n.toFixed(2))),
   );
 
   // Temporal reference overlap
   const temporalSimilarity = jaccardSimilarity(
     new Set(features1.temporalReferences),
-    new Set(features2.temporalReferences)
+    new Set(features2.temporalReferences),
   );
 
   // Topic match
-  const topicMatch = features1.topicClassification === features2.topicClassification ? 1 : 0.5;
+  const topicMatch =
+    features1.topicClassification === features2.topicClassification ? 1 : 0.5;
 
   // Weighted combination
   return (
-    tokenSimilarity * 0.20 +
-    entitySimilarity * 0.30 +
-    numericSimilarity * 0.20 +
+    tokenSimilarity * 0.2 +
+    entitySimilarity * 0.3 +
+    numericSimilarity * 0.2 +
     temporalSimilarity * 0.15 +
     topicMatch * 0.15
   );
@@ -301,12 +335,12 @@ export function detectDuplicate(
   newFingerprint: EvidenceFingerprint,
   existingFingerprints: EvidenceFingerprint[],
   _currentBlock: bigint,
-  config: DeduplicationConfig = DEFAULT_DEDUPLICATION_CONFIG
+  config: DeduplicationConfig = DEFAULT_DEDUPLICATION_CONFIG,
 ): DuplicateDetectionResult {
   // Default result - not a duplicate
   const notDuplicate: DuplicateDetectionResult = {
     isDuplicate: false,
-    duplicationType: 'none',
+    duplicationType: "none",
     similarityScore: 0,
     matchingEvidenceIds: [],
     isSimultaneous: false,
@@ -325,13 +359,17 @@ export function detectDuplicate(
 
   for (const existing of existingFingerprints) {
     // 1. Exact match check
-    if (config.exactMatchEnabled && newFingerprint.contentHash === existing.contentHash) {
-      const isSimultaneous = Math.abs(newFingerprint.firstSeen - existing.firstSeen) <=
-                            config.simultaneousWindow * 2521; // Convert blocks to ms
+    if (
+      config.exactMatchEnabled &&
+      newFingerprint.contentHash === existing.contentHash
+    ) {
+      const isSimultaneous =
+        Math.abs(newFingerprint.firstSeen - existing.firstSeen) <=
+        config.simultaneousWindow * 2521; // Convert blocks to ms
 
       return {
         isDuplicate: true,
-        duplicationType: 'exact',
+        duplicationType: "exact",
         similarityScore: 1.0,
         matchingEvidenceIds: [],
         originalEvidenceId: existing.contentHash,
@@ -344,14 +382,14 @@ export function detectDuplicate(
     // 2. Perceptual hash check (near-duplicate)
     const perceptualSimilarity = calculatePerceptualSimilarity(
       newFingerprint.perceptualHash,
-      existing.perceptualHash
+      existing.perceptualHash,
     );
 
-    if (perceptualSimilarity >= (1 - config.perceptualHashThreshold)) {
+    if (perceptualSimilarity >= 1 - config.perceptualHashThreshold) {
       if (!bestMatch || perceptualSimilarity > bestMatch.similarity) {
         bestMatch = {
           fingerprint: existing,
-          type: 'near',
+          type: "near",
           similarity: perceptualSimilarity,
         };
       }
@@ -360,14 +398,14 @@ export function detectDuplicate(
     // 3. Feature similarity check (related)
     const featureSimilarity = calculateFeatureSimilarity(
       newFingerprint.contentFeatures,
-      existing.contentFeatures
+      existing.contentFeatures,
     );
 
     if (featureSimilarity >= config.featureSimilarityThreshold) {
       if (!bestMatch || featureSimilarity > bestMatch.similarity) {
         bestMatch = {
           fingerprint: existing,
-          type: 'related',
+          type: "related",
           similarity: featureSimilarity,
         };
       }
@@ -375,8 +413,9 @@ export function detectDuplicate(
   }
 
   if (bestMatch) {
-    const isSimultaneous = Math.abs(newFingerprint.firstSeen - bestMatch.fingerprint.firstSeen) <=
-                          config.simultaneousWindow * 2521;
+    const isSimultaneous =
+      Math.abs(newFingerprint.firstSeen - bestMatch.fingerprint.firstSeen) <=
+      config.simultaneousWindow * 2521;
 
     return {
       isDuplicate: true,
@@ -386,7 +425,8 @@ export function detectDuplicate(
       originalEvidenceId: bestMatch.fingerprint.contentHash,
       firstSubmitter: bestMatch.fingerprint.firstSubmitter,
       isSimultaneous,
-      eligibleForConfirmationCredit: !isSimultaneous && bestMatch.type !== 'related',
+      eligibleForConfirmationCredit:
+        !isSimultaneous && bestMatch.type !== "related",
     };
   }
 
@@ -400,12 +440,14 @@ export function checkEvidenceDuplicate(
   newEvidence: Evidence,
   existingEvidence: Evidence[],
   currentBlock: bigint,
-  config: DeduplicationConfig = DEFAULT_DEDUPLICATION_CONFIG
+  config: DeduplicationConfig = DEFAULT_DEDUPLICATION_CONFIG,
 ): DuplicateDetectionResult {
   // Generate fingerprint for new evidence
   const newFingerprint: EvidenceFingerprint = {
     contentHash: newEvidence.contentHash,
-    perceptualHash: newEvidence.perceptualHash || generatePerceptualHash(newEvidence.originalSource),
+    perceptualHash:
+      newEvidence.perceptualHash ||
+      generatePerceptualHash(newEvidence.originalSource),
     normalizedSource: normalizeUrl(newEvidence.originalSource),
     contentFeatures: extractContentFeatures(newEvidence.originalSource),
     firstSeen: newEvidence.submittedAt,
@@ -413,22 +455,28 @@ export function checkEvidenceDuplicate(
   };
 
   // Generate fingerprints for existing evidence
-  const existingFingerprints = existingEvidence.map(e => ({
+  const existingFingerprints = existingEvidence.map((e) => ({
     contentHash: e.contentHash,
-    perceptualHash: e.perceptualHash || generatePerceptualHash(e.originalSource),
+    perceptualHash:
+      e.perceptualHash || generatePerceptualHash(e.originalSource),
     normalizedSource: normalizeUrl(e.originalSource),
     contentFeatures: extractContentFeatures(e.originalSource),
     firstSeen: e.submittedAt,
     firstSubmitter: e.firstSubmitter,
   }));
 
-  const result = detectDuplicate(newFingerprint, existingFingerprints, currentBlock, config);
+  const result = detectDuplicate(
+    newFingerprint,
+    existingFingerprints,
+    currentBlock,
+    config,
+  );
 
   // Add matching evidence IDs
   if (result.isDuplicate) {
     result.matchingEvidenceIds = existingEvidence
-      .filter(e => e.contentHash === result.originalEvidenceId)
-      .map(e => e.id);
+      .filter((e) => e.contentHash === result.originalEvidenceId)
+      .map((e) => e.id);
   }
 
   return result;
@@ -442,9 +490,12 @@ export function checkEvidenceDuplicate(
 export function calculateConfirmationCredit(
   duplicateResult: DuplicateDetectionResult,
   baseReward: bigint,
-  config: DeduplicationConfig = DEFAULT_DEDUPLICATION_CONFIG
+  config: DeduplicationConfig = DEFAULT_DEDUPLICATION_CONFIG,
 ): { originalCredit: bigint; confirmerCredit: bigint } {
-  if (!duplicateResult.isDuplicate || !duplicateResult.eligibleForConfirmationCredit) {
+  if (
+    !duplicateResult.isDuplicate ||
+    !duplicateResult.eligibleForConfirmationCredit
+  ) {
     return { originalCredit: baseReward, confirmerCredit: 0n };
   }
 
@@ -458,13 +509,13 @@ export function calculateConfirmationCredit(
   let confirmerRate: number;
 
   switch (duplicateResult.duplicationType) {
-    case 'exact':
+    case "exact":
       confirmerRate = config.confirmationCreditRate; // 10%
       break;
-    case 'near':
+    case "near":
       confirmerRate = config.confirmationCreditRate / 2; // 5%
       break;
-    case 'related':
+    case "related":
       confirmerRate = 0; // No credit for just related evidence
       break;
     default:
@@ -472,9 +523,14 @@ export function calculateConfirmationCredit(
   }
 
   // Cap at maximum
-  confirmerRate = Math.min(confirmerRate, EVIDENCE_ANTI_GAMING.MAX_CONFIRMATION_CREDIT);
+  confirmerRate = Math.min(
+    confirmerRate,
+    EVIDENCE_ANTI_GAMING.MAX_CONFIRMATION_CREDIT,
+  );
 
-  const confirmerCredit = BigInt(Math.floor(Number(baseReward) * confirmerRate));
+  const confirmerCredit = BigInt(
+    Math.floor(Number(baseReward) * confirmerRate),
+  );
   const originalCredit = baseReward - confirmerCredit;
 
   return { originalCredit, confirmerCredit };
@@ -499,7 +555,8 @@ export class DeduplicationIndex {
     this.contentHashIndex.set(fingerprint.contentHash, evidence.id);
 
     // Perceptual hash index (near)
-    const perceptualIds = this.perceptualHashIndex.get(fingerprint.perceptualHash) || [];
+    const perceptualIds =
+      this.perceptualHashIndex.get(fingerprint.perceptualHash) || [];
     perceptualIds.push(evidence.id);
     this.perceptualHashIndex.set(fingerprint.perceptualHash, perceptualIds);
 
@@ -561,9 +618,11 @@ export class DeduplicationIndex {
     }
 
     // Remove from perceptual hash index
-    const perceptualIds = this.perceptualHashIndex.get(fingerprint.perceptualHash);
+    const perceptualIds = this.perceptualHashIndex.get(
+      fingerprint.perceptualHash,
+    );
     if (perceptualIds) {
-      const filtered = perceptualIds.filter(id => id !== evidenceId);
+      const filtered = perceptualIds.filter((id) => id !== evidenceId);
       if (filtered.length > 0) {
         this.perceptualHashIndex.set(fingerprint.perceptualHash, filtered);
       } else {
@@ -574,7 +633,7 @@ export class DeduplicationIndex {
     // Remove from source index
     const sourceIds = this.sourceIndex.get(fingerprint.normalizedSource);
     if (sourceIds) {
-      const filtered = sourceIds.filter(id => id !== evidenceId);
+      const filtered = sourceIds.filter((id) => id !== evidenceId);
       if (filtered.length > 0) {
         this.sourceIndex.set(fingerprint.normalizedSource, filtered);
       } else {

@@ -6,14 +6,14 @@
  * Secondary: BLAKE3 (for performance-critical paths)
  */
 
-import { sha512 } from '@noble/hashes/sha512';
-import { sha256 } from '@noble/hashes/sha256';
-import { blake3 } from '@noble/hashes/blake3';
-import { bytesToHex, hexToBytes } from './keys.js';
+import { sha512 } from "@noble/hashes/sha512";
+import { sha256 } from "@noble/hashes/sha256";
+import { blake3 } from "@noble/hashes/blake3";
+import { bytesToHex, hexToBytes } from "./keys.js";
 
 // ============ Types ============
 
-export type Hash = string;  // Hex-encoded hash
+export type Hash = string; // Hex-encoded hash
 export type HashBytes = Uint8Array;
 
 // ============ SHA-512 (Primary) ============
@@ -23,7 +23,8 @@ export type HashBytes = Uint8Array;
  * Used for: signatures, commitments, fact hashes
  */
 export function sha512Hash(data: Uint8Array | string): HashBytes {
-  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const input =
+    typeof data === "string" ? new TextEncoder().encode(data) : data;
   return sha512(input);
 }
 
@@ -52,7 +53,8 @@ export function sha512_256Hex(data: Uint8Array | string): Hash {
  * SHA-256 hash (for compatibility)
  */
 export function sha256Hash(data: Uint8Array | string): HashBytes {
-  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const input =
+    typeof data === "string" ? new TextEncoder().encode(data) : data;
   return sha256(input);
 }
 
@@ -67,7 +69,8 @@ export function sha256Hex(data: Uint8Array | string): Hash {
  * Used for: Merkle trees, state hashing
  */
 export function blake3Hash(data: Uint8Array | string): HashBytes {
-  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const input =
+    typeof data === "string" ? new TextEncoder().encode(data) : data;
   return blake3(input);
 }
 
@@ -78,8 +81,12 @@ export function blake3Hex(data: Uint8Array | string): Hash {
 /**
  * BLAKE3 with custom output length
  */
-export function blake3Variable(data: Uint8Array | string, outputLength: number): HashBytes {
-  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+export function blake3Variable(
+  data: Uint8Array | string,
+  outputLength: number,
+): HashBytes {
+  const input =
+    typeof data === "string" ? new TextEncoder().encode(data) : data;
   return blake3(input, { dkLen: outputLength });
 }
 
@@ -89,9 +96,13 @@ export function blake3Variable(data: Uint8Array | string, outputLength: number):
  * Domain-separated hash to prevent cross-protocol attacks
  * Format: SHA-512(domain || length || data)
  */
-export function domainHash(domain: string, data: Uint8Array | string): HashBytes {
+export function domainHash(
+  domain: string,
+  data: Uint8Array | string,
+): HashBytes {
   const domainBytes = new TextEncoder().encode(domain);
-  const dataBytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const dataBytes =
+    typeof data === "string" ? new TextEncoder().encode(data) : data;
 
   // Prefix with domain and length to prevent ambiguity
   const lengthBytes = new Uint8Array(4);
@@ -109,15 +120,17 @@ export function domainHash(domain: string, data: Uint8Array | string): HashBytes
  * Predefined domains for Legible Money
  */
 export const HASH_DOMAINS = {
-  BLOCK: 'LGM.block.v1',
-  TRANSACTION: 'LGM.tx.v1',
-  STATE: 'LGM.state.v1',
-  FACT: 'LGM.fact.v1',
-  AXIOM: 'LGM.axiom.v1',
-  DERIVATION: 'LGM.derivation.v1',
-  COMMITMENT: 'LGM.commitment.v1',
-  VRF: 'LGM.vrf.v1',
-  SIGNATURE: 'LGM.sig.v1',
+  BLOCK: "LGM.block.v1",
+  TRANSACTION: "LGM.tx.v1",
+  STATE: "LGM.state.v1",
+  FACT: "LGM.fact.v1",
+  AXIOM: "LGM.axiom.v1",
+  DERIVATION: "LGM.derivation.v1",
+  COMMITMENT: "LGM.commitment.v1",
+  VRF: "LGM.vrf.v1",
+  SIGNATURE: "LGM.sig.v1",
+  SCHEDULE_EXECUTION: "LGM.schedule.exec.v1",
+  SCHEDULE_TX: "LGM.schedule.tx.v1",
 } as const;
 
 // ============ Merkle Hashing ============
@@ -147,7 +160,10 @@ export function merkleLeafHash(data: Uint8Array): HashBytes {
 /**
  * Hash an internal node (with domain separation)
  */
-export function merkleInternalHash(left: HashBytes, right: HashBytes): HashBytes {
+export function merkleInternalHash(
+  left: HashBytes,
+  right: HashBytes,
+): HashBytes {
   // Prefix with 0x01 to distinguish from leaves
   const combined = new Uint8Array(1 + left.length + right.length);
   combined[0] = 0x01;
@@ -163,7 +179,7 @@ export function merkleInternalHash(left: HashBytes, right: HashBytes): HashBytes
  */
 export function hashClaim(claim: string): Hash {
   // Normalize: lowercase, trim, collapse whitespace
-  const normalized = claim.toLowerCase().trim().replace(/\s+/g, ' ');
+  const normalized = claim.toLowerCase().trim().replace(/\s+/g, " ");
   return bytesToHex(domainHash(HASH_DOMAINS.FACT, normalized));
 }
 

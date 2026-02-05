@@ -8,7 +8,7 @@
  * - Open source: all algorithms are published
  */
 
-import { z } from 'zod';
+// zod available for schema validation if needed
 
 // ============================================================================
 // IDENTITY LAYER
@@ -20,34 +20,35 @@ import { z } from 'zod';
  */
 export const CapabilityType = {
   // Compute capabilities
-  COMPUTE_INFERENCE: 'compute.inference',
-  COMPUTE_TRAINING: 'compute.training',
-  COMPUTE_GENERAL: 'compute.general',
+  COMPUTE_INFERENCE: "compute.inference",
+  COMPUTE_TRAINING: "compute.training",
+  COMPUTE_GENERAL: "compute.general",
 
   // Data capabilities
-  DATA_STORAGE: 'data.storage',
-  DATA_RETRIEVAL: 'data.retrieval',
-  DATA_TRANSFORMATION: 'data.transformation',
+  DATA_STORAGE: "data.storage",
+  DATA_RETRIEVAL: "data.retrieval",
+  DATA_TRANSFORMATION: "data.transformation",
 
   // Service capabilities
-  SERVICE_API: 'service.api',
-  SERVICE_TASK: 'service.task',
-  SERVICE_COORDINATION: 'service.coordination',
+  SERVICE_API: "service.api",
+  SERVICE_TASK: "service.task",
+  SERVICE_COORDINATION: "service.coordination",
 
   // Validation capabilities
-  VALIDATION_REEXECUTION: 'validation.reexecution',
-  VALIDATION_ZKML: 'validation.zkml',
-  VALIDATION_TEE: 'validation.tee',
-  VALIDATION_SAMPLING: 'validation.sampling',
+  VALIDATION_REEXECUTION: "validation.reexecution",
+  VALIDATION_ZKML: "validation.zkml",
+  VALIDATION_TEE: "validation.tee",
+  VALIDATION_SAMPLING: "validation.sampling",
 } as const;
 
-export type CapabilityType = (typeof CapabilityType)[keyof typeof CapabilityType];
+export type CapabilityType =
+  (typeof CapabilityType)[keyof typeof CapabilityType];
 
 /**
  * Agent endpoint for communication
  */
 export interface AgentEndpoint {
-  protocol: 'https' | 'wss' | 'a2a' | 'mcp';
+  protocol: "https" | "wss" | "a2a" | "mcp";
   uri: string;
   priority: number; // Lower = preferred
 }
@@ -86,15 +87,15 @@ export interface AgentIdentity {
  * CANCELLED FAILED    FAILED    DISPUTED → RESOLVED
  */
 export const TaskState = {
-  OPEN: 'open',
-  ACCEPTED: 'accepted',
-  EXECUTED: 'executed',
-  VALIDATING: 'validating',
-  COMPLETED: 'completed',
-  DISPUTED: 'disputed',
-  RESOLVED: 'resolved',
-  CANCELLED: 'cancelled',
-  FAILED: 'failed',
+  OPEN: "open",
+  ACCEPTED: "accepted",
+  EXECUTED: "executed",
+  VALIDATING: "validating",
+  COMPLETED: "completed",
+  DISPUTED: "disputed",
+  RESOLVED: "resolved",
+  CANCELLED: "cancelled",
+  FAILED: "failed",
 } as const;
 
 export type TaskState = (typeof TaskState)[keyof typeof TaskState];
@@ -103,15 +104,16 @@ export type TaskState = (typeof TaskState)[keyof typeof TaskState];
  * Validation methods available
  */
 export const ValidationType = {
-  REEXECUTION: 'reexecution', // Run same input, compare output
-  SAMPLING: 'sampling', // Statistical sampling of output
-  ZKML: 'zkml', // Zero-knowledge ML proof
-  TEE: 'tee', // Trusted execution environment
-  MULTI_VALIDATOR: 'multi_validator', // Consensus of validators
-  STAKE_GUARANTEE: 'stake_guarantee', // Economic guarantee only
+  REEXECUTION: "reexecution", // Run same input, compare output
+  SAMPLING: "sampling", // Statistical sampling of output
+  ZKML: "zkml", // Zero-knowledge ML proof
+  TEE: "tee", // Trusted execution environment
+  MULTI_VALIDATOR: "multi_validator", // Consensus of validators
+  STAKE_GUARANTEE: "stake_guarantee", // Economic guarantee only
 } as const;
 
-export type ValidationType = (typeof ValidationType)[keyof typeof ValidationType];
+export type ValidationType =
+  (typeof ValidationType)[keyof typeof ValidationType];
 
 /**
  * Task requirements - machine readable for agent matching
@@ -176,12 +178,12 @@ export interface Task {
  * Node types in the execution DAG
  */
 export const DAGNodeType = {
-  TASK_CREATED: 'task_created',
-  TASK_ACCEPTED: 'task_accepted',
-  TASK_EXECUTED: 'task_executed',
-  VALIDATION: 'validation',
-  SETTLEMENT: 'settlement',
-  DISPUTE: 'dispute',
+  TASK_CREATED: "task_created",
+  TASK_ACCEPTED: "task_accepted",
+  TASK_EXECUTED: "task_executed",
+  VALIDATION: "validation",
+  SETTLEMENT: "settlement",
+  DISPUTE: "dispute",
 } as const;
 
 export type DAGNodeType = (typeof DAGNodeType)[keyof typeof DAGNodeType];
@@ -190,7 +192,7 @@ export type DAGNodeType = (typeof DAGNodeType)[keyof typeof DAGNodeType];
  * Work proof - evidence that useful work was done
  */
 export interface WorkProof {
-  proofType: 'execution' | 'validation' | 'attestation';
+  proofType: "execution" | "validation" | "attestation";
   data: Uint8Array;
   metadata: Record<string, unknown>;
 }
@@ -207,7 +209,11 @@ export interface DAGNode {
   parents: string[]; // Nodes this depends on
 
   // Content
-  payload: TaskCreatedPayload | TaskExecutedPayload | ValidationPayload | SettlementPayload;
+  payload:
+    | TaskCreatedPayload
+    | TaskExecutedPayload
+    | ValidationPayload
+    | SettlementPayload;
 
   // Work proof
   workProof: WorkProof;
@@ -226,12 +232,12 @@ export interface DAGNode {
 }
 
 export interface TaskCreatedPayload {
-  type: 'task_created';
+  type: "task_created";
   task: Task;
 }
 
 export interface TaskExecutedPayload {
-  type: 'task_executed';
+  type: "task_executed";
   taskId: string;
   outputHash: string;
   outputURI: string;
@@ -239,7 +245,7 @@ export interface TaskExecutedPayload {
 }
 
 export interface ValidationPayload {
-  type: 'validation';
+  type: "validation";
   taskId: string;
   validator: string;
   score: number; // 0-100
@@ -252,7 +258,7 @@ export interface ValidationPayload {
 }
 
 export interface SettlementPayload {
-  type: 'settlement';
+  type: "settlement";
   taskId: string;
   requester: string;
   provider: string;
@@ -407,8 +413,8 @@ export const DEFAULT_PARAMETERS: ProtocolParameters = {
   commitRevealWindowMs: 100,
 
   // Economics
-  minValidatorStake: BigInt('10000000000000000000000'), // 10,000 AGC
-  minProviderStake: BigInt('1000000000000000000000'), // 1,000 AGC
+  minValidatorStake: BigInt("10000000000000000000000"), // 10,000 AGC
+  minProviderStake: BigInt("1000000000000000000000"), // 1,000 AGC
   protocolFeeRate: 0.001, // 0.1%
   validationFeeRate: 0.01, // 1%
 

@@ -15,9 +15,9 @@
  * - Chainlink feed registry
  */
 
-import { InMemorySMT, type MerkleRoot } from '../core/crypto/merkle.js';
-import { sha512_256, sha512_256Hex } from '../core/crypto/hashing.js';
-import type { DID } from '../agents/identity/did.js';
+import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
+import { sha512_256, sha512_256Hex } from "../core/crypto/hashing.js";
+import type { DID } from "../core/agents/identity/did.js";
 import type {
   Evidence,
   EvidenceType,
@@ -26,24 +26,22 @@ import type {
   ArchiveRequest,
   ChainlinkFeedRegistration,
   ChainlinkFeedType,
-} from '../core/evidence/types.js';
-import { StateError } from './types.js';
+} from "../core/evidence/types.js";
+import { StateError } from "./types.js";
 import {
   DeduplicationIndex,
   generateFingerprint,
   detectDuplicate,
-} from '../core/evidence/deduplication.js';
+} from "../core/evidence/deduplication.js";
 import {
   calculateFreshness,
   processExpirations,
-} from '../core/evidence/expiry.js';
+} from "../core/evidence/expiry.js";
 import {
   ArchiveQueue,
   calculateArchiveBonus,
-} from '../core/evidence/archiving.js';
-import {
-  ChainlinkFeedRegistry,
-} from '../core/evidence/chainlink.js';
+} from "../core/evidence/archiving.js";
+import { ChainlinkFeedRegistry } from "../core/evidence/chainlink.js";
 
 // ============ Serialization ============
 
@@ -54,7 +52,7 @@ function serializeEvidence(evidence: Evidence): Uint8Array {
     originalSource: evidence.originalSource,
     contentHash: evidence.contentHash,
     perceptualHash: evidence.perceptualHash,
-    archives: evidence.archives.map(a => ({
+    archives: evidence.archives.map((a) => ({
       ...a,
       archivedAtBlock: a.archivedAtBlock.toString(),
     })),
@@ -71,16 +69,21 @@ function serializeEvidence(evidence: Evidence): Uint8Array {
     },
     expiry: {
       ...evidence.expiry,
-      heartbeatConfig: evidence.expiry.heartbeatConfig ? {
-        ...evidence.expiry.heartbeatConfig,
-        lastHeartbeatBlock: evidence.expiry.heartbeatConfig.lastHeartbeatBlock.toString(),
-      } : undefined,
+      heartbeatConfig: evidence.expiry.heartbeatConfig
+        ? {
+            ...evidence.expiry.heartbeatConfig,
+            lastHeartbeatBlock:
+              evidence.expiry.heartbeatConfig.lastHeartbeatBlock.toString(),
+          }
+        : undefined,
     },
-    oracleMetadata: evidence.oracleMetadata ? {
-      ...evidence.oracleMetadata,
-      roundId: evidence.oracleMetadata.roundId.toString(),
-      answeredInRound: evidence.oracleMetadata.answeredInRound.toString(),
-    } : undefined,
+    oracleMetadata: evidence.oracleMetadata
+      ? {
+          ...evidence.oracleMetadata,
+          roundId: evidence.oracleMetadata.roundId.toString(),
+          answeredInRound: evidence.oracleMetadata.answeredInRound.toString(),
+        }
+      : undefined,
   });
   return new TextEncoder().encode(json);
 }
@@ -100,16 +103,22 @@ function deserializeEvidence(bytes: Uint8Array): Evidence {
     submittedAtBlock: BigInt(obj.submittedAtBlock),
     expiry: {
       ...obj.expiry,
-      heartbeatConfig: obj.expiry.heartbeatConfig ? {
-        ...obj.expiry.heartbeatConfig,
-        lastHeartbeatBlock: BigInt(obj.expiry.heartbeatConfig.lastHeartbeatBlock),
-      } : undefined,
+      heartbeatConfig: obj.expiry.heartbeatConfig
+        ? {
+            ...obj.expiry.heartbeatConfig,
+            lastHeartbeatBlock: BigInt(
+              obj.expiry.heartbeatConfig.lastHeartbeatBlock,
+            ),
+          }
+        : undefined,
     },
-    oracleMetadata: obj.oracleMetadata ? {
-      ...obj.oracleMetadata,
-      roundId: BigInt(obj.oracleMetadata.roundId),
-      answeredInRound: BigInt(obj.oracleMetadata.answeredInRound),
-    } : undefined,
+    oracleMetadata: obj.oracleMetadata
+      ? {
+          ...obj.oracleMetadata,
+          roundId: BigInt(obj.oracleMetadata.roundId),
+          answeredInRound: BigInt(obj.oracleMetadata.answeredInRound),
+        }
+      : undefined,
   } as Evidence;
 }
 
@@ -226,7 +235,7 @@ export class EvidenceStateTree {
   submitEvidence(
     evidence: Evidence,
     content: string,
-    currentBlock: bigint
+    currentBlock: bigint,
   ): {
     success: boolean;
     evidenceId: string;
@@ -239,7 +248,7 @@ export class EvidenceStateTree {
       content,
       evidence.originalSource,
       evidence.firstSubmitter,
-      evidence.submittedAt
+      evidence.submittedAt,
     );
 
     // Check for duplicates
@@ -247,10 +256,13 @@ export class EvidenceStateTree {
     const duplicateResult = detectDuplicate(
       fingerprint,
       existingFingerprints,
-      currentBlock
+      currentBlock,
     );
 
-    if (duplicateResult.isDuplicate && duplicateResult.duplicationType === 'exact') {
+    if (
+      duplicateResult.isDuplicate &&
+      duplicateResult.duplicationType === "exact"
+    ) {
       // Exact duplicate - add as confirmer to existing
       const originalId = duplicateResult.matchingEvidenceIds[0];
       const original = this.getEvidence(originalId);
@@ -293,7 +305,9 @@ export class EvidenceStateTree {
     // Update stats
     this.evidenceCount++;
     this.archiveCount += evidence.archives.length;
-    this.verifiedArchiveCount += evidence.archives.filter(a => a.verified).length;
+    this.verifiedArchiveCount += evidence.archives.filter(
+      (a) => a.verified,
+    ).length;
 
     return {
       success: true,
@@ -313,7 +327,7 @@ export class EvidenceStateTree {
     if (!existing) {
       throw new StateError(
         `Evidence ${evidence.id} not found`,
-        'EVIDENCE_NOT_FOUND'
+        "EVIDENCE_NOT_FOUND",
       );
     }
 
@@ -332,10 +346,10 @@ export class EvidenceStateTree {
     }
 
     // Update archive stats
-    const existingVerified = existing.archives.filter(a => a.verified).length;
-    const newVerified = evidence.archives.filter(a => a.verified).length;
-    this.verifiedArchiveCount += (newVerified - existingVerified);
-    this.archiveCount += (evidence.archives.length - existing.archives.length);
+    const existingVerified = existing.archives.filter((a) => a.verified).length;
+    const newVerified = evidence.archives.filter((a) => a.verified).length;
+    this.verifiedArchiveCount += newVerified - existingVerified;
+    this.archiveCount += evidence.archives.length - existing.archives.length;
   }
 
   /**
@@ -346,13 +360,14 @@ export class EvidenceStateTree {
     if (!evidence) {
       throw new StateError(
         `Evidence ${evidenceId} not found`,
-        'EVIDENCE_NOT_FOUND'
+        "EVIDENCE_NOT_FOUND",
       );
     }
 
     // Check if archive already exists
     const exists = evidence.archives.some(
-      a => a.provider === archive.provider && a.identifier === archive.identifier
+      (a) =>
+        a.provider === archive.provider && a.identifier === archive.identifier,
     );
     if (exists) {
       return; // Already have this archive
@@ -362,7 +377,10 @@ export class EvidenceStateTree {
     const updated = {
       ...evidence,
       archives: [...evidence.archives, archive],
-      status: evidence.status === 'pending_archive' ? 'archived' as EvidenceStatus : evidence.status,
+      status:
+        evidence.status === "pending_archive"
+          ? ("archived" as EvidenceStatus)
+          : evidence.status,
     };
 
     this.updateEvidence(updated);
@@ -376,14 +394,14 @@ export class EvidenceStateTree {
     if (!evidence) {
       throw new StateError(
         `Evidence ${evidenceId} not found`,
-        'EVIDENCE_NOT_FOUND'
+        "EVIDENCE_NOT_FOUND",
       );
     }
 
     if (archiveIndex >= evidence.archives.length) {
       throw new StateError(
         `Archive index ${archiveIndex} not found`,
-        'ARCHIVE_NOT_FOUND'
+        "ARCHIVE_NOT_FOUND",
       );
     }
 
@@ -406,21 +424,21 @@ export class EvidenceStateTree {
     originalId: string,
     newEvidence: Evidence,
     content: string,
-    currentBlock: bigint
+    currentBlock: bigint,
   ): string {
     const original = this.getEvidence(originalId);
     if (!original) {
       throw new StateError(
         `Original evidence ${originalId} not found`,
-        'EVIDENCE_NOT_FOUND'
+        "EVIDENCE_NOT_FOUND",
       );
     }
 
     // Check version limits
     if (original.version.versionNumber >= 10) {
       throw new StateError(
-        'Maximum 10 versions per evidence chain',
-        'VERSION_LIMIT_EXCEEDED'
+        "Maximum 10 versions per evidence chain",
+        "VERSION_LIMIT_EXCEEDED",
       );
     }
 
@@ -448,7 +466,11 @@ export class EvidenceStateTree {
     this.updateEvidence(updatedOriginal);
 
     // Submit new version
-    const result = this.submitEvidence(versionedEvidence, content, currentBlock);
+    const result = this.submitEvidence(
+      versionedEvidence,
+      content,
+      currentBlock,
+    );
 
     // Update version chain index
     const chainRoot = original.version.versionChain[0] || originalId;
@@ -472,7 +494,7 @@ export class EvidenceStateTree {
     const chain = this.versionChainIndex.get(chainRoot) || [evidenceId];
 
     return chain
-      .map(id => this.getEvidence(id))
+      .map((id) => this.getEvidence(id))
       .filter((e): e is Evidence => e !== null);
   }
 
@@ -499,7 +521,7 @@ export class EvidenceStateTree {
     }
 
     // Filter results
-    let results: Evidence[] = [];
+    const results: Evidence[] = [];
     for (const id of candidateIds) {
       const evidence = this.getEvidence(id);
       if (!evidence) continue;
@@ -507,8 +529,13 @@ export class EvidenceStateTree {
       // Apply filters
       if (query.type && evidence.type !== query.type) continue;
       if (query.status && evidence.status !== query.status) continue;
-      if (query.submitter && evidence.firstSubmitter !== query.submitter) continue;
-      if (query.minReliability && evidence.reliabilityScore < query.minReliability) continue;
+      if (query.submitter && evidence.firstSubmitter !== query.submitter)
+        continue;
+      if (
+        query.minReliability &&
+        evidence.reliabilityScore < query.minReliability
+      )
+        continue;
       if (!query.includeExpired && evidence.expiry.isExpired) continue;
 
       results.push(evidence);
@@ -526,7 +553,7 @@ export class EvidenceStateTree {
   getEvidenceForFact(factId: string): Evidence[] {
     const evidenceIds = this.factIndex.get(factId) || new Set();
     return Array.from(evidenceIds)
-      .map(id => this.getEvidence(id))
+      .map((id) => this.getEvidence(id))
       .filter((e): e is Evidence => e !== null);
   }
 
@@ -539,8 +566,9 @@ export class EvidenceStateTree {
     processed: number;
     newlyExpired: string[];
   } {
-    const allEvidence = Array.from(this.evidenceCache.values())
-      .filter(e => !e.expiry.isExpired);
+    const allEvidence = Array.from(this.evidenceCache.values()).filter(
+      (e) => !e.expiry.isExpired,
+    );
 
     const results = processExpirations(allEvidence, currentBlock);
 
@@ -557,7 +585,7 @@ export class EvidenceStateTree {
               expiredAt: Date.now(),
               freshnessScore: 0,
             },
-            status: 'expired' as EvidenceStatus,
+            status: "expired" as EvidenceStatus,
           };
           this.updateEvidence(updated);
           newlyExpired.push(result.evidenceId);
@@ -576,7 +604,7 @@ export class EvidenceStateTree {
    */
   calculateEffectiveConfidence(
     evidenceId: string,
-    currentBlock: bigint
+    currentBlock: bigint,
   ): number {
     const evidence = this.getEvidence(evidenceId);
     if (!evidence) {
@@ -609,14 +637,19 @@ export class EvidenceStateTree {
   /**
    * Get Chainlink feed by address
    */
-  getChainlinkFeed(feedAddress: string, chainId: number): ChainlinkFeedRegistration | undefined {
+  getChainlinkFeed(
+    feedAddress: string,
+    chainId: number,
+  ): ChainlinkFeedRegistration | undefined {
     return this.chainlinkRegistry.getFeed(chainId, feedAddress);
   }
 
   /**
    * Get feeds by type
    */
-  getChainlinkFeedsByType(feedType: ChainlinkFeedType): ChainlinkFeedRegistration[] {
+  getChainlinkFeedsByType(
+    feedType: ChainlinkFeedType,
+  ): ChainlinkFeedRegistration[] {
     return this.chainlinkRegistry.getFeedsByType(feedType);
   }
 
@@ -639,7 +672,7 @@ export class EvidenceStateTree {
   /**
    * Get archive queue statistics
    */
-  getArchiveQueueStats(): ReturnType<ArchiveQueue['getStats']> {
+  getArchiveQueueStats(): ReturnType<ArchiveQueue["getStats"]> {
     return this.archiveQueue.getStats();
   }
 
@@ -649,8 +682,14 @@ export class EvidenceStateTree {
    * Get comprehensive statistics
    */
   getStatistics(): EvidenceStatistics {
-    const byType: Record<EvidenceType, number> = {} as Record<EvidenceType, number>;
-    const byStatus: Record<EvidenceStatus, number> = {} as Record<EvidenceStatus, number>;
+    const byType: Record<EvidenceType, number> = {} as Record<
+      EvidenceType,
+      number
+    >;
+    const byStatus: Record<EvidenceStatus, number> = {} as Record<
+      EvidenceStatus,
+      number
+    >;
 
     for (const [type, ids] of this.typeIndex) {
       byType[type] = ids.size;
@@ -669,9 +708,9 @@ export class EvidenceStateTree {
       totalArchives: this.archiveCount,
       verifiedArchives: this.verifiedArchiveCount,
       pendingArchiveRequests: queueStats.pending,
-      expiringEvidence: Array.from(this.evidenceCache.values())
-        .filter(e => !e.expiry.isExpired && e.expiry.expiryType !== 'eternal')
-        .length,
+      expiringEvidence: Array.from(this.evidenceCache.values()).filter(
+        (e) => !e.expiry.isExpired && e.expiry.expiryType !== "eternal",
+      ).length,
       chainlinkFeeds: this.chainlinkRegistry.getStats().totalFeeds,
     };
   }
@@ -682,7 +721,9 @@ export class EvidenceStateTree {
    * Generate proof that evidence exists
    * Note: Full proof generation pending InMemorySMT enhancement
    */
-  getEvidenceProof(evidenceId: string): { exists: boolean; root: MerkleRoot } | null {
+  getEvidenceProof(
+    evidenceId: string,
+  ): { exists: boolean; root: MerkleRoot } | null {
     const evidence = this.getEvidence(evidenceId);
     if (!evidence) {
       return null;
@@ -697,10 +738,7 @@ export class EvidenceStateTree {
    * Verify evidence exists at given root
    * Note: Full proof verification pending InMemorySMT enhancement
    */
-  verifyEvidenceExists(
-    evidenceId: string,
-    expectedRoot: MerkleRoot
-  ): boolean {
+  verifyEvidenceExists(evidenceId: string, expectedRoot: MerkleRoot): boolean {
     const evidence = this.getEvidence(evidenceId);
     if (!evidence) {
       return false;
