@@ -28,8 +28,5 @@ devnet/secrets/*.secret
 devnet/data/
 *.ldb
 
-# Claude Code
-.claude/
-
 # Debug
 npm-debug.log*

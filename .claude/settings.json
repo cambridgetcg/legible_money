@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "project": {
+    "name": "Legible Money",
+    "description": "Cryptocurrency protocol for AI agent economies with Proof of Truth consensus"
+  },
+  "context": {
+    "alwaysInclude": [
+      ".claude/CLAUDE.md",
+      ".claude/memory/CURRENT_STATE.md"
+    ],
+    "onDemand": [
+      ".claude/memory/DECISIONS.md",
+      ".claude/memory/BLOCKED.md",
+      ".claude/context/CORE_TYPES.md",
+      ".claude/context/API_PATTERNS.md"
+    ]
+  },
+  "sessionContinuity": {
+    "enabled": true,
+    "memoryPath": ".claude/memory",
+    "sessionsPath": ".claude/sessions",
+    "autoUpdateState": true
+  },
+  "codeStyle": {
+    "language": "typescript",
+    "indent": 2,
+    "quotes": "single",
+    "semicolons": true,
+    "trailingComma": "es5"
+  },
+  "conventions": {
+    "bigintForMoney": true,
+    "domainSeparatedHashing": true,
+    "atomicStateTransitions": true,
+    "protocolConstants": {
+      "blockTime": "2521ms",
+      "finality": "19 blocks"
+    }
+  },
+  "preferences": {
+    "usePurposePrompter": true,
+    "verboseExecution": true,
+    "createTaskLists": true
+  }
+}
