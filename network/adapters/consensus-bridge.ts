@@ -153,6 +153,29 @@ export class ConsensusNetworkBridge extends EventEmitter {
         this.emit("error", { type: "round_broadcast", error });
       }
     });
+
+    // Broadcast epoch changes so peers update their validator sets
+    this.consensus.on("epoch_change", async (event: any) => {
+      try {
+        await this.broadcastConsensus("epoch_change", {
+          oldEpoch: event.oldEpoch?.toString(),
+          newEpoch: event.newEpoch?.toString(),
+        });
+        this.emit("epoch:broadcast", event);
+      } catch (error) {
+        this.emit("error", { type: "epoch_broadcast", error });
+      }
+    });
+
+    // Broadcast checkpoint finalization for BFT finality propagation
+    this.consensus.on("checkpoint_finalized", async (checkpoint: any) => {
+      try {
+        await this.broadcastConsensus("checkpoint_finalized", checkpoint);
+        this.emit("checkpoint:broadcast", checkpoint);
+      } catch (error) {
+        this.emit("error", { type: "checkpoint_broadcast", error });
+      }
+    });
   }
 
   private wireMempoolToNetwork(): void {

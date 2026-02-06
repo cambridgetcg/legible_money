@@ -21,6 +21,7 @@ import type {
   Signature,
 } from "../../core/crypto/keys.js";
 import { sign } from "../../core/crypto/signatures.js";
+import { sha512_256Hex } from "../../core/crypto/hashing.js";
 import type { Transaction } from "./types.js";
 import {
   ScheduleProcessingUnit,
@@ -145,7 +146,9 @@ export class ScheduledTransactionCollector implements TransactionSubmitter {
     };
 
     const refundTx: GeneratedTransaction = {
-      id: `refund-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
+      id: sha512_256Hex(
+        `LGM.refund.id.v1:${recipient}:${amount}:${reason}:${Date.now()}`,
+      ),
       type: "schedule_execution",
       sender: "system",
       recipient,
@@ -415,7 +418,9 @@ export class AutonomyIntegration {
   ): Promise<string> {
     const timestamp = Date.now();
     const message = this.createScheduleMessage(
-      `schedule-${timestamp}-${Math.random().toString(16).slice(2, 10)}`,
+      sha512_256Hex(
+        `LGM.schedule.id.v1:${creator}:${targetAddress}:${functionSelector}:${timestamp}`,
+      ),
       creator,
       targetAddress,
       this.decodeCondition(condition, interval),

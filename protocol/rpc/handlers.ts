@@ -75,6 +75,9 @@ import { META_AXIOMS } from "../../core/logic/types.js";
 import { GOEDELIAN_PROMISE } from "../../core/logic/goedel.js";
 import { ZONE_PROPERTIES } from "../../core/logic/zones.js";
 
+// Research-enhanced confidence (P0-E3)
+import { calculateResearchAdjustedConfidence } from "../../consensus/pot/confidence.js";
+
 // ============ Handler Context ============
 
 export interface HandlerContext {
@@ -256,8 +259,37 @@ export const knowledgeGetFact: Handler<
   const fact = ctx.state.getFact(params.factId);
   const blockNumber = ctx.state.getBlockNumber();
 
+  // Apply research enhancement to fact confidence at query time.
+  // Research replications can boost confidence; fraud detection invalidates.
+  let enhancedFact = fact;
+  if (fact && fact.status === "active") {
+    const researchSummary = ctx.state.getFactResearchSummary(params.factId);
+    const hasResearch =
+      researchSummary.successfulReplications > 0 ||
+      researchSummary.failedReplications > 0 ||
+      researchSummary.fraudInvestigations > 0;
+
+    if (hasResearch) {
+      const blocksSinceVerification = Number(blockNumber - fact.verifiedAt);
+      const { confidence, effectiveCategory, fraudDetected } =
+        calculateResearchAdjustedConfidence(
+          fact.confidence,
+          fact.epistemicCategory || "empirical",
+          researchSummary,
+          blocksSinceVerification,
+        );
+
+      enhancedFact = {
+        ...fact,
+        confidence,
+        epistemicCategory: effectiveCategory as typeof fact.epistemicCategory,
+        status: fraudDetected ? ("revoked" as typeof fact.status) : fact.status,
+      };
+    }
+  }
+
   const response: KnowledgeGetFactResponse = {
-    fact,
+    fact: enhancedFact,
     blockNumber: blockNumber.toString(),
   };
 

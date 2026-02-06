@@ -30,6 +30,8 @@ export interface ValidationContext {
   currentEpoch: bigint;
   validatorSet: ValidatorSet;
   params: ConsensusParams;
+  /** Timestamp of the previous block (for monotonicity check). Optional for backward compat. */
+  previousBlockTimestamp?: number;
 }
 
 export interface ValidationResult {
@@ -66,10 +68,16 @@ export function validateBlock(
     errors.push("Invalid previous block hash");
   }
 
-  // 4. Check timestamp
+  // 4. Check timestamp (future bound + monotonicity)
   const now = Date.now();
   if (block.header.timestamp > now + 60000) {
     errors.push("Block timestamp too far in future");
+  }
+  if (
+    context.previousBlockTimestamp !== undefined &&
+    block.header.timestamp < context.previousBlockTimestamp
+  ) {
+    errors.push("Block timestamp before previous block");
   }
 
   // 5. Validate proposer
@@ -197,7 +205,11 @@ function validateTransaction(
     return { valid: false, reason: "Invalid fee" };
   }
 
-  // Verify transaction signature
+  // Verify transaction signature against payload.
+  // NOTE: Signature covers payload only (which includes type). The top-level fee is NOT signed.
+  // Fee malleability is low-risk (requires block producer collusion, who already sees all txs).
+  // TODO: Migrate to getSignableMessage() which covers type+nonce+fee+payload — requires
+  // coordinated wallet SDK + RPC update (see consensus/pot/types.ts:getSignableMessage).
   const payload = JSON.stringify(transaction.payload);
   const sigValid = verify(
     new TextEncoder().encode(payload),

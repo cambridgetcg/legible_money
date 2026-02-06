@@ -587,9 +587,20 @@ export class StratumRegistry {
   }
 
   /**
-   * Internal registration (skips validation).
+   * Internal registration (skips full validation but guards against corruption).
    */
   private registerInternal(stratum: StratumDefinition): void {
+    // Guard: skip duplicate IDs (idempotent on re-registration)
+    if (this.strata.has(stratum.id)) return;
+
+    // Guard: reject level conflicts from corrupt serialized data
+    const existingAtLevel = this.levelIndex.get(stratum.level);
+    if (existingAtLevel && existingAtLevel.length > 0) {
+      throw new Error(
+        `Stratum registry corruption: level ${stratum.level} already occupied by [${existingAtLevel.join(", ")}], cannot add "${stratum.id}"`,
+      );
+    }
+
     this.strata.set(stratum.id, stratum);
 
     // Update level index

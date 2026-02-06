@@ -583,11 +583,13 @@ describe("Verification Round - Reveals", () => {
 
 describe("Verification Round - Aggregation", () => {
   let validators: TestValidator[];
-  let validatorStakes: Map<string, bigint>;
+  let validatorStakes: Map<string, { stake: bigint; reputation: number }>;
 
   beforeEach(() => {
     validators = createTestValidators(5);
-    validatorStakes = new Map(validators.map((v) => [v.publicKey, v.stake]));
+    validatorStakes = new Map(
+      validators.map((v) => [v.publicKey, { stake: v.stake, reputation: 0.5 }]),
+    );
   });
 
   function setupRoundWithReveals(

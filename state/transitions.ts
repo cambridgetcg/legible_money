@@ -96,6 +96,7 @@ import {
   finalizeProposal,
   calculateStakeReturn,
   calculateEndorserStakeReturns,
+  calculateChallengerStakeReturns,
   createDomainFromProposal,
 } from "../core/knowledge/ontology/domain_proposal.js";
 import type { PublicKey } from "../core/crypto/keys.js";
@@ -107,6 +108,10 @@ import {
 } from "../core/knowledge/ontology/types.js";
 import type { EpistemicCategory } from "../core/knowledge/types.js";
 import {
+  calculateMasterConfidenceFromVerified,
+  evidenceToBayesian,
+} from "../consensus/pot/confidence.js";
+import {
   classifyClaimZone,
   intersectZones,
   canReference,
@@ -115,7 +120,9 @@ import {
 import {
   analyzeGoedelianStatus,
   assessDecidability,
+  handleUndecidable,
 } from "../core/logic/goedel.js";
+import type { ResolutionPath } from "../core/logic/types.js";
 
 /**
  * Resolve sender DID from transaction.
@@ -712,6 +719,10 @@ export function executeTransaction(
 
       case "set_availability":
         gasUsed = executeSetAvailability(state, tx, blockNumber);
+        break;
+
+      case "resolve_undecidable":
+        gasUsed = executeResolveUndecidable(state, tx, blockNumber);
         break;
 
       default:
@@ -1346,13 +1357,49 @@ function executeClaimCompleteVerification(
       epistemicCategory = STRATUM_EPISTEMIC_CATEGORY[claim.stratum];
     }
 
+    // Query evidence from the evidence state tree for this claim.
+    // Evidence is indexed by relatedFactIds — claim IDs are valid keys.
+    const claimEvidence = state.getEvidenceForFact(claim.id);
+    const bayesianEvidence = claimEvidence
+      .filter((e) => e.status === "active" || e.status === "archived")
+      .map((e) => evidenceToBayesian(e));
+
+    // Calculate multidimensional confidence (full epistemic breakdown)
+    // When evidence exists, blends 40% evidence + 60% verification (master formula)
+    const multiConfidence = calculateMasterConfidenceFromVerified(
+      clampedConfidence,
+      {
+        category: epistemicCategory,
+        currentBlockNumber: Number(blockNumber),
+        verifierCount: payload.verifierCount,
+        evidence: bayesianEvidence.length > 0 ? bayesianEvidence : undefined,
+      },
+    );
+
+    // Apply research enhancement from referenced facts.
+    // If any referenced fact has fraud detected, degrade confidence.
+    // If referenced facts have successful replications, the new fact inherits
+    // confidence from well-established premises.
+    let factConfidence = multiConfidence.value;
+    if (claim.references && claim.references.length > 0) {
+      for (const refFactId of claim.references) {
+        const refResearch = state.getFactResearchSummary(refFactId);
+        if (refResearch.fraudDetected) {
+          // A premise was found fraudulent — halve this fact's confidence
+          factConfidence *= 0.5;
+          break;
+        }
+      }
+    }
+
     state.addFact({
       id: factId,
       claim: claim.claim,
       domain: claim.domain,
       stratum: claim.stratum,
       epistemicCategory,
-      confidence: clampedConfidence,
+      confidence: factConfidence,
+      multidimensionalConfidence: multiConfidence,
       verifiedAt: blockNumber,
       verifierCount: payload.verifierCount,
       challengeCount: 0,
@@ -1360,6 +1407,7 @@ function executeClaimCompleteVerification(
       status: "active",
       logicZone: claim.logicZone,
       decidability: claim.decidability,
+      stratumCeiling,
     });
 
     // Wire claim references into knowledge graph edges
@@ -1463,12 +1511,58 @@ function executeClaimCompleteVerification(
     // undecidable claims in Peano+ zones and contentious empirical claims.
     const contestedFactId = `fact:${claim.id.replace("claim:", "")}`;
 
+    // U3 FIX: Apply stratum + zone ceiling even to contested facts
+    const contestedStratumCeiling = claim.stratum
+      ? STRATUM_CONFIDENCE_CEILING[claim.stratum]
+      : 1.0;
+    const contestedZoneCeiling =
+      claim.logicZone && ZONE_PROPERTIES[claim.logicZone]?.goedelApplies
+        ? 0.99
+        : 1.0;
+    const contestedConfidence = Math.min(
+      0.5,
+      contestedStratumCeiling,
+      contestedZoneCeiling,
+    );
+
+    // Resolve epistemic category for contested fact
+    let contestedEpistemicCategory: EpistemicCategory = "empirical";
+    if (claim.domain) {
+      const dTree = state.getKnowledgeDomainTree();
+      const dNode = dTree?.domainIndex?.get(claim.domain);
+      if (dNode?.domain.epistemicCategoryDefault) {
+        contestedEpistemicCategory = dNode.domain.epistemicCategoryDefault;
+      } else if (claim.stratum) {
+        contestedEpistemicCategory = STRATUM_EPISTEMIC_CATEGORY[claim.stratum];
+      }
+    } else if (claim.stratum) {
+      contestedEpistemicCategory = STRATUM_EPISTEMIC_CATEGORY[claim.stratum];
+    }
+
+    // Reuse evidence query for contested facts
+    const contestedEvidence = state.getEvidenceForFact(claim.id);
+    const contestedBayesian = contestedEvidence
+      .filter((e) => e.status === "active" || e.status === "archived")
+      .map((e) => evidenceToBayesian(e));
+
+    const contestedMultiConfidence = calculateMasterConfidenceFromVerified(
+      contestedConfidence,
+      {
+        category: contestedEpistemicCategory,
+        currentBlockNumber: Number(blockNumber),
+        verifierCount: payload.verifierCount,
+        evidence: contestedBayesian.length > 0 ? contestedBayesian : undefined,
+      },
+    );
+
     state.addFact({
       id: contestedFactId,
       claim: claim.claim,
       domain: claim.domain,
       stratum: claim.stratum,
-      confidence: 0.5, // Maximum uncertainty — neither confirmed nor refuted
+      epistemicCategory: contestedEpistemicCategory,
+      confidence: contestedConfidence,
+      multidimensionalConfidence: contestedMultiConfidence,
       verifiedAt: blockNumber,
       verifierCount: payload.verifierCount,
       challengeCount: 0,
@@ -1477,6 +1571,7 @@ function executeClaimCompleteVerification(
       // Propagate Gödelian metadata from claim
       logicZone: claim.logicZone,
       decidability: claim.decidability,
+      stratumCeiling: contestedStratumCeiling,
     });
 
     // Return full stake — contested is not the submitter's fault
@@ -3841,8 +3936,9 @@ function executeDomainFinalize(
   // Finalize the proposal (validates deadline internally)
   const finalizedProposal = finalizeProposal(proposal, blockNumber);
 
-  // Calculate endorser stake returns
+  // Calculate endorser and challenger stake returns
   const endorserReturns = calculateEndorserStakeReturns(finalizedProposal);
+  const challengerReturns = calculateChallengerStakeReturns(finalizedProposal);
 
   // Handle stake return based on outcome
   if (finalizedProposal.status === "approved") {
@@ -3852,6 +3948,21 @@ function executeDomainFinalize(
     // Return full stake to all endorsers
     for (const [endorser, { stakeReturn }] of endorserReturns) {
       state.unstake(endorser, stakeReturn);
+    }
+
+    // Challengers lost — return 77%, slash 23%
+    for (const [
+      challenger,
+      { stakeReturn: _stakeReturn, stakeSlashed },
+    ] of challengerReturns) {
+      const challengerStake =
+        finalizedProposal.challengerStakes.get(challenger) ?? 0n;
+      if (challengerStake > 0n) {
+        state.unstake(challenger, challengerStake);
+        if (stakeSlashed > 0n) {
+          state.transfer(challenger, "did:lgm:protocol-treasury", stakeSlashed);
+        }
+      }
     }
 
     // Get domain tree and parent domain
@@ -3922,6 +4033,15 @@ function executeDomainFinalize(
       }
     }
 
+    // Challengers won — return full stake
+    for (const [challenger] of challengerReturns) {
+      const challengerStake =
+        finalizedProposal.challengerStakes.get(challenger) ?? 0n;
+      if (challengerStake > 0n) {
+        state.unstake(challenger, challengerStake);
+      }
+    }
+
     // Emit rejection event
     state.emitEvent("DomainRejected", {
       proposalId: finalizedProposal.id,
@@ -3931,6 +4051,24 @@ function executeDomainFinalize(
       proposerStakeReturned: proposerStakeReturn.toString(),
       proposerStakeSlashed: proposerSlashed.toString(),
       endorserStakeSlashed: totalEndorserSlashed.toString(),
+    });
+  } else if (finalizedProposal.status === "expired") {
+    // Expired: no challenges, insufficient endorsements — full stake return
+    state.unstake(finalizedProposal.proposer, finalizedProposal.stake);
+
+    // Return full stake to endorsers (if any partial endorsement)
+    for (const [endorser] of endorserReturns) {
+      const endorserStake =
+        finalizedProposal.endorserStakes.get(endorser) ?? 0n;
+      if (endorserStake > 0n) {
+        state.unstake(endorser, endorserStake);
+      }
+    }
+
+    state.emitEvent("DomainExpired", {
+      proposalId: finalizedProposal.id,
+      domainId: finalizedProposal.proposedDomainId,
+      reason: finalizedProposal.rejectionReason ?? "Proposal expired",
     });
   }
 
@@ -3958,6 +4096,14 @@ function executeDomainGovernanceApprove(
     proposalId: string;
     lipId: string;
   };
+
+  // Authorization: only active validators can execute governance approvals
+  if (!state.isActiveValidator(tx.sender)) {
+    throw new StateError(
+      "Only active validators can execute domain governance approvals",
+      "UNAUTHORIZED",
+    );
+  }
 
   // Get the proposal
   const proposal = state.getDomainProposal(payload.proposalId);
@@ -4078,11 +4224,20 @@ function executeDomainDeprecate(
   }
 
   // Authorization: only domain proposer can deprecate
+  // Genesis domains (no proposal) require active validator status
   const proposals = state.getAllDomainProposals();
   const originalProposal = proposals.find(
     (p) => p.proposedDomainId === payload.domainId && p.status === "approved",
   );
-  if (originalProposal && originalProposal.proposer !== senderDid) {
+  if (!originalProposal) {
+    // Genesis domain — requires active validator authorization
+    if (!state.isActiveValidator(tx.sender)) {
+      throw new StateError(
+        "Genesis domains can only be deprecated by active validators",
+        "UNAUTHORIZED",
+      );
+    }
+  } else if (originalProposal.proposer !== senderDid) {
     throw new StateError(
       "Only the original domain proposer can deprecate this domain",
       "UNAUTHORIZED",
@@ -4353,6 +4508,21 @@ export function applyVerificationResult(
       // P0-E2 FIX: Carry stratum from claim to fact
       const claimForStratum = state.getClaim(result.claimId);
 
+      // Resolve epistemic category for multidimensional confidence
+      const vrEpistemicCategory: EpistemicCategory =
+        (claimForStratum?.stratum
+          ? STRATUM_EPISTEMIC_CATEGORY[claimForStratum.stratum]
+          : undefined) ?? "empirical";
+
+      const vrMultiConfidence = calculateMasterConfidenceFromVerified(
+        result.finalConfidence,
+        {
+          category: vrEpistemicCategory,
+          currentBlockNumber: Number(blockNumber),
+          verifierCount: result.participatingValidators,
+        },
+      );
+
       state.addFact({
         id: result.claimId,
         claim: result.fact.claim,
@@ -4364,6 +4534,7 @@ export function applyVerificationResult(
         challengeCount: 0,
         citationCount: 0,
         status: "active",
+        multidimensionalConfidence: vrMultiConfidence,
       });
 
       // GAP-006 FIX: Create vesting schedule for claim submitter
@@ -6973,4 +7144,136 @@ function executeSetAvailability(
   });
 
   return 20000n;
+}
+
+// ============ Undecidable Fact Resolution (U7) ============
+
+/**
+ * Resolve a contested/undecidable fact via oracle, consensus, new axiom, or acceptance.
+ *
+ * U7 FIX: Provides on-chain resolution paths for facts that the verification
+ * process couldn't decide. Updates fact confidence and status based on the
+ * chosen resolution mechanism.
+ *
+ * Valid resolution paths:
+ * - accept_undecidability: Leave at 0.5 (status stays "contested")
+ * - oracle: External authority verdict → 0.8 (status → "active")
+ * - consensus: Community vote → 0.7 (status → "active")
+ * - new_axiom: Governance-approved axiom → 1.0 (status → "active")
+ */
+function executeResolveUndecidable(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    factId: string;
+    resolutionPath: ResolutionPath;
+    oracle?: { oracleId: string; verdict: boolean };
+    consensus?: { proposalId: string; votesFor: number; votesAgainst: number };
+    newAxiom?: { axiomId: string };
+  };
+
+  if (!payload.factId || !payload.resolutionPath) {
+    throw new StateError(
+      "Missing factId or resolutionPath",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  const validPaths: ResolutionPath[] = [
+    "accept_undecidability",
+    "oracle",
+    "consensus",
+    "new_axiom",
+  ];
+  if (!validPaths.includes(payload.resolutionPath)) {
+    throw new StateError(
+      `Invalid resolution path: ${payload.resolutionPath}`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Fact must exist and be contested
+  const fact = state.getFact(payload.factId);
+  if (!fact) {
+    throw new StateError("Fact not found", "FACT_NOT_FOUND");
+  }
+  if (fact.status !== "contested") {
+    throw new StateError(
+      `Fact status must be 'contested', got '${fact.status}'`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Validate path-specific payloads
+  if (payload.resolutionPath === "oracle" && !payload.oracle?.oracleId) {
+    throw new StateError(
+      "Oracle resolution requires oracle.oracleId",
+      "INVALID_TRANSITION",
+    );
+  }
+  if (
+    payload.resolutionPath === "consensus" &&
+    !payload.consensus?.proposalId
+  ) {
+    throw new StateError(
+      "Consensus resolution requires consensus.proposalId",
+      "INVALID_TRANSITION",
+    );
+  }
+  if (payload.resolutionPath === "new_axiom" && !payload.newAxiom?.axiomId) {
+    throw new StateError(
+      "New axiom resolution requires newAxiom.axiomId",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Compute new confidence via handleUndecidable
+  const resolution = handleUndecidable(
+    payload.factId,
+    (fact.decidability as
+      | "undecidable"
+      | "undecidable_self_ref"
+      | "undecidable_timeout") ?? "undecidable",
+    payload.resolutionPath,
+  );
+
+  let newConfidence = resolution.finalConfidence ?? 0.5;
+
+  // Apply stratum ceiling
+  if (fact.stratumCeiling !== undefined) {
+    newConfidence = Math.min(newConfidence, fact.stratumCeiling);
+  } else if (fact.stratum) {
+    const ceiling =
+      STRATUM_CONFIDENCE_CEILING[fact.stratum as OntologicalStratum];
+    if (ceiling !== undefined) {
+      newConfidence = Math.min(newConfidence, ceiling);
+    }
+  }
+
+  // Apply zone ceiling for Gödel-applicable zones
+  if (fact.logicZone && ZONE_PROPERTIES[fact.logicZone]?.goedelApplies) {
+    newConfidence = Math.min(newConfidence, 0.99);
+  }
+
+  // Determine new status
+  const newStatus =
+    payload.resolutionPath === "accept_undecidability"
+      ? ("contested" as const)
+      : ("active" as const);
+
+  // Update fact confidence, status, and resolution metadata
+  state.updateFactConfidence(payload.factId, newConfidence);
+  state.updateFactStatus(payload.factId, newStatus);
+  state.updateFactUndecidableResolution(payload.factId, {
+    resolutionPath: payload.resolutionPath,
+    resolvedAt: blockNumber,
+    previousConfidence: fact.confidence,
+    oracle: payload.oracle,
+    consensus: payload.consensus,
+    newAxiom: payload.newAxiom,
+  });
+
+  return 40000n;
 }

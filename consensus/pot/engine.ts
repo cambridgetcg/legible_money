@@ -58,6 +58,7 @@ import {
   addReveal,
   aggregateResults,
   getCurrentPhase,
+  type ValidatorInfoMap,
 } from "./verification_round.js";
 
 import { shouldCreateCheckpoint, type Checkpoint } from "./finality.js";
@@ -99,6 +100,8 @@ export interface EngineConfig {
   isValidator: boolean;
   // GAP FIX: Optional state integration
   stateIntegration?: StateIntegration;
+  /** Explicitly opt-in to test-only methods (advanceBlockForTesting, submitCommitmentDeterministic). Defaults to false. */
+  allowTestMethods?: boolean;
 }
 
 // ============ Consensus Engine ============
@@ -348,6 +351,12 @@ export class ProofOfTruthEngine extends EventEmitter {
    * Returns the block number after advancement.
    */
   async advanceBlockForTesting(): Promise<bigint> {
+    if (!this.config.allowTestMethods) {
+      throw new Error(
+        "advanceBlockForTesting is disabled — set allowTestMethods: true in EngineConfig to enable",
+      );
+    }
+
     this.state.currentBlock++;
 
     // Update block hash
@@ -579,8 +588,12 @@ export class ProofOfTruthEngine extends EventEmitter {
         this.stateIntegration
           .getStateManager()
           .applyBlock(block.header.number, blockHash);
-      } catch {
-        // State manager update is best-effort (may fail if in transaction)
+      } catch (error) {
+        // State manager update is best-effort (may fail if mid-transaction)
+        console.warn(
+          `[PoT] State manager sync failed for block ${block.header.number}:`,
+          error instanceof Error ? error.message : error,
+        );
       }
     }
 
@@ -964,10 +977,10 @@ export class ProofOfTruthEngine extends EventEmitter {
       signature: string;
     },
   ): Promise<void> {
-    // SECURITY: Block in production mode
-    if (process.env.NODE_ENV === "production") {
+    // SECURITY: Require explicit opt-in via config (fail-closed)
+    if (!this.config.allowTestMethods) {
       throw new Error(
-        "submitCommitmentDeterministic is disabled in production mode - use submitCommitment() instead",
+        "submitCommitmentDeterministic is disabled — set allowTestMethods: true in EngineConfig to enable",
       );
     }
 
@@ -1725,12 +1738,15 @@ export class ProofOfTruthEngine extends EventEmitter {
     return validator ? validator.stake + validator.delegatedStake : 0n;
   }
 
-  private getValidatorStakes(): Map<string, bigint> {
-    const stakes = new Map<string, bigint>();
+  private getValidatorStakes(): ValidatorInfoMap {
+    const validators = new Map<string, { stake: bigint; reputation: number }>();
     for (const [key, validator] of this.state.validatorSet.validators) {
-      stakes.set(key, validator.stake + validator.delegatedStake);
+      validators.set(key, {
+        stake: validator.stake + validator.delegatedStake,
+        reputation: validator.reputation,
+      });
     }
-    return stakes;
+    return validators;
   }
 
   private getLastCheckpointBlock(): bigint {
@@ -1907,6 +1923,8 @@ export function createIntegratedEngine(config: {
   }>;
   stateManager: StateManager;
   params?: Partial<ConsensusParams>;
+  /** Enable test-only methods (advanceBlockForTesting, submitCommitmentDeterministic). Defaults to false. */
+  allowTestMethods?: boolean;
 }): ProofOfTruthEngine {
   const params = { ...DEFAULT_CONSENSUS_PARAMS, ...config.params };
 
@@ -1918,6 +1936,7 @@ export function createIntegratedEngine(config: {
     validatorPublicKey: config.validatorPublicKey,
     params,
     stateIntegration,
+    allowTestMethods: config.allowTestMethods,
   });
 
   // Initialize validator set

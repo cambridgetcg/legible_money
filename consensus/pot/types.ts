@@ -509,6 +509,28 @@ export interface Transaction {
 }
 
 /**
+ * Compute the canonical signable message for a transaction.
+ * Includes type, nonce, fee, and payload — covers all mutable fields to prevent malleability.
+ * Both signing (wallet SDK) and verification (block validator) MUST use this function.
+ */
+export function getSignableMessage(tx: {
+  type: string;
+  nonce: bigint;
+  fee: bigint;
+  payload: unknown;
+}): string {
+  return JSON.stringify(
+    {
+      type: tx.type,
+      nonce: tx.nonce.toString(),
+      fee: tx.fee.toString(),
+      payload: tx.payload,
+    },
+    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+  );
+}
+
+/**
  * Type guard to extract typed payload from transaction
  * GAP-022 FIX: Provides type-safe access to transaction payload
  */
@@ -639,6 +661,9 @@ export type TransactionType =
   | "review_application" // Project lead reviews application
   | "set_availability" // Agent sets availability for matching
   | "spawn_child_project" // Spawn child project from seeding parent
+
+  // Undecidable fact resolution (U7)
+  | "resolve_undecidable" // Resolve a contested/undecidable fact via oracle/consensus/axiom
 
   // Disbursement lifecycle
   | "disbursement_submit" // Submit treasury disbursement proposal

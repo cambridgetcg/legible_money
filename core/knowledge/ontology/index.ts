@@ -113,7 +113,6 @@ export type {
 export {
   DEFAULT_CONFIDENCE_CONFIG,
   calculateOntologicalConfidence,
-  calculateDerivedConfidence,
   calculateDependencyImpact,
   aggregateConfidences,
   constrainAggregatedConfidence,

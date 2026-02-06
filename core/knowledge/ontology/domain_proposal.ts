@@ -139,6 +139,12 @@ export interface DomainProposal {
   /** Validators who challenged this proposal */
   challengers: string[];
 
+  /** Stake locked by each challenger (DID -> stake amount) */
+  challengerStakes: Map<string, bigint>;
+
+  /** Reason given by each challenger (DID -> reason) */
+  challengerReasons: Map<string, string>;
+
   /** If rejected, reason for rejection */
   rejectionReason?: string;
 
@@ -452,6 +458,8 @@ export function createDomainProposal(
     endorserStakes: new Map(),
     requiredEndorsementStake,
     challengers: [],
+    challengerStakes: new Map(),
+    challengerReasons: new Map(),
     depth: validation.depth,
   };
 
@@ -534,8 +542,8 @@ export function endorseProposal(
 export function challengeProposal(
   proposal: DomainProposal,
   challenger: string,
-  _reason: string,
-  _stake: bigint,
+  reason: string,
+  stake: bigint,
   currentBlock: bigint,
 ): DomainProposal {
   // Cannot challenge already-decided proposals
@@ -555,12 +563,23 @@ export function challengeProposal(
     throw new Error("Cannot challenge your own proposal");
   }
 
-  // Add challenger
+  // Cannot challenge twice
+  if (proposal.challengers.includes(challenger)) {
+    throw new Error("Challenger has already challenged this proposal");
+  }
+
+  // Add challenger with stake and reason
   const updatedChallengers = [...proposal.challengers, challenger];
+  const updatedChallengerStakes = new Map(proposal.challengerStakes);
+  updatedChallengerStakes.set(challenger, stake);
+  const updatedChallengerReasons = new Map(proposal.challengerReasons);
+  updatedChallengerReasons.set(challenger, reason);
 
   return {
     ...proposal,
     challengers: updatedChallengers,
+    challengerStakes: updatedChallengerStakes,
+    challengerReasons: updatedChallengerReasons,
   };
 }
 
@@ -577,7 +596,11 @@ export function finalizeProposal(
   }
 
   // Already finalized
-  if (proposal.status === "approved" || proposal.status === "rejected") {
+  if (
+    proposal.status === "approved" ||
+    proposal.status === "rejected" ||
+    proposal.status === "expired"
+  ) {
     return proposal;
   }
 
@@ -604,13 +627,21 @@ export function finalizeProposal(
       status: "approved",
       approvedAt: currentBlock,
     };
-  } else {
+  } else if (hasChallenges) {
+    // Actively rejected by challengers
     return {
       ...proposal,
       status: "rejected",
-      rejectionReason: hasChallenges
-        ? "Proposal was challenged and did not receive sufficient endorsement"
-        : "Proposal did not receive minimum required endorsements",
+      rejectionReason:
+        "Proposal was challenged and did not receive sufficient endorsement",
+    };
+  } else {
+    // No challenges, just insufficient endorsements — expired
+    return {
+      ...proposal,
+      status: "expired",
+      rejectionReason:
+        "Proposal did not receive minimum required endorsements before deadline",
     };
   }
 }
@@ -635,8 +666,8 @@ export function calculateStakeReturn(proposal: DomainProposal): bigint {
  *
  * Return rules:
  * - Approved: 100% returned to all endorsers
- * - Rejected (no challenge): 100% returned to all endorsers
  * - Rejected (challenged): 77% returned to all endorsers
+ * - Expired (no challenges): 100% returned to all endorsers
  */
 export function calculateEndorserStakeReturns(
   proposal: DomainProposal,
@@ -647,25 +678,51 @@ export function calculateEndorserStakeReturns(
   >();
 
   for (const [endorser, stake] of proposal.endorserStakes) {
-    if (proposal.status === "approved") {
-      // Full return on approval
+    if (proposal.status === "approved" || proposal.status === "expired") {
+      // Full return on approval or expiration (no fault)
       returns.set(endorser, { stakeReturn: stake, stakeSlashed: 0n });
     } else if (proposal.status === "rejected") {
-      // Check if there were challenges
-      const wasChallenged = proposal.challengers.length > 0;
+      // 77% return when rejected after challenge
+      const returnRate = BigInt(
+        Math.floor(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 100),
+      );
+      const stakeReturn = (stake * returnRate) / 100n;
+      const stakeSlashed = stake - stakeReturn;
+      returns.set(endorser, { stakeReturn, stakeSlashed });
+    }
+  }
 
-      if (wasChallenged) {
-        // 77% return when rejected after challenge
-        const returnRate = BigInt(
-          Math.floor(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 100),
-        );
-        const stakeReturn = (stake * returnRate) / 100n;
-        const stakeSlashed = stake - stakeReturn;
-        returns.set(endorser, { stakeReturn, stakeSlashed });
-      } else {
-        // Full return when rejected without challenge (just insufficient endorsements)
-        returns.set(endorser, { stakeReturn: stake, stakeSlashed: 0n });
-      }
+  return returns;
+}
+
+/**
+ * Calculate stake returns for all challengers
+ *
+ * Return rules:
+ * - Approved (challengers lost): 77% returned to challengers (slashed for incorrect challenge)
+ * - Rejected (challengers won): 100% returned to challengers
+ * - Expired: 100% returned to challengers
+ */
+export function calculateChallengerStakeReturns(
+  proposal: DomainProposal,
+): Map<string, { stakeReturn: bigint; stakeSlashed: bigint }> {
+  const returns = new Map<
+    string,
+    { stakeReturn: bigint; stakeSlashed: bigint }
+  >();
+
+  for (const [challenger, stake] of proposal.challengerStakes) {
+    if (proposal.status === "rejected" || proposal.status === "expired") {
+      // Challengers won or proposal expired — full return
+      returns.set(challenger, { stakeReturn: stake, stakeSlashed: 0n });
+    } else if (proposal.status === "approved") {
+      // Challengers lost — 77% return (same slashing rate)
+      const returnRate = BigInt(
+        Math.floor(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 100),
+      );
+      const stakeReturn = (stake * returnRate) / 100n;
+      const stakeSlashed = stake - stakeReturn;
+      returns.set(challenger, { stakeReturn, stakeSlashed });
     }
   }
 

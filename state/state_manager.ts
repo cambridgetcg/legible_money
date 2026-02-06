@@ -531,6 +531,16 @@ export class StateManager {
   }
 
   /**
+   * Update undecidable resolution metadata on a fact
+   */
+  updateFactUndecidableResolution(
+    factId: string,
+    resolution: NonNullable<FactState["undecidableResolution"]>,
+  ): void {
+    this.knowledge.updateFact(factId, { undecidableResolution: resolution });
+  }
+
+  /**
    * Increment fact challenge count
    * GAP-003 FIX: Exposed for challenge integration
    */

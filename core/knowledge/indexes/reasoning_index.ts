@@ -100,6 +100,9 @@ export class DomainReasoningIndex {
   /** Last update block */
   private lastUpdateBlock: bigint = 0n;
 
+  /** Optional provider for active challenge counts per domain */
+  private challengeCountProvider?: (domainId: string) => number;
+
   constructor(config: ReasoningIndexConfig = DEFAULT_REASONING_INDEX_CONFIG) {
     this.config = { ...config };
 
@@ -110,6 +113,14 @@ export class DomainReasoningIndex {
       this.factsByStratum.set(stratum, new Set());
       this.factsByStratumAndConfidence.set(stratum, new Map());
     }
+  }
+
+  /**
+   * Set a provider function that returns active challenge count for a domain.
+   * Called during trajectory computation to feed real dispute data into health score.
+   */
+  setChallengeCountProvider(provider: (domainId: string) => number): void {
+    this.challengeCountProvider = provider;
   }
 
   // ============================================================================
@@ -618,6 +629,7 @@ export class DomainReasoningIndex {
   getConfidenceTrajectory(
     domainId: string,
     factConfidences?: Map<string, number>,
+    activeChallengeCount?: number,
   ): ConfidenceTrajectory {
     // Check cache
     const cached = this.trajectoryCache.get(domainId);
@@ -677,8 +689,9 @@ export class DomainReasoningIndex {
           existingHistory[0].avgConfidence
         : 0;
 
-    // Placeholder for active challenges (would query dispute state)
-    const activeChallenges = 0;
+    // Use caller-provided count, injected provider, or 0 as last resort
+    const activeChallenges =
+      activeChallengeCount ?? this.challengeCountProvider?.(domainId) ?? 0;
 
     const healthScore = computeDomainHealthScore(
       avgConfidence,

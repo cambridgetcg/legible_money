@@ -216,6 +216,7 @@ export class TestNetwork extends EventEmitter {
       initialValidators: validatorInfo,
       stateManager: this.state,
       params: consensusParams,
+      allowTestMethods: true,
     });
   }
 

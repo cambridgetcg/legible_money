@@ -24,6 +24,8 @@ import { bytesToHex } from "../../core/crypto/keys.js";
 import { randomBytes } from "@noble/hashes/utils";
 // GAP-002 FIX: Import VRF verification for validator selection
 import { verifyValidatorVRFSelection } from "./validator_selection.js";
+// V1 FIX: Import multi-modal confidence (stake + reputation + agreement)
+import { calculateFinalConfidence } from "./confidence.js";
 import type { PublicKey, PrivateKey } from "../../core/crypto/keys.js";
 import type {
   ClaimSubmission,
@@ -48,6 +50,12 @@ import {
   calculateCrossStratumConfidence,
   CROSS_STRATUM_CONFIG,
 } from "../cross_stratum/index.js";
+
+/** Validator info for confidence aggregation (stake + reputation) */
+export type ValidatorInfoMap = Map<
+  string,
+  { stake: bigint; reputation: number }
+>;
 
 // ============ Round Creation ============
 
@@ -460,7 +468,7 @@ export function addReveal(
  */
 export function aggregateResults(
   round: VerificationRound,
-  validatorStakes: Map<string, bigint>,
+  validatorStakes: ValidatorInfoMap,
   currentBlock: number,
   params: ConsensusParams,
 ): VerificationRound {
@@ -479,7 +487,7 @@ export function aggregateResults(
 
   // Process reveals
   for (const [validator, reveal] of round.reveals) {
-    const stake = validatorStakes.get(validator) || 0n;
+    const stake = validatorStakes.get(validator)?.stake || 0n;
     totalParticipatingStake += stake;
 
     switch (reveal.verdict) {
@@ -498,7 +506,7 @@ export function aggregateResults(
   // Check for validators who committed but didn't reveal (slash them)
   for (const [validator, _commitment] of round.commitments) {
     if (!round.reveals.has(validator)) {
-      const stake = validatorStakes.get(validator) || 0n;
+      const stake = validatorStakes.get(validator)?.stake || 0n;
       const slashAmount =
         (stake * BigInt(Math.floor(params.missedVerificationSlash * 10000))) /
         10000n;
@@ -511,7 +519,7 @@ export function aggregateResults(
   let finalConfidence: Confidence;
 
   const totalSelectedStake = round.selectedValidators.reduce(
-    (sum, v) => sum + (validatorStakes.get(v.validator) || 0n),
+    (sum, v) => sum + (validatorStakes.get(v.validator)?.stake || 0n),
     0n,
   );
 
@@ -542,11 +550,13 @@ export function aggregateResults(
 
     if (confirmedBps >= acceptanceBps) {
       outcome = "accepted";
-      finalConfidence = calculateAggregatedConfidence(
+      // P0-M3 FIX: Use reputation-aware confidence (stake + reputation + agreement)
+      // instead of raw stake-only aggregation
+      finalConfidence = calculateFinalConfidence(
         round.reveals,
         validatorStakes,
         "confirmed",
-      );
+      ).confidence;
     } else if (rejectedBps >= rejectionBps) {
       outcome = "rejected";
       finalConfidence = 0;
@@ -566,7 +576,7 @@ export function aggregateResults(
         rewards.set(validator, params.verificationReward);
       } else if (reveal.verdict !== "uncertain") {
         // Slash for wrong verification
-        const stake = validatorStakes.get(validator) || 0n;
+        const stake = validatorStakes.get(validator)?.stake || 0n;
         const slashAmount =
           (stake * BigInt(Math.floor(params.wrongVerificationSlash * 10000))) /
           10000n;
@@ -616,32 +626,8 @@ export function aggregateResults(
   };
 }
 
-/**
- * Calculate aggregated confidence from reveals
- */
-function calculateAggregatedConfidence(
-  reveals: Map<string, ValidatorReveal>,
-  stakes: Map<string, bigint>,
-  consensusVerdict: "confirmed" | "rejected",
-): Confidence {
-  // Use bigint basis-point arithmetic to avoid Number() overflow on large stakes.
-  // Confidence is 0.0–1.0; we scale to 0–10000 basis points for bigint math.
-  let weightedConfidenceBps = 0n;
-  let totalWeight = 0n;
-
-  for (const [validator, reveal] of reveals) {
-    if (reveal.verdict === consensusVerdict) {
-      const stake = stakes.get(validator) || 0n;
-      const confidenceBps = BigInt(Math.round(reveal.confidence * 10000));
-      weightedConfidenceBps += confidenceBps * stake;
-      totalWeight += stake;
-    }
-  }
-
-  return totalWeight > 0n
-    ? Number(weightedConfidenceBps / totalWeight) / 10000
-    : 0;
-}
+// calculateAggregatedConfidence replaced by calculateFinalConfidence from
+// confidence.ts — adds reputation weighting + agreement bonus (P0-M3 fix)
 
 // ============ Round Status ============
 
@@ -763,7 +749,7 @@ export function createCrossStratumVerificationRound(
  */
 export function aggregateCrossStratumResults(
   round: CrossStratumVerificationRound,
-  validatorStakes: Map<string, bigint>,
+  validatorStakes: ValidatorInfoMap,
   currentBlock: number,
   params: ConsensusParams,
 ): CrossStratumVerificationRound {
@@ -783,21 +769,13 @@ export function aggregateCrossStratumResults(
     };
   }
 
-  // Convert validatorStakes to the format expected by calculateCrossStratumConfidence
-  const validatorsWithReputation = new Map<
-    string,
-    { stake: bigint; reputation: number }
-  >();
-  for (const [validatorId, stake] of validatorStakes) {
-    validatorsWithReputation.set(validatorId, { stake, reputation: 0.5 }); // Default reputation
-  }
-
   // Calculate cross-stratum confidence adjustment
+  // P0-M3 FIX: validatorStakes now carries real reputation (no more hardcoded 0.5)
   const crossStratumResult = calculateCrossStratumConfidence(
     aggregatedRound.reveals,
     round.validatorStrata,
     round.claimStratum,
-    validatorsWithReputation,
+    validatorStakes,
   );
 
   // Apply cross-stratum adjustment to final confidence

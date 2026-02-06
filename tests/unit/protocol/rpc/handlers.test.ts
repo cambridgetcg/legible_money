@@ -108,11 +108,21 @@ function createMockContext(
         contradicts: [],
         extends: [],
       })),
+      getFactResearchSummary: vi.fn((_factId: string) => ({
+        factId: _factId,
+        replicationAttempts: 0,
+        successfulReplications: 0,
+        failedReplications: 0,
+        fraudInvestigations: 0,
+        fraudDetected: false,
+        netConfidenceModifier: 0,
+      })),
     } as any,
     consensus: {
       getActiveRounds: vi.fn(() => activeRounds),
       submitClaim: vi.fn(async () => "claim-id-generated"),
       submitCommitment: vi.fn(async () => {}),
+      submitCommitmentDeterministic: vi.fn(async () => {}),
       submitReveal: vi.fn(async () => {}),
     } as any,
     stateIntegration: {} as any,
@@ -595,16 +605,20 @@ describe.sequential("Verification Handlers", () => {
 
       expect(result.accepted).toBe(true);
       expect(result.commitDeadline).toBe(1000);
-      expect(ctx.consensus.submitCommitment).toHaveBeenCalledWith("round-1", {
-        validator: "validator-key",
-        commitment: "commitment-hash-123",
-        signature: "signature",
-      });
+      // Without vrfOutput/vrfProof, handler uses deterministic mode
+      expect(ctx.consensus.submitCommitmentDeterministic).toHaveBeenCalledWith(
+        "round-1",
+        {
+          validator: "validator-key",
+          commitment: "commitment-hash-123",
+          signature: "signature",
+        },
+      );
     });
 
     it("should propagate consensus errors", async () => {
       const ctx = createMockContext();
-      (ctx.consensus.submitCommitment as any).mockRejectedValue(
+      (ctx.consensus.submitCommitmentDeterministic as any).mockRejectedValue(
         new Error("Round not in commit phase"),
       );
 
@@ -751,7 +765,7 @@ describe.sequential("Handler Registry", () => {
   });
 
   it("should have all registered handlers", () => {
-    expect(Object.keys(handlers)).toHaveLength(70);
+    expect(Object.keys(handlers)).toHaveLength(71);
   });
 });
 

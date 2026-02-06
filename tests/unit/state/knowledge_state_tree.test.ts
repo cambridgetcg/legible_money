@@ -1104,11 +1104,11 @@ describe.sequential("KnowledgeStateTree", () => {
         strength: 0.9,
       });
 
-      // Change < 5% threshold
+      // Change < 1% threshold (PROPAGATION_THRESHOLD = 0.01)
       const result = tree.propagateConfidenceChange(
         base,
         0.9 as Confidence,
-        0.88 as Confidence,
+        0.895 as Confidence,
       );
 
       expect(result.updatedFacts).toHaveLength(0);

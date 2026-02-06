@@ -111,6 +111,8 @@ const VALID_TX_TYPES: Set<string> = new Set([
   "set_availability",
   // Tree of Life seeding
   "spawn_child_project",
+  // Undecidable resolution
+  "resolve_undecidable",
 ]);
 
 // ============ Send Transaction Handler ============

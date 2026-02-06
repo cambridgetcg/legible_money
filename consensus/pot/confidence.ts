@@ -18,6 +18,8 @@
 import {
   type Confidence,
   type EpistemicCategory,
+  type MultidimensionalConfidence,
+  type EpistemicBasis,
   EPISTEMIC_PROFILES,
 } from "../../core/knowledge/types.js";
 import type { ValidatorReveal } from "./types.js";
@@ -317,6 +319,33 @@ export interface BayesianEvidence {
 }
 
 /**
+ * Convert an Evidence state object (from EvidenceStateTree) into BayesianEvidence
+ * for use with the Bayesian confidence aggregation pipeline.
+ */
+export function evidenceToBayesian(e: {
+  id: string;
+  type: string;
+  direction: "supporting" | "contradicting" | "neutral";
+  intrinsicStrength: number;
+  independence: {
+    sourceIndependence: number;
+    methodIndependence: number;
+    temporalIndependence: number;
+    aggregateIndependence: number;
+  };
+  reliabilityScore: number;
+}): BayesianEvidence {
+  return {
+    id: e.id,
+    type: e.type,
+    strength: e.intrinsicStrength,
+    direction: e.direction,
+    independence: e.independence,
+    reliabilityScore: e.reliabilityScore,
+  };
+}
+
+/**
  * Calculate likelihood ratio for a piece of evidence
  *
  * L = P(E|H) / P(E|¬H)
@@ -393,7 +422,9 @@ function oddsToProb(odds: number): number {
  * O = P / (1 - P)
  */
 function probToOdds(prob: number): number {
-  return prob / (1 - prob);
+  // Guard: clamp to (0, 1) to avoid division by zero at prob=1 and negative odds at prob>1
+  const clamped = Math.max(0.001, Math.min(0.999, prob));
+  return clamped / (1 - clamped);
 }
 
 /**
@@ -488,26 +519,6 @@ export function aggregateEvidenceBayesian(
   };
 }
 
-// ============ Confidence for Derivations ============
-
-/**
- * Calculate confidence for a derived fact
- *
- * Derived confidence = min(premise_confidences) * inference_strength
- */
-export function calculateDerivedConfidence(
-  premiseConfidences: Confidence[],
-  inferenceStrength: number,
-): Confidence {
-  if (premiseConfidences.length === 0) return 0;
-
-  // Take minimum of all premises (weakest link)
-  const minPremise = Math.min(...premiseConfidences);
-
-  // Multiply by inference strength
-  return minPremise * inferenceStrength;
-}
-
 /**
  * Inference strength by type
  */
@@ -572,7 +583,7 @@ export function createHistoryEntry(
   roundId?: string,
 ): ConfidenceHistoryEntry {
   return {
-    timestamp: Date.now(),
+    timestamp: blockNumber, // Deterministic: use block number, not wall clock
     blockNumber,
     confidence,
     reason,
@@ -785,12 +796,28 @@ export function calculateMasterConfidence(
   const coherence = calculateCoherence(input.evidence);
 
   // 10. Calculate sensitivities
-  const toNewEvidence = 1.0 - input.evidence.length / 10; // More evidence = less sensitive
-  const toContradiction =
-    coherence === "unanimous" ? 0.9 : coherence === "consistent" ? 0.6 : 0.3;
+  // Evidence sensitivity: diminishing returns via inverse square root.
+  // 0 evidence → 1.0, 1 → 0.71, 4 → 0.45, 9 → 0.32, 16 → 0.24
+  const toNewEvidence =
+    input.evidence.length === 0
+      ? 1.0
+      : 1.0 / Math.sqrt(1 + input.evidence.length);
+  // Contradiction sensitivity: based on coherence AND current confidence level.
+  // High confidence + unanimous = more to lose from contradicting evidence.
+  const coherenceBase =
+    coherence === "unanimous" ? 0.9 : coherence === "consistent" ? 0.7 : 0.4;
+  const toContradiction = coherenceBase * Math.min(1, finalValue + 0.2);
+  // Decay sensitivity: proportional to position on decay curve.
+  // Facts far from half-life are less sensitive; eternal facts = 0.
   const decayParams =
     CATEGORY_DECAY[input.category] || CATEGORY_DECAY.empirical;
-  const toTimeDecay = decayParams.halfLifeBlocks === null ? 0 : 0.5;
+  const toTimeDecay =
+    decayParams.halfLifeBlocks === null
+      ? 0
+      : Math.min(
+          1,
+          input.blocksSinceLastVerification / decayParams.halfLifeBlocks,
+        );
 
   return {
     value: finalValue,
@@ -815,15 +842,114 @@ export function calculateMasterConfidence(
       toContradiction,
       toTimeDecay,
     },
-    calculatedAt: Date.now(),
+    calculatedAt: input.currentBlockNumber, // Deterministic: use block number, not wall clock
     calculatedAtBlock: input.currentBlockNumber,
   };
 }
 
-function getCategoryMethod(category: string): string {
+function getCategoryMethod(category: string): EpistemicBasis["primaryMethod"] {
   const profile = EPISTEMIC_PROFILES[category as EpistemicCategory];
   if (profile) return profile.verificationMethod;
   return "observation";
+}
+
+/**
+ * Calculate multidimensional confidence from pre-verified consensus output.
+ *
+ * Used in state transitions where the aggregate `finalConfidence` from the
+ * verification round is available, optionally enriched with evidence from
+ * the evidence state tree.
+ *
+ * Applies: Bayesian evidence blending (if evidence provided), epistemic ceiling,
+ * adversarial adjustment, metadata.
+ */
+export function calculateMasterConfidenceFromVerified(
+  verifiedConfidence: number,
+  opts: {
+    category: EpistemicCategory;
+    currentBlockNumber: number;
+    verifierCount: number;
+    sybilAdjustment?: number;
+    manipulationAdjustment?: number;
+    /** Evidence from the evidence state tree (converted via evidenceToBayesian) */
+    evidence?: BayesianEvidence[];
+  },
+): MultidimensionalConfidence {
+  // 1. Epistemic ceiling
+  const epistemicCeiling =
+    EPISTEMIC_CEILINGS[opts.category] || EPISTEMIC_CEILINGS.empirical;
+
+  // 2. Blend evidence with verification confidence
+  // Master formula: 40% evidence + 60% verification (verification is more robust to manipulation)
+  const EVIDENCE_WEIGHT = 0.4;
+  const VERIFICATION_WEIGHT = 0.6;
+
+  let evidenceContribution = 0;
+  let coherence: MultidimensionalConfidence["coherence"] = "consistent";
+  let evidenceCount = 0;
+  let baseConfidence = verifiedConfidence;
+
+  if (opts.evidence && opts.evidence.length > 0) {
+    evidenceCount = opts.evidence.length;
+    const evidenceResult = aggregateEvidenceBayesian(opts.evidence);
+    evidenceContribution = evidenceResult.effectiveConfidence * EVIDENCE_WEIGHT;
+    baseConfidence =
+      evidenceResult.effectiveConfidence * EVIDENCE_WEIGHT +
+      verifiedConfidence * VERIFICATION_WEIGHT;
+
+    // Determine coherence from evidence directions
+    coherence = calculateCoherence(opts.evidence);
+  }
+
+  // 3. Apply epistemic ceiling
+  const ceiledConfidence = Math.min(epistemicCeiling, baseConfidence);
+
+  // 4. Apply adversarial adjustments
+  const sybilAdj = opts.sybilAdjustment ?? 1.0;
+  const manipulationAdj = opts.manipulationAdjustment ?? 1.0;
+  const adversarialAdjustment = sybilAdj * manipulationAdj;
+  const finalValue = ceiledConfidence * adversarialAdjustment;
+
+  // 5. Decay sensitivity
+  const decayParams = CATEGORY_DECAY[opts.category] || CATEGORY_DECAY.empirical;
+  const toTimeDecay = decayParams.halfLifeBlocks === null ? 0 : 0.5;
+
+  // Sensitivity to new evidence decreases as we have more evidence
+  const toNewEvidence =
+    evidenceCount > 0 ? Math.max(0, 1.0 - evidenceCount / 10) : 1.0;
+
+  return {
+    value: finalValue,
+    basis: {
+      category: opts.category,
+      primaryMethod: getCategoryMethod(opts.category),
+      evidenceCount,
+      verificationCount: opts.verifierCount,
+      derivedFrom: [],
+    },
+    provenance: {
+      evidenceContribution,
+      verificationContribution:
+        verifiedConfidence * (evidenceCount > 0 ? VERIFICATION_WEIGHT : 1.0),
+      temporalAdjustment: 1.0, // No decay for new fact
+      adversarialAdjustment,
+      epistemicCeiling,
+    },
+    stability: "unstable", // No history yet for new facts
+    coherence,
+    sensitivities: {
+      toNewEvidence,
+      toContradiction:
+        coherence === "unanimous"
+          ? 0.9
+          : coherence === "consistent"
+            ? 0.6
+            : 0.3,
+      toTimeDecay,
+    },
+    calculatedAt: opts.currentBlockNumber, // Deterministic: use block number, not wall clock
+    calculatedAtBlock: opts.currentBlockNumber,
+  };
 }
 
 // ============ Research-Enhanced Confidence ============
@@ -891,9 +1017,9 @@ export function applyResearchEnhancement(
     }
   }
 
-  // Penalize failed replications
+  // Penalize failed replications (capped at -0.5 to prevent negative confidence)
   if (researchSummary.failedReplications > 0) {
-    const penalty = researchSummary.failedReplications * 0.1;
+    const penalty = Math.min(0.5, researchSummary.failedReplications * 0.1);
     modifier -= penalty;
     reasons.push(
       `-${penalty.toFixed(2)} (${researchSummary.failedReplications} failed replications)`,
@@ -1085,40 +1211,6 @@ export function needsResearchVerification(
     priority: "low",
     reason: "No immediate research needed",
   };
-}
-
-/**
- * Convert master calculation result to MultidimensionalConfidence type
- */
-export function toMultidimensionalConfidence(
-  result: ReturnType<typeof calculateMasterConfidence>,
-): {
-  value: number;
-  basis: {
-    category: string;
-    primaryMethod: string;
-    evidenceCount: number;
-    verificationCount: number;
-    derivedFrom: string[];
-  };
-  provenance: {
-    evidenceContribution: number;
-    verificationContribution: number;
-    temporalAdjustment: number;
-    adversarialAdjustment: number;
-    epistemicCeiling: number;
-  };
-  stability: "volatile" | "unstable" | "stable" | "anchored";
-  coherence: "contradictory" | "mixed" | "consistent" | "unanimous";
-  sensitivities: {
-    toNewEvidence: number;
-    toContradiction: number;
-    toTimeDecay: number;
-  };
-  calculatedAt: number;
-  calculatedAtBlock: number;
-} {
-  return result;
 }
 
 // ============ Isolated Reputation-Aware Confidence ============

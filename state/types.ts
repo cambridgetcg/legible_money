@@ -24,13 +24,18 @@ import type { VerificationResult } from "../consensus/pot/types.js";
 import type {
   Confidence,
   EpistemicCategory,
+  MultidimensionalConfidence,
   FactStatus as CoreFactStatus,
 } from "../core/knowledge/types.js";
 import type {
   OntologicalStratum,
   StratumDependency,
 } from "../core/knowledge/ontology/types.js";
-import type { Decidability, LogicZone } from "../core/logic/types.js";
+import type {
+  Decidability,
+  LogicZone,
+  ResolutionPath,
+} from "../core/logic/types.js";
 
 // ============ State Roots ============
 
@@ -230,9 +235,22 @@ export interface FactState {
   stratumCeiling?: number; // Confidence ceiling from stratum
   crossStratumDiscount?: number; // Discount factor from dependencies
 
+  // Multidimensional confidence (full epistemic breakdown)
+  multidimensionalConfidence?: MultidimensionalConfidence;
+
   // Gödelian metadata (U1 fix: propagated from ClaimState)
   logicZone?: LogicZone; // Logic zone of the claim
   decidability?: Decidability; // Decidability assessment at submission
+
+  // Undecidable resolution metadata (U7 fix)
+  undecidableResolution?: {
+    resolutionPath: ResolutionPath;
+    resolvedAt: bigint;
+    previousConfidence: number;
+    oracle?: { oracleId: string; verdict: boolean };
+    consensus?: { proposalId: string; votesFor: number; votesAgainst: number };
+    newAxiom?: { axiomId: string };
+  };
 }
 
 /**
@@ -388,6 +406,8 @@ export interface ClaimCompleteVerificationPayload {
   rewards: Array<[string, bigint]>;
   /** Slashes to apply (validator DID -> amount) */
   slashes: Array<[string, bigint]>;
+  /** Pre-computed multidimensional confidence from the verification round */
+  multidimensionalConfidence?: MultidimensionalConfidence;
 }
 
 /**

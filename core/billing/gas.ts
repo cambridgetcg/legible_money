@@ -344,6 +344,8 @@ const TRANSACTION_TYPE_GAS_MAP: Record<TransactionType, bigint> = {
   apply_to_project: 25000n,
   review_application: 30000n,
   set_availability: 20000n,
+  // Undecidable resolution
+  resolve_undecidable: 40000n,
   // Tree of Life seeding
   spawn_child_project: 60000n, // Higher: creates project + escrow transfer
   // Governance LIP lifecycle

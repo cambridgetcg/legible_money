@@ -141,41 +141,6 @@ function calculateInheritedCeiling(
 // ============================================================================
 
 /**
- * Calculate confidence for a derived fact based on its premises.
- *
- * Uses weakest-link principle: derived confidence is bounded by
- * the minimum confidence of its premises, multiplied by inference strength.
- */
-export function calculateDerivedConfidence(
-  premiseConfidences: number[],
-  inferenceStrength: number,
-  domain: OntologicalDomain,
-  dependencies: StratumDependency[],
-  domainTree?: DomainTree,
-): OntologicalConfidenceResult {
-  if (premiseConfidences.length === 0) {
-    // No premises - use inference strength as base
-    return calculateOntologicalConfidence(
-      inferenceStrength,
-      domain,
-      dependencies,
-      domainTree,
-    );
-  }
-
-  // Weakest-link: min of premises × inference strength
-  const minPremise = Math.min(...premiseConfidences);
-  const derivedBase = minPremise * inferenceStrength;
-
-  return calculateOntologicalConfidence(
-    derivedBase,
-    domain,
-    dependencies,
-    domainTree,
-  );
-}
-
-/**
  * Calculate confidence impact of adding a new dependency.
  */
 export function calculateDependencyImpact(
@@ -217,23 +182,27 @@ export function calculateDependencyImpact(
 
 /**
  * Aggregate confidences from multiple sources using stake-weighted average.
+ *
+ * Uses BigInt basis-point arithmetic to avoid Number() overflow on real
+ * LGM stakes (1111 LGM = 1.111×10²¹ exceeds Number.MAX_SAFE_INTEGER).
  */
 export function aggregateConfidences(
   contributions: Array<{ confidence: number; stake: bigint }>,
 ): number {
   if (contributions.length === 0) return 0;
 
-  let weightedSum = 0;
+  let weightedBps = 0n;
   let totalStake = 0n;
 
   for (const { confidence, stake } of contributions) {
-    weightedSum += confidence * Number(stake);
+    const confidenceBps = BigInt(Math.round(confidence * 10000));
+    weightedBps += confidenceBps * stake;
     totalStake += stake;
   }
 
   if (totalStake === 0n) return 0;
 
-  return weightedSum / Number(totalStake);
+  return Number(weightedBps / totalStake) / 10000;
 }
 
 /**

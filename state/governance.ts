@@ -745,21 +745,55 @@ export class GovernanceStateTree {
       cloned.quadraticVotes.set(id, { ...vote });
     }
 
-    // Clone domain proposals
+    // Deep clone domain proposals (Maps must not be shared)
     for (const [id, proposal] of this.domainProposals) {
-      cloned.domainProposals.set(id, { ...proposal });
+      cloned.domainProposals.set(id, {
+        ...proposal,
+        endorsers: [...proposal.endorsers],
+        endorserStakes: new Map(proposal.endorserStakes),
+        challengers: [...proposal.challengers],
+        challengerStakes: new Map(proposal.challengerStakes),
+        challengerReasons: new Map(proposal.challengerReasons),
+        examples: [...proposal.examples],
+      });
     }
 
-    // Clone domain tree (shallow copy of indexes, nodes are reference-shared)
+    // Deep clone domain tree (clone each DomainNode to prevent rollback corruption)
+    const clonedDomainIndex = new Map<
+      string,
+      import("../core/knowledge/ontology/types.js").DomainNode
+    >();
+    for (const [domainId, node] of this.domainTree.domainIndex) {
+      clonedDomainIndex.set(domainId, {
+        domain: {
+          ...node.domain,
+          childDomains: [...node.domain.childDomains],
+          dependsOnStrata: [...node.domain.dependsOnStrata],
+          examples: [...node.domain.examples],
+        },
+        children: [], // Re-linked below
+        depth: node.depth,
+        path: [...node.path],
+      });
+    }
+    // Re-link children from cloned nodes
+    for (const [domainId, node] of this.domainTree.domainIndex) {
+      const clonedNode = clonedDomainIndex.get(domainId)!;
+      clonedNode.children = node.children
+        .map((child) => clonedDomainIndex.get(child.domain.id)!)
+        .filter(Boolean);
+    }
     cloned.domainTree = {
-      root: this.domainTree.root,
+      root:
+        clonedDomainIndex.get(this.domainTree.root.domain.id) ??
+        this.domainTree.root,
       strataIndex: new Map(
         Array.from(this.domainTree.strataIndex.entries()).map(([k, v]) => [
           k,
           [...v],
         ]),
       ),
-      domainIndex: new Map(this.domainTree.domainIndex),
+      domainIndex: clonedDomainIndex,
       domainCount: this.domainTree.domainCount,
       maxDepth: this.domainTree.maxDepth,
     };

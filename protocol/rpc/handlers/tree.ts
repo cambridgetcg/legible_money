@@ -307,6 +307,18 @@ export interface TreeGetProjectApplicationsRequest {
   status?: string;
 }
 
+export interface TreeResolveUndecidableRequest {
+  factId: string;
+  resolutionPath: string;
+  oracle?: { oracleId: string; verdict: boolean };
+  consensus?: { proposalId: string; votesFor: number; votesAgainst: number };
+  newAxiom?: { axiomId: string };
+  nonce: string;
+  fee: string;
+  signature: string;
+  sender: string;
+}
+
 // ============ Validation Constants ============
 
 const VALID_PHASES: ReadonlySet<string> = new Set<ProjectPhase>([
@@ -1406,6 +1418,41 @@ export const treeMatchAgentsToTask: Handler<
   };
 };
 
+// ============ Undecidable Resolution Handler (U7) ============
+
+/**
+ * Resolve a contested/undecidable fact.
+ */
+export const treeResolveUndecidable: Handler<
+  TreeResolveUndecidableRequest,
+  TreeWriteResponse
+> = async (params, ctx) => {
+  const senderPubKey = verifySender(params, {
+    factId: params.factId,
+    resolutionPath: params.resolutionPath,
+    oracle: params.oracle,
+    consensus: params.consensus,
+    newAxiom: params.newAxiom,
+    nonce: params.nonce,
+    fee: params.fee,
+  });
+
+  return executeTreeTransaction(
+    ctx,
+    "resolve_undecidable",
+    senderPubKey,
+    {
+      factId: params.factId,
+      resolutionPath: params.resolutionPath,
+      oracle: params.oracle,
+      consensus: params.consensus,
+      newAxiom: params.newAxiom,
+    },
+    params.fee,
+    params.nonce,
+  );
+};
+
 // ============ Combined Handlers ============
 
 // Individual handlers are fully typed; the dispatch map uses `any` due to Handler contravariance
@@ -1440,4 +1487,6 @@ export const treeHandlers: Record<string, Handler<any, any>> = {
   tree_getAvailableAgents: treeGetAvailableAgents,
   tree_getAgentReputation: treeGetAgentReputation,
   tree_matchAgentsToTask: treeMatchAgentsToTask,
+  // Undecidable resolution
+  tree_resolveUndecidable: treeResolveUndecidable,
 };

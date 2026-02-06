@@ -182,7 +182,8 @@ export interface EpistemicBasis {
     | "observation"
     | "records"
     | "models"
-    | "consensus";
+    | "consensus"
+    | "replication";
   evidenceCount: number;
   verificationCount: number;
   derivedFrom: string[]; // Fact IDs this was derived from

@@ -14,7 +14,6 @@ import type {
   ClaimSubmission,
   TruthParameters,
   Confidence,
-  InferenceType,
   FundamentalityMetrics,
   CitationReward,
   CitationParameters,
@@ -78,26 +77,6 @@ export function calculateConfidence(
 
   // Clamp to [0, 1]
   return Math.max(0, Math.min(1, confidence));
-}
-
-/**
- * Calculate derived confidence from premises
- *
- * FORMULA (Open Source):
- *   derived_confidence = min(premise_confidences) × inference_strength
- *
- * Derivations are only as strong as their weakest premise.
- */
-export function calculateDerivedConfidence(
-  premiseConfidences: Confidence[],
-  inferenceType: InferenceType,
-): Confidence {
-  if (premiseConfidences.length === 0) return 0;
-
-  const minPremiseConfidence = Math.min(...premiseConfidences);
-  const inferenceStrength = INFERENCE_STRENGTH[inferenceType];
-
-  return minPremiseConfidence * inferenceStrength;
 }
 
 /**

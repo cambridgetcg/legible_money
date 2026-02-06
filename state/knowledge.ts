@@ -65,6 +65,16 @@ function serializeFactState(fact: FactState): Uint8Array {
     // Gödelian zone metadata
     logicZone: fact.logicZone,
     decidability: fact.decidability,
+    // U3/U7: stratum ceiling + undecidable resolution
+    stratumCeiling: fact.stratumCeiling,
+    undecidableResolution: fact.undecidableResolution
+      ? {
+          ...fact.undecidableResolution,
+          resolvedAt: fact.undecidableResolution.resolvedAt.toString(),
+        }
+      : undefined,
+    // Multidimensional confidence (all fields are number/string — no BigInt)
+    multidimensionalConfidence: fact.multidimensionalConfidence,
   });
   return new TextEncoder().encode(json);
 }
@@ -102,6 +112,16 @@ function deserializeFactState(bytes: Uint8Array): FactState {
     // Gödelian zone metadata (undefined for legacy facts — backward compat)
     logicZone: obj.logicZone,
     decidability: obj.decidability,
+    // U3/U7: stratum ceiling + undecidable resolution
+    stratumCeiling: obj.stratumCeiling,
+    undecidableResolution: obj.undecidableResolution
+      ? {
+          ...obj.undecidableResolution,
+          resolvedAt: BigInt(obj.undecidableResolution.resolvedAt),
+        }
+      : undefined,
+    // Multidimensional confidence (backward compat: undefined for legacy facts)
+    multidimensionalConfidence: obj.multidimensionalConfidence,
   };
 }
 
@@ -1015,7 +1035,7 @@ export class KnowledgeStateTree {
   /**
    * Propagation constants
    */
-  private static readonly PROPAGATION_THRESHOLD = 0.05; // 5% change triggers propagation
+  private static readonly PROPAGATION_THRESHOLD = 0.01; // 1% change triggers propagation
   private static readonly MAX_PROPAGATION_DEPTH = 10; // Max hops in dependency chain
 
   /**
@@ -1130,8 +1150,12 @@ export class KnowledgeStateTree {
       const ref = this.getReference(factId, toId);
       if (!ref) continue;
 
-      // Only consider supporting/extending references (derivation relationships)
-      if (ref.referenceType === "supports" || ref.referenceType === "extends") {
+      // Only consider derivation relationships (supports, extends, derives_from)
+      if (
+        ref.referenceType === "supports" ||
+        ref.referenceType === "extends" ||
+        ref.referenceType === "derives_from"
+      ) {
         hasSupportingRefs = true;
         const premise = this.getFact(toId);
         if (premise && premise.status === "active") {

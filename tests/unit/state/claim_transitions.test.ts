@@ -1612,5 +1612,356 @@ describe.sequential("Claim Submission Workflow", () => {
       expect(fact.confidence).toBe(0.8);
       expect(fact.domain).toBe("math.sets");
     });
+
+    // ============ U3: Stratum ceiling on contested facts ============
+
+    it("U3: should apply stratum ceiling to contested facts", () => {
+      // social stratum has ceiling 0.85
+      addTestDomain("sociology.norms", "empirical", "social");
+
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "Social norms vary by culture",
+        claimType: "empirical",
+        domain: "sociology.norms",
+        stratum: "social",
+        stake: 200n * ONE_LGM,
+        references: [],
+      };
+
+      const submitResult = executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+      expect(submitResult.success).toBe(true);
+
+      const pending = state.getPendingClaims();
+      const cId = pending[pending.length - 1].id;
+
+      executeTransaction(
+        state,
+        createSystemTransaction("claim_start_verification", {
+          type: "claim_start_verification",
+          claimId: cId,
+          roundId: `round-u3-${cId}`,
+          selectedValidators: ["v1", "v2", "v3"],
+        }),
+        blockNumber + 1n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      // Complete with "contested" — confidence should be min(0.5, 0.85) = 0.5
+      executeTransaction(
+        state,
+        createSystemTransaction("claim_complete_verification", {
+          type: "claim_complete_verification",
+          claimId: cId,
+          roundId: `round-u3-${cId}`,
+          outcome: "contested",
+          finalConfidence: 0.5,
+          verifierCount: 5,
+          rewards: [],
+          slashes: [],
+        }),
+        blockNumber + 10n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      const claim = state.getClaim(cId)!;
+      expect(claim.resultFactId).toBeDefined();
+      const fact = state.getFact(claim.resultFactId!)!;
+      expect(fact.status).toBe("contested");
+      // 0.5 is below the social ceiling 0.85, so no clamping needed
+      expect(fact.confidence).toBe(0.5);
+      expect(fact.stratumCeiling).toBe(0.85);
+    });
+
+    it("U3: should populate stratumCeiling on accepted facts", () => {
+      addTestDomain("physics.dynamics", "empirical", "physical");
+
+      const { factId } = submitAndVerify(
+        "Group dynamics follow predictable patterns",
+        "physics.dynamics",
+        { stratum: "physical", finalConfidence: 0.9 },
+      );
+
+      const fact = state.getFact(factId)!;
+      expect(fact.status).toBe("active");
+      // physical stratum ceiling is 0.99 — 0.9 is within bounds
+      expect(fact.confidence).toBe(0.9);
+      expect(fact.stratumCeiling).toBeDefined();
+    });
+  });
+
+  // ============================================================================
+  // resolve_undecidable Tests (U7)
+  // ============================================================================
+
+  describe("executeResolveUndecidable (U7)", () => {
+    let contestedFactId: string;
+    let claimIdU7: string;
+
+    function addTestDomainU7(
+      domainId: string,
+      logicZoneDefault:
+        | "propositional"
+        | "presburger"
+        | "peano"
+        | "set_theory"
+        | "empirical",
+      stratum:
+        | "fundamental"
+        | "physical"
+        | "chemical"
+        | "biological"
+        | "cognitive"
+        | "social"
+        | "technological" = "fundamental",
+    ): void {
+      const domain: OntologicalDomain = {
+        id: domainId,
+        name: domainId,
+        stratum,
+        parentDomain: "root",
+        childDomains: [],
+        dependsOnStrata: [],
+        logicZoneDefault,
+        epistemicCategoryDefault: "formal",
+        description: `U7 test domain`,
+        examples: [],
+        factCount: 0,
+        axiomCount: 0,
+        createdAt: 0,
+      };
+      state.addDomainToTree(domain);
+    }
+
+    beforeEach(() => {
+      // Submit a claim and complete it as "contested" to create a contested fact
+      addTestDomainU7("test.undecidable", "empirical", "physical");
+
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "A claim about an undecidable matter",
+        claimType: "empirical",
+        domain: "test.undecidable",
+        stratum: "physical",
+        stake: 200n * ONE_LGM,
+        references: [],
+      };
+
+      executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      const pending = state.getPendingClaims();
+      claimIdU7 = pending[pending.length - 1].id;
+
+      executeTransaction(
+        state,
+        createSystemTransaction("claim_start_verification", {
+          type: "claim_start_verification",
+          claimId: claimIdU7,
+          roundId: `round-u7-${claimIdU7}`,
+          selectedValidators: ["v1", "v2", "v3"],
+        }),
+        blockNumber + 1n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      executeTransaction(
+        state,
+        createSystemTransaction("claim_complete_verification", {
+          type: "claim_complete_verification",
+          claimId: claimIdU7,
+          roundId: `round-u7-${claimIdU7}`,
+          outcome: "contested",
+          finalConfidence: 0.5,
+          verifierCount: 5,
+          rewards: [],
+          slashes: [],
+        }),
+        blockNumber + 10n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      const claim = state.getClaim(claimIdU7)!;
+      contestedFactId = claim.resultFactId!;
+      expect(state.getFact(contestedFactId)!.status).toBe("contested");
+    });
+
+    it("should resolve via oracle path (confidence → 0.8, status → active)", () => {
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: contestedFactId,
+          resolutionPath: "oracle",
+          oracle: { oracleId: "oracle:physics-lab", verdict: true },
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(true);
+
+      const fact = state.getFact(contestedFactId)!;
+      expect(fact.status).toBe("active");
+      expect(fact.confidence).toBe(0.8);
+      expect(fact.undecidableResolution).toBeDefined();
+      expect(fact.undecidableResolution!.resolutionPath).toBe("oracle");
+      expect(fact.undecidableResolution!.previousConfidence).toBe(0.5);
+      expect(fact.undecidableResolution!.oracle?.oracleId).toBe(
+        "oracle:physics-lab",
+      );
+    });
+
+    it("should resolve via consensus path (confidence → 0.7, status → active)", () => {
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: contestedFactId,
+          resolutionPath: "consensus",
+          consensus: { proposalId: "prop-001", votesFor: 15, votesAgainst: 3 },
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(true);
+
+      const fact = state.getFact(contestedFactId)!;
+      expect(fact.status).toBe("active");
+      expect(fact.confidence).toBe(0.7);
+      expect(fact.undecidableResolution!.resolutionPath).toBe("consensus");
+      expect(fact.undecidableResolution!.consensus?.votesFor).toBe(15);
+    });
+
+    it("should resolve via new_axiom path (confidence → 0.99 with physical ceiling)", () => {
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: contestedFactId,
+          resolutionPath: "new_axiom",
+          newAxiom: { axiomId: "axiom:new-physical-law" },
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(true);
+
+      const fact = state.getFact(contestedFactId)!;
+      expect(fact.status).toBe("active");
+      // new_axiom gives 1.0 but physical stratum ceiling is 0.99
+      expect(fact.confidence).toBe(0.99);
+      expect(fact.undecidableResolution!.resolutionPath).toBe("new_axiom");
+      expect(fact.undecidableResolution!.newAxiom?.axiomId).toBe(
+        "axiom:new-physical-law",
+      );
+    });
+
+    it("should resolve via accept_undecidability (stays contested at 0.5)", () => {
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: contestedFactId,
+          resolutionPath: "accept_undecidability",
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(true);
+
+      const fact = state.getFact(contestedFactId)!;
+      expect(fact.status).toBe("contested"); // stays contested
+      expect(fact.confidence).toBe(0.5);
+      expect(fact.undecidableResolution!.resolutionPath).toBe(
+        "accept_undecidability",
+      );
+    });
+
+    it("should reject resolution of non-contested fact", () => {
+      // Create an active fact directly
+      state.addFact({
+        id: "fact:active-001",
+        claim: "An active fact",
+        domain: "test.undecidable",
+        confidence: 0.9,
+        verifiedAt: 50n,
+        verifierCount: 5,
+        challengeCount: 0,
+        citationCount: 0,
+        status: "active",
+      });
+
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: "fact:active-001",
+          resolutionPath: "oracle",
+          oracle: { oracleId: "oracle:test", verdict: true },
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("contested");
+    });
+
+    it("should reject resolution of non-existent fact", () => {
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: "fact:nonexistent",
+          resolutionPath: "oracle",
+          oracle: { oracleId: "oracle:test", verdict: true },
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("not found");
+    });
+
+    it("should reject oracle resolution without oracleId", () => {
+      const result = executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: contestedFactId,
+          resolutionPath: "oracle",
+          // Missing oracle payload
+        }),
+        blockNumber + 20n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("oracle");
+    });
+
+    it("should store resolution metadata with resolvedAt block number", () => {
+      const resolveBlock = blockNumber + 25n;
+      executeTransaction(
+        state,
+        createSystemTransaction("resolve_undecidable", {
+          factId: contestedFactId,
+          resolutionPath: "consensus",
+          consensus: { proposalId: "prop-002", votesFor: 20, votesAgainst: 5 },
+        }),
+        resolveBlock,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      const fact = state.getFact(contestedFactId)!;
+      expect(fact.undecidableResolution!.resolvedAt).toBe(resolveBlock);
+    });
   });
 });
