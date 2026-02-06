@@ -1,11 +1,13 @@
 /**
  * Ontological Validation - Cross-Stratum Reference Rules
  *
- * Enforces ontological constraints on references between facts:
- * - supports/extends: Can only reference same or lower stratum
- * - specializes: Must stay in same stratum
- * - generalizes: Can only reference lower stratum
- * - contradicts: Any stratum (contradictions are universal)
+ * Enforces ontological constraints on references between facts.
+ * Direction convention: "from generalizes to" means from=general, to=specific.
+ *
+ * - supports/extends: to must be at same or lower stratum as from
+ * - specializes: to must be in same stratum as from
+ * - generalizes: to (specific) must be at same or lower stratum as from (general)
+ * - contradicts: any stratum (contradictions are universal)
  */
 
 import {
@@ -40,12 +42,17 @@ export type ReferenceType =
 /**
  * Validate that a reference respects ontological constraints.
  *
+ * Direction convention: from → to means "from references to".
+ * E.g., "A generalizes B" means A is the general fact, B is the specific one.
+ *
  * Rules:
- * - supports: Can only support facts in same or lower stratum
- * - extends: Can only extend facts in same or lower stratum
- * - specializes: Must be in the same stratum
- * - generalizes: Can only generalize to lower stratum
- * - contradicts: Any stratum (contradictions cross boundaries)
+ * - supports: from can support to at same or lower stratum (support flows downward)
+ * - extends: from can extend to at same or lower stratum (extension flows downward)
+ * - specializes: from specializes to within the same stratum only
+ * - generalizes: from (general) references to (specific) at same or lower stratum.
+ *   A biology fact (level 3) can generalize a chemistry fact (level 2),
+ *   meaning "this higher-level pattern subsumes lower-level specifics".
+ * - contradicts: any stratum (contradictions cross boundaries)
  */
 export function validateOntologicalReference(
   fromDomain: OntologicalDomain,
@@ -90,12 +97,12 @@ export function validateOntologicalReference(
     return { valid: true, fromLevel, toLevel };
   }
 
-  // Generalizes: can only generalize to lower stratum
+  // Generalizes: from (general) can only reference to (specific) at same or lower stratum
   if (referenceType === "generalizes") {
     if (toLevel > fromLevel) {
       return {
         valid: false,
-        reason: `Cannot generalize to higher stratum (${toDomain.stratum} level ${toLevel} > ${fromDomain.stratum} level ${fromLevel})`,
+        reason: `Cannot generalize: target stratum ${toDomain.stratum} (level ${toLevel}) is higher than source ${fromDomain.stratum} (level ${fromLevel}). The general fact must be at or above the specific fact.`,
         fromLevel,
         toLevel,
       };
@@ -388,6 +395,9 @@ export function areAllReferencesValid(
 
 /**
  * Check if two domains are in compatible strata for a given reference type.
+ *
+ * Direction: from → to. For "generalizes", from is the general fact (higher/same stratum),
+ * to is the specific fact (lower/same stratum).
  */
 export function areDomainsCompatible(
   fromStratum: OntologicalStratum,

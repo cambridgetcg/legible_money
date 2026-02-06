@@ -12,6 +12,7 @@ import {
   STRATUM_HIERARCHY,
   STRATUM_CONFIDENCE_CEILING,
 } from "./types.js";
+import { defaultRegistry } from "./stratum_registry.js";
 
 // ============================================================================
 // Valid Stratum Dependencies
@@ -67,6 +68,10 @@ export function getValidDependencies(
 /**
  * Check if a stratum dependency is valid.
  *
+ * Checks the static VALID_DEPENDENCIES map first (covers genesis strata),
+ * then falls back to the registry for governance-registered strata that
+ * may have canReferenceAll=true.
+ *
  * @param fromStratum - The stratum of the dependent fact
  * @param toStratum - The stratum being depended upon
  * @returns true if the dependency is valid
@@ -78,9 +83,15 @@ export function isValidStratumDependency(
   // Same stratum is always valid
   if (fromStratum === toStratum) return true;
 
-  // Check against valid dependencies
+  // Check against static valid dependencies (covers all genesis strata)
   const validDeps = VALID_DEPENDENCIES.get(fromStratum);
-  return validDeps?.includes(toStratum) ?? false;
+  if (validDeps?.includes(toStratum)) return true;
+
+  // Fallback: check registry for governance-registered strata with canReferenceAll
+  const registryDef = defaultRegistry.get(fromStratum);
+  if (registryDef?.canReferenceAll) return true;
+
+  return false;
 }
 
 /**

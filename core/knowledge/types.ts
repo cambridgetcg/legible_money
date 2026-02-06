@@ -27,7 +27,8 @@ export type EpistemicCategory =
   | "empirical" // Observable facts (e.g., "Temperature is 20°C")
   | "historical" // Past events (e.g., "Event X occurred on date Y")
   | "predictive" // Future predictions (e.g., "Price will rise")
-  | "social"; // Consensus-based (e.g., "X is considered beautiful")
+  | "social" // Consensus-based (e.g., "X is considered beautiful")
+  | "replicated"; // IRL-verified empirical facts (upgraded from empirical after 2+ replications)
 
 /**
  * Profile for an epistemic category
@@ -37,6 +38,8 @@ export interface EpistemicProfile {
   category: EpistemicCategory;
   maxConfidence: Confidence; // Ceiling - cannot exceed this
   decayHalfLife: number | null; // Blocks until confidence halves (null = no decay)
+  minConfidence: number; // Floor - fact expires below this (1.0 for eternal)
+  reverificationBonus: number; // Confidence boost from successful re-verification
   verificationMethod:
     | "definition"
     | "proof"
@@ -44,14 +47,18 @@ export interface EpistemicProfile {
     | "observation"
     | "records"
     | "models"
-    | "consensus";
+    | "consensus"
+    | "replication";
   requiresReverification: boolean; // Whether ongoing verification needed
   minVerifiers: number; // Minimum validators for this category
   description: string;
 }
 
 /**
- * Epistemic profiles defining confidence semantics per category
+ * Epistemic profiles — SINGLE SOURCE OF TRUTH for all category parameters.
+ *
+ * CATEGORY_DECAY and EPISTEMIC_CEILINGS in consensus/pot/confidence.ts
+ * are derived from these profiles. Do NOT define parallel constants.
  *
  * Key insight: Eternal truths don't decay. Empirical facts do.
  */
@@ -60,6 +67,8 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
     category: "analytic",
     maxConfidence: 1.0,
     decayHalfLife: null, // Eternal - true by definition
+    minConfidence: 1.0,
+    reverificationBonus: 0,
     verificationMethod: "definition",
     requiresReverification: false,
     minVerifiers: 3,
@@ -69,6 +78,8 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
     category: "formal",
     maxConfidence: 1.0,
     decayHalfLife: null, // Eternal - mathematically proven
+    minConfidence: 1.0,
+    reverificationBonus: 0,
     verificationMethod: "proof",
     requiresReverification: false,
     minVerifiers: 5,
@@ -78,6 +89,8 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
     category: "protocol",
     maxConfidence: 1.0,
     decayHalfLife: null, // Eternal - constructed by protocol
+    minConfidence: 1.0,
+    reverificationBonus: 0,
     verificationMethod: "construction",
     requiresReverification: false,
     minVerifiers: 1, // Protocol itself verifies
@@ -86,7 +99,9 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
   empirical: {
     category: "empirical",
     maxConfidence: 0.99, // Never 100% - always measurement error
-    decayHalfLife: 100000, // ~3 days at 2521ms blocks
+    decayHalfLife: 100000, // ~2.9 days at 2521ms blocks
+    minConfidence: 0.33,
+    reverificationBonus: 0.11,
     verificationMethod: "observation",
     requiresReverification: true,
     minVerifiers: 5,
@@ -95,7 +110,9 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
   historical: {
     category: "historical",
     maxConfidence: 0.95, // Past is reconstructed, never certain
-    decayHalfLife: 500000, // ~15 days - slower decay
+    decayHalfLife: 500000, // ~14.6 days - slower decay
+    minConfidence: 0.22,
+    reverificationBonus: 0.11,
     verificationMethod: "records",
     requiresReverification: true,
     minVerifiers: 5,
@@ -104,7 +121,9 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
   predictive: {
     category: "predictive",
     maxConfidence: 0.9, // Future is inherently uncertain
-    decayHalfLife: 20000, // Fast decay until resolved
+    decayHalfLife: 20000, // ~0.6 days - fast decay until resolved
+    minConfidence: 0.22,
+    reverificationBonus: 0.11,
     verificationMethod: "models",
     requiresReverification: true,
     minVerifiers: 7,
@@ -113,11 +132,25 @@ export const EPISTEMIC_PROFILES: Record<EpistemicCategory, EpistemicProfile> = {
   social: {
     category: "social",
     maxConfidence: 0.85, // Consensus-based, inherently contested
-    decayHalfLife: 150000, // ~5 days
+    decayHalfLife: 150000, // ~4.4 days - consensus is stickier than observation
+    minConfidence: 0.22,
+    reverificationBonus: 0.11,
     verificationMethod: "consensus",
     requiresReverification: true,
     minVerifiers: 10,
     description: "Socially constructed truths and values",
+  },
+  replicated: {
+    category: "replicated",
+    maxConfidence: 0.995, // Higher than empirical due to IRL verification
+    decayHalfLife: 1000000, // ~29 days - very slow decay
+    minConfidence: 0.55, // Higher floor due to real-world verification
+    reverificationBonus: 0.05, // Less bonus needed (already verified IRL)
+    verificationMethod: "replication",
+    requiresReverification: true,
+    minVerifiers: 5,
+    description:
+      "Empirical facts with successful IRL replication (2+ independent replications)",
   },
 };
 

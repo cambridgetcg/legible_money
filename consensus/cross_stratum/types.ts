@@ -13,7 +13,10 @@
  * - 0.3 (30%) lower stratum veto weight
  */
 
-import type { OntologicalStratum } from "../../core/knowledge/ontology/types.js";
+import {
+  type OntologicalStratum,
+  STRATUM_HIERARCHY,
+} from "../../core/knowledge/ontology/types.js";
 import type { ValidatorReveal } from "../pot/types.js";
 
 // ============================================================================
@@ -166,40 +169,24 @@ export function getStratumRequirement(
 }
 
 /**
- * Check if stratum is lower than another
+ * Check if stratum is lower than another.
+ * Delegates to the single source of truth: STRATUM_HIERARCHY.
  */
 export function isLowerStratum(
   candidateStratum: OntologicalStratum,
   referenceStratum: OntologicalStratum,
 ): boolean {
-  const hierarchy: Record<OntologicalStratum, number> = {
-    fundamental: 0,
-    physical: 1,
-    chemical: 2,
-    biological: 3,
-    cognitive: 4,
-    social: 5,
-    technological: 6,
-  };
-
-  return hierarchy[candidateStratum] < hierarchy[referenceStratum];
+  return (
+    STRATUM_HIERARCHY[candidateStratum] < STRATUM_HIERARCHY[referenceStratum]
+  );
 }
 
 /**
- * Get stratum level (0-6)
+ * Get stratum level (0-6).
+ * Delegates to the single source of truth: STRATUM_HIERARCHY.
  */
 export function getStratumLevel(stratum: OntologicalStratum): number {
-  const hierarchy: Record<OntologicalStratum, number> = {
-    fundamental: 0,
-    physical: 1,
-    chemical: 2,
-    biological: 3,
-    cognitive: 4,
-    social: 5,
-    technological: 6,
-  };
-
-  return hierarchy[stratum];
+  return STRATUM_HIERARCHY[stratum];
 }
 
 /**

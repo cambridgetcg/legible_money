@@ -23,12 +23,14 @@ import type { MerkleRoot, MerkleProofData } from "../core/crypto/merkle.js";
 import type { VerificationResult } from "../consensus/pot/types.js";
 import type {
   Confidence,
+  EpistemicCategory,
   FactStatus as CoreFactStatus,
 } from "../core/knowledge/types.js";
 import type {
   OntologicalStratum,
   StratumDependency,
 } from "../core/knowledge/ontology/types.js";
+import type { Decidability, LogicZone } from "../core/logic/types.js";
 
 // ============ State Roots ============
 
@@ -220,12 +222,17 @@ export interface FactState {
   totalCitationRewards?: bigint; // Cumulative LGM earned from citation rewards
 
   // Ontological metadata
+  epistemicCategory?: EpistemicCategory; // Epistemic category (from domain or stratum default)
   stratum?: OntologicalStratum; // Stratum of the resolved domain
   resolvedDomainId?: string; // The domain ID resolved from ontology tree
   ontologyValidated?: boolean; // Whether claim passed ontology validation
   stratumDependencies?: StratumDependency[]; // Cross-stratum dependencies
   stratumCeiling?: number; // Confidence ceiling from stratum
   crossStratumDiscount?: number; // Discount factor from dependencies
+
+  // Gödelian metadata (U1 fix: propagated from ClaimState)
+  logicZone?: LogicZone; // Logic zone of the claim
+  decidability?: Decidability; // Decidability assessment at submission
 }
 
 /**
@@ -303,6 +310,15 @@ export interface ClaimState {
   /** Block when status last changed */
   statusChangedAt: bigint;
 
+  /** Logic zone classification */
+  logicZone?: LogicZone;
+
+  /** Decidability assessment */
+  decidability?: Decidability;
+
+  /** Gödelian status (benign, goedelian, paradoxical) */
+  goedelianStatus?: string;
+
   /** Reason for rejection (if rejected) */
   rejectionReason?: string;
 
@@ -336,6 +352,8 @@ export interface ClaimSubmitPayload {
   stratum: OntologicalStratum;
   stake: bigint;
   references: string[];
+  /** Optional formal notation for logical analysis */
+  formalNotation?: string;
   /** If derived from existing facts (inference chain) */
   derivedFrom?: {
     factIds: string[];

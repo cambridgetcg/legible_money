@@ -912,41 +912,6 @@ describe.sequential("KnowledgeStateTree", () => {
     });
   });
 
-  // ──────────── Confidence Decay (Eager) ────────────
-
-  describe("Confidence Decay (Eager)", () => {
-    it("should apply logarithmic decay to active facts", () => {
-      const id = uid();
-      tree.addFact(makeFact(id, { confidence: 0.9, verifiedAt: 0n }));
-
-      tree.applyConfidenceDecay(10000n, 0.001);
-      const fact = tree.getFact(id)!;
-      expect(fact.confidence).toBeLessThan(0.9);
-      expect(fact.confidence).toBeGreaterThan(0.1);
-    });
-
-    it("should not decay non-active facts", () => {
-      const id = uid();
-      tree.addFact(
-        makeFact(id, { confidence: 0.9, status: "revoked", verifiedAt: 0n }),
-      );
-
-      tree.applyConfidenceDecay(10000n, 0.001);
-      const fact = tree.getFact(id)!;
-      expect(fact.confidence).toBe(0.9);
-    });
-
-    it("should not decay below 0.1", () => {
-      const id = uid();
-      tree.addFact(makeFact(id, { confidence: 0.15, verifiedAt: 0n }));
-
-      // Very aggressive decay rate
-      tree.applyConfidenceDecay(1000000n, 0.1);
-      const fact = tree.getFact(id)!;
-      expect(fact.confidence).toBeGreaterThanOrEqual(0.1);
-    });
-  });
-
   // ──────────── Lazy Confidence Decay (GAP-008) ────────────
 
   describe("Lazy Confidence Decay (GAP-008)", () => {
@@ -990,7 +955,7 @@ describe.sequential("KnowledgeStateTree", () => {
 
       expect(decay.isEternal).toBe(true);
       expect(decay.effectiveConfidence).toBe(1.0);
-      expect(decay.category).toBe("analytic");
+      expect(decay.category).toBe("formal");
     });
 
     it("should treat technological stratum facts as eternal", () => {

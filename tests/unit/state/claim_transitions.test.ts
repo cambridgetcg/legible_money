@@ -19,6 +19,7 @@ import type {
 } from "../../../consensus/pot/types.js";
 import type { ClaimSubmitPayload, ClaimState } from "../../../state/types.js";
 import { publicKeyToDid } from "../../../core/agents/identity/did.js";
+import type { OntologicalDomain } from "../../../core/knowledge/ontology/types.js";
 
 // Test constants
 const ONE_LGM = 10n ** 18n;
@@ -289,6 +290,86 @@ describe.sequential("Claim Submission Workflow", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Insufficient balance");
+    });
+
+    it("should reject paradoxical claims (U1)", () => {
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "this statement is false",
+        claimType: "empirical",
+        domain: "test",
+        stratum: "physical",
+        stake: 200n * ONE_LGM,
+        references: [],
+      };
+
+      const tx = createTransaction("claim_submit", payload);
+      const result = executeTransaction(
+        state,
+        tx,
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("paradox");
+    });
+
+    it("should classify claim zone and decidability (U1)", () => {
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "Water boils at 100 degrees Celsius at sea level",
+        claimType: "empirical",
+        domain: "test",
+        stratum: "physical",
+        stake: 200n * ONE_LGM,
+        references: [],
+      };
+
+      const tx = createTransaction("claim_submit", payload);
+      const result = executeTransaction(
+        state,
+        tx,
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+      expect(result.success).toBe(true);
+
+      const claims = state.getPendingClaims();
+      const claim = claims[claims.length - 1];
+
+      // Claim should have logicZone and decidability set
+      expect(claim.logicZone).toBeDefined();
+      expect(claim.decidability).toBeDefined();
+      // Benign empirical claims should not be paradoxical
+      expect(claim.goedelianStatus).not.toBe("paradoxical");
+    });
+
+    it("should detect Gödelian self-reference without rejecting (U1)", () => {
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "This claim cannot be proven within this system",
+        claimType: "formal",
+        domain: "test",
+        stratum: "physical",
+        stake: 200n * ONE_LGM,
+        references: [],
+      };
+
+      const tx = createTransaction("claim_submit", payload);
+      const result = executeTransaction(
+        state,
+        tx,
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      // Gödelian self-reference is NOT paradoxical — it should succeed
+      expect(result.success).toBe(true);
+
+      const claims = state.getPendingClaims();
+      const claim = claims[claims.length - 1];
+      expect(claim.goedelianStatus).toBe("goedelian");
     });
   });
 
@@ -577,6 +658,65 @@ describe.sequential("Claim Submission Workflow", () => {
         const claim = state.getClaim(claimId);
         expect(claim?.rejectionReason).toContain("contested");
       });
+
+      it("should create a fact with status 'contested' and confidence 0.5 (U2)", () => {
+        const result = executeTransaction(
+          state,
+          createSystemTransaction("claim_complete_verification", {
+            type: "claim_complete_verification",
+            claimId,
+            roundId: "round-001",
+            outcome: "contested",
+            finalConfidence: 0.5,
+            verifierCount: 5,
+            rewards: [],
+            slashes: [],
+          }),
+          blockNumber + 10n,
+          TEST_CONSENSUS_PARAMS,
+        );
+        expect(result.success).toBe(true);
+
+        // Claim should be accepted (not rejected) with a result fact
+        const claim = state.getClaim(claimId)!;
+        expect(claim.status).toBe("accepted");
+        expect(claim.resultFactId).toBeDefined();
+
+        // Fact should exist with contested status and 0.5 confidence
+        const fact = state.getFact(claim.resultFactId!);
+        expect(fact).not.toBeNull();
+        expect(fact?.confidence).toBe(0.5);
+        expect(fact?.status).toBe("contested");
+        expect(fact?.claim).toBe("Test claim for completion");
+        expect(fact?.domain).toBe("test.completion");
+      });
+
+      it("should propagate Gödelian metadata from claim to contested fact (U2)", () => {
+        const result = executeTransaction(
+          state,
+          createSystemTransaction("claim_complete_verification", {
+            type: "claim_complete_verification",
+            claimId,
+            roundId: "round-001",
+            outcome: "contested",
+            finalConfidence: 0.5,
+            verifierCount: 5,
+            rewards: [],
+            slashes: [],
+          }),
+          blockNumber + 10n,
+          TEST_CONSENSUS_PARAMS,
+        );
+        expect(result.success).toBe(true);
+
+        const claim = state.getClaim(claimId)!;
+        const fact = state.getFact(claim.resultFactId!)!;
+
+        // Gödelian metadata from claim should be propagated to fact
+        // The claim "Test claim for completion" is empirical, so:
+        expect(fact.logicZone).toBe(claim.logicZone);
+        expect(fact.decidability).toBe(claim.decidability);
+      });
     });
 
     describe("insufficient outcome", () => {
@@ -605,6 +745,33 @@ describe.sequential("Claim Submission Workflow", () => {
 
         const claim = state.getClaim(claimId);
         expect(claim?.rejectionReason).toContain("Insufficient validators");
+      });
+
+      it("should NOT create a fact for insufficient outcome (U2 regression)", () => {
+        executeTransaction(
+          state,
+          createSystemTransaction("claim_complete_verification", {
+            type: "claim_complete_verification",
+            claimId,
+            roundId: "round-001",
+            outcome: "insufficient",
+            finalConfidence: 0,
+            verifierCount: 1,
+            rewards: [],
+            slashes: [],
+          }),
+          blockNumber + 10n,
+          TEST_CONSENSUS_PARAMS,
+        );
+
+        const claim = state.getClaim(claimId)!;
+        expect(claim.status).toBe("rejected");
+        expect(claim.resultFactId).toBeUndefined();
+
+        // Fact should NOT exist
+        const factId = `fact:${claimId.replace("claim:", "")}`;
+        const fact = state.getFact(factId);
+        expect(fact).toBeNull();
       });
     });
 
@@ -1118,6 +1285,332 @@ describe.sequential("Claim Submission Workflow", () => {
       // No fact should be created
       const claim = state.getClaim(claimId);
       expect(claim?.resultFactId).toBeUndefined();
+    });
+  });
+
+  // ============================================================================
+  // Gödelian Logic Zone Integration Tests (G1/G2 Fix)
+  // ============================================================================
+
+  describe("Logic Zone Integration", () => {
+    // Helper: set up domain tree with a domain that has a specific logicZoneDefault
+    function addTestDomain(
+      domainId: string,
+      logicZoneDefault:
+        | "propositional"
+        | "presburger"
+        | "peano"
+        | "set_theory"
+        | "empirical",
+      stratum:
+        | "fundamental"
+        | "physical"
+        | "chemical"
+        | "biological"
+        | "cognitive"
+        | "social"
+        | "technological" = "fundamental",
+    ): void {
+      const domain: OntologicalDomain = {
+        id: domainId,
+        name: domainId,
+        stratum,
+        parentDomain: "root",
+        childDomains: [],
+        dependsOnStrata: [],
+        logicZoneDefault,
+        epistemicCategoryDefault: "formal",
+        description: `Test domain with ${logicZoneDefault} zone`,
+        examples: [],
+        factCount: 0,
+        axiomCount: 0,
+        createdAt: 0,
+      };
+      state.addDomainToTree(domain);
+    }
+
+    // Helper: submit, start verification, and complete a claim
+    function submitAndVerify(
+      claimText: string,
+      domain: string,
+      options: {
+        stratum?: "fundamental" | "physical";
+        finalConfidence?: number;
+        references?: string[];
+        derivedFrom?: {
+          factIds: string[];
+          inferenceType: string;
+          logicChain: string;
+        };
+      } = {},
+    ): { claimId: string; factId: string } {
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: claimText,
+        claimType: "empirical",
+        domain,
+        stratum: options.stratum ?? "fundamental",
+        stake: 200n * ONE_LGM,
+        references: options.references ?? [],
+        derivedFrom: options.derivedFrom,
+      };
+
+      const submitResult = executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+      if (!submitResult.success)
+        throw new Error(`Submit failed: ${submitResult.error}`);
+
+      const pending = state.getPendingClaims();
+      const cId = pending[pending.length - 1].id;
+
+      executeTransaction(
+        state,
+        createSystemTransaction("claim_start_verification", {
+          type: "claim_start_verification",
+          claimId: cId,
+          roundId: `round-zone-${cId}`,
+          selectedValidators: ["v1", "v2", "v3"],
+        }),
+        blockNumber + 1n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      executeTransaction(
+        state,
+        createSystemTransaction("claim_complete_verification", {
+          type: "claim_complete_verification",
+          claimId: cId,
+          roundId: `round-zone-${cId}`,
+          outcome: "accepted",
+          finalConfidence: options.finalConfidence ?? 0.85,
+          verifierCount: 5,
+          rewards: [],
+          slashes: [],
+        }),
+        blockNumber + 10n,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      const claim = state.getClaim(cId)!;
+      return { claimId: cId, factId: claim.resultFactId! };
+    }
+
+    it("G2: should reconcile text zone with domain logicZoneDefault", () => {
+      // Set up a domain with peano zone default
+      addTestDomain("math.number_theory", "peano");
+
+      // Submit a simple claim (text classifies as "propositional")
+      // but domain says "peano" — intersectZones should pick the higher zone
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "Goldbach conjecture holds for all tested values",
+        claimType: "empirical",
+        domain: "math.number_theory",
+        stratum: "fundamental",
+        stake: 200n * ONE_LGM,
+        references: [],
+      };
+
+      executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      const claims = state.getPendingClaims();
+      const claim = claims[claims.length - 1];
+
+      // Domain default "peano" is higher than text-classified zone
+      // intersectZones returns the higher zone
+      expect(claim.logicZone).toBe("peano");
+    });
+
+    it("G1: should cap confidence at 0.99 for Gödel-applicable zones", () => {
+      addTestDomain("math.set_theory", "set_theory");
+
+      const { factId } = submitAndVerify(
+        "ZFC is consistent",
+        "math.set_theory",
+        { finalConfidence: 1.0 },
+      );
+
+      const fact = state.getFact(factId)!;
+      // set_theory zone has goedelApplies=true → capped at 0.99
+      expect(fact.confidence).toBe(0.99);
+    });
+
+    it("G1: should not cap confidence for non-Gödel zones", () => {
+      addTestDomain("logic.propositional", "propositional");
+
+      const { factId } = submitAndVerify(
+        "If A then B; A; therefore B",
+        "logic.propositional",
+        { finalConfidence: 1.0 },
+      );
+
+      const fact = state.getFact(factId)!;
+      // propositional zone has goedelApplies=false → no cap
+      expect(fact.confidence).toBe(1.0);
+    });
+
+    it("G1: should reject propositional claim deriving from peano fact (canReference)", () => {
+      addTestDomain("logic.propositional", "propositional");
+      addTestDomain("math.arithmetic", "peano");
+
+      // Create a peano-zone fact first
+      state.addFact({
+        id: "fact:peano-parent",
+        claim: "Multiplication is commutative",
+        domain: "math.arithmetic",
+        confidence: 0.9,
+        verifiedAt: 50n,
+        verifierCount: 5,
+        challengeCount: 0,
+        citationCount: 0,
+        status: "active",
+        logicZone: "peano",
+      });
+
+      // Try to submit a propositional claim that derives from the peano fact
+      // propositional (zone 0) cannot reference peano (zone 2)
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "Simple boolean statement",
+        claimType: "empirical",
+        domain: "logic.propositional",
+        stratum: "fundamental",
+        stake: 200n * ONE_LGM,
+        references: [],
+        derivedFrom: {
+          factIds: ["fact:peano-parent"],
+          inferenceType: "deductive",
+          logicChain: "A -> B",
+        },
+      };
+
+      const result = executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Zone violation");
+      expect(result.error).toContain("propositional");
+      expect(result.error).toContain("peano");
+    });
+
+    it("G1: should allow peano claim deriving from propositional fact (canReference)", () => {
+      addTestDomain("math.arithmetic", "peano");
+
+      // Create a propositional-zone fact
+      state.addFact({
+        id: "fact:prop-parent",
+        claim: "If P then Q",
+        domain: "logic",
+        confidence: 0.95,
+        verifiedAt: 50n,
+        verifierCount: 5,
+        challengeCount: 0,
+        citationCount: 0,
+        status: "active",
+        logicZone: "propositional",
+      });
+
+      // peano (zone 2) can reference propositional (zone 0) — higher references lower
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "Based on the logical premise, multiplication distributes",
+        claimType: "empirical",
+        domain: "math.arithmetic",
+        stratum: "fundamental",
+        stake: 200n * ONE_LGM,
+        references: [],
+        derivedFrom: {
+          factIds: ["fact:prop-parent"],
+          inferenceType: "deductive",
+          logicChain: "modus ponens",
+        },
+      };
+
+      const result = executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      expect(result.success).toBe(true);
+    });
+
+    it("G1: should propagate logicZone and decidability from claim to fact", () => {
+      addTestDomain("math.analysis", "peano");
+
+      const { factId } = submitAndVerify(
+        "Every bounded sequence has a convergent subsequence",
+        "math.analysis",
+        { finalConfidence: 0.9 },
+      );
+
+      const fact = state.getFact(factId)!;
+      expect(fact.logicZone).toBeDefined();
+      expect(fact.decidability).toBeDefined();
+      // The claim text doesn't trigger multiplication keywords, but domain
+      // default is peano, so intersectZones picks peano
+      expect(fact.logicZone).toBe("peano");
+    });
+
+    it("should skip canReference check for parent facts without zone metadata (backward compat)", () => {
+      // fact:reference-001 from beforeEach has no logicZone — legacy fact
+      const payload: ClaimSubmitPayload = {
+        type: "claim_submit",
+        claim: "Derived from a legacy fact without zone",
+        claimType: "empirical",
+        domain: "test.domain",
+        stratum: "physical",
+        stake: 200n * ONE_LGM,
+        references: [],
+        derivedFrom: {
+          factIds: ["fact:reference-001"],
+          inferenceType: "inductive",
+          logicChain: "observation",
+        },
+      };
+
+      const result = executeTransaction(
+        state,
+        createTransaction("claim_submit", payload),
+        blockNumber,
+        TEST_CONSENSUS_PARAMS,
+      );
+
+      // Should succeed — no zone check on legacy facts
+      expect(result.success).toBe(true);
+    });
+
+    it("should persist logicZone and decidability on fact (serialization coverage)", () => {
+      addTestDomain("math.sets", "set_theory");
+
+      const { factId } = submitAndVerify(
+        "The cardinality of the continuum",
+        "math.sets",
+        { finalConfidence: 0.8 },
+      );
+
+      const fact = state.getFact(factId)!;
+      // Verify zone metadata was persisted on the fact
+      expect(fact.logicZone).toBe("set_theory");
+      expect(fact.decidability).toBeDefined();
+      // set_theory has goedelApplies=true, so confidence capped at 0.99
+      // but 0.8 < 0.99 so no cap effect here
+      expect(fact.confidence).toBe(0.8);
+      expect(fact.domain).toBe("math.sets");
     });
   });
 });

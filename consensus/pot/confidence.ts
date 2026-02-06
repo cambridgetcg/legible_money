@@ -15,7 +15,11 @@
  * - Multidimensional confidence output
  */
 
-import type { Confidence } from "../../core/knowledge/types.js";
+import {
+  type Confidence,
+  type EpistemicCategory,
+  EPISTEMIC_PROFILES,
+} from "../../core/knowledge/types.js";
 import type { ValidatorReveal } from "./types.js";
 import type { FactResearchSummary } from "../../core/research/types.js";
 import { RESEARCH_CONFIDENCE_MODIFIERS } from "../../core/research/types.js";
@@ -50,74 +54,31 @@ export const CONFIDENCE_WEIGHTS = {
 } as const;
 
 /**
- * Time decay parameters (legacy - use category-specific decay instead)
- */
-export const TIME_DECAY = {
-  HALF_LIFE_BLOCKS: 111111, // Confidence halves every ~111k blocks (~3.2 days)
-  MIN_CONFIDENCE: 0.33, // Minimum confidence before fact expires
-  REVERIFICATION_BONUS: 0.11, // Bonus for successful re-verification
-} as const;
-
-/**
- * Category-specific decay rates
+ * Category-specific decay rates — DERIVED from EPISTEMIC_PROFILES.
  *
- * Key insight: Eternal truths don't decay. Empirical facts do.
- * Mathematical proofs remain valid forever.
- * Weather observations become stale quickly.
- *
- * NEW: 'replicated' category for facts with successful IRL replication.
- * Replicated facts have very slow decay due to real-world verification.
+ * Do NOT edit these values directly. Update EPISTEMIC_PROFILES in
+ * core/knowledge/types.ts instead (single source of truth).
  */
 export const CATEGORY_DECAY: Record<
   string,
   {
-    halfLifeBlocks: number | null; // null = no decay
+    halfLifeBlocks: number | null;
     minConfidence: number;
     reverificationBonus: number;
   }
-> = {
-  analytic: {
-    halfLifeBlocks: null, // Eternal - true by definition
-    minConfidence: 1.0,
-    reverificationBonus: 0,
-  },
-  formal: {
-    halfLifeBlocks: null, // Eternal - mathematically proven
-    minConfidence: 1.0,
-    reverificationBonus: 0,
-  },
-  protocol: {
-    halfLifeBlocks: null, // Eternal - constructed by protocol
-    minConfidence: 1.0,
-    reverificationBonus: 0,
-  },
-  empirical: {
-    halfLifeBlocks: 111111, // ~3.2 days
-    minConfidence: 0.33,
-    reverificationBonus: 0.11,
-  },
-  historical: {
-    halfLifeBlocks: 555555, // ~16 days - slower decay
-    minConfidence: 0.22,
-    reverificationBonus: 0.11,
-  },
-  predictive: {
-    halfLifeBlocks: 22222, // Fast decay until resolved
-    minConfidence: 0.22,
-    reverificationBonus: 0.11,
-  },
-  social: {
-    halfLifeBlocks: 111111, // ~3.2 days
-    minConfidence: 0.22,
-    reverificationBonus: 0.11,
-  },
-  // Replicated category for IRL-verified facts
-  replicated: {
-    halfLifeBlocks: 1111111, // ~32 days - very slow decay
-    minConfidence: 0.55, // Higher floor due to real-world verification
-    reverificationBonus: 0.05, // Less bonus needed (already verified IRL)
-  },
-};
+> = Object.fromEntries(
+  (Object.keys(EPISTEMIC_PROFILES) as EpistemicCategory[]).map((cat) => {
+    const p = EPISTEMIC_PROFILES[cat];
+    return [
+      cat,
+      {
+        halfLifeBlocks: p.decayHalfLife,
+        minConfidence: p.minConfidence,
+        reverificationBonus: p.reverificationBonus,
+      },
+    ];
+  }),
+);
 
 /**
  * Calculate final confidence from validator reveals
@@ -221,23 +182,6 @@ export interface ConfidenceBreakdown {
 // ============ Time Decay ============
 
 /**
- * Calculate decayed confidence based on blocks since verification (legacy)
- */
-export function calculateDecayedConfidence(
-  initialConfidence: Confidence,
-  blocksSinceVerification: number,
-): Confidence {
-  // Exponential decay: C(t) = C_0 * 0.5^(t/half_life)
-  const decayFactor = Math.pow(
-    0.5,
-    blocksSinceVerification / TIME_DECAY.HALF_LIFE_BLOCKS,
-  );
-  const decayed = initialConfidence * decayFactor;
-
-  return Math.max(TIME_DECAY.MIN_CONFIDENCE, decayed);
-}
-
-/**
  * Calculate decayed confidence with epistemic category awareness
  *
  * Eternal truths (analytic, formal, protocol) never decay.
@@ -270,8 +214,12 @@ export function calculateCategoryDecayedConfidence(
   );
   const decayed = initialConfidence * decayFactor;
 
+  // minConfidence is a floor for the decay process, not an upward clamp.
+  // If initialConfidence is already below minConfidence, don't raise it.
+  const floor = Math.min(decayParams.minConfidence, initialConfidence);
+
   return {
-    confidence: Math.max(decayParams.minConfidence, decayed),
+    confidence: Math.max(floor, decayed),
     decayFactor,
     isEternal: false,
   };
@@ -286,7 +234,8 @@ export function getDecayDescription(category: string): string {
     return "eternal (no decay)";
   }
 
-  const days = (params.halfLifeBlocks * 2.521) / (24 * 60 * 60 * 1000);
+  // Block time = 2.521 seconds. halfLifeBlocks * 2.521s / 86400s = days
+  const days = (params.halfLifeBlocks * 2.521) / 86400;
   return `half-life: ~${days.toFixed(1)} days`;
 }
 
@@ -298,20 +247,6 @@ export function needsReverification(
   threshold: Confidence = 0.5,
 ): boolean {
   return currentConfidence < threshold;
-}
-
-/**
- * Calculate confidence after successful re-verification
- */
-export function applyReverificationBonus(
-  currentConfidence: Confidence,
-  newVerificationConfidence: Confidence,
-): Confidence {
-  // Take the higher of current and new, plus a small bonus
-  const base = Math.max(currentConfidence, newVerificationConfidence);
-  const withBonus = base + TIME_DECAY.REVERIFICATION_BONUS;
-
-  return Math.min(1, withBonus);
 }
 
 // ============ Evidence Strength ============
@@ -668,17 +603,16 @@ export function getConfidenceTrend(
 /**
  * Epistemic category profiles (mirrored from types for runtime)
  */
-const EPISTEMIC_CEILINGS: Record<string, number> = {
-  analytic: 1.0,
-  formal: 1.0,
-  protocol: 1.0,
-  empirical: 0.99,
-  historical: 0.95,
-  predictive: 0.9,
-  social: 0.85,
-  // NEW: Replicated empirical facts can reach higher confidence
-  replicated: 0.995,
-};
+/**
+ * Epistemic ceilings — DERIVED from EPISTEMIC_PROFILES.
+ * Do NOT edit directly. Update EPISTEMIC_PROFILES instead.
+ */
+const EPISTEMIC_CEILINGS: Record<string, number> = Object.fromEntries(
+  (Object.keys(EPISTEMIC_PROFILES) as EpistemicCategory[]).map((cat) => [
+    cat,
+    EPISTEMIC_PROFILES[cat].maxConfidence,
+  ]),
+);
 
 /**
  * Input for master confidence calculation
@@ -887,16 +821,9 @@ export function calculateMasterConfidence(
 }
 
 function getCategoryMethod(category: string): string {
-  const methods: Record<string, string> = {
-    analytic: "definition",
-    formal: "proof",
-    protocol: "construction",
-    empirical: "observation",
-    historical: "records",
-    predictive: "models",
-    social: "consensus",
-  };
-  return methods[category] || "observation";
+  const profile = EPISTEMIC_PROFILES[category as EpistemicCategory];
+  if (profile) return profile.verificationMethod;
+  return "observation";
 }
 
 // ============ Research-Enhanced Confidence ============
@@ -1054,7 +981,19 @@ export function calculateResearchAdjustedConfidence(
     fraudDetected = enhancement.fraudDetected;
     researchApplied = true;
 
-    if (enhancement.shouldUpgradeCategory && enhancement.newCategory) {
+    // P0-E3 FIX: Never downgrade eternal categories to temporal.
+    // Eternal facts (analytic/formal/protocol) have halfLifeBlocks === null.
+    // "replicated" is temporal (32-day half-life), so upgrading an eternal
+    // fact to "replicated" would make it decay — violating truth invariant.
+    const originalDecay = CATEGORY_DECAY[effectiveCategory];
+    const isEternalCategory =
+      originalDecay && originalDecay.halfLifeBlocks === null;
+
+    if (
+      enhancement.shouldUpgradeCategory &&
+      enhancement.newCategory &&
+      !isEternalCategory
+    ) {
       effectiveCategory = enhancement.newCategory;
     }
   }

@@ -25,6 +25,7 @@ import {
   type ClaimOntologyResult,
 } from "../../core/knowledge/ontology/claim_validation.js";
 import { createGenesisDomainTree } from "../../core/knowledge/ontology/index.js";
+import { analyzeGoedelianStatus } from "../../core/logic/goedel.js";
 
 import {
   ConsensusParams,
@@ -807,6 +808,16 @@ export class ProofOfTruthEngine extends EventEmitter {
     // Log warnings (don't block, but inform)
     for (const warning of ontologyResult.warnings) {
       console.log(`[PoT] Ontology warning for claim: ${warning}`);
+    }
+
+    // U1 FIX: Gödelian analysis — reject paradoxical claims before creating round
+    if (claim.claim) {
+      const goedelResult = analyzeGoedelianStatus(claim.claim);
+      if (goedelResult.paradoxical) {
+        throw new Error(
+          `Claim rejected: contains logical paradox — ${goedelResult.details}`,
+        );
+      }
     }
 
     // Add to pending claims

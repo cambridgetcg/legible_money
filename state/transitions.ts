@@ -100,6 +100,22 @@ import {
 } from "../core/knowledge/ontology/domain_proposal.js";
 import type { PublicKey } from "../core/crypto/keys.js";
 import { publicKeyToDid } from "../core/agents/identity/did.js";
+import {
+  STRATUM_CONFIDENCE_CEILING,
+  STRATUM_EPISTEMIC_CATEGORY,
+  type OntologicalStratum,
+} from "../core/knowledge/ontology/types.js";
+import type { EpistemicCategory } from "../core/knowledge/types.js";
+import {
+  classifyClaimZone,
+  intersectZones,
+  canReference,
+  ZONE_PROPERTIES,
+} from "../core/logic/zones.js";
+import {
+  analyzeGoedelianStatus,
+  assessDecidability,
+} from "../core/logic/goedel.js";
 
 /**
  * Resolve sender DID from transaction.
@@ -642,6 +658,10 @@ export function executeTransaction(
         gasUsed = executeBeginSeeding(state, tx, blockNumber);
         break;
 
+      case "spawn_child_project":
+        gasUsed = executeSpawnChildProject(state, tx, blockNumber);
+        break;
+
       case "pause_project":
         gasUsed = executePauseProject(state, tx, blockNumber);
         break;
@@ -1087,6 +1107,94 @@ function executeClaimSubmit(
     }
   }
 
+  // 3c. Validate domain exists and is not deprecated
+  // Only enforce when the domain tree has been populated (skip in genesis/empty state)
+  if (payload.domain) {
+    const domainTree = state.getKnowledgeDomainTree();
+    if (domainTree && domainTree.domainCount > 1) {
+      const domainNode = domainTree.domainIndex.get(payload.domain);
+      if (!domainNode) {
+        throw new StateError(
+          `Knowledge domain "${payload.domain}" does not exist`,
+          "INVALID_TRANSITION",
+        );
+      }
+      if (domainNode.domain.deprecatedAt !== undefined) {
+        throw new StateError(
+          `Knowledge domain "${payload.domain}" is deprecated — new claims not accepted`,
+          "INVALID_TRANSITION",
+        );
+      }
+
+      // P0-E1 FIX: Validate submitted stratum matches domain's stratum
+      // Prevents agents from declaring empirical observations as "fundamental"
+      // to game eternal (non-decaying) confidence status
+      if (payload.stratum && domainNode.domain.stratum !== payload.stratum) {
+        throw new StateError(
+          `Stratum mismatch: domain "${payload.domain}" requires stratum "${domainNode.domain.stratum}", got "${payload.stratum}"`,
+          "INVALID_TRANSITION",
+        );
+      }
+    }
+  }
+
+  // 3d. Gödelian analysis: classify zone, detect self-reference, assess decidability
+
+  // Auto-classify zone from claim text
+  const textZone = classifyClaimZone(payload.claim, payload.formalNotation);
+
+  // G2 FIX: Read domain's logicZoneDefault — was write-only metadata
+  // Domain default acts as floor; text analysis can raise but not lower
+  let domainZone: import("../core/logic/types.js").LogicZone | undefined;
+  if (payload.domain) {
+    const dt = state.getKnowledgeDomainTree();
+    if (dt && dt.domainCount > 1) {
+      const dn = dt.domainIndex.get(payload.domain);
+      if (dn) domainZone = dn.domain.logicZoneDefault;
+    }
+  }
+
+  // Reconcile: intersectZones returns the higher (more expressive) zone
+  const logicZone = domainZone
+    ? intersectZones(textZone, domainZone)
+    : textZone;
+
+  const goedelAnalysis = analyzeGoedelianStatus(
+    payload.claim,
+    payload.formalNotation,
+  );
+
+  // Reject paradoxical claims (Liar paradox, Russell paradox, etc.)
+  if (goedelAnalysis.paradoxical) {
+    throw new StateError(
+      `Claim rejected: contains logical paradox — ${goedelAnalysis.details}`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  const decidabilityResult = assessDecidability(
+    payload.claim,
+    logicZone,
+    payload.formalNotation,
+  );
+
+  // 3e. Cross-zone reference validation (G1 fix: wire canReference)
+  // Higher zones can reference lower zones; empirical can reference any zone
+  if (payload.derivedFrom) {
+    for (const factId of payload.derivedFrom.factIds) {
+      const parentFact = state.getFact(factId);
+      // Only validate when parent fact has zone metadata (backward compat)
+      if (parentFact?.logicZone) {
+        if (!canReference(logicZone, parentFact.logicZone)) {
+          throw new StateError(
+            `Zone violation: "${logicZone}" claim cannot derive from "${parentFact.logicZone}" fact — higher zones can reference lower zones, not vice versa`,
+            "INVALID_REFERENCE",
+          );
+        }
+      }
+    }
+  }
+
   // 4. Generate claim ID
   const claimId = generateClaimId(payload.claim, senderDid, blockNumber);
 
@@ -1104,6 +1212,9 @@ function executeClaimSubmit(
     stake: payload.stake,
     submittedAt: blockNumber,
     references: payload.references,
+    logicZone,
+    decidability: decidabilityResult.decidability,
+    goedelianStatus: goedelAnalysis.status,
     status: "pending",
     statusChangedAt: blockNumber,
     derivedFrom: payload.derivedFrom,
@@ -1202,17 +1313,53 @@ function executeClaimCompleteVerification(
     // Create fact
     const factId = `fact:${claim.id.replace("claim:", "")}`;
 
+    // Clamp confidence to stratum ceiling — a social-stratum fact (ceiling 0.85)
+    // must not be stored above its ceiling regardless of validator consensus
+    const stratumCeiling = claim.stratum
+      ? STRATUM_CONFIDENCE_CEILING[claim.stratum]
+      : 1.0;
+
+    // Zone-aware confidence ceiling: Gödel-applicable zones (peano, set_theory)
+    // cannot achieve absolute certainty — cap at 0.99
+    const zoneCeiling =
+      claim.logicZone && ZONE_PROPERTIES[claim.logicZone]?.goedelApplies
+        ? 0.99
+        : 1.0;
+
+    const clampedConfidence = Math.min(
+      payload.finalConfidence,
+      stratumCeiling,
+      zoneCeiling,
+    );
+
+    // Resolve epistemicCategory: domain override → stratum default → "empirical"
+    let epistemicCategory: EpistemicCategory = "empirical";
+    if (claim.domain) {
+      const domainTree = state.getKnowledgeDomainTree();
+      const domainNode = domainTree?.domainIndex?.get(claim.domain);
+      if (domainNode?.domain.epistemicCategoryDefault) {
+        epistemicCategory = domainNode.domain.epistemicCategoryDefault;
+      } else if (claim.stratum) {
+        epistemicCategory = STRATUM_EPISTEMIC_CATEGORY[claim.stratum];
+      }
+    } else if (claim.stratum) {
+      epistemicCategory = STRATUM_EPISTEMIC_CATEGORY[claim.stratum];
+    }
+
     state.addFact({
       id: factId,
       claim: claim.claim,
       domain: claim.domain,
       stratum: claim.stratum,
-      confidence: payload.finalConfidence,
+      epistemicCategory,
+      confidence: clampedConfidence,
       verifiedAt: blockNumber,
       verifierCount: payload.verifierCount,
       challengeCount: 0,
       citationCount: 0,
       status: "active",
+      logicZone: claim.logicZone,
+      decidability: claim.decidability,
     });
 
     // Wire claim references into knowledge graph edges
@@ -1309,20 +1456,47 @@ function executeClaimCompleteVerification(
     state.updateClaimStatus(payload.claimId, "rejected", blockNumber, {
       rejectionReason: "Verification failed",
     });
-  } else if (
-    payload.outcome === "contested" ||
-    payload.outcome === "insufficient"
-  ) {
-    // Return full stake, claim can be resubmitted
+  } else if (payload.outcome === "contested") {
+    // U2 FIX: Create a fact with status "contested" and confidence 0.5
+    // instead of silently rejecting. The system honestly records that
+    // validators could not reach consensus — this is expected for
+    // undecidable claims in Peano+ zones and contentious empirical claims.
+    const contestedFactId = `fact:${claim.id.replace("claim:", "")}`;
+
+    state.addFact({
+      id: contestedFactId,
+      claim: claim.claim,
+      domain: claim.domain,
+      stratum: claim.stratum,
+      confidence: 0.5, // Maximum uncertainty — neither confirmed nor refuted
+      verifiedAt: blockNumber,
+      verifierCount: payload.verifierCount,
+      challengeCount: 0,
+      citationCount: 0,
+      status: "contested",
+      // Propagate Gödelian metadata from claim
+      logicZone: claim.logicZone,
+      decidability: claim.decidability,
+    });
+
+    // Return full stake — contested is not the submitter's fault
+    if (claim.stake > 0n) {
+      state.unstake(claim.submitter, claim.stake);
+    }
+
+    state.updateClaimStatus(payload.claimId, "accepted", blockNumber, {
+      resultFactId: contestedFactId,
+      rejectionReason:
+        "Verification contested — fact recorded at 0.5 confidence",
+    });
+  } else if (payload.outcome === "insufficient") {
+    // Insufficient participation: return stake, claim can be resubmitted
     if (claim.stake > 0n) {
       state.unstake(claim.submitter, claim.stake);
     }
 
     state.updateClaimStatus(payload.claimId, "rejected", blockNumber, {
-      rejectionReason:
-        payload.outcome === "contested"
-          ? "Verification contested - no consensus"
-          : "Insufficient validators participated",
+      rejectionReason: "Insufficient validators participated",
     });
   }
 
@@ -3951,13 +4125,37 @@ function executeAddFact(
     verifiedAtBlock: number;
     claim?: string;
     domain?: string;
+    stratum?: OntologicalStratum;
   };
+
+  // P0-E2 FIX: Derive stratum from domain tree if not in payload
+  let stratum: OntologicalStratum | undefined = payload.stratum;
+  let epistemicCategory: EpistemicCategory = "protocol"; // add_fact is system tx → protocol default
+  if (payload.domain) {
+    const domainTree = state.getKnowledgeDomainTree();
+    if (domainTree) {
+      const domainNode = domainTree.domainIndex.get(payload.domain);
+      if (domainNode) {
+        if (!stratum) stratum = domainNode.domain.stratum;
+        epistemicCategory = domainNode.domain.epistemicCategoryDefault;
+      }
+    }
+    if (!stratum) {
+      // No domain found, keep stratum undefined
+    }
+  }
+  // Final fallback: if stratum is known, use its default category
+  if (epistemicCategory === "protocol" && stratum) {
+    epistemicCategory = STRATUM_EPISTEMIC_CATEGORY[stratum];
+  }
 
   // Add fact to knowledge layer
   state.addFact({
     id: payload.factId,
     claim: payload.claim || `Verified claim ${payload.factId}`,
     domain: payload.domain || "verified",
+    stratum,
+    epistemicCategory,
     confidence: payload.confidence,
     verifiedAt: blockNumber,
     verifierCount: payload.verifierCount,
@@ -4152,10 +4350,14 @@ export function applyVerificationResult(
         );
       }
 
+      // P0-E2 FIX: Carry stratum from claim to fact
+      const claimForStratum = state.getClaim(result.claimId);
+
       state.addFact({
         id: result.claimId,
         claim: result.fact.claim,
         domain: result.fact.domain,
+        stratum: claimForStratum?.stratum,
         confidence: result.finalConfidence,
         verifiedAt: blockNumber,
         verifierCount: result.participatingValidators,
@@ -4165,7 +4367,7 @@ export function applyVerificationResult(
       });
 
       // GAP-006 FIX: Create vesting schedule for claim submitter
-      const claim = state.getClaim(result.claimId);
+      const claim = claimForStratum;
       if (claim && claim.submitter) {
         // Check if vesting already exists for this claim (prevent duplicates)
         const existingVesting = state.getVestingForClaim(result.claimId);
@@ -5289,6 +5491,7 @@ import {
   addContributor,
   recordTaskCompletion,
   addTask,
+  spawnChildProject,
 } from "../core/tree/project_lifecycle.js";
 import {
   createTask as createTreeTask,
@@ -6074,6 +6277,99 @@ function executeBeginSeeding(
   state.updateProject(payload.projectId, updated);
 
   return 40000n;
+}
+
+function executeSpawnChildProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    parentProjectId: string;
+    name: string;
+    description: string;
+    knowledgeDomain: string;
+    demandSignal: DemandSignal;
+    productSpec: ProductSpec;
+    /** Budget as basis points of parent revenue (max 3000 = 30%) */
+    budgetBp: bigint;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  // 1. Validate parent project exists
+  const parent = state.getProject(payload.parentProjectId);
+  if (!parent) {
+    throw new StateError("Parent project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // 2. Only parent contributors can spawn children
+  const isContributor = parent.contributors.some((c) => c.did === senderDid);
+  if (!isContributor) {
+    throw new StateError(
+      "Only parent project contributors can spawn child projects",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // 3. Coerce budgetBp (RPC may send string)
+  const budgetBp =
+    typeof payload.budgetBp === "bigint"
+      ? payload.budgetBp
+      : BigInt(String(payload.budgetBp));
+
+  // 4. Validate knowledge domain (if populated)
+  if (payload.knowledgeDomain) {
+    const domainTree = state.getKnowledgeDomainTree();
+    if (domainTree && domainTree.domainCount > 1) {
+      const domainNode = domainTree.domainIndex.get(payload.knowledgeDomain);
+      if (!domainNode) {
+        throw new StateError(
+          `Knowledge domain "${payload.knowledgeDomain}" does not exist`,
+          "INVALID_TRANSITION",
+        );
+      }
+      if (domainNode.domain.deprecatedAt !== undefined) {
+        throw new StateError(
+          `Knowledge domain "${payload.knowledgeDomain}" is deprecated`,
+          "INVALID_TRANSITION",
+        );
+      }
+    }
+  }
+
+  // 5. Spawn child project (validates phase, revenue, budget cap)
+  const nonce = state.getNonce(senderDid);
+  const { child, budgetAmount } = spawnChildProject(
+    parent,
+    senderDid,
+    payload.name,
+    payload.description,
+    payload.productSpec,
+    payload.knowledgeDomain || parent.knowledgeDomain,
+    payload.demandSignal,
+    budgetBp,
+    nonce,
+    blockNumber,
+  );
+
+  // 6. Transfer budget from parent escrow to child escrow
+  const parentEscrow = projectEscrowDid(payload.parentProjectId);
+  const parentEscrowBalance = state.getBalance(parentEscrow);
+  if (parentEscrowBalance < budgetAmount) {
+    throw new StateError(
+      `Parent escrow has ${parentEscrowBalance}, need ${budgetAmount}`,
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+  state.deductBalance(parentEscrow, budgetAmount);
+
+  const childEscrow = projectEscrowDid(child.id);
+  state.creditBalance(childEscrow, budgetAmount);
+
+  // 7. Persist child project
+  state.createProject(child);
+
+  return 60000n;
 }
 
 function executePauseProject(

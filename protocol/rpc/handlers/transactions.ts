@@ -109,6 +109,8 @@ const VALID_TX_TYPES: Set<string> = new Set([
   "apply_to_project",
   "review_application",
   "set_availability",
+  // Tree of Life seeding
+  "spawn_child_project",
 ]);
 
 // ============ Send Transaction Handler ============

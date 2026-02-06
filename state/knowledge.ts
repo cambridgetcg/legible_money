@@ -18,6 +18,7 @@ import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
 import { sha512_256, sha512_256Hex } from "../core/crypto/hashing.js";
 import {
   type Confidence,
+  type EpistemicCategory,
   type EpistemicProfile,
   EPISTEMIC_PROFILES,
 } from "../core/knowledge/types.js";
@@ -59,7 +60,11 @@ function serializeFactState(fact: FactState): Uint8Array {
     lastCitedBlock: fact.lastCitedBlock?.toString(),
     totalCitationRewards: fact.totalCitationRewards?.toString(),
     // Ontological metadata
+    epistemicCategory: fact.epistemicCategory,
     stratum: fact.stratum,
+    // Gödelian zone metadata
+    logicZone: fact.logicZone,
+    decidability: fact.decidability,
   });
   return new TextEncoder().encode(json);
 }
@@ -92,7 +97,11 @@ function deserializeFactState(bytes: Uint8Array): FactState {
       ? BigInt(obj.totalCitationRewards)
       : undefined,
     // Ontological metadata
+    epistemicCategory: obj.epistemicCategory, // undefined for legacy facts (backward compat)
     stratum: obj.stratum,
+    // Gödelian zone metadata (undefined for legacy facts — backward compat)
+    logicZone: obj.logicZone,
+    decidability: obj.decidability,
   };
 }
 
@@ -672,30 +681,7 @@ export class KnowledgeStateTree {
     return false;
   }
 
-  // ============ Confidence Decay ============
-
-  /**
-   * Apply confidence decay to facts over time
-   * Facts need re-verification to maintain high confidence
-   */
-  applyConfidenceDecay(currentBlock: bigint, decayRate: number = 0.001): void {
-    for (const [factId, fact] of this.factCache) {
-      if (fact.status !== "active") continue;
-
-      const age = currentBlock - fact.verifiedAt;
-      // Decay is logarithmic - fast initially, then slows
-      const decay = Math.log1p(Number(age)) * decayRate;
-      const newConfidence = Math.max(0.1, fact.confidence - decay);
-
-      if (newConfidence !== fact.confidence) {
-        this.updateFact(factId, {
-          confidence: newConfidence as Confidence,
-        });
-      }
-    }
-  }
-
-  // ============ GAP-008: Lazy Confidence Decay ============
+  // ============ Lazy Confidence Decay (GAP-008) ============
 
   // STRATUM_TO_DECAY_CATEGORY imported from core/knowledge/ontology/types.ts
 
@@ -716,10 +702,14 @@ export class KnowledgeStateTree {
   getEffectiveConfidence(fact: FactState, currentBlock: bigint): DecayInfo {
     const blocksSinceVerification = Number(currentBlock - fact.verifiedAt);
 
-    // Map stratum to category for decay calculation
-    const category = fact.stratum
-      ? (STRATUM_TO_DECAY_CATEGORY[fact.stratum] ?? "empirical")
-      : "empirical";
+    // Prefer fact-level epistemicCategory (set at creation from domain config),
+    // fall back to stratum→category mapping for legacy facts without it.
+    // Final fallback: "empirical" (temporal, decaying) — safe default.
+    const category: EpistemicCategory =
+      fact.epistemicCategory ??
+      (fact.stratum
+        ? (STRATUM_TO_DECAY_CATEGORY[fact.stratum] ?? "empirical")
+        : "empirical");
 
     // Use category-aware decay from consensus module
     const decay = calculateCategoryDecayedConfidence(
@@ -798,14 +788,17 @@ export class KnowledgeStateTree {
    * This maps the stratum types used in FactState to the epistemic profiles
    * that define decay rates and reverification requirements.
    */
-  private static readonly STRATUM_TO_PROFILE: Partial<
-    Record<OntologicalStratum, EpistemicProfile>
+  private static readonly STRATUM_TO_PROFILE: Record<
+    OntologicalStratum,
+    EpistemicProfile
   > = {
     fundamental: EPISTEMIC_PROFILES.formal,
-    technological: EPISTEMIC_PROFILES.protocol,
     physical: EPISTEMIC_PROFILES.empirical,
-    cognitive: EPISTEMIC_PROFILES.historical,
+    chemical: EPISTEMIC_PROFILES.empirical,
+    biological: EPISTEMIC_PROFILES.empirical,
+    cognitive: EPISTEMIC_PROFILES.social,
     social: EPISTEMIC_PROFILES.social,
+    technological: EPISTEMIC_PROFILES.protocol,
   };
 
   /**
@@ -842,13 +835,20 @@ export class KnowledgeStateTree {
       };
     }
 
-    // Condition 2: Confidence below threshold
-    if (fact.confidence < params.minConfidenceThreshold) {
+    // Condition 2: Effective (decayed) confidence below threshold
+    // Must use getEffectiveConfidence() instead of stored confidence,
+    // otherwise a fact verified at 0.9 that has decayed to 0.07 would
+    // appear alive because stored confidence is still 0.9.
+    const { effectiveConfidence } = this.getEffectiveConfidence(
+      fact,
+      currentBlock,
+    );
+    if (effectiveConfidence < params.minConfidenceThreshold) {
       return {
         expired: true,
         reason: "confidence_decay",
         details: {
-          currentConfidence: fact.confidence,
+          currentConfidence: effectiveConfidence,
           threshold: params.minConfidenceThreshold,
         },
       };

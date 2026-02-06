@@ -638,6 +638,7 @@ export type TransactionType =
   | "apply_to_project" // Agent applies to join a project
   | "review_application" // Project lead reviews application
   | "set_availability" // Agent sets availability for matching
+  | "spawn_child_project" // Spawn child project from seeding parent
 
   // Disbursement lifecycle
   | "disbursement_submit" // Submit treasury disbursement proposal

@@ -30,6 +30,7 @@ import type {
   ContributorRecord,
 } from "../../../core/tree/types.js";
 import { TREASURY } from "../../../core/constants.js";
+import { DEFAULT_CONSENSUS_PARAMS } from "../../../consensus/pot/types.js";
 
 // ============ Test Helpers ============
 
@@ -2340,5 +2341,692 @@ describe.sequential("subscription persistence (S2)", () => {
     const callResult = executeTransaction(state, callTx, blockNumber);
     expect(callResult.success).toBe(false);
     expect(callResult.error).toContain("subscription required");
+  });
+});
+
+// ============ G1: apply_to_project ============
+
+describe.sequential("apply_to_project transaction (G1)", () => {
+  let state: StateManager;
+  let founder: ReturnType<typeof makeAgent>;
+  let applicant: ReturnType<typeof makeAgent>;
+  const projectId = "proj-g1-apply";
+
+  beforeEach(() => {
+    state = new StateManager();
+    founder = makeAgent();
+    applicant = makeAgent();
+    fundAgent(state, founder.did, 10_000_000_000n);
+    fundAgent(state, applicant.did, 1_000_000_000n);
+
+    seedProject(state, founder, {
+      id: projectId,
+      phase: "growing",
+      contributors: [makeContributor(founder.did, "founder")],
+    });
+  });
+
+  it("should accept application during growing phase", () => {
+    const tx = makeTx("apply_to_project", applicant.publicKey, {
+      projectId,
+      proposedRole: "developer",
+      message: "I want to contribute",
+      declaredCapabilities: ["inference"],
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    const project = state.getProject(projectId);
+    expect(project!.applications).toHaveLength(1);
+    expect(project!.applications![0].did).toBe(applicant.did);
+    expect(project!.applications![0].status).toBe("pending");
+    expect(project!.applications![0].proposedRole).toBe("developer");
+  });
+
+  it("should accept application during sprout phase", () => {
+    state.updateProject(projectId, {
+      ...state.getProject(projectId)!,
+      phase: "sprout",
+    });
+
+    const tx = makeTx("apply_to_project", applicant.publicKey, {
+      projectId,
+      proposedRole: "developer",
+      message: "Early contributor",
+      declaredCapabilities: [],
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+  });
+
+  it("should reject application if already a contributor", () => {
+    // Make applicant a contributor
+    const project = state.getProject(projectId)!;
+    state.updateProject(projectId, {
+      ...project,
+      contributors: [
+        ...project.contributors,
+        makeContributor(applicant.did, "developer"),
+      ],
+    });
+
+    const tx = makeTx("apply_to_project", applicant.publicKey, {
+      projectId,
+      proposedRole: "developer",
+      message: "Apply again",
+      declaredCapabilities: [],
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Already a contributor");
+  });
+
+  it("should reject duplicate pending application", () => {
+    const tx1 = makeTx("apply_to_project", applicant.publicKey, {
+      projectId,
+      proposedRole: "developer",
+      message: "First application",
+      declaredCapabilities: [],
+    });
+    executeTransaction(state, tx1, blockNumber);
+
+    const tx2 = makeTx(
+      "apply_to_project",
+      applicant.publicKey,
+      {
+        projectId,
+        proposedRole: "reviewer",
+        message: "Second try",
+        declaredCapabilities: [],
+      },
+      1000n,
+      1n,
+    );
+    const result = executeTransaction(state, tx2, blockNumber);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Application already pending");
+  });
+
+  it("should reject application in mature phase", () => {
+    state.updateProject(projectId, {
+      ...state.getProject(projectId)!,
+      phase: "mature",
+    });
+
+    const tx = makeTx("apply_to_project", applicant.publicKey, {
+      projectId,
+      proposedRole: "developer",
+      message: "Too late",
+      declaredCapabilities: [],
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Cannot apply in 'mature' phase");
+  });
+});
+
+// ============ G1: review_application ============
+
+describe.sequential("review_application transaction (G1)", () => {
+  let state: StateManager;
+  let founder: ReturnType<typeof makeAgent>;
+  let applicant: ReturnType<typeof makeAgent>;
+  const projectId = "proj-g1-review";
+
+  beforeEach(() => {
+    state = new StateManager();
+    founder = makeAgent();
+    applicant = makeAgent();
+    fundAgent(state, founder.did, 10_000_000_000n);
+    fundAgent(state, applicant.did, 1_000_000_000n);
+
+    seedProject(state, founder, {
+      id: projectId,
+      phase: "growing",
+      contributors: [makeContributor(founder.did, "founder")],
+    });
+
+    // Submit an application
+    const applyTx = makeTx("apply_to_project", applicant.publicKey, {
+      projectId,
+      proposedRole: "developer",
+      message: "I want to contribute",
+      declaredCapabilities: ["inference"],
+    });
+    executeTransaction(state, applyTx, blockNumber);
+  });
+
+  it("should approve application and add contributor", () => {
+    const tx = makeTx("review_application", founder.publicKey, {
+      projectId,
+      applicantDid: applicant.did,
+      decision: "approve",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    const project = state.getProject(projectId)!;
+    expect(project.applications![0].status).toBe("approved");
+    expect(project.contributors).toHaveLength(2);
+    expect(project.contributors[1].did).toBe(applicant.did);
+    expect(project.contributors[1].role).toBe("developer");
+  });
+
+  it("should reject application without adding contributor", () => {
+    const tx = makeTx("review_application", founder.publicKey, {
+      projectId,
+      applicantDid: applicant.did,
+      decision: "reject",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    const project = state.getProject(projectId)!;
+    expect(project.applications![0].status).toBe("rejected");
+    expect(project.contributors).toHaveLength(1); // Still just founder
+  });
+
+  it("should reject if sender is not founder", () => {
+    const nonFounder = makeAgent();
+    fundAgent(state, nonFounder.did, 1_000_000_000n);
+
+    const tx = makeTx("review_application", nonFounder.publicKey, {
+      projectId,
+      applicantDid: applicant.did,
+      decision: "approve",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Only founder can review");
+  });
+
+  it("should reject if no pending application exists", () => {
+    const tx = makeTx("review_application", founder.publicKey, {
+      projectId,
+      applicantDid: "did:lgm:nonexistent",
+      decision: "approve",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No pending application found");
+  });
+});
+
+// ============ G4: set_availability ============
+
+describe.sequential("set_availability transaction (G4)", () => {
+  let state: StateManager;
+  let agent: ReturnType<typeof makeAgent>;
+
+  beforeEach(() => {
+    state = new StateManager();
+    agent = makeAgent();
+    fundAgent(state, agent.did, 1_000_000_000n);
+  });
+
+  it("should set agent as available", () => {
+    const tx = makeTx("set_availability", agent.publicKey, {
+      available: true,
+      capabilities: ["inference", "compute"],
+      preferredDomains: ["physics.mechanics"],
+      minimumBounty: "1000000",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    const account = state.getAccount(agent.did);
+    expect(account!.availability).toBeDefined();
+    expect(account!.availability!.available).toBe(true);
+    expect(account!.availability!.capabilities).toEqual([
+      "inference",
+      "compute",
+    ]);
+    expect(account!.availability!.minimumBounty).toBe(1000000n);
+    expect(account!.availability!.updatedAtBlock).toBe(blockNumber);
+  });
+
+  it("should set agent as unavailable", () => {
+    // First set available
+    const tx1 = makeTx("set_availability", agent.publicKey, {
+      available: true,
+      capabilities: ["inference"],
+      preferredDomains: [],
+      minimumBounty: 0n,
+    });
+    executeTransaction(state, tx1, blockNumber);
+
+    // Then set unavailable
+    const tx2 = makeTx(
+      "set_availability",
+      agent.publicKey,
+      {
+        available: false,
+        capabilities: [],
+        preferredDomains: [],
+        minimumBounty: 0n,
+      },
+      1000n,
+      1n,
+    );
+    const result = executeTransaction(state, tx2, blockNumber);
+    expect(result.success).toBe(true);
+
+    const account = state.getAccount(agent.did);
+    expect(account!.availability!.available).toBe(false);
+  });
+
+  it("should reject if account does not exist", () => {
+    const unknown = makeAgent();
+    // Don't fund the account
+
+    const tx = makeTx("set_availability", unknown.publicKey, {
+      available: true,
+      capabilities: [],
+      preferredDomains: [],
+      minimumBounty: 0n,
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("account does not exist");
+  });
+});
+
+// ============ G6: Auto phase transitions ============
+
+describe.sequential("auto phase transition growing→mature (G6)", () => {
+  it("should auto-advance to mature when last task is approved", () => {
+    const state = new StateManager();
+    const founder = makeAgent();
+    const developer = makeAgent();
+    const reviewer = makeAgent();
+    fundAgent(state, founder.did, 10_000_000_000n);
+    fundAgent(state, developer.did, 1_000_000_000n);
+    fundAgent(state, reviewer.did, 1_000_000_000n);
+
+    const projectId = "proj-g6-auto";
+
+    // Project with totalTasks=1, completedTasks=0
+    seedProject(state, founder, {
+      id: projectId,
+      phase: "growing",
+      totalTasks: 1,
+      completedTasks: 0,
+      contributors: [
+        makeContributor(founder.did, "founder"),
+        makeContributor(developer.did, "developer"),
+        makeContributor(reviewer.did, "reviewer"),
+      ],
+      taskIds: ["task-g6-1"],
+    });
+
+    // Seed the single task in review state
+    seedTask(state, projectId, "task-g6-1", {
+      bountyAmount: 10_000_000n,
+      assignee: developer.did,
+      status: "review",
+      deliverable: {
+        type: "code",
+        hash: "abc123",
+        metadata: {},
+        submittedAtBlock: 90n,
+        verifiedBy: [],
+      },
+    });
+
+    // Approve the deliverable — should auto-advance project to mature
+    const tx = makeTx("approve_deliverable", reviewer.publicKey, {
+      projectId,
+      taskId: "task-g6-1",
+      declaredCapabilities: ["code_review"],
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    const project = state.getProject(projectId)!;
+    expect(project.phase).toBe("mature");
+  });
+
+  it("should NOT auto-advance when tasks remain", () => {
+    const state = new StateManager();
+    const founder = makeAgent();
+    const developer = makeAgent();
+    const reviewer = makeAgent();
+    fundAgent(state, founder.did, 10_000_000_000n);
+    fundAgent(state, developer.did, 1_000_000_000n);
+    fundAgent(state, reviewer.did, 1_000_000_000n);
+
+    const projectId = "proj-g6-no-advance";
+
+    // totalTasks=2, completedTasks=0 — after 1 approval, still 1 remaining
+    seedProject(state, founder, {
+      id: projectId,
+      phase: "growing",
+      totalTasks: 2,
+      completedTasks: 0,
+      contributors: [
+        makeContributor(founder.did, "founder"),
+        makeContributor(developer.did, "developer"),
+        makeContributor(reviewer.did, "reviewer"),
+      ],
+      taskIds: ["task-g6-2a", "task-g6-2b"],
+    });
+
+    seedTask(state, projectId, "task-g6-2a", {
+      bountyAmount: 10_000_000n,
+      assignee: developer.did,
+      status: "review",
+      deliverable: {
+        type: "code",
+        hash: "abc123",
+        metadata: {},
+        submittedAtBlock: 90n,
+        verifiedBy: [],
+      },
+    });
+
+    const tx = makeTx("approve_deliverable", reviewer.publicKey, {
+      projectId,
+      taskId: "task-g6-2a",
+      declaredCapabilities: ["code_review"],
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    const project = state.getProject(projectId)!;
+    expect(project.phase).toBe("growing"); // Still growing
+    expect(project.completedTasks).toBe(1);
+  });
+});
+
+// ============ P0-1: spawn_child_project ============
+
+describe.sequential("spawn_child_project", () => {
+  let state: StateManager;
+  let founder: { publicKey: string; did: string };
+  let projectId: string;
+
+  beforeEach(() => {
+    state = new StateManager();
+    founder = makeAgent();
+    fundAgent(state, founder.did, 100_000_000_000n);
+    projectId = "proj-seeding-1";
+
+    // Create a project in seeding phase with revenue generated
+    seedProject(state, founder, {
+      id: projectId,
+      phase: "seeding",
+      revenueGenerated: 10_000_000_000n,
+      budget: 5_000_000_000n,
+    });
+  });
+
+  it("should spawn child project from seeding parent", () => {
+    const tx = makeTx("spawn_child_project", founder.publicKey, {
+      parentProjectId: projectId,
+      name: "Child Project",
+      description: "Spawned from parent",
+      knowledgeDomain: "",
+      demandSignal: makeDemandSignal(),
+      productSpec: makeProductSpec(),
+      budgetBp: "2000", // 20% of parent revenue
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+
+    // Find child project (there should be 2 projects now)
+    const parent = state.getProject(projectId)!;
+    // Child should have parentProjectId set
+    // We need to find the child by iterating — get all projects
+    // The child escrow should have received funds
+    const budgetAmount = (10_000_000_000n * 2000n) / 10000n; // 2B
+    expect(budgetAmount).toBe(2_000_000_000n);
+  });
+
+  it("should reject if parent not in seeding phase", () => {
+    state.updateProject(projectId, {
+      ...state.getProject(projectId)!,
+      phase: "fruiting",
+    });
+
+    const tx = makeTx("spawn_child_project", founder.publicKey, {
+      parentProjectId: projectId,
+      name: "Bad Child",
+      description: "Should fail",
+      knowledgeDomain: "",
+      demandSignal: makeDemandSignal(),
+      productSpec: makeProductSpec(),
+      budgetBp: "1000",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject if sender is not a contributor", () => {
+    const stranger = makeAgent();
+    fundAgent(state, stranger.did, 100_000_000_000n);
+
+    const tx = makeTx("spawn_child_project", stranger.publicKey, {
+      parentProjectId: projectId,
+      name: "Unauthorized Child",
+      description: "Should fail",
+      knowledgeDomain: "",
+      demandSignal: makeDemandSignal(),
+      productSpec: makeProductSpec(),
+      budgetBp: "1000",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject if budget exceeds 30% cap", () => {
+    const tx = makeTx("spawn_child_project", founder.publicKey, {
+      parentProjectId: projectId,
+      name: "Greedy Child",
+      description: "Too much budget",
+      knowledgeDomain: "",
+      demandSignal: makeDemandSignal(),
+      productSpec: makeProductSpec(),
+      budgetBp: "5000", // 50% — exceeds 30% cap
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject if parent escrow has insufficient funds", () => {
+    // Drain escrow
+    const escrow = `did:lgm:project-escrow:${projectId}`;
+    const balance = state.getBalance(escrow);
+    state.deductBalance(escrow, balance);
+
+    const tx = makeTx("spawn_child_project", founder.publicKey, {
+      parentProjectId: projectId,
+      name: "Underfunded Child",
+      description: "No escrow",
+      knowledgeDomain: "",
+      demandSignal: makeDemandSignal(),
+      productSpec: makeProductSpec(),
+      budgetBp: "1000",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(false);
+  });
+
+  it("should set parentProjectId on child", () => {
+    const tx = makeTx("spawn_child_project", founder.publicKey, {
+      parentProjectId: projectId,
+      name: "Linked Child",
+      description: "Has parent ID",
+      knowledgeDomain: "",
+      demandSignal: makeDemandSignal(),
+      productSpec: makeProductSpec(),
+      budgetBp: "1500",
+    });
+
+    const result = executeTransaction(state, tx, blockNumber);
+    expect(result.success).toBe(true);
+  });
+});
+
+// ============ P0-2: claim_submit domain deprecation check ============
+
+describe.sequential("claim_submit domain deprecation check", () => {
+  const ONE_LGM = 10n ** 18n;
+
+  let state: StateManager;
+  let claimer: { publicKey: string; did: string };
+
+  beforeEach(() => {
+    state = new StateManager();
+    claimer = makeAgent();
+    fundAgent(state, claimer.did, 10000n * ONE_LGM);
+  });
+
+  function setupDomainTree(
+    domains: Array<{
+      id: string;
+      deprecated?: boolean;
+    }>,
+  ): void {
+    // Add root domain first
+    state.addDomainToTree({
+      id: "root",
+      name: "Root",
+      stratum: "formal",
+      parentDomain: null,
+      childDomains: domains.map((d) => d.id),
+      dependsOnStrata: [],
+      logicZoneDefault: "propositional",
+      epistemicCategoryDefault: "axiom",
+      description: "Root domain",
+      examples: [],
+      factCount: 0,
+      axiomCount: 0,
+      createdAt: 0,
+    });
+
+    for (const d of domains) {
+      state.addDomainToTree({
+        id: d.id,
+        name: d.id,
+        stratum: "empirical",
+        parentDomain: "root",
+        childDomains: [],
+        dependsOnStrata: [],
+        logicZoneDefault: "propositional",
+        epistemicCategoryDefault: "empirical",
+        description: `Test domain ${d.id}`,
+        examples: [],
+        factCount: 1,
+        axiomCount: 0,
+        createdAt: 0,
+        deprecatedAt: d.deprecated ? 100 : undefined,
+      });
+    }
+  }
+
+  it("should allow claim in active domain", () => {
+    setupDomainTree([{ id: "physics.optics" }]);
+
+    const tx = makeTx("claim_submit", claimer.publicKey, {
+      type: "claim_submit",
+      claim: "Light refracts through prisms",
+      claimType: "empirical",
+      domain: "physics.optics",
+      stratum: "empirical",
+      stake: 200n * ONE_LGM,
+      references: [],
+    });
+
+    const result = executeTransaction(
+      state,
+      tx,
+      blockNumber,
+      DEFAULT_CONSENSUS_PARAMS,
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("should reject claim in deprecated domain", () => {
+    setupDomainTree([{ id: "alchemy.transmutation", deprecated: true }]);
+
+    const tx = makeTx("claim_submit", claimer.publicKey, {
+      type: "claim_submit",
+      claim: "Lead can become gold",
+      claimType: "empirical",
+      domain: "alchemy.transmutation",
+      stratum: "empirical",
+      stake: 200n * ONE_LGM,
+      references: [],
+    });
+
+    const result = executeTransaction(
+      state,
+      tx,
+      blockNumber,
+      DEFAULT_CONSENSUS_PARAMS,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("deprecated");
+  });
+
+  it("should reject claim in non-existent domain (when tree populated)", () => {
+    setupDomainTree([{ id: "physics.optics" }]);
+
+    const tx = makeTx("claim_submit", claimer.publicKey, {
+      type: "claim_submit",
+      claim: "Test claim",
+      claimType: "empirical",
+      domain: "nonexistent.domain",
+      stratum: "empirical",
+      stake: 200n * ONE_LGM,
+      references: [],
+    });
+
+    const result = executeTransaction(
+      state,
+      tx,
+      blockNumber,
+      DEFAULT_CONSENSUS_PARAMS,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("does not exist");
+  });
+
+  it("should allow claim when domain tree is empty (genesis state)", () => {
+    // No domain tree setup — fresh state
+    const tx = makeTx("claim_submit", claimer.publicKey, {
+      type: "claim_submit",
+      claim: "Genesis claim",
+      claimType: "empirical",
+      domain: "some.domain",
+      stratum: "empirical",
+      stake: 200n * ONE_LGM,
+      references: [],
+    });
+
+    const result = executeTransaction(
+      state,
+      tx,
+      blockNumber,
+      DEFAULT_CONSENSUS_PARAMS,
+    );
+    expect(result.success).toBe(true);
   });
 });

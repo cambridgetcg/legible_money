@@ -70,6 +70,11 @@ import {
 // B3 FIX: Import new handlers
 import { b3Handlers } from "./handlers/index.js";
 
+// Gödelian logic layer
+import { META_AXIOMS } from "../../core/logic/types.js";
+import { GOEDELIAN_PROMISE } from "../../core/logic/goedel.js";
+import { ZONE_PROPERTIES } from "../../core/logic/zones.js";
+
 // ============ Handler Context ============
 
 export interface HandlerContext {
@@ -719,6 +724,33 @@ export const networkHealth: Handler<
   };
 };
 
+// ============ Logic Layer Handlers ============
+
+/**
+ * Get the protocol's Gödelian meta-axioms.
+ * These are the foundational acknowledgments of system limitations.
+ */
+export const logicGetMetaAxioms: Handler<
+  Record<string, never>,
+  { axioms: typeof META_AXIOMS; goedelianPromise: string }
+> = async () => {
+  return {
+    axioms: META_AXIOMS,
+    goedelianPromise: GOEDELIAN_PROMISE,
+  };
+};
+
+/**
+ * Get logic zone properties.
+ * Returns decidability, completeness, and Gödel-applicability for each zone.
+ */
+export const logicGetZones: Handler<
+  Record<string, never>,
+  { zones: typeof ZONE_PROPERTIES }
+> = async () => {
+  return { zones: ZONE_PROPERTIES };
+};
+
 // ============ Handler Registry ============
 
 export const handlers: Record<string, Handler<any, any>> = {
@@ -744,6 +776,10 @@ export const handlers: Record<string, Handler<any, any>> = {
   verification_submitCommitment: verificationSubmitCommitment,
   verification_submitReveal: verificationSubmitReveal,
   verification_getRound: verificationGetRound,
+
+  // Logic (Gödelian)
+  logic_getMetaAxioms: logicGetMetaAxioms,
+  logic_getZones: logicGetZones,
 
   // Network
   network_health: networkHealth,

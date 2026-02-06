@@ -73,15 +73,23 @@ export const STRATUM_CONFIDENCE_CEILING: Record<OntologicalStratum, number> = {
 /**
  * Mapping from ontological stratum to decay category.
  *
- * Used for calculating time-decayed confidence values.
- * Categories align with CATEGORY_DECAY in consensus/pot/confidence.ts:
+ * Used as FALLBACK for calculating time-decayed confidence values when
+ * a fact has no explicit epistemicCategory stored. New facts should have
+ * epistemicCategory set from their domain's epistemicCategoryDefault.
+ *
+ * MUST be consistent with STRATUM_EPISTEMIC_CATEGORY below.
+ *
+ * Categories align with CATEGORY_DECAY (derived from EPISTEMIC_PROFILES):
  * - "analytic": Eternal — fundamental truths don't decay
  * - "protocol": Eternal — on-chain/protocol facts are permanent
- * - "empirical": ~3.2 days half-life — physical/chemical/biological facts need reverification
- * - "social": ~1 day half-life — cognitive/social consensus changes quickly
+ * - "empirical": ~2.9 days half-life — physical/chemical/biological facts need reverification
+ * - "social": ~4.4 days half-life — cognitive/social consensus is stickier
  */
-export const STRATUM_TO_DECAY_CATEGORY: Record<OntologicalStratum, string> = {
-  fundamental: "analytic",
+export const STRATUM_TO_DECAY_CATEGORY: Record<
+  OntologicalStratum,
+  EpistemicCategory
+> = {
+  fundamental: "formal", // Consistent with STRATUM_EPISTEMIC_CATEGORY (both eternal)
   physical: "empirical",
   chemical: "empirical",
   biological: "empirical",
@@ -104,19 +112,25 @@ export const STRATUM_LOGIC_ZONE: Record<OntologicalStratum, LogicZone> = {
 };
 
 /**
- * Default epistemic category for each stratum
+ * Default epistemic category for each stratum.
+ *
+ * Used as the default when registering new domains. Domain-level overrides
+ * are possible via OntologicalDomain.epistemicCategoryDefault.
+ *
+ * MUST be consistent with STRATUM_TO_DECAY_CATEGORY above — a domain's
+ * epistemic category determines its decay behavior.
  */
 export const STRATUM_EPISTEMIC_CATEGORY: Record<
   OntologicalStratum,
   EpistemicCategory
 > = {
-  fundamental: "formal",
-  physical: "formal",
-  chemical: "empirical",
-  biological: "empirical",
-  cognitive: "empirical",
-  social: "social",
-  technological: "protocol",
+  fundamental: "formal", // Math axioms — eternal, proven
+  physical: "empirical", // Physics observations — decay, need reverification
+  chemical: "empirical", // Chemistry experiments — decay
+  biological: "empirical", // Biology observations — decay
+  cognitive: "social", // Cognitive science — consensus-mediated, stickier decay
+  social: "social", // Social sciences — consensus-based
+  technological: "protocol", // On-chain constructed — eternal
 };
 
 // ============================================================================

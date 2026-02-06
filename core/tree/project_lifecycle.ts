@@ -446,6 +446,107 @@ function assertTransition(project: ProductProject, target: ProjectPhase): void {
   }
 }
 
+// ============ Child Project Spawning (Seeding Phase) ============
+
+/** Maximum fraction of parent revenue that can be allocated to a child (30%) */
+export const MAX_CHILD_BUDGET_BP = 3000n; // basis points out of 10000
+
+/**
+ * Spawn a child project from a seeding parent.
+ * The parent must be in 'seeding' phase and have generated revenue.
+ * Child inherits the parent's knowledge domain (or a specified one).
+ */
+export function spawnChildProject(
+  parent: ProductProject,
+  founderDid: DID,
+  childName: string,
+  childDescription: string,
+  childSpec: ProductSpec,
+  childDomain: string,
+  childSignal: DemandSignal,
+  budgetBp: bigint,
+  nonce: bigint,
+  block: bigint,
+): { child: ProductProject; budgetAmount: bigint } {
+  if (parent.phase !== "seeding") {
+    throw new ProjectLifecycleError(
+      `Parent must be in 'seeding' phase, is '${parent.phase}'`,
+      "INVALID_PHASE",
+    );
+  }
+
+  if (parent.revenueGenerated === 0n) {
+    throw new ProjectLifecycleError(
+      "Parent has no revenue to allocate",
+      "NO_REVENUE",
+    );
+  }
+
+  if (budgetBp > MAX_CHILD_BUDGET_BP) {
+    throw new ProjectLifecycleError(
+      `Budget cannot exceed ${MAX_CHILD_BUDGET_BP} BP (30%) of parent revenue, got ${budgetBp}`,
+      "INSUFFICIENT_STAKE",
+    );
+  }
+
+  if (budgetBp <= 0n) {
+    throw new ProjectLifecycleError(
+      "Budget must be positive",
+      "INSUFFICIENT_STAKE",
+    );
+  }
+
+  const budgetAmount = (parent.revenueGenerated * budgetBp) / 10000n;
+
+  const childId = generateChildProjectId(parent.id, nonce);
+
+  const child: ProductProject = {
+    id: childId,
+    name: childName,
+    description: childDescription,
+    phase: "seed",
+    createdAtBlock: block,
+    phaseChangedAtBlock: block,
+    knowledgeDomain: childDomain,
+    demandSignal: childSignal,
+    parentProjectId: parent.id,
+    founder: founderDid,
+    contributors: [
+      {
+        did: founderDid,
+        role: "founder",
+        joinedAtBlock: block,
+        tasksCompleted: 0,
+        totalEarned: 0n,
+      },
+    ],
+    productSpec: childSpec,
+    taskIds: [],
+    completedTasks: 0,
+    totalTasks: 0,
+    fundingSource: { type: "research_fund", amount: budgetAmount },
+    budget: budgetAmount,
+    spent: 0n,
+    revenueGenerated: 0n,
+    serviceIds: [],
+  };
+
+  return { child, budgetAmount };
+}
+
+/**
+ * Generate deterministic child project ID from parent ID + nonce.
+ */
+export function generateChildProjectId(
+  parentId: string,
+  nonce: bigint,
+): string {
+  const input = `child:${parentId}:${nonce}`;
+  return Buffer.from(
+    domainHash("LGM.tree.child_project.id.v1", input).slice(0, 16),
+  ).toString("hex");
+}
+
 // ============ Error Types ============
 
 export type ProjectLifecycleErrorCode =

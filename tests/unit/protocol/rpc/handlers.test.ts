@@ -751,7 +751,7 @@ describe.sequential("Handler Registry", () => {
   });
 
   it("should have all registered handlers", () => {
-    expect(Object.keys(handlers)).toHaveLength(68);
+    expect(Object.keys(handlers)).toHaveLength(70);
   });
 });
 
