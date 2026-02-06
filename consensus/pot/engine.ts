@@ -25,6 +25,7 @@ import {
   type ClaimOntologyResult,
 } from "../../core/knowledge/ontology/claim_validation.js";
 import { createGenesisDomainTree } from "../../core/knowledge/ontology/index.js";
+import { getStratumConfidenceCeiling } from "../../core/knowledge/ontology/strata.js";
 import { analyzeGoedelianStatus } from "../../core/logic/goedel.js";
 
 import {
@@ -792,24 +793,52 @@ export class ProofOfTruthEngine extends EventEmitter {
       throw new Error("Claim must have at least one reference");
     }
 
+    // P0-D1 FIX: Use state-synced domain tree when state integration is available,
+    // falling back to engine's genesis copy for standalone/test mode.
+    const activeDomainTree = this.stateIntegration
+      ? this.stateIntegration.getDomainTree()
+      : this.domainTree;
+
+    // P0-D2 FIX: Pass pending domain proposals so claims targeting in-flight domains
+    // are rejected per DOMAIN_PROPOSAL_CONFIG.pendingClaimBehavior.
+    const pendingProposals = this.stateIntegration
+      ? this.stateIntegration.getPendingDomainProposals()
+      : undefined;
+
+    // P1-D1 FIX: Resolve actual target domain for each reference from state.
+    // Cross-domain references (e.g., a biology claim citing a chemistry fact)
+    // need the correct target domain for ontology validation.
+    const stateManager = this.stateIntegration?.getStateManager();
+    const resolvedReferences = claim.references.map((r) => {
+      let targetDomain = claim.domain; // default fallback
+      if (stateManager && r.source) {
+        const referencedFact = stateManager.getFact(r.source);
+        if (referencedFact) {
+          targetDomain = referencedFact.domain;
+        }
+      }
+      return {
+        targetFactId: r.source ?? "unknown",
+        targetDomain,
+        referenceType: r.type as
+          | "supports"
+          | "contradicts"
+          | "extends"
+          | "specializes"
+          | "generalizes",
+      };
+    });
+
     // Validate claim against ontological tree
     const ontologyResult = validateClaimOntology(
       {
         domain: claim.domain,
         schemaId: claim.schemaId,
         proposedConfidence: claim.proposedConfidence,
-        references: claim.references.map((r) => ({
-          targetFactId: r.source ?? "unknown",
-          targetDomain: claim.domain, // Use claim domain as default for references
-          referenceType: r.type as
-            | "supports"
-            | "contradicts"
-            | "extends"
-            | "specializes"
-            | "generalizes",
-        })),
+        references: resolvedReferences,
       },
-      this.domainTree,
+      activeDomainTree,
+      pendingProposals,
     );
 
     if (!ontologyResult.valid) {
@@ -1097,6 +1126,17 @@ export class ProofOfTruthEngine extends EventEmitter {
         );
 
         if (aggregated.result) {
+          // P1-D2 FIX: Cap verification confidence by stratum ceiling from ontology.
+          // Even if all validators vote 1.0, empirical claims can't exceed their
+          // stratum's confidence ceiling (e.g., 0.95 for empirical, 0.85 for social).
+          if (round.resolvedStratum && aggregated.result.finalConfidence > 0) {
+            const ceiling = getStratumConfidenceCeiling(round.resolvedStratum);
+            aggregated.result.finalConfidence = Math.min(
+              aggregated.result.finalConfidence,
+              ceiling,
+            );
+          }
+
           results.push(aggregated.result);
 
           // Emit event

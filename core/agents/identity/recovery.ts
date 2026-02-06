@@ -14,6 +14,7 @@ import { type PublicKey, bytesToHex } from "../../crypto/keys.js";
 import { sha512_256Hex, domainHash } from "../../crypto/hashing.js";
 import { verify } from "../../crypto/signatures.js";
 import { randomBytes } from "@noble/hashes/utils";
+import { publicKeyToDid } from "./did.js";
 
 // ============ Types ============
 
@@ -253,6 +254,7 @@ export function createRecoveryConfig(
     canInitiate: boolean;
   }>,
   options: Partial<RecoveryConfig> = {},
+  currentBlock: number = 0,
 ): { config: RecoveryConfig; shards: Map<number, RecoveryShard> } {
   const config: RecoveryConfig = {
     ...DEFAULT_RECOVERY_CONFIG,
@@ -286,7 +288,7 @@ export function createRecoveryConfig(
       identifier: holder.identifier,
       shardIndex: shard.index,
       publicKeyHash: sha512_256Hex(holder.identifier),
-      addedAt: Date.now(),
+      addedAt: currentBlock, // P1-A5 FIX: Use block number, not wall clock
       canInitiateRecovery: holder.canInitiate,
     };
   });
@@ -329,10 +331,31 @@ export function addShardToRecovery(
   shard: RecoveryShard,
   holderSignature: string,
   holderPublicKey: PublicKey,
+  config?: RecoveryConfig,
 ): RecoveryRequest {
   // Verify shard hasn't been added
   if (request.shardsProvided.includes(shard.index)) {
     throw new Error("Shard already provided");
+  }
+
+  // Verify holder identity against config (if provided)
+  if (config) {
+    const holderEntry = config.shardHolders.find(
+      (h) => h.shardIndex === shard.index,
+    );
+    if (!holderEntry) {
+      throw new Error("Shard index not assigned to any holder");
+    }
+    // Verify signer is the authorized holder by DID derivation
+    const signerDid = publicKeyToDid(holderPublicKey);
+    if (
+      signerDid !== holderEntry.identifier &&
+      sha512_256Hex(signerDid) !== holderEntry.publicKeyHash
+    ) {
+      throw new Error(
+        "Shard holder identity mismatch - signer not authorized for this shard",
+      );
+    }
   }
 
   // Verify holder signature
@@ -386,6 +409,7 @@ export function challengeRecovery(
   challengerDid: string,
   reason: string,
   signature: string,
+  challengerPublicKey: PublicKey,
   currentBlock: number,
 ): RecoveryRequest {
   if (request.status !== "challengeable") {
@@ -394,6 +418,19 @@ export function challengeRecovery(
 
   if (currentBlock >= request.challengeExpires) {
     throw new Error("Challenge period expired");
+  }
+
+  // P0-A2 FIX: Verify the challenger's signature on the challenge message.
+  // Without verification, anyone could submit fake challenges to stall recovery.
+  const challengeMessage = `challenge:${request.id}:${challengerDid}:${reason}`;
+  if (
+    !verify(
+      new TextEncoder().encode(challengeMessage),
+      signature,
+      challengerPublicKey,
+    )
+  ) {
+    throw new Error("Invalid challenger signature");
   }
 
   return {
@@ -467,16 +504,25 @@ export function addGuardian(
   config: RecoveryConfig,
   guardian: Guardian,
 ): RecoveryConfig {
-  if (!config.socialRecovery) {
-    config.socialRecovery = {
-      guardians: [],
-      requiredGuardians: 2,
-      guardianDelay: 5000, // Extra delay blocks
-    };
+  // P0-A3 FIX: Return new object instead of mutating input
+  const socialRecovery = config.socialRecovery
+    ? {
+        ...config.socialRecovery,
+        guardians: [...config.socialRecovery.guardians],
+      }
+    : {
+        guardians: [],
+        requiredGuardians: 2,
+        guardianDelay: 5000, // Extra delay blocks
+      };
+
+  // P2-A6 FIX: Prevent duplicate guardian DIDs
+  if (socialRecovery.guardians.some((g) => g.did === guardian.did)) {
+    throw new Error("Guardian already exists");
   }
 
-  config.socialRecovery.guardians.push(guardian);
-  return config;
+  socialRecovery.guardians.push(guardian);
+  return { ...config, socialRecovery };
 }
 
 /**
@@ -488,11 +534,16 @@ export function removeGuardian(
 ): RecoveryConfig {
   if (!config.socialRecovery) return config;
 
-  config.socialRecovery.guardians = config.socialRecovery.guardians.filter(
-    (g) => g.did !== guardianDid,
-  );
-
-  return config;
+  // P0-A3 FIX: Return new object instead of mutating input
+  return {
+    ...config,
+    socialRecovery: {
+      ...config.socialRecovery,
+      guardians: config.socialRecovery.guardians.filter(
+        (g) => g.did !== guardianDid,
+      ),
+    },
+  };
 }
 
 /**

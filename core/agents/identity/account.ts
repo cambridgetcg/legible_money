@@ -272,12 +272,13 @@ export function createSessionKeyAuth(
   operationalKey: PublicKey,
   capabilities: Partial<SessionCapabilities>,
   expiresInBlocks: number = 1000,
+  currentBlock: number = 0,
 ): SessionKeyAuth {
   return {
     sessionKey,
     authorizedBy: operationalKey,
-    authorizedAt: 0, // Set by chain
-    expiresAt: 0 + expiresInBlocks, // Set by chain
+    authorizedAt: currentBlock,
+    expiresAt: currentBlock + expiresInBlocks,
     capabilities: {
       maxSpendPerTx: 100n * 10n ** 18n, // 100 LGM default
       maxSpendPerDay: 1000n * 10n ** 18n, // 1000 LGM default
@@ -304,8 +305,8 @@ export function validateSessionKeyAction(
   amount?: bigint,
   currentBlock?: number,
 ): { valid: boolean; reason?: string } {
-  // Check expiry
-  if (currentBlock && auth.expiresAt <= currentBlock) {
+  // Check expiry (P0-A1 FIX: use !== undefined, not falsy check — block 0 is valid)
+  if (currentBlock !== undefined && auth.expiresAt <= currentBlock) {
     return { valid: false, reason: "Session key expired" };
   }
 

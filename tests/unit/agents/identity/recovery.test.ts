@@ -610,9 +610,11 @@ describe.sequential("updateRecoveryStatus", () => {
 
 describe.sequential("challengeRecovery", () => {
   let request: RecoveryRequest;
+  let challengerKey: ReturnType<typeof generateKeypair>;
 
   beforeEach(() => {
     const recoveryKey = generateKeypair();
+    challengerKey = generateKeypair();
     const holders = [
       {
         type: "agent" as const,
@@ -641,27 +643,44 @@ describe.sequential("challengeRecovery", () => {
     request.status = "challengeable";
   });
 
+  function signChallenge(
+    requestId: string,
+    challengerDid: string,
+    reason: string,
+  ): string {
+    const message = `challenge:${requestId}:${challengerDid}:${reason}`;
+    return sign(new TextEncoder().encode(message), challengerKey.privateKey);
+  }
+
   it("should create challenge on challengeable request", () => {
+    const did = "did:lgm:challenger";
+    const reason = "Unauthorized recovery attempt";
+    const sig = signChallenge(request.id, did, reason);
     const challenged = challengeRecovery(
       request,
-      "did:lgm:challenger",
-      "Unauthorized recovery attempt",
-      "sig123",
+      did,
+      reason,
+      sig,
+      challengerKey.publicKey,
       1110,
     );
 
     expect(challenged.challenge).toBeDefined();
-    expect(challenged.challenge!.challenger).toBe("did:lgm:challenger");
-    expect(challenged.challenge!.reason).toBe("Unauthorized recovery attempt");
+    expect(challenged.challenge!.challenger).toBe(did);
+    expect(challenged.challenge!.reason).toBe(reason);
     expect(challenged.challenge!.resolved).toBe(false);
   });
 
   it("should record challenge timestamp", () => {
+    const did = "did:lgm:challenger";
+    const reason = "Reason";
+    const sig = signChallenge(request.id, did, reason);
     const challenged = challengeRecovery(
       request,
-      "did:lgm:challenger",
-      "Reason",
-      "sig",
+      did,
+      reason,
+      sig,
+      challengerKey.publicKey,
       1110,
     );
 
@@ -672,13 +691,27 @@ describe.sequential("challengeRecovery", () => {
     request.status = "delayed";
 
     expect(() =>
-      challengeRecovery(request, "did", "reason", "sig", 1110),
+      challengeRecovery(
+        request,
+        "did",
+        "reason",
+        "sig",
+        challengerKey.publicKey,
+        1110,
+      ),
     ).toThrow("Recovery not in challengeable state");
   });
 
   it("should reject challenge after challenge period", () => {
     expect(() =>
-      challengeRecovery(request, "did", "reason", "sig", 1200),
+      challengeRecovery(
+        request,
+        "did",
+        "reason",
+        "sig",
+        challengerKey.publicKey,
+        1200,
+      ),
     ).toThrow("Challenge period expired");
   });
 });

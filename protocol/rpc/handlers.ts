@@ -75,8 +75,11 @@ import { META_AXIOMS } from "../../core/logic/types.js";
 import { GOEDELIAN_PROMISE } from "../../core/logic/goedel.js";
 import { ZONE_PROPERTIES } from "../../core/logic/zones.js";
 
-// Research-enhanced confidence (P0-E3)
-import { calculateResearchAdjustedConfidence } from "../../consensus/pot/confidence.js";
+// Research-enhanced confidence (P0-E3) + research verification flagging (P1-E6)
+import {
+  calculateResearchAdjustedConfidence,
+  needsResearchVerification,
+} from "../../consensus/pot/confidence.js";
 
 // ============ Handler Context ============
 
@@ -292,6 +295,16 @@ export const knowledgeGetFact: Handler<
     fact: enhancedFact,
     blockNumber: blockNumber.toString(),
   };
+
+  // Flag whether this fact needs IRL research verification
+  if (enhancedFact) {
+    response.researchStatus = needsResearchVerification(
+      enhancedFact.confidence,
+      enhancedFact.epistemicCategory || "empirical",
+      enhancedFact.challengeCount ?? 0,
+      enhancedFact.verifierCount ?? 0,
+    );
+  }
 
   // Include references if requested
   if (params.includeReferences && fact) {

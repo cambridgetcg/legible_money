@@ -251,48 +251,6 @@ export function needsReverification(
   return currentConfidence < threshold;
 }
 
-// ============ Evidence Strength ============
-
-/**
- * Evidence type strength hierarchy (imported from types, mirrored here for runtime)
- */
-const EVIDENCE_STRENGTH: Record<string, number> = {
-  on_chain: 1.0,
-  cryptographic_proof: 0.99,
-  computational: 0.95,
-  formal_proof: 0.95,
-  peer_reviewed: 0.85,
-  institutional: 0.8,
-  oracle: 0.7,
-  archived_web: 0.6,
-  attestation: 0.5,
-  inference: 0.4,
-};
-
-/**
- * Calculate evidence strength based on references (legacy function)
- */
-export function calculateEvidenceStrength(
-  references: Array<{
-    type: string;
-    reliabilityScore: number;
-  }>,
-): number {
-  if (references.length === 0) return 0;
-
-  let weightedSum = 0;
-  let totalWeight = 0;
-
-  for (const ref of references) {
-    const typeWeight = EVIDENCE_STRENGTH[ref.type] || 0.5;
-    const combinedWeight = typeWeight * ref.reliabilityScore;
-    weightedSum += combinedWeight;
-    totalWeight += 1;
-  }
-
-  return weightedSum / totalWeight;
-}
-
 // ============ Bayesian Evidence Aggregation ============
 
 /**
@@ -571,42 +529,6 @@ export interface ConfidenceHistoryEntry {
   confidence: Confidence;
   reason: string;
   verificationRoundId?: string;
-}
-
-/**
- * Create confidence history entry
- */
-export function createHistoryEntry(
-  confidence: Confidence,
-  blockNumber: number,
-  reason: string,
-  roundId?: string,
-): ConfidenceHistoryEntry {
-  return {
-    timestamp: blockNumber, // Deterministic: use block number, not wall clock
-    blockNumber,
-    confidence,
-    reason,
-    verificationRoundId: roundId,
-  };
-}
-
-/**
- * Get confidence trend from history
- */
-export function getConfidenceTrend(
-  history: ConfidenceHistoryEntry[],
-): "increasing" | "decreasing" | "stable" {
-  if (history.length < 2) return "stable";
-
-  const recent = history.slice(-5);
-  const first = recent[0].confidence;
-  const last = recent[recent.length - 1].confidence;
-
-  const diff = last - first;
-  if (diff > 0.05) return "increasing";
-  if (diff < -0.05) return "decreasing";
-  return "stable";
 }
 
 // ============ Master Confidence Formula ============

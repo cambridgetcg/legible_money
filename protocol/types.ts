@@ -291,6 +291,12 @@ export interface KnowledgeGetFactResponse {
     contradicts: FactState[];
     extends: FactState[];
   };
+  /** Whether this fact needs IRL research verification (replication, fraud investigation) */
+  researchStatus?: {
+    needsResearch: boolean;
+    priority: "low" | "medium" | "high" | "critical";
+    reason: string;
+  };
   blockNumber: string;
 }
 

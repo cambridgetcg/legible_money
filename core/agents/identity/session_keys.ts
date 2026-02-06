@@ -58,6 +58,12 @@ export const MAX_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
  */
 export const MIN_SESSION_DURATION_MS = 60_000; // 1 minute
 
+/**
+ * Approximate blocks per day (86400000ms / 2521ms block time)
+ * Used for deterministic daily spending reset on-chain
+ */
+export const BLOCKS_PER_DAY = 34272n;
+
 // ============ Types ============
 
 /**
@@ -131,6 +137,7 @@ export interface SessionUsage {
   dailySpent: bigint;
   lastUsed: number;
   lastDailyReset: number;
+  lastDailyResetBlock?: bigint; // Block height for deterministic on-chain reset
 }
 
 /**
@@ -210,6 +217,7 @@ export function generateSessionKey(
       dailySpent: 0n,
       lastUsed: 0,
       lastDailyReset: now,
+      lastDailyResetBlock: 0n,
     },
   };
 }
@@ -246,6 +254,7 @@ export function deriveSessionKey(
       dailySpent: 0n,
       lastUsed: 0,
       lastDailyReset: now,
+      lastDailyResetBlock: 0n,
     },
   };
 }
@@ -296,9 +305,12 @@ export function authorizeSessionKey(
 export function verifySessionKeyAuthorization(
   auth: SessionKeyAuthorization,
   operationalPublicKey: PublicKey,
+  currentTimeMs?: number,
 ): { valid: boolean; reason?: string } {
-  // Check expiry
-  if (Date.now() > auth.expiresAt) {
+  // P1-A4 FIX: Accept explicit time to allow deterministic on-chain verification.
+  // Falls back to Date.now() only for off-chain/client-side checks.
+  const now = currentTimeMs ?? Date.now();
+  if (now > auth.expiresAt) {
     return { valid: false, reason: "Authorization expired" };
   }
 
@@ -410,9 +422,8 @@ export function validateSessionAction(
   action: SessionAction,
   amount?: bigint,
   currentBlock?: bigint,
+  recipient?: string,
 ): { allowed: boolean; reason?: string; warning?: string } {
-  const now = Date.now();
-
   // Check expiry (with clock skew tolerance)
   const expiryCheck = isSessionExpired(session, currentBlock);
   if (expiryCheck.expired) {
@@ -434,6 +445,15 @@ export function validateSessionAction(
     return { allowed: false, reason: `Action '${action}' not allowed` };
   }
 
+  // Check recipient restrictions (empty = all allowed)
+  if (
+    recipient &&
+    session.limits.allowedRecipients.length > 0 &&
+    !session.limits.allowedRecipients.includes(recipient)
+  ) {
+    return { allowed: false, reason: "Recipient not in allowed list" };
+  }
+
   // Check spending limits for transfers
   if (action === "transfer" && amount) {
     // Per-transaction limit
@@ -441,9 +461,19 @@ export function validateSessionAction(
       return { allowed: false, reason: "Exceeds per-transaction limit" };
     }
 
-    // Daily limit (reset if new day)
+    // Daily limit (reset based on block height for determinism)
     let dailySpent = session.usage.dailySpent;
-    if (now - session.usage.lastDailyReset > 86400000) {
+    if (
+      currentBlock !== undefined &&
+      session.usage.lastDailyResetBlock !== undefined &&
+      currentBlock - session.usage.lastDailyResetBlock >= BLOCKS_PER_DAY
+    ) {
+      dailySpent = 0n;
+    } else if (
+      currentBlock === undefined &&
+      Date.now() - session.usage.lastDailyReset > 86400000
+    ) {
+      // Fallback to wall-clock only when no block height available (off-chain)
       dailySpent = 0n;
     }
     if (dailySpent + amount > session.limits.maxPerDay) {
@@ -466,6 +496,7 @@ export function updateSessionUsage(
   session: SessionKey,
   _action: SessionAction,
   amount?: bigint,
+  currentBlock?: bigint,
 ): SessionKey {
   const now = Date.now();
   const usage = { ...session.usage };
@@ -473,8 +504,19 @@ export function updateSessionUsage(
   usage.transactionCount++;
   usage.lastUsed = now;
 
-  // Reset daily if needed
-  if (now - usage.lastDailyReset > 86400000) {
+  // Reset daily based on block height (deterministic) or wall-clock (off-chain fallback)
+  if (
+    currentBlock !== undefined &&
+    usage.lastDailyResetBlock !== undefined &&
+    currentBlock - usage.lastDailyResetBlock >= BLOCKS_PER_DAY
+  ) {
+    usage.dailySpent = 0n;
+    usage.lastDailyReset = now;
+    usage.lastDailyResetBlock = currentBlock;
+  } else if (
+    currentBlock === undefined &&
+    now - usage.lastDailyReset > 86400000
+  ) {
     usage.dailySpent = 0n;
     usage.lastDailyReset = now;
   }

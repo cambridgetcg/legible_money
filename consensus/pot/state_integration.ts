@@ -35,6 +35,8 @@ import type { PublicKey } from "../../core/crypto/keys.js";
 import type { KVStore } from "../../state/storage/types.js";
 import { MemoryStore, createStorage } from "../../state/storage/leveldb.js";
 import { Mempool as CanonicalMempool } from "../mempool/pool.js";
+import type { DomainTree } from "../../core/knowledge/ontology/types.js";
+import type { DomainProposal } from "../../core/knowledge/ontology/domain_proposal.js";
 
 // ============ Integration Interface ============
 
@@ -132,6 +134,12 @@ export interface StateIntegration {
 
   /** Check if a claim exists and is valid for verification */
   isValidClaim(claimId: string): boolean;
+
+  /** Get the current domain tree from state (synced with governance) */
+  getDomainTree(): DomainTree;
+
+  /** Get pending domain proposals (for rejecting claims to in-flight domains) */
+  getPendingDomainProposals(): Map<string, DomainProposal>;
 }
 
 export interface TransactionValidation {
@@ -617,6 +625,34 @@ export class StateIntegrationImpl implements StateIntegration {
    */
   getTotalStake(): bigint {
     return this.stateManager.getTotalStake();
+  }
+
+  /**
+   * P0-D1 FIX: Get current domain tree from state layer.
+   * Ensures engine always uses the latest domain tree (including governance-added domains),
+   * instead of a frozen genesis copy.
+   */
+  getDomainTree(): DomainTree {
+    return this.stateManager.getKnowledgeDomainTree();
+  }
+
+  /**
+   * P0-D2 FIX: Get pending domain proposals as Map for validateClaimOntology.
+   * Enables rejection of claims targeting domains that are still in proposal stage.
+   */
+  getPendingDomainProposals(): Map<string, DomainProposal> {
+    const proposals = this.stateManager.getAllDomainProposals();
+    const pending = new Map<string, DomainProposal>();
+    for (const p of proposals) {
+      if (
+        p.status === "pending" ||
+        p.status === "endorsed" ||
+        p.status === "governance"
+      ) {
+        pending.set(p.proposedDomainId, p);
+      }
+    }
+    return pending;
   }
 
   /**
