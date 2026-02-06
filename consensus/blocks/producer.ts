@@ -121,6 +121,7 @@ export function computeTransactionsRoot(txs: Transaction[]): string {
         type: tx.type,
         sender: tx.sender,
         nonce: tx.nonce.toString(),
+        fee: tx.fee.toString(),
         signature: tx.signature,
       }),
     ),

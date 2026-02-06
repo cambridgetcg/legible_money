@@ -140,6 +140,19 @@ export class ScheduleProcessStateManager {
       this.removeFromStatusIndex(process);
     }
 
+    // P0-S1 FIX: Update watchedKeys index when watchedStateKeys change
+    if (updates.watchedStateKeys) {
+      for (const key of process.watchedStateKeys) {
+        this.removeFromSetIndex(this.state.watchedKeys, key, process.id);
+      }
+    }
+
+    // P2-S1 FIX: Update byTime index when nextCheckTime changes
+    if (updates.nextCheckTime !== undefined && process.nextCheckTime) {
+      const oldBucket = this.getTimeBucket(process.nextCheckTime);
+      this.removeFromSetIndex(this.state.byTime, oldBucket, process.id);
+    }
+
     // Apply updates
     // CRIT-002 FIX: Use deterministic block timestamp instead of Date.now()
     const updatedProcess: ScheduleProcess = {
@@ -154,6 +167,19 @@ export class ScheduleProcessStateManager {
     if (updates.status && updates.status !== oldStatus) {
       this.addToStatusIndex(updatedProcess);
       this.updateActiveCount(oldStatus, updates.status);
+    }
+
+    // P0-S1 FIX: Add new watchedKeys to index
+    if (updates.watchedStateKeys) {
+      for (const key of updatedProcess.watchedStateKeys) {
+        this.addToSetIndex(this.state.watchedKeys, key, process.id);
+      }
+    }
+
+    // P2-S1 FIX: Add new time bucket to index
+    if (updates.nextCheckTime !== undefined && updatedProcess.nextCheckTime) {
+      const newBucket = this.getTimeBucket(updatedProcess.nextCheckTime);
+      this.addToSetIndex(this.state.byTime, newBucket, process.id);
     }
 
     // Update state root
@@ -524,6 +550,9 @@ export class ScheduleProcessStateManager {
   }
 
   private hashProcess(process: ScheduleProcess): string {
+    // P1-S3 FIX: Include all semantically meaningful fields in the hash.
+    // Previously omitted condition, targetAddress, callData, transferValue —
+    // two processes with different targets could produce the same hash.
     const data = JSON.stringify({
       id: process.id,
       sourceMessageId: process.sourceMessageId,
@@ -532,6 +561,13 @@ export class ScheduleProcessStateManager {
       executionCount: process.executionCount,
       generatedTxNonce: process.generatedTxNonce.toString(),
       remainingFee: process.remainingFee.toString(),
+      targetAddress: process.targetAddress,
+      transferValue: process.transferValue.toString(),
+      feePerExecution: process.feePerExecution.toString(),
+      callDataHash: createHash("sha256").update(process.callData).digest("hex"),
+      conditionHash: createHash("sha256")
+        .update(JSON.stringify(process.condition))
+        .digest("hex"),
     });
     return createHash("sha256").update(data).digest("hex");
   }

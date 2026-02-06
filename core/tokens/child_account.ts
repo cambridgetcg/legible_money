@@ -142,7 +142,7 @@ export class ChildAccountManager {
   /**
    * Get or create an expirable balance for an account
    */
-  getOrCreateBalance(account: DID): ExpirableBalance {
+  getOrCreateBalance(account: DID, currentTime?: number): ExpirableBalance {
     const existing = this.accounts.get(account);
     if (existing) {
       return existing;
@@ -155,7 +155,7 @@ export class ChildAccountManager {
       earliestPeriod: Number.MAX_SAFE_INTEGER,
       latestPeriod: 0,
       totalExpired: 0n,
-      updatedAt: Date.now(),
+      updatedAt: currentTime ?? 0,
     };
 
     this.accounts.set(account, newBalance);
@@ -269,7 +269,7 @@ export class ChildAccountManager {
     account: DID,
     amount: bigint,
     currentTime: number,
-    freshExpiration: boolean = true,
+    _freshExpiration: boolean = true,
   ): {
     balance: ExpirableBalance;
     childAccount: ChildAccount;
@@ -284,9 +284,9 @@ export class ChildAccountManager {
     }
 
     const balance = this.getOrCreateBalance(account);
-    const period = freshExpiration
-      ? this.timestampToPeriod(currentTime)
-      : this.timestampToPeriod(currentTime); // Could inherit period from sender
+    // P2-T1 FIX: freshExpiration is reserved for future "inherit period from sender" support.
+    // For now, always use current period — the ternary was a no-op.
+    const period = this.timestampToPeriod(currentTime);
 
     // Update period balance
     const currentPeriodBalance = balance.periodBalances.get(period) ?? 0n;
@@ -296,7 +296,7 @@ export class ChildAccountManager {
     balance.totalBalance += amount;
     balance.earliestPeriod = Math.min(balance.earliestPeriod, period);
     balance.latestPeriod = Math.max(balance.latestPeriod, period);
-    balance.updatedAt = Date.now();
+    balance.updatedAt = currentTime;
 
     // Create/update child account
     const childKey = this.getChildAccountKey(account, period);
@@ -386,7 +386,7 @@ export class ChildAccountManager {
 
     // Update balance totals
     balance.totalBalance -= amount;
-    balance.updatedAt = Date.now();
+    balance.updatedAt = currentTime;
 
     // Update earliest/latest pointers
     this.updatePeriodPointers(balance);
@@ -460,11 +460,11 @@ export class ChildAccountManager {
     if (expiredAmount > 0n) {
       balance.totalBalance -= expiredAmount;
       balance.totalExpired += expiredAmount;
-      balance.updatedAt = Date.now();
+      balance.updatedAt = currentTime;
       this.updatePeriodPointers(balance);
       this.accounts.set(account, balance);
     } else if (lockedAmount > 0n) {
-      balance.updatedAt = Date.now();
+      balance.updatedAt = currentTime;
       this.accounts.set(account, balance);
     }
 
@@ -541,7 +541,7 @@ export class ChildAccountManager {
 
     if (extensionPeriods > resolved.maxExtensionPeriods) {
       throw new TokenError(
-        `Extension ${extensionPeriods} exceeds max ${this.config.maxExtensionPeriods}`,
+        `Extension ${extensionPeriods} exceeds max ${resolved.maxExtensionPeriods}`,
         "MAX_EXTENSION_EXCEEDED",
       );
     }
@@ -557,7 +557,7 @@ export class ChildAccountManager {
 
     balance.totalBalance += amount;
     balance.latestPeriod = Math.max(balance.latestPeriod, newPeriod);
-    balance.updatedAt = Date.now();
+    balance.updatedAt = currentTime;
 
     // Update child account
     const childAccount = this.getOrCreateChildAccount(
@@ -722,7 +722,7 @@ export class ChildAccountManager {
     newChildAccount.balance += netUnlocked;
     this.childAccounts.set(newChildKey, newChildAccount);
 
-    balance.updatedAt = Date.now();
+    balance.updatedAt = currentTime;
     this.updatePeriodPointers(balance);
     this.accounts.set(account, balance);
 
@@ -765,8 +765,8 @@ export class ChildAccountManager {
   /**
    * Get current period
    */
-  getCurrentPeriod(): ExpirationPeriod {
-    return this.timestampToPeriod(Date.now());
+  getCurrentPeriod(currentTime: number): ExpirationPeriod {
+    return this.timestampToPeriod(currentTime);
   }
 
   /**

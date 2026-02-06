@@ -78,9 +78,7 @@ export class RetrievalEngine {
     currentBlock: bigint,
     targetAccounts?: DID[],
   ): RetrievalRequest {
-    const id = sha512_256Hex(
-      `retrieval:${period}:${currentBlock}:${Date.now()}`,
-    );
+    const id = sha512_256Hex(`retrieval:${period}:${currentBlock}`);
 
     const request: RetrievalRequest = {
       id,
@@ -195,25 +193,29 @@ export class RetrievalEngine {
 
   /**
    * Retrieve expired tokens from a single account
+   *
+   * P0-T1 FIX: Only count tokens from the requested period, not all expired periods.
+   * Previously, processExpiration() swept ALL expired periods but the total was
+   * attributed to just the requested period, causing over-counting.
    */
   private retrieveFromAccount(
     account: DID,
     period: ExpirationPeriod,
     currentTime: number,
   ): AccountRetrievalResult {
-    const { expiredAmount, expiredPeriods } =
-      this.childAccountManager.processExpiration(account, currentTime);
+    // Get the balance for this specific period BEFORE processing expiration
+    const balanceObj = this.childAccountManager.getOrCreateBalance(account);
+    const periodBalance = balanceObj.periodBalances.get(period) ?? 0n;
 
-    // Check if the requested period was among those expired
-    const periodExpiredAmount = expiredPeriods.includes(period)
-      ? expiredAmount // All expired in this batch
-      : 0n;
+    // Process expiration (sweeps all expired periods)
+    this.childAccountManager.processExpiration(account, currentTime);
 
+    // Only report what was in the requested period
     const balance = this.childAccountManager.getBalance(account, currentTime);
 
     return {
       account,
-      amount: periodExpiredAmount,
+      amount: periodBalance,
       period,
       balanceZeroed: balance === 0n,
     };
@@ -374,7 +376,7 @@ export class RetrievalEngine {
     // Create distribution record
     const period = this.expirationTracker.timestampToPeriod(currentTime);
     const distribution: RAIDistribution = {
-      id: sha512_256Hex(`rai:dist:${currentBlock}:${Date.now()}`),
+      id: sha512_256Hex(`rai:dist:${currentBlock}:${period}`),
       amount: distributedAmount,
       recipientCount,
       amountPerRecipient: perAccount,

@@ -418,6 +418,7 @@ export class GuardianManager {
     priority: Alert["priority"],
     message: string,
     data: Record<string, unknown> = {},
+    currentTime: number = 0,
   ): Alert {
     // Check if this alert type is enabled
     const trigger = this.guardian.alerts.triggers.find((t) => t.type === type);
@@ -426,12 +427,14 @@ export class GuardianManager {
     }
 
     const alert: Alert = {
-      id: sha512_256Hex(`alert:${type}:${Date.now()}:${Math.random()}`),
+      id: sha512_256Hex(
+        `alert:${type}:${this.guardian.stats.alertsGenerated}:${message}`,
+      ),
       type,
       priority,
       message,
       data,
-      createdAt: Date.now(),
+      createdAt: currentTime,
     };
 
     this.guardian.pendingAlerts.push(alert);
@@ -449,8 +452,9 @@ export class GuardianManager {
   /**
    * Get pending alerts
    */
+  // P0-H2 FIX: Use === undefined, not falsy — readAt=0 is falsy but valid
   getPendingAlerts(): Alert[] {
-    return this.guardian.pendingAlerts.filter((a) => !a.readAt);
+    return this.guardian.pendingAlerts.filter((a) => a.readAt === undefined);
   }
 
   /**
@@ -458,7 +462,7 @@ export class GuardianManager {
    */
   getAlertsByPriority(priority: Alert["priority"]): Alert[] {
     return this.guardian.pendingAlerts.filter(
-      (a) => a.priority === priority && !a.readAt,
+      (a) => a.priority === priority && a.readAt === undefined,
     );
   }
 
@@ -472,10 +476,10 @@ export class GuardianManager {
   /**
    * Mark alert as read
    */
-  markAlertRead(alertId: string): void {
+  markAlertRead(alertId: string, currentTime?: number): void {
     const alert = this.guardian.pendingAlerts.find((a) => a.id === alertId);
     if (alert) {
-      alert.readAt = Date.now();
+      alert.readAt = currentTime ?? 0;
       this.dirty = true;
     }
   }
@@ -483,10 +487,15 @@ export class GuardianManager {
   /**
    * Mark alert as actioned
    */
-  markAlertActioned(alertId: string, action: string): void {
+  markAlertActioned(
+    alertId: string,
+    action: string,
+    currentTime?: number,
+  ): void {
+    const ts = currentTime ?? 0;
     const alert = this.guardian.pendingAlerts.find((a) => a.id === alertId);
     if (alert) {
-      alert.readAt = alert.readAt ?? Date.now();
+      alert.readAt = alert.readAt ?? ts;
       alert.actionTaken = action;
       this.dirty = true;
     }
@@ -495,10 +504,10 @@ export class GuardianManager {
   /**
    * Mark all alerts as read
    */
-  markAllAlertsRead(): void {
-    const now = Date.now();
+  markAllAlertsRead(currentTime?: number): void {
+    const now = currentTime ?? 0;
     for (const alert of this.guardian.pendingAlerts) {
-      if (!alert.readAt) {
+      if (alert.readAt === undefined) {
         alert.readAt = now;
       }
     }

@@ -283,7 +283,7 @@ export function createSessionKeyAuth(
       maxSpendPerTx: 100n * 10n ** 18n, // 100 LGM default
       maxSpendPerDay: 1000n * 10n ** 18n, // 1000 LGM default
       dailySpent: 0n,
-      lastResetBlock: 0,
+      lastResetBlock: currentBlock,
       canTransfer: true,
       canStake: false,
       canSubmitClaims: true,
@@ -304,6 +304,7 @@ export function validateSessionKeyAction(
   action: keyof SessionCapabilities,
   amount?: bigint,
   currentBlock?: number,
+  recipient?: string,
 ): { valid: boolean; reason?: string } {
   // Check expiry (P0-A1 FIX: use !== undefined, not falsy check — block 0 is valid)
   if (currentBlock !== undefined && auth.expiresAt <= currentBlock) {
@@ -313,6 +314,16 @@ export function validateSessionKeyAction(
   // Check usage count
   if (auth.usageCount >= auth.maxUsage) {
     return { valid: false, reason: "Session key usage limit reached" };
+  }
+
+  // Check recipient restrictions
+  if (
+    recipient &&
+    auth.capabilities.allowedRecipients &&
+    auth.capabilities.allowedRecipients.length > 0 &&
+    !auth.capabilities.allowedRecipients.includes(recipient)
+  ) {
+    return { valid: false, reason: "Recipient not in allowed list" };
   }
 
   // Check capability

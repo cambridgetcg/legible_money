@@ -1227,17 +1227,20 @@ export class ProofOfTruthEngine extends EventEmitter {
   }
 
   /**
-   * GAP-006 FIX: Validate a transaction against actual state
-   * SECURITY: Signature now covers full transaction (type, sender, nonce, fee, payload)
+   * GAP-006 FIX: Validate a transaction against actual state.
+   *
+   * NOTE: The wallet SDK (protocol/sdk/wallet.ts) currently signs JSON.stringify(payload) only.
+   * All verification points (engine, block validator, mempool) MUST match this convention.
+   * TODO: Migrate to getSignableMessage() (types.ts) covering type+nonce+fee+payload with
+   * coordinated wallet SDK + RPC + CLI update to prevent fee/nonce malleability.
    */
   private async validateTransaction(
     tx: Transaction,
   ): Promise<{ valid: boolean; reason?: string }> {
-    // SECURITY: Verify signature covers FULL transaction, not just payload
-    // This prevents transaction malleability attacks where fee/nonce could be modified
-    const signedData = this.getTransactionSigningData(tx);
+    // Verify signature against payload (matches wallet SDK signing convention)
+    const payload = JSON.stringify(tx.payload);
     const sigValid = verify(
-      new TextEncoder().encode(signedData),
+      new TextEncoder().encode(payload),
       tx.signature,
       tx.sender,
     );
@@ -1245,8 +1248,7 @@ export class ProofOfTruthEngine extends EventEmitter {
     if (!sigValid) {
       return {
         valid: false,
-        reason:
-          "Invalid signature - must sign full transaction (type, sender, nonce, fee, payload)",
+        reason: "Invalid transaction signature",
       };
     }
 
@@ -1263,20 +1265,6 @@ export class ProofOfTruthEngine extends EventEmitter {
       reason:
         "State integration not available - cannot validate transaction state",
     };
-  }
-
-  /**
-   * Get the canonical data that must be signed for a transaction
-   * SECURITY: Includes ALL fields to prevent malleability attacks
-   */
-  private getTransactionSigningData(tx: Transaction): string {
-    return JSON.stringify({
-      type: tx.type,
-      sender: tx.sender,
-      nonce: tx.nonce.toString(),
-      fee: tx.fee.toString(),
-      payload: tx.payload,
-    });
   }
 
   /**

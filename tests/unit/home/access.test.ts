@@ -31,14 +31,20 @@ const SESSION_KEY_HASH = "session_key_hash_qrs456";
 const GUARDIAN_KEY_HASH = "guardian_key_hash_tuv789";
 const ONE_LGM = 10n ** 18n;
 
-// Helper to create fresh manager
+// Deterministic base time for tests (avoids Date.now() dependency)
+const BASE_TIME = 1700000000000; // fixed epoch ms
+
+// Helper to create fresh manager with deterministic time
 function createManager(): AccessManager {
-  return new AccessManager(TEST_DID);
+  const m = new AccessManager(TEST_DID);
+  m.setCurrentBlock(1n, BASE_TIME);
+  return m;
 }
 
 // Helper to create manager with identity key
 function createManagerWithIdentity(): AccessManager {
   const manager = new AccessManager(TEST_DID);
+  manager.setCurrentBlock(1n, BASE_TIME);
   manager.registerKey(IDENTITY_KEY_HASH, "identity", "owner", {
     label: "Primary",
   });
@@ -65,7 +71,7 @@ describe.sequential("AccessManager", () => {
             keyHash: IDENTITY_KEY_HASH,
             keyType: "identity",
             role: "owner",
-            registeredAt: Date.now() - 10000,
+            registeredAt: BASE_TIME - 10000,
             label: "Test Identity",
           },
         ],
@@ -153,7 +159,7 @@ describe.sequential("AccessManager", () => {
       it("should register session key as guest", () => {
         const manager = createManager();
         const key = manager.registerKey(SESSION_KEY_HASH, "session", "guest", {
-          expiresAt: Date.now() + 3600000,
+          expiresAt: BASE_TIME + 3600000,
         });
 
         expect(key.keyType).toBe("session");
@@ -346,7 +352,7 @@ describe.sequential("AccessManager", () => {
       it("should exclude expired keys", () => {
         const manager = createManager();
         manager.registerKey(SESSION_KEY_HASH, "session", "guest", {
-          expiresAt: Date.now() - 1000, // Already expired
+          expiresAt: BASE_TIME - 1000, // Already expired relative to BASE_TIME
         });
 
         const activeKeys = manager.getActiveKeys();
@@ -404,7 +410,7 @@ describe.sequential("AccessManager", () => {
       it("should throw for expired key", () => {
         const manager = createManager();
         manager.registerKey(SESSION_KEY_HASH, "session", "guest", {
-          expiresAt: Date.now() - 1000,
+          expiresAt: BASE_TIME - 1000,
         });
 
         expect(() => manager.startSession(SESSION_KEY_HASH)).toThrow(
@@ -483,21 +489,20 @@ describe.sequential("AccessManager", () => {
       it("should auto-cleanup expired session", () => {
         const manager = createManager();
         manager.registerKey(SESSION_KEY_HASH, "session", "guest", {
-          expiresAt: Date.now() + 100000,
+          expiresAt: BASE_TIME + 100000,
         });
 
-        // Start session with very short duration
+        // Start session with very short duration (1ms)
         const session = manager.startSession(SESSION_KEY_HASH, {
-          sessionDuration: 1, // 1ms
+          sessionDuration: 1,
         });
 
-        // Wait for expiration
         const sessionId = session.sessionId;
 
-        // Force time to pass (simulate by checking after delay)
-        setTimeout(() => {
-          expect(manager.getSession(sessionId)).toBeUndefined();
-        }, 10);
+        // Advance deterministic time past session expiry
+        manager.setCurrentBlock(2n, BASE_TIME + 10);
+
+        expect(manager.getSession(sessionId)).toBeUndefined();
       });
     });
 
@@ -539,19 +544,18 @@ describe.sequential("AccessManager", () => {
       it("should remove expired sessions", () => {
         const manager = createManager();
         manager.registerKey(SESSION_KEY_HASH, "session", "guest", {
-          expiresAt: Date.now() + 100000,
+          expiresAt: BASE_TIME + 100000,
         });
 
-        // Create a session that will expire
+        // Create a session that will expire (1ms duration)
         const session = manager.startSession(SESSION_KEY_HASH, {
           sessionDuration: 1,
         });
 
-        // Wait a bit then cleanup
-        setTimeout(() => {
-          const expired = manager.cleanupExpiredSessions();
-          expect(expired).toContain(session.sessionId);
-        }, 10);
+        // Advance time past session expiry (deterministic, no setTimeout)
+        manager.setCurrentBlock(2n, BASE_TIME + 100);
+        const expired = manager.cleanupExpiredSessions();
+        expect(expired).toContain(session.sessionId);
       });
 
       it("should keep active sessions", () => {
@@ -972,7 +976,7 @@ describe.sequential("AccessManager", () => {
         }
 
         // Get failures since far future (should be empty)
-        const failed = manager.getFailedAttempts(Date.now() + 100000);
+        const failed = manager.getFailedAttempts(BASE_TIME + 100000);
         expect(failed).toHaveLength(0);
       });
     });
@@ -1031,7 +1035,7 @@ describe.sequential("AccessManager", () => {
         keyHash: "injected",
         keyType: "session",
         role: "guest",
-        registeredAt: Date.now(),
+        registeredAt: BASE_TIME,
       });
 
       // Original should be unchanged
@@ -1047,7 +1051,7 @@ describe.sequential("AccessManager", () => {
       manager.registerKey(IDENTITY_KEY_HASH, "identity", "owner");
       manager.registerKey(OPERATIONAL_KEY_HASH, "operational", "operator");
       manager.registerKey(SESSION_KEY_HASH, "session", "guest", {
-        expiresAt: Date.now() - 1000, // Expired
+        expiresAt: BASE_TIME - 1000, // Expired relative to BASE_TIME
       });
       manager.registerKey(GUARDIAN_KEY_HASH, "guardian", "guardian");
       manager.revokeKey(OPERATIONAL_KEY_HASH, "test");
@@ -1138,6 +1142,8 @@ describe.sequential("AccessManager", () => {
 
       const sessionIds = new Set<string>();
       for (let i = 0; i < 100; i++) {
+        // Advance block each iteration so deterministic ID inputs differ
+        manager.setCurrentBlock(BigInt(i + 10), BASE_TIME + i * 2521);
         const session = manager.startSession(IDENTITY_KEY_HASH);
         sessionIds.add(session.sessionId);
         manager.endSession(session.sessionId);

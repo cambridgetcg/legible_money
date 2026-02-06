@@ -115,6 +115,20 @@ export class ContractRegistry {
       );
     }
 
+    // P1-I2 FIX: Protect immutable contract identity fields
+    if (updates.address !== undefined && updates.address !== contract.address) {
+      throw new ContractError("Cannot change contract address", "UNAUTHORIZED");
+    }
+    if (updates.creator !== undefined && updates.creator !== contract.creator) {
+      throw new ContractError("Cannot change contract creator", "UNAUTHORIZED");
+    }
+    if (
+      updates.deployedAtBlock !== undefined &&
+      updates.deployedAtBlock !== contract.deployedAtBlock
+    ) {
+      throw new ContractError("Cannot change deployment block", "UNAUTHORIZED");
+    }
+
     const updated = { ...contract, ...updates };
     this.contracts.set(address, updated);
     return updated;

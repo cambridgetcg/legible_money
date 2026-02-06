@@ -69,8 +69,9 @@ export function validateBlock(
   }
 
   // 4. Check timestamp (future bound + monotonicity)
+  // Allow ~2 block times (5s) of clock drift, not 60s which spans ~24 blocks
   const now = Date.now();
-  if (block.header.timestamp > now + 60000) {
+  if (block.header.timestamp > now + 5000) {
     errors.push("Block timestamp too far in future");
   }
   if (

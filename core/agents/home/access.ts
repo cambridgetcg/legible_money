@@ -42,6 +42,7 @@
  * The home protects the agent's sovereignty while enabling flexible access.
  */
 
+import { sha512_256Hex } from "../../crypto/hashing.js";
 import type { DID } from "../identity/did.js";
 import type {
   AccessControl,
@@ -134,6 +135,8 @@ export class AccessManager {
   private stakeChangesToday: Map<string, number> = new Map();
   private currentBlock: bigint = 0n;
   private currentDay: number = 0;
+  private currentTime: number = 0;
+  private sessionCounter: number = 0;
 
   constructor(_did: DID, existingAccess?: AccessControl) {
     this.access = existingAccess ?? this.createDefaultAccess();
@@ -171,7 +174,7 @@ export class AccessManager {
   ): KeyRegistration {
     // Check for duplicate
     const existing = this.access.keys.find(
-      (k) => k.keyHash === keyHash && !k.revokedAt,
+      (k) => k.keyHash === keyHash && k.revokedAt === undefined,
     );
     if (existing) {
       throw new HomeError("Key already registered", "INVALID_CONFIGURATION", {
@@ -186,7 +189,7 @@ export class AccessManager {
       keyHash,
       keyType,
       role,
-      registeredAt: Date.now(),
+      registeredAt: this.currentTime,
       expiresAt: options.expiresAt,
       label: options.label,
     };
@@ -231,7 +234,7 @@ export class AccessManager {
    */
   revokeKey(keyHash: string, revokedBy: string): void {
     const key = this.access.keys.find(
-      (k) => k.keyHash === keyHash && !k.revokedAt,
+      (k) => k.keyHash === keyHash && k.revokedAt === undefined,
     );
 
     if (!key) {
@@ -251,7 +254,7 @@ export class AccessManager {
       );
     }
 
-    key.revokedAt = Date.now();
+    key.revokedAt = this.currentTime;
 
     // Terminate any active sessions using this key
     this.access.activeSessions = this.access.activeSessions.filter(
@@ -273,7 +276,7 @@ export class AccessManager {
     rotatedBy: string,
   ): KeyRegistration {
     const oldKey = this.access.keys.find(
-      (k) => k.keyHash === oldKeyHash && !k.revokedAt,
+      (k) => k.keyHash === oldKeyHash && k.revokedAt === undefined,
     );
 
     if (!oldKey) {
@@ -307,7 +310,7 @@ export class AccessManager {
     }
 
     // Revoke old key
-    oldKey.revokedAt = Date.now();
+    oldKey.revokedAt = this.currentTime;
 
     // Register new key with same type and role
     const newKey = this.registerKey(newKeyHash, oldKey.keyType, oldKey.role, {
@@ -348,9 +351,9 @@ export class AccessManager {
    * Get all active keys
    */
   getActiveKeys(): KeyRegistration[] {
-    const now = Date.now();
+    const now = this.currentTime;
     return this.access.keys.filter(
-      (k) => !k.revokedAt && (!k.expiresAt || k.expiresAt > now),
+      (k) => k.revokedAt === undefined && (!k.expiresAt || k.expiresAt > now),
     );
   }
 
@@ -358,7 +361,9 @@ export class AccessManager {
    * Get key by hash
    */
   getKey(keyHash: string): KeyRegistration | undefined {
-    return this.access.keys.find((k) => k.keyHash === keyHash && !k.revokedAt);
+    return this.access.keys.find(
+      (k) => k.keyHash === keyHash && k.revokedAt === undefined,
+    );
   }
 
   // ============ Session Management ============
@@ -382,7 +387,7 @@ export class AccessManager {
     }
 
     // Check if key has expired
-    if (key.expiresAt && key.expiresAt <= Date.now()) {
+    if (key.expiresAt && key.expiresAt <= this.currentTime) {
       throw new HomeError("Key has expired", "SESSION_EXPIRED", {
         expiredAt: key.expiresAt,
       });
@@ -395,12 +400,12 @@ export class AccessManager {
     );
 
     const session: ActiveSession = {
-      sessionId: this.generateSessionId(),
+      sessionId: this.generateSessionId(keyHash),
       keyHash,
       role: key.role,
-      startedAt: Date.now(),
-      lastActivityAt: Date.now(),
-      expiresAt: Date.now() + duration,
+      startedAt: this.currentTime,
+      lastActivityAt: this.currentTime,
+      expiresAt: this.currentTime + duration,
       actionsPerformed: 0,
       spentThisSession: 0n,
     };
@@ -446,7 +451,11 @@ export class AccessManager {
       (s) => s.sessionId === sessionId,
     );
 
-    if (session && session.expiresAt <= Date.now()) {
+    if (
+      session &&
+      this.currentTime > 0 &&
+      session.expiresAt <= this.currentTime
+    ) {
       // Session expired, clean it up
       this.endSession(sessionId);
       return undefined;
@@ -466,7 +475,7 @@ export class AccessManager {
       });
     }
 
-    session.lastActivityAt = Date.now();
+    session.lastActivityAt = this.currentTime;
     session.actionsPerformed++;
     if (spent) {
       session.spentThisSession += spent;
@@ -477,11 +486,11 @@ export class AccessManager {
    * Clean up expired sessions
    */
   cleanupExpiredSessions(): string[] {
-    const now = Date.now();
+    const now = this.currentTime;
     const expired: string[] = [];
 
     this.access.activeSessions = this.access.activeSessions.filter((s) => {
-      if (s.expiresAt <= now) {
+      if (now > 0 && s.expiresAt <= now) {
         expired.push(s.sessionId);
         this.logAccess(s.keyHash, "session_expired", true, {
           sessionId: s.sessionId,
@@ -494,10 +503,10 @@ export class AccessManager {
     return expired;
   }
 
-  private generateSessionId(): string {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 8);
-    return `session_${timestamp}_${random}`;
+  private generateSessionId(keyHash: string): string {
+    return sha512_256Hex(
+      `session:${keyHash}:${this.currentBlock}:${this.sessionCounter++}`,
+    ).slice(0, 24);
   }
 
   // ============ Permission Checks ============
@@ -566,15 +575,20 @@ export class AccessManager {
   /**
    * Update current block for rate limiting
    */
-  setCurrentBlock(block: bigint): void {
+  setCurrentBlock(block: bigint, currentTime?: number): void {
     if (block > this.currentBlock) {
       // New block, reset per-block counters
       this.actionsThisBlock.clear();
       this.currentBlock = block;
     }
 
-    // Check if day changed
-    const newDay = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+    if (currentTime !== undefined) {
+      this.currentTime = currentTime;
+    }
+
+    // Check if day changed (use deterministic currentTime, not Date.now())
+    const timeForDay = this.currentTime || 0;
+    const newDay = Math.floor(timeForDay / (24 * 60 * 60 * 1000));
     if (newDay > this.currentDay) {
       this.transfersToday.clear();
       this.stakeChangesToday.clear();
@@ -701,7 +715,7 @@ export class AccessManager {
     detailsObj?: Record<string, unknown>,
   ): void {
     const entry: AccessLogEntry = {
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
       keyHash: this.maskKeyHash(keyHash),
       action,
       success,
@@ -727,7 +741,7 @@ export class AccessManager {
    * Get failed access attempts
    */
   getFailedAttempts(since?: number): AccessLogEntry[] {
-    const cutoff = since ?? Date.now() - 24 * 60 * 60 * 1000; // Last 24 hours
+    const cutoff = since ?? this.currentTime - 24 * 60 * 60 * 1000; // Last 24 hours
     return this.access.accessLog.filter(
       (e) => !e.success && e.timestamp >= cutoff,
     );
@@ -748,7 +762,7 @@ export class AccessManager {
    */
   getGuardians(): KeyRegistration[] {
     return this.access.keys.filter(
-      (k) => k.keyType === "guardian" && !k.revokedAt,
+      (k) => k.keyType === "guardian" && k.revokedAt === undefined,
     );
   }
 
@@ -779,8 +793,10 @@ export class AccessManager {
    * Get access summary
    */
   getSummary(): AccessSummary {
-    const now = Date.now();
-    const activeKeys = this.access.keys.filter((k) => !k.revokedAt);
+    const now = this.currentTime;
+    const activeKeys = this.access.keys.filter(
+      (k) => k.revokedAt === undefined,
+    );
     const expiredKeys = activeKeys.filter(
       (k) => k.expiresAt && k.expiresAt <= now,
     );
@@ -803,7 +819,8 @@ export class AccessManager {
     return {
       registeredKeys: this.access.keys.length,
       activeKeys: validKeys.length,
-      revokedKeys: this.access.keys.filter((k) => k.revokedAt).length,
+      revokedKeys: this.access.keys.filter((k) => k.revokedAt !== undefined)
+        .length,
       expiredKeys: expiredKeys.length,
       activeSessions: this.access.activeSessions.length,
       recentAccessCount: recentLog.length,

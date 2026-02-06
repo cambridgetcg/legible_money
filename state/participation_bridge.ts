@@ -64,7 +64,7 @@ export function buildParticipationMetrics(
     activeStake: accountState.stakedBalance,
     lastActivityBlock: accountState.lastActiveBlock,
     currentBlock,
-    accountCreatedBlock: 0n, // TODO: Track account creation block in AccountState
+    accountCreatedBlock: accountState.createdAtBlock ?? 0n,
   };
 }
 
@@ -75,12 +75,12 @@ export function createStateParticipationResolver(
   reader: ParticipationStateReader,
   config: ParticipationConfig = DEFAULT_PARTICIPATION_CONFIG,
   cacheSize: number = 1000,
-  cacheTtlMs: number = 60_000,
+  cacheTtlBlocks: bigint = 24n,
 ): ParticipationResolver {
   return createParticipationResolver(
     (account: DID) => buildParticipationMetrics(account, reader),
     config,
     cacheSize,
-    cacheTtlMs,
+    cacheTtlBlocks,
   );
 }

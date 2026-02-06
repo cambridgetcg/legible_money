@@ -638,10 +638,22 @@ function serializeLimits(limits: SessionLimits): object {
 /**
  * Check if session should be discarded
  */
-export function shouldDiscardSession(session: SessionKey): boolean {
+export function shouldDiscardSession(
+  session: SessionKey,
+  currentBlock?: bigint,
+): boolean {
+  // Block-height expiry takes precedence (consensus time)
+  if (
+    currentBlock !== undefined &&
+    session.expiresAtBlock !== undefined &&
+    currentBlock >= session.expiresAtBlock
+  ) {
+    return true;
+  }
+
   const now = Date.now();
 
-  // Expired
+  // Expired (wall-clock fallback)
   if (now > session.expiresAt) return true;
 
   // Used up transactions

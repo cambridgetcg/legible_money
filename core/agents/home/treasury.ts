@@ -252,7 +252,9 @@ export class TreasuryManager {
     purpose: StakingPosition["purpose"],
     lockedUntil?: bigint,
   ): string {
-    const id = sha512_256Hex(`stake:${Date.now()}:${Math.random()}`);
+    const id = sha512_256Hex(
+      `stake:${amount}:${purpose}:${this.treasury.stakingPositions.length}`,
+    );
 
     // Debit from available
     this.debit(amount, `stake:${purpose}`);
@@ -328,7 +330,9 @@ export class TreasuryManager {
    * Add a delegation position
    */
   addDelegation(validator: DID, amount: bigint, delegatedAt: bigint): string {
-    const id = sha512_256Hex(`delegation:${validator}:${Date.now()}`);
+    const id = sha512_256Hex(
+      `delegation:${validator}:${amount}:${this.treasury.delegationPositions.length}`,
+    );
 
     this.debit(amount, `delegation:${validator}`);
 
@@ -561,13 +565,14 @@ export class TreasuryManager {
       SpendingLimit,
       "keyType" | "usedToday" | "usedThisSession" | "resetAt"
     >,
+    currentTime: number = 0,
   ): void {
     this.treasury.spendingLimits.set(keyType, {
       keyType,
       ...limit,
       usedToday: 0n,
       usedThisSession: 0n,
-      resetAt: Date.now() + 24 * 60 * 60 * 1000,
+      resetAt: currentTime + 24 * 60 * 60 * 1000,
     });
     this.dirty = true;
   }
@@ -578,6 +583,7 @@ export class TreasuryManager {
   checkSpendingLimit(
     keyType: "session" | "operational",
     amount: bigint,
+    currentTime: number = 0,
   ): {
     allowed: boolean;
     reason?: string;
@@ -587,10 +593,10 @@ export class TreasuryManager {
       return { allowed: true }; // No limit set
     }
 
-    // Reset daily limits if needed
-    if (Date.now() > limit.resetAt) {
+    // Reset daily limits if needed (deterministic: use block-provided time)
+    if (currentTime > 0 && currentTime > limit.resetAt) {
       limit.usedToday = 0n;
-      limit.resetAt = Date.now() + 24 * 60 * 60 * 1000;
+      limit.resetAt = currentTime + 24 * 60 * 60 * 1000;
     }
 
     if (amount > limit.maxPerTransaction) {

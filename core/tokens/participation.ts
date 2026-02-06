@@ -154,35 +154,47 @@ export function calculateParticipationScore(
  * Create a ParticipationResolver from a metrics provider and config.
  * Includes a per-account LRU cache to avoid recalculating every call.
  *
+ * P0.2 FIX: Cache invalidation is now block-based (deterministic) instead
+ * of Date.now()-based (non-deterministic). Cache entries are valid for
+ * `cacheTtlBlocks` blocks after calculation.
+ *
  * @param metricsProvider - Function that fetches raw metrics for an account (return null if unknown)
  * @param config - Participation scoring configuration
  * @param cacheSize - Maximum cached entries (default 1000)
- * @param cacheTtlMs - Cache entry TTL in milliseconds (default 60s)
+ * @param cacheTtlBlocks - Cache entry TTL in blocks (default 24 ~ 1 minute at 2521ms block time)
  */
 export function createParticipationResolver(
   metricsProvider: (account: DID) => ParticipationMetrics | null,
   config: ParticipationConfig = DEFAULT_PARTICIPATION_CONFIG,
   cacheSize: number = 1000,
-  cacheTtlMs: number = 60_000,
+  cacheTtlBlocks: bigint = 24n,
 ): ParticipationResolver {
   const cache = new Map<
     string,
-    { score: ParticipationScore; expiresAt: number }
+    { score: ParticipationScore; cachedAtBlock: bigint }
   >();
 
-  return (account: DID): ParticipationScore | null => {
-    const now = Date.now();
+  let lastKnownBlock = 0n;
 
-    // Check cache
+  return (account: DID): ParticipationScore | null => {
+    // Check cache first (avoids calling metricsProvider when hit is valid)
     const cached = cache.get(account);
-    if (cached && cached.expiresAt > now) {
+    if (cached && lastKnownBlock - cached.cachedAtBlock < cacheTtlBlocks) {
       return cached.score;
     }
 
-    // Fetch metrics from provider
+    // Cache miss or expired — fetch metrics
     const metrics = metricsProvider(account);
     if (metrics === null) {
       return null;
+    }
+
+    const currentBlock = metrics.currentBlock;
+    lastKnownBlock = currentBlock;
+
+    // Re-check cache with fresh block (provider may have advanced the block)
+    if (cached && currentBlock - cached.cachedAtBlock < cacheTtlBlocks) {
+      return cached.score;
     }
 
     // Calculate score
@@ -196,7 +208,7 @@ export function createParticipationResolver(
       }
     }
 
-    cache.set(account, { score, expiresAt: now + cacheTtlMs });
+    cache.set(account, { score, cachedAtBlock: currentBlock });
     return score;
   };
 }

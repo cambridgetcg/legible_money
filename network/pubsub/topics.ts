@@ -22,10 +22,12 @@ import { PUBSUB_TOPICS, NetworkMessage, MESSAGE_TYPES } from "../config.js";
 export const MAX_MESSAGE_SIZE = 1024 * 1024;
 
 /**
- * Maximum message age in milliseconds (5 minutes)
- * Prevents replay of old messages
+ * Maximum message age in milliseconds (30 seconds ≈ 12 blocks).
+ * P0-3 FIX: Reduced from 5 minutes to limit replay attack window.
+ * At 2521ms block time, 30s covers ~12 blocks — enough for propagation
+ * delay while keeping the replay window tight.
  */
-export const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000;
+export const MAX_MESSAGE_AGE_MS = 30 * 1000;
 
 /**
  * Minimum message age in milliseconds (-10 seconds)

@@ -77,11 +77,13 @@ export class ConditionEvaluator {
    * @param condition - The condition to evaluate
    * @param currentTime - Current block timestamp
    * @param lastExecutedAt - MED-001 FIX: Last execution time for periodic deduplication
+   * @param processId - CRIT-004 FIX: Process ID for per-process threshold state isolation
    */
   async evaluate(
     condition: ScheduleCondition,
     currentTime: number,
     lastExecutedAt?: number,
+    processId?: string,
   ): Promise<EvaluationResult> {
     // Compound condition
     if (condition.compound) {
@@ -103,7 +105,7 @@ export class ConditionEvaluator {
         return timeResult;
       }
 
-      const logicResult = await this.evaluateLogic(condition.logic);
+      const logicResult = await this.evaluateLogic(condition.logic, processId);
       if (!logicResult.satisfied) {
         return {
           satisfied: false,
@@ -128,11 +130,16 @@ export class ConditionEvaluator {
 
     // Logic only
     if (condition.logic) {
-      return this.evaluateLogic(condition.logic);
+      return this.evaluateLogic(condition.logic, processId);
     }
 
-    // No condition = always satisfied (shouldn't happen)
-    return { satisfied: true };
+    // No condition defined — reject as invalid rather than auto-satisfying.
+    // This prevents unconditional execution every block if all fields are undefined.
+    return {
+      satisfied: false,
+      reason:
+        "Empty condition: at least one of time, logic, or compound must be defined",
+    };
   }
 
   /**
@@ -194,10 +201,16 @@ export class ConditionEvaluator {
     condition: TimeCondition,
     currentTime: number,
   ): EvaluationResult {
-    // For relative time, we assume executeAfter was converted to executeAt
-    // when the process was created
-    const executeAt =
-      condition.executeAt ?? condition.executeAfter! + currentTime;
+    // P1-S1 FIX: executeAt should be pre-computed at process creation time.
+    // If missing, throw rather than silently computing a moving target.
+    if (!condition.executeAt) {
+      throw new ScheduleError(
+        "Relative time condition must have executeAt pre-computed at creation time",
+        "INVALID_CONDITION",
+        { executeAfter: condition.executeAfter },
+      );
+    }
+    const executeAt = condition.executeAt;
 
     if (currentTime >= executeAt) {
       return {
@@ -286,8 +299,12 @@ export class ConditionEvaluator {
 
   /**
    * Evaluate logic-based condition
+   * @param processId - CRIT-004 FIX: Process ID for per-process threshold isolation
    */
-  async evaluateLogic(condition: LogicCondition): Promise<EvaluationResult> {
+  async evaluateLogic(
+    condition: LogicCondition,
+    processId?: string,
+  ): Promise<EvaluationResult> {
     switch (condition.type) {
       case "state_compare":
         return this.evaluateStateCompare(condition);
@@ -296,7 +313,7 @@ export class ConditionEvaluator {
         return this.evaluateEventOccurred(condition);
 
       case "threshold_crossed":
-        return this.evaluateThresholdCrossed(condition);
+        return this.evaluateThresholdCrossed(condition, processId);
 
       default:
         throw new ScheduleError(
@@ -367,9 +384,12 @@ export class ConditionEvaluator {
 
   /**
    * HIGH-003 FIX: Proper threshold crossing detection with state tracking
+   * CRIT-004 FIX: Per-process threshold state isolation — processes watching
+   * the same key maintain independent crossing detection state.
    */
   private async evaluateThresholdCrossed(
     condition: LogicCondition,
+    processId?: string,
   ): Promise<EvaluationResult> {
     const { thresholdKey, thresholdValue, direction } = condition;
 
@@ -397,8 +417,14 @@ export class ConditionEvaluator {
 
     const currentBlock = this.stateProvider.getCurrentBlock();
 
+    // CRIT-004 FIX: Namespace threshold state by processId to prevent cross-process leakage.
+    // Without this, Process A checking a key would update the "previous value" seen by Process B.
+    const stateMapKey = processId
+      ? `${processId}:${thresholdKey}`
+      : thresholdKey;
+
     // Get previous state for crossing detection
-    const prevState = this.thresholdStates.get(thresholdKey);
+    const prevState = this.thresholdStates.get(stateMapKey);
     const previousValue = prevState?.previousValue;
 
     let satisfied = false;
@@ -452,8 +478,8 @@ export class ConditionEvaluator {
         break;
     }
 
-    // Update threshold state for next check
-    this.thresholdStates.set(thresholdKey, {
+    // Update threshold state for next check (using per-process namespaced key)
+    this.thresholdStates.set(stateMapKey, {
       previousValue: numericValue,
       lastCheckedBlock: currentBlock,
     });
@@ -547,6 +573,8 @@ export class ConditionEvaluator {
           ? compareValue
           : BigInt(String(compareValue));
 
+      // P0-S2 FIX: Throw on unknown comparator instead of silent false.
+      // All validators must agree on error vs result — silent false masks bugs.
       switch (comparator) {
         case "eq":
           return a === b;
@@ -561,7 +589,10 @@ export class ConditionEvaluator {
         case "lte":
           return a <= b;
         default:
-          return false;
+          throw new ScheduleError(
+            `Comparator '${comparator}' is not valid for bigint values`,
+            "INVALID_CONDITION",
+          );
       }
     }
 
@@ -584,7 +615,10 @@ export class ConditionEvaluator {
         case "lte":
           return a <= b;
         default:
-          return false;
+          throw new ScheduleError(
+            `Comparator '${comparator}' is not valid for numeric values`,
+            "INVALID_CONDITION",
+          );
       }
     }
 
@@ -611,7 +645,10 @@ export class ConditionEvaluator {
         case "not_contains":
           return !a.includes(b);
         default:
-          return false;
+          throw new ScheduleError(
+            `Comparator '${comparator}' is not valid for string values`,
+            "INVALID_CONDITION",
+          );
       }
     }
 
@@ -623,7 +660,10 @@ export class ConditionEvaluator {
         case "not_contains":
           return !currentValue.includes(compareValue);
         default:
-          return false;
+          throw new ScheduleError(
+            `Comparator '${comparator}' is not valid for array values`,
+            "INVALID_CONDITION",
+          );
       }
     }
 

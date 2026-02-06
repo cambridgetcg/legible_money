@@ -616,14 +616,14 @@ describe.sequential("GuardianManager", () => {
       it("should set readAt timestamp", () => {
         const manager = createManager();
         const alert = manager.createAlert("balance_low", "high", "Test");
-        const beforeMark = Date.now();
-        manager.markAlertRead(alert.id);
+        const markTime = 1000;
+        manager.markAlertRead(alert.id, markTime);
 
         const guardian = manager.getGuardian();
         const markedAlert = guardian.pendingAlerts.find(
           (a) => a.id === alert.id,
         );
-        expect(markedAlert?.readAt).toBeGreaterThanOrEqual(beforeMark);
+        expect(markedAlert?.readAt).toBe(markTime);
       });
     });
 

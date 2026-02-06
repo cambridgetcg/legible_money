@@ -124,6 +124,8 @@ export class ConsensusBlockProvider implements BlockProvider {
 export class ScheduledTransactionCollector implements TransactionSubmitter {
   private pendingTransactions: GeneratedTransaction[] = [];
 
+  constructor(private blockProvider: ConsensusBlockProvider) {}
+
   async submitTransaction(
     tx: GeneratedTransaction,
   ): Promise<{ success: boolean; txId?: string; error?: string }> {
@@ -139,15 +141,18 @@ export class ScheduledTransactionCollector implements TransactionSubmitter {
     // Refunds are handled as special transactions
     // Empty signature (128 hex chars = 64 bytes)
     const emptySignature: Signature = "0".repeat(128);
+    // CRIT-004 FIX: Use deterministic block timestamp instead of Date.now()
+    const blockTimestamp = this.blockProvider.getCurrentBlockTimestamp();
+    const blockNumber = this.blockProvider.getCurrentBlockNumber();
     const conditionProof: ConditionProof = {
       type: "time",
-      timestamp: Date.now(),
-      blockNumber: 0n,
+      timestamp: blockTimestamp,
+      blockNumber,
     };
 
     const refundTx: GeneratedTransaction = {
       id: sha512_256Hex(
-        `LGM.refund.id.v1:${recipient}:${amount}:${reason}:${Date.now()}`,
+        `LGM.refund.id.v1:${recipient}:${amount}:${reason}:${blockTimestamp}`,
       ),
       type: "schedule_execution",
       sender: "system",
@@ -210,7 +215,7 @@ export class AutonomyIntegration {
 
     // Create components
     this.blockProvider = new ConsensusBlockProvider();
-    this.txCollector = new ScheduledTransactionCollector();
+    this.txCollector = new ScheduledTransactionCollector(this.blockProvider);
 
     // Initialize SPU with dependencies
     this.spu = new ScheduleProcessingUnit(stateProvider);
@@ -416,10 +421,12 @@ export class AutonomyIntegration {
     interval: bigint,
     prepaidFee: bigint,
   ): Promise<string> {
-    const timestamp = Date.now();
+    // CRIT-005 FIX: Use deterministic block timestamp instead of Date.now()
+    const timestamp = this.blockProvider.getCurrentBlockTimestamp();
+    const blockNumber = this.blockProvider.getCurrentBlockNumber();
     const message = this.createScheduleMessage(
       sha512_256Hex(
-        `LGM.schedule.id.v1:${creator}:${targetAddress}:${functionSelector}:${timestamp}`,
+        `LGM.schedule.id.v1:${creator}:${targetAddress}:${functionSelector}:${blockNumber}`,
       ),
       creator,
       targetAddress,

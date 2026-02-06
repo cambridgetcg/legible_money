@@ -111,8 +111,9 @@ export class Mempool extends EventEmitter {
       return { added: false, reason: "Too many transactions from sender" };
     }
 
-    // Calculate size and fee per byte
-    const size = JSON.stringify(tx, bigintReplacer).length;
+    // Calculate size in bytes (not characters) for accurate fee-per-byte
+    const serialized = JSON.stringify(tx, bigintReplacer);
+    const size = new TextEncoder().encode(serialized).byteLength;
     const feePerByte = tx.fee / BigInt(size);
 
     // Add to pool
@@ -188,30 +189,95 @@ export class Mempool extends EventEmitter {
   }
 
   /**
-   * Get transactions for block inclusion
-   * Returns transactions sorted by fee (highest first)
+   * Get transactions for block inclusion.
+   * Enforces nonce continuity per sender to prevent block rejection.
+   *
+   * @param senderBaseNonces - Expected next nonce per sender from state.
+   *   When provided, only nonce-contiguous sequences starting from the
+   *   expected nonce are selected. Without it, intra-pool nonce ordering
+   *   is still enforced but gaps relative to on-chain state are not caught.
    */
-  getForBlock(maxCount: number, maxSize: number): Transaction[] {
-    // Get all entries sorted by fee per byte
-    const entries = Array.from(this.pool.values()).sort((a, b) => {
-      // Sort by fee per byte (descending)
-      if (b.feePerByte > a.feePerByte) return 1;
-      if (b.feePerByte < a.feePerByte) return -1;
-      // Then by total fee
-      if (b.fee > a.fee) return 1;
-      if (b.fee < a.fee) return -1;
+  getForBlock(
+    maxCount: number,
+    maxSize: number,
+    senderBaseNonces?: Map<string, bigint>,
+  ): Transaction[] {
+    // Group entries by sender, sorted by nonce within each group
+    const bySenderEntries = new Map<string, MempoolEntry[]>();
+    for (const entry of this.pool.values()) {
+      const sender = entry.tx.sender;
+      if (!bySenderEntries.has(sender)) {
+        bySenderEntries.set(sender, []);
+      }
+      bySenderEntries.get(sender)!.push(entry);
+    }
+
+    // For each sender, build nonce-contiguous sequence
+    const senderQueues: Array<{
+      sender: string;
+      entries: MempoolEntry[];
+      leadFeePerByte: bigint;
+    }> = [];
+
+    for (const [sender, entries] of bySenderEntries) {
+      entries.sort((a, b) => {
+        if (a.tx.nonce < b.tx.nonce) return -1;
+        if (a.tx.nonce > b.tx.nonce) return 1;
+        return 0;
+      });
+
+      const baseNonce = senderBaseNonces?.get(sender);
+      const contiguous: MempoolEntry[] = [];
+      let expectedNonce = baseNonce;
+
+      for (const entry of entries) {
+        if (expectedNonce !== undefined && entry.tx.nonce !== expectedNonce) {
+          break; // Nonce gap — stop here for this sender
+        }
+        contiguous.push(entry);
+        expectedNonce =
+          expectedNonce !== undefined
+            ? expectedNonce + 1n
+            : entry.tx.nonce + 1n;
+      }
+
+      if (contiguous.length > 0) {
+        senderQueues.push({
+          sender,
+          entries: contiguous,
+          leadFeePerByte: contiguous[0].feePerByte,
+        });
+      }
+    }
+
+    // Sort sender queues by lead tx feePerByte (highest first)
+    senderQueues.sort((a, b) => {
+      if (b.leadFeePerByte > a.leadFeePerByte) return 1;
+      if (b.leadFeePerByte < a.leadFeePerByte) return -1;
       return 0;
     });
 
+    // Round-robin pick from sender queues, respecting nonce order
     const selected: Transaction[] = [];
     let totalSize = 0;
+    const queueIndices = new Map<string, number>();
 
-    for (const entry of entries) {
-      if (selected.length >= maxCount) break;
-      if (totalSize + entry.size > maxSize) continue;
+    let progress = true;
+    while (selected.length < maxCount && progress) {
+      progress = false;
+      for (const queue of senderQueues) {
+        if (selected.length >= maxCount) break;
+        const idx = queueIndices.get(queue.sender) ?? 0;
+        if (idx >= queue.entries.length) continue;
 
-      selected.push(entry.tx);
-      totalSize += entry.size;
+        const entry = queue.entries[idx];
+        if (totalSize + entry.size > maxSize) continue;
+
+        selected.push(entry.tx);
+        totalSize += entry.size;
+        queueIndices.set(queue.sender, idx + 1);
+        progress = true;
+      }
     }
 
     return selected;
@@ -268,8 +334,10 @@ export class Mempool extends EventEmitter {
     valid: boolean;
     reason?: string;
   } {
-    // Check size
-    const size = JSON.stringify(tx, bigintReplacer).length;
+    // Check size in bytes (not characters) for consistent enforcement
+    const size = new TextEncoder().encode(
+      JSON.stringify(tx, bigintReplacer),
+    ).byteLength;
     if (size > this.config.maxTxSize) {
       return { valid: false, reason: "Transaction too large" };
     }
@@ -279,7 +347,8 @@ export class Mempool extends EventEmitter {
       return { valid: false, reason: "Fee too low" };
     }
 
-    // Verify signature
+    // Verify signature against payload (matches wallet SDK signing convention).
+    // TODO: Migrate to getSignableMessage() covering type+nonce+fee+payload.
     const payload = JSON.stringify(tx.payload);
     const valid = verify(
       new TextEncoder().encode(payload),
@@ -307,16 +376,16 @@ export class Mempool extends EventEmitter {
   }
 
   private evictLowestFee(newFee: bigint): boolean {
-    // Find transaction with lowest fee
+    // Find transaction with lowest feePerByte (matches getForBlock sort order)
     let lowest: MempoolEntry | null = null;
 
     for (const entry of this.pool.values()) {
-      if (!lowest || entry.fee < lowest.fee) {
+      if (!lowest || entry.feePerByte < lowest.feePerByte) {
         lowest = entry;
       }
     }
 
-    // Only evict if new fee is higher
+    // Only evict if new fee is higher than the lowest entry's total fee
     if (lowest && newFee > lowest.fee) {
       this.remove(lowest.txHash);
       return true;

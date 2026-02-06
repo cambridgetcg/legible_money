@@ -388,7 +388,8 @@ export type ScheduleEvent =
   | { type: "process_completed"; processId: string; totalExecutions: number }
   | { type: "process_cancelled"; processId: string }
   | { type: "process_exhausted"; processId: string }
-  | { type: "fee_added"; processId: string; amount: bigint };
+  | { type: "fee_added"; processId: string; amount: bigint }
+  | { type: "refund_failed"; processId: string; amount: bigint; error: string };
 
 // ============ Error Types ============
 
@@ -417,4 +418,5 @@ export type ScheduleErrorCode =
   | "ALREADY_PAUSED"
   | "NOT_PAUSED"
   | "ALREADY_COMPLETED"
-  | "EXECUTION_FAILED";
+  | "EXECUTION_FAILED"
+  | "INVALID_FEE";

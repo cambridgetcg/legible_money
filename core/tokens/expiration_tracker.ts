@@ -92,7 +92,7 @@ export class ExpirationTracker {
     private config: ExpirationConfig = DEFAULT_EXPIRATION_CONFIG,
     initialPeriod?: ExpirationPeriod,
   ) {
-    const currentPeriod = initialPeriod ?? this.timestampToPeriod(Date.now());
+    const currentPeriod = initialPeriod ?? 0;
 
     this.globalState = {
       currentPeriod,
@@ -375,7 +375,10 @@ export class ExpirationTracker {
 
     let activeBalance = 0n;
     let pendingExpiration = 0n;
-    const expiringSoon = this.getExpiringSoonPeriods(Date.now(), 1);
+    const expiringSoon = this.getExpiringSoonPeriods(
+      this.globalState.currentPeriod * this.config.periodDurationMs,
+      1,
+    );
     const expiringSoonPeriods = new Set(expiringSoon.map((e) => e.period));
 
     for (const period of activePeriods) {

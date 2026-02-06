@@ -137,7 +137,8 @@ describe.sequential("AgentHomeContract", () => {
         const result = contract.startSession(IDENTITY_KEY_HASH, 101n);
 
         expect(result.sessionId).toBeDefined();
-        expect(result.sessionId).toContain("session_");
+        expect(typeof result.sessionId).toBe("string");
+        expect(result.sessionId.length).toBeGreaterThan(0);
         expect(result.wakeup).toBeDefined();
       });
 

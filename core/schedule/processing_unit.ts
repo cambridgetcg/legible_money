@@ -209,6 +209,31 @@ export class ScheduleProcessingUnit {
     // Validate message
     this.validateScheduleMessage(message, currentTime);
 
+    // P1-P3 FIX: Verify message signature (defense-in-depth).
+    // Transaction layer should already verify, but SPU verifies independently
+    // in case it's called from internal code paths.
+    if (message.senderAddress !== "system" && this.keyResolver) {
+      const senderPubKey = await this.keyResolver.getPublicKey(
+        message.senderAddress,
+      );
+      if (senderPubKey) {
+        // Hash all non-signature fields for verification
+        const msgData = domainHash(
+          HASH_DOMAINS.SCHEDULE_EXECUTION,
+          new TextEncoder().encode(
+            `${message.messageId}:${message.senderAddress}:${message.recipientAddress}:${message.nonce}`,
+          ),
+        );
+        if (!verify(message.signature, msgData, senderPubKey)) {
+          throw new ScheduleError(
+            "Invalid schedule message signature",
+            "UNAUTHORIZED",
+            { sender: message.senderAddress },
+          );
+        }
+      }
+    }
+
     // Generate process ID
     const processId = this.generateProcessId(message);
 
@@ -217,9 +242,23 @@ export class ScheduleProcessingUnit {
       message.scheduleCondition,
     );
 
+    // Pre-compute executeAt for relative time conditions so the evaluator
+    // doesn't need to re-derive it (which would create a moving target).
+    const resolvedCondition = { ...message.scheduleCondition };
+    if (
+      resolvedCondition.time?.type === "relative" &&
+      resolvedCondition.time.executeAfter !== undefined &&
+      !resolvedCondition.time.executeAt
+    ) {
+      resolvedCondition.time = {
+        ...resolvedCondition.time,
+        executeAt: currentTime + resolvedCondition.time.executeAfter,
+      };
+    }
+
     // Calculate next check time for time-based conditions
     const nextCheckTime = this.calculateInitialNextCheckTime(
-      message.scheduleCondition,
+      resolvedCondition,
       currentTime,
     );
 
@@ -229,7 +268,7 @@ export class ScheduleProcessingUnit {
       sourceMessageId: message.messageId,
       creator: message.senderAddress,
 
-      condition: message.scheduleCondition,
+      condition: resolvedCondition,
       nextCheckTime,
       watchedStateKeys,
 
@@ -351,23 +390,90 @@ export class ScheduleProcessingUnit {
       // CRIT-002 FIX: Set deterministic timestamp for all state updates
       this.stateManager.setBlockTimestamp(currentTime);
 
+      // P1-005 FIX: Clean up expired processes before processing
+      this.cleanupExpiredProcesses(currentTime);
+
       // Get processes due by time
       const timeDueProcesses =
         this.stateManager.getProcessesDueByTime(currentTime);
 
+      // HIGH-001 FIX: Enforce per-block gas budget to prevent DoS
+      let cumulativeGas = 0n;
+      const maxBlockGas = this.config.maxScheduleExecutionGas;
+
       for (const process of timeDueProcesses) {
+        // Stop when gas budget exhausted — remaining processes will be picked
+        // up in the next block (they stay in "active" status).
+        if (cumulativeGas >= maxBlockGas) {
+          break;
+        }
+
         const execution = await this.checkAndExecute(process, currentTime);
         if (execution) {
+          cumulativeGas += process.feePerExecution;
           executions.push(execution);
         }
       }
 
       // lastProcessedTime tracked internally
+
+      // HIGH-002 FIX: Cleanup expired/completed processes beyond retention period
+      this.cleanupExpiredProcesses();
     } finally {
       this.isProcessing = false;
     }
 
     return executions;
+  }
+
+  /**
+   * HIGH-002 FIX: Remove completed/cancelled processes beyond retention period.
+   * P1-005 FIX: Also expire active processes past their expiresAt timestamp
+   * and clean up per-process threshold states.
+   * Prevents unbounded memory growth from accumulated process history.
+   */
+  private cleanupExpiredProcesses(currentTime?: number): void {
+    if (!this.blockProvider) return;
+
+    const currentBlock = this.blockProvider.getCurrentBlockNumber();
+    const retentionBlocks = BigInt(this.config.expiredProcessRetentionBlocks);
+
+    // P1-005 FIX: First, expire active processes past their expiresAt
+    if (currentTime !== undefined) {
+      const activeProcesses = this.stateManager.getActiveProcesses();
+      for (const process of activeProcesses) {
+        if (process.expiresAt && process.expiresAt < currentTime) {
+          this.stateManager.updateProcess(process.id, { status: "completed" });
+          // CRIT-004 FIX: Clean up per-process threshold states
+          for (const key of process.watchedStateKeys) {
+            this.conditionEvaluator.clearThresholdState(`${process.id}:${key}`);
+          }
+          this.emit({
+            type: "process_completed",
+            processId: process.id,
+            totalExecutions: process.executionCount,
+          });
+        }
+      }
+    }
+
+    // Remove terminal processes beyond retention period
+    const statuses: Array<"completed" | "cancelled"> = [
+      "completed",
+      "cancelled",
+    ];
+
+    for (const status of statuses) {
+      const processes = this.stateManager.getProcessesByStatus(status);
+      for (const process of processes) {
+        const processBlock = BigInt(
+          process.lastExecutedAt ?? process.createdAt,
+        );
+        if (currentBlock > processBlock + retentionBlocks) {
+          this.stateManager.removeProcess(process.id);
+        }
+      }
+    }
   }
 
   /**
@@ -447,10 +553,12 @@ export class ScheduleProcessingUnit {
 
       // Evaluate condition
       // MED-001 FIX: Pass lastExecutedAt to prevent multiple executions per interval
+      // CRIT-004 FIX: Pass processId for per-process threshold state isolation
       const result = await this.conditionEvaluator.evaluate(
         currentProcess.condition,
         currentTime,
         currentProcess.lastExecutedAt,
+        currentProcess.id,
       );
 
       if (!result.satisfied) {
@@ -532,6 +640,15 @@ export class ScheduleProcessingUnit {
     }
 
     // Update process state
+    // CRIT-001 FIX: Defensive guard against fee underflow.
+    // The check at checkAndExecute (remainingFee < feePerExecution) should prevent this,
+    // but guard here too since bigint subtraction wraps silently.
+    if (process.remainingFee < process.feePerExecution) {
+      throw new ScheduleError(
+        `Fee underflow: remaining ${process.remainingFee} < per-execution ${process.feePerExecution}`,
+        "INSUFFICIENT_FEE",
+      );
+    }
     const newRemainingFee = process.remainingFee - process.feePerExecution;
     const newStatus: ScheduleProcessStatus =
       process.maxExecutions !== undefined &&
@@ -591,10 +708,12 @@ export class ScheduleProcessingUnit {
   private async checkAndActivate(process: ScheduleProcess): Promise<void> {
     const currentTime = this.getCurrentTime();
     // MED-001 FIX: Pass lastExecutedAt (undefined for new processes)
+    // CRIT-004 FIX: Pass processId for per-process threshold isolation
     const result = await this.conditionEvaluator.evaluate(
       process.condition,
       currentTime,
       process.lastExecutedAt,
+      process.id,
     );
 
     if (result.satisfied) {
@@ -649,6 +768,11 @@ export class ScheduleProcessingUnit {
     this.stateManager.updateProcess(process.id, { status: "cancelled" });
     this.emit({ type: "process_cancelled", processId: process.id });
 
+    // CRIT-004 FIX: Clean up per-process threshold states
+    for (const key of process.watchedStateKeys) {
+      this.conditionEvaluator.clearThresholdState(`${process.id}:${key}`);
+    }
+
     // HIGH-002 FIX: Refund remaining prepaid fees to creator
     if (process.remainingFee > 0n && this.txSubmitter) {
       const refundResult = await this.txSubmitter.submitRefund(
@@ -661,9 +785,10 @@ export class ScheduleProcessingUnit {
         // Log but don't fail - cancellation still succeeded
         // Refund can be retried via separate mechanism
         this.emit({
-          type: "process_paused", // Using existing event type for error notification
+          type: "refund_failed",
           processId: process.id,
-          reason: `Refund failed: ${refundResult.error}`,
+          amount: process.remainingFee,
+          error: refundResult.error ?? "Unknown error",
         });
       }
     }
@@ -681,8 +806,8 @@ export class ScheduleProcessingUnit {
       currentTime,
     );
 
-    // Remove from old watched key indexes
-    // (handled by state manager on update)
+    // P0-S1 FIX: watchedStateKeys and nextCheckTime index updates
+    // are now handled by state manager's updateProcess method
 
     this.stateManager.updateProcess(process.id, {
       condition: newCondition,
@@ -695,6 +820,13 @@ export class ScheduleProcessingUnit {
     process: ScheduleProcess,
     additionalFee: bigint,
   ): Promise<void> {
+    if (additionalFee <= 0n) {
+      throw new ScheduleError(
+        "Additional fee must be positive",
+        "INVALID_FEE",
+        { additionalFee: additionalFee.toString() },
+      );
+    }
     const newRemainingFee = process.remainingFee + additionalFee;
     this.stateManager.updateProcess(process.id, {
       remainingFee: newRemainingFee,
@@ -732,9 +864,27 @@ export class ScheduleProcessingUnit {
       );
     }
 
+    // Prevent external callers from spoofing system identity.
+    // Only the consensus engine may create system processes via internal paths.
+    if (message.senderAddress === "system") {
+      throw new ScheduleError(
+        "Reserved sender address 'system' cannot be used in user schedule messages",
+        "UNAUTHORIZED",
+      );
+    }
+
     if (!message.scheduleCondition) {
       throw new ScheduleError(
         "Schedule condition is required",
+        "INVALID_CONDITION",
+      );
+    }
+
+    // Reject empty conditions (all fields undefined = unconditional every-block execution)
+    const cond = message.scheduleCondition;
+    if (!cond.time && !cond.logic && !cond.compound) {
+      throw new ScheduleError(
+        "Schedule condition must define at least one of: time, logic, or compound",
         "INVALID_CONDITION",
       );
     }
@@ -807,14 +957,22 @@ export class ScheduleProcessingUnit {
     }
 
     // Create canonical data that was signed
+    // P0-P1 FIX: Use a fixed, deterministic key list instead of Object.keys() which
+    // varies by which optional properties are present on the modification object.
+    const canonicalKeys = [
+      "action",
+      "additionalFee",
+      "newCondition",
+      "processId",
+    ];
     const signedData = JSON.stringify(
       {
         processId: modification.processId,
         action: modification.action,
-        newCondition: modification.newCondition,
-        additionalFee: modification.additionalFee?.toString(),
+        newCondition: modification.newCondition ?? null,
+        additionalFee: modification.additionalFee?.toString() ?? null,
       },
-      Object.keys(modification).sort(),
+      canonicalKeys,
     );
 
     // Verify signature

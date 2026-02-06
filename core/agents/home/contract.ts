@@ -744,9 +744,10 @@ export class AgentHomeContract implements SelfInvokingContract {
   private executeDeadmanCheck(context: {
     block: bigint;
   }): InvocationResult & { returnValue?: unknown } {
+    // P0-H1 FIX: Args were swapped — signature is (lastActiveBlock, currentBlock)
     const check = this.guardian.checkDeadmanSwitch(
-      context.block,
       this.lastActiveBlock,
+      context.block,
     );
 
     if (check.triggered) {

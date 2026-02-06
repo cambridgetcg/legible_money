@@ -160,7 +160,13 @@ export class SelfInvoker {
     };
 
     this.pendingQueue.push(pending);
-    this.pendingQueue.sort((a, b) => b.priority - a.priority);
+    // P0-C2 FIX: Add deterministic tiebreakers to prevent validator divergence.
+    this.pendingQueue.sort(
+      (a, b) =>
+        b.priority - a.priority ||
+        a.contract.localeCompare(b.contract) ||
+        a.invocationId.localeCompare(b.invocationId),
+    );
 
     // Emit event
     this.emit({
@@ -248,6 +254,20 @@ export class SelfInvoker {
     context: ExecutionContext,
     executor: ContractExecutor,
   ): Promise<InvocationResult> {
+    // P0-3 FIX: Enforce recursion depth limits
+    if (context.recursionDepth > 0 && !this.config.allowRecursiveSelfInvoke) {
+      throw new ContractError(
+        `Recursive self-invocation not allowed (depth: ${context.recursionDepth})`,
+        "RECURSION_NOT_ALLOWED",
+      );
+    }
+    if (context.recursionDepth >= this.config.maxRecursionDepth) {
+      throw new ContractError(
+        `Max recursion depth exceeded: ${context.recursionDepth} >= ${this.config.maxRecursionDepth}`,
+        "MAX_RECURSION_DEPTH",
+      );
+    }
+
     // Get contract
     const contract = this.registry.getContract(pending.contract);
     if (!contract) {
@@ -350,26 +370,31 @@ export class SelfInvoker {
     invocation: InvocationConfig,
     currentBlock: bigint,
   ): number {
-    let priority = 0;
+    // P0-C1 FIX: Use integer-only arithmetic for deterministic priority.
+    // All operations scaled to integer basis points to avoid floating-point divergence.
+    let priorityBps = 0;
 
     // Higher gas limit = lower priority (conserve resources)
-    priority -= Number(invocation.gasLimit) / 1000000;
+    // Scale: 1M gas = -100 bps
+    priorityBps -= Number(invocation.gasLimit / 10000n);
 
     // Higher value transfer = higher priority (more important)
-    priority += Number(invocation.value) / 1e18;
+    // Scale: 1 LGM (10^18) = +100 bps
+    priorityBps += Number(invocation.value / 10n ** 16n);
 
     // Longer wait = higher priority (fairness)
+    // Scale: 1 block = +1 bps
     if (invocation.lastInvokedBlock) {
       const blocksWaiting = Number(currentBlock - invocation.lastInvokedBlock);
-      priority += blocksWaiting * 0.01;
+      priorityBps += blocksWaiting;
     }
 
     // PoT-specific: Knowledge domain contracts get boost
     if (contract.knowledgeDomain) {
-      priority += 10;
+      priorityBps += 10000;
     }
 
-    return priority;
+    return priorityBps;
   }
 
   // ============ Query Methods ============

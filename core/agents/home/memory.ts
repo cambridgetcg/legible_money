@@ -47,9 +47,18 @@ import {
 export class MemoryManager {
   private memory: AgentMemory;
   private dirty: boolean = false;
+  private currentTime: number = 0;
 
   constructor(existingMemory?: AgentMemory) {
     this.memory = existingMemory ?? this.createEmptyMemory();
+  }
+
+  /**
+   * Set current time for deterministic timestamps.
+   * Must be called with block-provided time before any state mutations.
+   */
+  setCurrentTime(time: number): void {
+    this.currentTime = time;
   }
 
   // ============ Memory Initialization ============
@@ -79,7 +88,7 @@ export class MemoryManager {
         totalEarnings: 0n,
         totalLosses: 0n,
         reputationPeak: 0,
-        oldestMemory: Date.now(),
+        oldestMemory: this.currentTime,
       },
     };
   }
@@ -94,7 +103,7 @@ export class MemoryManager {
   ): void {
     const record: KnowledgeContribution = {
       ...contribution,
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
     };
 
     this.memory.contributions.push(record);
@@ -163,15 +172,15 @@ export class MemoryManager {
       existing.confidence = confidence;
       existing.source = source;
       existing.sourceId = sourceId;
-      existing.lastUpdated = Date.now();
+      existing.lastUpdated = this.currentTime;
     } else {
       this.memory.beliefs.set(factId, {
         factId,
         confidence,
         source,
         sourceId,
-        firstBelieved: Date.now(),
-        lastUpdated: Date.now(),
+        firstBelieved: this.currentTime,
+        lastUpdated: this.currentTime,
         challenged: false,
       });
     }
@@ -193,7 +202,7 @@ export class MemoryManager {
     const belief = this.memory.beliefs.get(factId);
     if (belief) {
       belief.challenged = true;
-      belief.lastUpdated = Date.now();
+      belief.lastUpdated = this.currentTime;
       this.dirty = true;
     }
   }
@@ -247,7 +256,7 @@ export class MemoryManager {
         reason,
         interactions: 1,
         successfulCollaborations: 0,
-        since: Date.now(),
+        since: this.currentTime,
       });
     }
 
@@ -272,7 +281,7 @@ export class MemoryManager {
       reason,
       severity,
       incident,
-      since: Date.now(),
+      since: this.currentTime,
     });
 
     this.dirty = true;
@@ -305,13 +314,13 @@ export class MemoryManager {
     const acquaintance = this.memory.relationships.acquaintances.get(did);
     if (acquaintance) {
       acquaintance.interactions++;
-      acquaintance.lastInteraction = Date.now();
+      acquaintance.lastInteraction = this.currentTime;
       acquaintance.context = context;
     } else {
       this.memory.relationships.acquaintances.set(did, {
         did,
         interactions: 1,
-        lastInteraction: Date.now(),
+        lastInteraction: this.currentTime,
         context,
       });
     }
@@ -457,14 +466,16 @@ export class MemoryManager {
    * Add an encrypted note
    */
   addNote(encryptedContent: Uint8Array, tags: string[]): string {
-    const id = sha512_256Hex(`note:${Date.now()}:${Math.random()}`);
+    const id = sha512_256Hex(
+      `note:${this.memory.notes.length}:${encryptedContent.length}:${tags.join(",")}`,
+    );
 
     this.memory.notes.push({
       id,
       encryptedContent,
       tags,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: this.currentTime,
+      updatedAt: this.currentTime,
     });
 
     this.dirty = true;
@@ -485,7 +496,7 @@ export class MemoryManager {
     const note = this.memory.notes.find((n) => n.id === id);
     if (note) {
       note.encryptedContent = encryptedContent;
-      note.updatedAt = Date.now();
+      note.updatedAt = this.currentTime;
       this.dirty = true;
     }
   }
@@ -525,7 +536,7 @@ export class MemoryManager {
       type,
       title,
       description,
-      achievedAt: Date.now(),
+      achievedAt: this.currentTime,
       block,
       metadata,
     });
@@ -625,7 +636,9 @@ export class MemoryManager {
    * Start a new session
    */
   startSession(keyUsed: SessionRecord["keyUsed"]): string {
-    const sessionId = sha512_256Hex(`session:${Date.now()}:${Math.random()}`);
+    const sessionId = sha512_256Hex(
+      `session:${this.memory.sessionLog.length}:${keyUsed}`,
+    );
 
     this.memory.sessionLog.push({
       sessionId,

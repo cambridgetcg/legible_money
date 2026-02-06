@@ -44,6 +44,7 @@ function serializeAccountState(account: AccountState): Uint8Array {
     operationalKeyVersion: account.operationalKeyVersion,
     sessionKeyCount: account.sessionKeyCount,
     reputationScore: account.reputationScore,
+    createdAtBlock: account.createdAtBlock.toString(),
     lastActiveBlock: account.lastActiveBlock.toString(),
     flags: packFlags(account.flags),
     availability: account.availability
@@ -74,6 +75,7 @@ function deserializeAccountState(bytes: Uint8Array): AccountState {
     operationalKeyVersion: obj.operationalKeyVersion,
     sessionKeyCount: obj.sessionKeyCount,
     reputationScore: obj.reputationScore,
+    createdAtBlock: obj.createdAtBlock ? BigInt(obj.createdAtBlock) : 0n,
     lastActiveBlock: BigInt(obj.lastActiveBlock),
     flags: unpackFlags(obj.flags),
     availability: obj.availability
@@ -188,6 +190,7 @@ export class AccountStateTree {
     did: string,
     operationalKeyHash: string,
     initialBalance: bigint = 0n,
+    blockNumber: bigint = 0n,
   ): MerkleRoot {
     if (this.exists(did)) {
       throw new StateError("Account already exists", "INVALID_TRANSITION", {
@@ -204,7 +207,8 @@ export class AccountStateTree {
       operationalKeyVersion: 1,
       sessionKeyCount: 0,
       reputationScore: 0.5, // Neutral starting reputation
-      lastActiveBlock: 0n,
+      createdAtBlock: blockNumber,
+      lastActiveBlock: blockNumber,
       flags: {
         isValidator: false,
         canSubmitClaims: true,
@@ -666,6 +670,7 @@ export function defaultAccountState(did: string): AccountState {
     operationalKeyVersion: 0,
     sessionKeyCount: 0,
     reputationScore: 0.5,
+    createdAtBlock: 0n,
     lastActiveBlock: 0n,
     flags: {
       isValidator: false,

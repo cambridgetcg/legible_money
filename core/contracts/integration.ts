@@ -66,8 +66,8 @@ export class ContractIntegration {
     currentBlock: bigint,
     currentTime: number,
   ): Promise<DeploymentResult> {
-    // Generate contract address
-    const nonce = BigInt(Date.now()); // In production, use proper nonce
+    // CRIT-006 FIX: Use deterministic nonce from block number instead of Date.now()
+    const nonce = currentBlock;
     const address = ContractRegistry.generateAddress(
       request.deployer,
       nonce,
@@ -101,9 +101,11 @@ export class ContractIntegration {
     // Create schedule processes for each invocation config
     const scheduleProcessIds: string[] = [];
 
-    for (const invocationSpec of request.invocations) {
+    for (let idx = 0; idx < request.invocations.length; idx++) {
+      const invocationSpec = request.invocations[idx];
+      // P0-2 FIX: Deterministic invocation ID using block + index instead of Date.now()
       const invocationId = sha512_256Hex(
-        `invocation:${address}:${invocationSpec.functionName}:${Date.now()}`,
+        `invocation:${address}:${invocationSpec.functionName}:${currentBlock}:${idx}`,
       );
 
       // Create invocation config
@@ -127,6 +129,7 @@ export class ContractIntegration {
         invocation,
         request.deployer,
         currentTime,
+        idx,
       );
 
       // Register with SPU
@@ -162,6 +165,7 @@ export class ContractIntegration {
     invocation: InvocationConfig,
     sender: DID,
     currentTime: number,
+    invocationIndex: number = 0,
   ): ScheduleMessage {
     // Build call data (function selector + parameters)
     const callData = new Uint8Array(4 + invocation.parameters.length);
@@ -174,7 +178,9 @@ export class ContractIntegration {
         `schedule:${contract.address}:${invocation.id}:${currentTime}`,
       ),
       identifier: new Uint8Array(32), // Would be properly generated
-      nonce: BigInt(currentTime),
+      // P1-I1 FIX: Unique nonce per invocation to prevent collisions
+      // when multiple invocations are registered in the same deployment
+      nonce: BigInt(currentTime) + BigInt(invocationIndex),
       senderAddress: sender,
       recipientAddress: contract.address,
       networkFeeUnit: 1n,
@@ -288,8 +294,9 @@ export class ContractIntegration {
       );
     }
 
+    // P0-2 FIX: Deterministic invocation ID using block + invocation count
     const invocationId = sha512_256Hex(
-      `invocation:${contractAddress}:${invocationSpec.functionName}:${currentTime}`,
+      `invocation:${contractAddress}:${invocationSpec.functionName}:${_currentBlock}:${contract.invocations.length}`,
     );
 
     const invocation: InvocationConfig = {
@@ -411,12 +418,20 @@ export class ContractIntegration {
   /**
    * Add prepaid gas to a contract
    */
-  addPrepaidGas(contractAddress: string, amount: bigint, _sender: DID): void {
+  addPrepaidGas(contractAddress: string, amount: bigint, sender: DID): void {
     const contract = this.registry.getContract(contractAddress);
     if (!contract) {
       throw new ContractError(
         `Contract ${contractAddress} not found`,
         "CONTRACT_NOT_FOUND",
+      );
+    }
+
+    // P1-1 FIX: Verify sender is contract creator
+    if (contract.creator !== sender) {
+      throw new ContractError(
+        "Only contract creator can add prepaid gas",
+        "UNAUTHORIZED",
       );
     }
 

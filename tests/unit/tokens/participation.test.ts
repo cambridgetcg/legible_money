@@ -259,7 +259,7 @@ describe.sequential("createParticipationResolver", () => {
       },
       DEFAULT_PARTICIPATION_CONFIG,
       100,
-      60_000,
+      24n,
     );
     const result = resolver(TEST_DID);
     expect(result).not.toBeNull();
@@ -276,7 +276,7 @@ describe.sequential("createParticipationResolver", () => {
       },
       DEFAULT_PARTICIPATION_CONFIG,
       100,
-      60_000,
+      24n,
     );
     resolver(TEST_DID);
     resolver(TEST_DID);
@@ -302,7 +302,7 @@ describe.sequential("createParticipationResolver", () => {
       },
       DEFAULT_PARTICIPATION_CONFIG,
       100,
-      60_000,
+      24n,
     );
     const r1 = resolver(TEST_DID);
     const r2 = resolver(TEST_DID_2);
@@ -321,7 +321,7 @@ describe.sequential("createParticipationResolver", () => {
       },
       DEFAULT_PARTICIPATION_CONFIG,
       2, // Cache size of 2
-      60_000,
+      24n,
     );
     resolver("did:lgm:account-1");
     resolver("did:lgm:account-2");

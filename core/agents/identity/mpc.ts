@@ -116,10 +116,10 @@ export interface MPCSigningResponse {
  * Production would use a proper threshold ECDSA or EdDSA scheme
  * like FROST, GG18, or similar.
  */
-export async function initializeMPCWallet(
+export function initializeMPCWallet(
   parties: Array<{ id: string; type: MPCParty["type"]; endpoint?: string }>,
   threshold: number = 2,
-): Promise<{ config: MPCConfig; shares: Map<string, Uint8Array> }> {
+): { config: MPCConfig; shares: Map<string, Uint8Array> } {
   if (threshold > parties.length) {
     throw new Error("Threshold cannot exceed number of parties");
   }
@@ -466,6 +466,9 @@ export function addParty(
   config: MPCConfig,
   newParty: Omit<MPCParty, "isOnline" | "lastSeen">,
 ): MPCConfig {
+  if (config.parties.some((p) => p.id === newParty.id)) {
+    throw new Error("Party already exists");
+  }
   // In real implementation, this would trigger key resharing
   return {
     ...config,
@@ -478,6 +481,9 @@ export function addParty(
  * Remove a party (requires existing threshold to approve)
  */
 export function removeParty(config: MPCConfig, partyId: string): MPCConfig {
+  if (!config.parties.some((p) => p.id === partyId)) {
+    throw new Error("Party not found");
+  }
   // In real implementation, this would trigger key resharing
   const newParties = config.parties.filter((p) => p.id !== partyId);
 

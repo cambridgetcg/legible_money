@@ -90,6 +90,7 @@ export interface AccountState {
   operationalKeyVersion: number;
   sessionKeyCount: number; // Number of active session keys
   reputationScore: number; // Cached reputation (0-1)
+  createdAtBlock: bigint; // Block when account was created
   lastActiveBlock: bigint;
   flags: AccountFlags;
   /** Agent availability for project work */
