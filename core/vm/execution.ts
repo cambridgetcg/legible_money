@@ -53,8 +53,9 @@ import type {
   AgentBelief,
   AgentRelationships,
   BeliefSource,
+  BVMKnowledgeService,
 } from "./types.js";
-import { DEFAULT_BVM_CONFIG, BVMError } from "./types.js";
+import { DEFAULT_BVM_CONFIG, BVMError, NullKnowledgeService } from "./types.js";
 import * as opcodes from "./opcodes.js";
 import {
   getOpcodeDefinition,
@@ -64,6 +65,7 @@ import {
 } from "./opcodes.js";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { domainHash } from "../crypto/hashing.js";
+import { bytesToHex } from "../crypto/keys.js";
 
 /** Extended AgentRelationships with optional blocked set (used by BLOCK_AGENT/UNBLOCK_AGENT opcodes) */
 type AgentRelationshipsWithBlocked = AgentRelationships & {
@@ -220,6 +222,7 @@ class Stack implements VMStack {
 export class ExecutionEngine {
   private config: BVMConfig;
   private state: BVMState;
+  private knowledgeService: BVMKnowledgeService;
 
   // Current execution state
   private memory: Memory;
@@ -236,10 +239,17 @@ export class ExecutionEngine {
   private callDepth: number = 0;
   // AUTONOMY: Schedule nonce for deterministic schedule ID generation
   private scheduleNonce: number = 0;
+  // Deterministic nonce for stake/session IDs (replaces Math.random)
+  private idNonce: number = 0;
 
-  constructor(state: BVMState, config: BVMConfig = DEFAULT_BVM_CONFIG) {
+  constructor(
+    state: BVMState,
+    config: BVMConfig = DEFAULT_BVM_CONFIG,
+    knowledgeService?: BVMKnowledgeService,
+  ) {
     this.config = config;
     this.state = state;
+    this.knowledgeService = knowledgeService ?? new NullKnowledgeService();
     this.memory = new Memory(config.maxMemorySize);
     this.stack = new Stack(config.maxStackDepth);
   }
@@ -259,6 +269,7 @@ export class ExecutionEngine {
     this.beliefChanges = [];
     this.relationshipChanges = [];
     this.scheduleNonce = 0;
+    this.idNonce = 0;
 
     try {
       // Main execution loop
@@ -1505,7 +1516,8 @@ export class ExecutionEngine {
           const newBelief: AgentBelief = {
             factId,
             confidence,
-            networkConfidence: 0, // Would query knowledge base
+            networkConfidence:
+              this.knowledgeService.getNetworkConfidence(factId),
             source,
             firstBelieved: oldBelief?.firstBelieved ?? context.blockNumber,
             lastUpdated: context.blockNumber,
@@ -1645,19 +1657,19 @@ export class ExecutionEngine {
 
         // Generate deterministic schedule ID from contract + nonce
         const scheduleNonce = this.scheduleNonce++;
-        const scheduleId = BigInt(
-          "0x" +
-            domainHash(
-              "LGM.schedule.id.v1",
-              `${context.currentContract}:${scheduleNonce}:${context.blockNumber}`,
-            ).slice(0, 16),
-        );
+        const scheduleIdHex = bytesToHex(
+          domainHash(
+            "LGM.schedule.id.v1",
+            `${context.currentContract}:${scheduleNonce}:${context.blockNumber}`,
+          ),
+        ).slice(0, 16);
+        const scheduleId = BigInt("0x" + scheduleIdHex);
         this.stack.push(scheduleId);
 
         // Emit schedule creation state change
         // This will be processed by AutonomyIntegration to create actual SPU process
         this.stateChanges.push({
-          type: "storage" as StateChange["type"],
+          type: "agent" as StateChange["type"],
           address: context.currentContract,
           key: `schedule:${scheduleId}`,
           newValue: {
@@ -1724,31 +1736,165 @@ export class ExecutionEngine {
         return "CONTINUE";
       }
 
-      // ============ Knowledge Operations (0xF0-0xF5) ============
+      // ============ Knowledge Operations (0xB0-0xB5) ============
       case opcodes.QUERY_FACT: {
         // (factIdHash) -> (exists, confidence, domain)
-        this.stack.pop(); // factIdHash (consumed but not used yet)
-        // Would query knowledge SMT - simplified
-        this.stack.push(0n); // domain placeholder
-        this.stack.push(0n); // confidence placeholder
-        this.stack.push(0n); // exists placeholder
+        const factIdHash = this.stack.pop();
+        const factId = factIdHash.toString(16);
+        const factResult = this.knowledgeService.queryFact(factId);
+
+        if (factResult && factResult.exists) {
+          // Push in reverse order: domain first (bottom), then confidence, then exists (top)
+          const domainWord = this.stringToWord(factResult.domain);
+          const confidenceWord = BigInt(
+            Math.floor(factResult.confidence * 1e18),
+          );
+          this.stack.push(domainWord);
+          this.stack.push(confidenceWord);
+          this.stack.push(1n); // exists = true
+        } else {
+          this.stack.push(0n); // domain
+          this.stack.push(0n); // confidence
+          this.stack.push(0n); // exists = false
+        }
         return "CONTINUE";
       }
 
-      case opcodes.SUBMIT_CLAIM:
-      case opcodes.COMMIT_VOTE:
-      case opcodes.REVEAL_VOTE:
+      case opcodes.QUERY_DOMAIN: {
+        // (domainHash, limit) -> (count, factIds...)
+        const domainHash = this.stack.pop();
+        const limit = Number(this.stack.pop());
+        const domain = domainHash.toString(16);
+
+        const domainResult = this.knowledgeService.queryDomain(
+          domain,
+          Math.min(limit, this.config.maxQueryResultSize),
+        );
+
+        // Push fact IDs in reverse order so first is on top after count
+        for (let i = domainResult.factIds.length - 1; i >= 0; i--) {
+          this.stack.push(
+            BigInt(
+              "0x" + domainResult.factIds[i].slice(0, 64).padStart(64, "0"),
+            ),
+          );
+        }
+        this.stack.push(BigInt(domainResult.count));
+
+        // Dynamic gas: base + per-result cost
+        this.gasUsed += BigInt(domainResult.count) * 50n;
+        return "CONTINUE";
+      }
+
+      case opcodes.SUBMIT_CLAIM: {
+        // (domainHash, dataHash, evidenceHash) -> (claimId)
+        const domainHash = this.stack.pop();
+        const dataHash = this.stack.pop();
+        const evidenceHash = this.stack.pop();
+
+        if (!context.callerDID) {
+          this.stack.push(0n); // No agent identity → rejected
+          return "CONTINUE";
+        }
+
+        const claimResult = this.knowledgeService.submitClaim(
+          context.callerDID,
+          domainHash.toString(16),
+          dataHash.toString(16),
+          evidenceHash.toString(16),
+          context.blockNumber,
+        );
+
+        if (claimResult) {
+          this.stack.push(
+            BigInt("0x" + claimResult.claimId.slice(0, 64).padStart(64, "0")),
+          );
+          this.stateChanges.push({
+            type: "agent" as StateChange["type"],
+            address: context.currentContract,
+            key: `claim:${claimResult.claimId}`,
+            newValue: {
+              submitted: true,
+              block: context.blockNumber.toString(),
+            },
+          });
+        } else {
+          this.stack.push(0n);
+        }
+        return "CONTINUE";
+      }
+
+      case opcodes.COMMIT_VOTE: {
+        // (claimIdHash, voteHash) -> ()
+        const claimIdHash = this.stack.pop();
+        const voteHash = this.stack.pop();
+
+        if (context.callerDID) {
+          this.knowledgeService.commitVote(
+            context.callerDID,
+            claimIdHash.toString(16),
+            voteHash.toString(16),
+            context.blockNumber,
+          );
+        }
+        return "CONTINUE";
+      }
+
+      case opcodes.REVEAL_VOTE: {
+        // (claimIdHash, vote, salt) -> ()
+        const claimIdHash = this.stack.pop();
+        const vote = this.stack.pop();
+        const salt = this.stack.pop();
+
+        if (context.callerDID) {
+          this.knowledgeService.revealVote(
+            context.callerDID,
+            claimIdHash.toString(16),
+            vote,
+            salt,
+            context.blockNumber,
+          );
+        }
+        return "CONTINUE";
+      }
+
       case opcodes.INITIATE_CHALLENGE: {
-        // These would integrate with PoT consensus
-        // For now, just consume stack inputs and push placeholder results
-        const def = getOpcodeDefinition(opcode);
-        if (def) {
-          for (let i = 0; i < def.stackInputs; i++) {
-            this.stack.pop();
-          }
-          for (let i = 0; i < def.stackOutputs; i++) {
-            this.stack.push(0n);
-          }
+        // (factIdHash, evidenceHash, stake) -> (challengeId)
+        const factIdHash = this.stack.pop();
+        const evidenceHash = this.stack.pop();
+        const stake = this.stack.pop();
+
+        if (!context.callerDID) {
+          this.stack.push(0n);
+          return "CONTINUE";
+        }
+
+        const challengeResult = this.knowledgeService.initiateChallenge(
+          context.callerDID,
+          factIdHash.toString(16),
+          evidenceHash.toString(16),
+          stake,
+          context.blockNumber,
+        );
+
+        if (challengeResult) {
+          this.stack.push(
+            BigInt(
+              "0x" + challengeResult.challengeId.slice(0, 64).padStart(64, "0"),
+            ),
+          );
+          this.stateChanges.push({
+            type: "agent" as StateChange["type"],
+            address: context.currentContract,
+            key: `challenge:${challengeResult.challengeId}`,
+            newValue: {
+              initiated: true,
+              stake: stake.toString(),
+              block: context.blockNumber.toString(),
+            },
+          });
+        } else {
+          this.stack.push(0n);
         }
         return "CONTINUE";
       }
@@ -1796,7 +1942,10 @@ export class ExecutionEngine {
           type: "agent",
           address: context.currentContract,
           key: `blocked:${targetDid}`,
-          newValue: { reason: reasonHash.toString(16), blockedAt: Date.now() },
+          newValue: {
+            reason: reasonHash.toString(16),
+            blockedAt: context.timestamp,
+          },
         });
 
         this.stack.push(1n);
@@ -1886,8 +2035,15 @@ export class ExecutionEngine {
         const amount = this.stack.pop();
         const purpose = this.stack.pop();
 
-        // Generate stake ID
-        const stakeId = BigInt("0x" + Math.random().toString(16).slice(2, 18));
+        // Generate deterministic stake ID from contract + nonce + block
+        const stakeNonce = this.idNonce++;
+        const stakeIdHex = bytesToHex(
+          domainHash(
+            "LGM.stake.id.v1",
+            `${context.currentContract}:${stakeNonce}:${context.blockNumber}`,
+          ),
+        ).slice(0, 16);
+        const stakeId = BigInt("0x" + stakeIdHex);
 
         this.stateChanges.push({
           type: "storage" as StateChange["type"],
@@ -1896,7 +2052,7 @@ export class ExecutionEngine {
           newValue: {
             amount: amount.toString(),
             purpose: purpose.toString(),
-            stakedAt: Date.now(),
+            stakedAt: context.timestamp,
           },
         });
 
@@ -2015,7 +2171,7 @@ export class ExecutionEngine {
           type: "agent" as StateChange["type"],
           address: context.currentContract,
           key: `alert:${alertId}`,
-          newValue: { dismissed: true, dismissedAt: Date.now() },
+          newValue: { dismissed: true, dismissedAt: context.timestamp },
         });
 
         this.stack.push(1n);
@@ -2068,7 +2224,7 @@ export class ExecutionEngine {
             keyType: keyType.toString(),
             role: role.toString(),
             expiresAt: expiresAt.toString(),
-            registeredAt: Date.now(),
+            registeredAt: context.timestamp,
           },
         });
 
@@ -2084,7 +2240,7 @@ export class ExecutionEngine {
           type: "agent" as StateChange["type"],
           address: context.currentContract,
           key: `key:${keyHash}`,
-          newValue: { revoked: true, revokedAt: Date.now() },
+          newValue: { revoked: true, revokedAt: context.timestamp },
         });
 
         this.stack.push(1n);
@@ -2112,12 +2268,17 @@ export class ExecutionEngine {
       case opcodes.QUERY_SESSION: {
         // () -> (sessionId, role, expiresAt, actionsRemaining)
         // Would query current session from access control
-        // Placeholder values
-        const sessionId = BigInt(
-          "0x" + Math.random().toString(16).slice(2, 18),
-        );
+        // Deterministic: derive session ID from caller + block context
+        const sessionNonce = this.idNonce++;
+        const sessionIdHex = bytesToHex(
+          domainHash(
+            "LGM.session.id.v1",
+            `${context.caller}:${sessionNonce}:${context.blockNumber}`,
+          ),
+        ).slice(0, 16);
+        const sessionId = BigInt("0x" + sessionIdHex);
         const role = 2n; // guest
-        const expiresAt = BigInt(Date.now() + 3600000); // 1 hour
+        const expiresAt = BigInt(context.timestamp + 3600000); // 1 hour from block time
         const actionsRemaining = 100n;
 
         this.stack.push(actionsRemaining);
@@ -2195,6 +2356,16 @@ export class ExecutionEngine {
   private wordToDID(word: Word): DID {
     // This is a placeholder - in practice, we'd need a reverse lookup
     return `did:lgm:${word.toString(16).slice(0, 16)}`;
+  }
+
+  private stringToWord(str: string): Word {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(str);
+    let hash = 0n;
+    for (const byte of bytes) {
+      hash = ((hash << 5n) - hash + BigInt(byte)) & MAX_UINT256;
+    }
+    return hash;
   }
 
   private numberToBeliefSource(num: number): BeliefSource {
@@ -2306,8 +2477,12 @@ export class ExecutionEngine {
     // Increment call depth
     this.callDepth++;
 
-    // Create a new engine for sub-execution
-    const subEngine = new ExecutionEngine(this.state, this.config);
+    // Create a new engine for sub-execution (pass knowledge service through)
+    const subEngine = new ExecutionEngine(
+      this.state,
+      this.config,
+      this.knowledgeService,
+    );
     (subEngine as any).callDepth = this.callDepth;
 
     try {
@@ -2411,8 +2586,12 @@ export class ExecutionEngine {
     // Increment call depth
     this.callDepth++;
 
-    // Create a new engine for sub-execution
-    const subEngine = new ExecutionEngine(this.state, this.config);
+    // Create a new engine for sub-execution (pass knowledge service through)
+    const subEngine = new ExecutionEngine(
+      this.state,
+      this.config,
+      this.knowledgeService,
+    );
     (subEngine as any).callDepth = this.callDepth;
 
     try {

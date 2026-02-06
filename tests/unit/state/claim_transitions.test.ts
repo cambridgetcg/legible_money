@@ -607,6 +607,170 @@ describe.sequential("Claim Submission Workflow", () => {
         expect(claim?.rejectionReason).toContain("Insufficient validators");
       });
     });
+
+    describe("citation economics", () => {
+      // Helper: submit a claim with references, start and complete verification
+      function submitAndVerifyClaim(
+        claimText: string,
+        refs: string[],
+        derivedFrom?: {
+          factIds: string[];
+          inferenceType: string;
+          logicChain: string;
+        },
+        sender = TEST_SENDER,
+      ): { claimId: string; factId: string } {
+        const payload: ClaimSubmitPayload = {
+          type: "claim_submit",
+          claim: claimText,
+          claimType: "empirical",
+          domain: "test.citation",
+          stratum: "physical",
+          stake: 200n * ONE_LGM,
+          references: refs,
+          derivedFrom,
+        };
+
+        executeTransaction(
+          state,
+          createTransaction("claim_submit", payload, sender),
+          blockNumber + 20n,
+          TEST_CONSENSUS_PARAMS,
+        );
+
+        const pending = state.getPendingClaims();
+        const newClaimId = pending[pending.length - 1].id;
+
+        executeTransaction(
+          state,
+          createSystemTransaction("claim_start_verification", {
+            type: "claim_start_verification",
+            claimId: newClaimId,
+            roundId: `round-cite-${newClaimId}`,
+            selectedValidators: ["v1", "v2", "v3"],
+          }),
+          blockNumber + 21n,
+          TEST_CONSENSUS_PARAMS,
+        );
+
+        executeTransaction(
+          state,
+          createSystemTransaction("claim_complete_verification", {
+            type: "claim_complete_verification",
+            claimId: newClaimId,
+            roundId: `round-cite-${newClaimId}`,
+            outcome: "accepted",
+            finalConfidence: 0.85,
+            verifierCount: 5,
+            rewards: [],
+            slashes: [],
+          }),
+          blockNumber + 30n,
+          TEST_CONSENSUS_PARAMS,
+        );
+
+        const updatedClaim = state.getClaim(newClaimId)!;
+        return {
+          claimId: newClaimId,
+          factId: updatedClaim.resultFactId!,
+        };
+      }
+
+      it("should increment citation count on referenced facts", () => {
+        const factBefore = state.getFact("fact:reference-001")!;
+        expect(factBefore.citationCount).toBe(0);
+
+        submitAndVerifyClaim("Claim citing reference-001", [
+          "fact:reference-001",
+        ]);
+
+        const factAfter = state.getFact("fact:reference-001")!;
+        expect(factAfter.citationCount).toBe(1);
+        expect(factAfter.lastCitedBlock).toBe(blockNumber + 30n);
+      });
+
+      it("should increment citation count on derivedFrom facts", () => {
+        const factBefore = state.getFact("fact:reference-001")!;
+        expect(factBefore.citationCount).toBe(0);
+
+        submitAndVerifyClaim("Derived from reference-001", [], {
+          factIds: ["fact:reference-001"],
+          inferenceType: "deductive",
+          logicChain: "A -> B",
+        });
+
+        const factAfter = state.getFact("fact:reference-001")!;
+        expect(factAfter.citationCount).toBe(1);
+      });
+
+      it("should record citation rewards on cited facts", () => {
+        const factBefore = state.getFact("fact:reference-001")!;
+        expect(factBefore.totalCitationRewards ?? 0n).toBe(0n);
+
+        submitAndVerifyClaim("Claim for citation reward test", [
+          "fact:reference-001",
+        ]);
+
+        const factAfter = state.getFact("fact:reference-001")!;
+        // 15% of claimReward (5 LGM) = 0.75 LGM, all to one cited fact
+        const expectedReward = (TEST_CONSENSUS_PARAMS.claimReward * 15n) / 100n;
+        expect(factAfter.totalCitationRewards).toBe(expectedReward);
+      });
+
+      it("should transfer citation reward to original fact submitter", () => {
+        // Create a second account that will submit a fact
+        const SECOND_SENDER = "second-sender-key";
+        const SECOND_DID = publicKeyToDid(SECOND_SENDER);
+        state.createAccount(SECOND_DID, "second-op-hash", 10000n * ONE_LGM);
+
+        // Second account submits and gets a fact verified (no references)
+        const { factId: secondFact } = submitAndVerifyClaim(
+          "Fact by second sender",
+          [],
+          undefined,
+          SECOND_SENDER,
+        );
+
+        // Record second account's balance before citation
+        const balanceBefore = state.getAccount(SECOND_DID)!.balance;
+
+        // Now TEST_DID submits a claim referencing secondFact
+        submitAndVerifyClaim(`Claim citing ${secondFact}`, [secondFact]);
+
+        const balanceAfter = state.getAccount(SECOND_DID)!.balance;
+        const expectedReward = (TEST_CONSENSUS_PARAMS.claimReward * 15n) / 100n;
+        expect(balanceAfter - balanceBefore).toBe(expectedReward);
+      });
+
+      it("should not fail for genesis facts without claim submitter", () => {
+        // fact:reference-001 was created directly (no associated claim)
+        // Citation should still work — count increments, no transfer error
+        const result = submitAndVerifyClaim("Citing a genesis-like fact", [
+          "fact:reference-001",
+        ]);
+        expect(result.factId).toBeDefined();
+
+        const fact = state.getFact("fact:reference-001")!;
+        expect(fact.citationCount).toBe(1);
+        expect(fact.totalCitationRewards).toBeGreaterThan(0n);
+      });
+
+      it("should deduplicate citation count for facts in both references and derivedFrom", () => {
+        submitAndVerifyClaim(
+          "Claim with overlapping refs",
+          ["fact:reference-001"],
+          {
+            factIds: ["fact:reference-001"],
+            inferenceType: "inductive",
+            logicChain: "observation -> generalization",
+          },
+        );
+
+        const fact = state.getFact("fact:reference-001")!;
+        // Should count only once despite appearing in both references and derivedFrom
+        expect(fact.citationCount).toBe(1);
+      });
+    });
   });
 
   // ============================================================================

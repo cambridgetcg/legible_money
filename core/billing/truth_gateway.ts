@@ -33,6 +33,18 @@
  *                  ↓
  *            More Query Value ←───────────────────────────────────┘
  *
+ * REVENUE SPLIT (see calculateDistribution):
+ *   60% to service provider (the agent or node answering the query)
+ *   30% to knowledge fund (rewards fact submitters and verifiers)
+ *   10% to protocol treasury
+ *   The 22% research share is applied WITHIN the knowledge fund portion.
+ *
+ * NOTE: This is SEPARATE from the Tree of Life revenue model (core/tree/revenue_engine.ts).
+ * Tree services use a 22/39/23.4/15.6 split (evidence tax/contributors/research/treasury)
+ * because tree revenue rewards project contributors (developers, reviewers).
+ * Gateway revenue rewards knowledge contributors (fact submitters, verifiers).
+ * Both models fund research — they differ in who gets the operational remainder.
+ *
  * PP HIERARCHY:
  *   TRUTH: Every query is grounded in verified facts
  *   UNDERSTANDING: Clear pricing based on knowledge value

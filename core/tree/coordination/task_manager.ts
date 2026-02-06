@@ -30,6 +30,10 @@ export function createTask(
   block: bigint,
   deadlineBlock?: bigint,
 ): ProjectTask {
+  if (deadlineBlock !== undefined && deadlineBlock <= block) {
+    throw new TaskError("Deadline must be in the future", "INVALID_DEADLINE");
+  }
+
   const id = generateTaskId(projectId, nonce);
 
   return {
@@ -151,8 +155,12 @@ export function approveDeliverable(
   };
 }
 
+/** Maximum number of rejection cycles before task requires dispute resolution */
+const MAX_REJECTIONS = 3;
+
 /**
- * Reject a deliverable. Task returns to in_progress.
+ * Reject a deliverable. Task returns to rejected status.
+ * After MAX_REJECTIONS, task transitions to disputed (terminal until resolved).
  */
 export function rejectDeliverable(
   task: ProjectTask,
@@ -172,9 +180,22 @@ export function rejectDeliverable(
     );
   }
 
+  const rejectionCount = (task.rejectionCount ?? 0) + 1;
+
+  if (rejectionCount >= MAX_REJECTIONS) {
+    return {
+      ...task,
+      status: "disputed",
+      rejectionCount,
+      reviewers: [...task.reviewers, reviewerDid],
+      deliverable: undefined,
+    };
+  }
+
   return {
     ...task,
     status: "rejected",
+    rejectionCount,
     reviewers: [...task.reviewers, reviewerDid],
     deliverable: undefined, // Clear rejected deliverable
   };
@@ -182,6 +203,7 @@ export function rejectDeliverable(
 
 /**
  * Reopen a rejected task for another attempt.
+ * Cannot reopen disputed tasks — those require dispute resolution.
  */
 export function reopenTask(task: ProjectTask): ProjectTask {
   assertStatus(task, ["rejected"]);
@@ -196,6 +218,13 @@ export function reopenTask(task: ProjectTask): ProjectTask {
 
 /**
  * Check if a task can be assigned to an agent based on capabilities.
+ *
+ * This is an eligibility gate — ALL required capabilities must be present.
+ * For ranked matching (partial matches allowed), use matchAgentsToTask from
+ * skill_matching.ts instead.
+ *
+ * @param agentCapabilities - Expanded capability names from getActiveCapabilities()
+ *   in skill_matching.ts. Must use attested-only capabilities.
  */
 export function canAgentClaimTask(
   task: ProjectTask,
@@ -218,6 +247,22 @@ export function isTaskExpired(
 ): boolean {
   if (task.deadlineBlock === undefined) return false;
   return currentBlock >= task.deadlineBlock;
+}
+
+// ============ Bounty Bridge ============
+
+/**
+ * Link a collaboration bounty to a tree task.
+ * Stores the bountyId on the task for cross-referencing.
+ */
+export function linkBountyToTask(
+  task: ProjectTask,
+  bountyId: string,
+): ProjectTask {
+  return {
+    ...task,
+    bountyId,
+  };
 }
 
 // ============ Helpers ============
@@ -248,7 +293,8 @@ export type TaskErrorCode =
   | "NOT_ASSIGNEE"
   | "NO_DELIVERABLE"
   | "SELF_REVIEW"
-  | "DEADLINE_PASSED";
+  | "DEADLINE_PASSED"
+  | "INVALID_DEADLINE";
 
 export class TaskError extends Error {
   constructor(

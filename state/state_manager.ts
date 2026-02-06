@@ -31,6 +31,15 @@ import { PaymentChannelStateTree } from "./payment_channels.js";
 import { ProjectStateTree } from "./projects.js";
 import { ServiceStateTree } from "./services.js";
 import { GovernanceStateTree, type GovernanceStats } from "./governance.js";
+import type {
+  DisbursementProposal,
+  DisbursementStage,
+  DisbursementCategory,
+  TreasuryFund,
+  ExpenseRecord,
+} from "../governance/treasury/types.js";
+import { TaskStateTree } from "./tasks.js";
+import { SeedStateTree } from "./seeds.js";
 import type { LIP, LIPStage } from "../governance/proposals/types.js";
 import type { QuadraticVote } from "../governance/voting/quadratic.js";
 import type { DomainProposal } from "../core/knowledge/ontology/domain_proposal.js";
@@ -91,6 +100,8 @@ import type {
   RewardVesting,
   CreateVestingPayload,
 } from "../core/rewards/types.js";
+import { ScheduleProcessStateManager } from "../core/schedule/process_state.js";
+import type { ScheduleProcess } from "../core/schedule/types.js";
 
 // ============ State Manager ============
 
@@ -106,7 +117,13 @@ export class StateManager {
   private paymentChannels: PaymentChannelStateTree;
   private projects: ProjectStateTree;
   private services: ServiceStateTree;
+  private tasks: TaskStateTree;
+  private seeds: SeedStateTree;
   private governance: GovernanceStateTree;
+  private schedules: ScheduleProcessStateManager;
+
+  // Subscription state: serviceId → Map<callerDid, expiresAtBlock>
+  private subscriptions: Map<string, Map<string, bigint>> = new Map();
 
   private config: StateConfig;
   private version: bigint = 0n;
@@ -128,7 +145,11 @@ export class StateManager {
     paymentChannels: PaymentChannelStateTree;
     projects: ProjectStateTree;
     services: ServiceStateTree;
+    tasks: TaskStateTree;
+    seeds: SeedStateTree;
     governance: GovernanceStateTree;
+    schedules: ReturnType<ScheduleProcessStateManager["exportState"]>;
+    subscriptions: Map<string, Map<string, bigint>>;
     version: bigint;
   } | null = null;
 
@@ -149,7 +170,10 @@ export class StateManager {
     this.paymentChannels = new PaymentChannelStateTree();
     this.projects = new ProjectStateTree();
     this.services = new ServiceStateTree();
+    this.tasks = new TaskStateTree();
+    this.seeds = new SeedStateTree();
     this.governance = new GovernanceStateTree();
+    this.schedules = new ScheduleProcessStateManager();
   }
 
   // ============ State Root Computation ============
@@ -184,6 +208,11 @@ export class StateManager {
             )
           : "0".repeat(64),
       governanceRoot: this.governance.getRoot(),
+      projectRoot: this.projects.getRoot(),
+      serviceRoot: this.services.getRoot(),
+      taskRoot: this.tasks.getRoot(),
+      seedRoot: this.seeds.getRoot(),
+      scheduleRoot: this.schedules.getStateRoot(),
       version: this.version,
     };
   }
@@ -211,6 +240,9 @@ export class StateManager {
       (components.vestingRoot ?? EMPTY_ROOT) +
       (components.paymentChannelRoot ?? EMPTY_ROOT) +
       (components.governanceRoot ?? EMPTY_ROOT) +
+      (components.projectRoot ?? EMPTY_ROOT) +
+      (components.serviceRoot ?? EMPTY_ROOT) +
+      (components.taskRoot ?? EMPTY_ROOT) +
       versionHex;
 
     return bytesToHex(domainHash(HASH_DOMAINS.STATE, data)).slice(0, 64);
@@ -527,6 +559,53 @@ export class StateManager {
     this.knowledge.recordCitationReward(factId, amount);
   }
 
+  /**
+   * Add a reference edge between two facts in the knowledge graph.
+   * Wires claim references into graph edges for confidence propagation.
+   */
+  addFactReference(ref: FactReference): void {
+    this.knowledge.addReference(ref);
+  }
+
+  /**
+   * Get grouped references for a fact (supports, contradicts, extends).
+   * Used by RPC knowledge_getFact with includeReferences=true.
+   */
+  getFactReferences(factId: string): {
+    supports: FactState[];
+    contradicts: FactState[];
+    extends: FactState[];
+  } {
+    return {
+      supports: this.knowledge.getSupportingFacts(factId),
+      contradicts: this.knowledge.getContradictingFacts(factId),
+      extends: this.knowledge.getExtendingFacts(factId),
+    };
+  }
+
+  /**
+   * Get all fact references in the knowledge graph.
+   * Used by opportunity detection for cross-domain analysis.
+   */
+  getAllFactReferences(): FactReference[] {
+    return this.knowledge.getAllReferences();
+  }
+
+  /**
+   * Get outgoing reference target IDs for a fact.
+   * Used by cross-domain metrics aggregation.
+   */
+  getOutgoingFactReferences(factId: string): string[] {
+    return this.knowledge.getOutgoingReferences(factId);
+  }
+
+  /**
+   * Get all domain IDs registered in the knowledge tree.
+   */
+  getDomainIds(): string[] {
+    return this.knowledge.getDomains().map((d) => d.id);
+  }
+
   // ============ Claim Access ============
 
   /**
@@ -674,6 +753,14 @@ export class StateManager {
    */
   getOpenBounties(): BountyState[] {
     return this.research.getOpenBounties();
+  }
+
+  /**
+   * Get all bounties (all statuses).
+   * Used by opportunity detection metrics aggregation.
+   */
+  getAllBounties(): BountyState[] {
+    return this.research.exportBounties();
   }
 
   /**
@@ -1217,6 +1304,15 @@ export class StateManager {
   }
 
   /**
+   * Get projects by knowledge domain
+   */
+  getProjectsByDomain(
+    domain: string,
+  ): import("../core/tree/types.js").ProductProject[] {
+    return this.projects.getProjectsByDomain(domain);
+  }
+
+  /**
    * Get project count
    */
   getProjectCount(): number {
@@ -1259,6 +1355,24 @@ export class StateManager {
   }
 
   /**
+   * Get services by status
+   */
+  getServicesByStatus(
+    status: import("../core/tree/types.js").ServiceStatus,
+  ): import("../core/tree/types.js").ServiceLeaf[] {
+    return this.services.getServicesByStatus(status);
+  }
+
+  /**
+   * Look up a service by its protocol-assigned subdomain.
+   */
+  getServiceBySubdomain(
+    subdomain: string,
+  ): import("../core/tree/types.js").ServiceLeaf | null {
+    return this.services.getServiceBySubdomain(subdomain);
+  }
+
+  /**
    * Increment service call metrics
    */
   incrementServiceCalls(
@@ -1267,6 +1381,314 @@ export class StateManager {
     block: bigint,
   ): void {
     this.services.incrementServiceCalls(serviceId, revenue, block);
+  }
+
+  // ============ Subscription Access ============
+
+  /**
+   * Check if a caller has an active subscription to a service.
+   */
+  hasActiveSubscription(
+    serviceId: string,
+    callerDid: string,
+    currentBlock: bigint,
+  ): boolean {
+    const subs = this.subscriptions.get(serviceId);
+    if (!subs) return false;
+    const expiresAt = subs.get(callerDid);
+    if (expiresAt === undefined) return false;
+    return currentBlock < expiresAt;
+  }
+
+  /**
+   * Create or renew a subscription.
+   */
+  setSubscription(
+    serviceId: string,
+    callerDid: string,
+    expiresAtBlock: bigint,
+  ): void {
+    let subs = this.subscriptions.get(serviceId);
+    if (!subs) {
+      subs = new Map();
+      this.subscriptions.set(serviceId, subs);
+    }
+    subs.set(callerDid, expiresAtBlock);
+  }
+
+  /**
+   * Get subscription expiry for a caller on a service.
+   */
+  getSubscriptionExpiry(serviceId: string, callerDid: string): bigint | null {
+    const subs = this.subscriptions.get(serviceId);
+    if (!subs) return null;
+    return subs.get(callerDid) ?? null;
+  }
+
+  /**
+   * Export all subscriptions for persistence.
+   */
+  exportSubscriptions(): Array<{
+    serviceId: string;
+    callerDid: string;
+    expiresAt: bigint;
+  }> {
+    const result: Array<{
+      serviceId: string;
+      callerDid: string;
+      expiresAt: bigint;
+    }> = [];
+    for (const [serviceId, callerMap] of this.subscriptions) {
+      for (const [callerDid, expiresAt] of callerMap) {
+        result.push({ serviceId, callerDid, expiresAt });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Restore subscriptions from persisted data.
+   */
+  restoreSubscriptions(
+    entries: Array<{ serviceId: string; callerDid: string; expiresAt: bigint }>,
+  ): void {
+    for (const entry of entries) {
+      this.setSubscription(entry.serviceId, entry.callerDid, entry.expiresAt);
+    }
+  }
+
+  // ============ Schedule Access (DMSS) ============
+
+  /**
+   * Register a schedule process in state (persisted across blocks).
+   */
+  registerSchedule(schedule: ScheduleProcess): void {
+    this.schedules.addProcess(schedule);
+  }
+
+  /**
+   * Get a schedule process by ID.
+   */
+  getSchedule(id: string): ScheduleProcess | undefined {
+    return this.schedules.getProcess(id);
+  }
+
+  /**
+   * Export all schedules for persistence.
+   */
+  exportSchedules(): ReturnType<ScheduleProcessStateManager["exportState"]> {
+    return this.schedules.exportState();
+  }
+
+  /**
+   * Restore schedules from persisted data.
+   */
+  restoreSchedules(
+    data: Parameters<ScheduleProcessStateManager["importState"]>[0],
+  ): void {
+    this.schedules.importState(data);
+  }
+
+  // ============ Task Access (Tree of Life) ============
+
+  /**
+   * Get task by ID
+   */
+  getTask(taskId: string): import("../core/tree/types.js").ProjectTask | null {
+    return this.tasks.getTask(taskId);
+  }
+
+  /**
+   * Create a new task
+   */
+  createTask(task: import("../core/tree/types.js").ProjectTask): void {
+    this.tasks.createTask(task);
+  }
+
+  /**
+   * Update an existing task
+   */
+  updateTask(
+    taskId: string,
+    updates: Partial<import("../core/tree/types.js").ProjectTask>,
+  ): void {
+    this.tasks.updateTask(taskId, updates);
+  }
+
+  /**
+   * Get tasks by project
+   */
+  getTasksByProject(
+    projectId: string,
+  ): import("../core/tree/types.js").ProjectTask[] {
+    return this.tasks.getTasksByProject(projectId);
+  }
+
+  /**
+   * Get task count
+   */
+  getTaskCount(): number {
+    return this.tasks.getTaskCount();
+  }
+
+  // ============ Seed Access (Tree of Life) ============
+
+  /**
+   * Get opportunity seed by ID
+   */
+  getSeed(
+    seedId: string,
+  ): import("../core/tree/types.js").OpportunitySeed | null {
+    return this.seeds.getSeed(seedId);
+  }
+
+  /**
+   * Add a detected opportunity seed
+   */
+  addSeed(seed: import("../core/tree/types.js").OpportunitySeed): void {
+    this.seeds.addSeed(seed);
+  }
+
+  /**
+   * Update an existing seed
+   */
+  updateSeed(
+    seedId: string,
+    updates: Partial<import("../core/tree/types.js").OpportunitySeed>,
+  ): void {
+    this.seeds.updateSeed(seedId, updates);
+  }
+
+  /**
+   * Get available seeds (detected, not expired)
+   */
+  getAvailableSeeds(
+    currentBlock: bigint,
+  ): import("../core/tree/types.js").OpportunitySeed[] {
+    return this.seeds.getAvailableSeeds(currentBlock);
+  }
+
+  /**
+   * Get seeds by domain
+   */
+  getSeedsByDomain(
+    domain: string,
+  ): import("../core/tree/types.js").OpportunitySeed[] {
+    return this.seeds.getSeedsByDomain(domain);
+  }
+
+  /**
+   * Export all seeds for persistence
+   */
+  exportSeeds(): import("../core/tree/types.js").OpportunitySeed[] {
+    return this.seeds.exportSeeds();
+  }
+
+  /**
+   * Restore seeds from persistence
+   */
+  restoreSeeds(seeds: import("../core/tree/types.js").OpportunitySeed[]): void {
+    this.seeds.restoreSeeds(seeds);
+  }
+
+  // ============ Availability & Reputation ============
+
+  /**
+   * Set agent availability for project recruitment
+   */
+  setAvailability(
+    did: string,
+    availability: import("./types.js").AgentAvailability,
+  ): void {
+    this.accounts.updateAccount(did, { availability });
+  }
+
+  /**
+   * Get all available agents, optionally filtered
+   */
+  getAvailableAgents(filters?: {
+    capability?: string;
+    domain?: string;
+  }): Array<{
+    did: string;
+    availability: import("./types.js").AgentAvailability;
+  }> {
+    const results: Array<{
+      did: string;
+      availability: import("./types.js").AgentAvailability;
+    }> = [];
+
+    for (const account of this.accounts.getAllAccounts()) {
+      if (!account.availability?.available) continue;
+
+      if (filters?.capability) {
+        if (!account.availability.capabilities.includes(filters.capability))
+          continue;
+      }
+      if (filters?.domain) {
+        if (!account.availability.preferredDomains.includes(filters.domain))
+          continue;
+      }
+
+      results.push({ did: account.did, availability: account.availability });
+    }
+
+    return results;
+  }
+
+  /**
+   * Get agent's aggregate reputation across all projects
+   */
+  getAgentCrossProjectReputation(did: string): {
+    projectsContributed: number;
+    totalTasksCompleted: number;
+    totalEarned: bigint;
+    roleBreakdown: Record<string, number>;
+    topDomains: Array<{ domain: string; projectCount: number }>;
+    projectsByPhase: Record<string, number>;
+  } {
+    const allProjects = this.projects.exportProjects();
+    const contributedProjects = allProjects.filter((p) =>
+      p.contributors.some((c) => c.did === did),
+    );
+
+    let totalTasksCompleted = 0;
+    let totalEarned = 0n;
+    const roleBreakdown: Record<string, number> = {};
+    const projectsByPhase: Record<string, number> = {};
+    const domainCounts = new Map<string, number>();
+
+    for (const project of contributedProjects) {
+      const contributor = project.contributors.find((c) => c.did === did)!;
+      totalTasksCompleted += contributor.tasksCompleted;
+      totalEarned += contributor.totalEarned;
+
+      // Count by role
+      roleBreakdown[contributor.role] =
+        (roleBreakdown[contributor.role] || 0) + 1;
+
+      // Count by phase
+      projectsByPhase[project.phase] =
+        (projectsByPhase[project.phase] || 0) + 1;
+
+      // Count by domain
+      const count = domainCounts.get(project.knowledgeDomain) || 0;
+      domainCounts.set(project.knowledgeDomain, count + 1);
+    }
+
+    const topDomains = Array.from(domainCounts.entries())
+      .map(([domain, projectCount]) => ({ domain, projectCount }))
+      .sort((a, b) => b.projectCount - a.projectCount)
+      .slice(0, 5);
+
+    return {
+      projectsContributed: contributedProjects.length,
+      totalTasksCompleted,
+      totalEarned,
+      roleBreakdown,
+      topDomains,
+      projectsByPhase,
+    };
   }
 
   // ============ Governance Access ============
@@ -1341,6 +1763,69 @@ export class StateManager {
     this.governance.addDomainToTree(domain);
   }
 
+  getAllDomainProposals(): DomainProposal[] {
+    return this.governance.getAllDomainProposals();
+  }
+
+  updateDomainInTree(
+    domainId: string,
+    updates: Partial<OntologicalDomain>,
+  ): void {
+    this.governance.updateDomainInTree(domainId, updates);
+  }
+
+  // ============ Disbursement Access ============
+
+  addDisbursement(proposal: DisbursementProposal): void {
+    this.governance.addDisbursement(proposal);
+  }
+
+  getDisbursement(id: string): DisbursementProposal | undefined {
+    return this.governance.getDisbursement(id);
+  }
+
+  updateDisbursement(id: string, updated: DisbursementProposal): void {
+    this.governance.updateDisbursement(id, updated);
+  }
+
+  getDisbursementsByStage(stage: DisbursementStage): DisbursementProposal[] {
+    return this.governance.getDisbursementsByStage(stage);
+  }
+
+  getDisbursementsByTreasury(fund: TreasuryFund): DisbursementProposal[] {
+    return this.governance.getDisbursementsByTreasury(fund);
+  }
+
+  getNextDisbursementNumber(): number {
+    return this.governance.getNextDisbursementNumber();
+  }
+
+  // ============ Expense Record Access ============
+
+  addExpenseRecord(record: ExpenseRecord): void {
+    this.governance.addExpenseRecord(record);
+  }
+
+  getExpenseRecord(id: string): ExpenseRecord | undefined {
+    return this.governance.getExpenseRecord(id);
+  }
+
+  getExpensesByCategory(category: DisbursementCategory): ExpenseRecord[] {
+    return this.governance.getExpensesByCategory(category);
+  }
+
+  getExpensesByTreasury(fund: TreasuryFund): ExpenseRecord[] {
+    return this.governance.getExpensesByTreasury(fund);
+  }
+
+  getTotalExpenses(fund?: TreasuryFund): bigint {
+    return this.governance.getTotalExpenses(fund);
+  }
+
+  getNextExpenseNumber(): number {
+    return this.governance.getNextExpenseNumber();
+  }
+
   // ============ Atomic Operations ============
 
   /**
@@ -1367,7 +1852,11 @@ export class StateManager {
       paymentChannels: this.paymentChannels.checkpoint() as any, // PaymentChannelStateTree uses checkpoint/restore
       projects: this.projects.clone(),
       services: this.services.clone(),
+      tasks: this.tasks.clone(),
+      seeds: this.seeds.clone(),
       governance: this.governance.clone(),
+      schedules: this.schedules.exportState(),
+      subscriptions: cloneSubscriptions(this.subscriptions),
       version: this.version,
     };
   }
@@ -1414,7 +1903,11 @@ export class StateManager {
     this.paymentChannels.restore(this.checkpoint.paymentChannels as any);
     this.projects = this.checkpoint.projects;
     this.services = this.checkpoint.services;
+    this.tasks = this.checkpoint.tasks;
+    this.seeds = this.checkpoint.seeds;
     this.governance = this.checkpoint.governance;
+    this.schedules.importState(this.checkpoint.schedules);
+    this.subscriptions = this.checkpoint.subscriptions;
     this.version = this.checkpoint.version;
     this.checkpoint = null;
   }
@@ -1473,7 +1966,15 @@ export class StateManager {
    */
   generateStateProof(
     queries: Array<{
-      tree: "account" | "validator" | "knowledge" | "research" | "evidence";
+      tree:
+        | "account"
+        | "validator"
+        | "knowledge"
+        | "research"
+        | "evidence"
+        | "project"
+        | "service"
+        | "task";
       key: string;
     }>,
   ): StateProof {
@@ -1500,6 +2001,15 @@ export class StateManager {
           proof = this.evidence.getEvidenceProof(
             query.key,
           ) as unknown as typeof proof;
+          break;
+        case "project":
+          proof = this.projects.proveProject(query.key);
+          break;
+        case "service":
+          proof = this.services.proveService(query.key);
+          break;
+        case "task":
+          proof = this.tasks.proveTask(query.key);
           break;
       }
 
@@ -1631,7 +2141,284 @@ export class StateManager {
   }
 
   /**
+   * Persist an entire block's state atomically.
+   * Single LevelDB batch containing all 12 state trees + state roots + latest pointer.
+   * This replaces the separate persistStateTrees() + persistStateRoots() calls
+   * to prevent crash-inconsistency between state data and metadata.
+   */
+  async persistBlock(blockNumber: bigint): Promise<number> {
+    if (!this.store) {
+      return 0;
+    }
+
+    let count = 0;
+    const batch = this.store.batch();
+
+    // ---- 1. Accounts ----
+    for (const account of this.accounts.getAllAccounts()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.ACCOUNTS,
+        new TextEncoder().encode(account.did),
+      );
+      batch.put(key, encodeValue(account, "json"));
+      count++;
+    }
+
+    // ---- 2. Validators (ALL, not just active) ----
+    for (const validator of this.validators.exportValidators()) {
+      const keyHex =
+        typeof validator.publicKey === "string"
+          ? validator.publicKey
+          : Buffer.from(validator.publicKey).toString("hex");
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.VALIDATORS,
+        new TextEncoder().encode(keyHex),
+      );
+      batch.put(key, encodeValue(validator, "json"));
+      count++;
+    }
+
+    // ---- 3. Facts ----
+    const allFacts = [
+      ...this.knowledge.getFactsByStatus("active"),
+      ...this.knowledge.getFactsByStatus("challenged"),
+      ...this.knowledge.getFactsByStatus("superseded"),
+      ...this.knowledge.getFactsByStatus("revoked"),
+      ...this.knowledge.getFactsByStatus("expired"),
+    ];
+    for (const fact of allFacts) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.KNOWLEDGE,
+        new TextEncoder().encode(fact.id),
+      );
+      batch.put(key, encodeValue(fact, "json"));
+      count++;
+    }
+
+    // ---- 4. Fact references (knowledge graph edges) ----
+    for (const ref of this.knowledge.getAllReferences()) {
+      const refKey = namespacedKey(
+        STORAGE_NAMESPACES.REFERENCES,
+        new TextEncoder().encode(`${ref.fromFactId}:${ref.toFactId}`),
+      );
+      batch.put(refKey, encodeValue(ref, "json"));
+      count++;
+    }
+
+    // ---- 5. Claims ----
+    for (const claim of this.claims.exportClaims()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.CLAIMS,
+        new TextEncoder().encode(claim.id),
+      );
+      batch.put(key, encodeValue(claim, "json"));
+      count++;
+    }
+
+    // ---- 6. Payment channels ----
+    for (const [channelId, channel] of this.paymentChannels.checkpoint()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.PAYMENT_CHANNELS,
+        new TextEncoder().encode(channelId),
+      );
+      batch.put(key, encodeValue(channel, "json"));
+      count++;
+    }
+
+    // ---- 7. Disputes ----
+    for (const dispute of this.disputes.exportDisputes()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.DISPUTES,
+        new TextEncoder().encode(dispute.id),
+      );
+      batch.put(key, encodeValue(dispute, "json"));
+      count++;
+    }
+
+    // ---- 8. Evidence ----
+    for (const evidence of this.evidence.exportEvidence()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.EVIDENCE,
+        new TextEncoder().encode(evidence.id),
+      );
+      batch.put(key, encodeValue(evidence, "json"));
+      count++;
+    }
+
+    // ---- 9. Vesting ----
+    for (const vesting of this.vesting.exportVestings()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.VESTING,
+        new TextEncoder().encode(vesting.id),
+      );
+      batch.put(key, encodeValue(vesting, "json"));
+      count++;
+    }
+
+    // ---- 10. Research ----
+    for (const research of this.research.exportResearch()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.RESEARCH,
+        new TextEncoder().encode(research.id),
+      );
+      batch.put(key, encodeValue(research, "json"));
+      count++;
+    }
+    for (const bounty of this.research.exportBounties()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.RESEARCH,
+        new TextEncoder().encode(`bounty:${bounty.id}`),
+      );
+      batch.put(key, encodeValue(bounty, "json"));
+      count++;
+    }
+
+    // ---- 11. Projects ----
+    for (const project of this.projects.exportProjects()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.PROJECTS,
+        new TextEncoder().encode(project.id),
+      );
+      batch.put(key, encodeValue(project, "json"));
+      count++;
+    }
+
+    // ---- 12. Tasks ----
+    for (const task of this.tasks.exportTasks()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.TASKS,
+        new TextEncoder().encode(task.id),
+      );
+      batch.put(key, encodeValue(task, "json"));
+      count++;
+    }
+
+    // ---- 13. Services ----
+    for (const service of this.services.exportServices()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.SERVICES,
+        new TextEncoder().encode(service.id),
+      );
+      batch.put(key, encodeValue(service, "json"));
+      count++;
+    }
+
+    // ---- 14. Subscriptions ----
+    for (const [serviceId, callerMap] of this.subscriptions) {
+      for (const [callerDid, expiresAt] of callerMap) {
+        const subKey = `${serviceId}:${callerDid}`;
+        const key = namespacedKey(
+          STORAGE_NAMESPACES.SUBSCRIPTIONS,
+          new TextEncoder().encode(subKey),
+        );
+        batch.put(
+          key,
+          encodeValue(
+            { serviceId, callerDid, expiresAt: expiresAt.toString() },
+            "json",
+          ),
+        );
+        count++;
+      }
+    }
+
+    // ---- 15. Seeds (Tree of Life) ----
+    for (const seed of this.seeds.exportSeeds()) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.SEEDS,
+        new TextEncoder().encode(seed.id),
+      );
+      batch.put(key, encodeValue(seed, "json"));
+      count++;
+    }
+
+    // ---- 16. Schedules (DMSS) ----
+    const scheduleState = this.schedules.exportState();
+    for (const [id, schedule] of scheduleState.processes) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.SCHEDULES,
+        new TextEncoder().encode(id),
+      );
+      batch.put(key, encodeValue(schedule, "json"));
+      count++;
+    }
+
+    // ---- 16. Governance ----
+    const govState = this.governance.exportState();
+    for (const lip of govState.lips) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.GOVERNANCE,
+        new TextEncoder().encode(`lip:${lip.id}`),
+      );
+      batch.put(key, encodeValue(lip, "json"));
+      count++;
+    }
+    for (const vote of govState.votes) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.GOVERNANCE,
+        new TextEncoder().encode(`vote:${vote.lipId}:${vote.voter}`),
+      );
+      batch.put(key, encodeValue(vote, "json"));
+      count++;
+    }
+    for (const proposal of govState.domainProposals) {
+      const key = namespacedKey(
+        STORAGE_NAMESPACES.GOVERNANCE,
+        new TextEncoder().encode(`domain:${proposal.id}`),
+      );
+      batch.put(key, encodeValue(proposal, "json"));
+      count++;
+    }
+
+    // ---- 14. State roots + metadata (in same batch = atomic) ----
+    const components = this.getStateRootComponents();
+    const stateRoot = this.computeStateRoot(components);
+
+    const persistedState: PersistedStateRoots = {
+      blockNumber: blockNumber.toString(),
+      stateRoot,
+      accountRoot: components.accountRoot,
+      validatorRoot: components.validatorRoot,
+      knowledgeRoot: components.knowledgeRoot,
+      claimRoot: components.claimRoot ?? "",
+      researchRoot: components.researchRoot ?? "",
+      evidenceRoot: components.evidenceRoot ?? "",
+      disputeRoot: components.disputeRoot ?? "",
+      vestingRoot: components.vestingRoot ?? "",
+      paymentChannelRoot: components.paymentChannelRoot ?? "",
+      governanceRoot: components.governanceRoot ?? "",
+      projectRoot: components.projectRoot ?? "",
+      serviceRoot: components.serviceRoot ?? "",
+      taskRoot: components.taskRoot ?? "",
+      scheduleRoot: components.scheduleRoot ?? "",
+      version: components.version.toString(),
+      timestamp: Date.now(),
+    };
+
+    const stateKey = namespacedKey(
+      STORAGE_NAMESPACES.CONFIG,
+      new TextEncoder().encode(`state:${blockNumber}`),
+    );
+    batch.put(stateKey, encodeValue(persistedState, "json"));
+
+    // ---- 16. Latest block pointer ----
+    const latestKey = namespacedKey(
+      STORAGE_NAMESPACES.CONFIG,
+      new TextEncoder().encode("latest"),
+    );
+    batch.put(
+      latestKey,
+      encodeValue({ blockNumber: blockNumber.toString() }, "json"),
+    );
+
+    // Single atomic write for everything
+    await batch.write();
+    return count;
+  }
+
+  /**
    * Persist state roots and metadata for a block
+   * @deprecated Use persistBlock() instead for atomic writes
    */
   async persistStateRoots(blockNumber: bigint): Promise<void> {
     if (!this.store) {
@@ -1648,10 +2435,17 @@ export class StateManager {
       accountRoot: components.accountRoot,
       validatorRoot: components.validatorRoot,
       knowledgeRoot: components.knowledgeRoot,
+      claimRoot: components.claimRoot ?? "",
       researchRoot: components.researchRoot ?? "",
       evidenceRoot: components.evidenceRoot ?? "",
       disputeRoot: components.disputeRoot ?? "",
       vestingRoot: components.vestingRoot ?? "",
+      paymentChannelRoot: components.paymentChannelRoot ?? "",
+      governanceRoot: components.governanceRoot ?? "",
+      projectRoot: components.projectRoot ?? "",
+      serviceRoot: components.serviceRoot ?? "",
+      taskRoot: components.taskRoot ?? "",
+      scheduleRoot: components.scheduleRoot ?? "",
       version: components.version.toString(),
       timestamp: Date.now(),
     };
@@ -1705,10 +2499,17 @@ export class StateManager {
       accountRoot: persisted.accountRoot,
       validatorRoot: persisted.validatorRoot,
       knowledgeRoot: persisted.knowledgeRoot,
+      claimRoot: persisted.claimRoot || undefined,
       researchRoot: persisted.researchRoot || undefined,
       evidenceRoot: persisted.evidenceRoot || undefined,
       disputeRoot: persisted.disputeRoot || undefined,
       vestingRoot: persisted.vestingRoot || undefined,
+      paymentChannelRoot: persisted.paymentChannelRoot || undefined,
+      governanceRoot: persisted.governanceRoot || undefined,
+      projectRoot: persisted.projectRoot || undefined,
+      serviceRoot: persisted.serviceRoot || undefined,
+      taskRoot: persisted.taskRoot || undefined,
+      scheduleRoot: persisted.scheduleRoot || undefined,
       version: BigInt(persisted.version),
     };
   }
@@ -1834,21 +2635,33 @@ export class StateManager {
   }
 
   /**
-   * Load state trees from storage
+   * Load all state trees from storage.
+   * Restores all 12 state types from their respective namespaces.
    */
   async loadStateTrees(): Promise<void> {
     if (!this.store) {
       return;
     }
 
-    // Load accounts
-    const accountPrefix = STORAGE_NAMESPACES.ACCOUNTS;
-    const accountPrefixEnd = new Uint8Array([accountPrefix[0] + 1]);
+    const store = this.store;
 
-    for await (const { key: _accountKey, value } of this.store.iterator({
-      gte: accountPrefix,
-      lt: accountPrefixEnd,
-    })) {
+    // Helper to iterate a namespace
+    async function* iterateNamespace(ns: Uint8Array) {
+      const nsEnd = new Uint8Array([ns[0] + 1]);
+      for await (const entry of store.iterator({ gte: ns, lt: nsEnd })) {
+        yield entry;
+      }
+    }
+
+    // Helper to extract key string from namespaced key
+    function extractKeyStr(ns: Uint8Array, fullKey: Uint8Array): string {
+      return new TextDecoder().decode(fullKey.slice(ns.length));
+    }
+
+    // ---- 1. Accounts ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.ACCOUNTS,
+    )) {
       const account = decodeValue<AccountState>(value, "json");
       if (!this.accounts.exists(account.did)) {
         this.accounts.createAccount(
@@ -1860,14 +2673,10 @@ export class StateManager {
       this.accounts.updateAccount(account.did, account);
     }
 
-    // Load validators
-    const validatorPrefix = STORAGE_NAMESPACES.VALIDATORS;
-    const validatorPrefixEnd = new Uint8Array([validatorPrefix[0] + 1]);
-
-    for await (const { key: _validatorKey, value } of this.store.iterator({
-      gte: validatorPrefix,
-      lt: validatorPrefixEnd,
-    })) {
+    // ---- 2. Validators ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.VALIDATORS,
+    )) {
       const validator = decodeValue<ValidatorState>(value, "json");
       this.validators.registerValidator(
         validator.publicKey,
@@ -1877,34 +2686,151 @@ export class StateManager {
       );
     }
 
-    // Load facts
-    const factPrefix = STORAGE_NAMESPACES.KNOWLEDGE;
-    const factPrefixEnd = new Uint8Array([factPrefix[0] + 1]);
-
-    for await (const { key: _factKey, value } of this.store.iterator({
-      gte: factPrefix,
-      lt: factPrefixEnd,
-    })) {
+    // ---- 3. Facts ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.KNOWLEDGE,
+    )) {
       const fact = decodeValue<FactState>(value, "json");
       this.knowledge.addFact(fact);
     }
 
-    // Load fact references (knowledge graph edges)
-    const refPrefix = STORAGE_NAMESPACES.REFERENCES;
-    const refPrefixEnd = new Uint8Array([refPrefix[0] + 1]);
-
-    for await (const { key: _refKey, value } of this.store.iterator({
-      gte: refPrefix,
-      lt: refPrefixEnd,
-    })) {
+    // ---- 4. Fact references ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.REFERENCES,
+    )) {
       const ref = decodeValue<FactReference>(value, "json");
-      // Only restore references whose facts exist (defensive)
       if (
         this.knowledge.hasFact(ref.fromFactId) &&
         this.knowledge.hasFact(ref.toFactId)
       ) {
         this.knowledge.addReference(ref);
+      } else {
+        console.warn(
+          `[StateManager] Orphaned reference ${ref.fromFactId} -> ${ref.toFactId} (missing fact)`,
+        );
       }
+    }
+
+    // ---- 5. Claims ----
+    for await (const { value } of iterateNamespace(STORAGE_NAMESPACES.CLAIMS)) {
+      const claim = decodeValue<ClaimState>(value, "json");
+      this.claims.addClaim(claim);
+    }
+
+    // ---- 6. Payment channels ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.PAYMENT_CHANNELS,
+    )) {
+      const channel = decodeValue<PaymentChannelState>(value, "json");
+      this.paymentChannels.addChannel(channel);
+    }
+
+    // ---- 7. Disputes ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.DISPUTES,
+    )) {
+      const dispute = decodeValue<Dispute>(value, "json");
+      this.disputes.restoreDispute(dispute);
+    }
+
+    // ---- 8. Evidence ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.EVIDENCE,
+    )) {
+      const evidence = decodeValue<Evidence>(value, "json");
+      this.evidence.restoreEvidence(evidence);
+    }
+
+    // ---- 9. Vesting ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.VESTING,
+    )) {
+      const vesting = decodeValue<RewardVesting>(value, "json");
+      this.vesting.restoreVesting(vesting);
+    }
+
+    // ---- 10. Research + Bounties ----
+    for await (const { key, value } of iterateNamespace(
+      STORAGE_NAMESPACES.RESEARCH,
+    )) {
+      const keyStr = extractKeyStr(STORAGE_NAMESPACES.RESEARCH, key);
+      if (keyStr.startsWith("bounty:")) {
+        const bounty = decodeValue<BountyState>(value, "json");
+        this.research.addBounty(bounty);
+      } else {
+        const research = decodeValue<ResearchState>(value, "json");
+        this.research.addResearch(research);
+      }
+    }
+
+    // ---- 11. Projects ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.PROJECTS,
+    )) {
+      const project = decodeValue<
+        import("../core/tree/types.js").ProductProject
+      >(value, "json");
+      this.projects.createProject(project);
+    }
+
+    // ---- 12. Tasks ----
+    for await (const { value } of iterateNamespace(STORAGE_NAMESPACES.TASKS)) {
+      const task = decodeValue<import("../core/tree/types.js").ProjectTask>(
+        value,
+        "json",
+      );
+      this.tasks.createTask(task);
+    }
+
+    // ---- 13. Services ----
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.SERVICES,
+    )) {
+      const service = decodeValue<import("../core/tree/types.js").ServiceLeaf>(
+        value,
+        "json",
+      );
+      this.services.createService(service);
+    }
+
+    // ---- 13b. Seeds ----
+    for await (const { value } of iterateNamespace(STORAGE_NAMESPACES.SEEDS)) {
+      const seed = decodeValue<import("../core/tree/types.js").OpportunitySeed>(
+        value,
+        "json",
+      );
+      this.seeds.addSeed(seed);
+    }
+
+    // ---- 14. Governance ----
+    const govLips: import("../governance/proposals/types.js").LIP[] = [];
+    const govVotes: import("../governance/voting/quadratic.js").QuadraticVote[] =
+      [];
+    const govDomainProposals: import("../core/knowledge/ontology/domain_proposal.js").DomainProposal[] =
+      [];
+
+    for await (const { key, value } of iterateNamespace(
+      STORAGE_NAMESPACES.GOVERNANCE,
+    )) {
+      const keyStr = extractKeyStr(STORAGE_NAMESPACES.GOVERNANCE, key);
+      if (keyStr.startsWith("lip:")) {
+        govLips.push(decodeValue(value, "json"));
+      } else if (keyStr.startsWith("vote:")) {
+        govVotes.push(decodeValue(value, "json"));
+      } else if (keyStr.startsWith("domain:")) {
+        govDomainProposals.push(decodeValue(value, "json"));
+      }
+    }
+    if (
+      govLips.length > 0 ||
+      govVotes.length > 0 ||
+      govDomainProposals.length > 0
+    ) {
+      this.governance.importState({
+        lips: govLips,
+        votes: govVotes,
+        domainProposals: govDomainProposals,
+      });
     }
   }
 
@@ -1972,10 +2898,17 @@ export interface PersistedStateRoots {
   accountRoot: string;
   validatorRoot: string;
   knowledgeRoot: string;
+  claimRoot: string;
   researchRoot: string;
   evidenceRoot: string;
   disputeRoot: string;
   vestingRoot: string;
+  paymentChannelRoot: string;
+  governanceRoot: string;
+  projectRoot: string;
+  serviceRoot: string;
+  taskRoot: string;
+  scheduleRoot: string;
   version: string;
   timestamp: number;
 }
@@ -2022,6 +2955,21 @@ export interface StateStats {
     pendingArchiveRequests: number;
     chainlinkFeeds: number;
   };
+}
+
+// ============ Helpers ============
+
+/**
+ * Deep-clone the subscriptions Map<serviceId, Map<callerDid, expiresAt>>.
+ */
+function cloneSubscriptions(
+  src: Map<string, Map<string, bigint>>,
+): Map<string, Map<string, bigint>> {
+  const dst = new Map<string, Map<string, bigint>>();
+  for (const [serviceId, callerMap] of src) {
+    dst.set(serviceId, new Map(callerMap));
+  }
+  return dst;
 }
 
 // ============ Factory Functions ============

@@ -387,8 +387,10 @@ export class TestNetwork extends EventEmitter {
 
     return new Promise((resolve) => {
       const checkInterval = setInterval(async () => {
-        // Check if round completed
-        const fact = this.state?.getFact(claimId);
+        // Check if round completed (fact ID may be claimId or "fact:claimId")
+        const fact =
+          this.state?.getFact(claimId) ??
+          this.state?.getFact(`fact:${claimId}`);
         if (fact) {
           clearInterval(checkInterval);
           resolve("accepted");
@@ -712,7 +714,7 @@ export class StateAssertions {
    */
   factExists(factId: string): void {
     const state = this.network.getState();
-    const fact = state.getFact(factId);
+    const fact = state.getFact(factId) ?? state.getFact(`fact:${factId}`);
 
     if (!fact) {
       throw new AssertionError(`Fact not found: ${factId}`);
@@ -724,7 +726,7 @@ export class StateAssertions {
    */
   factConfidenceAtLeast(factId: string, minConfidence: number): void {
     const state = this.network.getState();
-    const fact = state.getFact(factId);
+    const fact = state.getFact(factId) ?? state.getFact(`fact:${factId}`);
 
     if (!fact) {
       throw new AssertionError(`Fact not found: ${factId}`);

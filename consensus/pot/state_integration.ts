@@ -445,105 +445,54 @@ export class StateIntegrationImpl implements StateIntegration {
   }
 
   /**
-   * GAP-004 FIX: Apply verification result to state
+   * Apply verification result to state.
    *
-   * Note: Each executeTransaction call handles its own atomic transaction,
-   * so we don't wrap in an outer transaction to avoid nesting issues.
+   * Routes through completeClaimVerification() which uses the full
+   * claim_complete_verification transaction handler. This ensures:
+   * - Facts are created with full metadata (domain, stratum, claim text)
+   * - Claim references are wired into knowledge graph edges
+   * - Submitter stake is properly returned/slashed
+   * - Rewards and slashes are distributed atomically
+   * - Cache hooks receive correct domain information
    */
   async applyVerificationResult(
     result: VerificationResult,
     blockNumber: bigint,
   ): Promise<void> {
-    // 1. Distribute rewards to correct verifiers
-    for (const [validatorKey, reward] of result.rewards) {
-      const validator = this.stateManager.getValidator(
-        validatorKey as PublicKey,
-      );
-      if (validator) {
-        // Add reward to validator's account balance
-        const account = this.stateManager.getAccount(validator.did);
-        if (account) {
-          // Create reward transaction
-          const rewardTx: Transaction = {
-            type: "verification_reward",
-            sender: "system" as any,
-            nonce: 0n,
-            fee: 0n,
-            payload: {
-              type: "verification_reward",
-              recipient: validator.did,
-              amount: reward,
-              roundId: result.claimId,
-            },
-            signature: "" as any,
-          };
-          await executeTransaction(
-            this.stateManager,
-            rewardTx,
-            blockNumber,
-            this.consensusParams,
-          );
-        }
-      }
+    // Ensure claim exists in state before completing verification.
+    // The engine's submitClaim() creates rounds without a state-layer claim_submit,
+    // so the claim may not exist in the StateManager. Bootstrap it if missing.
+    const existingClaim = this.stateManager.getClaim(result.claimId);
+    if (!existingClaim) {
+      this.stateManager.addClaim({
+        id: result.claimId,
+        claim: result.fact?.claim ?? result.claimId,
+        claimType: "empirical",
+        domain: result.fact?.domain ?? "unknown",
+        stratum: (result.fact as any)?.stratum ?? "physical",
+        submitter: "system",
+        stake: 0n,
+        submittedAt: blockNumber,
+        references: [],
+        status: "verifying",
+        statusChangedAt: blockNumber,
+      });
     }
 
-    // 2. Apply slashes to incorrect verifiers
-    for (const [validatorKey, slashAmount] of result.slashes) {
-      const slashTx: Transaction = {
-        type: "slash_validator",
-        sender: "system" as any,
-        nonce: 0n,
-        fee: 0n,
-        payload: {
-          type: "slash_validator",
-          validator: validatorKey,
-          amount: slashAmount,
-          reason: "verification_failure",
-        },
-        signature: "" as any,
-      };
-      await executeTransaction(
-        this.stateManager,
-        slashTx,
-        blockNumber,
-        this.consensusParams,
-      );
-    }
+    // Convert Map entries to Arrays for the transaction payload
+    const rewards = Array.from(result.rewards.entries());
+    const slashes = Array.from(result.slashes.entries());
 
-    // 3. If accepted, create fact in knowledge layer
-    if (result.outcome === "accepted") {
-      const addFactTx: Transaction = {
-        type: "add_fact",
-        sender: "system" as any,
-        nonce: 0n,
-        fee: 0n,
-        payload: {
-          type: "add_fact",
-          factId: result.claimId,
-          confidence: result.finalConfidence,
-          verifierCount: result.participatingValidators,
-          verifiedAtBlock: result.recordedAt,
-        },
-        signature: "" as any,
-      };
-      await executeTransaction(
-        this.stateManager,
-        addFactTx,
-        blockNumber,
-        this.consensusParams,
-      );
-
-      // Notify cache hooks of new fact
-      // Note: domainId would come from the claim data in a full implementation
-      const domainId = (result as any).domain || "unknown";
-      this.notifyFactIndexed(
-        result.claimId,
-        domainId,
-        result.finalConfidence,
-        blockNumber,
-      );
-      this.notifyDomainUpdated(domainId);
-    }
+    await this.completeClaimVerification(
+      result.claimId,
+      result.claimId, // roundId — used for tracking, not consumed by handler logic
+      result.outcome,
+      result.finalConfidence,
+      result.participatingValidators,
+      rewards,
+      slashes,
+      blockNumber,
+    );
   }
 
   /**

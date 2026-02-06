@@ -35,6 +35,11 @@ import {
   type LipAdvanceStagePayload,
   type LipWithdrawPayload,
   type VoteCastPayload,
+  type DisbursementSubmitPayload,
+  type DisbursementStakePayload,
+  type DisbursementAdvanceStagePayload,
+  type DisbursementExecutePayload,
+  type DisbursementCancelPayload,
   StateError,
 } from "./types.js";
 import {
@@ -55,6 +60,23 @@ import {
   calculateVoteCost,
   type VoteDirection,
 } from "../governance/voting/quadratic.js";
+import {
+  createDisbursement as createDisbursementProposal,
+  transitionToVoting as disbursementTransitionToVoting,
+  transitionFromVoting as disbursementTransitionFromVoting,
+  executeDisbursement as disbursementExecute,
+  cancelDisbursement as disbursementCancel,
+  calculateDisbursementStakeOutcome,
+} from "../governance/treasury/disbursement_lifecycle.js";
+import {
+  type DisbursementCategory,
+  type TreasuryFund,
+  validateDisbursementAmount,
+  treasuryFundToDid,
+  VALID_DISBURSEMENT_CATEGORIES,
+  VALID_TREASURY_FUNDS,
+  type ExpenseRecord,
+} from "../governance/treasury/types.js";
 import type {
   Transaction,
   TransactionType,
@@ -78,6 +100,15 @@ import {
 } from "../core/knowledge/ontology/domain_proposal.js";
 import type { PublicKey } from "../core/crypto/keys.js";
 import { publicKeyToDid } from "../core/agents/identity/did.js";
+
+/**
+ * Resolve sender DID from transaction.
+ * Uses explicit senderDid when present (e.g., from RPC with custom DevNet DIDs),
+ * otherwise derives from public key.
+ */
+function resolveSenderDid(tx: Transaction): string {
+  return (tx as any).senderDid || publicKeyToDid(tx.sender);
+}
 import { generateClaimId } from "./claims.js";
 import {
   generateChannelId,
@@ -246,7 +277,7 @@ export function executeTransaction(
         ));
 
     if (!isSystemTx) {
-      const senderDid = publicKeyToDid(tx.sender);
+      const senderDid = resolveSenderDid(tx);
       const senderNonce = state.getNonce(senderDid);
 
       // First transaction (nonce === 0) triggers automatic bootstrap claim
@@ -276,7 +307,7 @@ export function executeTransaction(
     }
 
     // Record nonce before handler so we can detect if handler incremented it
-    const senderDidForNonce = !isSystemTx ? publicKeyToDid(tx.sender) : "";
+    const senderDidForNonce = !isSystemTx ? resolveSenderDid(tx) : "";
     const nonceBeforeHandler = !isSystemTx
       ? state.getNonce(senderDidForNonce)
       : 0n;
@@ -367,6 +398,42 @@ export function executeTransaction(
       // Governance voting
       case "vote_cast":
         gasUsed = executeVoteCast(state, tx, blockNumber, params);
+        break;
+
+      // Disbursement lifecycle
+      case "disbursement_submit":
+        gasUsed = executeDisbursementSubmit(state, tx, blockNumber, params);
+        break;
+
+      case "disbursement_stake":
+        gasUsed = executeDisbursementStake(state, tx, blockNumber, params);
+        break;
+
+      case "disbursement_advance_stage":
+        gasUsed = executeDisbursementAdvanceStage(
+          state,
+          tx,
+          blockNumber,
+          params,
+        );
+        break;
+
+      case "disbursement_execute":
+        gasUsed = executeDisbursementExecuteHandler(
+          state,
+          tx,
+          blockNumber,
+          params,
+        );
+        break;
+
+      case "disbursement_cancel":
+        gasUsed = executeDisbursementCancelHandler(
+          state,
+          tx,
+          blockNumber,
+          params,
+        );
         break;
 
       // Research transactions (Protocol Research Repository)
@@ -461,6 +528,19 @@ export function executeTransaction(
         gasUsed = executeDomainFinalize(state, tx, blockNumber, params);
         break;
 
+      case "domain_governance_approve":
+        gasUsed = executeDomainGovernanceApprove(
+          state,
+          tx,
+          blockNumber,
+          params,
+        );
+        break;
+
+      case "domain_deprecate":
+        gasUsed = executeDomainDeprecate(state, tx, blockNumber);
+        break;
+
       // System transactions (used by consensus layer, no fee)
       case "add_fact":
         gasUsed = executeAddFact(state, tx, blockNumber);
@@ -533,12 +613,85 @@ export function executeTransaction(
         gasUsed = executeCallService(state, tx, blockNumber);
         break;
 
+      case "subscribe_service":
+        gasUsed = executeSubscribeService(state, tx, blockNumber);
+        break;
+
       case "pause_service":
         gasUsed = executePauseService(state, tx);
         break;
 
+      case "resume_service":
+        gasUsed = executeResumeService(state, tx);
+        break;
+
       case "retire_service":
         gasUsed = executeRetireService(state, tx);
+        break;
+
+      // Tree of Life lifecycle transitions
+      case "start_development":
+        gasUsed = executeStartDevelopment(state, tx, blockNumber);
+        break;
+
+      case "complete_project":
+        gasUsed = executeCompleteProject(state, tx, blockNumber);
+        break;
+
+      case "begin_seeding":
+        gasUsed = executeBeginSeeding(state, tx, blockNumber);
+        break;
+
+      case "pause_project":
+        gasUsed = executePauseProject(state, tx, blockNumber);
+        break;
+
+      case "resume_project":
+        gasUsed = executeResumeProject(state, tx, blockNumber);
+        break;
+
+      case "abandon_project":
+        gasUsed = executeAbandonProject(state, tx, blockNumber);
+        break;
+
+      case "add_contributor":
+        gasUsed = executeAddContributor(state, tx, blockNumber);
+        break;
+
+      case "add_task":
+        gasUsed = executeAddTask(state, tx, blockNumber);
+        break;
+
+      case "start_work":
+        gasUsed = executeStartWork(state, tx, blockNumber);
+        break;
+
+      case "reject_deliverable":
+        gasUsed = executeRejectDeliverable(state, tx, blockNumber);
+        break;
+
+      case "reopen_task":
+        gasUsed = executeReopenTask(state, tx, blockNumber);
+        break;
+
+      case "detect_opportunity":
+        gasUsed = executeDetectOpportunity(state, tx, blockNumber);
+        break;
+
+      case "claim_opportunity":
+        gasUsed = executeClaimOpportunity(state, tx, blockNumber);
+        break;
+
+      case "apply_to_project":
+        gasUsed = executeApplyToProject(state, tx, blockNumber);
+        break;
+
+      case "review_application":
+        gasUsed = executeReviewApplication(state, tx, blockNumber);
+        break;
+
+      case "set_availability":
+        gasUsed = executeSetAvailability(state, tx, blockNumber);
         break;
 
       default:
@@ -563,7 +716,7 @@ export function executeTransaction(
     // Skip fee handling for system transactions (isSystemTx defined above for bootstrap claim check)
     if (!isSystemTx) {
       // Deduct fee from sender
-      const senderDid = publicKeyToDid(tx.sender);
+      const senderDid = resolveSenderDid(tx);
       const currentBalance = state.getBalance(senderDid);
       if (currentBalance < tx.fee) {
         state.rollbackTransaction();
@@ -634,15 +787,21 @@ function executeTransfer(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as TransferPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
+
+  // Coerce amount to bigint (RPC sends strings)
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
 
   // Validate
-  if (payload.amount <= 0n) {
+  if (amount <= 0n) {
     throw new StateError("Invalid transfer amount", "INVALID_TRANSITION");
   }
 
   // Execute transfer
-  state.transfer(senderDid, payload.to, payload.amount);
+  state.transfer(senderDid, payload.to, amount);
 
   // Increment nonce is handled by transfer
 
@@ -651,7 +810,7 @@ function executeTransfer(
 
 function executeKeyRotation(state: StateManager, tx: Transaction): bigint {
   const payload = tx.payload as unknown as RotateKeyPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Only the account owner can rotate their own key
   if (payload.account !== senderDid) {
@@ -681,20 +840,26 @@ function executeStake(
   params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as StakePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
-  if (payload.amount < params.minValidatorStake) {
+  // Coerce amount to bigint (RPC sends strings)
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
+
+  if (amount < params.minValidatorStake) {
     throw new StateError(
       `Minimum stake is ${params.minValidatorStake}`,
       "INVALID_TRANSITION",
     );
   }
 
-  state.stake(senderDid, payload.amount);
+  state.stake(senderDid, amount);
 
   // If not already a validator, register
   if (!state.isActiveValidator(tx.sender)) {
-    state.registerValidator(tx.sender, senderDid, payload.amount);
+    state.registerValidator(tx.sender, senderDid, amount);
   }
 
   return 50000n; // Staking gas
@@ -706,9 +871,13 @@ function executeUnstake(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as StakePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
 
-  state.unstake(senderDid, payload.amount);
+  state.unstake(senderDid, amount);
 
   return 50000n;
 }
@@ -719,7 +888,11 @@ function executeDelegate(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as DelegatePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
 
   // Validate validator exists
   if (!state.isActiveValidator(payload.validator)) {
@@ -728,7 +901,7 @@ function executeDelegate(
 
   // Transfer from balance to delegation
   const currentBalance = state.getBalance(senderDid);
-  if (currentBalance < payload.amount) {
+  if (currentBalance < amount) {
     throw new StateError(
       "Insufficient balance to delegate",
       "INSUFFICIENT_BALANCE",
@@ -736,10 +909,10 @@ function executeDelegate(
   }
 
   // Deduct from account balance
-  state.transfer(senderDid, "did:lgm:delegation-pool", payload.amount);
+  state.transfer(senderDid, "did:lgm:delegation-pool", amount);
 
   // Add to validator's delegated stake
-  state.delegate(senderDid, payload.validator, payload.amount);
+  state.delegate(senderDid, payload.validator, amount);
 
   return 60000n;
 }
@@ -761,7 +934,11 @@ function executeUndelegate(
   params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as DelegatePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
+  const undelegateAmount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
 
   // 1. Validate validator exists and is active
   if (!state.isActiveValidator(payload.validator)) {
@@ -770,16 +947,16 @@ function executeUndelegate(
 
   // 2. Validate delegation exists and has sufficient amount
   const currentDelegation = state.getDelegation(senderDid, payload.validator);
-  if (!currentDelegation || currentDelegation.amount < payload.amount) {
+  if (!currentDelegation || currentDelegation.amount < undelegateAmount) {
     throw new StateError(
-      `Insufficient delegation: have ${currentDelegation?.amount ?? 0n}, requested ${payload.amount}`,
+      `Insufficient delegation: have ${currentDelegation?.amount ?? 0n}, requested ${undelegateAmount}`,
       "INSUFFICIENT_DELEGATION",
     );
   }
 
   // 3. Reduce active delegation immediately
   // The stake no longer counts toward validator's voting power
-  state.reduceDelegation(senderDid, payload.validator, payload.amount);
+  state.reduceDelegation(senderDid, payload.validator, undelegateAmount);
 
   // 4. Create unbonding entry with timelock
   // Default unbonding period: ~7 days at 2.521s blocks = ~240,000 blocks
@@ -788,14 +965,14 @@ function executeUndelegate(
   const completesAt = currentBlock + unbondingPeriod;
 
   const unbondingId = sha512_256Hex(
-    `unbond:${senderDid}:${payload.validator}:${currentBlock}:${payload.amount}`,
+    `unbond:${senderDid}:${payload.validator}:${currentBlock}:${undelegateAmount}`,
   );
 
   state.addUnbondingEntry({
     id: unbondingId,
     delegator: senderDid,
     validator: payload.validator,
-    amount: payload.amount,
+    amount: undelegateAmount,
     initiatedAt: currentBlock,
     completesAt,
     status: "pending",
@@ -806,7 +983,7 @@ function executeUndelegate(
     unbondingId,
     delegator: senderDid,
     validator: payload.validator,
-    amount: payload.amount.toString(),
+    amount: undelegateAmount.toString(),
     completesAt: completesAt.toString(),
   });
 
@@ -867,7 +1044,7 @@ function executeClaimSubmit(
   params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ClaimSubmitPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // 1. Validate stake meets minimum
   if (payload.stake < params.minClaimStake) {
@@ -897,6 +1074,19 @@ function executeClaimSubmit(
     }
   }
 
+  // 3b. Validate derivedFrom fact IDs exist (if provided)
+  if (payload.derivedFrom) {
+    for (const factId of payload.derivedFrom.factIds) {
+      const parentFact = state.getFact(factId);
+      if (!parentFact || parentFact.status !== "active") {
+        throw new StateError(
+          `Derived-from fact ${factId} not found or inactive`,
+          "INVALID_REFERENCE",
+        );
+      }
+    }
+  }
+
   // 4. Generate claim ID
   const claimId = generateClaimId(payload.claim, senderDid, blockNumber);
 
@@ -916,6 +1106,7 @@ function executeClaimSubmit(
     references: payload.references,
     status: "pending",
     statusChangedAt: blockNumber,
+    derivedFrom: payload.derivedFrom,
     schemaId: payload.schemaId,
   };
 
@@ -977,7 +1168,7 @@ function executeClaimCompleteVerification(
   state: StateManager,
   tx: Transaction,
   blockNumber: bigint,
-  _params: ConsensusParams,
+  params: ConsensusParams,
 ): bigint {
   // System transaction validation
   if (!isSystemTransaction(tx)) {
@@ -1024,19 +1215,91 @@ function executeClaimCompleteVerification(
       status: "active",
     });
 
+    // Wire claim references into knowledge graph edges
+    // Each referenced fact gets a 'supports' edge from the new fact
+    // and has its citation count incremented
+    const citedFactIds = new Set<string>();
+    if (claim.references && claim.references.length > 0) {
+      for (const referencedFactId of claim.references) {
+        if (state.isActiveFact(referencedFactId)) {
+          state.addFactReference({
+            fromFactId: factId,
+            toFactId: referencedFactId,
+            referenceType: "supports",
+            strength: 0.8,
+          });
+          state.incrementFactCitationCount(referencedFactId, blockNumber);
+          citedFactIds.add(referencedFactId);
+        }
+      }
+    }
+
+    // Wire derivedFrom into knowledge graph edges
+    // Creates 'derives_from' edges with inference-type-appropriate strength
+    if (claim.derivedFrom && claim.derivedFrom.factIds.length > 0) {
+      // Inference strength: deductive=0.99, inductive=0.75, abductive=0.6
+      const inferenceStrengths: Record<string, number> = {
+        deductive: 0.99,
+        inductive: 0.75,
+        abductive: 0.6,
+      };
+      const strength =
+        inferenceStrengths[claim.derivedFrom.inferenceType] ?? 0.7;
+
+      for (const parentFactId of claim.derivedFrom.factIds) {
+        if (state.isActiveFact(parentFactId)) {
+          state.addFactReference({
+            fromFactId: factId,
+            toFactId: parentFactId,
+            referenceType: "derives_from",
+            strength,
+          });
+          if (!citedFactIds.has(parentFactId)) {
+            state.incrementFactCitationCount(parentFactId, blockNumber);
+            citedFactIds.add(parentFactId);
+          }
+        }
+      }
+    }
+
+    // Distribute citation rewards to cited facts' submitters
+    // 15% of claimReward split equally among cited facts (KNOWLEDGE_ECONOMICS.md)
+    if (citedFactIds.size > 0) {
+      const CITATION_SHARE = 15n;
+      const citationPool = (params.claimReward * CITATION_SHARE) / 100n;
+      const rewardPerFact = citationPool / BigInt(citedFactIds.size);
+
+      if (rewardPerFact > 0n) {
+        for (const citedFactId of citedFactIds) {
+          state.recordFactCitationReward(citedFactId, rewardPerFact);
+
+          // Transfer reward to the original fact submitter (if known)
+          const citedClaimId = "claim:" + citedFactId.replace("fact:", "");
+          const citedClaim = state.getClaim(citedClaimId);
+          if (citedClaim?.submitter) {
+            state.transfer(FEE_POOL_DID, citedClaim.submitter, rewardPerFact);
+          }
+        }
+      }
+    }
+
     // Update claim with fact reference
     state.updateClaimStatus(payload.claimId, "accepted", blockNumber, {
       resultFactId: factId,
     });
 
     // Return stake to submitter (unstake)
-    state.unstake(claim.submitter, claim.stake);
+    if (claim.stake > 0n) {
+      state.unstake(claim.submitter, claim.stake);
+    }
   } else if (payload.outcome === "rejected") {
     // Slash submitter stake (50%)
     const slashAmount = claim.stake / 2n;
 
     // First unstake the full amount (moves from staked to balance)
-    state.unstake(claim.submitter, claim.stake);
+    if (claim.stake > 0n) {
+      state.unstake(claim.submitter, claim.stake);
+    }
 
     // Then transfer the slashed portion to fee pool
     if (slashAmount > 0n) {
@@ -1051,7 +1314,9 @@ function executeClaimCompleteVerification(
     payload.outcome === "insufficient"
   ) {
     // Return full stake, claim can be resubmitted
-    state.unstake(claim.submitter, claim.stake);
+    if (claim.stake > 0n) {
+      state.unstake(claim.submitter, claim.stake);
+    }
 
     state.updateClaimStatus(payload.claimId, "rejected", blockNumber, {
       rejectionReason:
@@ -1061,10 +1326,15 @@ function executeClaimCompleteVerification(
     });
   }
 
-  // 4. Distribute rewards
+  // 4. Distribute rewards (only if fee pool and recipient accounts exist)
   for (const [validatorDid, reward] of payload.rewards) {
-    // Credit reward to validator
-    state.transfer(FEE_POOL_DID, validatorDid, reward);
+    if (
+      reward > 0n &&
+      state.accountExists(FEE_POOL_DID) &&
+      state.accountExists(validatorDid)
+    ) {
+      state.transfer(FEE_POOL_DID, validatorDid, reward);
+    }
   }
 
   // 5. Apply slashes (validators who didn't reveal)
@@ -1092,7 +1362,7 @@ function executeClaimWithdraw(
   blockNumber: bigint,
 ): bigint {
   const payload = tx.payload as unknown as ClaimWithdrawPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // 1. Get claim
   const claim = state.getClaim(payload.claimId);
@@ -1172,7 +1442,7 @@ function executeChallenge(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as ChallengeFactPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate fact exists and is active
   if (!state.isActiveFact(payload.factId)) {
@@ -1195,7 +1465,7 @@ function executeGovernanceVote(
 ): bigint {
   // Governance voting
   // Requires stake to vote
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
   const account = state.getAccount(senderDid);
 
   if (!account || account.stakedBalance === 0n) {
@@ -1211,7 +1481,7 @@ function executeGovernancePropose(
   _params: ConsensusParams,
 ): bigint {
   // Governance proposals require minimum stake
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
   const account = state.getAccount(senderDid);
 
   const MIN_PROPOSAL_STAKE = 10000n * 10n ** 18n; // 10000 LGM
@@ -1261,7 +1531,7 @@ function executeLipSubmit(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as LipSubmitPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Build governance stats for eligibility check
   const stats = buildGovernanceStats(state, senderDid, blockNumber);
@@ -1317,7 +1587,7 @@ function executeLipStake(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as LipStakePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   const lip = state.getLIP(payload.lipId);
   if (!lip) {
@@ -1433,7 +1703,7 @@ function executeLipAdvanceStage(
           stakeOutcome.slashAmount,
         );
         state.creditBalance(
-          "did:lgm:treasury-foundation",
+          TREASURY.ADDRESSES.FOUNDATION,
           stakeOutcome.slashAmount,
         );
       }
@@ -1462,7 +1732,7 @@ function executeLipWithdraw(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as LipWithdrawPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   const lip = state.getLIP(payload.lipId);
   if (!lip) {
@@ -1483,7 +1753,7 @@ function executeLipWithdraw(
     if (stakeOutcome.slashAmount > 0n) {
       state.deductBalance(lip.stakeHolder as string, stakeOutcome.slashAmount);
       state.creditBalance(
-        "did:lgm:treasury-foundation",
+        TREASURY.ADDRESSES.FOUNDATION,
         stakeOutcome.slashAmount,
       );
     }
@@ -1513,7 +1783,7 @@ function executeVoteCast(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as VoteCastPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   const lip = state.getLIP(payload.lipId);
   if (!lip) {
@@ -1613,6 +1883,361 @@ function buildVoteTally(
   };
 }
 
+// ============ Disbursement Transaction Handlers ============
+
+/**
+ * Submit a new disbursement proposal.
+ * Requires Tier 1 proposer eligibility.
+ */
+function executeDisbursementSubmit(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DisbursementSubmitPayload;
+  const senderDid = resolveSenderDid(tx);
+
+  // Validate category
+  if (
+    !VALID_DISBURSEMENT_CATEGORIES.includes(
+      payload.category as DisbursementCategory,
+    )
+  ) {
+    throw new StateError(
+      `Invalid disbursement category: ${payload.category}`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Validate treasury fund
+  if (!VALID_TREASURY_FUNDS.includes(payload.treasuryFund as TreasuryFund)) {
+    throw new StateError(
+      `Invalid treasury fund: ${payload.treasuryFund}`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Validate amount against treasury cap
+  const treasuryDid = treasuryFundToDid(payload.treasuryFund as TreasuryFund);
+  const treasuryBalance = state.getBalance(treasuryDid);
+  const amountValidation = validateDisbursementAmount(
+    payload.amount,
+    treasuryBalance,
+  );
+  if (!amountValidation.valid) {
+    throw new StateError(amountValidation.error!, "INVALID_TRANSITION");
+  }
+
+  // Create proposal via lifecycle
+  const result = createDisbursementProposal(
+    {
+      title: payload.title,
+      description: payload.description,
+      category: payload.category as DisbursementCategory,
+      treasuryFund: payload.treasuryFund as TreasuryFund,
+      proposer: senderDid as any,
+      recipientDid: payload.recipientDid as any,
+      amount: payload.amount,
+      justification: payload.justification,
+      externalReference: payload.externalReference,
+    },
+    blockNumber,
+    state.getNextDisbursementNumber(),
+  );
+
+  if ("error" in result) {
+    throw new StateError(result.error, "INVALID_TRANSITION");
+  }
+
+  // Store in governance tree
+  state.addDisbursement(result.proposal);
+
+  state.emitEvent("DisbursementSubmitted", {
+    id: result.proposal.id,
+    proposer: senderDid,
+    category: payload.category,
+    treasuryFund: payload.treasuryFund,
+    amount: payload.amount.toString(),
+    recipient: payload.recipientDid,
+  });
+
+  return 150000n;
+}
+
+/**
+ * Stake on a disbursement proposal to advance it from proposed to voting.
+ * Requires DISBURSEMENT_STAKE (2000 LGM).
+ */
+function executeDisbursementStake(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DisbursementStakePayload;
+  const senderDid = resolveSenderDid(tx);
+
+  const proposal = state.getDisbursement(payload.disbursementId);
+  if (!proposal) {
+    throw new StateError(
+      `Disbursement ${payload.disbursementId} not found`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Only proposer or stakeholder can stake
+  if (proposal.proposer !== senderDid && proposal.stakeHolder !== senderDid) {
+    throw new StateError(
+      "Only proposer or stakeholder can stake on disbursement",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Validate balance
+  const balance = state.getBalance(senderDid);
+  if (balance < payload.amount) {
+    throw new StateError(
+      "Insufficient balance for disbursement stake",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Lock the stake
+  state.stake(senderDid, payload.amount);
+
+  // Transition to voting
+  const result = disbursementTransitionToVoting(
+    proposal,
+    payload.amount,
+    blockNumber,
+    senderDid as any,
+  );
+  if (!result.success) {
+    throw new StateError(result.error!, "INVALID_TRANSITION");
+  }
+
+  // Update the proposal
+  state.updateDisbursement(payload.disbursementId, proposal);
+
+  state.emitEvent("DisbursementStaked", {
+    id: payload.disbursementId,
+    staker: senderDid,
+    amount: payload.amount.toString(),
+    newStage: proposal.stage,
+  });
+
+  return 100000n;
+}
+
+/**
+ * Advance a disbursement from voting to approved/rejected based on vote results.
+ * Uses buildVoteTally (same as LIP) + disbursement thresholds.
+ */
+function executeDisbursementAdvanceStage(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DisbursementAdvanceStagePayload;
+
+  const proposal = state.getDisbursement(payload.disbursementId);
+  if (!proposal) {
+    throw new StateError(
+      `Disbursement ${payload.disbursementId} not found`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  if (proposal.stage !== "voting") {
+    throw new StateError(
+      `Cannot advance disbursement from stage: ${proposal.stage}`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Build VoteTally from quadratic votes (reuses LIP voting infrastructure)
+  const votes = state.getVotesForLIP(payload.disbursementId);
+  const tally = buildVoteTally(votes, state);
+
+  const result = disbursementTransitionFromVoting(proposal, tally, blockNumber);
+  if (!result.success) {
+    throw new StateError(result.error!, "INVALID_TRANSITION");
+  }
+
+  // Handle stake return on terminal states (stage may have been mutated by transition)
+  const currentDisbStage = proposal.stage as string;
+  if (currentDisbStage === "rejected") {
+    const stakeOutcome = calculateDisbursementStakeOutcome(
+      proposal,
+      "rejected_normal",
+    );
+    if (proposal.stakedAmount > 0n) {
+      state.unstake(proposal.stakeHolder as string, proposal.stakedAmount);
+      if (stakeOutcome.slashAmount > 0n) {
+        state.deductBalance(
+          proposal.stakeHolder as string,
+          stakeOutcome.slashAmount,
+        );
+        state.creditBalance(
+          treasuryFundToDid("FOUNDATION"),
+          stakeOutcome.slashAmount,
+        );
+      }
+    }
+  }
+
+  // Update the proposal
+  state.updateDisbursement(payload.disbursementId, proposal);
+
+  state.emitEvent("DisbursementAdvanced", {
+    id: payload.disbursementId,
+    newStage: proposal.stage,
+    reason: result.transition?.reason ?? "Stage advanced",
+  });
+
+  return 120000n;
+}
+
+/**
+ * Execute an approved disbursement after timelock expires.
+ * Transfers funds from treasury to recipient and creates an ExpenseRecord.
+ */
+function executeDisbursementExecuteHandler(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DisbursementExecutePayload;
+
+  const proposal = state.getDisbursement(payload.disbursementId);
+  if (!proposal) {
+    throw new StateError(
+      `Disbursement ${payload.disbursementId} not found`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Lifecycle validates stage + timelock
+  const result = disbursementExecute(proposal, blockNumber);
+  if (!result.success) {
+    throw new StateError(result.error!, "INVALID_TRANSITION");
+  }
+
+  // Verify treasury has sufficient balance
+  const treasuryDid = treasuryFundToDid(proposal.treasuryFund);
+  const treasuryBalance = state.getBalance(treasuryDid);
+  if (treasuryBalance < proposal.amount) {
+    throw new StateError(
+      `Insufficient treasury balance: ${treasuryBalance / 10n ** 18n} LGM < ${proposal.amount / 10n ** 18n} LGM`,
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Re-validate amount cap at execution time
+  const amountCheck = validateDisbursementAmount(
+    proposal.amount,
+    treasuryBalance,
+  );
+  if (!amountCheck.valid) {
+    throw new StateError(amountCheck.error!, "INVALID_TRANSITION");
+  }
+
+  // Transfer funds: treasury → recipient
+  state.deductBalance(treasuryDid, proposal.amount);
+  state.creditBalance(proposal.recipientDid as string, proposal.amount);
+
+  // Return stake to proposer
+  if (proposal.stakedAmount > 0n) {
+    state.unstake(proposal.stakeHolder as string, proposal.stakedAmount);
+  }
+
+  // Create immutable expense record
+  const expenseRecord: ExpenseRecord = {
+    id: `EXP-${state.getNextExpenseNumber()}`,
+    disbursementId: proposal.id,
+    category: proposal.category,
+    treasuryFund: proposal.treasuryFund,
+    recipientDid: proposal.recipientDid,
+    amount: proposal.amount,
+    executedAt: blockNumber,
+    txHash: sha512_256Hex(`disbursement:${proposal.id}:${blockNumber}`),
+    justification: proposal.justification,
+    externalReference: proposal.externalReference,
+  };
+  state.addExpenseRecord(expenseRecord);
+
+  // Update the proposal
+  state.updateDisbursement(payload.disbursementId, proposal);
+
+  state.emitEvent("DisbursementExecuted", {
+    id: proposal.id,
+    expenseId: expenseRecord.id,
+    treasuryFund: proposal.treasuryFund,
+    recipient: proposal.recipientDid,
+    amount: proposal.amount.toString(),
+  });
+
+  return 200000n;
+}
+
+/**
+ * Cancel a disbursement proposal. Only proposer can cancel from proposed or approved.
+ */
+function executeDisbursementCancelHandler(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as DisbursementCancelPayload;
+  const senderDid = resolveSenderDid(tx);
+
+  const proposal = state.getDisbursement(payload.disbursementId);
+  if (!proposal) {
+    throw new StateError(
+      `Disbursement ${payload.disbursementId} not found`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  const result = disbursementCancel(proposal, blockNumber, senderDid as any);
+  if (!result.success) {
+    throw new StateError(result.error!, "INVALID_TRANSITION");
+  }
+
+  // Return stake (minus cancellation fee) if staked
+  if (proposal.stakedAmount > 0n) {
+    const stakeOutcome = calculateDisbursementStakeOutcome(
+      proposal,
+      "cancelled",
+    );
+    state.unstake(proposal.stakeHolder as string, proposal.stakedAmount);
+    if (stakeOutcome.slashAmount > 0n) {
+      state.deductBalance(
+        proposal.stakeHolder as string,
+        stakeOutcome.slashAmount,
+      );
+      state.creditBalance(
+        treasuryFundToDid("FOUNDATION"),
+        stakeOutcome.slashAmount,
+      );
+    }
+  }
+
+  // Update the proposal
+  state.updateDisbursement(payload.disbursementId, proposal);
+
+  state.emitEvent("DisbursementCancelled", {
+    id: payload.disbursementId,
+    canceller: senderDid,
+  });
+
+  return 80000n;
+}
+
 // ============ Research Transaction Handlers ============
 
 /**
@@ -1625,7 +2250,7 @@ function executeResearchSubmit(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as ResearchSubmitPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate minimum stake
   if (payload.stake < DEFAULT_RESEARCH_PARAMETERS.minResearchStake) {
@@ -1695,7 +2320,7 @@ function executeResearchChallenge(
     stake: bigint;
     evidence: string;
   };
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate research exists
   const research = state.getResearch(payload.researchId);
@@ -1738,7 +2363,7 @@ function executeBountyCreate(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as BountyCreatePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Only research treasury or governance can create bounties
   // For now, allow anyone with sufficient stake
@@ -1815,7 +2440,7 @@ function executeBountyClaim(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as BountyClaimPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate bounty exists and is open
   const bounty = state.getBounty(payload.bountyId);
@@ -1846,7 +2471,7 @@ function executeBountyFulfill(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as BountyFulfillPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate bounty exists and is claimed
   const bounty = state.getBounty(payload.bountyId);
@@ -1916,7 +2541,7 @@ function executeDisputeInitiate(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as InitiateDisputePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the challenger
   if (payload.challenger !== senderDid) {
@@ -1977,7 +2602,7 @@ function executeDisputeCommitEvidence(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as CommitEvidencePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the committer
   if (payload.committer !== senderDid) {
@@ -2033,7 +2658,7 @@ function executeDisputeRevealEvidence(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as RevealEvidencePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the revealer
   if (payload.revealer !== senderDid) {
@@ -2092,7 +2717,7 @@ function executeDisputeArbiterVote(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ArbiterVotePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the arbiter
   if (payload.arbiter !== senderDid) {
@@ -2161,7 +2786,7 @@ function executeDisputeEscalate(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as EscalateDisputePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the escalator
   if (payload.escalator !== senderDid) {
@@ -2630,7 +3255,7 @@ function executeVestingClaim(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ClaimRewardsPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the claimer
   if (payload.claimer !== senderDid) {
@@ -2816,7 +3441,7 @@ function executeDomainPropose(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as DomainProposePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the proposer
   if (payload.proposer !== senderDid) {
@@ -2889,7 +3514,7 @@ function executeDomainEndorse(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as DomainEndorsePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the endorser
   if (payload.endorser !== senderDid) {
@@ -2966,7 +3591,7 @@ function executeDomainChallenge(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as unknown as DomainChallengePayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Validate sender is the challenger
   if (payload.challenger !== senderDid) {
@@ -3139,6 +3764,170 @@ function executeDomainFinalize(
   state.updateDomainProposal(finalizedProposal);
 
   return 100000n; // Domain finalization gas
+}
+
+/**
+ * Execute governance approval for a domain proposal
+ *
+ * Proposals in "governance" status (fundamental strata, top-level domains)
+ * require an accepted LIP vote before they can be approved.
+ * Once the LIP is in "accepted" or "implemented" stage, this handler
+ * approves the domain and adds it to the ontological tree.
+ */
+function executeDomainGovernanceApprove(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as unknown as {
+    proposalId: string;
+    lipId: string;
+  };
+
+  // Get the proposal
+  const proposal = state.getDomainProposal(payload.proposalId);
+  if (!proposal) {
+    throw new StateError(
+      "Domain proposal not found",
+      "DOMAIN_PROPOSAL_NOT_FOUND",
+    );
+  }
+
+  // Must be in governance status
+  if (proposal.status !== "governance") {
+    throw new StateError(
+      `Cannot governance-approve proposal with status "${proposal.status}"`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Verify the LIP exists and is accepted
+  const lip = state.getLIP(payload.lipId);
+  if (!lip) {
+    throw new StateError("LIP not found", "INVALID_TRANSITION");
+  }
+  if (lip.stage !== "accepted" && lip.stage !== "implemented") {
+    throw new StateError(
+      `LIP must be accepted or implemented, currently "${lip.stage}"`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Return full stake to proposer
+  state.unstake(proposal.proposer, proposal.stake);
+
+  // Return full stake to all endorsers
+  const endorserReturns = calculateEndorserStakeReturns({
+    ...proposal,
+    status: "approved",
+  });
+  for (const [endorser, { stakeReturn }] of endorserReturns) {
+    state.unstake(endorser, stakeReturn);
+  }
+
+  // Get domain tree and create the domain
+  const domainTree = state.getKnowledgeDomainTree();
+  if (!domainTree) {
+    throw new StateError("Domain tree not initialized", "INVALID_TRANSITION");
+  }
+
+  const parentNode = domainTree.domainIndex.get(proposal.parentDomainId);
+  const parentDomain = parentNode?.domain ?? null;
+
+  const newDomain = createDomainFromProposal(
+    { ...proposal, status: "approved", approvedAt: blockNumber },
+    parentDomain,
+    Number(blockNumber),
+  );
+
+  // Add domain to tree
+  state.addDomainToTree(newDomain);
+
+  // Update proposal status
+  state.updateDomainProposal({
+    ...proposal,
+    status: "approved",
+    approvedAt: blockNumber,
+    governanceProposalId: payload.lipId,
+  });
+
+  // Emit event
+  state.emitEvent("DomainGovernanceApproved", {
+    proposalId: proposal.id,
+    domainId: newDomain.id,
+    lipId: payload.lipId,
+    approvedAt: blockNumber.toString(),
+  });
+
+  return 100000n; // Domain governance approval gas
+}
+
+/**
+ * Execute domain deprecation transaction
+ *
+ * Marks a domain as deprecated, preventing new claims from targeting it.
+ * Existing facts remain but no new claims can be submitted to this domain.
+ * Only the original proposer can deprecate a domain.
+ */
+function executeDomainDeprecate(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    domainId: string;
+    reason: string;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  // Verify domain exists in the tree
+  const domainTree = state.getKnowledgeDomainTree();
+  if (!domainTree) {
+    throw new StateError("Domain tree not initialized", "INVALID_TRANSITION");
+  }
+
+  const node = domainTree.domainIndex.get(payload.domainId);
+  if (!node) {
+    throw new StateError(
+      `Domain "${payload.domainId}" not found`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Cannot deprecate already-deprecated domain
+  if (node.domain.deprecatedAt !== undefined) {
+    throw new StateError(
+      `Domain "${payload.domainId}" is already deprecated`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Authorization: only domain proposer can deprecate
+  const proposals = state.getAllDomainProposals();
+  const originalProposal = proposals.find(
+    (p) => p.proposedDomainId === payload.domainId && p.status === "approved",
+  );
+  if (originalProposal && originalProposal.proposer !== senderDid) {
+    throw new StateError(
+      "Only the original domain proposer can deprecate this domain",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Mark domain as deprecated
+  state.updateDomainInTree(payload.domainId, {
+    deprecatedAt: Number(blockNumber),
+  });
+
+  state.emitEvent("DomainDeprecated", {
+    domainId: payload.domainId,
+    deprecatedBy: senderDid,
+    reason: payload.reason,
+    deprecatedAt: blockNumber.toString(),
+  });
+
+  return 50000n; // Domain deprecation gas
 }
 
 // ============ System Transaction Handlers ============
@@ -3628,7 +4417,7 @@ function validateTransaction(
   }
 
   // Check sender exists
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
   if (!state.accountExists(senderDid)) {
     return { valid: false, reason: "Sender account does not exist" };
   }
@@ -3827,7 +4616,7 @@ function executeOpenPaymentChannel(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as OpenPaymentChannelPayload;
-  const payerDid = publicKeyToDid(tx.sender);
+  const payerDid = resolveSenderDid(tx);
 
   // 1. Validate deposit meets minimum
   if (payload.deposit < PAYMENT_CHANNEL_CONSTANTS.MIN_DEPOSIT) {
@@ -3919,7 +4708,7 @@ function executeUpdatePaymentChannel(
   _blockNumber: bigint,
 ): bigint {
   const payload = tx.payload as UpdatePaymentChannelPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // 1. Get channel
   const channel = state.getPaymentChannel(payload.channelId);
@@ -3992,7 +4781,7 @@ function executeClosePaymentChannel(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as ClosePaymentChannelPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   const channel = state.getPaymentChannel(payload.channelId);
   if (!channel) {
@@ -4107,7 +4896,7 @@ function executeSettlePaymentChannel(
   _params: ConsensusParams,
 ): bigint {
   const payload = tx.payload as SettlePaymentChannelPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // 1. Get and validate channel
   const channel = state.getPaymentChannel(payload.channelId);
@@ -4180,7 +4969,7 @@ function executeDisputePaymentChannel(
   blockNumber: bigint,
 ): bigint {
   const payload = tx.payload as DisputePaymentChannelPayload;
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   const channel = state.getPaymentChannel(payload.channelId);
   if (!channel) {
@@ -4337,7 +5126,7 @@ function executeContractCall(
     value: bigint;
   };
 
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
 
   // Verify target contract exists
   const targetAccount = state.getAccount(payload.targetContract);
@@ -4490,15 +5279,42 @@ export {
 import {
   createProject,
   proposeProject,
+  startDevelopment,
+  completeProject,
+  deployProject,
+  beginSeeding,
+  pauseProject,
+  resumeProject,
+  abandonProject,
+  addContributor,
+  recordTaskCompletion,
+  addTask,
 } from "../core/tree/project_lifecycle.js";
+import {
+  createTask as createTreeTask,
+  assignTask as assignTaskPure,
+  startWork as startWorkPure,
+  submitDeliverable as submitDeliverablePure,
+  approveDeliverable as approveDeliverablePure,
+  rejectDeliverable as rejectDeliverablePure,
+  reopenTask as reopenTaskPure,
+  canAgentClaimTask,
+} from "../core/tree/coordination/task_manager.js";
+import { VALID_TASK_CAPABILITY_NAMES } from "../core/tree/coordination/skill_matching.js";
 import {
   createServiceLeaf,
   activateService,
   calculateCallCost,
+  validatePricingModel,
+  createHealthCheckSchedule,
   pauseService as pauseTreeService,
+  resumeService as resumeTreeService,
   retireService as retireTreeService,
 } from "../core/tree/service_deployment.js";
-import { calculateRevenueDistribution } from "../core/tree/revenue_engine.js";
+import {
+  calculateRevenueDistribution,
+  verifyDistribution,
+} from "../core/tree/revenue_engine.js";
 import type {
   ProductSpec,
   DemandSignal,
@@ -4506,9 +5322,19 @@ import type {
   PricingModel,
   ServiceEndpoint,
   TaskDeliverable,
+  ProjectPhase,
+  ContributorRole,
+  TaskType,
+  OpportunitySeed,
 } from "../core/tree/types.js";
 import { MIN_PROJECT_STAKE } from "../core/tree/types.js";
+import { TREASURY } from "../core/constants.js";
 import type { ContractABI } from "../core/contracts/types.js";
+
+/** Escrow DID for project budget funds */
+function projectEscrowDid(projectId: string): string {
+  return `did:lgm:project-escrow:${projectId}`;
+}
 
 function executeCreateProject(
   state: StateManager,
@@ -4523,7 +5349,29 @@ function executeCreateProject(
     productSpec: ProductSpec;
     fundingSource: FundingSource;
   };
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
+  const nonce = state.getNonce(senderDid);
+
+  // Validate knowledgeDomain exists and is not deprecated
+  // Only enforce when the domain tree has been populated (skip in genesis/empty state)
+  if (payload.knowledgeDomain) {
+    const domainTree = state.getKnowledgeDomainTree();
+    if (domainTree && domainTree.domainCount > 1) {
+      const domainNode = domainTree.domainIndex.get(payload.knowledgeDomain);
+      if (!domainNode) {
+        throw new StateError(
+          `Knowledge domain "${payload.knowledgeDomain}" does not exist`,
+          "INVALID_TRANSITION",
+        );
+      }
+      if (domainNode.domain.deprecatedAt !== undefined) {
+        throw new StateError(
+          `Knowledge domain "${payload.knowledgeDomain}" is deprecated`,
+          "INVALID_TRANSITION",
+        );
+      }
+    }
+  }
 
   const project = createProject(
     senderDid,
@@ -4533,7 +5381,7 @@ function executeCreateProject(
     payload.knowledgeDomain,
     payload.demandSignal,
     payload.fundingSource,
-    0n, // nonce
+    nonce,
     blockNumber,
   );
 
@@ -4547,7 +5395,7 @@ function executeProposeProject(
   blockNumber: bigint,
 ): bigint {
   const payload = tx.payload as unknown as { projectId: string };
-  const senderDid = publicKeyToDid(tx.sender);
+  const senderDid = resolveSenderDid(tx);
   const project = state.getProject(payload.projectId);
 
   if (!project) {
@@ -4569,8 +5417,10 @@ function executeProposeProject(
   const proposed = proposeProject(project, MIN_PROJECT_STAKE, blockNumber);
   state.updateProject(payload.projectId, proposed);
 
-  // Lock the stake
+  // Lock the stake — deduct from founder and fund project treasury
   state.deductBalance(senderDid, MIN_PROJECT_STAKE);
+  const escrow = projectEscrowDid(payload.projectId);
+  state.creditBalance(escrow, MIN_PROJECT_STAKE);
 
   return 40000n;
 }
@@ -4578,15 +5428,13 @@ function executeProposeProject(
 function executeAssignTask(
   state: StateManager,
   tx: Transaction,
-  _blockNumber: bigint,
+  blockNumber: bigint,
 ): bigint {
-  // Task assignment is recorded at the project level
-  // The actual task state is managed by the project's taskIds + off-chain coordination
-  // This handler validates and records the assignment on-chain
   const payload = tx.payload as unknown as {
     projectId: string;
     taskId: string;
     agentDid: string;
+    declaredCapabilities?: string[];
   };
 
   const project = state.getProject(payload.projectId);
@@ -4594,13 +5442,62 @@ function executeAssignTask(
     throw new StateError("Project not found", "PROJECT_NOT_FOUND");
   }
 
+  // Phase validation: tasks can only be assigned during active development
+  if (project.phase !== "sprout" && project.phase !== "growing") {
+    throw new StateError(
+      "Tasks can only be assigned in sprout or growing phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Authorization: only founder or existing contributors can assign tasks
+  const senderDid = resolveSenderDid(tx);
+  if (
+    project.founder !== senderDid &&
+    !project.contributors.some((c) => c.did === senderDid)
+  ) {
+    throw new StateError(
+      "Only project members can assign tasks",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Validate assignee is a project contributor (prevents weight drift where
+  // recordTaskCompletion silently fails to track non-contributor earnings)
+  if (!project.contributors.some((c) => c.did === payload.agentDid)) {
+    throw new StateError(
+      "Assignee must be a project contributor",
+      "NOT_A_CONTRIBUTOR",
+    );
+  }
+
+  // Read task, apply pure state machine transition, persist
+  const task = state.getTask(payload.taskId);
+  if (!task) {
+    throw new StateError("Task not found", "TASK_NOT_FOUND");
+  }
+
+  // Capability gate: if task has required capabilities, agent must declare them
+  if (task.requiredCapabilities.length > 0) {
+    const declared = payload.declaredCapabilities ?? [];
+    if (!canAgentClaimTask(task, declared)) {
+      throw new StateError(
+        "Agent lacks required capabilities for this task",
+        "INSUFFICIENT_CAPABILITIES",
+      );
+    }
+  }
+
+  const assigned = assignTaskPure(task, payload.agentDid, blockNumber);
+  state.updateTask(payload.taskId, assigned);
+
   return 30000n;
 }
 
 function executeSubmitDeliverable(
   state: StateManager,
   tx: Transaction,
-  _blockNumber: bigint,
+  blockNumber: bigint,
 ): bigint {
   const payload = tx.payload as unknown as {
     projectId: string;
@@ -4613,19 +5510,55 @@ function executeSubmitDeliverable(
     throw new StateError("Project not found", "PROJECT_NOT_FOUND");
   }
 
+  // Phase validation: deliverables can be submitted during development or maturation
+  if (
+    project.phase !== "sprout" &&
+    project.phase !== "growing" &&
+    project.phase !== "mature"
+  ) {
+    throw new StateError(
+      "Deliverables can only be submitted in sprout, growing, or mature phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Authorization: only project contributors can submit deliverables
+  const senderDid = resolveSenderDid(tx);
+  if (
+    project.founder !== senderDid &&
+    !project.contributors.some((c) => c.did === senderDid)
+  ) {
+    throw new StateError(
+      "Only project members can submit deliverables",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Read task, apply pure state machine transition, persist
+  const task = state.getTask(payload.taskId);
+  if (!task) {
+    throw new StateError("Task not found", "TASK_NOT_FOUND");
+  }
+  const submitted = submitDeliverablePure(
+    task,
+    senderDid,
+    payload.deliverable,
+    blockNumber,
+  );
+  state.updateTask(payload.taskId, submitted);
+
   return 35000n;
 }
 
 function executeApproveDeliverable(
   state: StateManager,
   tx: Transaction,
-  _blockNumber: bigint,
+  blockNumber: bigint,
 ): bigint {
   const payload = tx.payload as unknown as {
     projectId: string;
     taskId: string;
-    bountyAmount: bigint;
-    assigneeDid: string;
+    declaredCapabilities?: string[];
   };
 
   const project = state.getProject(payload.projectId);
@@ -4633,13 +5566,94 @@ function executeApproveDeliverable(
     throw new StateError("Project not found", "PROJECT_NOT_FOUND");
   }
 
-  // Pay bounty to assignee from project budget
-  if (payload.bountyAmount > 0n && payload.assigneeDid) {
-    state.creditBalance(payload.assigneeDid, payload.bountyAmount);
-    state.updateProject(payload.projectId, {
-      spent: project.spent + payload.bountyAmount,
-      completedTasks: project.completedTasks + 1,
-    });
+  // Phase validation: approvals allowed during development or maturation
+  if (
+    project.phase !== "sprout" &&
+    project.phase !== "growing" &&
+    project.phase !== "mature"
+  ) {
+    throw new StateError(
+      "Deliverables can only be approved in sprout, growing, or mature phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Authorization: only founder or reviewers can approve deliverables
+  const senderDid = resolveSenderDid(tx);
+  const isFounder = project.founder === senderDid;
+  const isReviewer = project.contributors.some(
+    (c) =>
+      c.did === senderDid && (c.role === "reviewer" || c.role === "founder"),
+  );
+  if (!isFounder && !isReviewer) {
+    throw new StateError(
+      "Only founder or reviewers can approve deliverables",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Capability gate: non-founder reviewers must hold code_review capability
+  if (!isFounder) {
+    const declared = payload.declaredCapabilities ?? [];
+    if (!declared.includes("code_review") && !declared.includes("review")) {
+      throw new StateError(
+        "Reviewer must have code_review capability",
+        "INSUFFICIENT_CAPABILITIES",
+      );
+    }
+  }
+
+  // Read task, apply pure state machine transition, persist
+  const task = state.getTask(payload.taskId);
+  if (!task) {
+    throw new StateError("Task not found", "TASK_NOT_FOUND");
+  }
+
+  // Self-review guard: assignee cannot approve their own deliverable
+  if (task.assignee === senderDid) {
+    throw new StateError(
+      "Assignee cannot approve their own deliverable",
+      "SELF_REVIEW",
+    );
+  }
+
+  const approved = approveDeliverablePure(task, senderDid, blockNumber);
+  state.updateTask(payload.taskId, approved);
+
+  // Pay bounty to assignee from project escrow
+  const bountyAmount = task.bountyAmount;
+  const assigneeDid = task.assignee;
+  if (bountyAmount > 0n && assigneeDid) {
+    // Budget validation — always check, even when budget=0n (agent-funded)
+    const treasuryDid = projectEscrowDid(payload.projectId);
+    const escrowBal = state.getBalance(treasuryDid);
+    if (escrowBal < bountyAmount) {
+      throw new StateError(
+        "Bounty exceeds project escrow balance",
+        "INSUFFICIENT_BALANCE",
+      );
+    }
+    if (project.budget > 0n && project.spent + bountyAmount > project.budget) {
+      throw new StateError("Bounty exceeds project budget", "BUDGET_EXCEEDED");
+    }
+
+    // Debit from project escrow, credit to assignee
+    state.deductBalance(treasuryDid, bountyAmount);
+    state.creditBalance(assigneeDid, bountyAmount);
+
+    // Update contributor metrics via lifecycle function
+    let updated = recordTaskCompletion(project, assigneeDid, bountyAmount);
+
+    // G6: Auto-advance growing → mature when all tasks complete
+    if (
+      updated.phase === "growing" &&
+      updated.completedTasks >= updated.totalTasks &&
+      updated.totalTasks > 0
+    ) {
+      updated = completeProject(updated, blockNumber);
+    }
+
+    state.updateProject(payload.projectId, updated);
   }
 
   return 40000n;
@@ -4666,6 +5680,23 @@ function executeDeployService(
     throw new StateError("Project not found", "PROJECT_NOT_FOUND");
   }
 
+  // Authorization: only founder can deploy services
+  const senderDid = resolveSenderDid(tx);
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can deploy services", "UNAUTHORIZED");
+  }
+
+  // Phase validation: services can only be deployed in mature phase
+  if (project.phase !== "mature") {
+    throw new StateError(
+      "Services can only be deployed in mature phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Validate pricing model before deployment
+  validatePricingModel(payload.pricing);
+
   const service = createServiceLeaf(
     payload.projectId,
     payload.name,
@@ -4679,16 +5710,78 @@ function executeDeployService(
     blockNumber,
   );
 
-  // Activate immediately
-  const activeService = activateService(service);
+  // Create health check schedule and activate with schedule ID
+  const blockTimestampMs = Number(blockNumber) * 2521; // approximate
+  const healthSchedule = createHealthCheckSchedule(
+    service,
+    senderDid,
+    blockTimestampMs,
+  );
+  state.registerSchedule(healthSchedule);
+  const activeService = activateService(service, healthSchedule.id);
   state.createService(activeService);
 
-  // Add service ID to project
-  state.updateProject(payload.projectId, {
-    serviceIds: [...project.serviceIds, activeService.id],
-  });
+  // Add service ID to project and transition to fruiting
+  const newServiceIds = [...project.serviceIds, activeService.id];
+  const deployed = deployProject(
+    project,
+    newServiceIds,
+    payload.contractAddress,
+    blockNumber,
+  );
+  state.updateProject(payload.projectId, deployed);
 
   return 80000n;
+}
+
+/**
+ * Distribute service revenue to contributors, treasury, and research fund.
+ * Includes verifyDistribution() integrity check.
+ */
+function distributeServiceRevenue(
+  state: StateManager,
+  serviceProjectId: string,
+  amount: bigint,
+  contributors: import("../core/tree/types.js").ContributorRecord[],
+): void {
+  const dist = calculateRevenueDistribution(amount, contributors);
+
+  // Integrity check: all distributed amounts must sum to the original amount
+  if (!verifyDistribution(dist, amount)) {
+    throw new StateError(
+      "Revenue distribution integrity check failed: amounts do not sum to cost",
+      "INTERNAL_ERROR",
+    );
+  }
+
+  // Credit contributor shares
+  for (const share of dist.contributorShares) {
+    state.creditBalance(share.did, share.amount);
+  }
+
+  // Route evidence tax through 5-way treasury split
+  if (dist.evidenceTax > 0n) {
+    const treasurySplit = splitEvidenceTax(dist.evidenceTax);
+    for (const entry of treasurySplit) {
+      if (entry.amount > 0n) {
+        state.creditBalance(entry.did, entry.amount);
+      }
+    }
+  }
+
+  // Research fund (23.4%) goes to separate address from evidence tax research (77% of 22%)
+  if (dist.researchFund > 0n) {
+    state.creditBalance(TREASURY.ADDRESSES.RESEARCH_FUND, dist.researchFund);
+  }
+  if (dist.protocolTreasury > 0n) {
+    state.creditBalance(TREASURY.ADDRESSES.FOUNDATION, dist.protocolTreasury);
+  }
+
+  // Track revenue on project
+  state.updateProject(serviceProjectId, {
+    revenueGenerated:
+      (state.getProject(serviceProjectId)?.revenueGenerated ?? 0n) + amount,
+  });
 }
 
 function executeCallService(
@@ -4696,13 +5789,19 @@ function executeCallService(
   tx: Transaction,
   blockNumber: bigint,
 ): bigint {
-  const payload = tx.payload as unknown as {
+  const rawPayload = tx.payload as unknown as {
     serviceId: string;
-    units: bigint;
+    units: bigint | string | number;
   };
-  const callerDid = publicKeyToDid(tx.sender);
+  const callerDid = resolveSenderDid(tx);
 
-  const service = state.getService(payload.serviceId);
+  // Coerce units to bigint (RPC sends strings via JSON)
+  const units =
+    typeof rawPayload.units === "string" || typeof rawPayload.units === "number"
+      ? BigInt(rawPayload.units)
+      : rawPayload.units;
+
+  const service = state.getService(rawPayload.serviceId);
   if (!service) {
     throw new StateError("Service not found", "SERVICE_NOT_FOUND");
   }
@@ -4710,7 +5809,19 @@ function executeCallService(
     throw new StateError("Service is not active", "INVALID_TRANSITION");
   }
 
-  const cost = calculateCallCost(service, payload.units);
+  // Subscription pricing: caller must have an active subscription
+  if (service.pricing.type === "subscription") {
+    if (
+      !state.hasActiveSubscription(rawPayload.serviceId, callerDid, blockNumber)
+    ) {
+      throw new StateError(
+        "Active subscription required — use subscribe_service transaction first",
+        "INVALID_TRANSITION",
+      );
+    }
+  }
+
+  const cost = calculateCallCost(service, units);
   const balance = state.getBalance(callerDid);
   if (balance < cost) {
     throw new StateError(
@@ -4719,37 +5830,98 @@ function executeCallService(
     );
   }
 
-  // Deduct payment
-  state.deductBalance(callerDid, cost);
+  // Deduct payment (subscription calls are pre-paid, cost=0)
+  if (cost > 0n) {
+    state.deductBalance(callerDid, cost);
+  }
 
   // Record service call
-  state.incrementServiceCalls(payload.serviceId, cost, blockNumber);
+  state.incrementServiceCalls(rawPayload.serviceId, cost, blockNumber);
 
   // Distribute revenue
   const project = state.getProject(service.projectId);
-  if (project && cost > 0n) {
-    const dist = calculateRevenueDistribution(cost, project.contributors);
-
-    // Credit contributor shares
-    for (const share of dist.contributorShares) {
-      state.creditBalance(share.did, share.amount);
-    }
-
-    // Credit research fund + protocol treasury
-    if (dist.researchFund > 0n) {
-      state.creditBalance("did:lgm:treasury-research", dist.researchFund);
-    }
-    if (dist.protocolTreasury > 0n) {
-      state.creditBalance("did:lgm:treasury-foundation", dist.protocolTreasury);
-    }
-
-    // Track revenue on project
-    state.updateProject(service.projectId, {
-      revenueGenerated: project.revenueGenerated + cost,
-    });
+  if (!project) {
+    throw new StateError("Service project not found", "PROJECT_NOT_FOUND");
+  }
+  if (cost > 0n) {
+    distributeServiceRevenue(
+      state,
+      service.projectId,
+      cost,
+      project.contributors,
+    );
   }
 
   return 60000n;
+}
+
+function executeSubscribeService(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as { serviceId: string };
+  const callerDid = resolveSenderDid(tx);
+
+  const service = state.getService(payload.serviceId);
+  if (!service) {
+    throw new StateError("Service not found", "SERVICE_NOT_FOUND");
+  }
+  if (service.status !== "active") {
+    throw new StateError("Service is not active", "INVALID_TRANSITION");
+  }
+  if (service.pricing.type !== "subscription") {
+    throw new StateError(
+      "Service does not use subscription pricing",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  const subscriptionFee = service.pricing.basePrice;
+  const subscriptionBlocks = service.pricing.subscriptionBlocks!;
+
+  // Check caller can afford the subscription
+  const balance = state.getBalance(callerDid);
+  if (balance < subscriptionFee) {
+    throw new StateError(
+      "Insufficient balance for subscription fee",
+      "INSUFFICIENT_BALANCE",
+    );
+  }
+
+  // Deduct subscription fee
+  state.deductBalance(callerDid, subscriptionFee);
+
+  // Calculate expiry: extend existing subscription or start from current block
+  const existingExpiry = state.getSubscriptionExpiry(
+    payload.serviceId,
+    callerDid,
+  );
+  const startBlock =
+    existingExpiry !== null && existingExpiry > blockNumber
+      ? existingExpiry
+      : blockNumber;
+  const expiresAt = startBlock + subscriptionBlocks;
+  state.setSubscription(payload.serviceId, callerDid, expiresAt);
+
+  // Record revenue on service
+  state.incrementServiceCalls(payload.serviceId, subscriptionFee, blockNumber);
+
+  // Distribute subscription revenue (same path as call_service)
+  const project = state.getProject(service.projectId);
+  if (!project) {
+    throw new StateError("Service project not found", "PROJECT_NOT_FOUND");
+  }
+  if (subscriptionFee > 0n) {
+    distributeServiceRevenue(
+      state,
+      service.projectId,
+      subscriptionFee,
+      project.contributors,
+    );
+  }
+
+  return 50000n;
 }
 
 function executePauseService(state: StateManager, tx: Transaction): bigint {
@@ -4758,6 +5930,19 @@ function executePauseService(state: StateManager, tx: Transaction): bigint {
   const service = state.getService(payload.serviceId);
   if (!service) {
     throw new StateError("Service not found", "SERVICE_NOT_FOUND");
+  }
+
+  // Authorization: only project founder can pause services
+  const senderDid = resolveSenderDid(tx);
+  const project = state.getProject(service.projectId);
+  if (!project) {
+    throw new StateError("Service project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError(
+      "Only project founder can pause services",
+      "UNAUTHORIZED",
+    );
   }
 
   const paused = pauseTreeService(service);
@@ -4774,8 +5959,722 @@ function executeRetireService(state: StateManager, tx: Transaction): bigint {
     throw new StateError("Service not found", "SERVICE_NOT_FOUND");
   }
 
+  // Authorization: only project founder can retire services
+  const senderDid = resolveSenderDid(tx);
+  const project = state.getProject(service.projectId);
+  if (!project) {
+    throw new StateError("Service project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError(
+      "Only project founder can retire services",
+      "UNAUTHORIZED",
+    );
+  }
+
   const retired = retireTreeService(service);
   state.updateService(payload.serviceId, retired);
 
   return 25000n;
+}
+
+function executeResumeService(state: StateManager, tx: Transaction): bigint {
+  const payload = tx.payload as unknown as { serviceId: string };
+
+  const service = state.getService(payload.serviceId);
+  if (!service) {
+    throw new StateError("Service not found", "SERVICE_NOT_FOUND");
+  }
+
+  // Authorization: only project founder can resume services
+  const senderDid = resolveSenderDid(tx);
+  const project = state.getProject(service.projectId);
+  if (!project) {
+    throw new StateError("Service project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError(
+      "Only project founder can resume services",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const resumed = resumeTreeService(service);
+  state.updateService(payload.serviceId, resumed);
+
+  return 25000n;
+}
+
+// ============ Tree of Life Lifecycle Handlers ============
+
+function executeStartDevelopment(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as { projectId: string };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can start development", "UNAUTHORIZED");
+  }
+
+  const updated = startDevelopment(project, blockNumber);
+  state.updateProject(payload.projectId, updated);
+
+  return 40000n;
+}
+
+function executeCompleteProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as { projectId: string };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError(
+      "Only founder can mark project complete",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const updated = completeProject(project, blockNumber);
+  state.updateProject(payload.projectId, updated);
+
+  return 40000n;
+}
+
+function executeBeginSeeding(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as { projectId: string };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can begin seeding", "UNAUTHORIZED");
+  }
+
+  const updated = beginSeeding(project, blockNumber);
+  state.updateProject(payload.projectId, updated);
+
+  return 40000n;
+}
+
+function executePauseProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    reason?: string;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can pause project", "UNAUTHORIZED");
+  }
+
+  const updated = pauseProject(project, payload.reason ?? "", blockNumber);
+  state.updateProject(payload.projectId, updated);
+
+  return 30000n;
+}
+
+function executeResumeProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    targetPhase: ProjectPhase;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can resume project", "UNAUTHORIZED");
+  }
+
+  const updated = resumeProject(project, payload.targetPhase, blockNumber);
+  state.updateProject(payload.projectId, updated);
+
+  return 30000n;
+}
+
+function executeAbandonProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as { projectId: string };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can abandon project", "UNAUTHORIZED");
+  }
+
+  const updated = abandonProject(project, blockNumber);
+  state.updateProject(payload.projectId, updated);
+
+  // Refund remaining treasury to founder
+  const treasuryDid = projectEscrowDid(payload.projectId);
+  const remaining = state.getBalance(treasuryDid);
+  if (remaining > 0n) {
+    state.deductBalance(treasuryDid, remaining);
+    state.creditBalance(senderDid, remaining);
+  }
+
+  return 40000n;
+}
+
+function executeAddContributor(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    agentDid: string;
+    role: ContributorRole;
+    declaredCapabilities?: string[];
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError("Only founder can add contributors", "UNAUTHORIZED");
+  }
+
+  // G2: Advisory capability validation — check declared capabilities against project spec
+  // Non-blocking: founder can override (may have off-chain knowledge)
+  if (payload.declaredCapabilities && payload.declaredCapabilities.length > 0) {
+    const projectCaps = project.productSpec.capabilities;
+    if (projectCaps.length > 0) {
+      const hasRelevant = payload.declaredCapabilities.some((cap) =>
+        projectCaps.includes(cap),
+      );
+      if (!hasRelevant) {
+        // Advisory only — logged but not blocking
+        // In production this could emit a governance event
+      }
+    }
+  }
+
+  const updated = addContributor(
+    project,
+    payload.agentDid,
+    payload.role,
+    blockNumber,
+  );
+  state.updateProject(payload.projectId, updated);
+
+  return 30000n;
+}
+
+function executeAddTask(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    title: string;
+    description: string;
+    taskType: TaskType;
+    requiredCapabilities: string[];
+    bountyAmount: bigint;
+    deadlineBlock?: bigint;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // Phase validation: tasks can only be added during active development
+  if (project.phase !== "sprout" && project.phase !== "growing") {
+    throw new StateError(
+      "Tasks can only be added in sprout or growing phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  if (
+    project.founder !== senderDid &&
+    !project.contributors.some((c) => c.did === senderDid)
+  ) {
+    throw new StateError("Only project members can add tasks", "UNAUTHORIZED");
+  }
+
+  // Validate required capabilities against known set
+  for (const cap of payload.requiredCapabilities) {
+    if (!VALID_TASK_CAPABILITY_NAMES.has(cap)) {
+      throw new StateError(`Invalid capability: ${cap}`, "INVALID_CAPABILITY");
+    }
+  }
+
+  // Validate bounty against project escrow
+  const bountyAmount = BigInt(payload.bountyAmount);
+  if (bountyAmount > 0n) {
+    const escrowDid = projectEscrowDid(payload.projectId);
+    const escrowBal = state.getBalance(escrowDid);
+
+    // Sum outstanding committed bounties (non-completed tasks)
+    const existingTasks = state.getTasksByProject(payload.projectId);
+    const committedBounties = existingTasks
+      .filter(
+        (t) =>
+          t.status !== "completed" &&
+          t.status !== "rejected" &&
+          t.status !== "disputed",
+      )
+      .reduce((sum, t) => sum + t.bountyAmount, 0n);
+
+    if (committedBounties + bountyAmount > escrowBal) {
+      throw new StateError(
+        "Task bounty would exceed project escrow balance",
+        "BUDGET_EXCEEDED",
+      );
+    }
+  }
+
+  // Create the task record in TaskStateTree
+  const nonce = state.getNonce(senderDid);
+  const task = createTreeTask(
+    payload.projectId,
+    payload.title,
+    payload.description,
+    payload.taskType,
+    payload.requiredCapabilities,
+    BigInt(payload.bountyAmount),
+    nonce,
+    blockNumber,
+    payload.deadlineBlock ? BigInt(payload.deadlineBlock) : undefined,
+  );
+  state.createTask(task);
+
+  // Register task ID with the project
+  const updated = addTask(project, task.id);
+  state.updateProject(payload.projectId, updated);
+
+  return 25000n;
+}
+
+// ============ Task Lifecycle Handlers ============
+
+function executeStartWork(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    taskId: string;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // Phase validation: work can only start during active development
+  if (project.phase !== "sprout" && project.phase !== "growing") {
+    throw new StateError(
+      "Work can only start in sprout or growing phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  const task = state.getTask(payload.taskId);
+  if (!task) {
+    throw new StateError("Task not found", "TASK_NOT_FOUND");
+  }
+
+  const updated = startWorkPure(task, senderDid);
+  state.updateTask(payload.taskId, updated);
+
+  return 20000n;
+}
+
+function executeRejectDeliverable(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    taskId: string;
+    reason: string;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // Phase validation: rejections allowed during development or maturation
+  if (
+    project.phase !== "sprout" &&
+    project.phase !== "growing" &&
+    project.phase !== "mature"
+  ) {
+    throw new StateError(
+      "Deliverables can only be rejected in sprout, growing, or mature phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Authorization: only founder or contributors can reject
+  if (
+    project.founder !== senderDid &&
+    !project.contributors.some((c) => c.did === senderDid)
+  ) {
+    throw new StateError(
+      "Only project members can reject deliverables",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const task = state.getTask(payload.taskId);
+  if (!task) {
+    throw new StateError("Task not found", "TASK_NOT_FOUND");
+  }
+
+  const updated = rejectDeliverablePure(task, senderDid, payload.reason);
+  state.updateTask(payload.taskId, updated);
+
+  return 30000n;
+}
+
+function executeReopenTask(
+  state: StateManager,
+  tx: Transaction,
+  _blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    taskId: string;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // Phase validation: tasks can only be reopened during active development
+  if (project.phase !== "sprout" && project.phase !== "growing") {
+    throw new StateError(
+      "Tasks can only be reopened in sprout or growing phase",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Authorization: only founder or assignee can reopen
+  const task = state.getTask(payload.taskId);
+  if (!task) {
+    throw new StateError("Task not found", "TASK_NOT_FOUND");
+  }
+
+  if (project.founder !== senderDid && task.assignee !== senderDid) {
+    throw new StateError(
+      "Only founder or assignee can reopen task",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const updated = reopenTaskPure(task);
+  state.updateTask(payload.taskId, updated);
+
+  return 20000n;
+}
+
+// ============ Opportunity Seed Handlers ============
+
+function executeDetectOpportunity(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    seeds: Array<{
+      id: string;
+      knowledgeDomain: string;
+      signal: import("../core/tree/types.js").DemandSignal;
+      confidence: number;
+      estimatedDemand: bigint;
+      estimatedEffort: number;
+      estimatedROI: number;
+      expiresAtBlock: bigint;
+    }>;
+  };
+
+  for (const seedData of payload.seeds) {
+    // Skip if seed already exists
+    if (state.getSeed(seedData.id)) continue;
+
+    const seed: OpportunitySeed = {
+      id: seedData.id,
+      detectedAtBlock: blockNumber,
+      knowledgeDomain: seedData.knowledgeDomain,
+      signal: seedData.signal,
+      confidence: seedData.confidence,
+      estimatedDemand: BigInt(seedData.estimatedDemand),
+      estimatedEffort: seedData.estimatedEffort,
+      estimatedROI: seedData.estimatedROI,
+      status: "detected",
+      expiresAtBlock: BigInt(seedData.expiresAtBlock),
+    };
+    state.addSeed(seed);
+  }
+
+  return 15000n;
+}
+
+function executeClaimOpportunity(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    seedId: string;
+    projectName: string;
+    projectDescription: string;
+    productSpec: import("../core/tree/types.js").ProductSpec;
+    fundingSource: FundingSource;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const seed = state.getSeed(payload.seedId);
+  if (!seed) {
+    throw new StateError("Opportunity seed not found", "SEED_NOT_FOUND");
+  }
+  if (seed.status !== "detected") {
+    throw new StateError(
+      `Seed is '${seed.status}', not available for claiming`,
+      "INVALID_TRANSITION",
+    );
+  }
+  if (seed.expiresAtBlock <= blockNumber) {
+    // Mark as expired and reject
+    state.updateSeed(payload.seedId, { status: "expired" });
+    throw new StateError("Opportunity seed has expired", "SEED_EXPIRED");
+  }
+
+  // Create project from the seed
+  const nonce = state.getNonce(senderDid);
+  const project = createProject(
+    senderDid,
+    payload.projectName,
+    payload.projectDescription,
+    payload.productSpec,
+    seed.knowledgeDomain,
+    seed.signal,
+    payload.fundingSource,
+    nonce,
+    blockNumber,
+  );
+  state.createProject(project);
+
+  // Update seed: mark as claimed and link to project
+  state.updateSeed(payload.seedId, {
+    status: "claimed",
+    claimedBy: senderDid,
+    projectId: project.id,
+  });
+
+  return 35000n;
+}
+
+// ============ Tree of Life Recruitment ============
+
+function executeApplyToProject(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    proposedRole: ContributorRole;
+    message: string;
+    declaredCapabilities: string[];
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+
+  // Applications only accepted during sprout/growing phases
+  if (project.phase !== "sprout" && project.phase !== "growing") {
+    throw new StateError(
+      `Cannot apply in '${project.phase}' phase`,
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Can't apply if already a contributor
+  if (project.contributors.some((c) => c.did === senderDid)) {
+    throw new StateError(
+      "Already a contributor to this project",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Can't apply if already have pending application
+  const applications = project.applications ?? [];
+  if (applications.some((a) => a.did === senderDid && a.status === "pending")) {
+    throw new StateError("Application already pending", "INVALID_TRANSITION");
+  }
+
+  const application: import("../core/tree/types.js").ProjectApplication = {
+    did: senderDid,
+    proposedRole: payload.proposedRole,
+    message: payload.message,
+    capabilities: payload.declaredCapabilities ?? [],
+    appliedAtBlock: blockNumber,
+    status: "pending",
+  };
+
+  state.updateProject(payload.projectId, {
+    ...project,
+    applications: [...applications, application],
+  });
+
+  return 25000n;
+}
+
+function executeReviewApplication(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    projectId: string;
+    applicantDid: string;
+    decision: "approve" | "reject";
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const project = state.getProject(payload.projectId);
+  if (!project) {
+    throw new StateError("Project not found", "PROJECT_NOT_FOUND");
+  }
+  if (project.founder !== senderDid) {
+    throw new StateError(
+      "Only founder can review applications",
+      "UNAUTHORIZED",
+    );
+  }
+
+  const applications = project.applications ?? [];
+  const appIndex = applications.findIndex(
+    (a) => a.did === payload.applicantDid && a.status === "pending",
+  );
+  if (appIndex === -1) {
+    throw new StateError(
+      "No pending application found for this agent",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  const updatedApplications = applications.map((a, i) =>
+    i === appIndex
+      ? {
+          ...a,
+          status:
+            payload.decision === "approve"
+              ? ("approved" as const)
+              : ("rejected" as const),
+        }
+      : a,
+  );
+
+  let updated: import("../core/tree/types.js").ProductProject = {
+    ...project,
+    applications: updatedApplications,
+  };
+
+  // If approved, add as contributor
+  if (payload.decision === "approve") {
+    const app = applications[appIndex];
+    updated = addContributor(
+      updated,
+      payload.applicantDid,
+      app.proposedRole,
+      blockNumber,
+    );
+  }
+
+  state.updateProject(payload.projectId, updated);
+
+  return 30000n;
+}
+
+function executeSetAvailability(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  const payload = tx.payload as unknown as {
+    available: boolean;
+    capabilities: string[];
+    preferredDomains: string[];
+    minimumBounty: bigint | string;
+  };
+  const senderDid = resolveSenderDid(tx);
+
+  const balance = state.getBalance(senderDid);
+  if (balance === 0n && state.getNonce(senderDid) === 0n) {
+    throw new StateError("Account not found", "ACCOUNT_NOT_FOUND");
+  }
+
+  state.setAvailability(senderDid, {
+    available: payload.available,
+    capabilities: payload.capabilities ?? [],
+    preferredDomains: payload.preferredDomains ?? [],
+    minimumBounty:
+      typeof payload.minimumBounty === "string"
+        ? BigInt(payload.minimumBounty)
+        : BigInt(payload.minimumBounty ?? 0),
+    updatedAtBlock: blockNumber,
+  });
+
+  return 20000n;
 }

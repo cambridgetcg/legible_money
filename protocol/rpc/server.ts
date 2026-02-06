@@ -510,7 +510,7 @@ export class RPCServer {
         status: "healthy" as const,
         blockHeight: blockNumber.toString(),
         isSynced,
-        peerCount: 0, // Would need network layer access for accurate count
+        peerCount: this.context.network?.getPeerCount() ?? 0,
         version: nodeVersion,
         timestamp: Date.now(),
       };
@@ -784,7 +784,7 @@ export class RPCServer {
       return this.createErrorResponse(
         request.id,
         RPC_ERROR_CODES.INTERNAL_ERROR,
-        "Internal error",
+        `Internal error: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

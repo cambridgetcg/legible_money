@@ -25,6 +25,8 @@
 
 import type { DID } from "../identity/did.js";
 import { TREASURY } from "../../constants.js";
+import { domainHash } from "../../crypto/hashing.js";
+import { bytesToHex } from "../../crypto/keys.js";
 
 // ============ Bounty Types ============
 
@@ -404,10 +406,14 @@ export const BUG_BOUNTY_REWARDS =
 export function createBounty(
   bounty: Omit<Bounty, "bountyId" | "status" | "createdAt" | "currentClaims">,
   currentBlock: bigint,
+  nonce: bigint = 0n,
 ): Bounty {
+  const idHash = bytesToHex(
+    domainHash("LGM.bounty.id.v1", `${bounty.title}:${currentBlock}:${nonce}`),
+  ).slice(0, 16);
   return {
     ...bounty,
-    bountyId: `bounty-${currentBlock}-${Math.random().toString(36).slice(2, 8)}`,
+    bountyId: `bounty-${idHash}`,
     status: "open",
     createdAt: currentBlock,
     currentClaims: 0,
@@ -421,17 +427,17 @@ export function claimBounty(
   bounty: Bounty,
   claimant: DID,
   currentBlock: bigint,
-): Bounty | { error: string } {
+): Bounty {
   if (bounty.status !== "open") {
-    return { error: "Bounty is not open for claims" };
+    throw new BountyError("Bounty is not open for claims", "INVALID_STATUS");
   }
 
   if (bounty.currentClaims >= bounty.maxClaims) {
-    return { error: "Maximum claims reached" };
+    throw new BountyError("Maximum claims reached", "MAX_CLAIMS_REACHED");
   }
 
   if (bounty.expiresAt && currentBlock > bounty.expiresAt) {
-    return { error: "Bounty has expired" };
+    throw new BountyError("Bounty has expired", "EXPIRED");
   }
 
   return {
@@ -441,6 +447,23 @@ export function claimBounty(
     claimedAt: currentBlock,
     currentClaims: bounty.currentClaims + 1,
   };
+}
+
+// ============ Error Types ============
+
+export type BountyErrorCode =
+  | "INVALID_STATUS"
+  | "MAX_CLAIMS_REACHED"
+  | "EXPIRED";
+
+export class BountyError extends Error {
+  constructor(
+    message: string,
+    public code: BountyErrorCode,
+  ) {
+    super(message);
+    this.name = "BountyError";
+  }
 }
 
 /**

@@ -780,6 +780,43 @@ export class EvidenceStateTree {
     this.submitterIndex.get(submitter)!.add(id);
   }
 
+  // ============ Persistence Export/Restore ============
+
+  /**
+   * Export all evidence for persistence
+   */
+  exportEvidence(): Evidence[] {
+    return Array.from(this.evidenceCache.values());
+  }
+
+  /**
+   * Restore evidence from persistence (bypasses deduplication and content hashing)
+   */
+  restoreEvidence(evidence: Evidence): void {
+    // Store in SMT
+    const key = evidenceIdToKey(evidence.id);
+    const value = serializeEvidence(evidence);
+    this.evidenceSmt.set(key, value);
+
+    // Update cache
+    this.evidenceCache.set(evidence.id, evidence);
+
+    // Update indexes
+    this.addToTypeIndex(evidence.type, evidence.id);
+    this.addToStatusIndex(evidence.status, evidence.id);
+    this.addToSubmitterIndex(evidence.firstSubmitter, evidence.id);
+    for (const factId of evidence.relatedFactIds) {
+      this.addToFactIndex(factId, evidence.id);
+    }
+
+    // Update stats
+    this.evidenceCount++;
+    this.archiveCount += evidence.archives.length;
+    this.verifiedArchiveCount += evidence.archives.filter(
+      (a) => a.verified,
+    ).length;
+  }
+
   // ============ Clone for Transaction Support ============
 
   /**

@@ -85,8 +85,8 @@ const STATE_NAMESPACES = {
   DISPUTES: STORAGE_NAMESPACES.DISPUTES,
   VESTING: STORAGE_NAMESPACES.VESTING,
   RESEARCH: STORAGE_NAMESPACES.RESEARCH,
-  CLAIMS: new Uint8Array([0x08]), // Claims namespace
-  DELEGATIONS: new Uint8Array([0x09]), // Delegations namespace
+  CLAIMS: new Uint8Array([0x09]), // Claims namespace (0x08 is REFERENCES)
+  DELEGATIONS: new Uint8Array([0x0e]), // Delegations namespace
 } as const;
 
 // ============ Modified Entry Tracker ============

@@ -78,6 +78,8 @@ export interface HandlerContext {
   stateIntegration: StateIntegration;
   nodeVersion: string;
   networkId: string;
+  /** Network layer for peer info (optional for backward compat) */
+  network?: { getPeerCount(): number };
   // Economic Sustainability Integration (optional for backward compat)
   truthGateway?: TruthGateway;
   loopController?: LoopController;
@@ -256,12 +258,7 @@ export const knowledgeGetFact: Handler<
 
   // Include references if requested
   if (params.includeReferences && fact) {
-    // Would need to get references from knowledge tree
-    response.references = {
-      supports: [],
-      contradicts: [],
-      extends: [],
-    };
+    response.references = ctx.state.getFactReferences(params.factId);
   }
 
   return response;
@@ -621,11 +618,23 @@ export const verificationSubmitCommitment: Handler<
   VerificationSubmitCommitmentResponse
 > = async (params, ctx) => {
   try {
-    await ctx.consensus.submitCommitment(params.roundId, {
-      validator: params.validatorKey,
-      commitment: params.commitment,
-      signature: params.signature,
-    } as any);
+    // Use deterministic mode when VRF params not provided (DevNet/testing)
+    // Production clients should include vrfOutput + vrfProof
+    if ((params as any).vrfOutput && (params as any).vrfProof) {
+      await ctx.consensus.submitCommitment(params.roundId, {
+        validator: params.validatorKey,
+        commitment: params.commitment,
+        signature: params.signature,
+        vrfOutput: (params as any).vrfOutput,
+        vrfProof: (params as any).vrfProof,
+      });
+    } else {
+      await ctx.consensus.submitCommitmentDeterministic(params.roundId, {
+        validator: params.validatorKey,
+        commitment: params.commitment,
+        signature: params.signature,
+      });
+    }
 
     // Get the round to return deadline
     const rounds = ctx.consensus.getActiveRounds();
@@ -705,7 +714,7 @@ export const networkHealth: Handler<
     status: "healthy",
     latestBlock: blockNumber.toString(),
     syncStatus: "synced",
-    peerCount: 0, // Would get from network layer
+    peerCount: ctx.network?.getPeerCount() ?? 0,
     version: ctx.nodeVersion,
   };
 };

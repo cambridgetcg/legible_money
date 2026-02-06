@@ -310,7 +310,23 @@ export class RecoveryManager {
         }
         break;
 
-      case 0x08: // CLAIMS
+      case 0x04: // EVIDENCE
+      case 0x05: // DISPUTES
+      case 0x06: // VESTING
+      case 0x07: // RESEARCH
+      case 0x08: // REFERENCES
+      case 0x0a: // PAYMENT_CHANNELS
+      case 0x0b: // PROJECTS
+      case 0x0c: // SERVICES
+      case 0x0d: // GOVERNANCE
+      case 0x0e: // TASKS
+      case 0x0f: // SUBSCRIPTIONS
+      case 0x15: // SCHEDULES
+        // These namespaces are persisted to storage (below) but not tracked
+        // in recovery maps. Full state is loaded via StateManager.loadStateTrees().
+        break;
+
+      case 0x09: // CLAIMS
         if (op.type === "put" && value) {
           const claim = this.deserialize<ClaimState>(value);
           claims.set(op.key, claim);
@@ -318,8 +334,6 @@ export class RecoveryManager {
           claims.delete(op.key);
         }
         break;
-
-      // Other namespaces can be added as needed
     }
 
     // Also apply to persistent storage
@@ -440,9 +454,7 @@ export async function createCheckpoint(
 /**
  * Load the last checkpoint
  */
-export async function loadCheckpoint(
-  store: KVStore,
-): Promise<{
+export async function loadCheckpoint(store: KVStore): Promise<{
   blockNumber: bigint;
   stateRoot: string;
   timestamp: number;

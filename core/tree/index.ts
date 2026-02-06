@@ -29,6 +29,7 @@ export type {
   PricingTier,
   RevenueStream,
   RevenueDistribution,
+  EvidenceTaxBreakdown,
   ContributorShare,
   OpportunitySeed,
   SeedStatus,
@@ -97,6 +98,7 @@ export {
   calculateMatchScore,
   calculateContributorWeight,
   calculateAllContributorWeights,
+  VALID_TASK_CAPABILITY_NAMES,
 } from "./coordination/skill_matching.js";
 export type { AgentMatch } from "./coordination/skill_matching.js";
 
@@ -114,6 +116,8 @@ export {
   retireService,
   isServiceCallable,
   generateServiceId,
+  slugifyServiceName,
+  generateSubdomain,
   ServiceError,
 } from "./service_deployment.js";
 export type { ServiceErrorCode } from "./service_deployment.js";

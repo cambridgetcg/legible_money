@@ -56,6 +56,18 @@ describe("createTask", () => {
     expect(task.assignee).toBeUndefined();
   });
 
+  it("should reject deadline in the past (P2-4 fix)", () => {
+    expect(() =>
+      createTask("p", "T", "", "implement", [], 1000n, 0n, 100n, 50n),
+    ).toThrow("Deadline must be in the future");
+  });
+
+  it("should reject deadline equal to creation block (P2-4 fix)", () => {
+    expect(() =>
+      createTask("p", "T", "", "implement", [], 1000n, 0n, 100n, 100n),
+    ).toThrow("Deadline must be in the future");
+  });
+
   it("should generate deterministic IDs", () => {
     const t1 = createTask("proj-1", "A", "", "test", [], 0n, 0n, 0n);
     const t2 = createTask("proj-1", "B", "", "test", [], 0n, 0n, 0n);
@@ -186,6 +198,41 @@ describe("rejectDeliverable", () => {
     expect(() => rejectDeliverable(task, AGENT_A, "reason")).toThrow(
       "cannot review their own",
     );
+  });
+});
+
+describe("rejectDeliverable — rejection cap (P2-6 fix)", () => {
+  it("should escalate to disputed after 3 rejections", () => {
+    let task = createTask("p", "T", "", "implement", [], 1000n, 0n, 100n);
+    task = assignTask(task, AGENT_A, 101n);
+
+    // Rejection 1
+    task = submitDeliverable(task, AGENT_A, makeDeliverable(), 200n);
+    task = rejectDeliverable(task, AGENT_B, "needs work");
+    expect(task.status).toBe("rejected");
+    expect(task.rejectionCount).toBe(1);
+
+    // Rejection 2
+    task = reopenTask(task);
+    task = submitDeliverable(task, AGENT_A, makeDeliverable(210n), 210n);
+    task = rejectDeliverable(task, AGENT_B, "still needs work");
+    expect(task.status).toBe("rejected");
+    expect(task.rejectionCount).toBe(2);
+
+    // Rejection 3 → disputed
+    task = reopenTask(task);
+    task = submitDeliverable(task, AGENT_A, makeDeliverable(220n), 220n);
+    task = rejectDeliverable(task, AGENT_B, "final rejection");
+    expect(task.status).toBe("disputed");
+    expect(task.rejectionCount).toBe(3);
+  });
+
+  it("should not allow reopening disputed tasks", () => {
+    let task = createTask("p", "T", "", "implement", [], 1000n, 0n, 100n);
+    task = assignTask(task, AGENT_A, 101n);
+    // Force to disputed state
+    task = { ...task, status: "disputed", rejectionCount: 3 };
+    expect(() => reopenTask(task)).toThrow();
   });
 });
 

@@ -50,6 +50,10 @@ if (!isMainThread) {
 
   const runNode = async () => {
     try {
+      // Register tsx ESM loader in worker thread so .js → .ts resolution works
+      const { register } = await import("tsx/esm/api");
+      register();
+
       parentPort?.postMessage({
         type: "status",
         nodeId: config.nodeId,
@@ -97,20 +101,70 @@ if (!isMainThread) {
         };
       }
 
+      // Load validator keys if this is a validator node
+      let validatorKey: string | undefined;
+      let validatorPublicKey: string | undefined;
+      if (config.isValidator) {
+        try {
+          const secretsPath = join(
+            __workerDirname,
+            "..",
+            "..",
+            "devnet",
+            "secrets",
+            `validator-${config.nodeId + 1}.key`,
+          );
+          const keyData = JSON.parse(readFileSync(secretsPath, "utf-8"));
+          validatorKey = keyData.privateKey;
+          validatorPublicKey = keyData.publicKey;
+          console.log(
+            `[Node ${config.nodeId}] Loaded validator key: ${validatorPublicKey?.slice(0, 16)}...`,
+          );
+        } catch {
+          console.warn(
+            `[Node ${config.nodeId}] No validator key found, running as non-validator`,
+          );
+        }
+      }
+
       // Create and start the node
       const node = createDevnetNode(`node-${config.nodeId}`, genesis, {
         rpcPort: config.rpcPort,
         p2pPort: config.p2pPort,
-        isValidator: config.isValidator,
+        isValidator: config.isValidator && !!validatorKey,
+        validatorKey,
+        validatorPublicKey,
       });
 
       await node.start();
+
+      // Get listen addresses for peer connection
+      const components = node.getComponents();
+      const listenAddrs = components?.network?.getListenAddresses() ?? [];
 
       parentPort?.postMessage({
         type: "status",
         nodeId: config.nodeId,
         status: "running",
         pid: process.pid,
+        listenAddresses: listenAddrs,
+      });
+
+      // Listen for connect messages from main thread
+      parentPort?.on("message", async (msg) => {
+        if (msg.type === "connect" && components?.network) {
+          for (const addr of msg.addresses) {
+            try {
+              const { multiaddr } = await import("@multiformats/multiaddr");
+              await components.network.connect(multiaddr(addr).toString());
+              console.log(
+                `[Node ${config.nodeId}] Connected to ${addr.slice(-20)}`,
+              );
+            } catch (err) {
+              // Ignore self-connection errors
+            }
+          }
+        }
       });
 
       // Keep worker alive and handle shutdown
@@ -142,6 +196,7 @@ if (isMainThread) {
   class DevnetSpawner {
     private workers: Map<number, Worker> = new Map();
     private nodeStatuses: Map<number, NodeStatus> = new Map();
+    private nodeListenAddresses: Map<number, string[]> = new Map();
     private nodeCount: number;
 
     constructor(nodeCount: number = DEFAULT_NODE_COUNT) {
@@ -166,6 +221,9 @@ if (isMainThread) {
       const elapsed = Date.now() - startTime;
       console.log(`\n✅ All ${this.nodeCount} nodes started in ${elapsed}ms`);
       this.printStatus();
+
+      // Connect peers to each other
+      await this.connectPeers();
 
       // Handle shutdown
       process.on("SIGINT", () => this.shutdown());
@@ -199,6 +257,8 @@ if (isMainThread) {
       return new Promise((resolve, reject) => {
         const worker = new Worker(__filename, {
           workerData: config,
+          // Register tsx loader in worker threads so .js → .ts resolution works
+          execArgv: ["--import", "tsx"],
         });
 
         worker.on("message", (msg) => {
@@ -211,6 +271,9 @@ if (isMainThread) {
             });
 
             if (msg.status === "running") {
+              if (msg.listenAddresses) {
+                this.nodeListenAddresses.set(msg.nodeId, msg.listenAddresses);
+              }
               console.log(`   ✓ Node ${msg.nodeId} running (PID: ${msg.pid})`);
               resolve();
             } else if (msg.status === "error") {
@@ -233,6 +296,36 @@ if (isMainThread) {
 
         this.workers.set(config.nodeId, worker);
       });
+    }
+
+    private async connectPeers(): Promise<void> {
+      // Collect all listen addresses (use only localhost TCP)
+      const allAddresses: string[] = [];
+      for (const [, addrs] of this.nodeListenAddresses) {
+        const localhostAddr = addrs.find((a) => a.includes("127.0.0.1/tcp/"));
+        if (localhostAddr) allAddresses.push(localhostAddr);
+      }
+
+      if (allAddresses.length < 2) {
+        console.log("\n⚠️  Not enough peers to connect");
+        return;
+      }
+
+      console.log(`\n🔗 Connecting ${allAddresses.length} peers...`);
+
+      // Send all addresses to each worker
+      for (const [nodeId, worker] of this.workers) {
+        // Send addresses of OTHER nodes
+        const otherAddresses = allAddresses.filter((addr) => {
+          const nodeAddrs = this.nodeListenAddresses.get(nodeId) ?? [];
+          return !nodeAddrs.includes(addr);
+        });
+        worker.postMessage({ type: "connect", addresses: otherAddresses });
+      }
+
+      // Wait for connections to establish
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log("   Peer connections initiated");
     }
 
     private printStatus(): void {

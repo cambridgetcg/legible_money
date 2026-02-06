@@ -219,7 +219,7 @@ export function beginSeeding(
  */
 export function pauseProject(
   project: ProductProject,
-  _reason: string,
+  reason: string,
   block: bigint,
 ): ProductProject {
   assertTransition(project, "dormant");
@@ -227,13 +227,16 @@ export function pauseProject(
   return {
     ...project,
     phase: "dormant",
+    previousPhase: project.phase,
+    pauseReason: reason || undefined,
     phaseChangedAtBlock: block,
   };
 }
 
 /**
- * Resume a dormant project to a specified phase.
- * Phase must be one the project was previously in.
+ * Resume a dormant project to its previous phase.
+ * Only allows returning to the phase the project was in before pausing.
+ * If targetPhase is specified, it must match previousPhase.
  */
 export function resumeProject(
   project: ProductProject,
@@ -247,10 +250,18 @@ export function resumeProject(
     );
   }
 
-  const allowed = VALID_PHASE_TRANSITIONS.dormant;
-  if (!allowed.includes(targetPhase)) {
+  // Must have a recorded previous phase (set by pauseProject)
+  if (!project.previousPhase) {
     throw new ProjectLifecycleError(
-      `Cannot resume to '${targetPhase}': allowed targets are ${allowed.join(", ")}`,
+      "Cannot resume: no previous phase recorded (project may have been created dormant)",
+      "INVALID_TRANSITION",
+    );
+  }
+
+  // Only allow resuming to the phase the project was in before pausing
+  if (targetPhase !== project.previousPhase) {
+    throw new ProjectLifecycleError(
+      `Cannot resume to '${targetPhase}': project was paused from '${project.previousPhase}', must resume there`,
       "INVALID_TRANSITION",
     );
   }
@@ -258,6 +269,8 @@ export function resumeProject(
   return {
     ...project,
     phase: targetPhase,
+    previousPhase: undefined,
+    pauseReason: undefined,
     phaseChangedAtBlock: block,
   };
 }
@@ -322,12 +335,29 @@ export function addContributor(
 
 /**
  * Record a task completion for a contributor.
+ * Throws if the contributor is not in the project's contributor list,
+ * preventing silent weight drift where project.spent diverges from
+ * sum(contributors[].totalEarned).
  */
 export function recordTaskCompletion(
   project: ProductProject,
   contributor: DID,
   bountyEarned: bigint,
 ): ProductProject {
+  if (!project.contributors.some((c) => c.did === contributor)) {
+    throw new ProjectLifecycleError(
+      `Agent ${contributor} is not a project contributor`,
+      "NOT_A_CONTRIBUTOR",
+    );
+  }
+
+  if (project.completedTasks >= project.totalTasks) {
+    throw new ProjectLifecycleError(
+      "All tasks already completed",
+      "INVARIANT_VIOLATION",
+    );
+  }
+
   const updatedContributors = project.contributors.map((c) =>
     c.did === contributor
       ? {
@@ -427,7 +457,9 @@ export type ProjectLifecycleErrorCode =
   | "TASKS_INCOMPLETE"
   | "NO_SERVICES"
   | "NO_REVENUE"
-  | "DUPLICATE_CONTRIBUTOR";
+  | "DUPLICATE_CONTRIBUTOR"
+  | "NOT_A_CONTRIBUTOR"
+  | "INVARIANT_VIOLATION";
 
 export class ProjectLifecycleError extends Error {
   constructor(

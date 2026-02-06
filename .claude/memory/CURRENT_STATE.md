@@ -1,7 +1,7 @@
 # Current Project State
 
-> **Last Updated**: 2026-02-05
-> **Session**: Testing & Gap Analysis
+> **Last Updated**: 2026-02-06
+> **Session**: KnowledgeStateTree Tests + Tree of Knowledge Review
 
 ---
 
@@ -294,6 +294,25 @@ cd devnet && docker-compose up -d
 npm run devnet:multi -- --nodes 3
 ```
 
+### 2026-02-06: KnowledgeStateTree Unit Tests
+- Created 116 unit tests for the core knowledge state tree (`tests/unit/state/knowledge_state_tree.test.ts`)
+- Covers: Fact CRUD (14), citation economics (6), challenges (8), revocation with BFS propagation (5),
+  supersession (4), reference graph (7), supporting/contradicting queries (4), queries (4),
+  domain management (4), merkle proofs (3), eager decay (3), lazy decay GAP-008 (8),
+  confidence propagation (4), derived confidence (4), circular dependency detection (4),
+  updateFactConfidenceWithPropagation (3), reverification (5), cloning (5), factory functions (3),
+  constants (2), edge cases (8)
+- Discovered and documented key behavioral details:
+  - `revokeFact()` BFS propagation: `calculateDerivedConfidence()` returns 0 when all premises revoked
+  - CATEGORY_DECAY "empirical" and "social" share half-life (111111), differ only in minConfidence
+  - Cycle penalty feeds back through BFS (2-node: 0.8 → 0.48 → 0.3888)
+- Conducted comprehensive Tree of Knowledge progress review (~20K LOC, 95%+ complete)
+
+Files created:
+```
+tests/unit/state/knowledge_state_tree.test.ts (116 tests)
+```
+
 ### 2026-02-05: Testing & Gap Analysis (Session 2)
 - Added tests for GAP-004 (Semantic Search): 42 tests for SemanticSimilarityIndex and StubEmbedder
 - Added tests for GAP-007 (Per-Message Billing): 83 tests for MessageBillingTracker, token counting, complexity multipliers
@@ -409,8 +428,8 @@ Files created:
 | Lines of code (src) | ~172,000 |
 | Documentation files | 59 |
 | Top-level modules | 20 |
-| Test files | 45 (all passing) |
-| Total tests | 1,717 |
+| Test files | 46 (all passing) |
+| Total tests | 1,833 |
 | Implementation gaps | 0 (10/10 resolved) |
 | Open-source readiness | A+ |
 | Overall completion | ~95% |

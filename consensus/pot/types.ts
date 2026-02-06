@@ -457,7 +457,44 @@ export type TransactionPayload =
       targetContract: string;
       data: Uint8Array;
       value: bigint;
-    };
+    }
+  // Tree of Life transactions
+  | {
+      type: "create_project";
+      name: string;
+      description: string;
+      knowledgeDomain: string;
+      productSpec: Record<string, unknown>;
+      fundingSource: Record<string, unknown>;
+      demandSignal: Record<string, unknown>;
+    }
+  | { type: "propose_project"; projectId: string }
+  | { type: "assign_task"; projectId: string; taskId: string; agentDid: string }
+  | {
+      type: "submit_deliverable";
+      projectId: string;
+      taskId: string;
+      deliverable: Record<string, unknown>;
+    }
+  | { type: "approve_deliverable"; projectId: string; taskId: string }
+  | { type: "deploy_service"; projectId: string }
+  | { type: "call_service"; serviceId: string; units: bigint }
+  | { type: "pause_service"; serviceId: string }
+  | { type: "resume_service"; serviceId: string }
+  | { type: "retire_service"; serviceId: string }
+  | { type: "start_development"; projectId: string }
+  | { type: "complete_project"; projectId: string }
+  | { type: "begin_seeding"; projectId: string }
+  | { type: "pause_project"; projectId: string }
+  | { type: "resume_project"; projectId: string }
+  | { type: "abandon_project"; projectId: string }
+  | {
+      type: "add_contributor";
+      projectId: string;
+      contributorDid: string;
+      role: string;
+    }
+  | { type: "add_task"; projectId: string; taskId: string };
 
 // Re-export ScheduleExecutionProof for consumers of this module
 export type { ScheduleExecutionProof } from "../../core/schedule/types.js";
@@ -530,6 +567,8 @@ export type TransactionType =
   | "domain_endorse" // Endorse a domain proposal
   | "domain_challenge" // Challenge a domain proposal
   | "domain_finalize" // Finalize a domain proposal
+  | "domain_governance_approve" // Approve a governance-required domain proposal after LIP vote
+  | "domain_deprecate" // Deprecate a domain (prevent new claims)
   // Governance LIP lifecycle
   | "lip_submit" // Submit a new LIP
   | "lip_stake" // Stake on a LIP to move to review
@@ -577,8 +616,35 @@ export type TransactionType =
   | "approve_deliverable" // Approve deliverable + pay bounty
   | "deploy_service" // Deploy project as service
   | "call_service" // Call a deployed service
+  | "subscribe_service" // Subscribe to a subscription-priced service
   | "pause_service" // Pause a service
-  | "retire_service"; // Retire a service
+  | "resume_service" // Resume a paused service
+  | "retire_service" // Retire a service
+
+  // Tree of Life lifecycle transitions
+  | "start_development" // Start development (sprout → growing)
+  | "complete_project" // Mark project complete (growing → mature)
+  | "begin_seeding" // Begin spawning child projects (fruiting → seeding)
+  | "pause_project" // Pause project (→ dormant)
+  | "resume_project" // Resume project (dormant → previous phase)
+  | "abandon_project" // Abandon project (→ withered)
+  | "add_contributor" // Add contributor to project
+  | "add_task" // Add task to project
+  | "start_work" // Agent begins work on assigned task
+  | "reject_deliverable" // Reviewer rejects deliverable
+  | "reopen_task" // Reopen rejected task for retry
+  | "detect_opportunity" // Store detected opportunity seeds
+  | "claim_opportunity" // Claim an opportunity seed to create project
+  | "apply_to_project" // Agent applies to join a project
+  | "review_application" // Project lead reviews application
+  | "set_availability" // Agent sets availability for matching
+
+  // Disbursement lifecycle
+  | "disbursement_submit" // Submit treasury disbursement proposal
+  | "disbursement_stake" // Stake on disbursement to move to voting
+  | "disbursement_advance_stage" // Advance based on vote results
+  | "disbursement_execute" // Execute approved disbursement after timelock
+  | "disbursement_cancel"; // Cancel disbursement (by proposer)
 
 // ============ Consensus State ============
 

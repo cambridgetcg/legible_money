@@ -80,7 +80,10 @@ const VALID_TX_TYPES: Set<string> = new Set([
   "vesting_clawback",
   "domain_propose",
   "domain_endorse",
-  "domain_reject",
+  "domain_challenge",
+  "domain_finalize",
+  "domain_governance_approve",
+  "domain_deprecate",
   "open_payment_channel",
   "update_payment_channel",
   "close_payment_channel",
@@ -90,6 +93,22 @@ const VALID_TX_TYPES: Set<string> = new Set([
   "autonomy_cancel_schedule",
   "autonomy_execute_scheduled",
   "autonomy_invoke_contract",
+  // Tree of Life transactions
+  "create_project",
+  "propose_project",
+  "assign_task",
+  "submit_deliverable",
+  "approve_deliverable",
+  "deploy_service",
+  "call_service",
+  "subscribe_service",
+  "pause_service",
+  "resume_service",
+  "retire_service",
+  // Tree of Life recruitment
+  "apply_to_project",
+  "review_application",
+  "set_availability",
 ]);
 
 // ============ Send Transaction Handler ============

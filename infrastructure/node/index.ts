@@ -25,6 +25,9 @@ import {
 } from "../../network/adapters/consensus-bridge.js";
 import type { ConsensusParams } from "../../consensus/pot/types.js";
 import type { PrivateKey, PublicKey } from "../../core/crypto/keys.js";
+import { WriteAheadLog } from "../../state/storage/write_ahead_log.js";
+import { RPCServer } from "../../protocol/rpc/server.js";
+import type { HandlerContext } from "../../protocol/rpc/handlers.js";
 
 // ============ Types ============
 
@@ -111,12 +114,14 @@ export interface GenesisConfig {
 
 export interface NodeComponents {
   store: KVStore;
+  wal: WriteAheadLog;
   stateManager: StateManager;
   stateIntegration: StateIntegration;
   consensus: ProofOfTruthEngine;
   mempool: Mempool;
   network: LegibleNode;
   bridge: ConsensusNetworkBridge;
+  rpcServer: RPCServer | null;
 }
 
 // ============ Node Class ============
@@ -131,6 +136,7 @@ export class LegibleMoneyNode extends EventEmitter {
   private genesis: GenesisConfig;
   private components: NodeComponents | null = null;
   private started = false;
+  private lastFinalizedBlock: bigint = 0n;
 
   constructor(config: NodeConfig, genesis: GenesisConfig) {
     super();
@@ -154,6 +160,33 @@ export class LegibleMoneyNode extends EventEmitter {
       // Phase 1: Initialize storage
       console.log("[Node] Phase 1: Initializing storage...");
       const store = await this.initStorage();
+
+      // Phase 1b: Initialize WAL and check for crash recovery
+      console.log("[Node] Phase 1b: Initializing write-ahead log...");
+      const wal = new WriteAheadLog(store);
+      await wal.initialize();
+
+      const uncommitted = await wal.findUncommittedEntries();
+      if (uncommitted.length > 0) {
+        console.warn(
+          `[Node] Found ${uncommitted.length} uncommitted WAL entries from previous run`,
+        );
+        // Our persistBlock() uses a single atomic LevelDB batch, so either
+        // all data wrote or none did. Mark these WAL entries as committed
+        // since the data is either fully present or absent.
+        for (const entry of uncommitted) {
+          console.warn(
+            `[Node] Marking WAL entry ${entry.id} (block ${entry.blockNumber}) as committed`,
+          );
+          await wal.markCommitted(entry.id);
+        }
+      }
+
+      // Clean up old WAL entries
+      const cleaned = await wal.cleanup(100);
+      if (cleaned > 0) {
+        console.log(`[Node] Cleaned up ${cleaned} old WAL entries`);
+      }
 
       // Phase 2: Initialize state
       console.log("[Node] Phase 2: Initializing state manager...");
@@ -220,23 +253,65 @@ export class LegibleMoneyNode extends EventEmitter {
         throw new Error("State integration not available from consensus");
       }
 
+      // Phase 7: Initialize RPC server (if enabled)
+      let rpcServer: RPCServer | null = null;
+      if (this.config.rpc.enabled) {
+        console.log("[Node] Phase 7: Initializing RPC server...");
+        const handlerContext: HandlerContext = {
+          state: stateManager,
+          consensus,
+          stateIntegration,
+          nodeVersion: "0.1.0",
+          networkId: "lgm-devnet-1",
+          network,
+        };
+        rpcServer = new RPCServer(handlerContext, {
+          host: this.config.rpc.host,
+          port: this.config.rpc.port,
+          cors: {
+            enabled: this.config.rpc.cors.length > 0,
+            origins: this.config.rpc.cors.filter((o: string) => o !== "*"),
+          },
+          // DevNet: increase rate limits for automated testing
+          rateLimits: {
+            windowMs: 60000,
+            maxRequests: {
+              free: 600,
+              staked100: 3000,
+              staked1000: 10000,
+              validator: 100000,
+            },
+          },
+        });
+      }
+
       // Store components
       this.components = {
         store,
+        wal,
         stateManager,
         stateIntegration,
         consensus,
         mempool,
         network,
         bridge,
+        rpcServer,
       };
 
-      // Phase 7: Start network
-      console.log("[Node] Phase 7: Starting network...");
+      // Phase 8: Start network
+      console.log("[Node] Phase 8: Starting network...");
       await network.start();
 
-      // Phase 8: Start consensus
-      console.log("[Node] Phase 8: Starting consensus...");
+      // Phase 9: Start RPC server
+      if (rpcServer) {
+        console.log(
+          `[Node] Phase 9: Starting RPC on ${this.config.rpc.host}:${this.config.rpc.port}...`,
+        );
+        await rpcServer.start();
+      }
+
+      // Phase 10: Start consensus
+      console.log("[Node] Phase 10: Starting consensus...");
       consensus.start();
 
       // Setup block persistence
@@ -266,9 +341,23 @@ export class LegibleMoneyNode extends EventEmitter {
       // Stop consensus
       this.components.consensus.stop();
 
-      // Persist final state
+      // Persist final state atomically with WAL
       console.log("[Node] Persisting final state...");
-      await this.components.stateManager.persistStateTrees();
+      const { wal, stateManager } = this.components;
+      const blockNumber = this.lastFinalizedBlock;
+
+      wal.beginTransaction(blockNumber);
+      await wal.prepare();
+      await stateManager.persistBlock(blockNumber);
+      await wal.commit();
+
+      // Clean up old WAL entries
+      await wal.cleanup(10);
+
+      // Stop RPC server
+      if (this.components.rpcServer) {
+        await this.components.rpcServer.stop();
+      }
 
       // Stop network
       await this.components.network.stop();
@@ -372,9 +461,8 @@ export class LegibleMoneyNode extends EventEmitter {
       });
     }
 
-    // Persist genesis state
-    await stateManager.persistStateTrees();
-    await stateManager.persistStateRoots(0n);
+    // Persist genesis state atomically
+    await stateManager.persistBlock(0n);
 
     console.log(
       `[Node] Genesis state initialized: ${this.genesis.initialAccounts.length} accounts, ${this.genesis.initialValidators.length} validators, ${this.genesis.genesisAxioms.length} axioms`,
@@ -383,24 +471,28 @@ export class LegibleMoneyNode extends EventEmitter {
 
   /**
    * Setup block persistence - persist state after each finalized block
+   * Uses WAL to fence each persist: if we crash between prepare and commit,
+   * recovery knows block N was in-flight.
    */
   private setupBlockPersistence(): void {
     if (!this.components) return;
 
-    const { consensus, stateManager } = this.components;
+    const { consensus, stateManager, wal } = this.components;
 
     // Persist state after each finalized block
     consensus.on(
       "block_finalized",
-      async (event: { block: { number: bigint } }) => {
+      async (event: { blockNumber: bigint; blockHash: string }) => {
         try {
-          const blockNumber = event.block.number;
+          const blockNumber = event.blockNumber;
 
-          // Persist state trees
-          const count = await stateManager.persistStateTrees();
+          // WAL fence: begin → prepare → atomic persist → commit
+          wal.beginTransaction(blockNumber);
+          await wal.prepare();
+          const count = await stateManager.persistBlock(blockNumber);
+          await wal.commit();
 
-          // Persist state roots for this block
-          await stateManager.persistStateRoots(blockNumber);
+          this.lastFinalizedBlock = blockNumber;
 
           if (this.config.node.logLevel === "debug") {
             console.log(
@@ -409,6 +501,12 @@ export class LegibleMoneyNode extends EventEmitter {
           }
         } catch (error) {
           console.error("[Node] Failed to persist block state:", error);
+          // Attempt WAL rollback on failure
+          try {
+            await wal.rollback();
+          } catch (rollbackError) {
+            console.error("[Node] WAL rollback failed:", rollbackError);
+          }
           this.emit("error", error);
         }
       },

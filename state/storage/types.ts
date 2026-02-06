@@ -150,6 +150,33 @@ export const STORAGE_NAMESPACES = {
   /** Knowledge reference graph (fact-to-fact references) */
   REFERENCES: new Uint8Array([0x08]),
 
+  /** Claim state tree */
+  CLAIMS: new Uint8Array([0x09]),
+
+  /** Payment channel state tree */
+  PAYMENT_CHANNELS: new Uint8Array([0x0a]),
+
+  /** Project state tree (Tree of Life) */
+  PROJECTS: new Uint8Array([0x0b]),
+
+  /** Service state tree (Tree of Life) */
+  SERVICES: new Uint8Array([0x0c]),
+
+  /** Task state tree (Tree of Life) */
+  TASKS: new Uint8Array([0x0e]),
+
+  /** Governance state tree (LIPs, votes, domain proposals) */
+  GOVERNANCE: new Uint8Array([0x0d]),
+
+  /** Subscription state (service subscriptions) */
+  SUBSCRIPTIONS: new Uint8Array([0x0f]),
+
+  /** Opportunity seed state tree (Tree of Life) */
+  SEEDS: new Uint8Array([0x14]),
+
+  /** DMSS schedule processes (SPS 131313) */
+  SCHEDULES: new Uint8Array([0x15]),
+
   /** Evidence state tree */
   EVIDENCE: new Uint8Array([0x04]),
 

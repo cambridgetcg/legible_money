@@ -103,6 +103,11 @@ function createMockContext(
           f.claim.toLowerCase().includes(query.toLowerCase()),
         );
       }),
+      getFactReferences: vi.fn((_factId: string) => ({
+        supports: [],
+        contradicts: [],
+        extends: [],
+      })),
     } as any,
     consensus: {
       getActiveRounds: vi.fn(() => activeRounds),
@@ -427,7 +432,7 @@ describe.sequential("Knowledge Handlers", () => {
       expect(result.blockNumber).toBe("100");
     });
 
-    it("should include empty references when requested", async () => {
+    it("should include references when requested", async () => {
       const fact = createMockFact();
       const facts = new Map([[fact.id, fact]]);
       const ctx = createMockContext({ facts });
@@ -442,6 +447,8 @@ describe.sequential("Knowledge Handlers", () => {
         contradicts: [],
         extends: [],
       });
+      // Verify getFactReferences was called with the correct fact ID
+      expect(ctx.state.getFactReferences).toHaveBeenCalledWith(fact.id);
     });
 
     it("should not include references when not requested", async () => {
@@ -744,7 +751,7 @@ describe.sequential("Handler Registry", () => {
   });
 
   it("should have all registered handlers", () => {
-    expect(Object.keys(handlers)).toHaveLength(46);
+    expect(Object.keys(handlers)).toHaveLength(68);
   });
 });
 

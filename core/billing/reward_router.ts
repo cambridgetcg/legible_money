@@ -351,16 +351,12 @@ export interface TreasurySplitEntry {
 export function splitEvidenceTax(
   evidenceTaxAmount: bigint,
 ): TreasurySplitEntry[] {
-  const researchBps = BigInt(Math.round(TREASURY.ALLOCATION.RESEARCH * 10000));
-  const foundationBps = BigInt(
-    Math.round(TREASURY.ALLOCATION.FOUNDATION * 10000),
-  );
-  const communityBps = BigInt(
-    Math.round(TREASURY.ALLOCATION.COMMUNITY * 10000),
-  );
-  const developersBps = BigInt(
-    Math.round(TREASURY.ALLOCATION.DEVELOPERS * 10000),
-  );
+  const {
+    RESEARCH: researchBps,
+    FOUNDATION: foundationBps,
+    COMMUNITY: communityBps,
+    DEVELOPERS: developersBps,
+  } = TREASURY.ALLOCATION_BPS;
 
   const research = (evidenceTaxAmount * researchBps) / 10000n;
   const foundation = (evidenceTaxAmount * foundationBps) / 10000n;

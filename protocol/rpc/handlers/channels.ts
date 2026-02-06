@@ -128,6 +128,27 @@ export const lgmOpenChannel: Handler<
     // Lock deposit in channel escrow
     ctx.state.transfer(senderDid, `channel:${channelId}:escrow`, deposit);
 
+    // Store channel in PaymentChannelStateTree
+    ctx.state.addPaymentChannel({
+      channelId,
+      payer: senderDid,
+      provider: params.providerDid,
+      deposited: deposit,
+      spent: 0n,
+      available: deposit,
+      status: "open",
+      openedAt: currentBlock,
+      expiresAt: expiresAtBlock,
+      lastNonce: 0n,
+      lastStateHash: "",
+      pendingDistributions: [],
+      totalDistributed: 0n,
+      settlementFrequency: params.settlementFrequency
+        ? BigInt(params.settlementFrequency)
+        : 100n,
+      lastSettlementBlock: currentBlock,
+    });
+
     return {
       channelId,
       txHash,
@@ -223,6 +244,22 @@ export const lgmCloseChannel: Handler<
       // In production, there would be a dispute period
       finalPayerBalance = totalDeposit;
       finalProviderBalance = 0n;
+    }
+
+    // Settle escrow: distribute funds back to payer and provider
+    const escrowDid2 = `channel:${params.channelId}:escrow`;
+    if (finalPayerBalance > 0n) {
+      ctx.state.transfer(escrowDid2, senderDid, finalPayerBalance);
+    }
+    if (finalProviderBalance > 0n) {
+      const channelState = ctx.state.getPaymentChannel(params.channelId);
+      if (channelState?.provider) {
+        ctx.state.transfer(
+          escrowDid2,
+          channelState.provider,
+          finalProviderBalance,
+        );
+      }
     }
 
     // Calculate dispute period end (for unilateral close)

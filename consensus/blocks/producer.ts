@@ -14,6 +14,10 @@ import type {
   VerificationResult,
 } from "../pot/types.js";
 
+/** JSON replacer that converts BigInt to string (for size estimation and hashing) */
+const bigintReplacer = (_k: string, v: unknown) =>
+  typeof v === "bigint" ? v.toString() : v;
+
 // ============ Block Building ============
 
 export interface BlockBuildContext {
@@ -234,7 +238,7 @@ export function checkBlockLimits(block: Block): {
     return { valid: false, reason: "Too many verification results" };
   }
 
-  const size = JSON.stringify(block).length;
+  const size = JSON.stringify(block, bigintReplacer).length;
   if (size > BLOCK_LIMITS.MAX_BLOCK_SIZE_BYTES) {
     return { valid: false, reason: "Block too large" };
   }

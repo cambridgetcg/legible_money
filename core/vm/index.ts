@@ -122,6 +122,9 @@ export type {
 
   // Configuration
   BVMConfig,
+
+  // Knowledge service interface
+  BVMKnowledgeService,
 } from "./types.js";
 
 export {
@@ -129,6 +132,7 @@ export {
   DEFAULT_GAS_COSTS,
   DEFAULT_BVM_CONFIG,
   BVMError,
+  NullKnowledgeService,
   type BVMErrorCode,
 } from "./types.js";
 
@@ -290,7 +294,7 @@ export function createInitialState(): BVMState {
       globalRoot: new Uint8Array(32),
     },
     blockNumber: 0n,
-    timestamp: Date.now(),
+    timestamp: 0,
     stateVersion: 1,
   };
 }

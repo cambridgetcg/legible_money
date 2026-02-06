@@ -1001,7 +1001,7 @@ export const OPCODE_DEFINITIONS: Map<number, OpcodeDefinition> = new Map([
       mnemonic: "QUERY_DOMAIN",
       category: 0xb0,
       stackInputs: 2,
-      stackOutputs: "dynamic" as any,
+      stackOutputs: 1, // Minimum: count; actual outputs depend on results
       gasCost: "dynamic",
       description: "Query facts in domain",
     },
@@ -1063,7 +1063,7 @@ export const OPCODE_DEFINITIONS: Map<number, OpcodeDefinition> = new Map([
       mnemonic: "LIST_TRUSTED",
       category: 0xc0,
       stackInputs: 2,
-      stackOutputs: "dynamic" as any,
+      stackOutputs: 1, // Minimum: count; actual outputs depend on results
       gasCost: g.relationshipRead,
       description: "List all trusted agents",
     },
@@ -1125,7 +1125,7 @@ export const OPCODE_DEFINITIONS: Map<number, OpcodeDefinition> = new Map([
       mnemonic: "QUERY_VESTING",
       category: 0xd0,
       stackInputs: 2,
-      stackOutputs: "dynamic" as any,
+      stackOutputs: 1, // Minimum: count; actual outputs depend on results
       gasCost: g.introspection,
       description: "Query vesting positions",
     },
@@ -1211,7 +1211,7 @@ export const OPCODE_DEFINITIONS: Map<number, OpcodeDefinition> = new Map([
       mnemonic: "QUERY_ALERTS",
       category: 0xd8,
       stackInputs: 2,
-      stackOutputs: "dynamic" as any,
+      stackOutputs: 1, // Minimum: count; actual outputs depend on results
       gasCost: g.introspection,
       description: "Query pending alerts",
     },
@@ -1247,7 +1247,7 @@ export const OPCODE_DEFINITIONS: Map<number, OpcodeDefinition> = new Map([
       mnemonic: "QUERY_DEFENSES",
       category: 0xd8,
       stackInputs: 0,
-      stackOutputs: "dynamic" as any,
+      stackOutputs: 1, // Minimum: count; actual outputs depend on results
       gasCost: g.introspection,
       description: "Query active defenses",
     },

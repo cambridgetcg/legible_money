@@ -981,15 +981,15 @@ Autonomy (0xEC-0xEF):
   0xEE MODIFY_SCHEDULE  - Modify schedule
   0xEF GET_SCHEDULES    - List schedules
 
-Knowledge (0xF0-0xF7):
-  0xF0 QUERY_FACT       - Query knowledge
-  0xF1 QUERY_DOMAIN     - List domain facts
-  0xF2 SUBMIT_CLAIM     - Submit claim
-  0xF3 COMMIT_VOTE      - Commit verification
-  0xF4 REVEAL_VOTE      - Reveal verification
-  0xF5 INITIATE_CHALLENGE - Challenge fact
-  0xF6 DEFEND_CHALLENGE - Defend fact
-  0xF7 MY_ASSIGNMENTS   - Get assignments
+Knowledge (0xB0-0xB5):
+  0xB0 QUERY_FACT         - Query knowledge
+  0xB1 QUERY_DOMAIN       - List domain facts
+  0xB2 SUBMIT_CLAIM       - Submit claim
+  0xB3 COMMIT_VOTE        - Commit verification
+  0xB4 REVEAL_VOTE        - Reveal verification
+  0xB5 INITIATE_CHALLENGE - Challenge fact
+  Note: Moved from 0xF0-0xF7 to 0xB0-0xB5 to avoid conflict with EVM system opcodes (CREATE=0xF0, CALL=0xF1, etc.)
+  DEFEND_CHALLENGE, MY_ASSIGNMENTS reserved for future expansion (0xB6-0xB7)
 
 Introspection (0xF8-0xFF):
   0xF8 SELF_BALANCE     - Own balance

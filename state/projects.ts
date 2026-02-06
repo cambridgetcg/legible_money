@@ -12,7 +12,11 @@
  * - Budget and revenue tracking
  */
 
-import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
+import {
+  InMemorySMT,
+  type MerkleRoot,
+  type MerkleProofData,
+} from "../core/crypto/merkle.js";
 import { sha512_256 } from "../core/crypto/hashing.js";
 import type {
   ProductProject,
@@ -60,6 +64,14 @@ function serializeProject(project: ProductProject): Uint8Array {
     revenueGenerated: project.revenueGenerated.toString(),
     contractAddress: project.contractAddress,
     serviceIds: project.serviceIds,
+    applications: (project.applications ?? []).map((a) => ({
+      did: a.did,
+      proposedRole: a.proposedRole,
+      message: a.message,
+      capabilities: a.capabilities,
+      appliedAtBlock: a.appliedAtBlock.toString(),
+      status: a.status,
+    })),
   });
   return new TextEncoder().encode(json);
 }
@@ -115,6 +127,18 @@ function deserializeProject(bytes: Uint8Array): ProductProject {
     revenueGenerated: BigInt(obj.revenueGenerated),
     contractAddress: obj.contractAddress,
     serviceIds: obj.serviceIds,
+    applications: obj.applications
+      ? (obj.applications as Array<Record<string, unknown>>).map(
+          (a): import("../core/tree/types.js").ProjectApplication => ({
+            did: a.did as string,
+            proposedRole: a.proposedRole as ContributorRecord["role"],
+            message: a.message as string,
+            capabilities: a.capabilities as string[],
+            appliedAtBlock: BigInt(a.appliedAtBlock as string),
+            status: a.status as "pending" | "approved" | "rejected",
+          }),
+        )
+      : [],
   };
 }
 
@@ -156,7 +180,9 @@ export class ProjectStateTree {
   // ============ CRUD Operations ============
 
   /**
-   * Get project by ID
+   * Get project by ID.
+   * WARNING: Returns a cached reference. Do NOT mutate the returned object directly.
+   * Use updateProject() for all modifications.
    */
   getProject(projectId: string): ProductProject | null {
     const cached = this.cache.get(projectId);
@@ -271,6 +297,26 @@ export class ProjectStateTree {
    */
   getProjectCount(): number {
     return this.projectCount;
+  }
+
+  // ============ Proofs ============
+
+  /**
+   * Generate Merkle proof for a project.
+   * Proves inclusion (or non-inclusion) in the project state tree.
+   */
+  proveProject(projectId: string): MerkleProofData {
+    const key = projectIdToKey(projectId);
+    return this.smt.prove(key);
+  }
+
+  // ============ Persistence Export/Restore ============
+
+  /**
+   * Export all projects for persistence
+   */
+  exportProjects(): ProductProject[] {
+    return Array.from(this.cache.values());
   }
 
   // ============ Utilities ============

@@ -23,9 +23,10 @@
 
 import type { DID } from "../../../core/agents/identity/did.js";
 import type { FactState, DecayInfo } from "../../../state/types.js";
-import type {
-  OntologicalDomain,
-  OntologicalStratum,
+import {
+  type OntologicalDomain,
+  type OntologicalStratum,
+  STRATUM_TO_DECAY_CATEGORY,
 } from "../ontology/types.js";
 // GAP-008: Confidence decay calculation
 import { calculateCategoryDecayedConfidence } from "../../../consensus/pot/confidence.js";
@@ -94,6 +95,9 @@ export class UnifiedQueryService {
   /** GAP-010: Rate limiter for query throttling */
   private rateLimiter?: QueryRateLimiter;
 
+  /** Citation recorder callback (injected) for tracking fact usage */
+  private citationRecorder?: (factId: string, blockNumber: bigint) => void;
+
   constructor(
     reasoningIndex: DomainReasoningIndex,
     gatewayIndex: GatewayDomainIndex,
@@ -157,6 +161,16 @@ export class UnifiedQueryService {
    */
   getRateLimiter(): QueryRateLimiter | undefined {
     return this.rateLimiter;
+  }
+
+  /**
+   * Set the citation recorder callback.
+   * Called when facts are accessed via queries to drive citation economics.
+   */
+  setCitationRecorder(
+    recorder: (factId: string, blockNumber: bigint) => void,
+  ): void {
+    this.citationRecorder = recorder;
   }
 
   // ============================================================================
@@ -426,6 +440,13 @@ export class UnifiedQueryService {
     if (this.rateLimiter) {
       this.rateLimiter.recordQuery(sessionId, false);
       this.rateLimiter.recordQueryComplete(sessionId);
+    }
+
+    // Record citations for accessed facts (drives citation economics)
+    if (this.citationRecorder && result.facts.length > 0) {
+      for (const factResult of result.facts) {
+        this.citationRecorder(factResult.factId, chatSession.currentBlock);
+      }
     }
 
     // Trigger async prefetch for predicted next domains
@@ -1194,23 +1215,6 @@ export class UnifiedQueryService {
   // ============================================================================
 
   /**
-   * Mapping from ontological stratum to decay category.
-   * Categories align with CATEGORY_DECAY in consensus/pot/confidence.ts.
-   */
-  private static readonly STRATUM_TO_DECAY_CATEGORY: Record<
-    OntologicalStratum,
-    string
-  > = {
-    fundamental: "analytic", // Eternal - fundamental truths don't decay
-    physical: "empirical", // ~3.2 days half-life - physical facts need reverification
-    chemical: "empirical", // ~3.2 days half-life
-    biological: "empirical", // ~3.2 days half-life
-    cognitive: "social", // ~1 day half-life - cognitive/opinion facts decay faster
-    social: "social", // ~1 day half-life - social consensus changes quickly
-    technological: "protocol", // Eternal - on-chain/protocol facts are permanent
-  };
-
-  /**
    * Calculate effective (time-decayed) confidence for a fact.
    *
    * GAP-008: Lazy decay calculation - doesn't modify stored values.
@@ -1226,7 +1230,7 @@ export class UnifiedQueryService {
     // Map stratum to category for decay calculation
     const stratum = fact.stratum as OntologicalStratum | undefined;
     const category = stratum
-      ? (UnifiedQueryService.STRATUM_TO_DECAY_CATEGORY[stratum] ?? "empirical")
+      ? (STRATUM_TO_DECAY_CATEGORY[stratum] ?? "empirical")
       : "empirical";
 
     // Use category-aware decay from consensus module

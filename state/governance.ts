@@ -32,6 +32,13 @@ import {
   createEmptyDomainTree,
   addDomainToTree as addDomainToOntologicalTree,
 } from "../core/knowledge/ontology/tree.js";
+import type {
+  DisbursementProposal,
+  DisbursementStage,
+  DisbursementCategory,
+  TreasuryFund,
+  ExpenseRecord,
+} from "../governance/treasury/types.js";
 
 // ============ Key Generation ============
 
@@ -76,6 +83,9 @@ export interface GovernanceStats {
   totalVotes: number;
   totalStakeLocked: bigint;
   totalDomainProposals: number;
+  totalDisbursements: number;
+  totalExpenses: number;
+  totalDisbursed: bigint;
 }
 
 // ============ Governance State Tree ============
@@ -102,6 +112,23 @@ export class GovernanceStateTree {
 
   // Auto-incrementing LIP counter
   private lipCounter: number;
+
+  // Disbursement proposals
+  private disbursementCache: Map<string, DisbursementProposal>;
+  private disbursementCounter: number;
+
+  // Disbursement indexes
+  private disbursementsByStage: Map<DisbursementStage, Set<string>>;
+  private disbursementsByTreasury: Map<TreasuryFund, Set<string>>;
+  private disbursementsByCategory: Map<DisbursementCategory, Set<string>>;
+
+  // Expense records
+  private expenseRecords: Map<string, ExpenseRecord>;
+  private expenseCounter: number;
+
+  // Expense indexes
+  private expensesByCategory: Map<DisbursementCategory, Set<string>>;
+  private expensesByTreasury: Map<TreasuryFund, Set<string>>;
 
   // Statistics
   private stats: GovernanceStats;
@@ -136,12 +163,41 @@ export class GovernanceStateTree {
 
     this.lipCounter = 1;
 
+    // Disbursement fields
+    this.disbursementCache = new Map();
+    this.disbursementCounter = 1;
+    this.disbursementsByStage = new Map();
+    this.disbursementsByTreasury = new Map();
+    this.disbursementsByCategory = new Map();
+
+    // Initialize disbursement stage indexes
+    const disbStages: DisbursementStage[] = [
+      "proposed",
+      "voting",
+      "approved",
+      "executed",
+      "rejected",
+      "cancelled",
+    ];
+    for (const s of disbStages) {
+      this.disbursementsByStage.set(s, new Set());
+    }
+
+    // Expense fields
+    this.expenseRecords = new Map();
+    this.expenseCounter = 1;
+    this.expensesByCategory = new Map();
+    this.expensesByTreasury = new Map();
+
     this.stats = {
       totalLIPs: 0,
       lipsByStage: {},
       totalVotes: 0,
       totalStakeLocked: 0n,
       totalDomainProposals: 0,
+      totalDisbursements: 0,
+      totalExpenses: 0,
+      totalDisbursed: 0n,
     };
   }
 
@@ -335,6 +391,10 @@ export class GovernanceStateTree {
     this.domainProposals.set(proposal.id, proposal);
   }
 
+  getAllDomainProposals(): DomainProposal[] {
+    return Array.from(this.domainProposals.values());
+  }
+
   // ============ Domain Tree Operations ============
 
   getDomainTree(): DomainTree {
@@ -343,6 +403,179 @@ export class GovernanceStateTree {
 
   addDomainToTree(domain: OntologicalDomain): void {
     addDomainToOntologicalTree(this.domainTree, domain);
+  }
+
+  updateDomainInTree(
+    domainId: string,
+    updates: Partial<OntologicalDomain>,
+  ): void {
+    const node = this.domainTree.domainIndex.get(domainId);
+    if (!node) {
+      throw new StateError(
+        `Domain "${domainId}" not found in tree`,
+        "INVALID_TRANSITION",
+      );
+    }
+    Object.assign(node.domain, updates);
+  }
+
+  // ============ Disbursement Operations ============
+
+  addDisbursement(proposal: DisbursementProposal): void {
+    if (this.disbursementCache.has(proposal.id)) {
+      throw new StateError(
+        `Disbursement ${proposal.id} already exists`,
+        "INVALID_TRANSITION",
+      );
+    }
+
+    this.disbursementCache.set(proposal.id, proposal);
+
+    // Update indexes
+    this.addToIndex(this.disbursementsByStage, proposal.stage, proposal.id);
+    this.addToIndex(
+      this.disbursementsByTreasury,
+      proposal.treasuryFund,
+      proposal.id,
+    );
+    this.addToIndex(
+      this.disbursementsByCategory,
+      proposal.category,
+      proposal.id,
+    );
+
+    // Update counter
+    const num = parseInt(proposal.id.replace("DISB-", ""), 10);
+    if (!isNaN(num) && num >= this.disbursementCounter) {
+      this.disbursementCounter = num + 1;
+    }
+
+    this.stats.totalDisbursements++;
+    this.stats.totalStakeLocked += proposal.stakedAmount;
+  }
+
+  getDisbursement(id: string): DisbursementProposal | undefined {
+    return this.disbursementCache.get(id);
+  }
+
+  updateDisbursement(id: string, updated: DisbursementProposal): void {
+    const existing = this.getDisbursement(id);
+    if (!existing) {
+      throw new StateError(
+        `Disbursement ${id} not found`,
+        "INVALID_TRANSITION",
+      );
+    }
+
+    const oldStage = existing.stage;
+    const newStage = updated.stage;
+
+    this.disbursementCache.set(id, updated);
+
+    // Update stage index if changed
+    if (oldStage !== newStage) {
+      this.removeFromIndex(this.disbursementsByStage, oldStage, id);
+      this.addToIndex(this.disbursementsByStage, newStage, id);
+    }
+
+    // Track executed disbursements
+    if (newStage === "executed" && oldStage !== "executed") {
+      this.stats.totalDisbursed += updated.amount;
+    }
+
+    // Update stake tracking
+    const stakeDelta = updated.stakedAmount - existing.stakedAmount;
+    this.stats.totalStakeLocked += stakeDelta;
+  }
+
+  getDisbursementsByStage(stage: DisbursementStage): DisbursementProposal[] {
+    const ids = this.disbursementsByStage.get(stage);
+    if (!ids) return [];
+    return Array.from(ids)
+      .map((id) => this.disbursementCache.get(id))
+      .filter((d): d is DisbursementProposal => d !== undefined);
+  }
+
+  getDisbursementsByTreasury(fund: TreasuryFund): DisbursementProposal[] {
+    const ids = this.disbursementsByTreasury.get(fund);
+    if (!ids) return [];
+    return Array.from(ids)
+      .map((id) => this.disbursementCache.get(id))
+      .filter((d): d is DisbursementProposal => d !== undefined);
+  }
+
+  getDisbursementsByCategory(
+    category: DisbursementCategory,
+  ): DisbursementProposal[] {
+    const ids = this.disbursementsByCategory.get(category);
+    if (!ids) return [];
+    return Array.from(ids)
+      .map((id) => this.disbursementCache.get(id))
+      .filter((d): d is DisbursementProposal => d !== undefined);
+  }
+
+  getNextDisbursementNumber(): number {
+    return this.disbursementCounter;
+  }
+
+  // ============ Expense Record Operations ============
+
+  addExpenseRecord(record: ExpenseRecord): void {
+    if (this.expenseRecords.has(record.id)) {
+      throw new StateError(
+        `Expense record ${record.id} already exists`,
+        "INVALID_TRANSITION",
+      );
+    }
+
+    this.expenseRecords.set(record.id, record);
+
+    // Update indexes
+    this.addToIndex(this.expensesByCategory, record.category, record.id);
+    this.addToIndex(this.expensesByTreasury, record.treasuryFund, record.id);
+
+    // Update counter
+    const num = parseInt(record.id.replace("EXP-", ""), 10);
+    if (!isNaN(num) && num >= this.expenseCounter) {
+      this.expenseCounter = num + 1;
+    }
+
+    this.stats.totalExpenses++;
+  }
+
+  getExpenseRecord(id: string): ExpenseRecord | undefined {
+    return this.expenseRecords.get(id);
+  }
+
+  getExpensesByCategory(category: DisbursementCategory): ExpenseRecord[] {
+    const ids = this.expensesByCategory.get(category);
+    if (!ids) return [];
+    return Array.from(ids)
+      .map((id) => this.expenseRecords.get(id))
+      .filter((e): e is ExpenseRecord => e !== undefined);
+  }
+
+  getExpensesByTreasury(fund: TreasuryFund): ExpenseRecord[] {
+    const ids = this.expensesByTreasury.get(fund);
+    if (!ids) return [];
+    return Array.from(ids)
+      .map((id) => this.expenseRecords.get(id))
+      .filter((e): e is ExpenseRecord => e !== undefined);
+  }
+
+  getTotalExpenses(fund?: TreasuryFund): bigint {
+    let total = 0n;
+    if (fund) {
+      const records = this.getExpensesByTreasury(fund);
+      for (const r of records) total += r.amount;
+    } else {
+      for (const r of this.expenseRecords.values()) total += r.amount;
+    }
+    return total;
+  }
+
+  getNextExpenseNumber(): number {
+    return this.expenseCounter;
   }
 
   // ============ Statistics ============
@@ -386,11 +619,15 @@ export class GovernanceStateTree {
     lips: LIP[];
     votes: QuadraticVote[];
     domainProposals: DomainProposal[];
+    disbursements: DisbursementProposal[];
+    expenses: ExpenseRecord[];
   } {
     return {
       lips: Array.from(this.lipCache.values()),
       votes: Array.from(this.quadraticVotes.values()),
       domainProposals: Array.from(this.domainProposals.values()),
+      disbursements: Array.from(this.disbursementCache.values()),
+      expenses: Array.from(this.expenseRecords.values()),
     };
   }
 
@@ -398,6 +635,8 @@ export class GovernanceStateTree {
     lips: LIP[];
     votes: QuadraticVote[];
     domainProposals: DomainProposal[];
+    disbursements?: DisbursementProposal[];
+    expenses?: ExpenseRecord[];
   }): void {
     for (const lip of data.lips) {
       this.addLIP(lip);
@@ -407,6 +646,16 @@ export class GovernanceStateTree {
     }
     for (const proposal of data.domainProposals) {
       this.addDomainProposal(proposal);
+    }
+    if (data.disbursements) {
+      for (const disb of data.disbursements) {
+        this.addDisbursement(disb);
+      }
+    }
+    if (data.expenses) {
+      for (const expense of data.expenses) {
+        this.addExpenseRecord(expense);
+      }
     }
   }
 
@@ -436,12 +685,39 @@ export class GovernanceStateTree {
     }
 
     this.lipCounter = 1;
+
+    // Clear disbursement state
+    this.disbursementCache.clear();
+    this.disbursementCounter = 1;
+    const disbStages: DisbursementStage[] = [
+      "proposed",
+      "voting",
+      "approved",
+      "executed",
+      "rejected",
+      "cancelled",
+    ];
+    for (const s of disbStages) {
+      this.disbursementsByStage.set(s, new Set());
+    }
+    this.disbursementsByTreasury.clear();
+    this.disbursementsByCategory.clear();
+
+    // Clear expense state
+    this.expenseRecords.clear();
+    this.expenseCounter = 1;
+    this.expensesByCategory.clear();
+    this.expensesByTreasury.clear();
+
     this.stats = {
       totalLIPs: 0,
       lipsByStage: {},
       totalVotes: 0,
       totalStakeLocked: 0n,
       totalDomainProposals: 0,
+      totalDisbursements: 0,
+      totalExpenses: 0,
+      totalDisbursed: 0n,
     };
   }
 
@@ -504,6 +780,36 @@ export class GovernanceStateTree {
     for (const [voter, voteIds] of this.votesByVoter) {
       cloned.votesByVoter.set(voter, new Set(voteIds));
     }
+
+    // Clone disbursements
+    for (const [id, disb] of this.disbursementCache) {
+      cloned.disbursementCache.set(id, {
+        ...disb,
+        stageHistory: [...disb.stageHistory],
+      });
+    }
+    for (const [stage, ids] of this.disbursementsByStage) {
+      cloned.disbursementsByStage.set(stage, new Set(ids));
+    }
+    for (const [fund, ids] of this.disbursementsByTreasury) {
+      cloned.disbursementsByTreasury.set(fund, new Set(ids));
+    }
+    for (const [cat, ids] of this.disbursementsByCategory) {
+      cloned.disbursementsByCategory.set(cat, new Set(ids));
+    }
+    cloned.disbursementCounter = this.disbursementCounter;
+
+    // Clone expense records (immutable, shallow copy is sufficient)
+    for (const [id, record] of this.expenseRecords) {
+      cloned.expenseRecords.set(id, { ...record });
+    }
+    for (const [cat, ids] of this.expensesByCategory) {
+      cloned.expensesByCategory.set(cat, new Set(ids));
+    }
+    for (const [fund, ids] of this.expensesByTreasury) {
+      cloned.expensesByTreasury.set(fund, new Set(ids));
+    }
+    cloned.expenseCounter = this.expenseCounter;
 
     // Clone counter and stats
     cloned.lipCounter = this.lipCounter;

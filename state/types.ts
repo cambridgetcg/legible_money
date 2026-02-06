@@ -55,6 +55,10 @@ export interface StateRootComponents {
   governanceRoot?: MerkleRoot; // Governance state tree root (LIPs, votes, deployments)
   operatorRoot?: MerkleRoot; // Operator registry state root
   paymentChannelRoot?: MerkleRoot; // Payment channel state tree root (GAP-005)
+  projectRoot?: MerkleRoot; // Project state tree root (Tree of Life)
+  serviceRoot?: MerkleRoot; // Service state tree root (Tree of Life)
+  taskRoot?: MerkleRoot; // Task state tree root (Tree of Life)
+  seedRoot?: MerkleRoot; // Opportunity seed state tree root (Tree of Life)
 
   // Domain Capture Defense state roots
   qualificationRoot?: MerkleRoot; // Validator qualification state root
@@ -81,6 +85,19 @@ export interface AccountState {
   reputationScore: number; // Cached reputation (0-1)
   lastActiveBlock: bigint;
   flags: AccountFlags;
+  /** Agent availability for project work */
+  availability?: AgentAvailability;
+}
+
+/**
+ * Agent availability broadcast for project recruitment
+ */
+export interface AgentAvailability {
+  available: boolean;
+  capabilities: string[];
+  preferredDomains: string[];
+  minimumBounty: bigint;
+  updatedAtBlock: bigint;
 }
 
 /**
@@ -289,6 +306,13 @@ export interface ClaimState {
   /** Reason for rejection (if rejected) */
   rejectionReason?: string;
 
+  /** If derived from existing facts (inference chain) */
+  derivedFrom?: {
+    factIds: string[];
+    inferenceType: string;
+    logicChain: string;
+  };
+
   /** Optional schema ID for schema-based claims */
   schemaId?: string;
 }
@@ -312,6 +336,12 @@ export interface ClaimSubmitPayload {
   stratum: OntologicalStratum;
   stake: bigint;
   references: string[];
+  /** If derived from existing facts (inference chain) */
+  derivedFrom?: {
+    factIds: string[];
+    inferenceType: string;
+    logicChain: string;
+  };
   /** Optional schema ID for schema-based claims */
   schemaId?: string;
 }
@@ -486,7 +516,8 @@ export type ReferenceType =
   | "contradicts" // This fact contradicts another
   | "extends" // This fact extends another
   | "specializes" // This fact is a special case
-  | "generalizes"; // This fact is a generalization
+  | "generalizes" // This fact is a generalization
+  | "derives_from"; // This fact is derived from another (inference)
 
 /**
  * Knowledge domain (for organizing facts)
@@ -677,8 +708,34 @@ export type TransitionType =
   | "approve_deliverable"
   | "deploy_service"
   | "call_service"
+  | "subscribe_service"
   | "pause_service"
-  | "retire_service";
+  | "retire_service"
+
+  // Tree of Life lifecycle transitions
+  | "start_development"
+  | "complete_project"
+  | "begin_seeding"
+  | "pause_project"
+  | "resume_project"
+  | "abandon_project"
+  | "add_contributor"
+  | "add_task"
+  | "start_work"
+  | "reject_deliverable"
+  | "reopen_task"
+  | "detect_opportunity"
+  | "claim_opportunity"
+  | "apply_to_project"
+  | "review_application"
+  | "set_availability"
+
+  // Disbursement transitions
+  | "disbursement_submit"
+  | "disbursement_stake"
+  | "disbursement_advance_stage"
+  | "disbursement_execute"
+  | "disbursement_cancel";
 
 export type TransitionPayload =
   | CreateAccountPayload
@@ -714,7 +771,13 @@ export type TransitionPayload =
   | LipStakePayload
   | LipAdvanceStagePayload
   | LipWithdrawPayload
-  | VoteCastPayload;
+  | VoteCastPayload
+  // Disbursement payloads
+  | DisbursementSubmitPayload
+  | DisbursementStakePayload
+  | DisbursementAdvanceStagePayload
+  | DisbursementExecutePayload
+  | DisbursementCancelPayload;
 
 // ============ Governance Payloads ============
 
@@ -748,6 +811,36 @@ export interface VoteCastPayload {
   lipId: string;
   direction: "support" | "oppose" | "abstain";
   votes: number;
+}
+
+// ============ Disbursement Payloads ============
+
+export interface DisbursementSubmitPayload {
+  title: string;
+  description: string;
+  category: string; // DisbursementCategory
+  treasuryFund: string; // TreasuryFund
+  recipientDid: string;
+  amount: bigint;
+  justification: string;
+  externalReference?: string;
+}
+
+export interface DisbursementStakePayload {
+  disbursementId: string;
+  amount: bigint;
+}
+
+export interface DisbursementAdvanceStagePayload {
+  disbursementId: string;
+}
+
+export interface DisbursementExecutePayload {
+  disbursementId: string;
+}
+
+export interface DisbursementCancelPayload {
+  disbursementId: string;
 }
 
 export interface RotateKeyPayload {
@@ -892,6 +985,13 @@ export interface DomainChallengePayload {
 export interface DomainFinalizePayload {
   /** Proposal ID to finalize */
   proposalId: string;
+}
+
+export interface DomainGovernanceApprovePayload {
+  /** Proposal ID to approve */
+  proposalId: string;
+  /** LIP ID that authorizes this approval */
+  lipId: string;
 }
 
 // ============ Domain Qualification Payloads ============
@@ -1081,7 +1181,10 @@ export interface StateSubProof {
     | "knowledge"
     | "research"
     | "evidence"
-    | "dispute";
+    | "dispute"
+    | "project"
+    | "service"
+    | "task";
   key: string;
   proof: MerkleProofData;
 }
@@ -1337,6 +1440,15 @@ export type StateErrorCode =
   // Tree of Life errors
   | "PROJECT_NOT_FOUND"
   | "SERVICE_NOT_FOUND"
+  | "BUDGET_EXCEEDED"
+  | "TASK_NOT_FOUND"
+  | "INSUFFICIENT_CAPABILITIES"
+  | "INVALID_CAPABILITY"
+  | "NOT_A_CONTRIBUTOR"
+  | "SELF_REVIEW"
+  | "INTERNAL_ERROR"
+  | "SEED_NOT_FOUND"
+  | "SEED_EXPIRED"
 
   // Governance errors
   | "LIP_NOT_FOUND"

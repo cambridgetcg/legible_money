@@ -21,7 +21,10 @@ import {
   type EpistemicProfile,
   EPISTEMIC_PROFILES,
 } from "../core/knowledge/types.js";
-import type { OntologicalStratum } from "../core/knowledge/ontology/types.js";
+import {
+  type OntologicalStratum,
+  STRATUM_TO_DECAY_CATEGORY,
+} from "../core/knowledge/ontology/types.js";
 import { calculateCategoryDecayedConfidence } from "../consensus/pot/confidence.js";
 import {
   type FactState,
@@ -364,23 +367,18 @@ export class KnowledgeStateTree {
       throw new StateError("Fact not found", "FACT_NOT_FOUND", { factId });
     }
 
-    // When revoking, we need to handle dependent facts
-    // Facts that rely solely on this one may need to be reconsidered
-    const dependents = this.getIncomingReferences(factId);
-    for (const dependent of dependents) {
-      const depFact = this.getFact(dependent);
-      if (depFact && depFact.status === "active") {
-        // Mark dependent facts as needing review
-        // In practice, this would trigger re-verification
-        this.updateFact(dependent, {
-          confidence: Math.max(0, depFact.confidence - 0.2) as Confidence,
-        });
-      }
-    }
+    const oldConfidence = fact.confidence;
 
-    return this.updateFact(factId, {
+    // Revoke the fact first (confidence effectively becomes 0)
+    const root = this.updateFact(factId, {
       status: "revoked",
     });
+
+    // Propagate the confidence drop through the knowledge graph via BFS
+    // This replaces the naive flat -0.2 with proper graph-aware propagation
+    this.propagateConfidenceChange(factId, oldConfidence, 0 as Confidence);
+
+    return root;
   }
 
   /**
@@ -535,6 +533,26 @@ export class KnowledgeStateTree {
     return contradicting;
   }
 
+  /**
+   * Get facts that extend a given fact
+   */
+  getExtendingFacts(factId: string): FactState[] {
+    const incoming = this.getIncomingReferences(factId);
+    const extending: FactState[] = [];
+
+    for (const fromId of incoming) {
+      const ref = this.getReference(fromId, factId);
+      if (ref?.referenceType === "extends") {
+        const fact = this.getFact(fromId);
+        if (fact && fact.status === "active") {
+          extending.push(fact);
+        }
+      }
+    }
+
+    return extending;
+  }
+
   // ============ Queries ============
 
   /**
@@ -679,24 +697,7 @@ export class KnowledgeStateTree {
 
   // ============ GAP-008: Lazy Confidence Decay ============
 
-  /**
-   * Mapping from ontological stratum to decay category
-   *
-   * Used for calculating time-decayed confidence values.
-   * Categories align with CATEGORY_DECAY in consensus/pot/confidence.ts.
-   */
-  private static readonly STRATUM_TO_DECAY_CATEGORY: Record<
-    OntologicalStratum,
-    string
-  > = {
-    fundamental: "analytic", // Eternal - fundamental truths don't decay
-    physical: "empirical", // ~3.2 days half-life - physical facts need reverification
-    chemical: "empirical", // ~3.2 days half-life
-    biological: "empirical", // ~3.2 days half-life
-    cognitive: "social", // ~1 day half-life - cognitive/opinion facts decay faster
-    social: "social", // ~1 day half-life - social consensus changes quickly
-    technological: "protocol", // Eternal - on-chain/protocol facts are permanent
-  };
+  // STRATUM_TO_DECAY_CATEGORY imported from core/knowledge/ontology/types.ts
 
   /**
    * Get effective (time-decayed) confidence for a fact
@@ -717,8 +718,7 @@ export class KnowledgeStateTree {
 
     // Map stratum to category for decay calculation
     const category = fact.stratum
-      ? (KnowledgeStateTree.STRATUM_TO_DECAY_CATEGORY[fact.stratum] ??
-        "empirical")
+      ? (STRATUM_TO_DECAY_CATEGORY[fact.stratum] ?? "empirical")
       : "empirical";
 
     // Use category-aware decay from consensus module
@@ -1124,6 +1124,7 @@ export class KnowledgeStateTree {
     // Get premise confidences
     const premiseConfidences: number[] = [];
     let inferenceStrength = 0.99; // Default to deductive
+    let hasSupportingRefs = false;
 
     for (const toId of outgoing) {
       const ref = this.getReference(factId, toId);
@@ -1131,6 +1132,7 @@ export class KnowledgeStateTree {
 
       // Only consider supporting/extending references (derivation relationships)
       if (ref.referenceType === "supports" || ref.referenceType === "extends") {
+        hasSupportingRefs = true;
         const premise = this.getFact(toId);
         if (premise && premise.status === "active") {
           premiseConfidences.push(premise.confidence);
@@ -1140,7 +1142,11 @@ export class KnowledgeStateTree {
       }
     }
 
-    if (premiseConfidences.length === 0) return null;
+    // No derivation relationships at all - not a derived fact
+    if (!hasSupportingRefs) return null;
+
+    // Had supporting refs but all premises are revoked/inactive - derivation chain broken
+    if (premiseConfidences.length === 0) return 0 as Confidence;
 
     // Weakest link principle
     const minPremise = Math.min(...premiseConfidences);

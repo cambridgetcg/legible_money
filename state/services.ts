@@ -12,7 +12,11 @@
  * - Pricing model storage
  */
 
-import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
+import {
+  InMemorySMT,
+  type MerkleRoot,
+  type MerkleProofData,
+} from "../core/crypto/merkle.js";
 import { sha512_256 } from "../core/crypto/hashing.js";
 import type {
   ServiceLeaf,
@@ -39,6 +43,7 @@ function serializeService(service: ServiceLeaf): Uint8Array {
     description: service.description,
     serviceType: service.serviceType,
     endpoint: service.endpoint,
+    subdomain: service.subdomain,
     abi: service.abi,
     pricing: serializePricing(service.pricing),
     contractAddress: service.contractAddress,
@@ -86,6 +91,7 @@ function deserializeService(bytes: Uint8Array): ServiceLeaf {
     description: obj.description,
     serviceType: obj.serviceType as ServiceType,
     endpoint: obj.endpoint as ServiceEndpoint,
+    subdomain: obj.subdomain ?? "",
     abi: obj.abi as ContractABI,
     pricing: deserializePricing(obj.pricing),
     contractAddress: obj.contractAddress,
@@ -137,6 +143,7 @@ function serviceIdToKey(serviceId: string): Uint8Array {
 export class ServiceStateTree {
   private smt: InMemorySMT;
   private cache: Map<string, ServiceLeaf> = new Map();
+  private subdomainIndex: Map<string, string> = new Map(); // subdomain → serviceId
   private serviceCount: number = 0;
 
   constructor() {
@@ -153,7 +160,9 @@ export class ServiceStateTree {
   // ============ CRUD Operations ============
 
   /**
-   * Get service by ID
+   * Get service by ID.
+   * WARNING: Returns a cached reference. Do NOT mutate the returned object directly.
+   * Use updateService() for all modifications.
    */
   getService(serviceId: string): ServiceLeaf | null {
     const cached = this.cache.get(serviceId);
@@ -184,6 +193,11 @@ export class ServiceStateTree {
 
     this.cache.set(service.id, service);
     this.serviceCount++;
+
+    // Index subdomain for reverse lookup
+    if (service.subdomain) {
+      this.subdomainIndex.set(service.subdomain, service.id);
+    }
 
     return newRoot;
   }
@@ -244,13 +258,29 @@ export class ServiceStateTree {
    * Get all active services (status === 'active')
    */
   getActiveServices(): ServiceLeaf[] {
+    return this.getServicesByStatus("active");
+  }
+
+  /**
+   * Get all services with a given status
+   */
+  getServicesByStatus(status: ServiceStatus): ServiceLeaf[] {
     const results: ServiceLeaf[] = [];
     for (const service of this.cache.values()) {
-      if (service.status === "active") {
+      if (service.status === status) {
         results.push(service);
       }
     }
     return results;
+  }
+
+  /**
+   * Look up a service by its protocol-assigned subdomain.
+   */
+  getServiceBySubdomain(subdomain: string): ServiceLeaf | null {
+    const serviceId = this.subdomainIndex.get(subdomain);
+    if (!serviceId) return null;
+    return this.getService(serviceId);
   }
 
   /**
@@ -292,6 +322,26 @@ export class ServiceStateTree {
     });
   }
 
+  // ============ Proofs ============
+
+  /**
+   * Generate Merkle proof for a service.
+   * Proves inclusion (or non-inclusion) in the service state tree.
+   */
+  proveService(serviceId: string): MerkleProofData {
+    const key = serviceIdToKey(serviceId);
+    return this.smt.prove(key);
+  }
+
+  // ============ Persistence Export/Restore ============
+
+  /**
+   * Export all services for persistence
+   */
+  exportServices(): ServiceLeaf[] {
+    return Array.from(this.cache.values());
+  }
+
   // ============ Utilities ============
 
   /**
@@ -308,7 +358,7 @@ export class ServiceStateTree {
           ...service.endpoint,
           methods: [...service.endpoint.methods],
         },
-        abi: { ...service.abi },
+        abi: JSON.parse(JSON.stringify(service.abi)),
         pricing: {
           ...service.pricing,
           tiers: service.pricing.tiers?.map((t) => ({ ...t })),
@@ -324,6 +374,7 @@ export class ServiceStateTree {
     }
 
     cloned.serviceCount = this.serviceCount;
+    cloned.subdomainIndex = new Map(this.subdomainIndex);
     return cloned;
   }
 }

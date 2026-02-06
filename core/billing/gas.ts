@@ -307,6 +307,8 @@ const TRANSACTION_TYPE_GAS_MAP: Record<TransactionType, bigint> = {
   domain_endorse: TRANSACTION_GAS_COSTS.governanceVote,
   domain_challenge: TRANSACTION_GAS_COSTS.challenge,
   domain_finalize: TRANSACTION_GAS_COSTS.governanceVote,
+  domain_governance_approve: TRANSACTION_GAS_COSTS.governanceVote,
+  domain_deprecate: TRANSACTION_GAS_COSTS.governanceVote,
   // Autonomy transactions
   scheduled_execution: TRANSACTION_GAS_COSTS.selfInvocation,
   contract_call: TRANSACTION_GAS_COSTS.contractCall,
@@ -320,8 +322,28 @@ const TRANSACTION_TYPE_GAS_MAP: Record<TransactionType, bigint> = {
   approve_deliverable: 40000n,
   deploy_service: 80000n,
   call_service: 60000n,
+  subscribe_service: 60000n,
   pause_service: 25000n,
+  resume_service: 25000n,
   retire_service: 25000n,
+  // Tree of Life lifecycle transitions
+  start_development: 30000n,
+  complete_project: 35000n,
+  begin_seeding: 40000n,
+  pause_project: 25000n,
+  resume_project: 25000n,
+  abandon_project: 25000n,
+  add_contributor: 30000n,
+  add_task: 30000n,
+  start_work: 25000n,
+  reject_deliverable: 35000n,
+  reopen_task: 25000n,
+  detect_opportunity: 40000n,
+  claim_opportunity: 50000n,
+  // Tree of Life recruitment
+  apply_to_project: 25000n,
+  review_application: 30000n,
+  set_availability: 20000n,
   // Governance LIP lifecycle
   lip_submit: TRANSACTION_GAS_COSTS.governancePropose,
   lip_stake: TRANSACTION_GAS_COSTS.stake,
@@ -347,6 +369,12 @@ const TRANSACTION_TYPE_GAS_MAP: Record<TransactionType, bigint> = {
   deployment_advance: TRANSACTION_GAS_COSTS.governanceVote,
   deployment_approve: TRANSACTION_GAS_COSTS.governanceVote,
   deployment_rollback: TRANSACTION_GAS_COSTS.governancePropose,
+  // Disbursement lifecycle
+  disbursement_submit: TRANSACTION_GAS_COSTS.governancePropose,
+  disbursement_stake: TRANSACTION_GAS_COSTS.stake,
+  disbursement_advance_stage: TRANSACTION_GAS_COSTS.governanceVote,
+  disbursement_execute: 200000n,
+  disbursement_cancel: TRANSACTION_GAS_COSTS.unstake,
 };
 
 /**

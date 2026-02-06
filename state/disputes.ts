@@ -573,6 +573,60 @@ export class DisputeStateTree {
     };
   }
 
+  // ============ Persistence Export/Restore ============
+
+  /**
+   * Export all disputes for persistence
+   */
+  exportDisputes(): Dispute[] {
+    return Array.from(this.disputeCache.values());
+  }
+
+  /**
+   * Export all domain expertise for persistence
+   */
+  exportExpertise(): Array<{ did: string; expertise: DomainExpertise[] }> {
+    return Array.from(this.expertiseCache.entries()).map(
+      ([did, expertise]) => ({
+        did,
+        expertise,
+      }),
+    );
+  }
+
+  /**
+   * Restore a dispute from persistence (bypasses duplicate check,
+   * correctly handles resolved disputes)
+   */
+  restoreDispute(dispute: Dispute): void {
+    // Store in SMT
+    const key = disputeIdToKey(dispute.id);
+    const value = serializeDispute(dispute);
+    this.disputeSmt.set(key, value);
+
+    // Update cache
+    this.disputeCache.set(dispute.id, dispute);
+
+    // Update indexes — only add to activeDisputeIndex if not resolved
+    const phase = dispute.state?.phase ?? "initiation";
+    if (phase !== "settlement" && phase !== "resolved") {
+      this.activeDisputeIndex.add(dispute.id);
+    }
+    this.addToPhaseIndex(dispute.id, phase);
+    this.addToDomainIndex(dispute.id, dispute.domain);
+    this.addToPartyIndex(dispute.challenger.did, dispute.id);
+    if (dispute.defender.did) {
+      this.addToPartyIndex(dispute.defender.did, dispute.id);
+    }
+    this.addToTargetIndex(dispute.targetId, dispute.id);
+
+    // Update stats
+    this.disputeCount++;
+    if (phase === "settlement" || phase === "resolved") {
+      this.resolvedCount++;
+    }
+  }
+
   // ============ Clone (for transactions) ============
 
   /**

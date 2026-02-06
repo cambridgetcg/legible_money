@@ -8,10 +8,14 @@ import { describe, it, expect } from "vitest";
 import {
   detectOpportunities,
   scoreOpportunity,
+  aggregateDomainMetrics,
+  aggregateCrossDomainMetrics,
 } from "../../../core/tree/opportunity_detector.js";
 import type {
   DomainMetrics,
   MarketMetrics,
+  AgentRequest,
+  CrossDomainMetrics,
 } from "../../../core/tree/opportunity_detector.js";
 import {
   MAX_SEEDS_PER_EPOCH,
@@ -58,6 +62,8 @@ describe("detectOpportunities", () => {
         domain: "ai-safety",
         queryCount: 1000n,
         queryGrowthRate: 2.5,
+        fulfilledBounties: 2, // Low bounties so query_volume is strongest signal
+        citationCount: 10n, // Low citations so no citation signal
       }),
     ];
 
@@ -238,5 +244,216 @@ describe("scoreOpportunity", () => {
     const hardROI = scoreOpportunity(5_000_000_000n, 50); // 5 LGM, 50 tasks
 
     expect(easyROI).toBeGreaterThan(hardROI);
+  });
+});
+
+// ============ agent_request & cross_domain signals ============
+
+describe("detectOpportunities — agent_request signal", () => {
+  it("should detect agent_request opportunities", () => {
+    const agentRequests: AgentRequest[] = [
+      {
+        requesterDid: "did:lgm:agent-001",
+        domain: "quantum-computing",
+        description: "Need verified quantum error correction data",
+        estimatedDemand: 2_000_000_000n, // 2 LGM
+      },
+    ];
+
+    const seeds = detectOpportunities([], [], [], 100n, 0n, agentRequests);
+
+    expect(seeds.length).toBeGreaterThan(0);
+    const agentSeed = seeds.find((s) => s.signal.type === "agent_request");
+    expect(agentSeed).toBeTruthy();
+    expect(agentSeed!.knowledgeDomain).toBe("quantum-computing");
+    expect(agentSeed!.confidence).toBeGreaterThanOrEqual(MIN_SEED_CONFIDENCE);
+  });
+
+  it("should skip agent_request for existing project domains", () => {
+    const agentRequests: AgentRequest[] = [
+      {
+        requesterDid: "did:lgm:agent-001",
+        domain: "existing-domain",
+        description: "Requested domain",
+        estimatedDemand: 2_000_000_000n,
+      },
+    ];
+
+    const seeds = detectOpportunities(
+      [],
+      [],
+      ["existing-domain"],
+      100n,
+      0n,
+      agentRequests,
+    );
+    const agentSeed = seeds.find((s) => s.signal.type === "agent_request");
+    expect(agentSeed).toBeUndefined();
+  });
+});
+
+describe("detectOpportunities — cross_domain signal", () => {
+  it("should detect cross_domain opportunities", () => {
+    const crossDomain: CrossDomainMetrics[] = [
+      {
+        domainA: "neuroscience",
+        domainB: "ai-safety",
+        crossReferences: 10, // Well above threshold of 5
+        combinedCitationCount: 200n,
+        combinedFactCount: 40,
+      },
+    ];
+
+    const seeds = detectOpportunities([], [], [], 100n, 0n, [], crossDomain);
+
+    expect(seeds.length).toBeGreaterThan(0);
+    const crossSeed = seeds.find((s) => s.signal.type === "cross_domain");
+    expect(crossSeed).toBeTruthy();
+    expect(crossSeed!.confidence).toBeGreaterThanOrEqual(MIN_SEED_CONFIDENCE);
+  });
+
+  it("should skip cross_domain below threshold", () => {
+    const crossDomain: CrossDomainMetrics[] = [
+      {
+        domainA: "physics",
+        domainB: "chemistry",
+        crossReferences: 2, // Below threshold of 5
+        combinedCitationCount: 10n,
+        combinedFactCount: 5,
+      },
+    ];
+
+    const seeds = detectOpportunities([], [], [], 100n, 0n, [], crossDomain);
+
+    const crossSeed = seeds.find((s) => s.signal.type === "cross_domain");
+    expect(crossSeed).toBeUndefined();
+  });
+});
+
+// ============ Metrics Aggregation ============
+
+describe("aggregateDomainMetrics", () => {
+  it("should aggregate domain metrics from state callbacks", () => {
+    const factsDB: Record<
+      string,
+      {
+        id: string;
+        citationCount: number;
+        confidence: number;
+        domain: string;
+      }[]
+    > = {
+      "ai-safety": [
+        {
+          id: "fact:1",
+          citationCount: 10,
+          confidence: 0.9,
+          domain: "ai-safety",
+        },
+        {
+          id: "fact:2",
+          citationCount: 5,
+          confidence: 0.8,
+          domain: "ai-safety",
+        },
+      ],
+      climate: [
+        {
+          id: "fact:3",
+          citationCount: 20,
+          confidence: 0.95,
+          domain: "climate",
+        },
+      ],
+    };
+
+    const bounties = [
+      { targetFactId: "fact:1", status: "open" },
+      { targetFactId: "fact:1", status: "fulfilled" },
+      { targetFactId: "fact:3", status: "fulfilled" },
+    ];
+
+    const metrics = aggregateDomainMetrics(
+      (d) => factsDB[d] ?? [],
+      () => ["ai-safety", "climate", "empty-domain"],
+      () => bounties,
+      (fId) => {
+        for (const facts of Object.values(factsDB)) {
+          const f = facts.find((x) => x.id === fId);
+          if (f) return { domain: f.domain };
+        }
+        return null;
+      },
+    );
+
+    // "empty-domain" should be skipped (no facts)
+    expect(metrics).toHaveLength(2);
+
+    const aiSafety = metrics.find((m) => m.domain === "ai-safety")!;
+    expect(aiSafety).toBeTruthy();
+    expect(aiSafety.factCount).toBe(2);
+    expect(aiSafety.citationCount).toBe(15n); // 10 + 5
+    expect(aiSafety.averageConfidence).toBeCloseTo(0.85); // (0.9+0.8)/2
+    expect(aiSafety.activeBounties).toBe(1); // 1 open bounty for fact:1
+    expect(aiSafety.fulfilledBounties).toBe(1); // 1 fulfilled for fact:1
+
+    const climate = metrics.find((m) => m.domain === "climate")!;
+    expect(climate.factCount).toBe(1);
+    expect(climate.citationCount).toBe(20n);
+    expect(climate.fulfilledBounties).toBe(1);
+  });
+});
+
+describe("aggregateCrossDomainMetrics", () => {
+  it("should detect cross-domain metrics from reference graph", () => {
+    const factsDB: Record<
+      string,
+      { id: string; citationCount: number; domain: string }[]
+    > = {
+      physics: [
+        { id: "fact:p1", citationCount: 10, domain: "physics" },
+        { id: "fact:p2", citationCount: 5, domain: "physics" },
+      ],
+      chemistry: [{ id: "fact:c1", citationCount: 8, domain: "chemistry" }],
+      biology: [{ id: "fact:b1", citationCount: 3, domain: "biology" }],
+    };
+
+    // fact:p1 -> fact:c1 (physics cites chemistry)
+    // fact:p2 -> fact:c1 (physics cites chemistry again)
+    // fact:c1 -> fact:b1 (chemistry cites biology)
+    const refs: Record<string, string[]> = {
+      "fact:p1": ["fact:c1"],
+      "fact:p2": ["fact:c1"],
+      "fact:c1": ["fact:b1"],
+    };
+
+    const allFacts = Object.values(factsDB).flat();
+
+    const crossMetrics = aggregateCrossDomainMetrics(
+      (d) => factsDB[d] ?? [],
+      () => ["physics", "chemistry", "biology"],
+      (fId) => refs[fId] ?? [],
+      (fId) => {
+        const f = allFacts.find((x) => x.id === fId);
+        return f ? { domain: f.domain, citationCount: f.citationCount } : null;
+      },
+    );
+
+    // physics↔chemistry: 2 cross-refs (>= 2 threshold), should appear
+    const physChem = crossMetrics.find(
+      (m) =>
+        (m.domainA === "chemistry" && m.domainB === "physics") ||
+        (m.domainA === "physics" && m.domainB === "chemistry"),
+    );
+    expect(physChem).toBeTruthy();
+    expect(physChem!.crossReferences).toBe(2);
+
+    // chemistry↔biology: only 1 cross-ref (below threshold of 2), should NOT appear
+    const chemBio = crossMetrics.find(
+      (m) =>
+        (m.domainA === "chemistry" && m.domainB === "biology") ||
+        (m.domainA === "biology" && m.domainB === "chemistry"),
+    );
+    expect(chemBio).toBeUndefined();
   });
 });

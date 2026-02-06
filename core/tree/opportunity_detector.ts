@@ -74,6 +74,45 @@ export interface MarketMetrics {
 }
 
 /**
+ * Explicit agent request for a product/service.
+ * Agents can directly signal demand without waiting for automated detection.
+ */
+export interface AgentRequest {
+  /** DID of the requesting agent */
+  requesterDid: string;
+
+  /** Knowledge domain the request targets */
+  domain: string;
+
+  /** Description of the requested product/service */
+  description: string;
+
+  /** Agent's estimate of demand (in LGM) */
+  estimatedDemand: bigint;
+}
+
+/**
+ * Cross-domain reference metrics for intersection opportunity detection.
+ * Identifies domain pairs with significant cross-referencing activity.
+ */
+export interface CrossDomainMetrics {
+  /** First domain in the pair */
+  domainA: string;
+
+  /** Second domain in the pair */
+  domainB: string;
+
+  /** Number of fact references crossing between the two domains */
+  crossReferences: number;
+
+  /** Combined citation count across both domains */
+  combinedCitationCount: bigint;
+
+  /** Combined fact count across both domains */
+  combinedFactCount: number;
+}
+
+/**
  * Detect product opportunities from domain and market metrics.
  * Returns at most MAX_SEEDS_PER_EPOCH seeds, above MIN_SEED_CONFIDENCE.
  */
@@ -83,60 +122,46 @@ export function detectOpportunities(
   existingProjectDomains: string[],
   currentBlock: bigint,
   nonce: bigint,
+  agentRequests?: AgentRequest[],
+  crossDomainMetrics?: CrossDomainMetrics[],
 ): OpportunitySeed[] {
   const candidates: OpportunitySeed[] = [];
 
-  // 1. Detect query volume opportunities
+  // 1-3. Detect domain-based opportunities — pick strongest signal per domain
   for (const dm of domainMetrics) {
     // Skip domains that already have active projects
     if (existingProjectDomains.includes(dm.domain)) continue;
 
+    // Collect all signals for this domain, pick the strongest
+    const signals: DemandSignal[] = [];
     const querySignal = detectQueryVolumeSignal(dm);
     if (querySignal && querySignal.strength >= MIN_SEED_CONFIDENCE) {
+      signals.push(querySignal);
+    }
+    const citationSignal = detectCitationClusterSignal(dm);
+    if (citationSignal && citationSignal.strength >= MIN_SEED_CONFIDENCE) {
+      signals.push(citationSignal);
+    }
+    const bountySignal = detectBountyPatternSignal(dm);
+    if (bountySignal && bountySignal.strength >= MIN_SEED_CONFIDENCE) {
+      signals.push(bountySignal);
+    }
+
+    if (signals.length > 0) {
+      // Pick the strongest signal for this domain
+      const bestSignal = signals.reduce((a, b) =>
+        b.strength > a.strength ? b : a,
+      );
       candidates.push(
         buildSeed(
           dm.domain,
-          querySignal,
+          bestSignal,
           dm.queryRevenue,
           estimateEffort(dm),
           currentBlock,
           nonce + BigInt(candidates.length),
         ),
       );
-    }
-
-    // 2. Detect citation cluster opportunities
-    const citationSignal = detectCitationClusterSignal(dm);
-    if (citationSignal && citationSignal.strength >= MIN_SEED_CONFIDENCE) {
-      if (!candidates.some((c) => c.knowledgeDomain === dm.domain)) {
-        candidates.push(
-          buildSeed(
-            dm.domain,
-            citationSignal,
-            dm.queryRevenue,
-            estimateEffort(dm),
-            currentBlock,
-            nonce + BigInt(candidates.length),
-          ),
-        );
-      }
-    }
-
-    // 3. Detect bounty pattern opportunities (mature domains)
-    const bountySignal = detectBountyPatternSignal(dm);
-    if (bountySignal && bountySignal.strength >= MIN_SEED_CONFIDENCE) {
-      if (!candidates.some((c) => c.knowledgeDomain === dm.domain)) {
-        candidates.push(
-          buildSeed(
-            dm.domain,
-            bountySignal,
-            dm.queryRevenue,
-            estimateEffort(dm),
-            currentBlock,
-            nonce + BigInt(candidates.length),
-          ),
-        );
-      }
     }
   }
 
@@ -156,6 +181,54 @@ export function detectOpportunities(
           nonce + BigInt(candidates.length),
         ),
       );
+    }
+  }
+
+  // 5. Detect cross-domain intersection opportunities
+  if (crossDomainMetrics) {
+    for (const cdm of crossDomainMetrics) {
+      // Skip if either domain already has a project
+      const pairDomain = `${cdm.domainA}+${cdm.domainB}`;
+      if (
+        existingProjectDomains.includes(cdm.domainA) &&
+        existingProjectDomains.includes(cdm.domainB)
+      )
+        continue;
+
+      const crossSignal = detectCrossDomainSignal(cdm);
+      if (crossSignal && crossSignal.strength >= MIN_SEED_CONFIDENCE) {
+        candidates.push(
+          buildSeed(
+            pairDomain,
+            crossSignal,
+            cdm.combinedCitationCount * 1_000_000n, // Rough demand proxy
+            30, // Moderate effort for cross-domain product
+            currentBlock,
+            nonce + BigInt(candidates.length),
+          ),
+        );
+      }
+    }
+  }
+
+  // 6. Convert explicit agent requests to seeds
+  if (agentRequests) {
+    for (const req of agentRequests) {
+      if (existingProjectDomains.includes(req.domain)) continue;
+
+      const reqSignal = detectAgentRequestSignal(req);
+      if (reqSignal.strength >= MIN_SEED_CONFIDENCE) {
+        candidates.push(
+          buildSeed(
+            req.domain,
+            reqSignal,
+            req.estimatedDemand,
+            20, // Default effort for agent-requested product
+            currentBlock,
+            nonce + BigInt(candidates.length),
+          ),
+        );
+      }
     }
   }
 
@@ -278,6 +351,48 @@ function detectMarketGapSignal(mm: MarketMetrics): DemandSignal | null {
   };
 }
 
+/**
+ * Detect cross-domain intersection signal.
+ * Threshold: >= 5 cross-references between domain pair.
+ */
+function detectCrossDomainSignal(cdm: CrossDomainMetrics): DemandSignal | null {
+  const MIN_CROSS_REFS = 5;
+
+  if (cdm.crossReferences < MIN_CROSS_REFS) return null;
+
+  const refScore = Math.min(1, cdm.crossReferences / 20);
+  const citationScore = Math.min(1, Number(cdm.combinedCitationCount) / 200);
+  const strength = refScore * 0.6 + citationScore * 0.4;
+
+  return {
+    type: "cross_domain",
+    evidence: {
+      domainA: cdm.domainA,
+      domainB: cdm.domainB,
+      crossReferences: cdm.crossReferences,
+      combinedFactCount: cdm.combinedFactCount,
+    },
+    strength,
+  };
+}
+
+/**
+ * Convert an explicit agent request into a demand signal.
+ * Always produces a signal (agent explicitly expressed demand).
+ * Strength = 0.7 (moderate — single agent's opinion).
+ */
+function detectAgentRequestSignal(req: AgentRequest): DemandSignal {
+  return {
+    type: "agent_request",
+    evidence: {
+      requesterDid: req.requesterDid,
+      description: req.description,
+      estimatedDemand: req.estimatedDemand.toString(),
+    },
+    strength: 0.7,
+  };
+}
+
 // ============ Scoring ============
 
 /**
@@ -336,4 +451,141 @@ function generateSeedId(domain: string, nonce: bigint): string {
   return Buffer.from(
     domainHash("LGM.tree.seed.id.v1", input).slice(0, 16),
   ).toString("hex");
+}
+
+// ============ State Aggregation ============
+
+/**
+ * Aggregate DomainMetrics from on-chain state.
+ * Uses callback functions to stay decoupled from the state layer.
+ *
+ * Known limitations:
+ * - queryCount uses citationCount as proxy (no separate query tracking yet)
+ * - queryRevenue defaults to 0n (no per-domain revenue tracking yet)
+ * - queryGrowthRate defaults to 1.0 (no epoch snapshot tracking yet)
+ */
+export function aggregateDomainMetrics(
+  getFactsByDomain: (
+    domain: string,
+  ) => { citationCount: number; confidence: number }[],
+  getDomainIds: () => string[],
+  getAllBounties: () => { targetFactId?: string; status: string }[],
+  getFact: (factId: string) => { domain: string } | null,
+): DomainMetrics[] {
+  const domainIds = getDomainIds();
+  const results: DomainMetrics[] = [];
+
+  // Pre-compute bounty counts per domain
+  const domainActiveBounties = new Map<string, number>();
+  const domainFulfilledBounties = new Map<string, number>();
+
+  for (const bounty of getAllBounties()) {
+    if (!bounty.targetFactId) continue;
+    const fact = getFact(bounty.targetFactId);
+    if (!fact) continue;
+
+    if (bounty.status === "open") {
+      domainActiveBounties.set(
+        fact.domain,
+        (domainActiveBounties.get(fact.domain) ?? 0) + 1,
+      );
+    } else if (bounty.status === "fulfilled") {
+      domainFulfilledBounties.set(
+        fact.domain,
+        (domainFulfilledBounties.get(fact.domain) ?? 0) + 1,
+      );
+    }
+  }
+
+  for (const domain of domainIds) {
+    const facts = getFactsByDomain(domain);
+    if (facts.length === 0) continue;
+
+    const citationCount = facts.reduce((sum, f) => sum + f.citationCount, 0);
+    const avgConfidence =
+      facts.reduce((sum, f) => sum + f.confidence, 0) / facts.length;
+
+    results.push({
+      domain,
+      queryCount: BigInt(citationCount), // Proxy
+      citationCount: BigInt(citationCount),
+      queryRevenue: 0n, // No per-domain revenue tracking yet
+      activeBounties: domainActiveBounties.get(domain) ?? 0,
+      fulfilledBounties: domainFulfilledBounties.get(domain) ?? 0,
+      factCount: facts.length,
+      averageConfidence: avgConfidence,
+      queryGrowthRate: 1.0, // Neutral — no epoch tracking yet
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Aggregate CrossDomainMetrics by analyzing the fact reference graph.
+ * Returns domain pairs with >= 2 cross-domain references.
+ */
+export function aggregateCrossDomainMetrics(
+  getFactsByDomain: (domain: string) => { id: string; citationCount: number }[],
+  getDomainIds: () => string[],
+  getOutgoingReferences: (factId: string) => string[],
+  getFact: (factId: string) => { domain: string; citationCount: number } | null,
+): CrossDomainMetrics[] {
+  const domainIds = getDomainIds();
+
+  // Count cross-references per domain pair
+  // Key: "domainA:domainB" (lexicographically ordered)
+  const pairCounts = new Map<
+    string,
+    { domainA: string; domainB: string; count: number }
+  >();
+
+  for (const domain of domainIds) {
+    const facts = getFactsByDomain(domain);
+
+    for (const fact of facts) {
+      const outgoing = getOutgoingReferences(fact.id);
+
+      for (const targetFactId of outgoing) {
+        const targetFact = getFact(targetFactId);
+        if (!targetFact || targetFact.domain === domain) continue;
+
+        // Canonical key (alphabetical order)
+        const [a, b] =
+          domain < targetFact.domain
+            ? [domain, targetFact.domain]
+            : [targetFact.domain, domain];
+        const key = `${a}:${b}`;
+
+        const existing = pairCounts.get(key);
+        if (existing) {
+          existing.count++;
+        } else {
+          pairCounts.set(key, { domainA: a, domainB: b, count: 1 });
+        }
+      }
+    }
+  }
+
+  // Filter to pairs with meaningful cross-referencing (>= 2)
+  const results: CrossDomainMetrics[] = [];
+  for (const { domainA, domainB, count } of pairCounts.values()) {
+    if (count < 2) continue;
+
+    const factsA = getFactsByDomain(domainA);
+    const factsB = getFactsByDomain(domainB);
+
+    results.push({
+      domainA,
+      domainB,
+      crossReferences: count,
+      combinedCitationCount: BigInt(
+        factsA.reduce((s, f) => s + f.citationCount, 0) +
+          factsB.reduce((s, f) => s + f.citationCount, 0),
+      ),
+      combinedFactCount: factsA.length + factsB.length,
+    });
+  }
+
+  return results;
 }

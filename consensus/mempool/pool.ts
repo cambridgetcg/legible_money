@@ -10,6 +10,10 @@ import { verify } from "../../core/crypto/signatures.js";
 import { sha512_256Hex } from "../../core/crypto/hashing.js";
 import type { Transaction, TransactionType } from "../pot/types.js";
 
+/** JSON replacer that converts BigInt to string (for size estimation) */
+const bigintReplacer = (_k: string, v: unknown) =>
+  typeof v === "bigint" ? v.toString() : v;
+
 // ============ Mempool Configuration ============
 
 export interface MempoolConfig {
@@ -108,7 +112,7 @@ export class Mempool extends EventEmitter {
     }
 
     // Calculate size and fee per byte
-    const size = JSON.stringify(tx).length;
+    const size = JSON.stringify(tx, bigintReplacer).length;
     const feePerByte = tx.fee / BigInt(size);
 
     // Add to pool
@@ -265,7 +269,7 @@ export class Mempool extends EventEmitter {
     reason?: string;
   } {
     // Check size
-    const size = JSON.stringify(tx).length;
+    const size = JSON.stringify(tx, bigintReplacer).length;
     if (size > this.config.maxTxSize) {
       return { valid: false, reason: "Transaction too large" };
     }

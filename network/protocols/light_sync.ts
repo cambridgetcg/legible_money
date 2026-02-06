@@ -24,7 +24,7 @@ import { pipe } from "it-pipe";
 import * as lp from "it-length-prefixed";
 import type { Stream } from "@libp2p/interface";
 import { SYNC_CONFIG, type SyncPeer, type SyncStatus } from "./sync.js";
-import { PROTOCOL_IDS } from "../config.js";
+import { PROTOCOL_IDS, networkReplacer } from "../config.js";
 import { sha512_256Hex } from "../../core/crypto/hashing.js";
 
 // ============================================================================
@@ -825,7 +825,9 @@ export class LightSyncProtocolHandler {
         new TextDecoder().decode(requestData),
       );
       const response = await this.handleRequest(request);
-      const responseData = new TextEncoder().encode(JSON.stringify(response));
+      const responseData = new TextEncoder().encode(
+        JSON.stringify(response, networkReplacer),
+      );
 
       await pipe([responseData], lp.encode, streamAny.sink);
     } catch (error) {

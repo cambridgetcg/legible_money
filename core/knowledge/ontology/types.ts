@@ -71,6 +71,26 @@ export const STRATUM_CONFIDENCE_CEILING: Record<OntologicalStratum, number> = {
 };
 
 /**
+ * Mapping from ontological stratum to decay category.
+ *
+ * Used for calculating time-decayed confidence values.
+ * Categories align with CATEGORY_DECAY in consensus/pot/confidence.ts:
+ * - "analytic": Eternal — fundamental truths don't decay
+ * - "protocol": Eternal — on-chain/protocol facts are permanent
+ * - "empirical": ~3.2 days half-life — physical/chemical/biological facts need reverification
+ * - "social": ~1 day half-life — cognitive/social consensus changes quickly
+ */
+export const STRATUM_TO_DECAY_CATEGORY: Record<OntologicalStratum, string> = {
+  fundamental: "analytic",
+  physical: "empirical",
+  chemical: "empirical",
+  biological: "empirical",
+  cognitive: "social",
+  social: "social",
+  technological: "protocol",
+};
+
+/**
  * Default logic zone for each stratum
  */
 export const STRATUM_LOGIC_ZONE: Record<OntologicalStratum, LogicZone> = {
@@ -155,6 +175,9 @@ export interface OntologicalDomain {
 
   /** Governance proposal that created this domain (if not genesis) */
   governanceProposal?: string;
+
+  /** Block number when domain was deprecated (undefined = active) */
+  deprecatedAt?: number;
 }
 
 // ============================================================================

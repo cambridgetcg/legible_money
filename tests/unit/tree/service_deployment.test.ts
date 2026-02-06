@@ -15,11 +15,16 @@ import {
   pauseService,
   resumeService,
   markDegraded,
+  recoverService,
   retireService,
   isServiceCallable,
   generateServiceId,
+  slugifyServiceName,
+  generateSubdomain,
   ServiceError,
 } from "../../../core/tree/service_deployment.js";
+import { ServiceStateTree } from "../../../state/services.js";
+import { SERVICE_BASE_DOMAIN } from "../../../core/constants.js";
 import type { ServiceLeaf, PricingModel } from "../../../core/tree/types.js";
 import type { ContractABI } from "../../../core/contracts/types.js";
 
@@ -37,20 +42,27 @@ const MOCK_ABI: ContractABI = {
   events: [],
 };
 
+const MOCK_ENDPOINT = {
+  protocol: "rest" as const,
+  contractAddress: "contract-addr-1",
+  url: "https://example.com/api",
+  methods: ["query"],
+};
+
 function makeService(overrides: Partial<ServiceLeaf> = {}): ServiceLeaf {
-  return createServiceLeaf(
+  const service = createServiceLeaf(
     "proj-1",
     "Test Service",
     "A test service",
     "api",
-    { url: "https://example.com/api", protocol: "https" },
+    MOCK_ENDPOINT,
     MOCK_ABI,
     { type: "per_call", basePrice: 1000n, unit: "call" },
     "contract-addr-1",
     0n,
     100n,
-    ...(Object.keys(overrides).length ? [] : []),
   );
+  return { ...service, ...overrides };
 }
 
 function makeActiveService(): ServiceLeaf {
@@ -66,7 +78,11 @@ describe("createServiceLeaf", () => {
       "API Service",
       "REST API",
       "api",
-      { url: "https://api.example.com", protocol: "https" },
+      {
+        protocol: "rest" as const,
+        contractAddress: "contract-1",
+        methods: ["query"],
+      },
       MOCK_ABI,
       { type: "per_call", basePrice: 500n, unit: "call" },
       "contract-1",
@@ -90,7 +106,7 @@ describe("createServiceLeaf", () => {
       "A",
       "",
       "api",
-      { url: "", protocol: "" },
+      { protocol: "rpc" as const, contractAddress: "", methods: [] },
       MOCK_ABI,
       { type: "per_call", basePrice: 0n, unit: "call" },
       "",
@@ -102,7 +118,7 @@ describe("createServiceLeaf", () => {
       "B",
       "",
       "api",
-      { url: "", protocol: "" },
+      { protocol: "rpc" as const, contractAddress: "", methods: [] },
       MOCK_ABI,
       { type: "per_call", basePrice: 0n, unit: "call" },
       "",
@@ -114,7 +130,7 @@ describe("createServiceLeaf", () => {
       "A",
       "",
       "api",
-      { url: "", protocol: "" },
+      { protocol: "rpc" as const, contractAddress: "", methods: [] },
       MOCK_ABI,
       { type: "per_call", basePrice: 0n, unit: "call" },
       "",
@@ -186,8 +202,9 @@ describe("calculateCallCost", () => {
     // totalUsage = 50 + 5 = 55, still in tier 1 (threshold 0)
     expect(calculateCallCost(service, 5n)).toBe(500n);
 
-    // totalUsage = 50 + 60 = 110, in tier 2 (threshold 100)
-    expect(calculateCallCost(service, 60n)).toBe(80n * 60n);
+    // Marginal pricing: 50 units fill tier 1 (100n each = 5000n),
+    // remaining 10 units at tier 2 rate (80n each = 800n) = 5800n
+    expect(calculateCallCost(service, 60n)).toBe(100n * 50n + 80n * 10n);
   });
 
   it("should use base price for dynamic pricing", () => {
@@ -298,11 +315,23 @@ describe("markDegraded", () => {
     expect(degraded.status).toBe("degraded");
   });
 
-  it("should not degrade non-active service", () => {
+  it("should reject degrading non-active service", () => {
     const service = makeService(); // deploying
-    const result = markDegraded(service);
+    expect(() => markDegraded(service)).toThrow("expected 'active'");
+  });
+});
 
-    expect(result.status).toBe("deploying"); // Unchanged
+describe("recoverService", () => {
+  it("should recover a degraded service to active", () => {
+    const degraded = markDegraded(makeActiveService());
+    const recovered = recoverService(degraded);
+
+    expect(recovered.status).toBe("active");
+  });
+
+  it("should reject recovering non-degraded service", () => {
+    const service = makeActiveService();
+    expect(() => recoverService(service)).toThrow("expected 'degraded'");
   });
 });
 
@@ -317,6 +346,11 @@ describe("retireService", () => {
   it("should reject retiring already retired service", () => {
     const retired = retireService(makeActiveService());
     expect(() => retireService(retired)).toThrow("already retired");
+  });
+
+  it("should reject retiring a deploying service", () => {
+    const service = makeService(); // still in "deploying" status
+    expect(() => retireService(service)).toThrow("never activated");
   });
 });
 
@@ -346,5 +380,225 @@ describe("generateServiceId", () => {
     const id2 = generateServiceId("proj-1", 1n);
 
     expect(id1).not.toBe(id2);
+  });
+});
+
+// ============ slugifyServiceName ============
+
+describe("slugifyServiceName", () => {
+  it("should lowercase and hyphenate standard names", () => {
+    expect(slugifyServiceName("Inference API")).toBe("inference-api");
+  });
+
+  it("should strip special characters", () => {
+    expect(slugifyServiceName("My $ervice (v2.0)")).toBe("my-ervice-v2-0");
+  });
+
+  it("should collapse consecutive hyphens", () => {
+    expect(slugifyServiceName("a---b")).toBe("a-b");
+  });
+
+  it("should strip leading and trailing hyphens", () => {
+    expect(slugifyServiceName("--hello--")).toBe("hello");
+  });
+
+  it("should return empty string for all-special-char input", () => {
+    expect(slugifyServiceName("$$$%%%")).toBe("");
+  });
+
+  it("should truncate to maxLength", () => {
+    const long = "a".repeat(100);
+    const result = slugifyServiceName(long, 10);
+    expect(result.length).toBeLessThanOrEqual(10);
+    expect(result).toBe("aaaaaaaaaa");
+  });
+
+  it("should not end with trailing hyphen after truncation", () => {
+    // "ab-cd-ef" truncated to 5 chars = "ab-cd" → fine
+    // "ab-cd-ef" truncated to 3 chars = "ab-" → strip trailing → "ab"
+    expect(slugifyServiceName("ab cd ef", 3)).toBe("ab");
+  });
+
+  it("should return empty for empty input", () => {
+    expect(slugifyServiceName("")).toBe("");
+  });
+});
+
+// ============ generateSubdomain ============
+
+describe("generateSubdomain", () => {
+  it("should produce deterministic subdomains", () => {
+    const id = generateServiceId("proj-1", 0n);
+    const sub1 = generateSubdomain(id, "Inference API");
+    const sub2 = generateSubdomain(id, "Inference API");
+
+    expect(sub1).toBe(sub2);
+  });
+
+  it("should include slug and short ID in label", () => {
+    const id = generateServiceId("proj-1", 0n);
+    const sub = generateSubdomain(id, "Inference API");
+    const shortId = id.slice(0, 8);
+
+    expect(sub).toBe(`inference-api-${shortId}.${SERVICE_BASE_DOMAIN}`);
+  });
+
+  it("should fall back to short ID when name slugifies to empty", () => {
+    const id = generateServiceId("proj-1", 0n);
+    const sub = generateSubdomain(id, "$$$");
+    const shortId = id.slice(0, 8);
+
+    expect(sub).toBe(`${shortId}.${SERVICE_BASE_DOMAIN}`);
+  });
+
+  it("should use custom base domain when provided", () => {
+    const id = generateServiceId("proj-1", 0n);
+    const sub = generateSubdomain(id, "Test", "custom.domain");
+
+    expect(sub).toContain(".custom.domain");
+  });
+
+  it("should produce labels ≤ 63 chars (DNS RFC 1035)", () => {
+    const id = generateServiceId("proj-1", 0n);
+    const longName = "a".repeat(200);
+    const sub = generateSubdomain(id, longName);
+    const label = sub.split(".")[0];
+
+    expect(label.length).toBeLessThanOrEqual(63);
+  });
+});
+
+// ============ createServiceLeaf subdomain integration ============
+
+describe("createServiceLeaf subdomain", () => {
+  it("should populate subdomain field", () => {
+    const service = createServiceLeaf(
+      "proj-1",
+      "My Analytics API",
+      "Analytics",
+      "analytics",
+      MOCK_ENDPOINT,
+      MOCK_ABI,
+      { type: "per_call", basePrice: 100n, unit: "call" },
+      "contract-1",
+      0n,
+      100n,
+    );
+
+    expect(service.subdomain).toBeTruthy();
+    expect(service.subdomain).toContain(SERVICE_BASE_DOMAIN);
+    expect(service.subdomain).toContain("my-analytics-api");
+  });
+
+  it("should have deterministic subdomain from same inputs", () => {
+    const args = [
+      "proj-1",
+      "Service A",
+      "Desc",
+      "api" as const,
+      MOCK_ENDPOINT,
+      MOCK_ABI,
+      { type: "per_call" as const, basePrice: 100n, unit: "call" as const },
+      "contract-1",
+      5n,
+      200n,
+    ] as const;
+
+    const s1 = createServiceLeaf(...args);
+    const s2 = createServiceLeaf(...args);
+
+    expect(s1.subdomain).toBe(s2.subdomain);
+  });
+});
+
+// ============ ServiceStateTree subdomain index ============
+
+describe("ServiceStateTree subdomain index", () => {
+  function makeTestService(
+    id: string,
+    subdomain: string,
+  ): import("../../../core/tree/types.js").ServiceLeaf {
+    return {
+      id,
+      projectId: "proj-1",
+      name: "Test",
+      description: "Test",
+      serviceType: "api",
+      endpoint: { protocol: "rest", contractAddress: "c1", methods: ["q"] },
+      subdomain,
+      abi: MOCK_ABI,
+      pricing: { type: "per_call", basePrice: 100n, unit: "call" },
+      contractAddress: "c1",
+      totalCalls: 0n,
+      totalRevenue: 0n,
+      uptimeBlocks: 0n,
+      averageLatencyMs: 0,
+      status: "active",
+      deployedAtBlock: 100n,
+    };
+  }
+
+  it("should index subdomain on create and look up by subdomain", () => {
+    const tree = new ServiceStateTree();
+    const service = makeTestService(
+      "svc-1",
+      "my-api-12345678.services.legible.money",
+    );
+    tree.createService(service);
+
+    const found = tree.getServiceBySubdomain(
+      "my-api-12345678.services.legible.money",
+    );
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe("svc-1");
+  });
+
+  it("should return null for unknown subdomain", () => {
+    const tree = new ServiceStateTree();
+    expect(
+      tree.getServiceBySubdomain("unknown.services.legible.money"),
+    ).toBeNull();
+  });
+
+  it("should not index empty subdomain", () => {
+    const tree = new ServiceStateTree();
+    const service = makeTestService("svc-1", "");
+    tree.createService(service);
+
+    expect(tree.getServiceBySubdomain("")).toBeNull();
+  });
+
+  it("should preserve subdomain index after clone", () => {
+    const tree = new ServiceStateTree();
+    const service = makeTestService(
+      "svc-1",
+      "cloned-api-abcdef12.services.legible.money",
+    );
+    tree.createService(service);
+
+    const cloned = tree.clone();
+    const found = cloned.getServiceBySubdomain(
+      "cloned-api-abcdef12.services.legible.money",
+    );
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe("svc-1");
+  });
+
+  it("should preserve subdomain through serialization round-trip", () => {
+    const tree = new ServiceStateTree();
+    const subdomain = "round-trip-12345678.services.legible.money";
+    const service = makeTestService("svc-rt", subdomain);
+    tree.createService(service);
+
+    // Export and restore into a new tree
+    const exported = tree.exportServices();
+    const tree2 = new ServiceStateTree();
+    for (const svc of exported) {
+      tree2.createService(svc);
+    }
+
+    const found = tree2.getServiceBySubdomain(subdomain);
+    expect(found).not.toBeNull();
+    expect(found!.subdomain).toBe(subdomain);
   });
 });

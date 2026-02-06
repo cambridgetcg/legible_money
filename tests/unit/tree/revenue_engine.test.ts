@@ -38,6 +38,26 @@ describe("calculateRevenueDistribution", () => {
     // 22% evidence tax
     expect(dist.evidenceTax).toBe(2200n);
 
+    // Evidence tax sub-distribution (of 2200)
+    // research: 77% of 2200 = 1694
+    // foundation: 7% of 2200 = 154
+    // community: 7% of 2200 = 154
+    // developers: 7% of 2200 = 154
+    // reserve: remainder = 2200 - 1694 - 154 - 154 - 154 = 44
+    expect(dist.evidenceTaxBreakdown.research).toBe(1694n);
+    expect(dist.evidenceTaxBreakdown.foundation).toBe(154n);
+    expect(dist.evidenceTaxBreakdown.community).toBe(154n);
+    expect(dist.evidenceTaxBreakdown.developers).toBe(154n);
+    expect(dist.evidenceTaxBreakdown.reserve).toBe(44n);
+    // Sub-distribution sums to evidence tax
+    const taxSubTotal =
+      dist.evidenceTaxBreakdown.research +
+      dist.evidenceTaxBreakdown.foundation +
+      dist.evidenceTaxBreakdown.community +
+      dist.evidenceTaxBreakdown.developers +
+      dist.evidenceTaxBreakdown.reserve;
+    expect(taxSubTotal).toBe(dist.evidenceTax);
+
     // Research fund: 23.4%
     expect(dist.researchFund).toBe(2340n);
 
@@ -86,6 +106,13 @@ describe("calculateRevenueDistribution", () => {
     const dist = calculateRevenueDistribution(0n, []);
 
     expect(dist.evidenceTax).toBe(0n);
+    expect(dist.evidenceTaxBreakdown).toEqual({
+      research: 0n,
+      foundation: 0n,
+      community: 0n,
+      developers: 0n,
+      reserve: 0n,
+    });
     expect(dist.researchFund).toBe(0n);
     expect(dist.protocolTreasury).toBe(0n);
     expect(dist.contributorShares).toEqual([]);
@@ -177,5 +204,123 @@ describe("calculateProjectRevenueSummary", () => {
         summary.totalToResearchFund +
         summary.totalToProtocol,
     ).toBe(100000n);
+  });
+});
+
+// ============ Pure bigint precision (P0 fix) ============
+
+describe("distributeContributorPool precision", () => {
+  it("should correctly distribute pool exceeding Number.MAX_SAFE_INTEGER", () => {
+    // Pool > 2^53 (9_007_199_254_740_992) would lose precision with Number()
+    const total = 100_000_000_000_000_000n; // 100 quadrillion nanoLGM
+    const contributors = [
+      makeContributor("did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 7000n), // 70%
+      makeContributor("did:lgm:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 3000n), // 30%
+    ];
+
+    const dist = calculateRevenueDistribution(total, contributors);
+
+    // Contributor pool = 39% of 100Q = 39Q
+    const pool = (total * 3900n) / 10000n;
+    const agentA = dist.contributorShares.find((s) => s.did.includes("aaaa"));
+    const agentB = dist.contributorShares.find((s) => s.did.includes("bbbb"));
+
+    expect(agentA).toBeTruthy();
+    expect(agentB).toBeTruthy();
+
+    // Pure bigint: A gets (pool * 7000) / 10000 = 27.3Q exactly
+    const expectedA = (pool * 7000n) / 10000n;
+    expect(agentA!.amount).toBe(expectedA);
+
+    // Total must sum exactly to pool
+    const contributorTotal = dist.contributorShares.reduce(
+      (s, c) => s + c.amount,
+      0n,
+    );
+    expect(contributorTotal).toBe(pool);
+
+    // Full conservation
+    expect(verifyDistribution(dist, total)).toBe(true);
+  });
+
+  it("should correctly distribute with extreme weight asymmetry", () => {
+    // One whale (99.9999%) and one dust contributor (0.0001%)
+    const total = 10_000_000_000n; // 10B nanoLGM
+    const contributors = [
+      makeContributor("did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 999_999n), // 99.9999%
+      makeContributor("did:lgm:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 1n), // 0.0001%
+    ];
+
+    const dist = calculateRevenueDistribution(total, contributors);
+    const pool = (total * 3900n) / 10000n; // 3.9B
+
+    // Tiny contributor: (3_900_000_000 * 1) / 1_000_000 = 3900
+    const agentB = dist.contributorShares.find((s) => s.did.includes("bbbb"));
+    expect(agentB).toBeTruthy();
+    expect(agentB!.amount).toBeGreaterThan(0n);
+
+    // Conservation
+    const contributorTotal = dist.contributorShares.reduce(
+      (s, c) => s + c.amount,
+      0n,
+    );
+    expect(contributorTotal).toBe(pool);
+    expect(verifyDistribution(dist, total)).toBe(true);
+  });
+
+  it("should distribute equally when no earnings yet", () => {
+    const total = 10000n;
+    const contributors = [
+      makeContributor("did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0n),
+      makeContributor("did:lgm:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 0n),
+      makeContributor("did:lgm:cccccccccccccccccccccccccccccccccc", 0n),
+    ];
+
+    const dist = calculateRevenueDistribution(total, contributors);
+    const pool = (total * 3900n) / 10000n; // 3900
+
+    // Each gets pool / 3 = 1300, last gets remainder
+    expect(dist.contributorShares).toHaveLength(3);
+    const amounts = dist.contributorShares.map((s) => s.amount);
+    // All should be close to 1300
+    for (const a of amounts) {
+      expect(a).toBeGreaterThanOrEqual(1300n);
+      expect(a).toBeLessThanOrEqual(1301n);
+    }
+    // Total must be exact
+    expect(amounts.reduce((s, a) => s + a, 0n)).toBe(pool);
+  });
+
+  it("should handle many contributors without precision loss", () => {
+    const total = 1_000_000_000n;
+    // 20 contributors with varying earnings
+    const contributors: ContributorRecord[] = [];
+    for (let i = 0; i < 20; i++) {
+      const hex = i.toString(16).padStart(34, "0");
+      contributors.push(
+        makeContributor(`did:lgm:${hex}`, BigInt((i + 1) * 1000)),
+      );
+    }
+
+    const dist = calculateRevenueDistribution(total, contributors);
+
+    // All 20 should get a share
+    expect(dist.contributorShares).toHaveLength(20);
+
+    // Total shares must equal contributor pool exactly
+    const pool = (total * 3900n) / 10000n;
+    const contributorTotal = dist.contributorShares.reduce(
+      (s, c) => s + c.amount,
+      0n,
+    );
+    expect(contributorTotal).toBe(pool);
+
+    // Higher earners get more
+    const sorted = [...dist.contributorShares].sort((a, b) =>
+      Number(b.amount - a.amount),
+    );
+    expect(sorted[0].amount).toBeGreaterThan(sorted[19].amount);
+
+    expect(verifyDistribution(dist, total)).toBe(true);
   });
 });

@@ -1,20 +1,26 @@
 /**
- * Revenue Engine
+ * Revenue Engine — Tree of Life Project Revenue Distribution
  *
- * Processes service revenue and distributes it according to the Tree of Life
- * economics: evidence tax → contributors → research fund → protocol treasury.
+ * Distributes revenue from Tree of Life service calls (deploy_service/call_service)
+ * among project contributors, research fund, and protocol treasury.
  *
- * Revenue distribution follows the same economic model as knowledge queries:
- *   22% evidence tax (frozen forever, split 5 ways)
- *   78% remaining:
- *     50% to contributors (pro-rata by contribution weight)
- *     30% to research fund (feeds perpetual truth-finding loop)
- *     20% to protocol treasury (infrastructure)
+ * REVENUE SPLIT (basis points, sum to 10000):
+ *   2200 BP = 22% evidence tax (frozen forever, split 5 ways via TREASURY.ALLOCATION)
+ *   3900 BP = 39% to project contributors (pro-rata by contribution weight)
+ *   2340 BP = 23.4% to research fund (feeds perpetual truth-finding loop)
+ *   1560 BP = 15.6% to protocol treasury (infrastructure)
+ *
+ * NOTE: This is SEPARATE from the Truth Gateway billing model (core/billing/).
+ * The Truth Gateway uses a 60/30/10 split (provider/knowledge/protocol) because
+ * gateway queries reward knowledge contributors (fact submitters, verifiers),
+ * while tree services reward project contributors (developers, reviewers).
+ * Both models apply the 22% research share — they differ in who gets the remainder.
  */
 
 import type { DID } from "../agents/identity/did.js";
 import type {
   RevenueDistribution,
+  EvidenceTaxBreakdown,
   ContributorShare,
   ContributorRecord,
 } from "./types.js";
@@ -22,8 +28,20 @@ import {
   REVENUE_EVIDENCE_TAX_BP,
   REVENUE_CONTRIBUTORS_BP,
   REVENUE_RESEARCH_FUND_BP,
+  REVENUE_PROTOCOL_TREASURY_BP,
 } from "./types.js";
+import { splitEvidenceTax } from "../billing/reward_router.js";
 import { calculateAllContributorWeights } from "./coordination/skill_matching.js";
+
+// Static assertion: all 4 BP constants must sum to 10000 (100%)
+const _BP_SUM =
+  REVENUE_EVIDENCE_TAX_BP +
+  REVENUE_CONTRIBUTORS_BP +
+  REVENUE_RESEARCH_FUND_BP +
+  REVENUE_PROTOCOL_TREASURY_BP;
+if (_BP_SUM !== 10000n) {
+  throw new Error(`Revenue basis points must sum to 10000, got ${_BP_SUM}`);
+}
 
 // ============ Revenue Distribution ============
 
@@ -44,6 +62,13 @@ export function calculateRevenueDistribution(
   if (totalRevenue === 0n) {
     return {
       evidenceTax: 0n,
+      evidenceTaxBreakdown: {
+        research: 0n,
+        foundation: 0n,
+        community: 0n,
+        developers: 0n,
+        reserve: 0n,
+      },
       contributorShares: [],
       researchFund: 0n,
       protocolTreasury: 0n,
@@ -73,6 +98,7 @@ export function calculateRevenueDistribution(
 
   return {
     evidenceTax,
+    evidenceTaxBreakdown: distributeEvidenceTax(evidenceTax),
     contributorShares,
     researchFund,
     protocolTreasury: protocolTreasury + unclaimedPool,
@@ -82,6 +108,10 @@ export function calculateRevenueDistribution(
 /**
  * Distribute the contributor pool among project contributors.
  * Weights are based on total bounties earned (reflecting contribution value).
+ *
+ * Amount calculation uses pure bigint arithmetic: (pool * earned) / totalEarned.
+ * This avoids Number() precision loss that would misallocate for pools > 2^53.
+ * Float weights are still computed for the ContributorShare.weight display field.
  */
 function distributeContributorPool(
   pool: bigint,
@@ -89,12 +119,14 @@ function distributeContributorPool(
 ): ContributorShare[] {
   if (contributors.length === 0 || pool === 0n) return [];
 
+  const totalEarned = contributors.reduce((sum, c) => sum + c.totalEarned, 0n);
   const weights = calculateAllContributorWeights(contributors);
   const shares: ContributorShare[] = [];
   let distributed = 0n;
 
   // Sort by DID for deterministic ordering
   const sorted = [...contributors].sort((a, b) => a.did.localeCompare(b.did));
+  const n = BigInt(sorted.length);
 
   for (let i = 0; i < sorted.length; i++) {
     const contributor = sorted[i];
@@ -104,8 +136,12 @@ function distributeContributorPool(
     if (i === sorted.length - 1) {
       // Last contributor gets remainder (handles rounding)
       amount = pool - distributed;
+    } else if (totalEarned === 0n) {
+      // Equal split when no earnings yet
+      amount = pool / n;
     } else {
-      amount = BigInt(Math.floor(Number(pool) * weight));
+      // Pure bigint: avoids Number() precision loss for large pools
+      amount = (pool * contributor.totalEarned) / totalEarned;
     }
 
     if (amount > 0n) {
@@ -119,6 +155,36 @@ function distributeContributorPool(
   }
 
   return shares;
+}
+
+/**
+ * Sub-distribute the evidence tax across 5 treasury funds.
+ * Delegates to splitEvidenceTax() in reward_router.ts (single source of truth)
+ * and converts from TreasurySplitEntry[] to EvidenceTaxBreakdown.
+ */
+function distributeEvidenceTax(evidenceTax: bigint): EvidenceTaxBreakdown {
+  if (evidenceTax === 0n) {
+    return {
+      research: 0n,
+      foundation: 0n,
+      community: 0n,
+      developers: 0n,
+      reserve: 0n,
+    };
+  }
+
+  const entries = splitEvidenceTax(evidenceTax);
+  const breakdown: EvidenceTaxBreakdown = {
+    research: 0n,
+    foundation: 0n,
+    community: 0n,
+    developers: 0n,
+    reserve: 0n,
+  };
+  for (const entry of entries) {
+    breakdown[entry.fund] = entry.amount;
+  }
+  return breakdown;
 }
 
 // ============ Revenue Summaries ============
@@ -194,5 +260,12 @@ export function verifyDistribution(
     distribution.researchFund +
     distribution.protocolTreasury;
 
-  return actualTotal === expectedTotal;
+  if (actualTotal !== expectedTotal) return false;
+
+  // Verify evidence tax sub-distribution sums to evidence tax
+  const { research, foundation, community, developers, reserve } =
+    distribution.evidenceTaxBreakdown;
+  const taxSubTotal = research + foundation + community + developers + reserve;
+
+  return taxSubTotal === distribution.evidenceTax;
 }

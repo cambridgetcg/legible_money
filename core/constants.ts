@@ -203,12 +203,25 @@ export const TREASURY = {
     RESERVE: 0.02, // 2%  → Emergency reserve
   },
 
+  // Integer basis points (no floating-point conversion needed)
+  // Sum = 10000 (verified: 7700 + 700 + 700 + 700 + 200 = 10000)
+  ALLOCATION_BPS: {
+    RESEARCH: 7700n, // 77%
+    FOUNDATION: 700n, // 7%
+    COMMUNITY: 700n, // 7%
+    DEVELOPERS: 700n, // 7%
+    RESERVE: 200n, // 2%
+  },
+
   // ============ Fund Addresses (FROZEN AT GENESIS) ============
   // These are derived deterministically from GENESIS_TREASURY_SEED
   // Anyone can verify: address = publicKeyToAddress(deriveKey(seed, path))
   ADDRESSES: {
-    // Research fund - hybrid grant/journal with experimental verification
+    // Evidence tax research allocation (77% of 22% evidence tax)
     RESEARCH: "did:lgm:research",
+
+    // Research fund — perpetual truth-finding loop (23.4% of revenue, separate from evidence tax)
+    RESEARCH_FUND: "did:lgm:treasury-research-fund",
 
     // Core protocol development
     FOUNDATION: "did:lgm:treasury-foundation",
@@ -448,3 +461,14 @@ export const GENESIS = {
  * The path to understanding starts at axiom_0
  */
 export const DERIVATION_HINT = "axiom_0 → origin → unity";
+
+// ============ Service Domain Constants ============
+
+/**
+ * Base domain for protocol-assigned service subdomains.
+ * Services are addressed as: {name-slug}-{short-id}.{SERVICE_BASE_DOMAIN}
+ */
+export const SERVICE_BASE_DOMAIN = "services.legible.money" as const;
+
+/** Number of hex chars from service ID used in the subdomain label. */
+export const SERVICE_SUBDOMAIN_SHORT_ID_LEN = 8 as const;

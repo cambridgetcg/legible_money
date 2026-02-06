@@ -425,6 +425,7 @@ describe("pauseProject", () => {
 
     const paused = pauseProject(project, "funding issue", 150n);
     expect(paused.phase).toBe("dormant");
+    expect(paused.previousPhase).toBe("growing");
   });
 
   it("should pause from fruiting", () => {
@@ -449,6 +450,7 @@ describe("pauseProject", () => {
 
     const paused = pauseProject(project, "maintenance", 350n);
     expect(paused.phase).toBe("dormant");
+    expect(paused.previousPhase).toBe("fruiting");
   });
 });
 
@@ -473,6 +475,38 @@ describe("resumeProject", () => {
 
     const resumed = resumeProject(project, "growing", 200n);
     expect(resumed.phase).toBe("growing");
+    expect(resumed.previousPhase).toBeUndefined();
+  });
+
+  it("should reject backward phase jump on resume", () => {
+    let project = createProject(
+      FOUNDER,
+      "P",
+      "",
+      makeSpec(),
+      "d",
+      makeSignal(),
+      makeFunding(),
+      0n,
+      100n,
+    );
+    project = proposeProject(project, MIN_PROJECT_STAKE, 101n);
+    project = addContributor(project, AGENT_B, "developer", 102n);
+    project = addTask(project, "task-1");
+    project = startDevelopment(project, 103n);
+    // Pause from growing
+    project = pauseProject(project, "reason", 150n);
+    expect(project.previousPhase).toBe("growing");
+
+    // Try to resume to fruiting (forward jump — skips mature)
+    expect(() => resumeProject(project, "fruiting", 200n)).toThrow(
+      "must resume there",
+    );
+
+    // Try to resume to sprout (backward jump)
+    expect(() => resumeProject(project, "sprout", 200n)).toThrow(
+      "must resume there",
+    );
   });
 
   it("should reject resuming non-dormant project", () => {
@@ -646,6 +680,102 @@ describe("recordTaskCompletion", () => {
     const agentB = project.contributors.find((c) => c.did === AGENT_B);
     expect(agentB?.tasksCompleted).toBe(1);
     expect(agentB?.totalEarned).toBe(5000n);
+  });
+
+  it("should throw for non-contributor DID (P1 fix)", () => {
+    let project = createProject(
+      FOUNDER,
+      "P",
+      "",
+      makeSpec(),
+      "d",
+      makeSignal(),
+      makeFunding(),
+      0n,
+      100n,
+    );
+    project = proposeProject(project, MIN_PROJECT_STAKE, 101n);
+    // AGENT_B is NOT added as a contributor
+
+    expect(() => recordTaskCompletion(project, AGENT_B, 5000n)).toThrow(
+      "is not a project contributor",
+    );
+  });
+
+  it("should throw NOT_A_CONTRIBUTOR error code for non-contributor", () => {
+    const project = createProject(
+      FOUNDER,
+      "P",
+      "",
+      makeSpec(),
+      "d",
+      makeSignal(),
+      makeFunding(),
+      0n,
+      100n,
+    );
+
+    try {
+      recordTaskCompletion(project, "did:lgm:stranger", 1000n);
+      expect.unreachable("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProjectLifecycleError);
+      expect((e as any).code).toBe("NOT_A_CONTRIBUTOR");
+    }
+  });
+
+  it("should correctly track multiple completions per contributor", () => {
+    let project = createProject(
+      FOUNDER,
+      "P",
+      "",
+      makeSpec(),
+      "d",
+      makeSignal(),
+      makeFunding(),
+      0n,
+      100n,
+    );
+    project = proposeProject(project, MIN_PROJECT_STAKE, 101n);
+    project = addContributor(project, AGENT_B, "developer", 102n);
+    project = addTask(project, "task-1");
+    project = addTask(project, "task-2");
+
+    project = recordTaskCompletion(project, AGENT_B, 3000n);
+    project = recordTaskCompletion(project, AGENT_B, 7000n);
+
+    expect(project.completedTasks).toBe(2);
+    expect(project.spent).toBe(10000n);
+    const agentB = project.contributors.find((c) => c.did === AGENT_B);
+    expect(agentB?.tasksCompleted).toBe(2);
+    expect(agentB?.totalEarned).toBe(10000n);
+  });
+
+  it("should reject when completedTasks would exceed totalTasks (P2-3 fix)", () => {
+    let project = createProject(
+      FOUNDER,
+      "P",
+      "",
+      makeSpec(),
+      "d",
+      makeSignal(),
+      makeFunding(),
+      0n,
+      100n,
+    );
+    project = proposeProject(project, MIN_PROJECT_STAKE, 101n);
+    project = addContributor(project, AGENT_B, "developer", 102n);
+    project = addTask(project, "task-1"); // totalTasks = 1
+
+    // Complete the one task
+    project = recordTaskCompletion(project, AGENT_B, 5000n);
+    expect(project.completedTasks).toBe(1);
+    expect(project.totalTasks).toBe(1);
+
+    // Attempting another completion should fail — invariant violation
+    expect(() => recordTaskCompletion(project, AGENT_B, 3000n)).toThrow(
+      "All tasks already completed",
+    );
   });
 });
 

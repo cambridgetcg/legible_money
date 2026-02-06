@@ -591,6 +591,22 @@ export class ResearchStateTree {
     return this.bountySmt.prove(key);
   }
 
+  // ============ Persistence Export/Restore ============
+
+  /**
+   * Export all research submissions for persistence
+   */
+  exportResearch(): ResearchState[] {
+    return Array.from(this.researchCache.values());
+  }
+
+  /**
+   * Export all bounties for persistence
+   */
+  exportBounties(): BountyState[] {
+    return Array.from(this.bountyCache.values());
+  }
+
   // ============ Utilities ============
 
   /**

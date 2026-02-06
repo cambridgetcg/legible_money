@@ -12,7 +12,7 @@
     "listenAddresses": [
       "/ip4/0.0.0.0/tcp/26656"
     ],
-    "bootstrapPeers": ["/dns4/validator-1/tcp/26656"],
+    "bootstrapPeers": [],
     "maxPeers": 50
   },
   "rpc": {

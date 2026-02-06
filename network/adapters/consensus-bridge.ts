@@ -5,11 +5,16 @@
  * handling message broadcasting and event routing.
  */
 
-import { EventEmitter } from 'events';
-import type { LegibleNode } from '../node.js';
-import type { ProofOfTruthEngine } from '../../consensus/pot/engine.js';
-import type { Mempool } from '../../consensus/mempool/pool.js';
-import { PUBSUB_TOPICS, MESSAGE_TYPES, type NetworkMessage } from '../config.js';
+import { EventEmitter } from "events";
+import type { LegibleNode } from "../node.js";
+import type { ProofOfTruthEngine } from "../../consensus/pot/engine.js";
+import type { Mempool } from "../../consensus/mempool/pool.js";
+import {
+  PUBSUB_TOPICS,
+  MESSAGE_TYPES,
+  type NetworkMessage,
+  networkReplacer,
+} from "../config.js";
 
 // ============ Types ============
 
@@ -48,7 +53,7 @@ export class ConsensusNetworkBridge extends EventEmitter {
     this.wireMempoolToNetwork();
 
     this.connected = true;
-    this.emit('connected');
+    this.emit("connected");
   }
 
   /**
@@ -61,7 +66,7 @@ export class ConsensusNetworkBridge extends EventEmitter {
     // and remove them here. For now, handlers remain attached.
 
     this.connected = false;
-    this.emit('disconnected');
+    this.emit("disconnected");
   }
 
   // ============ Broadcast Methods ============
@@ -93,10 +98,13 @@ export class ConsensusNetworkBridge extends EventEmitter {
   /**
    * Broadcast a verification commitment
    */
-  async broadcastCommitment(roundId: string, commitment: unknown): Promise<void> {
+  async broadcastCommitment(
+    roundId: string,
+    commitment: unknown,
+  ): Promise<void> {
     const message = this.createMessage(MESSAGE_TYPES.VERIFICATION_COMMIT, {
       roundId,
-      ...commitment as object,
+      ...(commitment as object),
     });
     await this.node.broadcast(PUBSUB_TOPICS.VERIFICATIONS, message);
   }
@@ -107,7 +115,7 @@ export class ConsensusNetworkBridge extends EventEmitter {
   async broadcastReveal(roundId: string, reveal: unknown): Promise<void> {
     const message = this.createMessage(MESSAGE_TYPES.VERIFICATION_REVEAL, {
       roundId,
-      ...reveal as object,
+      ...(reveal as object),
     });
     await this.node.broadcast(PUBSUB_TOPICS.VERIFICATIONS, message);
   }
@@ -115,7 +123,10 @@ export class ConsensusNetworkBridge extends EventEmitter {
   /**
    * Broadcast a consensus message
    */
-  async broadcastConsensus(messageType: string, payload: unknown): Promise<void> {
+  async broadcastConsensus(
+    messageType: string,
+    payload: unknown,
+  ): Promise<void> {
     const message = this.createMessage(messageType, payload);
     await this.node.broadcast(PUBSUB_TOPICS.CONSENSUS, message);
   }
@@ -124,34 +135,34 @@ export class ConsensusNetworkBridge extends EventEmitter {
 
   private wireConsensusToNetwork(): void {
     // Broadcast new blocks
-    this.consensus.on('block_proposed', async (event: any) => {
+    this.consensus.on("block_proposed", async (event: any) => {
       try {
         await this.broadcastBlock(event.block);
-        this.emit('block:broadcast', event.block);
+        this.emit("block:broadcast", event.block);
       } catch (error) {
-        this.emit('error', { type: 'block_broadcast', error });
+        this.emit("error", { type: "block_broadcast", error });
       }
     });
 
     // Broadcast verification round starts
-    this.consensus.on('round_started', async (event: any) => {
+    this.consensus.on("round_started", async (event: any) => {
       try {
         await this.broadcastClaim(event.round);
-        this.emit('round:broadcast', event.round);
+        this.emit("round:broadcast", event.round);
       } catch (error) {
-        this.emit('error', { type: 'round_broadcast', error });
+        this.emit("error", { type: "round_broadcast", error });
       }
     });
   }
 
   private wireMempoolToNetwork(): void {
     // Broadcast new transactions
-    this.mempool.on('tx:added', async (entry: any) => {
+    this.mempool.on("tx:added", async (entry: any) => {
       try {
         await this.broadcastTransaction(entry.tx);
-        this.emit('tx:broadcast', entry.tx);
+        this.emit("tx:broadcast", entry.tx);
       } catch (error) {
-        this.emit('error', { type: 'tx_broadcast', error });
+        this.emit("error", { type: "tx_broadcast", error });
       }
     });
   }
@@ -159,10 +170,12 @@ export class ConsensusNetworkBridge extends EventEmitter {
   private createMessage(type: string, payload: unknown): NetworkMessage {
     return {
       type,
-      version: '1.0.0',
+      version: "1.0.0",
       timestamp: Date.now(),
-      sender: this.node.getPeerId() || '',
-      payload: new TextEncoder().encode(JSON.stringify(payload)),
+      sender: this.node.getPeerId() || "",
+      payload: new TextEncoder().encode(
+        JSON.stringify(payload, networkReplacer),
+      ),
     };
   }
 }
@@ -172,7 +185,9 @@ export class ConsensusNetworkBridge extends EventEmitter {
 /**
  * Create and connect a consensus-network bridge
  */
-export function createConsensusBridge(config: ConsensusBridgeConfig): ConsensusNetworkBridge {
+export function createConsensusBridge(
+  config: ConsensusBridgeConfig,
+): ConsensusNetworkBridge {
   const bridge = new ConsensusNetworkBridge(config);
   bridge.connect();
   return bridge;

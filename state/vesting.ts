@@ -17,15 +17,15 @@
  *   JUSTICE: Deterministic state transitions for all operations
  */
 
-import { InMemorySMT, type MerkleRoot } from '../core/crypto/merkle.js';
-import { sha512_256Hex } from '../core/crypto/hashing.js';
+import { InMemorySMT, type MerkleRoot } from "../core/crypto/merkle.js";
+import { sha512_256Hex } from "../core/crypto/hashing.js";
 import {
   type RewardVesting,
   type VestingCategory,
   type VestingStatus,
   type CreateVestingPayload,
   VestingError,
-} from '../core/rewards/types.js';
+} from "../core/rewards/types.js";
 import {
   createVesting,
   updateRelease,
@@ -35,7 +35,7 @@ import {
   handleReplication,
   getVestingSummary,
   canClaim,
-} from '../core/rewards/vesting_engine.js';
+} from "../core/rewards/vesting_engine.js";
 
 // ============ Key Generation ============
 
@@ -44,7 +44,7 @@ import {
  */
 function vestingIdToKey(vestingId: string): Uint8Array {
   const hash = sha512_256Hex(`vesting:id:${vestingId}`);
-  return new Uint8Array(Buffer.from(hash, 'hex').slice(0, 32));
+  return new Uint8Array(Buffer.from(hash, "hex").slice(0, 32));
 }
 
 // ============ Serialization ============
@@ -54,7 +54,7 @@ function vestingIdToKey(vestingId: string): Uint8Array {
  */
 function serializeVesting(vesting: RewardVesting): Uint8Array {
   const json = JSON.stringify(vesting, (_, value) =>
-    typeof value === 'bigint' ? value.toString() + 'n' : value
+    typeof value === "bigint" ? value.toString() + "n" : value,
   );
   return new TextEncoder().encode(json);
 }
@@ -65,7 +65,7 @@ function serializeVesting(vesting: RewardVesting): Uint8Array {
 function deserializeVesting(data: Uint8Array): RewardVesting {
   const json = new TextDecoder().decode(data);
   return JSON.parse(json, (_, value) => {
-    if (typeof value === 'string' && value.endsWith('n')) {
+    if (typeof value === "string" && value.endsWith("n")) {
       return BigInt(value.slice(0, -1));
     }
     return value;
@@ -105,7 +105,13 @@ export class VestingStateTree {
     this.categoryIndex = new Map();
 
     // Initialize status index
-    for (const status of ['vesting', 'paused', 'completed', 'falsified', 'abandoned'] as VestingStatus[]) {
+    for (const status of [
+      "vesting",
+      "paused",
+      "completed",
+      "falsified",
+      "abandoned",
+    ] as VestingStatus[]) {
       this.statusIndex.set(status, new Set());
     }
 
@@ -126,12 +132,15 @@ export class VestingStateTree {
   /**
    * Create a new vesting schedule
    */
-  createVesting(payload: CreateVestingPayload, currentBlock: bigint): RewardVesting {
+  createVesting(
+    payload: CreateVestingPayload,
+    currentBlock: bigint,
+  ): RewardVesting {
     // Check if vesting already exists for this claim
     if (this.claimToVestingIndex.has(payload.claimId)) {
       throw new VestingError(
         `Vesting already exists for claim ${payload.claimId}`,
-        'INVALID_AMOUNT'
+        "INVALID_AMOUNT",
       );
     }
 
@@ -153,7 +162,7 @@ export class VestingStateTree {
     this.recipientToVestingsIndex.get(payload.recipient)!.add(vesting.id);
 
     // Status index
-    this.statusIndex.get('vesting')!.add(vesting.id);
+    this.statusIndex.get("vesting")!.add(vesting.id);
 
     // Category index
     if (!this.categoryIndex.has(vesting.category)) {
@@ -227,35 +236,38 @@ export class VestingStateTree {
   /**
    * Update status statistics
    */
-  private updateStatusStats(oldStatus: VestingStatus, newStatus: VestingStatus): void {
+  private updateStatusStats(
+    oldStatus: VestingStatus,
+    newStatus: VestingStatus,
+  ): void {
     // Decrement old
     switch (oldStatus) {
-      case 'vesting':
+      case "vesting":
         this.stats.activeVestings--;
         break;
-      case 'paused':
+      case "paused":
         this.stats.pausedVestings--;
         break;
-      case 'completed':
+      case "completed":
         this.stats.completedVestings--;
         break;
-      case 'falsified':
+      case "falsified":
         this.stats.falsifiedVestings--;
         break;
     }
 
     // Increment new
     switch (newStatus) {
-      case 'vesting':
+      case "vesting":
         this.stats.activeVestings++;
         break;
-      case 'paused':
+      case "paused":
         this.stats.pausedVestings++;
         break;
-      case 'completed':
+      case "completed":
         this.stats.completedVestings++;
         break;
-      case 'falsified':
+      case "falsified":
         this.stats.falsifiedVestings++;
         break;
     }
@@ -270,17 +282,17 @@ export class VestingStateTree {
     vestingId: string,
     claimer: string,
     amount: bigint | undefined,
-    currentBlock: bigint
+    currentBlock: bigint,
   ): { vesting: RewardVesting; claimedAmount: bigint } {
     const vesting = this.getVesting(vestingId);
     if (!vesting) {
-      throw new VestingError('Vesting not found', 'VESTING_NOT_FOUND');
+      throw new VestingError("Vesting not found", "VESTING_NOT_FOUND");
     }
 
     const { updatedVesting, claimedAmount } = claimRewards(
       vesting,
       { vestingId, claimer, amount },
-      currentBlock
+      currentBlock,
     );
 
     this.updateVesting(updatedVesting);
@@ -294,10 +306,14 @@ export class VestingStateTree {
   /**
    * Pause vesting for challenge
    */
-  pauseForChallenge(vestingId: string, challengeId: string, currentBlock: bigint): RewardVesting {
+  pauseForChallenge(
+    vestingId: string,
+    challengeId: string,
+    currentBlock: bigint,
+  ): RewardVesting {
     const vesting = this.getVesting(vestingId);
     if (!vesting) {
-      throw new VestingError('Vesting not found', 'VESTING_NOT_FOUND');
+      throw new VestingError("Vesting not found", "VESTING_NOT_FOUND");
     }
 
     const updated = handleChallengeStart(vesting, challengeId, currentBlock);
@@ -314,11 +330,11 @@ export class VestingStateTree {
     challengerWon: boolean,
     challengerDid: string,
     disputeId: string,
-    currentBlock: bigint
+    currentBlock: bigint,
   ): { vesting: RewardVesting; clawback?: any } {
     const vesting = this.getVesting(vestingId);
     if (!vesting) {
-      throw new VestingError('Vesting not found', 'VESTING_NOT_FOUND');
+      throw new VestingError("Vesting not found", "VESTING_NOT_FOUND");
     }
 
     const result = handleChallengeResolution(
@@ -326,7 +342,7 @@ export class VestingStateTree {
       challengerWon,
       challengerDid,
       disputeId,
-      currentBlock
+      currentBlock,
     );
 
     this.updateVesting(result.updatedVesting);
@@ -340,10 +356,14 @@ export class VestingStateTree {
   /**
    * Apply acceleration for replication
    */
-  applyReplication(vestingId: string, researchId: string, currentBlock: bigint): RewardVesting {
+  applyReplication(
+    vestingId: string,
+    researchId: string,
+    currentBlock: bigint,
+  ): RewardVesting {
     const vesting = this.getVesting(vestingId);
     if (!vesting) {
-      throw new VestingError('Vesting not found', 'VESTING_NOT_FOUND');
+      throw new VestingError("Vesting not found", "VESTING_NOT_FOUND");
     }
 
     const updated = handleReplication(vesting, researchId, currentBlock);
@@ -364,7 +384,7 @@ export class VestingStateTree {
     }
 
     return Array.from(vestingIds)
-      .map(id => this.getVesting(id))
+      .map((id) => this.getVesting(id))
       .filter((v): v is RewardVesting => v !== null);
   }
 
@@ -378,7 +398,7 @@ export class VestingStateTree {
     }
 
     return Array.from(vestingIds)
-      .map(id => this.getVesting(id))
+      .map((id) => this.getVesting(id))
       .filter((v): v is RewardVesting => v !== null);
   }
 
@@ -392,7 +412,7 @@ export class VestingStateTree {
     }
 
     return Array.from(vestingIds)
-      .map(id => this.getVesting(id))
+      .map((id) => this.getVesting(id))
       .filter((v): v is RewardVesting => v !== null);
   }
 
@@ -400,9 +420,9 @@ export class VestingStateTree {
    * Get active vestings that can be claimed
    */
   getClaimableVestings(currentBlock: bigint): RewardVesting[] {
-    const activeVestings = this.getVestingsByStatus('vesting');
+    const activeVestings = this.getVestingsByStatus("vesting");
 
-    return activeVestings.filter(v => {
+    return activeVestings.filter((v) => {
       const check = canClaim(v, currentBlock);
       return check.canClaim;
     });
@@ -414,7 +434,7 @@ export class VestingStateTree {
   getVestingSummary(vestingId: string, currentBlock: bigint) {
     const vesting = this.getVesting(vestingId);
     if (!vesting) {
-      throw new VestingError('Vesting not found', 'VESTING_NOT_FOUND');
+      throw new VestingError("Vesting not found", "VESTING_NOT_FOUND");
     }
 
     return getVestingSummary(vesting, currentBlock);
@@ -426,17 +446,20 @@ export class VestingStateTree {
    * Update releases for all active vestings
    */
   batchUpdateReleases(currentBlock: bigint): number {
-    const activeVestings = this.getVestingsByStatus('vesting');
+    const activeVestings = this.getVestingsByStatus("vesting");
     let updatedCount = 0;
 
     for (const vesting of activeVestings) {
       if (vesting.isPaused) continue;
 
       const updated = updateRelease(vesting, currentBlock);
-      if (updated.releasedAmount !== vesting.releasedAmount ||
-          updated.status !== vesting.status) {
+      if (
+        updated.releasedAmount !== vesting.releasedAmount ||
+        updated.status !== vesting.status
+      ) {
         this.updateVesting(updated);
-        this.stats.totalReleased = this.stats.totalReleased +
+        this.stats.totalReleased =
+          this.stats.totalReleased +
           (updated.releasedAmount - vesting.releasedAmount);
         updatedCount++;
       }
@@ -459,6 +482,63 @@ export class VestingStateTree {
    */
   getStats() {
     return { ...this.stats };
+  }
+
+  // ============ Persistence Export/Restore ============
+
+  /**
+   * Export all vestings for persistence
+   */
+  exportVestings(): RewardVesting[] {
+    return Array.from(this.vestingCache.values());
+  }
+
+  /**
+   * Restore a vesting from persistence (bypasses creation logic,
+   * takes a pre-built RewardVesting)
+   */
+  restoreVesting(vesting: RewardVesting): void {
+    // Store in SMT
+    const key = vestingIdToKey(vesting.id);
+    this.vestingSmt.set(key, serializeVesting(vesting));
+
+    // Update cache
+    this.vestingCache.set(vesting.id, vesting);
+
+    // Claim-to-vesting index
+    if (vesting.claimId) {
+      this.claimToVestingIndex.set(vesting.claimId, vesting.id);
+    }
+
+    // Recipient index
+    if (!this.recipientToVestingsIndex.has(vesting.recipient)) {
+      this.recipientToVestingsIndex.set(vesting.recipient, new Set());
+    }
+    this.recipientToVestingsIndex.get(vesting.recipient)!.add(vesting.id);
+
+    // Status index
+    const status = vesting.status ?? "vesting";
+    if (!this.statusIndex.has(status)) {
+      this.statusIndex.set(status, new Set());
+    }
+    this.statusIndex.get(status)!.add(vesting.id);
+
+    // Category index
+    if (!this.categoryIndex.has(vesting.category)) {
+      this.categoryIndex.set(vesting.category, new Set());
+    }
+    this.categoryIndex.get(vesting.category)!.add(vesting.id);
+
+    // Update stats
+    this.stats.totalVestings++;
+    this.stats.totalAmount += vesting.totalAmount;
+    this.stats.totalReleased += vesting.releasedAmount ?? 0n;
+    this.stats.totalClaimed += vesting.claimableAmount ?? 0n;
+
+    if (status === "vesting") this.stats.activeVestings++;
+    else if (status === "paused") this.stats.pausedVestings++;
+    else if (status === "completed") this.stats.completedVestings++;
+    else if (status === "falsified") this.stats.falsifiedVestings++;
   }
 
   /**

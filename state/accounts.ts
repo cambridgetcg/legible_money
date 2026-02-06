@@ -46,6 +46,15 @@ function serializeAccountState(account: AccountState): Uint8Array {
     reputationScore: account.reputationScore,
     lastActiveBlock: account.lastActiveBlock.toString(),
     flags: packFlags(account.flags),
+    availability: account.availability
+      ? {
+          available: account.availability.available,
+          capabilities: account.availability.capabilities,
+          preferredDomains: account.availability.preferredDomains,
+          minimumBounty: account.availability.minimumBounty.toString(),
+          updatedAtBlock: account.availability.updatedAtBlock.toString(),
+        }
+      : undefined,
   });
   return new TextEncoder().encode(json);
 }
@@ -67,6 +76,15 @@ function deserializeAccountState(bytes: Uint8Array): AccountState {
     reputationScore: obj.reputationScore,
     lastActiveBlock: BigInt(obj.lastActiveBlock),
     flags: unpackFlags(obj.flags),
+    availability: obj.availability
+      ? {
+          available: obj.availability.available,
+          capabilities: obj.availability.capabilities,
+          preferredDomains: obj.availability.preferredDomains,
+          minimumBounty: BigInt(obj.availability.minimumBounty),
+          updatedAtBlock: BigInt(obj.availability.updatedAtBlock),
+        }
+      : undefined,
   };
 }
 

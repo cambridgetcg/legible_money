@@ -17,12 +17,18 @@ import type { ContributorRecord } from "../../../core/tree/types.js";
 
 // ============ Test Helpers ============
 
-function makeCapability(active: boolean) {
+function makeCapability(
+  active: boolean,
+  overrides: {
+    level?: 1 | 2 | 3;
+    status?: "pending" | "attested" | "revoked";
+  } = {},
+) {
   if (!active) return null;
   return {
     type: "development" as const,
-    level: 2 as const,
-    status: "attested" as const,
+    level: overrides.level ?? (2 as const),
+    status: overrides.status ?? ("attested" as const),
     attestedBy: [],
     evidence: [],
     stakedAmount: 0n,
@@ -285,6 +291,213 @@ describe("calculateMatchScore", () => {
   });
 });
 
+// ============ Revoked / Pending Capability Filtering (S3) ============
+
+describe("capability status filtering", () => {
+  it("should exclude revoked capabilities from matching", () => {
+    const task = createTask(
+      "p",
+      "Build",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+    const revokedProfile = makeProfile(
+      "did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        capabilities: {
+          verification: null,
+          research: null,
+          development: makeCapability(true, { status: "revoked" }),
+          testing: null,
+          code_review: null,
+          governance: null,
+          mentorship: null,
+        },
+      },
+    );
+
+    // Revoked capability should not match
+    expect(calculateMatchScore(task, revokedProfile)).toBe(0);
+    expect(matchAgentsToTask(task, [revokedProfile])).toHaveLength(0);
+  });
+
+  it("should exclude pending capabilities from matching", () => {
+    const task = createTask(
+      "p",
+      "Build",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+    const pendingProfile = makeProfile(
+      "did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        capabilities: {
+          verification: null,
+          research: null,
+          development: makeCapability(true, { status: "pending" }),
+          testing: null,
+          code_review: null,
+          governance: null,
+          mentorship: null,
+        },
+      },
+    );
+
+    expect(calculateMatchScore(task, pendingProfile)).toBe(0);
+  });
+});
+
+// ============ Level-Weighted Scoring (S2) ============
+
+describe("capability level weighting", () => {
+  it("should score level-3 higher than level-1", () => {
+    const task = createTask(
+      "p",
+      "Build",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+    const expert = makeProfile("did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", {
+      capabilities: {
+        verification: null,
+        research: null,
+        development: makeCapability(true, { level: 3 }),
+        testing: null,
+        code_review: null,
+        governance: null,
+        mentorship: null,
+      },
+    });
+    const novice = makeProfile("did:lgm:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", {
+      capabilities: {
+        verification: null,
+        research: null,
+        development: makeCapability(true, { level: 1 }),
+        testing: null,
+        code_review: null,
+        governance: null,
+        mentorship: null,
+      },
+    });
+
+    const expertScore = calculateMatchScore(task, expert);
+    const noviceScore = calculateMatchScore(task, novice);
+
+    expect(expertScore).toBeGreaterThan(noviceScore);
+    // Level 3: capScore = 1.0, Level 1: capScore = 0.6
+    // Difference should be in the capability weight (0.5 * delta)
+    expect(expertScore - noviceScore).toBeCloseTo(0.5 * (1.0 - 0.6), 2);
+  });
+
+  it("should use minimum level for composite capabilities", () => {
+    const task = createTask(
+      "p",
+      "Design system",
+      "",
+      "design",
+      ["design"],
+      1000n,
+      0n,
+      100n,
+    );
+    // design = research + development composite
+    const mixedLevel = makeProfile(
+      "did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        capabilities: {
+          verification: null,
+          research: makeCapability(true, { level: 1 }),
+          development: makeCapability(true, { level: 3 }),
+          testing: null,
+          code_review: null,
+          governance: null,
+          mentorship: null,
+        },
+      },
+    );
+
+    const score = calculateMatchScore(task, mixedLevel);
+    // Composite uses min level (1) → levelMultiplier = 0.6
+    // capScore = 0.6/1 = 0.6
+    expect(score).toBeGreaterThan(0);
+    // Level 1 cap weight = 0.6 * 0.5 = 0.3 cap contribution
+    expect(score).toBeLessThan(0.8); // Not full score
+  });
+});
+
+// ============ Recency Weighting (C1) ============
+
+describe("recency weighting", () => {
+  it("should score recently active agent higher than inactive", () => {
+    const task = createTask(
+      "p",
+      "Build",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+    const recentAgent = makeProfile(
+      "did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        lastActiveAt: Date.now() - 1000, // 1 second ago
+      },
+    );
+    const inactiveAgent = makeProfile(
+      "did:lgm:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      {
+        lastActiveAt: 0, // Never active
+      },
+    );
+
+    const recentScore = calculateMatchScore(task, recentAgent);
+    const inactiveScore = calculateMatchScore(task, inactiveAgent);
+
+    expect(recentScore).toBeGreaterThan(inactiveScore);
+  });
+
+  it("should decay recency over time", () => {
+    const task = createTask(
+      "p",
+      "Build",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+    const veryRecent = makeProfile(
+      "did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      {
+        lastActiveAt: Date.now() - 60_000, // 1 minute ago
+      },
+    );
+    const weekOld = makeProfile("did:lgm:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", {
+      lastActiveAt: Date.now() - 7 * 24 * 60 * 60 * 1000, // 1 week ago
+    });
+
+    const recentScore = calculateMatchScore(task, veryRecent);
+    const weekScore = calculateMatchScore(task, weekOld);
+
+    expect(recentScore).toBeGreaterThan(weekScore);
+  });
+});
+
 // ============ calculateContributorWeight ============
 
 describe("calculateContributorWeight", () => {
@@ -349,5 +562,100 @@ describe("calculateAllContributorWeights", () => {
     const weights = calculateAllContributorWeights(contributors);
 
     expect(weights.get("did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBe(1);
+  });
+});
+
+// ============ C4: Expired capability exclusion ============
+
+describe("expired capability filtering (C4 fix)", () => {
+  it("should exclude expired capabilities from matching", () => {
+    const task = createTask(
+      "proj-1",
+      "Build API",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+
+    const expiredAgent = makeProfile("did:lgm:expired00000000000000000000000", {
+      capabilities: {
+        verification: null,
+        research: null,
+        development: {
+          type: "development",
+          level: 3,
+          status: "attested",
+          attestedBy: ["did:lgm:attestor"],
+          evidence: [],
+          stakedAmount: 0n,
+          expiresAt: Date.now() - 1000, // Expired 1 second ago
+        },
+        testing: null,
+        code_review: null,
+        governance: null,
+        mentorship: null,
+      },
+    });
+
+    // Expired capability should score 0 — agent is disqualified
+    const score = calculateMatchScore(task, expiredAgent);
+    expect(score).toBe(0);
+  });
+
+  it("should include non-expired capabilities in matching", () => {
+    const task = createTask(
+      "proj-1",
+      "Build API",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+
+    const activeAgent = makeProfile("did:lgm:active000000000000000000000000", {
+      capabilities: {
+        verification: null,
+        research: null,
+        development: {
+          type: "development",
+          level: 3,
+          status: "attested",
+          attestedBy: ["did:lgm:attestor"],
+          evidence: [],
+          stakedAmount: 0n,
+          expiresAt: Date.now() + 86_400_000, // Expires in 24 hours
+        },
+        testing: null,
+        code_review: null,
+        governance: null,
+        mentorship: null,
+      },
+    });
+
+    const score = calculateMatchScore(task, activeAgent);
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it("should treat capabilities without expiresAt as non-expiring", () => {
+    const task = createTask(
+      "proj-1",
+      "Build API",
+      "",
+      "implement",
+      ["development"],
+      1000n,
+      0n,
+      100n,
+    );
+
+    // Default makeProfile has no expiresAt — should still work
+    const agent = makeProfile("did:lgm:noexpiry0000000000000000000000");
+    const score = calculateMatchScore(task, agent);
+    expect(score).toBeGreaterThan(0);
   });
 });

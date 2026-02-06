@@ -36,6 +36,12 @@ export interface ProductProject {
   /** Current lifecycle phase */
   phase: ProjectPhase;
 
+  /** Phase before pausing (set when transitioning to dormant) */
+  previousPhase?: ProjectPhase;
+
+  /** Reason for pausing (set when transitioning to dormant) */
+  pauseReason?: string;
+
   /** Block when project was created */
   createdAtBlock: bigint;
 
@@ -97,6 +103,11 @@ export interface ProductProject {
 
   /** Deployed service IDs */
   serviceIds: string[];
+
+  // ---- Applications ----
+
+  /** Pending applications from agents wanting to join */
+  applications?: ProjectApplication[];
 }
 
 /**
@@ -122,7 +133,7 @@ export const VALID_PHASE_TRANSITIONS: Record<ProjectPhase, ProjectPhase[]> = {
   mature: ["fruiting", "dormant", "withered"],
   fruiting: ["seeding", "dormant"],
   seeding: ["fruiting", "dormant"],
-  dormant: ["sprout", "growing", "fruiting", "withered"],
+  dormant: ["sprout", "growing", "mature", "fruiting", "seeding", "withered"],
   withered: [], // Terminal state
 };
 
@@ -214,6 +225,9 @@ export interface ServiceLeaf {
 
   /** How to reach the service */
   endpoint: ServiceEndpoint;
+
+  /** Protocol-assigned subdomain (e.g. "inference-api-5a3b7c2e.services.legible.money") */
+  subdomain: string;
 
   /** Contract interface (reuses core/contracts/types.ts ABI) */
   abi: ContractABI;
@@ -352,11 +366,31 @@ export interface RevenueStream {
 }
 
 /**
+ * How the 22% evidence tax is sub-distributed across 5 treasury funds.
+ * Percentages come from TREASURY.ALLOCATION in core/constants.ts.
+ */
+export interface EvidenceTaxBreakdown {
+  /** 77% of evidence tax → research fund */
+  research: bigint;
+  /** 7% of evidence tax → core protocol development */
+  foundation: bigint;
+  /** 7% of evidence tax → community grants & bounties */
+  community: bigint;
+  /** 7% of evidence tax → developer ecosystem & tooling */
+  developers: bigint;
+  /** 2% of evidence tax → emergency reserve */
+  reserve: bigint;
+}
+
+/**
  * How revenue is distributed (follows partnership model economics)
  */
 export interface RevenueDistribution {
   /** 22% evidence tax (frozen forever) */
   evidenceTax: bigint;
+
+  /** Sub-distribution of evidence tax to 5 treasury funds */
+  evidenceTaxBreakdown: EvidenceTaxBreakdown;
 
   /** Contributor shares (pro-rata by contribution weight) */
   contributorShares: ContributorShare[];
@@ -500,6 +534,9 @@ export interface ProjectTask {
 
   /** Link to BountySystem bounty ID */
   bountyId?: string;
+
+  /** Number of times deliverable was rejected (caps at MAX_REJECTIONS → disputed) */
+  rejectionCount?: number;
 }
 
 export type TaskType =
@@ -510,6 +547,8 @@ export type TaskType =
   | "deploy" // Deployment
   | "document" // Documentation
   | "verify" // Truth verification for domain
+  | "research" // Knowledge research / claim investigation
+  | "governance" // Governance review and voting
   | "maintain"; // Ongoing maintenance
 
 export type TaskStatus =
@@ -518,7 +557,8 @@ export type TaskStatus =
   | "in_progress" // Agent is working on it
   | "review" // Deliverable submitted, under review
   | "completed" // Approved and bounty paid
-  | "rejected"; // Deliverable rejected
+  | "rejected" // Deliverable rejected
+  | "disputed"; // Exceeded max rejections, requires dispute resolution
 
 /**
  * A deliverable submitted for a task
@@ -563,6 +603,31 @@ export interface ServiceCallResult {
 
   /** Block when executed */
   executedAtBlock: bigint;
+}
+
+// ============ Applications ============
+
+/**
+ * Application from an agent to join a project
+ */
+export interface ProjectApplication {
+  /** Agent DID */
+  did: DID;
+
+  /** Proposed role */
+  proposedRole: ContributorRole;
+
+  /** Message from applicant */
+  message: string;
+
+  /** Agent's declared capabilities */
+  capabilities: string[];
+
+  /** Block when applied */
+  appliedAtBlock: bigint;
+
+  /** Application status */
+  status: "pending" | "approved" | "rejected";
 }
 
 // ============ Constants ============

@@ -764,6 +764,125 @@ export const DEFAULT_BVM_CONFIG: BVMConfig = {
   maxClaimSize: 65536, // 64KB
 };
 
+// ============ Knowledge Service Interface (KQU 131326) ============
+
+/**
+ * BVM Knowledge Service
+ *
+ * Bridge between the BVM execution engine and the knowledge state layer.
+ * Injected into ExecutionEngine to enable knowledge opcodes (0xB0-0xB5)
+ * to interact with KnowledgeStateTree, VerificationRound, and ClaimState.
+ *
+ * All methods are deterministic - they depend only on block-level state,
+ * never on wall-clock time or randomness.
+ */
+export interface BVMKnowledgeService {
+  /**
+   * QUERY_FACT (0xB0): Query a fact from the knowledge base
+   * Returns null if fact doesn't exist
+   */
+  queryFact(factId: string): {
+    exists: boolean;
+    confidence: Confidence;
+    domain: string;
+  } | null;
+
+  /**
+   * QUERY_DOMAIN (0xB1): Query facts in a domain
+   * Returns up to `limit` fact IDs for the given domain
+   */
+  queryDomain(
+    domainHash: string,
+    limit: number,
+  ): {
+    count: number;
+    factIds: string[];
+  };
+
+  /**
+   * SUBMIT_CLAIM (0xB2): Submit a knowledge claim
+   * Returns claim ID if accepted, null if rejected
+   */
+  submitClaim(
+    callerDID: DID,
+    domain: string,
+    dataHash: string,
+    evidenceHash: string,
+    blockNumber: bigint,
+  ): { claimId: string } | null;
+
+  /**
+   * COMMIT_VOTE (0xB3): Commit a verification vote hash
+   * Returns true if commitment was accepted
+   */
+  commitVote(
+    callerDID: DID,
+    claimId: string,
+    voteHash: string,
+    blockNumber: bigint,
+  ): boolean;
+
+  /**
+   * REVEAL_VOTE (0xB4): Reveal a verification vote
+   * Returns true if reveal was accepted
+   */
+  revealVote(
+    callerDID: DID,
+    claimId: string,
+    vote: bigint,
+    salt: bigint,
+    blockNumber: bigint,
+  ): boolean;
+
+  /**
+   * INITIATE_CHALLENGE (0xB5): Initiate a challenge against a fact
+   * Returns challenge ID if accepted, null if rejected
+   */
+  initiateChallenge(
+    callerDID: DID,
+    factId: string,
+    evidenceHash: string,
+    stake: bigint,
+    blockNumber: bigint,
+  ): { challengeId: string } | null;
+
+  /**
+   * Get network confidence for a fact (used by SET_BELIEF to populate networkConfidence)
+   */
+  getNetworkConfidence(factId: string): Confidence;
+}
+
+/**
+ * Null implementation of BVMKnowledgeService
+ *
+ * Used when no knowledge service is injected (backward compatible).
+ * All queries return empty/zero results. All mutations are no-ops.
+ * This preserves existing behavior for tests that don't need knowledge.
+ */
+export class NullKnowledgeService implements BVMKnowledgeService {
+  queryFact(_factId: string) {
+    return null;
+  }
+  queryDomain(_domainHash: string, _limit: number) {
+    return { count: 0, factIds: [] };
+  }
+  submitClaim() {
+    return null;
+  }
+  commitVote() {
+    return false;
+  }
+  revealVote() {
+    return false;
+  }
+  initiateChallenge() {
+    return null;
+  }
+  getNetworkConfidence(_factId: string): Confidence {
+    return 0;
+  }
+}
+
 // ============ Error Types ============
 
 export class BVMError extends Error {

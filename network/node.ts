@@ -28,6 +28,7 @@ import {
   NetworkMessage,
   DEFAULT_PEER_SCORE_CONFIG,
   type PeerScoreConfig,
+  networkReplacer,
 } from "./config.js";
 import type { TopicManager, ValidationResult } from "./pubsub/topics.js";
 import { MAX_MESSAGE_SIZE } from "./pubsub/topics.js";
@@ -334,8 +335,10 @@ export class LegibleNode extends EventEmitter {
 
     const pubsub = this.libp2p.services.pubsub as GossipSub;
 
-    // Encode message as JSON
-    const data = new TextEncoder().encode(JSON.stringify(message));
+    // Encode message as JSON (networkReplacer handles BigInt/Uint8Array)
+    const data = new TextEncoder().encode(
+      JSON.stringify(message, networkReplacer),
+    );
 
     // Publish to topic
     await pubsub.publish(topic, data);
@@ -373,8 +376,10 @@ export class LegibleNode extends EventEmitter {
     // Open a new stream on the protocol
     const stream = await connections[0].newStream(protocol);
 
-    // Encode and send message
-    const data = new TextEncoder().encode(JSON.stringify(message));
+    // Encode and send message (networkReplacer handles BigInt/Uint8Array)
+    const data = new TextEncoder().encode(
+      JSON.stringify(message, networkReplacer),
+    );
 
     await pipe([data], lp.encode, (stream as any).sink);
 
@@ -421,7 +426,9 @@ export class LegibleNode extends EventEmitter {
         const stream = await connections[0].newStream(protocol);
 
         // Send request
-        const requestData = new TextEncoder().encode(JSON.stringify(request));
+        const requestData = new TextEncoder().encode(
+          JSON.stringify(request, networkReplacer),
+        );
 
         // Pipe request and read response
         let responseData: Uint8Array | undefined;

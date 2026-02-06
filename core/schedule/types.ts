@@ -223,7 +223,8 @@ export type LinkedEntityType =
   | "vesting" // Vesting schedule
   | "validator" // Validator operation
   | "bounty" // Knowledge bounty
-  | "rai"; // Regenerative Agent Income
+  | "rai" // Regenerative Agent Income
+  | "service"; // Tree of Life deployed service
 
 export type ExecutionResult =
   | { success: true; txId: string; gasUsed: bigint }

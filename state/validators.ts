@@ -640,6 +640,13 @@ export class ValidatorStateTree {
   }
 
   /**
+   * Export all validators for persistence (includes inactive/jailed)
+   */
+  exportValidators(): ValidatorState[] {
+    return Array.from(this.validatorCache.values());
+  }
+
+  /**
    * Get all active validators sorted by stake
    */
   getActiveValidators(): ValidatorState[] {

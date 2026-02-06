@@ -1,8 +1,8 @@
 # Test Progress Tracker
 
-> **Last Updated:** 2026-02-05
-> **Coverage Status:** ~40% of source files have tests
-> **Total Test Files:** 32 | **Total Tests:** ~909+ (unit) + ~99 (integration)
+> **Last Updated:** 2026-02-06
+> **Coverage Status:** ~42% of source files have tests
+> **Total Test Files:** 33 | **Total Tests:** ~1,025+ (unit) + ~99 (integration)
 
 ---
 
@@ -69,7 +69,7 @@
 | - Transitions | [~] | `transitions.test.ts` | 31 tests: transfer, stake, unstake, system txs |
 | - Accounts | [~] | Via transitions | Account balance operations tested |
 | - Validators | [~] | Via transitions | Validator stake/slash tested |
-| - Knowledge | [ ] | - | Knowledge tree updates |
+| - Knowledge | [x] | `knowledge_state_tree.test.ts` | 116 tests: CRUD, refs, citations, decay, propagation, cycles |
 
 ### Network Layer (`network/`)
 
@@ -176,6 +176,7 @@
 | `tests/unit/home/access.test.ts` | 85 | PASS | 2026-02-05 |
 | `tests/unit/home/contract.test.ts` | 68 | PASS | 2026-02-05 |
 | `tests/integration/knowledge/chat_session_simulation.test.ts` | 29 | PASS | 2026-02-05 |
+| `tests/unit/state/knowledge_state_tree.test.ts` | 116 | PASS | 2026-02-06 |
 
 ### Needs Verification
 
@@ -189,6 +190,36 @@
 ---
 
 ## Recent Testing Activity
+
+### 2026-02-06: KnowledgeStateTree Unit Tests
+- Created 116 unit tests for the core knowledge state tree (`tests/unit/state/knowledge_state_tree.test.ts`)
+- Initialization tests (3): empty roots, zero counts, empty domains
+- Fact CRUD tests (14): add, get, has, isActive, duplicate rejection, counts, serialization round-trip, root changes
+- Citation Economics tests (6): increment, accumulate, skip non-active, record rewards, errors
+- Challenge tests (8): challenge active, reject non-active, resolve upheld/revoked, errors
+- Revocation tests (5): revoke, BFS zeroing when derivation chain breaks, multi-premise recalc, non-active skip
+- Supersession tests (4): supersede, extends reference, error cases
+- Reference Graph tests (7): add, get, outgoing/incoming indexes, missing fact errors
+- Supporting/Contradicting queries (4): find supporters, exclude inactive, bidirectional contradictions, dedup
+- Query tests (4): by domain, by status, text search (case-insensitive), active-only filter
+- Domain Management tests (4): auto-create, increment, multi-domain, setDomain
+- Merkle Proof tests (3): generation, not-found error, proof data integrity
+- Eager Confidence Decay tests (3): logarithmic decay, non-active skip, floor at 0.1
+- Lazy Confidence Decay GAP-008 tests (8): immutable reads, eternal strata, category mapping, batch retrieval
+- Confidence Propagation tests (4): BFS propagation, threshold gating, cycle detection, depth limit
+- Derived Confidence tests (4): weakest-link, null for no support, extends included, inactive premise skip
+- Circular Dependency tests (4): 2-node, 3-node, no-cycle, tightness scaling
+- updateFactConfidenceWithPropagation tests (3): update + propagation, cycle penalty feedback (0.8→0.48→0.3888), error
+- Reverification tests (5): timestamp, verifier count, reactivation of expired, confidence update, error
+- Cloning tests (5): facts, references, domains, mutation independence, root matching
+- Factory Function tests (3): deterministic IDs, genesis axioms
+- Constants tests (2): threshold exports
+- Edge Cases (8): zero/max confidence, large blocks, minimal fields, rapid lifecycle, self-ref, all ref types
+
+Key behavioral findings documented during test development:
+- `revokeFact()` uses BFS propagation (not flat -0.2); `calculateDerivedConfidence()` returns 0 when all premises revoked
+- CATEGORY_DECAY: "empirical" and "social" share half-life (111111), differ only in minConfidence (0.33 vs 0.22)
+- Cycle penalty feeds back through BFS (2-node cycle: 0.8 → 0.48 → 0.3888)
 
 ### 2026-02-05: Knowledge Query Chat Session Simulation Tests
 - Created 29 integration tests for knowledge tree queries and LGM chat economics
@@ -381,7 +412,19 @@
    - [x] Slash validator transaction (2 tests)
    - [x] Add/update fact transactions (2 tests)
 
-3. **Protocol RPC Tests**
+3. **Knowledge State Tree Tests**
+   - [x] Fact CRUD and serialization (14 tests)
+   - [x] Citation economics (6 tests)
+   - [x] Challenge/resolve lifecycle (8 tests)
+   - [x] Revocation with BFS propagation (5 tests)
+   - [x] Reference graph (7 tests)
+   - [x] Confidence decay - eager and lazy (11 tests)
+   - [x] Confidence propagation with cycle detection (11 tests)
+   - [x] Reverification (5 tests)
+   - [x] Cloning (5 tests)
+   - [x] Queries, domains, proofs, edge cases (19 tests)
+
+4. **Protocol RPC Tests**
    - [x] getBalance handler (4 tests)
    - [x] account/agent handlers (12 tests)
    - [x] knowledge handlers (10 tests)
@@ -390,36 +433,36 @@
 
 ### P1 - High Priority
 
-4. **Token System Tests**
+5. **Token System Tests**
    - [x] Expirable balance mechanics (ExpirationTracker - 54 tests)
    - [x] RAI retrieval calculation (RetrievalEngine - 41 tests)
    - [x] Child account tracking (36 tests)
 
-5. **Agent Home Tests**
+6. **Agent Home Tests**
    - [x] Memory persistence (53 tests)
    - [x] Treasury operations (85 tests)
    - [x] Guardian alerts (78 tests)
    - [x] Access control (85 tests)
    - [x] Contract orchestration (68 tests)
 
-6. **VRF Cryptographic Tests**
+7. **VRF Cryptographic Tests**
    - [ ] VRF output generation
    - [ ] VRF proof verification
    - [ ] Selection threshold calculation
 
 ### P2 - Medium Priority
 
-7. **Schedule/DMSS Tests**
-8. **Self-Invoking Contract Tests**
-9. **Storage Backend Tests**
-10. **Network Sync Protocol Tests**
+8. **Schedule/DMSS Tests**
+9. **Self-Invoking Contract Tests**
+10. **Storage Backend Tests**
+11. **Network Sync Protocol Tests**
 
 ### P3 - Quality Improvements
 
-11. Error recovery path tests
-12. Concurrent operation tests
-13. Performance benchmarks
-14. Fuzzing tests
+12. Error recovery path tests
+13. Concurrent operation tests
+14. Performance benchmarks
+15. Fuzzing tests
 
 ---
 
@@ -469,10 +512,10 @@
 | Metric | Value | Target |
 |--------|-------|--------|
 | Source Files | ~95 | - |
-| Files with Tests | ~24 | 95 |
-| Test Files | 31 | 50+ |
-| Test Lines | ~19,500 | 25,000+ |
-| Unit Tests | ~909 | 200+ |
+| Files with Tests | ~25 | 95 |
+| Test Files | 33 | 50+ |
+| Test Lines | ~20,500 | 25,000+ |
+| Unit Tests | ~1,025 | 200+ |
 | Integration Tests | ~70 | 150+ |
 | Property Tests | 4 | 20+ |
 | E2E Tests | 0 | 10+ |
