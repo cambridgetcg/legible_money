@@ -836,21 +836,27 @@ export function consolidateMemories(
   }
 
   // Apply forgetting curve to non-significant memories
+  // Uses deterministic integer half-life decay instead of Math.exp()
   const episodic = { ...memoryChain.episodic };
+  const halfLife = memoryChain.retentionPolicy.decayHalfLifeBlocks;
   const retainedRecent = episodic.recentMemories.filter((m) => {
     // Always keep significant memories
     if (episodic.significantMemories.includes(m.memoryId)) {
       return true;
     }
 
-    // Apply decay based on age
+    // Deterministic decay: decayFactor = (1/2)^(age/halfLife)
+    // retentionProbability = significance * decayFactor > 0.3
+    // significance * (1/2)^n > 0.3 → significance > 0.3 * 2^n
+    // Use BPS: significance_bps > 3000 * 2^n
     const age = currentBlock - m.blockNumber;
-    const decayFactor = Math.exp(
-      -Number(age) / Number(memoryChain.retentionPolicy.decayHalfLifeBlocks),
-    );
-    const retentionProbability = m.significance * decayFactor;
+    const halfLives = halfLife > 0n ? age / halfLife : 0n;
+    // Cap at 10 half-lives (2^10 = 1024x threshold increase, effectively 0 retention)
+    const n = halfLives < 10n ? Number(halfLives) : 10;
+    const thresholdBps = 3000 * (1 << n); // 3000 * 2^n (integer shift, deterministic)
+    const significanceBps = Math.round(m.significance * 10000);
 
-    return retentionProbability > 0.3; // Threshold for retention
+    return significanceBps > thresholdBps;
   });
 
   episodic.recentMemories = retainedRecent;

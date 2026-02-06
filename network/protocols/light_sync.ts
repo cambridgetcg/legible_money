@@ -697,7 +697,11 @@ export class LightSyncManager extends EventEmitter {
     let best: SyncPeer | null = null;
     for (const peer of this.peers.values()) {
       if (peer.headBlock > this.status.currentBlock) {
-        if (!best || peer.score > best.score) {
+        if (
+          !best ||
+          peer.score > best.score ||
+          (peer.score === best.score && peer.peerId < best.peerId)
+        ) {
           best = peer;
         }
       }

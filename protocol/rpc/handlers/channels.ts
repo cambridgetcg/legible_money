@@ -20,6 +20,7 @@ import { verify } from "../../../core/crypto/signatures.js";
 import { sha512_256Hex } from "../../../core/crypto/hashing.js";
 import {
   parsePositiveBigInt,
+  parseNonNegativeBigInt,
   validateDid,
   validatePublicKey,
 } from "../validation.js";
@@ -223,11 +224,11 @@ export const lgmCloseChannel: Handler<
 
     if (params.finalPayerBalance && params.finalProviderBalance) {
       // Cooperative close with agreed balances (validate as non-negative)
-      finalPayerBalance = parsePositiveBigInt(
+      finalPayerBalance = parseNonNegativeBigInt(
         params.finalPayerBalance,
         "finalPayerBalance",
       );
-      finalProviderBalance = parsePositiveBigInt(
+      finalProviderBalance = parseNonNegativeBigInt(
         params.finalProviderBalance,
         "finalProviderBalance",
       );

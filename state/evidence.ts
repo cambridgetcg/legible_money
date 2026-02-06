@@ -389,7 +389,11 @@ export class EvidenceStateTree {
   /**
    * Verify an archive
    */
-  verifyArchive(evidenceId: string, archiveIndex: number): void {
+  verifyArchive(
+    evidenceId: string,
+    archiveIndex: number,
+    currentTime?: number,
+  ): void {
     const evidence = this.getEvidence(evidenceId);
     if (!evidence) {
       throw new StateError(
@@ -409,7 +413,7 @@ export class EvidenceStateTree {
     archives[archiveIndex] = {
       ...archives[archiveIndex],
       verified: true,
-      verifiedAt: Date.now(),
+      verifiedAt: currentTime ?? 0,
     };
 
     this.updateEvidence({ ...evidence, archives });
@@ -450,7 +454,7 @@ export class EvidenceStateTree {
         previousVersionHash: original.contentHash,
         supersededBy: null,
         versionChain: [...original.version.versionChain, original.id],
-        createdAt: Date.now(),
+        createdAt: Number(currentBlock),
         confidenceImpact: newEvidence.version.confidenceImpact || 0,
       },
     };
@@ -582,7 +586,7 @@ export class EvidenceStateTree {
             expiry: {
               ...evidence.expiry,
               isExpired: true,
-              expiredAt: Date.now(),
+              expiredAt: Number(currentBlock),
               freshnessScore: 0,
             },
             status: "expired" as EvidenceStatus,

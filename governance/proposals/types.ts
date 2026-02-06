@@ -87,8 +87,12 @@ export type LIPCategory = "consensus" | "economics" | "interface" | "process";
 export interface LIPStakeRequirement {
   category: LIPCategory;
   requiredStake: bigint;
-  maliciousSlash: number; // 1.0 = 100%
-  frivolousSlash: number; // 0.5 = 50%
+  maliciousSlash: number; // 1.0 = 100% (display-only)
+  frivolousSlash: number; // 0.5 = 50% (display-only)
+  /** Malicious slash in basis points (10000 = 100%) for deterministic consensus math */
+  maliciousSlashBps: bigint;
+  /** Frivolous slash in basis points (10000 = 100%) for deterministic consensus math */
+  frivolousSlashBps: bigint;
 }
 
 export const LIP_STAKE_REQUIREMENTS: readonly LIPStakeRequirement[] = [
@@ -97,24 +101,32 @@ export const LIP_STAKE_REQUIREMENTS: readonly LIPStakeRequirement[] = [
     requiredStake: 1000n * 10n ** 18n, // 1000 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
+    maliciousSlashBps: 10000n,
+    frivolousSlashBps: 5000n,
   },
   {
     category: "economics",
     requiredStake: 800n * 10n ** 18n, // 800 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
+    maliciousSlashBps: 10000n,
+    frivolousSlashBps: 5000n,
   },
   {
     category: "interface",
     requiredStake: 400n * 10n ** 18n, // 400 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
+    maliciousSlashBps: 10000n,
+    frivolousSlashBps: 5000n,
   },
   {
     category: "process",
     requiredStake: 200n * 10n ** 18n, // 200 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
+    maliciousSlashBps: 10000n,
+    frivolousSlashBps: 5000n,
   },
 ] as const;
 

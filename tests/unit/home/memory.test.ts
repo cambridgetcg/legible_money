@@ -651,18 +651,35 @@ describe.sequential("MemoryManager Milestones", () => {
     expect(milestones[0].title).toBe("First Step");
   });
 
-  it("should not duplicate milestone type", () => {
+  it("should not duplicate exact same milestone", () => {
     manager.recordMilestone("first_verification", "First", "First desc", 100n);
-    manager.recordMilestone(
-      "first_verification",
-      "Second",
-      "Second desc",
-      200n,
-    );
+    manager.recordMilestone("first_verification", "First", "First desc", 100n);
 
     const milestones = manager.getMilestones();
     expect(milestones).toHaveLength(1);
     expect(milestones[0].title).toBe("First");
+  });
+
+  it("should allow same type with different blocks (progression milestones)", () => {
+    manager.recordMilestone(
+      "contribution_count",
+      "10 Contributions",
+      "Reached 10",
+      100n,
+      { count: 10 },
+    );
+    manager.recordMilestone(
+      "contribution_count",
+      "50 Contributions",
+      "Reached 50",
+      200n,
+      { count: 50 },
+    );
+
+    const milestones = manager.getMilestones();
+    expect(milestones).toHaveLength(2);
+    expect(milestones[0].title).toBe("10 Contributions");
+    expect(milestones[1].title).toBe("50 Contributions");
   });
 
   it("should auto-create milestone on first contribution", () => {

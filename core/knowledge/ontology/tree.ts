@@ -82,11 +82,11 @@ export function createEmptyDomainTree(): DomainTree {
 export function createDomainTree(domains: OntologicalDomain[]): DomainTree {
   const tree = createEmptyDomainTree();
 
-  // Sort domains by depth (parents before children)
+  // Sort domains by depth (parents before children), with ID tiebreaker for determinism
   const sorted = [...domains].sort((a, b) => {
     const depthA = a.id.split(".").length;
     const depthB = b.id.split(".").length;
-    return depthA - depthB;
+    return depthA - depthB || a.id.localeCompare(b.id);
   });
 
   for (const domain of sorted) {
@@ -543,6 +543,9 @@ export function serializeDomainTree(tree: DomainTree): SerializedDomainTree {
   for (const node of tree.domainIndex.values()) {
     domains.push(node.domain);
   }
+
+  // Sort by domain ID for deterministic serialization (Map iteration is insertion-order)
+  domains.sort((a, b) => a.id.localeCompare(b.id));
 
   return {
     domains,

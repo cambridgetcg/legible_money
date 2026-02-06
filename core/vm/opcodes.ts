@@ -396,6 +396,81 @@ export const OPCODE_DEFINITIONS: Map<number, OpcodeDefinition> = new Map([
       description: "Modulo",
     },
   ],
+  // P0-V1 FIX: Missing opcode definitions — these 6 opcodes were handled in
+  // execution.ts but not registered here, causing "Invalid opcode" for any
+  // bytecode that used them (getOpcodeDefinition returned undefined).
+  [
+    SDIV,
+    {
+      code: SDIV,
+      mnemonic: "SDIV",
+      category: 0x00,
+      stackInputs: 2,
+      stackOutputs: 1,
+      gasCost: g.low,
+      description: "Signed division",
+    },
+  ],
+  [
+    SMOD,
+    {
+      code: SMOD,
+      mnemonic: "SMOD",
+      category: 0x00,
+      stackInputs: 2,
+      stackOutputs: 1,
+      gasCost: g.low,
+      description: "Signed modulo",
+    },
+  ],
+  [
+    ADDMOD,
+    {
+      code: ADDMOD,
+      mnemonic: "ADDMOD",
+      category: 0x00,
+      stackInputs: 3,
+      stackOutputs: 1,
+      gasCost: g.mid,
+      description: "Addition modulo",
+    },
+  ],
+  [
+    MULMOD,
+    {
+      code: MULMOD,
+      mnemonic: "MULMOD",
+      category: 0x00,
+      stackInputs: 3,
+      stackOutputs: 1,
+      gasCost: g.mid,
+      description: "Multiplication modulo",
+    },
+  ],
+  [
+    EXP,
+    {
+      code: EXP,
+      mnemonic: "EXP",
+      category: 0x00,
+      stackInputs: 2,
+      stackOutputs: 1,
+      gasCost: "dynamic",
+      description: "Exponentiation",
+    },
+  ],
+  [
+    SIGNEXTEND,
+    {
+      code: SIGNEXTEND,
+      mnemonic: "SIGNEXTEND",
+      category: 0x00,
+      stackInputs: 2,
+      stackOutputs: 1,
+      gasCost: g.low,
+      description: "Sign extend",
+    },
+  ],
 
   // Comparison
   [

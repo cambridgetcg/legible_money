@@ -37,7 +37,6 @@ export interface ReputationAttestation {
 /**
  * Reputation decay parameters
  */
-const DECAY_RATE = 0.01; // 1% decay per epoch
 const EPOCH_BLOCKS = 1000; // Decay applied every 1000 blocks
 const MIN_TRANSACTIONS_FOR_SCORE = 5;
 
@@ -116,7 +115,11 @@ export class ReputationSystem {
     }
 
     return agents
-      .sort((a, b) => b.score.overall - a.score.overall)
+      .sort(
+        (a, b) =>
+          b.score.overall - a.score.overall ||
+          (a.did < b.did ? -1 : a.did > b.did ? 1 : 0),
+      )
       .slice(0, limit);
   }
 
@@ -132,7 +135,9 @@ export class ReputationSystem {
   }
 
   /**
-   * Apply reputation decay (called at epoch boundaries)
+   * Apply reputation decay (called at epoch boundaries).
+   * Uses integer-only iterated decay to avoid Math.pow nondeterminism.
+   * Each epoch: score = 500 + ((score - 500) * (10000 - DECAY_RATE_BPS)) / 10000
    */
   applyDecay(currentBlock: number): void {
     const epochsPassed = Math.floor(
@@ -141,16 +146,31 @@ export class ReputationSystem {
 
     if (epochsPassed === 0) return;
 
-    for (const [_did, score] of this.scores) {
-      // Decay towards neutral (500)
-      const decayFactor = Math.pow(1 - DECAY_RATE, epochsPassed);
+    // Decay rate in basis points: 1% = 100 BPS
+    const DECAY_RATE_BPS = 100;
+    const RETAIN_BPS = 10000 - DECAY_RATE_BPS; // 9900
 
-      score.overall = 500 + Math.round((score.overall - 500) * decayFactor);
-      score.reliability =
-        500 + Math.round((score.reliability - 500) * decayFactor);
-      score.responsiveness =
-        500 + Math.round((score.responsiveness - 500) * decayFactor);
-      score.quality = 500 + Math.round((score.quality - 500) * decayFactor);
+    for (const [_did, score] of this.scores) {
+      // Apply decay iteratively for determinism
+      // For large epoch gaps, cap iterations to prevent DoS
+      const iterations = Math.min(epochsPassed, 1000);
+
+      let overall = score.overall - 500;
+      let reliability = score.reliability - 500;
+      let responsiveness = score.responsiveness - 500;
+      let quality = score.quality - 500;
+
+      for (let i = 0; i < iterations; i++) {
+        overall = Math.trunc((overall * RETAIN_BPS) / 10000);
+        reliability = Math.trunc((reliability * RETAIN_BPS) / 10000);
+        responsiveness = Math.trunc((responsiveness * RETAIN_BPS) / 10000);
+        quality = Math.trunc((quality * RETAIN_BPS) / 10000);
+      }
+
+      score.overall = 500 + overall;
+      score.reliability = 500 + reliability;
+      score.responsiveness = 500 + responsiveness;
+      score.quality = 500 + quality;
       score.lastUpdated = currentBlock;
     }
 
@@ -166,15 +186,18 @@ export class ReputationSystem {
   }
 
   /**
-   * Calculate reputation weight for voting/staking
+   * Calculate reputation weight for voting/staking.
+   * Uses pure BigInt math to avoid Number(stakeAmount) precision loss for large stakes.
+   * Multiplier: 0.5x to 1.5x based on score (500-1500 BPS out of 1000).
    */
   getVotingWeight(agent: DID, stakeAmount: bigint): bigint {
     const score = this.getReputation(agent);
 
-    // Reputation multiplier: 0.5x to 1.5x based on score
-    const multiplier = 0.5 + score.overall / 1000;
+    // multiplierBps = 500 + overall (score.overall ranges 0-1000)
+    // This maps to 0.5x at score=0, 1.0x at score=500, 1.5x at score=1000
+    const multiplierBps = BigInt(500 + score.overall);
 
-    return BigInt(Math.floor(Number(stakeAmount) * multiplier));
+    return (stakeAmount * multiplierBps) / 1000n;
   }
 
   private recalculateScore(agent: DID): void {
@@ -189,9 +212,9 @@ export class ReputationSystem {
     const negatives = recentAttestations.filter((a) => a.score === -1).length;
     const total = recentAttestations.length;
 
-    // Quality = (positives - negatives) / total, normalized to 0-1000
-    const qualityRatio = (positives - negatives) / total;
-    score.quality = Math.round(500 + qualityRatio * 500);
+    // Quality = 500 + ((positives - negatives) * 500) / total
+    // Pure integer arithmetic — no float division
+    score.quality = 500 + Math.trunc(((positives - negatives) * 500) / total);
 
     this.recalculateOverall(agent);
   }
@@ -199,11 +222,13 @@ export class ReputationSystem {
   private recalculateOverall(agent: DID): void {
     const score = this.getReputation(agent);
 
-    // Weighted average of components
-    score.overall = Math.round(
-      score.reliability * 0.4 +
-        score.quality * 0.4 +
-        score.responsiveness * 0.2,
+    // Weighted average using basis points: 40% = 4000 BPS, 20% = 2000 BPS
+    // overall = (reliability * 4000 + quality * 4000 + responsiveness * 2000) / 10000
+    score.overall = Math.trunc(
+      (score.reliability * 4000 +
+        score.quality * 4000 +
+        score.responsiveness * 2000) /
+        10000,
     );
 
     score.lastUpdated = this.currentBlock;

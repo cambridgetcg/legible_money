@@ -72,12 +72,15 @@ export function createArchiveRequest(
   currentBlock: bigint,
   priority: ArchivePriority = "normal",
   providers: ArchiveProvider[] = ["ipfs", "arweave", "wayback"],
+  currentTime?: number,
 ): ArchiveRequest {
+  // P0-E4 FIX: Accept deterministic timestamp for consensus path
+  const now = currentTime ?? Date.now();
   return {
     id: `archive_${evidenceId}_${currentBlock}`,
     evidenceId,
     originalUrl,
-    requestedAt: Date.now(),
+    requestedAt: now,
     requestedAtBlock: currentBlock,
     requester,
     status: "pending",
@@ -134,11 +137,14 @@ export function createArchiveLocation(
   currentBlock: bigint,
   archiver?: DID,
   isPrimary: boolean = false,
+  currentTime?: number,
 ): ArchiveLocation {
+  // P0-E4 FIX: Accept deterministic timestamp for consensus path
+  const now = currentTime ?? Date.now();
   return {
     provider,
     identifier,
-    archivedAt: Date.now(),
+    archivedAt: now,
     archivedAtBlock: currentBlock,
     contentHash,
     isPrimary,
@@ -150,11 +156,16 @@ export function createArchiveLocation(
 /**
  * Mark archive as verified
  */
-export function verifyArchive(archive: ArchiveLocation): ArchiveLocation {
+export function verifyArchive(
+  archive: ArchiveLocation,
+  currentTime?: number,
+): ArchiveLocation {
+  // P0-E4 FIX: Accept deterministic timestamp for consensus path
+  const now = currentTime ?? Date.now();
   return {
     ...archive,
     verified: true,
-    verifiedAt: Date.now(),
+    verifiedAt: now,
   };
 }
 
@@ -456,13 +467,14 @@ export function verifyEvidenceArchives(
 export function applyVerificationResults(
   evidence: Evidence,
   results: ArchiveVerificationResult[],
+  currentTime?: number,
 ): Evidence {
   const updatedArchives = evidence.archives.map((archive, index) => {
     const result = results.find((r) => r.archiveIndex === index);
     if (!result) return archive;
 
     if (result.newlyVerified) {
-      return verifyArchive(archive);
+      return verifyArchive(archive, currentTime);
     }
 
     return archive;

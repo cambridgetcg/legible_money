@@ -89,6 +89,12 @@ export function calculateHeartbeatFreshness(
 
   // Decay from 1.0 at expectedInterval to 0 at maxStaleness
   const decayRange = heartbeat.maxStaleness - heartbeat.expectedInterval;
+
+  // P0-E1 FIX: Guard against division by zero when maxStaleness <= expectedInterval
+  if (decayRange <= 0) {
+    return 0;
+  }
+
   const decayProgress = blocksSinceHeartbeat - heartbeat.expectedInterval;
 
   return Math.max(0, 1 - decayProgress / decayRange);
@@ -103,6 +109,11 @@ export function calculateBlockBasedFreshness(
   currentBlock: bigint,
 ): number {
   const blocksSinceSubmission = Number(currentBlock - submittedAtBlock);
+
+  // P0-E2 FIX: Guard against zero expiresAfterBlocks
+  if (expiresAfterBlocks <= 0) {
+    return 0;
+  }
 
   if (blocksSinceSubmission >= expiresAfterBlocks) {
     return 0; // Expired
@@ -127,6 +138,11 @@ export function calculateDecayFreshness(
 
   if (blocksSinceSubmission <= 0) {
     return 1.0;
+  }
+
+  // P0-E2 FIX: Guard against division by zero when halfLife is 0
+  if (halfLifeBlocks <= 0) {
+    return 0;
   }
 
   const lambda = Math.LN2 / halfLifeBlocks;
@@ -191,6 +207,10 @@ export function blocksUntilExpiry(
       // For decay-based, we consider "expired" when freshness < 0.01
       // f(t) = e^(-λt) = 0.01 → t = -ln(0.01) / λ
       const halfLife = expiry.expiresAfterBlocks!;
+      // P0-E2 FIX: Guard against zero halfLife
+      if (halfLife <= 0) {
+        return 0;
+      }
       const lambda = Math.LN2 / halfLife;
       const fullDecayBlocks = Math.ceil(-Math.log(0.01) / lambda);
       const blocksSince = Number(currentBlock - evidence.submittedAtBlock);
@@ -213,19 +233,20 @@ export function blocksUntilExpiry(
 export function updateExpiryState(
   evidence: Evidence,
   currentBlock: bigint,
+  currentTime?: number,
 ): EvidenceExpiry {
+  // P0-E4 FIX: Accept deterministic timestamp for consensus path
+  const now = currentTime ?? Date.now();
   const freshness = calculateFreshness(evidence, currentBlock);
   const expired = freshness === 0;
 
   return {
     ...evidence.expiry,
     freshnessScore: freshness,
-    freshnessUpdatedAt: Date.now(),
+    freshnessUpdatedAt: now,
     isExpired: expired,
     expiredAt:
-      expired && !evidence.expiry.expiredAt
-        ? Date.now()
-        : evidence.expiry.expiredAt,
+      expired && !evidence.expiry.expiredAt ? now : evidence.expiry.expiredAt,
   };
 }
 
@@ -267,13 +288,16 @@ export function updateHeartbeat(
 export function markExpiredByEvent(
   evidence: Evidence,
   _reason: string,
+  currentTime?: number,
 ): EvidenceExpiry {
+  // P0-E4 FIX: Accept deterministic timestamp for consensus path
+  const now = currentTime ?? Date.now();
   return {
     ...evidence.expiry,
     freshnessScore: 0,
-    freshnessUpdatedAt: Date.now(),
+    freshnessUpdatedAt: now,
     isExpired: true,
-    expiredAt: Date.now(),
+    expiredAt: now,
   };
 }
 

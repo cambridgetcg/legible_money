@@ -401,11 +401,11 @@ export class SecurityScanner {
       riskLevel = "clean";
     }
 
-    // Identify blocking issues (critical/high, not false positives)
+    // Identify blocking issues (critical always blocks; high blocks unless false positive)
     const blockingIssues = findings.filter(
       (f) =>
-        (f.severity === "critical" || f.severity === "high") &&
-        !f.isPotentialFalsePositive,
+        f.severity === "critical" ||
+        (f.severity === "high" && !f.isPotentialFalsePositive),
     );
 
     // Determine if human review is required

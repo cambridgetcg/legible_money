@@ -655,10 +655,11 @@ export function calculateStakeReturn(proposal: DomainProposal): bigint {
   }
 
   // Return 77% of stake
-  const returnRate = BigInt(
-    Math.floor(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 100),
+  // Use BPS to avoid float*100 rounding fragility
+  const returnRateBps = BigInt(
+    Math.round(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 10000),
   );
-  return (proposal.stake * returnRate) / 100n;
+  return (proposal.stake * returnRateBps) / 10000n;
 }
 
 /**
@@ -683,10 +684,11 @@ export function calculateEndorserStakeReturns(
       returns.set(endorser, { stakeReturn: stake, stakeSlashed: 0n });
     } else if (proposal.status === "rejected") {
       // 77% return when rejected after challenge
-      const returnRate = BigInt(
-        Math.floor(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 100),
+      // Use BPS to avoid float*100 rounding fragility
+      const returnRateBps = BigInt(
+        Math.round(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 10000),
       );
-      const stakeReturn = (stake * returnRate) / 100n;
+      const stakeReturn = (stake * returnRateBps) / 10000n;
       const stakeSlashed = stake - stakeReturn;
       returns.set(endorser, { stakeReturn, stakeSlashed });
     }
@@ -717,10 +719,11 @@ export function calculateChallengerStakeReturns(
       returns.set(challenger, { stakeReturn: stake, stakeSlashed: 0n });
     } else if (proposal.status === "approved") {
       // Challengers lost — 77% return (same slashing rate)
-      const returnRate = BigInt(
-        Math.floor(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 100),
+      // Use BPS to avoid float*100 rounding fragility
+      const returnRateBps = BigInt(
+        Math.round(DOMAIN_PROPOSAL_CONFIG.stakeReturnOnRejection * 10000),
       );
-      const stakeReturn = (stake * returnRate) / 100n;
+      const stakeReturn = (stake * returnRateBps) / 10000n;
       const stakeSlashed = stake - stakeReturn;
       returns.set(challenger, { stakeReturn, stakeSlashed });
     }

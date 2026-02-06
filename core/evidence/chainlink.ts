@@ -30,6 +30,7 @@ import type {
 } from "./types.js";
 import { EVIDENCE_TYPE_STRENGTH } from "./types.js";
 import { calculateHeartbeatFreshness, isStale } from "./expiry.js";
+import { sha512_256Hex } from "../../core/crypto/hashing.js";
 
 // ============ Constants ============
 
@@ -125,7 +126,10 @@ export function createFeedRegistration(
   decimals: number,
   aggregatorAddress: string,
   customHeartbeat?: Partial<HeartbeatConfig>,
+  currentTime?: number,
 ): ChainlinkFeedRegistration {
+  // P0-E4 FIX: Accept deterministic timestamp for consensus path
+  const now = currentTime ?? Date.now();
   const defaultHeartbeat = DEFAULT_CHAINLINK_HEARTBEATS[feedType];
 
   return {
@@ -140,7 +144,7 @@ export function createFeedRegistration(
       ...defaultHeartbeat,
       ...customHeartbeat,
     },
-    registeredAt: Date.now(),
+    registeredAt: now,
     isActive: true,
   };
 }
@@ -172,16 +176,7 @@ export function feedTypeToEvidenceType(
  */
 export function hashChainlinkRound(roundData: ChainlinkRoundData): string {
   const data = `${roundData.roundId}:${roundData.answer}:${roundData.updatedAt}:${roundData.answeredInRound}`;
-
-  // Simple hash - in production use proper crypto
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-
-  return `chainlink:${Math.abs(hash).toString(16).padStart(16, "0")}`;
+  return `chainlink:${sha512_256Hex(data)}`;
 }
 
 /**

@@ -13,6 +13,7 @@
  *   CREATIVITY: Pathway to earn new capabilities
  */
 
+import { sha512_256Hex } from "../../crypto/hashing.js";
 import type { DID } from "../identity/did.js";
 
 // ============ Core Types ============
@@ -207,6 +208,15 @@ export interface UnbondingEntry {
 export class AgentHomeRegistry {
   private profiles: Map<DID, AgentProfile> = new Map();
   private pendingAttestations: Map<string, AttestationRequest> = new Map();
+  private currentTime: number = 0;
+  private attestationCounter: number = 0;
+
+  /**
+   * Set current time for deterministic timestamps.
+   */
+  setCurrentTime(time: number): void {
+    this.currentTime = time;
+  }
 
   /**
    * Register a new agent profile
@@ -252,7 +262,7 @@ export class AgentHomeRegistry {
         },
         history: [],
         decay: 1.0, // No decay initially
-        lastCalculatedAt: Date.now(),
+        lastCalculatedAt: this.currentTime,
       },
 
       contributions: {
@@ -278,8 +288,8 @@ export class AgentHomeRegistry {
         unbondingEntries: [],
       },
 
-      createdAt: Date.now(),
-      lastActiveAt: Date.now(),
+      createdAt: this.currentTime,
+      lastActiveAt: this.currentTime,
       profileVersion: 1,
     };
 
@@ -300,7 +310,7 @@ export class AgentHomeRegistry {
   recordActivity(did: DID): void {
     const profile = this.profiles.get(did);
     if (profile) {
-      profile.lastActiveAt = Date.now();
+      profile.lastActiveAt = this.currentTime;
       // Reset decay on activity
       profile.reputation.decay = 1.0;
     }
@@ -331,7 +341,7 @@ export class AgentHomeRegistry {
       type: contribution.type,
       outcome: contribution.outcome,
       reward: contribution.reward?.toString(),
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
     });
 
     // Keep only last 10 recent contributions
@@ -357,7 +367,7 @@ export class AgentHomeRegistry {
     );
 
     profile.reputation.history.push({
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
       type: "contribution",
       domain,
       delta: reputationDelta,
@@ -368,7 +378,7 @@ export class AgentHomeRegistry {
     // Recalculate overall reputation
     this.recalculateReputation(profile);
 
-    profile.lastActiveAt = Date.now();
+    profile.lastActiveAt = this.currentTime;
   }
 
   /**
@@ -387,7 +397,9 @@ export class AgentHomeRegistry {
       throw new Error(`Agent ${did} not found`);
     }
 
-    const requestId = `attest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const requestId = sha512_256Hex(
+      `attest:${did}:${request.capability}:${this.attestationCounter++}`,
+    ).slice(0, 24);
 
     const attestationRequest: AttestationRequest = {
       id: requestId,
@@ -398,7 +410,7 @@ export class AgentHomeRegistry {
       attestors: [],
       requiredAttestors: 2,
       status: "pending",
-      createdAt: Date.now(),
+      createdAt: this.currentTime,
     };
 
     this.pendingAttestations.set(requestId, attestationRequest);
@@ -446,7 +458,7 @@ export class AgentHomeRegistry {
         type: request.capability,
         level: 1, // Start at level 1
         status: "attested",
-        attestedAt: Date.now(),
+        attestedAt: this.currentTime,
         attestedBy: request.attestors,
         evidence: request.evidence,
         stakedAmount: request.stake,
@@ -457,7 +469,7 @@ export class AgentHomeRegistry {
 
       // Add reputation event
       profile.reputation.history.push({
-        timestamp: Date.now(),
+        timestamp: this.currentTime,
         type: "attestation",
         domain: request.capability,
         delta: 0.05,
@@ -513,7 +525,7 @@ export class AgentHomeRegistry {
    * Apply inactivity decay to all profiles
    */
   applyDecay(decayRate: number = 0.001): void {
-    const now = Date.now();
+    const now = this.currentTime;
     const decayThreshold = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     for (const profile of this.profiles.values()) {
@@ -568,7 +580,7 @@ export class AgentHomeRegistry {
     overall *= profile.reputation.decay;
 
     profile.reputation.overall = Math.max(0, Math.min(1, overall));
-    profile.reputation.lastCalculatedAt = Date.now();
+    profile.reputation.lastCalculatedAt = this.currentTime;
   }
 }
 

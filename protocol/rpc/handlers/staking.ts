@@ -152,7 +152,7 @@ export const lgmUnstake: Handler<
   }
 
   // Check staked balance
-  const amount = BigInt(params.amount);
+  const amount = parsePositiveBigInt(params.amount, "amount");
   if (account.stakedBalance < amount) {
     throw createRPCError(
       RPC_ERROR_CODES.INSUFFICIENT_BALANCE,
@@ -230,7 +230,7 @@ export const lgmDelegate: Handler<
   }
 
   // Check balance
-  const amount = BigInt(params.amount);
+  const amount = parsePositiveBigInt(params.amount, "amount");
   if (account.balance < amount) {
     throw createRPCError(
       RPC_ERROR_CODES.INSUFFICIENT_BALANCE,
@@ -304,7 +304,7 @@ export const lgmUndelegate: Handler<
   }
 
   // Execute undelegation via state manager (reduce delegation and start unbonding)
-  const amount = BigInt(params.amount);
+  const amount = parsePositiveBigInt(params.amount, "amount");
   ctx.state.reduceDelegation(params.delegatorDid, params.validatorKey, amount);
 
   // Generate transaction hash

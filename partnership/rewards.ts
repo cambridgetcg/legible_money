@@ -254,11 +254,11 @@ export function distributePartnershipReward(
   partnership: PartnershipAccount;
   distribution: PartnershipRewardDistribution;
 } {
-  // Step 1: Apply lock tier multiplier to gross amount
-  const multiplier = partnership.pool.lockTier.rewardMultiplier;
-  const withMultiplier = BigInt(
-    Math.floor(Number(input.grossAmount) * multiplier),
+  // Step 1: Apply lock tier multiplier to gross amount (BPS to avoid Number() precision loss)
+  const multiplierBps = BigInt(
+    Math.round(partnership.pool.lockTier.rewardMultiplier * 10000),
   );
+  const withMultiplier = (input.grossAmount * multiplierBps) / 10000n;
 
   // Step 2: Route 22% to co-owned common pot
   const commonPotShare = (withMultiplier * 22n) / 100n;

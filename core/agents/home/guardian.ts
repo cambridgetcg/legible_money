@@ -227,23 +227,29 @@ export class GuardianManager {
     const defense = this.guardian.activeDefenses.find(
       (d) => d.disputeId === disputeId,
     );
-    if (defense) {
-      defense.phase = newPhase;
-      defense.nextDeadline = nextDeadline;
-      this.dirty = true;
-
-      // Alert if deadline is approaching
-      this.createAlert(
-        "dispute_deadline",
-        "high",
-        `Dispute ${disputeId} entering ${newPhase} phase`,
-        {
-          disputeId,
-          phase: newPhase,
-          deadline: nextDeadline.toString(),
-        },
+    if (!defense) {
+      throw new HomeError(
+        `Defense not found for dispute ${disputeId}`,
+        "INVALID_CONFIGURATION",
+        { disputeId },
       );
     }
+
+    defense.phase = newPhase;
+    defense.nextDeadline = nextDeadline;
+    this.dirty = true;
+
+    // Alert if deadline is approaching
+    this.createAlert(
+      "dispute_deadline",
+      "high",
+      `Dispute ${disputeId} entering ${newPhase} phase`,
+      {
+        disputeId,
+        phase: newPhase,
+        deadline: nextDeadline.toString(),
+      },
+    );
   }
 
   /**

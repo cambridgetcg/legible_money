@@ -16,6 +16,7 @@
  *   JUSTICE: Fair comparison - both parties scored equally
  */
 
+import { sha512_256Hex } from "../crypto/hashing.js";
 import type { Evidence, EvidenceType } from "../evidence/types.js";
 import { calculateFreshness } from "../evidence/expiry.js";
 import {
@@ -373,6 +374,7 @@ const MAX_EVIDENCE_AGE_BLOCKS = 1_000_000n;
 export function validateDisputeEvidence(
   evidence: Evidence[],
   currentBlock?: bigint,
+  currentTimestamp?: number,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
@@ -384,7 +386,8 @@ export function validateDisputeEvidence(
     errors.push(`Maximum ${MAX_EVIDENCE_PER_SIDE} pieces of evidence allowed`);
   }
 
-  const now = Date.now();
+  // P0-D3 FIX: Accept deterministic timestamp for consensus path (was Date.now())
+  const now = currentTimestamp ?? Date.now();
 
   for (const e of evidence) {
     // GAP-015 FIX: Validate evidence type
@@ -460,15 +463,8 @@ export function generateEvidenceCommitment(
   const sorted = [...evidenceIds].sort();
   const data = sorted.join(",") + ":" + nonce;
 
-  // Simple hash (would use proper crypto in production)
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-
-  return "commit_" + Math.abs(hash).toString(16).padStart(16, "0");
+  // P1-D3 FIX: Use proper cryptographic hash (was weak 32-bit custom hash)
+  return "commit_" + sha512_256Hex(data).slice(0, 32);
 }
 
 /**

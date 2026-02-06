@@ -1339,7 +1339,13 @@ export function getExpirationSummary(
 } {
   const nextEvent = state.schedule.scheduledEvents
     .filter((e) => !e.executed)
-    .sort((a, b) => Number(a.scheduledBlock - b.scheduledBlock))[0];
+    .sort((a, b) =>
+      a.scheduledBlock < b.scheduledBlock
+        ? -1
+        : a.scheduledBlock > b.scheduledBlock
+          ? 1
+          : 0,
+    )[0];
 
   const expirationEvent = state.schedule.scheduledEvents.find(
     (e) => e.eventType === "expiration" && !e.executed,

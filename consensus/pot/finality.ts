@@ -263,7 +263,7 @@ export function createCheckpoint(
     knowledgeRoot: block.header.knowledgeRoot,
     signatures,
     totalSigningStake: totalStake,
-    createdAt: Date.now(),
+    createdAt: block.header.timestamp, // P1: Use deterministic block timestamp
   };
 }
 

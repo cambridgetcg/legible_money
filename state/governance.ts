@@ -318,6 +318,14 @@ export class GovernanceStateTree {
       );
     }
 
+    // Enforce one vote per voter per LIP at state layer (defense-in-depth)
+    if (this.hasVotedOnLIP(vote.voter, vote.lipId)) {
+      throw new StateError(
+        `Voter ${vote.voter} has already voted on LIP ${vote.lipId}`,
+        "INVALID_TRANSITION",
+      );
+    }
+
     this.quadraticVotes.set(vote.voteId, vote);
 
     // Update indexes

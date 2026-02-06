@@ -19,8 +19,9 @@ import {
   type TreasuryFund,
   DISBURSEMENT_STAKE,
   DISBURSEMENT_THRESHOLDS,
+  DISBURSEMENT_THRESHOLDS_BPS,
   TIMELOCK_BLOCKS,
-  DISBURSEMENT_SLASH_RATES,
+  DISBURSEMENT_SLASH_BPS,
   VALID_DISBURSEMENT_CATEGORIES,
   VALID_TREASURY_FUNDS,
 } from "./types.js";
@@ -194,23 +195,25 @@ export function transitionFromVoting(
     };
   }
 
+  // Calculate support and quorum ratios in basis points (10000 = 100%)
   const totalVotes = votes.support + votes.oppose;
-  const supportRatio =
-    totalVotes > 0n ? Number(votes.support) / Number(totalVotes) : 0;
-  const quorumRatio =
-    Number(votes.support + votes.oppose + votes.abstain) /
-    Number(votes.totalEligible);
+  const supportBps =
+    totalVotes > 0n ? (votes.support * 10000n) / totalVotes : 0n;
+  const totalVoted = votes.support + votes.oppose + votes.abstain;
+  const quorumBps =
+    votes.totalEligible > 0n ? (totalVoted * 10000n) / votes.totalEligible : 0n;
+  const supportRequiredBps = DISBURSEMENT_THRESHOLDS_BPS.supportRequired;
+  const quorumRequiredBps = DISBURSEMENT_THRESHOLDS_BPS.quorumRequired;
 
   // Check thresholds
-  if (
-    quorumRatio < DISBURSEMENT_THRESHOLDS.quorumRequired ||
-    supportRatio < DISBURSEMENT_THRESHOLDS.supportRequired
-  ) {
+  if (quorumBps < quorumRequiredBps || supportBps < supportRequiredBps) {
+    const supportPct = (Number(supportBps) / 100).toFixed(1);
+    const quorumPct = (Number(quorumBps) / 100).toFixed(1);
     const transition: StageTransition = {
       from: "voting" as any,
       to: "rejected" as any,
       at: currentBlock,
-      reason: `Vote failed: ${(supportRatio * 100).toFixed(1)}% support (need ${DISBURSEMENT_THRESHOLDS.supportRequired * 100}%), ${(quorumRatio * 100).toFixed(1)}% quorum (need ${DISBURSEMENT_THRESHOLDS.quorumRequired * 100}%)`,
+      reason: `Vote failed: ${supportPct}% support (need ${DISBURSEMENT_THRESHOLDS.supportRequired * 100}%), ${quorumPct}% quorum (need ${DISBURSEMENT_THRESHOLDS.quorumRequired * 100}%)`,
       triggeredBy: "system",
     };
     proposal.stage = "rejected";
@@ -221,11 +224,13 @@ export function transitionFromVoting(
   }
 
   // Approved — set timelock
+  const supportPct = (Number(supportBps) / 100).toFixed(1);
+  const quorumPct = (Number(quorumBps) / 100).toFixed(1);
   const transition: StageTransition = {
     from: "voting" as any,
     to: "approved" as any,
     at: currentBlock,
-    reason: `Vote passed: ${(supportRatio * 100).toFixed(1)}% support, ${(quorumRatio * 100).toFixed(1)}% quorum. Timelock: ${TIMELOCK_BLOCKS} blocks`,
+    reason: `Vote passed: ${supportPct}% support, ${quorumPct}% quorum. Timelock: ${TIMELOCK_BLOCKS} blocks`,
     triggeredBy: "system",
   };
   proposal.stage = "approved";
@@ -254,11 +259,14 @@ export function executeDisbursement(
     };
   }
 
-  // Check timelock
-  if (
-    proposal.timelockExpiry !== undefined &&
-    currentBlock < proposal.timelockExpiry
-  ) {
+  // Check timelock — defense-in-depth: reject if timelockExpiry was never set
+  if (proposal.timelockExpiry === undefined) {
+    return {
+      success: false,
+      error: "Timelock not set for approved proposal",
+    };
+  }
+  if (currentBlock < proposal.timelockExpiry) {
     const remaining = proposal.timelockExpiry - currentBlock;
     return {
       success: false,
@@ -354,10 +362,8 @@ export function calculateDisbursementStakeOutcome(
       };
 
     case "rejected_frivolous": {
-      const slashBps = BigInt(
-        Math.floor(DISBURSEMENT_SLASH_RATES.frivolous * 100),
-      );
-      const slashAmount = (proposal.stakedAmount * slashBps) / 100n;
+      const slashAmount =
+        (proposal.stakedAmount * DISBURSEMENT_SLASH_BPS.frivolous) / 10000n;
       return {
         returnAmount: proposal.stakedAmount - slashAmount,
         slashAmount,
@@ -366,10 +372,8 @@ export function calculateDisbursementStakeOutcome(
     }
 
     case "rejected_normal": {
-      const slashBps = BigInt(
-        Math.floor(DISBURSEMENT_SLASH_RATES.normal * 100),
-      );
-      const slashAmount = (proposal.stakedAmount * slashBps) / 100n;
+      const slashAmount =
+        (proposal.stakedAmount * DISBURSEMENT_SLASH_BPS.normal) / 10000n;
       return {
         returnAmount: proposal.stakedAmount - slashAmount,
         slashAmount,
@@ -378,10 +382,8 @@ export function calculateDisbursementStakeOutcome(
     }
 
     case "cancelled": {
-      const feeBps = BigInt(
-        Math.floor(DISBURSEMENT_SLASH_RATES.cancelled * 100),
-      );
-      const fee = (proposal.stakedAmount * feeBps) / 100n;
+      const fee =
+        (proposal.stakedAmount * DISBURSEMENT_SLASH_BPS.cancelled) / 10000n;
       return {
         returnAmount: proposal.stakedAmount - fee,
         slashAmount: fee,

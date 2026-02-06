@@ -118,13 +118,13 @@ export class RetrievalEngine {
     if (request.period > expirationThreshold) {
       throw new TokenError(
         `Period ${request.period} has not expired yet (threshold: ${expirationThreshold})`,
-        "TOKENS_EXPIRED",
+        "RETRIEVAL_FAILED",
       );
     }
 
     // Check grace period
     const periodState = this.expirationTracker.getPeriodState(request.period);
-    if (periodState?.expiredAtBlock) {
+    if (periodState?.expiredAtBlock !== undefined) {
       const blocksSinceExpiration = currentBlock - periodState.expiredAtBlock;
       if (blocksSinceExpiration < this.config.graceBlocks) {
         throw new TokenError(

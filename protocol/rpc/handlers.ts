@@ -65,6 +65,8 @@ import {
   validateDomain,
   validateSearch,
   validateConfidence,
+  validateDid,
+  parsePositiveBigInt,
 } from "./validation.js";
 
 // B3 FIX: Import new handlers
@@ -111,6 +113,7 @@ export const accountGetBalance: Handler<
   AccountGetBalanceRequest,
   AccountGetBalanceResponse
 > = async (params, ctx) => {
+  validateDid(params.did, "did");
   const account = ctx.state.getAccount(params.did);
 
   if (!account) {
@@ -132,6 +135,7 @@ export const accountGetInfo: Handler<
   AccountGetInfoRequest,
   AccountGetInfoResponse
 > = async (params, ctx) => {
+  validateDid(params.did, "did");
   const account = ctx.state.getAccount(params.did);
   const blockNumber = ctx.state.getBlockNumber();
 
@@ -345,7 +349,8 @@ export const knowledgeSubmitClaim: Handler<
   const senderDid = params.senderDid || `did:lgm:${params.sender.slice(0, 32)}`;
   const account = ctx.state.getAccount(senderDid);
 
-  if (!account || account.balance < BigInt(params.stake)) {
+  const stakeAmount = parsePositiveBigInt(params.stake, "stake");
+  if (!account || account.balance < stakeAmount) {
     throw createRPCError(
       RPC_ERROR_CODES.INSUFFICIENT_BALANCE,
       "Insufficient balance for stake",
@@ -358,7 +363,7 @@ export const knowledgeSubmitClaim: Handler<
       claim: params.claim,
       domain: params.domain,
       type: "empirical" as any,
-      stake: BigInt(params.stake),
+      stake: stakeAmount,
       proposedConfidence: 0.5,
       references: (params.references || []) as any,
     } as any,

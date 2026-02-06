@@ -243,6 +243,8 @@ export class StateManager {
       (components.projectRoot ?? EMPTY_ROOT) +
       (components.serviceRoot ?? EMPTY_ROOT) +
       (components.taskRoot ?? EMPTY_ROOT) +
+      (components.seedRoot ?? EMPTY_ROOT) +
+      (components.scheduleRoot ?? EMPTY_ROOT) +
       versionHex;
 
     return bytesToHex(domainHash(HASH_DOMAINS.STATE, data)).slice(0, 64);
@@ -2402,7 +2404,8 @@ export class StateManager {
       taskRoot: components.taskRoot ?? "",
       scheduleRoot: components.scheduleRoot ?? "",
       version: components.version.toString(),
-      timestamp: Date.now(),
+      // P0-SP1 FIX: Use deterministic block number instead of Date.now()
+      timestamp: Number(blockNumber),
     };
 
     const stateKey = namespacedKey(
@@ -2457,7 +2460,8 @@ export class StateManager {
       taskRoot: components.taskRoot ?? "",
       scheduleRoot: components.scheduleRoot ?? "",
       version: components.version.toString(),
-      timestamp: Date.now(),
+      // P0-SP1 FIX: Use deterministic block number instead of Date.now()
+      timestamp: Number(blockNumber),
     };
 
     // Create batch for atomic write
@@ -2812,7 +2816,51 @@ export class StateManager {
       this.seeds.addSeed(seed);
     }
 
-    // ---- 14. Governance ----
+    // ---- 14. Subscriptions ---- (P0-SP2 FIX: was missing from restore)
+    for await (const { value } of iterateNamespace(
+      STORAGE_NAMESPACES.SUBSCRIPTIONS,
+    )) {
+      const sub = decodeValue<{
+        serviceId: string;
+        callerDid: string;
+        expiresAt: string;
+      }>(value, "json");
+      let callerMap = this.subscriptions.get(sub.serviceId);
+      if (!callerMap) {
+        callerMap = new Map();
+        this.subscriptions.set(sub.serviceId, callerMap);
+      }
+      callerMap.set(sub.callerDid, BigInt(sub.expiresAt));
+    }
+
+    // ---- 15. Schedules (DMSS) ---- (P0-SP2 FIX: was missing from restore)
+    const scheduleProcesses: Array<[string, any]> = [];
+    for await (const { key, value } of iterateNamespace(
+      STORAGE_NAMESPACES.SCHEDULES,
+    )) {
+      const id = extractKeyStr(STORAGE_NAMESPACES.SCHEDULES, key);
+      const process = decodeValue(value, "json");
+      scheduleProcesses.push([id, process]);
+    }
+    if (scheduleProcesses.length > 0) {
+      const activeCount = scheduleProcesses.filter(
+        ([, p]) => p.status === "active" || p.status === "pending",
+      ).length;
+      const completedCount = scheduleProcesses.filter(
+        ([, p]) => p.status === "completed",
+      ).length;
+      this.schedules.importState({
+        processes: scheduleProcesses,
+        metrics: {
+          totalProcesses: scheduleProcesses.length,
+          activeProcesses: activeCount,
+          completedProcesses: completedCount,
+          totalExecutions: 0,
+        },
+      });
+    }
+
+    // ---- 16. Governance ----
     const govLips: import("../governance/proposals/types.js").LIP[] = [];
     const govVotes: import("../governance/voting/quadratic.js").QuadraticVote[] =
       [];

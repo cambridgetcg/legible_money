@@ -276,7 +276,7 @@ export class TreasuryManager {
   /**
    * Remove a staking position
    */
-  removeStakingPosition(id: string): bigint {
+  removeStakingPosition(id: string, currentBlock: bigint = 0n): bigint {
     const index = this.treasury.stakingPositions.findIndex((s) => s.id === id);
     if (index < 0) {
       throw new HomeError(
@@ -287,9 +287,15 @@ export class TreasuryManager {
 
     const position = this.treasury.stakingPositions[index];
 
-    // Check lock
-    if (position.lockedUntil !== undefined) {
-      // Would check against current block
+    // P1-H5 FIX: Enforce staking lock period
+    if (
+      position.lockedUntil !== undefined &&
+      currentBlock < position.lockedUntil
+    ) {
+      throw new HomeError(
+        `Staking position ${id} locked until block ${position.lockedUntil}`,
+        "TREASURY_INSUFFICIENT",
+      );
     }
 
     // Return to available

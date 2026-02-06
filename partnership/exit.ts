@@ -67,10 +67,13 @@ export function calculateExitPenalties(
   const initiatorForfeitedRewards = (unvested * 77n) / 100n;
 
   // 2. Early exit penalty on stake (scales with how early and lock tier)
-  const earlyExitPenaltyRate = pool.lockTier.earlyExitPenalty * earlyExitRatio;
-  const initiatorEarlyPenalty = BigInt(
-    Math.floor(Number(initiatorStake) * earlyExitPenaltyRate),
-  );
+  // Use pure BigInt to avoid Number() precision loss:
+  // penalty = stake * earlyExitPenalty * remaining / lockBlocks
+  const remaining = getRemainingLockBlocks(pool, currentBlock);
+  const penaltyBps = multiplierToBps(pool.lockTier.earlyExitPenalty);
+  const initiatorEarlyPenalty =
+    (initiatorStake * penaltyBps * remaining) /
+    (10000n * pool.lockTier.lockBlocks);
 
   // 3. Reputation damage (up to 11%, scaled by how early)
   const initiatorReputationDamage =

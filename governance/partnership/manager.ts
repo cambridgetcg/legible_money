@@ -203,11 +203,15 @@ export function acceptProposal(
     return { partnership: null as unknown as Partnership, errors };
   }
 
-  // Calculate stake contribution
+  // Calculate stake contribution using BPS to avoid Number() precision loss
   const totalStake =
     proposal.proposedTerms.initialStake + agentStakeContribution;
-  const humanRatio =
-    Number(proposal.proposedTerms.initialStake) / Number(totalStake);
+  const humanRatioBps =
+    totalStake > 0n
+      ? Number((proposal.proposedTerms.initialStake * 10000n) / totalStake) /
+        10000
+      : 0;
+  const humanRatio = humanRatioBps;
   const agentRatio = 1 - humanRatio;
 
   const stakeContribution: StakeContribution = {

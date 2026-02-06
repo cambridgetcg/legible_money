@@ -76,7 +76,7 @@ export function calculateVoteCost(
     );
   }
 
-  return BigInt(votes * votes) * config.baseCost;
+  return BigInt(votes) * BigInt(votes) * config.baseCost;
 }
 
 /**
@@ -305,9 +305,9 @@ export function validateQuadraticVote(
   voterBalance: bigint,
   config: QuadraticVotingConfig = DEFAULT_QV_CONFIG,
 ): { valid: boolean; error?: string } {
-  // Check vote count
-  if (vote.votes < 0) {
-    return { valid: false, error: "Negative votes" };
+  // Check vote count (zero votes cost nothing but inflate quorum — reject)
+  if (vote.votes <= 0) {
+    return { valid: false, error: "Votes must be positive" };
   }
 
   if (vote.votes > config.maxVotesPerVoter) {

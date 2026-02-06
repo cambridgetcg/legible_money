@@ -109,8 +109,11 @@ export function validateContributions(
   }
 
   // Contributions should be roughly balanced (within 3x of each other)
-  const ratio = Number(humanContribution) / Number(agentContribution);
-  if (ratio > 3 || ratio < 1 / 3) {
+  // Use cross-multiplication to avoid Number() precision loss
+  if (
+    humanContribution > agentContribution * 3n ||
+    agentContribution > humanContribution * 3n
+  ) {
     errors.push("Contribution imbalance too large (max 3x ratio)");
   }
 
@@ -325,17 +328,35 @@ export function updateVestingRelease(
     return pool;
   }
 
-  // Calculate release using exponential decay
-  // R(t) = R_total × (1 - e^(-λt)) where λ = ln(2) / half_life
+  // Calculate release using iterative integer half-life decay for determinism.
+  // Each half-life period releases half of remaining unvested.
+  // accelerationBonus (0-0.77) reduces effective half-life.
+  const accelerationBps = BigInt(Math.round(vesting.accelerationBonus * 10000));
+  // effectiveHalfLife = BASE / (1 + acceleration) → BASE * 10000 / (10000 + accelerationBps)
   const effectiveHalfLife =
-    Number(VESTING.BASE_VESTING_BLOCKS) / (1 + vesting.accelerationBonus);
-  const lambda = Math.log(2) / effectiveHalfLife;
-  const t = Number(blocksSinceStart - VESTING.BASE_CLIFF_BLOCKS);
+    (VESTING.BASE_VESTING_BLOCKS * 10000n) / (10000n + accelerationBps);
+  const t = blocksSinceStart - VESTING.BASE_CLIFF_BLOCKS;
 
-  const releaseRatio = 1 - Math.exp(-lambda * t);
-  const shouldBeReleased = BigInt(
-    Math.floor(Number(vesting.totalEarned) * releaseRatio),
-  );
+  // Use iterative halving: each half-life, released approaches total.
+  // remaining = totalEarned * (1/2)^(t/halfLife)
+  // We iterate per half-life to stay deterministic.
+  const halfLives = effectiveHalfLife > 0n ? t / effectiveHalfLife : 0n;
+  const cappedHalfLives = halfLives < 100n ? halfLives : 100n; // Cap iterations
+
+  let unreleased = vesting.totalEarned;
+  for (let i = 0n; i < cappedHalfLives; i++) {
+    unreleased = unreleased / 2n;
+  }
+
+  // Fractional half-life: linear interpolation for remainder
+  const remainder = effectiveHalfLife > 0n ? t % effectiveHalfLife : 0n;
+  if (effectiveHalfLife > 0n && remainder > 0n) {
+    // Linear interpolation: unreleased -= unreleased * remainder / (2 * effectiveHalfLife)
+    unreleased =
+      unreleased - (unreleased * remainder) / (effectiveHalfLife * 2n);
+  }
+
+  const shouldBeReleased = vesting.totalEarned - unreleased;
 
   // Calculate newly claimable
   const newlyReleased = shouldBeReleased - vesting.releasedAmount;

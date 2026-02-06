@@ -250,10 +250,13 @@ export class AgentHomeContract implements SelfInvokingContract {
   startSession(
     keyHash: string,
     currentBlock: bigint,
-    options: { sessionDuration?: number } = {},
+    options: { sessionDuration?: number; currentTime?: number } = {},
   ): { sessionId: string; wakeup: WakeupSummary } {
-    // Update block tracking
-    this.access.setCurrentBlock(currentBlock);
+    // Update block and time tracking (P1-H1 FIX: thread time to memory)
+    this.access.setCurrentBlock(currentBlock, options.currentTime);
+    if (options.currentTime !== undefined) {
+      this.memory.setCurrentTime(options.currentTime);
+    }
 
     // Start the session
     const session = this.access.startSession(keyHash, options);
@@ -444,7 +447,7 @@ export class AgentHomeContract implements SelfInvokingContract {
     sessionId: string,
     amount: bigint,
     purpose: "validator" | "claim" | "challenge" | "general",
-    currentBlock: bigint,
+    _currentBlock: bigint,
   ): string {
     this.requireSessionPermission(sessionId, "stake");
 
@@ -453,12 +456,9 @@ export class AgentHomeContract implements SelfInvokingContract {
 
     this.access.checkRateLimit(key, "stake_change");
 
-    // Add staking position - TreasuryManager generates the ID internally
-    const stakeId = this.treasury.addStakingPosition(
-      amount,
-      purpose,
-      currentBlock,
-    );
+    // Add staking position - no lock period at Agent Home level
+    // Protocol-level lock (e.g., validator unbonding) is enforced in state/transitions
+    const stakeId = this.treasury.addStakingPosition(amount, purpose);
 
     this.emitEvent({
       type: "treasury_changed",

@@ -112,14 +112,39 @@ export function calculateDomainMultiplier(
 
 /**
  * Calculate expertise decay based on time since last activity.
+ * Uses iterative integer halving for cross-platform determinism.
+ * Each half-life iteration: value = value / 2
+ * Partial half-lives use linear interpolation within the last period.
  */
 export function calculateDecay(
   blocksSinceActivity: bigint,
   config: DomainWeightConfig = DEFAULT_DOMAIN_WEIGHT_CONFIG,
 ): number {
-  // Exponential decay: decay = 0.5^(time / halfLife)
-  const halfLives = Number(blocksSinceActivity) / Number(config.decayHalfLife);
-  return Math.pow(0.5, halfLives);
+  if (blocksSinceActivity <= 0n) return 1.0;
+  if (config.decayHalfLife <= 0n) return 0;
+
+  // Integer half-lives (full halvings)
+  const fullHalfLives = Number(blocksSinceActivity / config.decayHalfLife);
+
+  // Cap iterations to prevent DoS
+  if (fullHalfLives >= 20) return 0; // 2^-20 ≈ 0.000001, effectively zero
+
+  // Compute 0.5^fullHalfLives using basis points (10000 = 1.0)
+  let decayBps = 10000;
+  for (let i = 0; i < fullHalfLives; i++) {
+    decayBps = (decayBps * 5000) / 10000; // halve each iteration
+  }
+
+  // Partial half-life: linear interpolation for remainder
+  const remainder = blocksSinceActivity % config.decayHalfLife;
+  if (remainder > 0n) {
+    // Linear interpolation between current and next half-life
+    const fractionBps = Number((remainder * 10000n) / config.decayHalfLife);
+    // Interpolate: decay * (1 - fraction * 0.5) = decay * (10000 - fraction/2) / 10000
+    decayBps = (decayBps * (10000 - (fractionBps * 5000) / 10000)) / 10000;
+  }
+
+  return decayBps / 10000;
 }
 
 /**
@@ -416,8 +441,12 @@ export function getTopExperts(
     });
   }
 
-  // Sort by weight descending
-  entries.sort((a, b) => b.weight - a.weight);
+  // Sort by weight descending with deterministic tiebreaker (DID lexicographic)
+  entries.sort(
+    (a, b) =>
+      b.weight - a.weight ||
+      (a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0),
+  );
 
   return entries.slice(0, limit);
 }

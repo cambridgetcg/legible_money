@@ -451,11 +451,7 @@ export class AccessManager {
       (s) => s.sessionId === sessionId,
     );
 
-    if (
-      session &&
-      this.currentTime > 0 &&
-      session.expiresAt <= this.currentTime
-    ) {
+    if (session && session.expiresAt <= this.currentTime) {
       // Session expired, clean it up
       this.endSession(sessionId);
       return undefined;

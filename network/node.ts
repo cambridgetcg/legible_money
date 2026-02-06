@@ -683,6 +683,13 @@ export class LegibleNode extends EventEmitter {
         // No score change
         break;
     }
+
+    // VULN-002 FIX: Disconnect peers with scores below threshold
+    if (peer.score <= this.peerScoreConfig.decayToZero) {
+      this.disconnect(peerId as PeerId).catch(() => {
+        // Best-effort disconnect
+      });
+    }
   }
 
   private async subscribeTopics(): Promise<void> {

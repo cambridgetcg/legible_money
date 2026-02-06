@@ -221,18 +221,20 @@ function calculateContributionCredit(period: ComputePeriod): bigint {
   // Base contribution is LGM invested
   let credit = period.lgmInvested;
 
-  // Apply compute contribution multiplier (1.11x)
-  credit = BigInt(
-    Math.floor(Number(credit) * COMPUTE_INVESTMENT.CONTRIBUTION_MULTIPLIER),
+  // Apply compute contribution multiplier (1.11x) using BPS to avoid Number() precision loss
+  const contributionBps = BigInt(
+    Math.round(COMPUTE_INVESTMENT.CONTRIBUTION_MULTIPLIER * 10000),
   );
+  credit = (credit * contributionBps) / 10000n;
 
-  // Apply accuracy bonus if above threshold
+  // Apply accuracy bonus if above threshold (1.11x via BPS)
   if (
     period.verificationAccuracy >= COMPUTE_INVESTMENT.ACCURACY_BONUS_THRESHOLD
   ) {
-    credit = BigInt(
-      Math.floor(Number(credit) * COMPUTE_INVESTMENT.ACCURACY_BONUS_MULTIPLIER),
+    const accuracyBps = BigInt(
+      Math.round(COMPUTE_INVESTMENT.ACCURACY_BONUS_MULTIPLIER * 10000),
     );
+    credit = (credit * accuracyBps) / 10000n;
   }
 
   return credit;
@@ -339,20 +341,17 @@ export function projectInvestmentReturns(
   const projectedROI =
     Number(projectedRewards) / Number(proposedInvestment) - 1;
 
-  // Calculate contribution credit
-  let contributionCredit = BigInt(
-    Math.floor(
-      Number(proposedInvestment) * COMPUTE_INVESTMENT.CONTRIBUTION_MULTIPLIER,
-    ),
+  // Calculate contribution credit using BPS to avoid Number() precision loss
+  const projContribBps = BigInt(
+    Math.round(COMPUTE_INVESTMENT.CONTRIBUTION_MULTIPLIER * 10000),
   );
+  let contributionCredit = (proposedInvestment * projContribBps) / 10000n;
 
   if (expectedAccuracy >= COMPUTE_INVESTMENT.ACCURACY_BONUS_THRESHOLD) {
-    contributionCredit = BigInt(
-      Math.floor(
-        Number(contributionCredit) *
-          COMPUTE_INVESTMENT.ACCURACY_BONUS_MULTIPLIER,
-      ),
+    const projAccBps = BigInt(
+      Math.round(COMPUTE_INVESTMENT.ACCURACY_BONUS_MULTIPLIER * 10000),
     );
+    contributionCredit = (contributionCredit * projAccBps) / 10000n;
   }
 
   return {

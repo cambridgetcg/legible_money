@@ -247,5 +247,76 @@ All mutations require Ed25519 signatures. For DevNet testing:
 
 ---
 
+---
+
+## Integration-Level Robustness Testing (Session 2)
+
+> **Date**: 2026-02-06
+> **Test file**: `tests/integration/devnet/robustness.test.ts`
+> **Results**: 44/44 tests passing, ~1.8s runtime
+> **Total test suite**: 2629 tests, 70 files, type check clean
+
+### Test Categories
+
+| Category | Tests | Key Invariants Verified |
+|----------|-------|------------------------|
+| Block Production Stress | 5 | 100-200 blocks; monotonic numbers; finality tracks (200 blocks → finalized ≥181) |
+| Mempool Robustness | 8 | Duplicate rejection; min fee; per-sender limit; capacity eviction; nonce-gap block selection; expiry |
+| State Transition Correctness | 5 | Transfer; insufficient balance; total supply invariant; nonce ordering; nonce replay rejection |
+| Claim Verification Pipeline | 4 | Claim creation; full verification round; sequential claims; multi-submitter claims |
+| Consensus State Integrity | 4 | Finality tracking; validator set stability; block height advancement; hash chain consistency |
+| State Root Consistency | 4 | Deterministic roots; root changes on mutation; all 15 sub-roots included; idempotent computation |
+| Validator Verification Rounds | 3 | Unanimous confirm; split verdict (5/7 majority); all-uncertain |
+| Edge Cases | 6 | Zero-amount reject; self-transfer; nonexistent account; min stake; rapid claims; exact-balance drain |
+| Mempool Block Selection | 2 | Fee priority ordering; max block size enforcement |
+| Long-Running Stability | 2 | 500 blocks with interleaved claims; 100 circular transfers without corruption |
+
+### Key Insights
+
+1. **Test DID Mismatch**: TestNetwork uses `did:lgm-test:*` format but `publicKeyToDid()` derives different DIDs. Tests using `executeTransaction()` MUST set `senderDid` override on the transaction object.
+
+2. **State Root API**: `getStateRoot()` is public, `computeStateRoot(components)` is private. `getStateRootComponents().version` starts at `0n` (falsy but valid — don't use `toBeTruthy()`).
+
+3. **Mempool Nonce Contiguity**: `getForBlock(maxCount, maxSize, senderBaseNonces)` stops at first nonce gap per sender. With nonces [0, 1, 3, 4] and base=0, only selects [0, 1].
+
+4. **Finality Math**: After N blocks, `lastFinalizedBlock >= N - 19`. 500 blocks → finalized ≥ 481.
+
+5. **Performance**: 500 blocks < 5s in deterministic mode. No memory leaks. State root remains computable.
+
+6. **Unknown Domains**: Claims with unregistered domains (e.g., "stability") resolve to parent "root" with a warning. Not an error.
+
+7. **Transfer Self-Loop**: `state.transfer(a, a, amount)` succeeds without error, balance unchanged. Harmless no-op.
+
+8. **getAccount() Returns null**: Not undefined. Use `toBeNull()` in assertions.
+
+### Identified Gaps (Not Yet Tested)
+
+| Priority | Gap | Why Untestable with Current Framework |
+|----------|-----|--------------------------------------|
+| P0 | Real P2P multi-node | TestNetwork is in-process, no actual libp2p |
+| P0 | Transaction signing E2E | Robustness tests bypass signature validation via senderDid |
+| P1 | Network partitions | Requires real multi-node with controlled network |
+| P1 | Storage persistence | LevelDB crash recovery needs actual disk I/O |
+| P1 | Block reorg safety | Requires simulating competing chain tips |
+| P2 | Load/throughput benchmarks | Need dedicated perf harness with metrics collection |
+| P2 | 100+ validator rounds | Computationally expensive, needs timing analysis |
+
+### DevNet Launch Readiness Assessment
+
+**Phase 1 (Local Validation): COMPLETE**
+- Unit tests: 2629/2629 ✓
+- Type check: clean ✓
+- Robustness tests: 44/44 ✓
+- 500-block stability: verified ✓
+- State root consistency: verified ✓
+- Mempool behavior: validated ✓
+- Finality tracking: confirmed ✓
+
+**Phase 2 (Multi-Node In-Process): NEXT**
+- Worker thread multi-node (`tools/devnet/spawn.ts`)
+- State sync between nodes
+- Block propagation
+- Claim verified across validators
+
 _Last Updated: 2026-02-06_
 _PP Verification: T✓ U✓ B✓ J✓ C✓_

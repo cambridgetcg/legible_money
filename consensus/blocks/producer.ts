@@ -239,7 +239,11 @@ export function checkBlockLimits(block: Block): {
     return { valid: false, reason: "Too many verification results" };
   }
 
-  const size = JSON.stringify(block, bigintReplacer).length;
+  // P1-B1 FIX: Use byte length, not character count — non-ASCII payloads
+  // (UTF-8 knowledge claims) have more bytes than characters
+  const size = new TextEncoder().encode(
+    JSON.stringify(block, bigintReplacer),
+  ).byteLength;
   if (size > BLOCK_LIMITS.MAX_BLOCK_SIZE_BYTES) {
     return { valid: false, reason: "Block too large" };
   }

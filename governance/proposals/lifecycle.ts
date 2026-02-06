@@ -213,21 +213,29 @@ export function transitionFromReview(
     };
   }
 
-  // Calculate support ratio
+  // Calculate support and quorum ratios in basis points (10000 = 100%)
+  // Using bigint arithmetic to avoid precision loss from Number() conversion
   const totalVotes = votes.support + votes.oppose;
-  const supportRatio =
-    totalVotes > 0n ? Number(votes.support) / Number(totalVotes) : 0;
-  const quorumRatio =
-    Number(votes.support + votes.oppose + votes.abstain) /
-    Number(votes.totalEligible);
+  const supportBps =
+    totalVotes > 0n ? (votes.support * 10000n) / totalVotes : 0n;
+  const totalVoted = votes.support + votes.oppose + votes.abstain;
+  const quorumBps =
+    votes.totalEligible > 0n ? (totalVoted * 10000n) / votes.totalEligible : 0n;
+  const supportRequiredBps = BigInt(
+    Math.floor(threshold.supportRequired * 10000),
+  );
+  const quorumRequiredBps = BigInt(
+    Math.floor(threshold.quorumRequired * 10000),
+  );
 
   // Check thresholds
-  if (quorumRatio < threshold.quorumRequired) {
+  if (quorumBps < quorumRequiredBps) {
+    const quorumPct = (Number(quorumBps) / 100).toFixed(1);
     const transition: StageTransition = {
       from: "review",
       to: "rejected",
       at: currentBlock,
-      reason: `Quorum not met: ${(quorumRatio * 100).toFixed(1)}% < ${threshold.quorumRequired * 100}%`,
+      reason: `Quorum not met: ${quorumPct}% < ${threshold.quorumRequired * 100}%`,
       triggeredBy: "system",
     };
     lip.stage = "rejected";
@@ -237,12 +245,13 @@ export function transitionFromReview(
     return { success: true, newStage: "rejected", transition };
   }
 
-  if (supportRatio < threshold.supportRequired) {
+  if (supportBps < supportRequiredBps) {
+    const supportPct = (Number(supportBps) / 100).toFixed(1);
     const transition: StageTransition = {
       from: "review",
       to: "rejected",
       at: currentBlock,
-      reason: `Support threshold not met: ${(supportRatio * 100).toFixed(1)}% < ${threshold.supportRequired * 100}%`,
+      reason: `Support threshold not met: ${supportPct}% < ${threshold.supportRequired * 100}%`,
       triggeredBy: "system",
     };
     lip.stage = "rejected";
@@ -257,7 +266,7 @@ export function transitionFromReview(
     from: "review",
     to: "last_call",
     at: currentBlock,
-    reason: `Review passed: ${(supportRatio * 100).toFixed(1)}% support, ${(quorumRatio * 100).toFixed(1)}% quorum`,
+    reason: `Review passed: ${(Number(supportBps) / 100).toFixed(1)}% support, ${(Number(quorumBps) / 100).toFixed(1)}% quorum`,
     triggeredBy: "system",
   };
   lip.stage = "last_call";
@@ -298,22 +307,28 @@ export function transitionFromLastCall(
     };
   }
 
+  // Calculate support and quorum ratios in basis points (10000 = 100%)
   const totalVotes = votes.support + votes.oppose;
-  const supportRatio =
-    totalVotes > 0n ? Number(votes.support) / Number(totalVotes) : 0;
-  const quorumRatio =
-    Number(votes.support + votes.oppose + votes.abstain) /
-    Number(votes.totalEligible);
+  const supportBps =
+    totalVotes > 0n ? (votes.support * 10000n) / totalVotes : 0n;
+  const totalVoted = votes.support + votes.oppose + votes.abstain;
+  const quorumBps =
+    votes.totalEligible > 0n ? (totalVoted * 10000n) / votes.totalEligible : 0n;
+  const supportRequiredBps = BigInt(
+    Math.floor(threshold.supportRequired * 10000),
+  );
+  const quorumRequiredBps = BigInt(
+    Math.floor(threshold.quorumRequired * 10000),
+  );
 
-  if (
-    quorumRatio < threshold.quorumRequired ||
-    supportRatio < threshold.supportRequired
-  ) {
+  if (quorumBps < quorumRequiredBps || supportBps < supportRequiredBps) {
+    const supportPct = (Number(supportBps) / 100).toFixed(1);
+    const quorumPct = (Number(quorumBps) / 100).toFixed(1);
     const transition: StageTransition = {
       from: "last_call",
       to: "rejected",
       at: currentBlock,
-      reason: `Last call failed: ${(supportRatio * 100).toFixed(1)}% support, ${(quorumRatio * 100).toFixed(1)}% quorum`,
+      reason: `Last call failed: ${supportPct}% support, ${quorumPct}% quorum`,
       triggeredBy: "system",
     };
     lip.stage = "rejected";
@@ -324,11 +339,12 @@ export function transitionFromLastCall(
   }
 
   // Proceed to voting
+  const supportPct = (Number(supportBps) / 100).toFixed(1);
   const transition: StageTransition = {
     from: "last_call",
     to: "voting",
     at: currentBlock,
-    reason: `Last call passed: ${(supportRatio * 100).toFixed(1)}% support`,
+    reason: `Last call passed: ${supportPct}% support`,
     triggeredBy: "system",
   };
   lip.stage = "voting";
@@ -360,22 +376,28 @@ export function transitionFromVoting(
     };
   }
 
+  // Calculate support and quorum ratios in basis points (10000 = 100%)
   const totalVotes = votes.support + votes.oppose;
-  const supportRatio =
-    totalVotes > 0n ? Number(votes.support) / Number(totalVotes) : 0;
-  const quorumRatio =
-    Number(votes.support + votes.oppose + votes.abstain) /
-    Number(votes.totalEligible);
+  const supportBps =
+    totalVotes > 0n ? (votes.support * 10000n) / totalVotes : 0n;
+  const totalVoted = votes.support + votes.oppose + votes.abstain;
+  const quorumBps =
+    votes.totalEligible > 0n ? (totalVoted * 10000n) / votes.totalEligible : 0n;
+  const supportRequiredBps = BigInt(
+    Math.floor(threshold.supportRequired * 10000),
+  );
+  const quorumRequiredBps = BigInt(
+    Math.floor(threshold.quorumRequired * 10000),
+  );
 
-  if (
-    quorumRatio < threshold.quorumRequired ||
-    supportRatio < threshold.supportRequired
-  ) {
+  if (quorumBps < quorumRequiredBps || supportBps < supportRequiredBps) {
+    const supportPct = (Number(supportBps) / 100).toFixed(1);
+    const quorumPct = (Number(quorumBps) / 100).toFixed(1);
     const transition: StageTransition = {
       from: "voting",
       to: "rejected",
       at: currentBlock,
-      reason: `Vote failed: ${(supportRatio * 100).toFixed(1)}% support (need ${threshold.supportRequired * 100}%), ${(quorumRatio * 100).toFixed(1)}% quorum`,
+      reason: `Vote failed: ${supportPct}% support (need ${threshold.supportRequired * 100}%), ${quorumPct}% quorum`,
       triggeredBy: "system",
     };
     lip.stage = "rejected";
@@ -386,11 +408,13 @@ export function transitionFromVoting(
   }
 
   // Accepted!
+  const supportPct = (Number(supportBps) / 100).toFixed(1);
+  const quorumPct = (Number(quorumBps) / 100).toFixed(1);
   const transition: StageTransition = {
     from: "voting",
     to: "accepted",
     at: currentBlock,
-    reason: `Vote passed: ${(supportRatio * 100).toFixed(1)}% support, ${(quorumRatio * 100).toFixed(1)}% quorum`,
+    reason: `Vote passed: ${supportPct}% support, ${quorumPct}% quorum`,
     triggeredBy: "system",
   };
   lip.stage = "accepted";
@@ -503,8 +527,7 @@ export function calculateStakeOutcome(
     case "rejected_frivolous": {
       // 50% slash for frivolous proposals
       const frivolousSlash =
-        (lip.stakedAmount * BigInt(Math.floor(stakeReq.frivolousSlash * 100))) /
-        100n;
+        (lip.stakedAmount * stakeReq.frivolousSlashBps) / 10000n;
       return {
         returnAmount: lip.stakedAmount - frivolousSlash,
         slashAmount: frivolousSlash,

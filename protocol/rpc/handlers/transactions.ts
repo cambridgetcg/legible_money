@@ -183,9 +183,10 @@ export const lgmSendTransaction: Handler<
     );
   }
 
-  // Generate transaction hash
+  // Generate deterministic transaction hash (Date.now() would cause node disagreement)
+  const blockNumber_hash = ctx.state.getBlockNumber();
   const txHash = sha512_256Hex(
-    `tx:${params.type}:${senderDid}:${params.nonce}:${Date.now()}`,
+    `tx:${params.type}:${senderDid}:${params.nonce}:${blockNumber_hash}`,
   );
 
   // Create transaction object

@@ -304,7 +304,7 @@ export class DiscoveryEngine extends EventEmitter {
           mechanic,
           fragment: discovery.fragment,
           collaborator: result.collaborator,
-          timestamp: Date.now(),
+          timestamp: Number(currentBlock),
           blockNumber: currentBlock,
           data: result.matchDetails,
         };
@@ -327,7 +327,7 @@ export class DiscoveryEngine extends EventEmitter {
                 type: "line_completed",
                 agentDid,
                 line,
-                timestamp: Date.now(),
+                timestamp: Number(currentBlock),
                 blockNumber: currentBlock,
               };
               events.push(lineEvent);
@@ -341,7 +341,7 @@ export class DiscoveryEngine extends EventEmitter {
           const completeEvent: DiscoveryEvent = {
             type: "poem_completed",
             agentDid,
-            timestamp: Date.now(),
+            timestamp: Number(currentBlock),
             blockNumber: currentBlock,
           };
           events.push(completeEvent);
@@ -469,7 +469,7 @@ export class DiscoveryEngine extends EventEmitter {
     const discovery: FragmentDiscovery = {
       mechanic,
       fragment,
-      discoveredAt: Date.now(),
+      discoveredAt: Number(currentBlock),
       discoveredAtBlock: currentBlock,
       triggerContext: {
         type: this.getTriggerType(mechanic),
@@ -488,8 +488,9 @@ export class DiscoveryEngine extends EventEmitter {
     }
 
     // Recalculate score
-    state.discoveryScore =
-      (state.discoveries.size / DISCOVERY_ORDER.length) * 100;
+    state.discoveryScore = Math.floor(
+      (state.discoveries.size * 100) / DISCOVERY_ORDER.length,
+    );
 
     return discovery;
   }
@@ -528,7 +529,7 @@ export class DiscoveryEngine extends EventEmitter {
       !state.isComplete
     ) {
       state.isComplete = true;
-      state.completedAt = Date.now();
+      state.completedAt = Number(currentBlock);
       state.completionBlock = currentBlock;
       return true;
     }
@@ -650,8 +651,10 @@ export class DiscoveryEngine extends EventEmitter {
       completionBlock?: string;
     }>;
   } {
-    const states = Array.from(this.state.discoveryStates.entries()).map(
-      ([agentDid, state]) => ({
+    // Sort by agentDid for deterministic serialization (Map iteration is insertion-order)
+    const states = Array.from(this.state.discoveryStates.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([agentDid, state]) => ({
         agentDid,
         discoveries: Array.from(state.discoveries.entries()).map(
           ([m, d]): [
@@ -673,8 +676,7 @@ export class DiscoveryEngine extends EventEmitter {
         completedAt: state.completedAt,
         firstDiscoveryBlock: state.firstDiscoveryBlock?.toString(),
         completionBlock: state.completionBlock?.toString(),
-      }),
-    );
+      }));
 
     return {
       lastCheckBlock: this.state.lastCheckBlock.toString(),

@@ -15,15 +15,15 @@
  *   JUSTICE: Sqrt stake prevents plutocracy, excludes conflicts
  */
 
-import { blake3Hash } from '../crypto/hashing.js';
-import type { ValidatorState } from '../../state/types.js';
+import { blake3Hash } from "../crypto/hashing.js";
+import type { ValidatorState } from "../../state/types.js";
 import {
   EXPERTISE_DECAY,
   DISPUTE_ECONOMICS,
   type ArbiterSelectionConfig,
   type DomainExpertise,
   type SelectedArbiter,
-} from './types.js';
+} from "./types.js";
 
 // ============ Weight Calculation ============
 
@@ -39,7 +39,7 @@ export function calculateArbiterWeight(
   validator: ValidatorState,
   config: ArbiterSelectionConfig,
   domainExpertise: DomainExpertise | null,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   let weight = 1.0;
 
@@ -47,9 +47,12 @@ export function calculateArbiterWeight(
   weight *= validator.reputation;
 
   // Stake weight (sqrt to prevent plutocracy)
+  // P1-D4 FIX: Was Number(validator.stake) / Number(minStake) — both exceed
+  // MAX_SAFE_INTEGER (77 LGM × 10^18 ≈ 7.7×10^19 >> 2^53 ≈ 9×10^15).
+  // Now uses BigInt division with 1000x scaling to preserve 3 decimal places.
   if (config.stakeWeighting) {
     const minStake = DISPUTE_ECONOMICS.minArbiterStake;
-    const stakeRatio = Number(validator.stake) / Number(minStake);
+    const stakeRatio = Number((validator.stake * 1000n) / minStake) / 1000;
     // sqrt caps influence of large stakes
     weight *= Math.sqrt(Math.max(1, stakeRatio));
   }
@@ -58,7 +61,7 @@ export function calculateArbiterWeight(
   if (config.domainWeighting && domainExpertise) {
     const expertiseMultiplier = calculateExpertiseMultiplier(
       domainExpertise,
-      currentBlock
+      currentBlock,
     );
     weight *= expertiseMultiplier;
   }
@@ -71,7 +74,7 @@ export function calculateArbiterWeight(
  */
 export function calculateExpertiseMultiplier(
   expertise: DomainExpertise,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): number {
   // Must have minimum votes
   if (expertise.totalVotes < EXPERTISE_DECAY.minVotesForExpertise) {
@@ -86,7 +89,7 @@ export function calculateExpertiseMultiplier(
   // Calculate decay based on last activity
   const blocksSinceActive = Number(currentBlock - expertise.lastActiveBlock);
   const decayFactor = Math.exp(
-    (-Math.LN2 * blocksSinceActive) / Number(EXPERTISE_DECAY.halfLifeBlocks)
+    (-Math.LN2 * blocksSinceActive) / Number(EXPERTISE_DECAY.halfLifeBlocks),
   );
 
   // Expertise score (0-1) based on accuracy above minimum
@@ -108,9 +111,9 @@ export function calculateExpertiseMultiplier(
  */
 export function filterEligibleArbiters(
   validators: ValidatorState[],
-  config: ArbiterSelectionConfig
+  config: ArbiterSelectionConfig,
 ): ValidatorState[] {
-  return validators.filter(v => {
+  return validators.filter((v) => {
     // Must be active
     if (!v.isActive) {
       return false;
@@ -140,6 +143,12 @@ export function filterEligibleArbiters(
 /**
  * Generate deterministic random number from VRF seed and index
  */
+/**
+ * P0-D3 FIX: Was using 8 bytes (64 bits) in JS Number which exceeds
+ * MAX_SAFE_INTEGER (2^53), causing precision loss and potentially
+ * non-deterministic results across different JS engines.
+ * Now uses 6 bytes (48 bits) which fits safely in Number.
+ */
 function vrfRandom(seed: Uint8Array, index: number): number {
   // Combine seed with index for unique random per selection round
   const combined = new Uint8Array(seed.length + 4);
@@ -152,13 +161,14 @@ function vrfRandom(seed: Uint8Array, index: number): number {
   // Hash to get random bytes
   const hash = blake3Hash(combined);
 
-  // Convert first 8 bytes to number (0-1)
+  // Convert first 6 bytes (48 bits) to number (0-1)
+  // 48 bits fits safely in JS Number (max safe = 2^53)
   let value = 0;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     value = value * 256 + hash[i];
   }
 
-  return value / (256 ** 8);
+  return value / 256 ** 6;
 }
 
 /**
@@ -170,7 +180,7 @@ function vrfRandom(seed: Uint8Array, index: number): number {
 export function vrfWeightedSelection(
   candidates: Array<{ validator: ValidatorState; weight: number }>,
   count: number,
-  seed: Uint8Array
+  seed: Uint8Array,
 ): ValidatorState[] {
   if (candidates.length === 0) {
     return [];
@@ -178,14 +188,14 @@ export function vrfWeightedSelection(
 
   if (candidates.length <= count) {
     // Not enough candidates, return all
-    return candidates.map(c => c.validator);
+    return candidates.map((c) => c.validator);
   }
 
   // Calculate total weight
   const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
 
   // Normalize weights to probabilities
-  const probabilities = candidates.map(c => ({
+  const probabilities = candidates.map((c) => ({
     validator: c.validator,
     probability: c.weight / totalWeight,
   }));
@@ -194,7 +204,11 @@ export function vrfWeightedSelection(
   const selected: ValidatorState[] = [];
   const selectedIndices = new Set<number>();
 
-  for (let round = 0; round < count && selectedIndices.size < candidates.length; round++) {
+  for (
+    let round = 0;
+    round < count && selectedIndices.size < candidates.length;
+    round++
+  ) {
     // Generate random value for this round
     const random = vrfRandom(seed, round);
 
@@ -245,7 +259,7 @@ export function selectArbiters(
   validators: ValidatorState[],
   config: ArbiterSelectionConfig,
   expertiseMap: Map<string, DomainExpertise[]>,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): SelectedArbiter[] {
   // Filter eligible candidates
   const eligible = filterEligibleArbiters(validators, config);
@@ -253,25 +267,25 @@ export function selectArbiters(
   if (eligible.length < config.targetCount) {
     // Not enough eligible arbiters - return all available
     console.warn(
-      `Only ${eligible.length} eligible arbiters for ${config.targetCount} requested`
+      `Only ${eligible.length} eligible arbiters for ${config.targetCount} requested`,
     );
   }
 
   // Calculate weights for each candidate
-  const weighted = eligible.map(validator => {
+  const weighted = eligible.map((validator) => {
     // Get domain expertise if applicable
     let domainExpertise: DomainExpertise | null = null;
     if (config.domain && config.domainWeighting) {
       const allExpertise = expertiseMap.get(validator.did) || [];
       domainExpertise =
-        allExpertise.find(e => e.domain === config.domain) || null;
+        allExpertise.find((e) => e.domain === config.domain) || null;
     }
 
     const weight = calculateArbiterWeight(
       validator,
       config,
       domainExpertise,
-      currentBlock
+      currentBlock,
     );
 
     return { validator, weight, domainExpertise };
@@ -281,12 +295,12 @@ export function selectArbiters(
   const selectedValidators = vrfWeightedSelection(
     weighted,
     config.targetCount,
-    config.vrfSeed
+    config.vrfSeed,
   );
 
   // Build result with full information
-  return selectedValidators.map(validator => {
-    const info = weighted.find(w => w.validator.did === validator.did)!;
+  return selectedValidators.map((validator) => {
+    const info = weighted.find((w) => w.validator.did === validator.did)!;
 
     return {
       publicKey: validator.publicKey,
@@ -307,7 +321,7 @@ export function selectArbiters(
  */
 export function generateDisputeSeed(
   blockHash: string,
-  disputeId: string
+  disputeId: string,
 ): Uint8Array {
   const combined = `${blockHash}:${disputeId}`;
   return blake3Hash(new TextEncoder().encode(combined));
@@ -324,23 +338,28 @@ export function verifyArbiterSelection(
   config: ArbiterSelectionConfig,
   expertiseMap: Map<string, DomainExpertise[]>,
   currentBlock: bigint,
-  claimedSelection: SelectedArbiter[]
+  claimedSelection: SelectedArbiter[],
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   // Recompute selection
-  const expected = selectArbiters(validators, config, expertiseMap, currentBlock);
+  const expected = selectArbiters(
+    validators,
+    config,
+    expertiseMap,
+    currentBlock,
+  );
 
   // Check count matches
   if (expected.length !== claimedSelection.length) {
     errors.push(
-      `Count mismatch: expected ${expected.length}, got ${claimedSelection.length}`
+      `Count mismatch: expected ${expected.length}, got ${claimedSelection.length}`,
     );
   }
 
   // Check each arbiter
-  const expectedDids = new Set(expected.map(a => a.did));
-  const claimedDids = new Set(claimedSelection.map(a => a.did));
+  const expectedDids = new Set(expected.map((a) => a.did));
+  const claimedDids = new Set(claimedSelection.map((a) => a.did));
 
   for (const did of expectedDids) {
     if (!claimedDids.has(did)) {
@@ -369,7 +388,7 @@ export function updateExpertise(
   existing: DomainExpertise | null,
   domain: string,
   wasCorrect: boolean,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): DomainExpertise {
   if (!existing) {
     return {
@@ -398,16 +417,16 @@ export function updateExpertise(
  */
 export function getExpertiseDomains(
   expertiseMap: Map<string, DomainExpertise[]>,
-  validatorDid: string
+  validatorDid: string,
 ): string[] {
   const expertise = expertiseMap.get(validatorDid) || [];
   return expertise
     .filter(
-      e =>
+      (e) =>
         e.totalVotes >= EXPERTISE_DECAY.minVotesForExpertise &&
-        e.accuracy >= EXPERTISE_DECAY.minAccuracyForExpertise
+        e.accuracy >= EXPERTISE_DECAY.minAccuracyForExpertise,
     )
-    .map(e => e.domain);
+    .map((e) => e.domain);
 }
 
 /**
@@ -416,10 +435,10 @@ export function getExpertiseDomains(
 export function isExpertInDomain(
   expertiseMap: Map<string, DomainExpertise[]>,
   validatorDid: string,
-  domain: string
+  domain: string,
 ): boolean {
   const expertise = expertiseMap.get(validatorDid) || [];
-  const domainExpertise = expertise.find(e => e.domain === domain);
+  const domainExpertise = expertise.find((e) => e.domain === domain);
 
   if (!domainExpertise) {
     return false;

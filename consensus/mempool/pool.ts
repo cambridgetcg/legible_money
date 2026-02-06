@@ -52,10 +52,13 @@ export class Mempool extends EventEmitter {
   private pool: Map<string, MempoolEntry> = new Map();
   private bySender: Map<string, Set<string>> = new Map(); // sender -> txHashes
   private evictionTimer: NodeJS.Timeout | null = null;
+  // P1-M1 FIX: Injectable clock for deterministic testing
+  private clock: () => number;
 
-  constructor(config: Partial<MempoolConfig> = {}) {
+  constructor(config: Partial<MempoolConfig> = {}, clock?: () => number) {
     super();
     this.config = { ...DEFAULT_MEMPOOL_CONFIG, ...config };
+    this.clock = clock ?? (() => Date.now());
   }
 
   /**
@@ -96,10 +99,15 @@ export class Mempool extends EventEmitter {
       return { added: false, reason: validation.reason };
     }
 
+    // Calculate size in bytes (not characters) for accurate fee-per-byte
+    const serialized = JSON.stringify(tx, bigintReplacer);
+    const size = new TextEncoder().encode(serialized).byteLength;
+    const feePerByte = tx.fee / BigInt(size);
+
     // Check pool size
     if (this.pool.size >= this.config.maxSize) {
       // Try to evict lower-fee transaction
-      const evicted = this.evictLowestFee(tx.fee);
+      const evicted = this.evictLowestFee(tx.fee, size);
       if (!evicted) {
         return { added: false, reason: "Pool full, fee too low" };
       }
@@ -111,16 +119,11 @@ export class Mempool extends EventEmitter {
       return { added: false, reason: "Too many transactions from sender" };
     }
 
-    // Calculate size in bytes (not characters) for accurate fee-per-byte
-    const serialized = JSON.stringify(tx, bigintReplacer);
-    const size = new TextEncoder().encode(serialized).byteLength;
-    const feePerByte = tx.fee / BigInt(size);
-
     // Add to pool
     const entry: MempoolEntry = {
       tx,
       txHash,
-      addedAt: Date.now(),
+      addedAt: this.clock(),
       fee: tx.fee,
       feePerByte,
       size,
@@ -364,18 +367,21 @@ export class Mempool extends EventEmitter {
   }
 
   private hashTransaction(tx: Transaction): string {
+    // P1-M4 FIX: Include fee in hash so that fee-bumped replacements
+    // are distinct entries (enables Replace-By-Fee)
     return sha512_256Hex(
       JSON.stringify({
         type: tx.type,
         sender: tx.sender,
         nonce: tx.nonce.toString(),
+        fee: tx.fee.toString(),
         payload: tx.payload,
         signature: tx.signature,
       }),
     );
   }
 
-  private evictLowestFee(newFee: bigint): boolean {
+  private evictLowestFee(newFee: bigint, newSize?: number): boolean {
     // Find transaction with lowest feePerByte (matches getForBlock sort order)
     let lowest: MempoolEntry | null = null;
 
@@ -385,8 +391,14 @@ export class Mempool extends EventEmitter {
       }
     }
 
-    // Only evict if new fee is higher than the lowest entry's total fee
-    if (lowest && newFee > lowest.fee) {
+    if (!lowest) return false;
+
+    // P1-M3 FIX: Compare feePerByte consistently (was comparing total fee
+    // against entry selected by feePerByte — inconsistent units)
+    const newFeePerByte =
+      newSize !== undefined && newSize > 0 ? newFee / BigInt(newSize) : newFee; // Fallback if size unknown
+
+    if (newFeePerByte > lowest.feePerByte) {
       this.remove(lowest.txHash);
       return true;
     }
@@ -395,7 +407,7 @@ export class Mempool extends EventEmitter {
   }
 
   private evictExpired(): void {
-    const now = Date.now();
+    const now = this.clock();
     const maxAge = this.config.maxTxAge;
     const toRemove: string[] = [];
 

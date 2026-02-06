@@ -120,17 +120,16 @@ class Memory implements VMMemory {
       throw new BVMError("Memory limit exceeded", "EXECUTION_FAILED");
     }
 
-    const oldWords = Math.ceil(this.size / 32);
-    const newWords = Math.ceil(newSize / 32);
+    // Integer ceiling division: (x + 31) / 32 truncated
+    const oldWords = ((this.size + 31) / 32) | 0;
+    const newWords = ((newSize + 31) / 32) | 0;
     const wordsDiff = newWords - oldWords;
 
-    // Gas cost: 3 * words + words^2 / 512
+    // Gas cost: 3 * words + words^2 / 512 (all integer arithmetic)
     const gasCost =
       BigInt(3 * wordsDiff) +
-      BigInt(
-        Math.floor((newWords * newWords) / 512) -
-          Math.floor((oldWords * oldWords) / 512),
-      );
+      BigInt(((newWords * newWords) / 512) | 0) -
+      BigInt(((oldWords * oldWords) / 512) | 0);
 
     this.ensureSize(newSize);
     return gasCost;
@@ -475,7 +474,15 @@ export class ExecutionEngine {
         // a ** b mod 2^256
         const base = this.stack.pop();
         const exponent = this.stack.pop();
-        // Gas is dynamic based on exponent size, but we handle base gas in main loop
+        // P1-V1 FIX: Charge dynamic gas based on exponent byte size (EIP-160: 50 gas/byte)
+        if (exponent > 0n) {
+          const hexLen = exponent.toString(16).length;
+          const expByteSize = BigInt((hexLen + 1) >>> 1);
+          this.gasUsed += 50n * expByteSize;
+          if (this.gasUsed >= context.gasLimit) {
+            throw new BVMError("Out of gas (EXP dynamic)", "GAS_EXHAUSTED");
+          }
+        }
         let result = 1n;
         let b = base;
         let e = exponent;
@@ -670,7 +677,7 @@ export class ExecutionEngine {
         const hash = keccak_256(data);
         this.stack.push(this.bytesToWord(hash));
         // Dynamic gas: 30 + 6 * ceil(length / 32)
-        this.gasUsed += BigInt(6 * Math.ceil(length / 32));
+        this.gasUsed += BigInt(6 * ((length + 31) >>> 5));
         return "CONTINUE";
       }
 
@@ -742,6 +749,20 @@ export class ExecutionEngine {
         }
 
         const oldValue = storage.slots.get(keyHex);
+        const oldWord = oldValue ? this.bytesToWord(oldValue) : 0n;
+
+        // P1-V2 FIX: Dynamic gas for SSTORE (simplified EIP-2200 model)
+        if (oldWord === 0n && value !== 0n) {
+          this.gasUsed += this.config.gasCosts.sstoreSet; // 20000n new slot
+        } else if (oldWord !== 0n && value === 0n) {
+          this.gasUsed += this.config.gasCosts.sstoreReset; // 5000n clear slot
+        } else {
+          this.gasUsed += this.config.gasCosts.sstore; // 5000n update slot
+        }
+        if (this.gasUsed >= context.gasLimit) {
+          throw new BVMError("Out of gas (SSTORE dynamic)", "GAS_EXHAUSTED");
+        }
+
         storage.slots.set(keyHex, this.wordToBytes(value));
         storage.lastModified = context.blockNumber;
 
@@ -749,7 +770,7 @@ export class ExecutionEngine {
           type: "storage",
           address: context.currentContract,
           key: keyHex,
-          oldValue: oldValue ? this.bytesToWord(oldValue) : undefined,
+          oldValue: oldWord !== 0n ? oldWord : undefined,
           newValue: value,
         });
 
@@ -759,7 +780,11 @@ export class ExecutionEngine {
       // ============ Control Flow ============
       case opcodes.JUMP: {
         const dest = Number(this.stack.pop());
-        if (bytecode[dest] !== opcodes.JUMPDEST) {
+        if (
+          dest < 0 ||
+          dest >= bytecode.length ||
+          bytecode[dest] !== opcodes.JUMPDEST
+        ) {
           throw new BVMError("Invalid jump destination", "EXECUTION_FAILED", {
             code: "INVALID_JUMP",
           });
@@ -772,7 +797,11 @@ export class ExecutionEngine {
         const dest = Number(this.stack.pop());
         const condition = this.stack.pop();
         if (condition !== 0n) {
-          if (bytecode[dest] !== opcodes.JUMPDEST) {
+          if (
+            dest < 0 ||
+            dest >= bytecode.length ||
+            bytecode[dest] !== opcodes.JUMPDEST
+          ) {
             throw new BVMError("Invalid jump destination", "EXECUTION_FAILED", {
               code: "INVALID_JUMP",
             });
@@ -818,6 +847,14 @@ export class ExecutionEngine {
         return "CONTINUE";
       }
 
+      // P1-V3 FIX: BALANCE opcode was defined in opcodes.ts but not in execution switch
+      case opcodes.BALANCE: {
+        const addr = this.wordToAddress(this.stack.pop());
+        const account = this.state.accounts.accounts.get(addr);
+        this.stack.push(account?.balance ?? 0n);
+        return "CONTINUE";
+      }
+
       case opcodes.CALLDATASIZE: {
         this.stack.push(BigInt(context.callData.length));
         return "CONTINUE";
@@ -850,7 +887,7 @@ export class ExecutionEngine {
         }
         this.memory.write(destOffset, data);
         // Dynamic gas: 3 * ceil(length / 32)
-        this.gasUsed += BigInt(3 * Math.ceil(length / 32));
+        this.gasUsed += BigInt(3 * ((length + 31) >>> 5));
         return "CONTINUE";
       }
 
@@ -873,7 +910,7 @@ export class ExecutionEngine {
         }
         this.memory.write(destOffset, data);
         // Dynamic gas: 3 * ceil(length / 32)
-        this.gasUsed += BigInt(3 * Math.ceil(length / 32));
+        this.gasUsed += BigInt(3 * ((length + 31) >>> 5));
         return "CONTINUE";
       }
 
@@ -907,7 +944,7 @@ export class ExecutionEngine {
         }
         this.memory.write(destOffset, data);
         // Dynamic gas: 3 * ceil(length / 32)
-        this.gasUsed += BigInt(3 * Math.ceil(length / 32));
+        this.gasUsed += BigInt(3 * ((length + 31) >>> 5));
         return "CONTINUE";
       }
 
@@ -931,7 +968,7 @@ export class ExecutionEngine {
         const data = this.returnData.slice(dataOffset, dataOffset + length);
         this.memory.write(destOffset, data);
         // Dynamic gas: 3 * ceil(length / 32)
-        this.gasUsed += BigInt(3 * Math.ceil(length / 32));
+        this.gasUsed += BigInt(3 * ((length + 31) >>> 5));
         return "CONTINUE";
       }
 
@@ -2141,7 +2178,9 @@ export class ExecutionEngine {
         // Placeholder values for reserved and delegated
         const reserved = 0n;
         const delegated = 0n;
-        const available = balance - staked - reserved;
+        // P0-V2 FIX: Guard against underflow when staked > balance
+        const committed = staked + reserved;
+        const available = balance > committed ? balance - committed : 0n;
 
         this.stack.push(delegated);
         this.stack.push(staked);
@@ -2342,30 +2381,23 @@ export class ExecutionEngine {
   }
 
   private didToWord(did: DID): Word {
-    // Hash DID to 256 bits
+    // Hash DID to 256 bits using keccak_256 for collision resistance
     const encoder = new TextEncoder();
     const bytes = encoder.encode(did);
-    // Simple hash for now - would use proper hash function
-    let hash = 0n;
-    for (const byte of bytes) {
-      hash = ((hash << 5n) - hash + BigInt(byte)) & ((1n << 256n) - 1n);
-    }
-    return hash;
+    const hash = keccak_256(bytes);
+    return this.bytesToWord(hash);
   }
 
   private wordToDID(word: Word): DID {
-    // This is a placeholder - in practice, we'd need a reverse lookup
-    return `did:lgm:${word.toString(16).slice(0, 16)}`;
+    // Use full 64 hex chars to avoid collision between different DIDs
+    return `did:lgm:${word.toString(16).padStart(64, "0")}`;
   }
 
   private stringToWord(str: string): Word {
     const encoder = new TextEncoder();
     const bytes = encoder.encode(str);
-    let hash = 0n;
-    for (const byte of bytes) {
-      hash = ((hash << 5n) - hash + BigInt(byte)) & MAX_UINT256;
-    }
-    return hash;
+    const hash = keccak_256(bytes);
+    return this.bytesToWord(hash);
   }
 
   private numberToBeliefSource(num: number): BeliefSource {

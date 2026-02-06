@@ -15,8 +15,9 @@
  *   JUSTICE: Ensures all parties treated fairly per rules
  */
 
-import type { ValidatorState } from '../../state/types.js';
-import type { Evidence } from '../evidence/types.js';
+import { sha512_256Hex } from "../crypto/hashing.js";
+import type { ValidatorState } from "../../state/types.js";
+import type { Evidence } from "../evidence/types.js";
 import {
   PHASE_DURATIONS,
   DISPUTE_ECONOMICS,
@@ -32,18 +33,15 @@ import {
   type DisputeEvent,
   type DisputeEventType,
   DisputeError,
-} from './types.js';
+} from "./types.js";
 import {
   compareEvidence,
   getAutoResolutionResult,
   validateDisputeEvidence,
   generateEvidenceCommitment,
   verifyEvidenceCommitment,
-} from './evidence_comparison.js';
-import {
-  selectArbiters,
-  updateExpertise,
-} from './arbitrator_selection.js';
+} from "./evidence_comparison.js";
+import { selectArbiters, updateExpertise } from "./arbitrator_selection.js";
 import {
   advancePhase,
   escalateDispute,
@@ -57,26 +55,26 @@ import {
   canEnterDeliberation,
   canEnterSettlement,
   canEscalate,
-} from './state_machine.js';
-import { calculateSettlement, calculateDrawSettlement } from './settlement.js';
+} from "./state_machine.js";
+import { calculateSettlement, calculateDrawSettlement } from "./settlement.js";
 import {
   canPartyEscalate,
   getEscalationCost,
   buildTierSelectionConfig,
-} from './escalation.js';
+} from "./escalation.js";
 
 // ============ ID Generation ============
 
-let disputeCounter = 0;
-
 /**
- * Generate unique dispute ID
+ * Generate deterministic dispute ID from consensus-available data
+ * P0-D1 FIX: Was using Date.now() + module-level counter — non-deterministic across validators
  */
-export function generateDisputeId(): string {
-  disputeCounter++;
-  const timestamp = Date.now().toString(36);
-  const counter = disputeCounter.toString(36).padStart(4, '0');
-  return `dispute_${timestamp}_${counter}`;
+export function generateDisputeId(
+  currentBlock: bigint,
+  challengerDid: string,
+  targetId: string,
+): string {
+  return `dispute_${sha512_256Hex(`${currentBlock}:${challengerDid}:${targetId}`).slice(0, 24)}`;
 }
 
 // ============ Dispute Creation ============
@@ -86,27 +84,35 @@ export function generateDisputeId(): string {
  */
 export function createDispute(
   payload: InitiateDisputePayload,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Dispute {
   // Validate stake
   if (payload.stake < DISPUTE_ECONOMICS.minChallengeStake) {
     throw new DisputeError(
       `Stake too low. Minimum: ${DISPUTE_ECONOMICS.minChallengeStake}`,
-      'INSUFFICIENT_STAKE',
-      { required: DISPUTE_ECONOMICS.minChallengeStake, provided: payload.stake }
+      "INSUFFICIENT_STAKE",
+      {
+        required: DISPUTE_ECONOMICS.minChallengeStake,
+        provided: payload.stake,
+      },
     );
   }
 
   // Validate initial evidence
   if (payload.initialEvidence.length === 0) {
     throw new DisputeError(
-      'At least one piece of initial evidence is required',
-      'INVALID_EVIDENCE'
+      "At least one piece of initial evidence is required",
+      "INVALID_EVIDENCE",
     );
   }
 
-  const now = Date.now();
-  const id = generateDisputeId();
+  // P0-D2 FIX: Use block number for deterministic timestamps (was Date.now())
+  const now = Number(currentBlock);
+  const id = generateDisputeId(
+    currentBlock,
+    payload.challenger,
+    payload.targetId,
+  );
   const phaseDeadline = currentBlock + BigInt(PHASE_DURATIONS.initiation);
 
   const dispute: Dispute = {
@@ -122,13 +128,13 @@ export function createDispute(
     },
 
     defender: {
-      did: '', // Set when defender responds
+      did: "", // Set when defender responds
       stake: 0n,
       responseEvidence: undefined,
     },
 
     state: {
-      phase: 'initiation',
+      phase: "initiation",
       phaseDeadline,
       canEscalate: false,
       escalationTier: 1,
@@ -161,21 +167,24 @@ export function defendDispute(
   defenderDid: string,
   stake: bigint,
   responseEvidence: string[],
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Dispute {
-  if (dispute.state.phase !== 'initiation') {
-    throw new DisputeError('Dispute is not in initiation phase', 'INVALID_PHASE');
+  if (dispute.state.phase !== "initiation") {
+    throw new DisputeError(
+      "Dispute is not in initiation phase",
+      "INVALID_PHASE",
+    );
   }
 
   if (currentBlock > dispute.state.phaseDeadline) {
-    throw new DisputeError('Initiation deadline has passed', 'DEADLINE_PASSED');
+    throw new DisputeError("Initiation deadline has passed", "DEADLINE_PASSED");
   }
 
   if (stake < dispute.challenger.stake) {
     throw new DisputeError(
-      'Defender stake must match challenger stake',
-      'INSUFFICIENT_STAKE',
-      { required: dispute.challenger.stake, provided: stake }
+      "Defender stake must match challenger stake",
+      "INSUFFICIENT_STAKE",
+      { required: dispute.challenger.stake, provided: stake },
     );
   }
 
@@ -186,7 +195,7 @@ export function defendDispute(
       stake,
       responseEvidence,
     },
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 }
 
@@ -198,27 +207,30 @@ export function defendDispute(
 export function commitEvidence(
   dispute: Dispute,
   payload: CommitEvidencePayload,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Dispute {
-  if (dispute.state.phase !== 'evidence_commit') {
-    throw new DisputeError('Not in evidence commit phase', 'INVALID_PHASE');
+  if (dispute.state.phase !== "evidence_commit") {
+    throw new DisputeError("Not in evidence commit phase", "INVALID_PHASE");
   }
 
   if (currentBlock > dispute.state.phaseDeadline) {
-    throw new DisputeError('Evidence commit deadline passed', 'DEADLINE_PASSED');
+    throw new DisputeError(
+      "Evidence commit deadline passed",
+      "DEADLINE_PASSED",
+    );
   }
 
   const isChallenger = payload.committer === dispute.challenger.did;
   const isDefender = payload.committer === dispute.defender.did;
 
   if (!isChallenger && !isDefender) {
-    throw new DisputeError('Not a party to this dispute', 'NOT_AUTHORIZED');
+    throw new DisputeError("Not a party to this dispute", "NOT_AUTHORIZED");
   }
 
-  const commitmentKey = isChallenger ? 'challenger' : 'defender';
+  const commitmentKey = isChallenger ? "challenger" : "defender";
 
   if (dispute.commitments[commitmentKey]) {
-    throw new DisputeError('Evidence already committed', 'ALREADY_COMMITTED');
+    throw new DisputeError("Evidence already committed", "ALREADY_COMMITTED");
   }
 
   const commitment = {
@@ -234,7 +246,7 @@ export function commitEvidence(
       ...dispute.commitments,
       [commitmentKey]: commitment,
     },
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 }
 
@@ -245,49 +257,68 @@ export function revealEvidence(
   dispute: Dispute,
   payload: RevealEvidencePayload,
   evidenceItems: Evidence[],
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Dispute {
-  if (dispute.state.phase !== 'evidence_reveal') {
-    throw new DisputeError('Not in evidence reveal phase', 'INVALID_PHASE');
+  if (dispute.state.phase !== "evidence_reveal") {
+    throw new DisputeError("Not in evidence reveal phase", "INVALID_PHASE");
   }
 
   if (currentBlock > dispute.state.phaseDeadline) {
-    throw new DisputeError('Evidence reveal deadline passed', 'DEADLINE_PASSED');
+    throw new DisputeError(
+      "Evidence reveal deadline passed",
+      "DEADLINE_PASSED",
+    );
   }
 
   const isChallenger = payload.revealer === dispute.challenger.did;
   const isDefender = payload.revealer === dispute.defender.did;
 
   if (!isChallenger && !isDefender) {
-    throw new DisputeError('Not a party to this dispute', 'NOT_AUTHORIZED');
+    throw new DisputeError("Not a party to this dispute", "NOT_AUTHORIZED");
   }
 
-  const commitmentKey = isChallenger ? 'challenger' : 'defender';
+  const commitmentKey = isChallenger ? "challenger" : "defender";
   const commitment = dispute.commitments[commitmentKey];
 
   if (!commitment) {
-    throw new DisputeError('No evidence commitment found', 'COMMITMENT_MISMATCH');
+    throw new DisputeError(
+      "No evidence commitment found",
+      "COMMITMENT_MISMATCH",
+    );
   }
 
   if (commitment.revealed) {
-    throw new DisputeError('Evidence already revealed', 'ALREADY_COMMITTED');
+    throw new DisputeError("Evidence already revealed", "ALREADY_COMMITTED");
   }
 
   // Verify commitment matches
-  const computedHash = generateEvidenceCommitment(payload.evidenceIds, payload.nonce);
-  if (!verifyEvidenceCommitment(payload.evidenceIds, payload.nonce, commitment.evidenceHash)) {
-    throw new DisputeError('Evidence does not match commitment', 'COMMITMENT_MISMATCH', {
-      expected: commitment.evidenceHash,
-      computed: computedHash,
-    });
+  const computedHash = generateEvidenceCommitment(
+    payload.evidenceIds,
+    payload.nonce,
+  );
+  if (
+    !verifyEvidenceCommitment(
+      payload.evidenceIds,
+      payload.nonce,
+      commitment.evidenceHash,
+    )
+  ) {
+    throw new DisputeError(
+      "Evidence does not match commitment",
+      "COMMITMENT_MISMATCH",
+      {
+        expected: commitment.evidenceHash,
+        computed: computedHash,
+      },
+    );
   }
 
   // Validate evidence
   const validation = validateDisputeEvidence(evidenceItems);
   if (!validation.valid) {
     throw new DisputeError(
-      `Invalid evidence: ${validation.errors.join(', ')}`,
-      'INVALID_EVIDENCE'
+      `Invalid evidence: ${validation.errors.join(", ")}`,
+      "INVALID_EVIDENCE",
     );
   }
 
@@ -301,7 +332,7 @@ export function revealEvidence(
         evidence: evidenceItems,
       },
     },
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 }
 
@@ -315,16 +346,25 @@ export function selectDisputeArbiters(
   validators: ValidatorState[],
   expertiseMap: Map<string, DomainExpertise[]>,
   blockHash: string,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Dispute {
-  const config = buildTierSelectionConfig(dispute, dispute.state.escalationTier, blockHash);
-  const arbiters = selectArbiters(validators, config, expertiseMap, currentBlock);
+  const config = buildTierSelectionConfig(
+    dispute,
+    dispute.state.escalationTier,
+    blockHash,
+  );
+  const arbiters = selectArbiters(
+    validators,
+    config,
+    expertiseMap,
+    currentBlock,
+  );
 
   return {
     ...dispute,
     arbiters,
     votes: new Map(), // Clear previous votes on new selection
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 }
 
@@ -335,25 +375,25 @@ export function castArbiterVote(
   dispute: Dispute,
   payload: ArbiterVotePayload,
   lockedStake: bigint,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Dispute {
-  if (dispute.state.phase !== 'arbitration') {
-    throw new DisputeError('Not in arbitration phase', 'INVALID_PHASE');
+  if (dispute.state.phase !== "arbitration") {
+    throw new DisputeError("Not in arbitration phase", "INVALID_PHASE");
   }
 
   if (currentBlock > dispute.state.phaseDeadline) {
-    throw new DisputeError('Arbitration deadline passed', 'DEADLINE_PASSED');
+    throw new DisputeError("Arbitration deadline passed", "DEADLINE_PASSED");
   }
 
   // Check arbiter is selected
-  const isArbiter = dispute.arbiters.some(a => a.did === payload.arbiter);
+  const isArbiter = dispute.arbiters.some((a) => a.did === payload.arbiter);
   if (!isArbiter) {
-    throw new DisputeError('Not selected as arbiter', 'NOT_ARBITER');
+    throw new DisputeError("Not selected as arbiter", "NOT_ARBITER");
   }
 
   // Check not already voted
   if (dispute.votes.has(payload.arbiter)) {
-    throw new DisputeError('Already voted', 'ALREADY_VOTED');
+    throw new DisputeError("Already voted", "ALREADY_VOTED");
   }
 
   const newVotes = new Map(dispute.votes);
@@ -368,7 +408,7 @@ export function castArbiterVote(
   return {
     ...dispute,
     votes: newVotes,
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 }
 
@@ -380,7 +420,7 @@ export function castArbiterVote(
 export function tryAdvancePhase(
   dispute: Dispute,
   currentBlock: bigint,
-  verifiedFactIds: Set<string>
+  verifiedFactIds: Set<string>,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   if (isTerminal(dispute)) {
     return { dispute, advanced: false };
@@ -393,22 +433,26 @@ export function tryAdvancePhase(
 
   // Check phase-specific advancement conditions
   switch (dispute.state.phase) {
-    case 'initiation':
+    case "initiation":
       return tryAdvanceFromInitiation(dispute, currentBlock);
 
-    case 'evidence_commit':
+    case "evidence_commit":
       return tryAdvanceFromEvidenceCommit(dispute, currentBlock);
 
-    case 'evidence_reveal':
-      return tryAdvanceFromEvidenceReveal(dispute, currentBlock, verifiedFactIds);
+    case "evidence_reveal":
+      return tryAdvanceFromEvidenceReveal(
+        dispute,
+        currentBlock,
+        verifiedFactIds,
+      );
 
-    case 'arbitration':
+    case "arbitration":
       return tryAdvanceFromArbitration(dispute, currentBlock);
 
-    case 'deliberation':
+    case "deliberation":
       return tryAdvanceFromDeliberation(dispute, currentBlock);
 
-    case 'settlement':
+    case "settlement":
       return tryAdvanceFromSettlement(dispute, currentBlock);
 
     default:
@@ -418,44 +462,52 @@ export function tryAdvancePhase(
 
 function tryAdvanceFromInitiation(
   dispute: Dispute,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   const check = canEnterEvidenceCommit(dispute);
   if (!check.canEnter) {
     return { dispute, advanced: false };
   }
 
-  const newState = advancePhase(dispute, 'evidence_commit', currentBlock);
-  const updated = { ...dispute, state: newState, updatedAt: Date.now() };
+  const newState = advancePhase(dispute, "evidence_commit", currentBlock);
+  const updated = {
+    ...dispute,
+    state: newState,
+    updatedAt: Number(currentBlock),
+  };
 
   return {
     dispute: updated,
     advanced: true,
-    event: createEvent('phase_advanced', dispute.id, currentBlock, {
-      from: 'initiation',
-      to: 'evidence_commit',
+    event: createEvent("phase_advanced", dispute.id, currentBlock, {
+      from: "initiation",
+      to: "evidence_commit",
     }),
   };
 }
 
 function tryAdvanceFromEvidenceCommit(
   dispute: Dispute,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   const check = canEnterEvidenceReveal(dispute);
   if (!check.canEnter) {
     return { dispute, advanced: false };
   }
 
-  const newState = advancePhase(dispute, 'evidence_reveal', currentBlock);
-  const updated = { ...dispute, state: newState, updatedAt: Date.now() };
+  const newState = advancePhase(dispute, "evidence_reveal", currentBlock);
+  const updated = {
+    ...dispute,
+    state: newState,
+    updatedAt: Number(currentBlock),
+  };
 
   return {
     dispute: updated,
     advanced: true,
-    event: createEvent('phase_advanced', dispute.id, currentBlock, {
-      from: 'evidence_commit',
-      to: 'evidence_reveal',
+    event: createEvent("phase_advanced", dispute.id, currentBlock, {
+      from: "evidence_commit",
+      to: "evidence_reveal",
     }),
   };
 }
@@ -463,7 +515,7 @@ function tryAdvanceFromEvidenceCommit(
 function tryAdvanceFromEvidenceReveal(
   dispute: Dispute,
   currentBlock: bigint,
-  verifiedFactIds: Set<string>
+  verifiedFactIds: Set<string>,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   // Check if both revealed
   if (
@@ -481,33 +533,33 @@ function tryAdvanceFromEvidenceReveal(
     challengerEvidence,
     defenderEvidence,
     currentBlock,
-    verifiedFactIds
+    verifiedFactIds,
   );
 
   let updated = {
     ...dispute,
     evidenceComparison: comparison,
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 
   // Check for auto-resolution
   const autoResult = getAutoResolutionResult(comparison);
   if (autoResult.canResolve && autoResult.winner) {
     // Skip arbitration, go directly to settlement
-    const newState = advancePhase(dispute, 'settlement', currentBlock);
+    const newState = advancePhase(dispute, "settlement", currentBlock);
     updated = {
       ...updated,
       state: newState,
       winner: autoResult.winner,
-      exposedFalsehood: autoResult.winner === 'challenger',
+      exposedFalsehood: autoResult.winner === "challenger",
     };
 
     return {
       dispute: updated,
       advanced: true,
-      event: createEvent('phase_advanced', dispute.id, currentBlock, {
-        from: 'evidence_reveal',
-        to: 'settlement',
+      event: createEvent("phase_advanced", dispute.id, currentBlock, {
+        from: "evidence_reveal",
+        to: "settlement",
         autoResolved: true,
         winner: autoResult.winner,
       }),
@@ -520,49 +572,53 @@ function tryAdvanceFromEvidenceReveal(
     return { dispute: updated, advanced: false };
   }
 
-  const newState = advancePhase(dispute, 'arbitration', currentBlock);
+  const newState = advancePhase(dispute, "arbitration", currentBlock);
   updated = { ...updated, state: newState };
 
   return {
     dispute: updated,
     advanced: true,
-    event: createEvent('phase_advanced', dispute.id, currentBlock, {
-      from: 'evidence_reveal',
-      to: 'arbitration',
+    event: createEvent("phase_advanced", dispute.id, currentBlock, {
+      from: "evidence_reveal",
+      to: "arbitration",
     }),
   };
 }
 
 function tryAdvanceFromArbitration(
   dispute: Dispute,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   const check = canEnterDeliberation(dispute);
   if (!check.canEnter) {
     return { dispute, advanced: false };
   }
 
-  const newState = advancePhase(dispute, 'deliberation', currentBlock);
-  const updated = { ...dispute, state: newState, updatedAt: Date.now() };
+  const newState = advancePhase(dispute, "deliberation", currentBlock);
+  const updated = {
+    ...dispute,
+    state: newState,
+    updatedAt: Number(currentBlock),
+  };
 
   return {
     dispute: updated,
     advanced: true,
-    event: createEvent('phase_advanced', dispute.id, currentBlock, {
-      from: 'arbitration',
-      to: 'deliberation',
+    event: createEvent("phase_advanced", dispute.id, currentBlock, {
+      from: "arbitration",
+      to: "deliberation",
     }),
   };
 }
 
 function tryAdvanceFromDeliberation(
   dispute: Dispute,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   // Determine winner from votes
   const winner = determineFinalWinner(dispute);
 
-  if (winner === 'draw' && canEscalate(dispute).canEscalate) {
+  if (winner === "draw" && canEscalate(dispute).canEscalate) {
     // Draw with escalation possible - wait for escalation or timeout
     return { dispute, advanced: false };
   }
@@ -572,21 +628,21 @@ function tryAdvanceFromDeliberation(
     return { dispute, advanced: false };
   }
 
-  const newState = advancePhase(dispute, 'settlement', currentBlock);
+  const newState = advancePhase(dispute, "settlement", currentBlock);
   const updated = {
     ...dispute,
     state: newState,
-    winner: winner === 'draw' ? undefined : winner,
-    exposedFalsehood: winner === 'challenger',
-    updatedAt: Date.now(),
+    winner: winner === "draw" ? undefined : winner,
+    exposedFalsehood: winner === "challenger",
+    updatedAt: Number(currentBlock),
   };
 
   return {
     dispute: updated,
     advanced: true,
-    event: createEvent('phase_advanced', dispute.id, currentBlock, {
-      from: 'deliberation',
-      to: 'settlement',
+    event: createEvent("phase_advanced", dispute.id, currentBlock, {
+      from: "deliberation",
+      to: "settlement",
       winner,
     }),
   };
@@ -594,20 +650,20 @@ function tryAdvanceFromDeliberation(
 
 function tryAdvanceFromSettlement(
   dispute: Dispute,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
-  const newState = advancePhase(dispute, 'resolved', currentBlock);
+  const newState = advancePhase(dispute, "resolved", currentBlock);
   const updated = {
     ...dispute,
     state: newState,
     resolvedAtBlock: currentBlock,
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 
   return {
     dispute: updated,
     advanced: true,
-    event: createEvent('dispute_resolved', dispute.id, currentBlock, {
+    event: createEvent("dispute_resolved", dispute.id, currentBlock, {
       winner: dispute.winner,
       tier: dispute.state.escalationTier,
     }),
@@ -618,25 +674,25 @@ function tryAdvanceFromSettlement(
 
 function handlePhaseTimeout(
   dispute: Dispute,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; advanced: boolean; event?: DisputeEvent } {
   const timeoutResult = handleTimeout(dispute, currentBlock);
 
   switch (timeoutResult.action) {
-    case 'default_judgment': {
-      const newState = advancePhase(dispute, 'settlement', currentBlock);
+    case "default_judgment": {
+      const newState = advancePhase(dispute, "settlement", currentBlock);
       const updated = {
         ...dispute,
         state: newState,
         winner: timeoutResult.winner,
-        outcome: 'timeout' as const,
-        updatedAt: Date.now(),
+        outcome: "timeout" as const,
+        updatedAt: Number(currentBlock),
       };
 
       return {
         dispute: updated,
         advanced: true,
-        event: createEvent('phase_advanced', dispute.id, currentBlock, {
+        event: createEvent("phase_advanced", dispute.id, currentBlock, {
           reason: timeoutResult.reason,
           winner: timeoutResult.winner,
           timeout: true,
@@ -644,14 +700,22 @@ function handlePhaseTimeout(
       };
     }
 
-    case 'advance': {
-      const newState = advancePhase(dispute, timeoutResult.nextPhase!, currentBlock);
-      const updated = { ...dispute, state: newState, updatedAt: Date.now() };
+    case "advance": {
+      const newState = advancePhase(
+        dispute,
+        timeoutResult.nextPhase!,
+        currentBlock,
+      );
+      const updated = {
+        ...dispute,
+        state: newState,
+        updatedAt: Number(currentBlock),
+      };
 
       return {
         dispute: updated,
         advanced: true,
-        event: createEvent('phase_advanced', dispute.id, currentBlock, {
+        event: createEvent("phase_advanced", dispute.id, currentBlock, {
           from: dispute.state.phase,
           to: timeoutResult.nextPhase,
           timeout: true,
@@ -659,24 +723,24 @@ function handlePhaseTimeout(
       };
     }
 
-    case 'forfeit': {
+    case "forfeit": {
       const newState: DisputeState = {
         ...dispute.state,
-        phase: 'resolved',
+        phase: "resolved",
         phaseDeadline: currentBlock,
       };
       const updated = {
         ...dispute,
         state: newState,
-        outcome: 'timeout' as const,
+        outcome: "timeout" as const,
         resolvedAtBlock: currentBlock,
-        updatedAt: Date.now(),
+        updatedAt: Number(currentBlock),
       };
 
       return {
         dispute: updated,
         advanced: true,
-        event: createEvent('dispute_resolved', dispute.id, currentBlock, {
+        event: createEvent("dispute_resolved", dispute.id, currentBlock, {
           reason: timeoutResult.reason,
           forfeit: true,
         }),
@@ -696,11 +760,11 @@ function handlePhaseTimeout(
 export function processEscalation(
   dispute: Dispute,
   payload: EscalateDisputePayload,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): { dispute: Dispute; event?: DisputeEvent } {
   const check = canPartyEscalate(dispute, payload.escalator, currentBlock);
   if (!check.canEscalate) {
-    throw new DisputeError(check.reason!, 'CANNOT_ESCALATE');
+    throw new DisputeError(check.reason!, "CANNOT_ESCALATE");
   }
 
   // Verify sufficient additional stake
@@ -708,8 +772,8 @@ export function processEscalation(
   if (payload.additionalStake < requiredStake) {
     throw new DisputeError(
       `Insufficient escalation stake. Required: ${requiredStake}`,
-      'INSUFFICIENT_STAKE',
-      { required: requiredStake, provided: payload.additionalStake }
+      "INSUFFICIENT_STAKE",
+      { required: requiredStake, provided: payload.additionalStake },
     );
   }
 
@@ -721,19 +785,25 @@ export function processEscalation(
     ...dispute,
     state: newState,
     challenger: isChallenger
-      ? { ...dispute.challenger, stake: dispute.challenger.stake + payload.additionalStake }
+      ? {
+          ...dispute.challenger,
+          stake: dispute.challenger.stake + payload.additionalStake,
+        }
       : dispute.challenger,
     defender: !isChallenger
-      ? { ...dispute.defender, stake: dispute.defender.stake + payload.additionalStake }
+      ? {
+          ...dispute.defender,
+          stake: dispute.defender.stake + payload.additionalStake,
+        }
       : dispute.defender,
     arbiters: [], // Clear arbiters for new tier
     votes: new Map(), // Clear votes for new tier
-    updatedAt: Date.now(),
+    updatedAt: Number(currentBlock),
   };
 
   return {
     dispute: updated,
-    event: createEvent('dispute_escalated', dispute.id, currentBlock, {
+    event: createEvent("dispute_escalated", dispute.id, currentBlock, {
       from: dispute.state.escalationTier,
       to: newState.escalationTier,
       escalator: payload.escalator,
@@ -747,9 +817,12 @@ export function processEscalation(
  * Calculate and return settlement for resolved dispute
  */
 export function getDisputeSettlement(
-  dispute: Dispute
+  dispute: Dispute,
 ): DisputeSettlement | null {
-  if (dispute.state.phase !== 'settlement' && dispute.state.phase !== 'resolved') {
+  if (
+    dispute.state.phase !== "settlement" &&
+    dispute.state.phase !== "resolved"
+  ) {
     return null;
   }
 
@@ -765,7 +838,7 @@ export function getDisputeSettlement(
  * Get draw settlement
  */
 export function getDrawSettlement(
-  dispute: Dispute
+  dispute: Dispute,
 ): ReturnType<typeof calculateDrawSettlement> | null {
   if (dispute.winner) {
     return null; // Has a winner, not a draw
@@ -782,7 +855,7 @@ export function getDrawSettlement(
 export function updateArbiterExpertise(
   dispute: Dispute,
   expertiseMap: Map<string, DomainExpertise[]>,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): Map<string, DomainExpertise[]> {
   if (!dispute.winner) {
     return expertiseMap; // No expertise update on draw
@@ -794,13 +867,18 @@ export function updateArbiterExpertise(
     const wasCorrect = vote.vote === dispute.winner;
     const existing = newMap.get(arbiterDid) || [];
 
-    const domainExpertise = existing.find(e => e.domain === dispute.domain);
-    const updated = updateExpertise(domainExpertise || null, dispute.domain, wasCorrect, currentBlock);
+    const domainExpertise = existing.find((e) => e.domain === dispute.domain);
+    const updated = updateExpertise(
+      domainExpertise || null,
+      dispute.domain,
+      wasCorrect,
+      currentBlock,
+    );
 
     if (domainExpertise) {
       // Update existing
-      const newExpertise = existing.map(e =>
-        e.domain === dispute.domain ? updated : e
+      const newExpertise = existing.map((e) =>
+        e.domain === dispute.domain ? updated : e,
       );
       newMap.set(arbiterDid, newExpertise);
     } else {
@@ -818,13 +896,13 @@ function createEvent(
   type: DisputeEventType,
   disputeId: string,
   blockNumber: bigint,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): DisputeEvent {
   return {
     type,
     disputeId,
     blockNumber,
-    timestamp: Date.now(),
+    timestamp: Number(blockNumber),
     data,
   };
 }

@@ -305,12 +305,13 @@ export class ContractIntegration {
       invocationCount: 0,
     };
 
-    // Create schedule
+    // Create schedule (pass invocation count as index to prevent nonce collisions)
     const scheduleMessage = this.createScheduleMessage(
       contract,
       invocation,
       sender,
       currentTime,
+      contract.invocations.length,
     );
 
     const scheduleProcess =

@@ -450,11 +450,11 @@ export function validateReviewerSet(
     });
   }
 
-  // Sort by priority
+  // Sort by priority with deterministic tiebreaker (DID lexicographic)
   selected.sort((a, b) => {
     if (a.priority < b.priority) return -1;
     if (a.priority > b.priority) return 1;
-    return 0;
+    return a.did < b.did ? -1 : a.did > b.did ? 1 : 0;
   });
 
   // Check operator distribution

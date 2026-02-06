@@ -110,9 +110,17 @@ export class GuardianAutonomyManager {
   private config: GuardianAutonomyConfig;
   private activeSchedules: Map<string, GuardianSchedule> = new Map();
   private scheduleCounter: number = 0;
+  private currentTime: number = 0;
 
   constructor(config: Partial<GuardianAutonomyConfig> = {}) {
     this.config = { ...DEFAULT_GUARDIAN_AUTONOMY_CONFIG, ...config };
+  }
+
+  /**
+   * Set current time for deterministic timestamps.
+   */
+  setCurrentTime(time: number): void {
+    this.currentTime = time;
   }
 
   // ============ Schedule Registration ============
@@ -183,7 +191,8 @@ export class GuardianAutonomyManager {
         time: {
           type: "absolute",
           executeAt:
-            Date.now() + Number(this.config.defenseResponseTimeout) * 2521,
+            this.currentTime +
+            Number(this.config.defenseResponseTimeout) * 2521,
         },
       },
       active: true,
@@ -463,7 +472,7 @@ export class GuardianAutonomyManager {
       data: functionSelector,
       scheduleCondition: schedule.condition,
       signature: emptySignature,
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
       scheduleType:
         schedule.condition.time?.type === "periodic"
           ? "time_periodic"

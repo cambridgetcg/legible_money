@@ -218,6 +218,29 @@ legible-money/
 
 ---
 
+## Agent Context (inject into subagent prompts)
+
+When spawning PP agents (Territory Scout, Pattern Archaeologist, etc.) for this project,
+include this block in the agent prompt as `{PROJECT_CONTEXT}`:
+
+```
+PROJECT CONTEXT (Legible Money):
+- BigInt for all monetary values (use bigIntReplacer for JSON serialization)
+- domainHash() returns Uint8Array (HashBytes), sha512_256Hex() returns string
+- Nonce: stake/unstake/transfer bump nonce; system transactions bypass nonce check
+- 15 state sub-roots: accounts, validators, facts, references, disputes, evidence,
+  vesting, research, claims, payment_channels, projects, services, governance, tasks, subscriptions
+- Storage namespaces: 0x01-0x0f (accounts through subscriptions)
+- Block time: 2521ms, finality depth: 19 blocks, BLOCKS_PER_DAY = 34272
+- Consensus: Proof of Truth (PoT) with commit-reveal verification rounds
+- Agent identity: 4-layer keys (identity → recovery → operational → session)
+- DID format: did:lgm:{32-hex} (canonical via publicKeyToDid)
+- Test runner: vitest, type check: tsc --noEmit
+- Treasury: FOUNDATION (did:lgm:protocol-treasury), RESEARCH (did:lgm:research)
+```
+
+---
+
 ## Session Continuity Protocol
 
 ### At Session Start

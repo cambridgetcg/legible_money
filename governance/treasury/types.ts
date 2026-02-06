@@ -84,28 +84,40 @@ export interface ExpenseRecord {
 /** Flat stake requirement for all disbursement proposals (2000 LGM) */
 export const DISBURSEMENT_STAKE = 2000n * 10n ** 18n;
 
-/** Voting thresholds for disbursement approval */
+/** Voting thresholds for disbursement approval (float, display-only) */
 export const DISBURSEMENT_THRESHOLDS = {
   supportRequired: 0.8, // 80% support to approve
   quorumRequired: 0.2, // 20% participation
   operatorCap: 0.15, // No single operator > 15%
 } as const;
 
+/** Voting thresholds in basis points for deterministic consensus math (10000 = 100%) */
+export const DISBURSEMENT_THRESHOLDS_BPS = {
+  supportRequired: 8000n, // 80%
+  quorumRequired: 2000n, // 20%
+  operatorCap: 1500n, // 15%
+} as const;
+
 /** Blocks between approval and earliest execution (~35 hours at 2521ms) */
 export const TIMELOCK_BLOCKS = 50000n;
 
-/** Maximum disbursement as fraction of source treasury balance */
-export const MAX_AMOUNT_RATIO = 0.1; // 10%
+/** Maximum disbursement as basis points of source treasury balance (10% = 1000/10000) */
+export const MAX_AMOUNT_BPS = 1000n;
 
-/** Basis points version of MAX_AMOUNT_RATIO for pure bigint math */
-export const MAX_AMOUNT_BPS = 1000n; // 10% = 1000/10000
-
-/** Slash rates for rejected disbursements */
+/** Slash rates for rejected disbursements (float, display-only) */
 export const DISBURSEMENT_SLASH_RATES = {
   malicious: 1.0, // 100% slash
   frivolous: 0.5, // 50% slash
   normal: 0.1, // 10% slash
   cancelled: 0.05, // 5% processing fee
+} as const;
+
+/** Slash rates in basis points for deterministic consensus math (10000 = 100%) */
+export const DISBURSEMENT_SLASH_BPS = {
+  malicious: 10000n, // 100%
+  frivolous: 5000n, // 50%
+  normal: 1000n, // 10%
+  cancelled: 500n, // 5%
 } as const;
 
 // ============ Validation Helpers ============

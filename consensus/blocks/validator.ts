@@ -367,10 +367,12 @@ export function quickValidateBlock(
     return { valid: false, reason: "Missing required fields" };
   }
 
-  // Check size (bigintReplacer prevents BigInt serialization crash)
-  const size = JSON.stringify(block, (_k, v) =>
-    typeof v === "bigint" ? v.toString() : v,
-  ).length;
+  // P1-B1 FIX: Use byte length, not character count (bigintReplacer prevents crash)
+  const size = new TextEncoder().encode(
+    JSON.stringify(block, (_k, v) =>
+      typeof v === "bigint" ? v.toString() : v,
+    ),
+  ).byteLength;
   if (size > BLOCK_LIMITS.MAX_BLOCK_SIZE_BYTES) {
     return { valid: false, reason: "Block too large" };
   }

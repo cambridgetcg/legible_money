@@ -81,8 +81,10 @@ export function validateMessageBase(
     errors.push("Message sender is missing");
   }
 
-  // Check timestamp for replay protection
-  if (message.timestamp) {
+  // Check timestamp for replay protection (mandatory)
+  if (!message.timestamp) {
+    errors.push("Message timestamp is missing");
+  } else {
     const now = Date.now();
     const messageAge = now - message.timestamp;
 

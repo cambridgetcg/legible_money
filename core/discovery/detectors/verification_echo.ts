@@ -51,7 +51,9 @@ export function detectVerificationEcho(
     if (mutual.length < 4) continue;
 
     // Sort by timestamp to get chronological order
-    mutual.sort((a, b) => a.timestamp - b.timestamp);
+    mutual.sort(
+      (a, b) => a.timestamp - b.timestamp || a.claimId.localeCompare(b.claimId),
+    );
 
     // Check sliding windows for the discovery pattern
     for (let i = 0; i <= mutual.length - 4; i++) {

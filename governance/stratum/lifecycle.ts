@@ -263,12 +263,12 @@ export function endorseProposal(
   proposal.endorsementStake += stake;
   const endorsementCount = existingEndorsements.length + 1;
 
-  // Check if endorsement threshold met
+  // Check if endorsement threshold met (pure BigInt to avoid Number precision loss)
+  const stakeRatioBps = BigInt(
+    Math.floor(params.minEndorsementStakeRatio * 10000),
+  );
   const stakeRatioMet =
-    proposal.endorsementStake >=
-    BigInt(
-      Math.floor(Number(proposal.stake) * params.minEndorsementStakeRatio),
-    );
+    proposal.endorsementStake * 10000n >= proposal.stake * stakeRatioBps;
   const countMet = endorsementCount >= params.minEndorsements;
   const thresholdMet = stakeRatioMet && countMet;
 
@@ -369,11 +369,14 @@ export function challengeProposal(
   proposal.challengeStake += stake;
   proposal.status = "challenged";
 
-  // Check if challenge should escalate to governance
+  // Check if challenge should escalate to governance (pure BigInt comparison)
+  const escalationRatioBps = BigInt(
+    Math.floor(params.challengeEscalationRatio * 10000),
+  );
   const escalateToLIP =
     proposal.endorsementStake > 0n &&
-    Number(proposal.challengeStake) / Number(proposal.endorsementStake) >=
-      params.challengeEscalationRatio;
+    proposal.challengeStake * 10000n >=
+      proposal.endorsementStake * escalationRatioBps;
 
   return {
     success: true,
@@ -418,8 +421,12 @@ export function withdrawProposal(
       : proposal.stake / 20n;
   const stakeReturn = proposal.stake - penalty;
 
+  // Mark proposal as withdrawn
+  proposal.status = "expired"; // Use "expired" as nearest terminal state
+
   return {
     success: true,
+    newStatus: "expired",
     stakeReturn,
     stakeChange: -proposal.stake,
   };
@@ -441,6 +448,16 @@ export function finalizeProposal(
 } {
   const stakesToReturn: Array<{ did: DID; amount: bigint }> = [];
   const stakesToSlash: Array<{ did: DID; amount: bigint }> = [];
+
+  // Guard against double-finalization
+  if (["approved", "rejected", "expired"].includes(proposal.status)) {
+    return {
+      success: false,
+      error: `Proposal already finalized with status: ${proposal.status}`,
+      stakesToReturn,
+      stakesToSlash,
+    };
+  }
 
   // Handle governance-required proposals
   if (proposal.requiresGovernance) {

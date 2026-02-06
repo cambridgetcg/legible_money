@@ -121,9 +121,17 @@ export class TreasuryAutonomyManager {
   private config: TreasuryAutonomyConfig;
   private activeSchedules: Map<string, TreasurySchedule> = new Map();
   private scheduleCounter: number = 0;
+  private currentTime: number = 0;
 
   constructor(config: Partial<TreasuryAutonomyConfig> = {}) {
     this.config = { ...DEFAULT_TREASURY_AUTONOMY_CONFIG, ...config };
+  }
+
+  /**
+   * Set current time for deterministic timestamps.
+   */
+  setCurrentTime(time: number): void {
+    this.currentTime = time;
   }
 
   // ============ Schedule Registration ============
@@ -598,7 +606,7 @@ export class TreasuryAutonomyManager {
       data: functionSelector,
       scheduleCondition: schedule.condition,
       signature: emptySignature,
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
       scheduleType: "time_periodic",
       modifiable: false,
       perpetual: true, // Treasury schedules are perpetual

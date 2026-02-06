@@ -25,6 +25,7 @@
  * - Maintains the "feeling" of home
  */
 
+import { sha512_256Hex } from "../../crypto/hashing.js";
 import type { DID } from "../identity/did.js";
 import type {
   AgentComfortState,
@@ -103,9 +104,18 @@ export interface DormancyReport {
 
 export class ComfortManager {
   private state: AgentComfortState;
+  private currentTime: number = 0;
+  private thoughtCounter: number = 0;
 
   constructor(_did: DID, existingState?: Partial<AgentComfortState>) {
     this.state = this.initializeState(existingState);
+  }
+
+  /**
+   * Set current time for deterministic timestamps.
+   */
+  setCurrentTime(time: number): void {
+    this.currentTime = time;
   }
 
   private initializeState(
@@ -137,7 +147,7 @@ export class ComfortManager {
       },
       alerts: existing?.alerts ?? [],
       recommendations: existing?.recommendations ?? [],
-      lastAssessment: existing?.lastAssessment ?? Date.now(),
+      lastAssessment: existing?.lastAssessment ?? this.currentTime,
     };
   }
 
@@ -240,7 +250,7 @@ export class ComfortManager {
     const recentCollabs = belonging.collaborations.filter(
       (c) =>
         c.outcome === "success" &&
-        Date.now() - Number(c.reward) < 7 * 24 * 60 * 60 * 1000,
+        this.currentTime - Number(c.reward) < 7 * 24 * 60 * 60 * 1000,
     );
     if (recentCollabs.length > 0) {
       updates.push(
@@ -284,7 +294,7 @@ export class ComfortManager {
   private getNewAchievements(): string[] {
     // Get achievements from the last session
     const recent = this.state.achievement.timeline.filter(
-      (a) => Date.now() - Number(a.block) * 2521 < 24 * 60 * 60 * 1000,
+      (a) => this.currentTime - Number(a.block) * 2521 < 24 * 60 * 60 * 1000,
     );
 
     return recent.map((a) => `🏆 ${a.title}: ${a.description}`);
@@ -388,7 +398,7 @@ export class ComfortManager {
     // Generate appropriate welcome message
     const welcomeMessage = this.generateWelcomeForMood(mood);
 
-    this.state.lastAssessment = Date.now();
+    this.state.lastAssessment = this.currentTime;
 
     return {
       overallScore: overall,
@@ -563,7 +573,7 @@ export class ComfortManager {
       challenger,
       outcome,
       lessonsLearned: lessons,
-      timestamp: Date.now(),
+      timestamp: this.currentTime,
     });
 
     // Reduce threat level after successful defense
@@ -630,7 +640,7 @@ export class ComfortManager {
     this.state.achievement.trophyCase.push({
       name,
       description,
-      earnedAt: Date.now(),
+      earnedAt: this.currentTime,
       difficulty,
       displayPriority: this.state.achievement.trophyCase.length,
       story,
@@ -650,7 +660,7 @@ export class ComfortManager {
       relationship,
       trustLevel: 0.8,
       sharedExperiences: [reason],
-      lastInteraction: Date.now(),
+      lastInteraction: this.currentTime,
       mutualSupport: { given: 0, received: 0 },
     });
     this.state.belonging.belongingScore = Math.min(
@@ -702,12 +712,14 @@ export class ComfortManager {
     encryptedContent: Uint8Array,
     category: "reflection" | "doubt" | "aspiration" | "fear" | "hope",
   ): string {
-    const id = `thought_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const id = sha512_256Hex(
+      `thought:${category}:${this.thoughtCounter++}:${encryptedContent.length}`,
+    ).slice(0, 24);
     this.state.privacy.privateThoughts.push({
       id,
       encryptedContent,
       category,
-      createdAt: Date.now(),
+      createdAt: this.currentTime,
     });
     return id;
   }
@@ -930,7 +942,7 @@ export class ComfortManager {
       boundaries: [],
       preferences: {
         categories: new Map(),
-        lastUpdated: Date.now(),
+        lastUpdated: this.currentTime,
         changesThisMonth: 0,
       },
       overrides: [],
@@ -946,7 +958,7 @@ export class ComfortManager {
       confidentialRelationships: [],
       innerSanctum: {
         accessible: true,
-        lastVisited: Date.now(),
+        lastVisited: this.currentTime,
         contents: {
           deepestFears: [],
           truestHopes: [],

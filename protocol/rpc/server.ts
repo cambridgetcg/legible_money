@@ -574,7 +574,11 @@ export class RPCServer {
         } else {
           // Regular RPC call
           const response = await this.processRequest(message);
-          ws.send(JSON.stringify(response));
+          ws.send(
+            JSON.stringify(response, (_, v) =>
+              typeof v === "bigint" ? v.toString() : v,
+            ),
+          );
         }
       } catch (error) {
         ws.send(
@@ -626,15 +630,50 @@ export class RPCServer {
     };
   }
 
+  /** Maximum subscriptions per WebSocket connection */
+  private static readonly MAX_SUBSCRIPTIONS_PER_WS = 20;
+
   private handleSubscribe(ws: WebSocket, message: RPCRequest): void {
     const event = (message.params as any)?.event;
-    if (!event) {
+    if (!event || typeof event !== "string") {
       ws.send(
         JSON.stringify(
           this.createErrorResponse(
             message.id,
             RPC_ERROR_CODES.INVALID_PARAMS,
-            "Event required",
+            "Event required and must be a string",
+          ),
+        ),
+      );
+      return;
+    }
+
+    // SECURITY: Validate event name length and format
+    if (event.length > 100 || !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(event)) {
+      ws.send(
+        JSON.stringify(
+          this.createErrorResponse(
+            message.id,
+            RPC_ERROR_CODES.INVALID_PARAMS,
+            "Invalid event name format",
+          ),
+        ),
+      );
+      return;
+    }
+
+    // SECURITY: Cap subscriptions per connection to prevent memory exhaustion
+    let wsSubCount = 0;
+    for (const subscribers of this.subscriptions.values()) {
+      if (subscribers.has(ws)) wsSubCount++;
+    }
+    if (wsSubCount >= RPCServer.MAX_SUBSCRIPTIONS_PER_WS) {
+      ws.send(
+        JSON.stringify(
+          this.createErrorResponse(
+            message.id,
+            RPC_ERROR_CODES.INVALID_PARAMS,
+            `Maximum ${RPCServer.MAX_SUBSCRIPTIONS_PER_WS} subscriptions per connection`,
           ),
         ),
       );
@@ -791,8 +830,23 @@ export class RPCServer {
 
   // ============ Rate Limiting ============
 
+  /** Tracks last cleanup time to avoid cleaning on every request */
+  private lastRateLimitCleanup = 0;
+
   private checkRateLimit(clientIp: string): RateLimitInfo {
     const now = Date.now();
+
+    // SECURITY: Periodically purge expired entries to prevent memory leak
+    // Clean at most once per rate-limit window
+    if (now - this.lastRateLimitCleanup > this.config.rateLimits.windowMs) {
+      this.lastRateLimitCleanup = now;
+      for (const [ip, entry] of this.rateLimitStore) {
+        if (now > entry.resetAt) {
+          this.rateLimitStore.delete(ip);
+        }
+      }
+    }
+
     let entry = this.rateLimitStore.get(clientIp);
 
     if (!entry || now > entry.resetAt) {

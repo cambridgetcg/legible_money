@@ -50,7 +50,10 @@ export function detectStakeSpiral(
     for (let j = 0; j < 4; j++) {
       const expected = spiral[j] * scale;
       const actual = window[j];
-      const tolerance = expected / BigInt(Math.floor(100 / tolerancePercent));
+      // tolerancePercent must be a positive integer to avoid non-deterministic BigInt conversion
+      const toleranceDivisor = Math.trunc(100 / Math.trunc(tolerancePercent));
+      const tolerance =
+        toleranceDivisor > 0 ? expected / BigInt(toleranceDivisor) : 0n;
 
       const isMatch =
         actual >= expected - tolerance && actual <= expected + tolerance;

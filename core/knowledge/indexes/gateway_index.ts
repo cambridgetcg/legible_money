@@ -291,8 +291,11 @@ export class GatewayDomainIndex {
       }
     }
 
-    // Sort by gateway score
-    matchingGateways.sort((a, b) => b.gatewayScore - a.gatewayScore);
+    // Sort by gateway score with domainId tiebreaker for determinism
+    matchingGateways.sort(
+      (a, b) =>
+        b.gatewayScore - a.gatewayScore || a.domainId.localeCompare(b.domainId),
+    );
 
     // Cache the result
     this.gatewayPaths.set(
@@ -324,7 +327,10 @@ export class GatewayDomainIndex {
       }
     }
 
-    return result.sort((a, b) => b.gatewayScore - a.gatewayScore);
+    return result.sort(
+      (a, b) =>
+        b.gatewayScore - a.gatewayScore || a.domainId.localeCompare(b.domainId),
+    );
   }
 
   /**
@@ -346,7 +352,11 @@ export class GatewayDomainIndex {
    */
   getTopGateways(limit: number = 10): GatewayDomainInfo[] {
     return Array.from(this.gateways.values())
-      .sort((a, b) => b.gatewayScore - a.gatewayScore)
+      .sort(
+        (a, b) =>
+          b.gatewayScore - a.gatewayScore ||
+          a.domainId.localeCompare(b.domainId),
+      )
       .slice(0, limit);
   }
 

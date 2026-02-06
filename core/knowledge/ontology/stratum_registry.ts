@@ -416,7 +416,7 @@ export class StratumRegistry {
    */
   getAllIds(): string[] {
     return this.getAll()
-      .sort((a, b) => a.level - b.level)
+      .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
       .map((s) => s.id);
   }
 

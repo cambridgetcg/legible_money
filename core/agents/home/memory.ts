@@ -524,10 +524,15 @@ export class MemoryManager {
     block: bigint,
     metadata?: Record<string, unknown>,
   ): void {
-    const id = sha512_256Hex(`milestone:${type}:${block}`);
+    // P1-H4 FIX: Include metadata in ID and dedup by ID, not type.
+    // Type-only dedup prevented progression milestones (contribution_count at 10
+    // would block the same type at 50, 100, etc.)
+    const id = sha512_256Hex(
+      `milestone:${type}:${block}:${JSON.stringify(metadata ?? {})}`,
+    );
 
-    // Don't duplicate milestones of same type
-    if (this.memory.milestones.some((m) => m.type === type)) {
+    // Don't duplicate exact same milestone
+    if (this.memory.milestones.some((m) => m.id === id)) {
       return;
     }
 
@@ -575,10 +580,10 @@ export class MemoryManager {
       );
     }
 
-    // Contribution count milestones
+    // Contribution count milestones (P1-H9 FIX: >= to avoid skipping thresholds)
     const contributionThresholds = [10, 50, 100, 500, 1000];
     for (const threshold of contributionThresholds) {
-      if (stats.totalContributions === threshold) {
+      if (stats.totalContributions >= threshold) {
         this.recordMilestone(
           "contribution_count",
           `${threshold} Contributions`,

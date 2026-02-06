@@ -26,6 +26,7 @@ import type {
   DeduplicationConfig,
 } from "./types.js";
 import { DEFAULT_DEDUPLICATION_CONFIG, EVIDENCE_ANTI_GAMING } from "./types.js";
+import { sha512_256Hex } from "../../core/crypto/hashing.js";
 
 // ============ Fingerprint Generation ============
 
@@ -34,15 +35,7 @@ import { DEFAULT_DEDUPLICATION_CONFIG, EVIDENCE_ANTI_GAMING } from "./types.js";
  * This is deterministic and collision-resistant
  */
 export function generateContentHash(content: string): string {
-  // In production, use proper crypto library
-  // For now, simple hash simulation
-  let hash = 0;
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16).padStart(16, "0");
+  return sha512_256Hex(content);
 }
 
 /**
@@ -246,6 +239,12 @@ export function generateFingerprint(
  */
 function hammingDistance(hash1: string, hash2: string): number {
   const maxLen = Math.max(hash1.length, hash2.length);
+
+  // P0-E3 FIX: Guard against division by zero when both hashes are empty
+  if (maxLen === 0) {
+    return 0;
+  }
+
   const h1 = hash1.padStart(maxLen, "0");
   const h2 = hash2.padStart(maxLen, "0");
 
@@ -528,9 +527,9 @@ export function calculateConfirmationCredit(
     EVIDENCE_ANTI_GAMING.MAX_CONFIRMATION_CREDIT,
   );
 
-  const confirmerCredit = BigInt(
-    Math.floor(Number(baseReward) * confirmerRate),
-  );
+  // P1-E3 FIX: Use basis-point arithmetic to avoid BigInt→Number precision loss
+  const rateBps = BigInt(Math.round(confirmerRate * 10000));
+  const confirmerCredit = (baseReward * rateBps) / 10000n;
   const originalCredit = baseReward - confirmerCredit;
 
   return { originalCredit, confirmerCredit };

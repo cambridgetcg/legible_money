@@ -431,8 +431,10 @@ async function executeTreeTransaction(
 ): Promise<TreeWriteResponse> {
   const { executeTransaction } = await import("../../../state/transitions.js");
 
+  // Use block number instead of Date.now() for deterministic tx hashes
+  const blockNumber_hash = ctx.state.getBlockNumber();
   const txHash = sha512_256Hex(
-    `tree:${txType}:${sender}:${nonce}:${Date.now()}`,
+    `tree:${txType}:${sender}:${nonce}:${blockNumber_hash}`,
   );
   const blockNumber = ctx.state.getBlockNumber();
 
@@ -519,7 +521,7 @@ export const treeListProjects: Handler<
   }
 
   const offset = params.offset ?? 0;
-  const limit = params.limit ?? 50;
+  const limit = Math.min(params.limit ?? 50, 100);
   const limited = projects.slice(offset, offset + limit);
 
   return {
@@ -581,7 +583,7 @@ export const treeListServices: Handler<
   }
 
   const offset = params.offset ?? 0;
-  const limit = params.limit ?? 50;
+  const limit = Math.min(params.limit ?? 50, 100);
   const limited = services.slice(offset, offset + limit);
 
   return {
@@ -678,7 +680,7 @@ export const treeGetOpportunities: Handler<
   }
 
   const offset = params.offset ?? 0;
-  const limit = params.limit ?? 50;
+  const limit = Math.min(params.limit ?? 50, 100);
   const limited = filtered.slice(offset, offset + limit);
 
   return {
@@ -716,7 +718,7 @@ export const treeListDomainProposals: Handler<
   }
 
   const offset = params.offset ?? 0;
-  const limit = params.limit ?? 50;
+  const limit = Math.min(params.limit ?? 50, 100);
   const page = proposals.slice(offset, offset + limit);
 
   return {

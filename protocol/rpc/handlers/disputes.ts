@@ -21,6 +21,7 @@ import type {
 import { RPC_ERROR_CODES } from "../../types.js";
 import { verify } from "../../../core/crypto/signatures.js";
 import { sha512_256Hex } from "../../../core/crypto/hashing.js";
+import { parsePositiveBigInt } from "../validation.js";
 
 // ============ Helper ============
 
@@ -96,7 +97,7 @@ export const lgmOpenDispute: Handler<
   }
 
   // Check stake balance
-  const stake = BigInt(params.stake);
+  const stake = parsePositiveBigInt(params.stake, "stake");
   if (account.balance < stake) {
     throw createRPCError(
       RPC_ERROR_CODES.INSUFFICIENT_BALANCE,
@@ -180,9 +181,10 @@ export const lgmSubmitEvidence: Handler<
     );
   }
 
-  // Generate transaction hash
+  // Generate deterministic transaction hash (Date.now() would cause node disagreement)
+  const blockNumber_hash = ctx.state.getBlockNumber();
   const txHash = sha512_256Hex(
-    `tx:dispute_${params.phase}_evidence:${params.disputeId}:${senderDid}:${Date.now()}`,
+    `tx:dispute_${params.phase}_evidence:${params.disputeId}:${senderDid}:${blockNumber_hash}`,
   );
 
   // Execute evidence submission

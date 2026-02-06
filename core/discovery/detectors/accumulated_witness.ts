@@ -34,12 +34,23 @@ export function detectAccumulatedWitness(
     };
   }
 
-  // Calculate ratio
+  // Calculate ratio using integer arithmetic for deterministic comparison.
+  // targetRatio = 2.521, tolerance = 0.01
+  // Check: |totalVerifications/totalClaims - 2.521| <= 0.01
+  // Equivalent: totalVerifications * 10000 >= totalClaims * (25210 - 100)
+  //         AND totalVerifications * 10000 <= totalClaims * (25210 + 100)
+  const targetRatioBps = 25210; // 2.521 * 10000
+  const toleranceBps = Math.round(tolerance * 10000); // 0.01 * 10000 = 100
+
+  const scaledVerifications = totalVerifications * 10000;
+  const lowerBound = totalClaims * (targetRatioBps - toleranceBps);
+  const upperBound = totalClaims * (targetRatioBps + toleranceBps);
+
+  // For display purposes (informational only, not used in detection decision)
   const ratio = totalVerifications / totalClaims;
   const targetRatio = SYMBOLIC_CONSTANTS.TARGET_RATIO; // 2.521
 
-  // Check if ratio is close to target
-  if (Math.abs(ratio - targetRatio) <= tolerance) {
+  if (scaledVerifications >= lowerBound && scaledVerifications <= upperBound) {
     return {
       detected: true,
       mechanic: "accumulated_witness",

@@ -43,6 +43,14 @@ import {
   verifyEvidenceCommitment,
 } from "../../../core/dispute/evidence_comparison.js";
 import {
+  calculateSettlement,
+  calculateBaseReward,
+  calculateLoserPenalty,
+  qualifiesForEarlyDetection,
+} from "../../../core/dispute/settlement.js";
+import { canPartyEscalate } from "../../../core/dispute/escalation.js";
+import { calculateArbiterWeight } from "../../../core/dispute/arbitrator_selection.js";
+import {
   DISPUTE_ECONOMICS,
   PHASE_DURATIONS,
   ESCALATION_TIERS,
@@ -302,13 +310,19 @@ describe("GAP-003: Dispute Engine", () => {
     });
 
     it("should generate unique dispute IDs", () => {
-      const id1 = generateDisputeId();
-      const id2 = generateDisputeId();
-      const id3 = generateDisputeId();
+      const id1 = generateDisputeId(100n, "did:lgm:challenger1", "target1");
+      const id2 = generateDisputeId(100n, "did:lgm:challenger2", "target1");
+      const id3 = generateDisputeId(101n, "did:lgm:challenger1", "target1");
 
       expect(id1).not.toBe(id2);
       expect(id2).not.toBe(id3);
       expect(id1).toMatch(/^dispute_/);
+    });
+
+    it("should generate deterministic dispute IDs for same inputs", () => {
+      const id1 = generateDisputeId(100n, "did:lgm:challenger1", "target1");
+      const id2 = generateDisputeId(100n, "did:lgm:challenger1", "target1");
+      expect(id1).toBe(id2);
     });
 
     it("should set correct phase deadline", () => {
@@ -957,10 +971,11 @@ describe("GAP-003: Dispute Engine", () => {
     it("should process valid escalation", () => {
       const dispute = setupDisputeInPhase("deliberation");
 
+      // Escalate as defender (the losing party — winners cannot escalate)
       const { dispute: escalated, event } = processEscalation(
         dispute,
         {
-          escalator: dispute.challenger.did,
+          escalator: dispute.defender.did,
           additionalStake: DISPUTE_ECONOMICS.minChallengeStake * 2n,
         },
         200n,
@@ -977,11 +992,12 @@ describe("GAP-003: Dispute Engine", () => {
     it("should reject escalation with insufficient additional stake", () => {
       const dispute = setupDisputeInPhase("deliberation");
 
+      // Escalate as defender (loser) with insufficient stake
       expect(() =>
         processEscalation(
           dispute,
           {
-            escalator: dispute.challenger.did,
+            escalator: dispute.defender.did,
             additionalStake: 1n, // Too low
           },
           200n,
@@ -1252,6 +1268,198 @@ describe("GAP-003: Dispute Engine", () => {
 
       const winner = determineFinalWinner(dispute);
       expect(winner).toBe("draw");
+    });
+  });
+
+  // ============ PP Review Hardening Tests ============
+
+  describe("PP Review: Settlement Economics (P0-D1)", () => {
+    it("should compute winner reward from penalty, not full stake", () => {
+      // Set up a resolved dispute where challenger wins
+      let dispute = setupDisputeInPhase("deliberation");
+      dispute = { ...dispute, winner: "challenger", exposedFalsehood: false };
+
+      const loser = "defender";
+      const { penalty } = calculateLoserPenalty(dispute, loser);
+
+      // Penalty should be 50% of defender stake (false claim slash)
+      const defenderStake = dispute.defender.stake;
+      const expectedPenalty =
+        (defenderStake *
+          BigInt(Math.floor(PUNISHMENT_RATES.falseClaimSlash * 100))) /
+        100n;
+      expect(penalty).toBe(expectedPenalty);
+
+      // Base reward should be 66% of PENALTY (not full stake)
+      const baseReward = calculateBaseReward(penalty);
+      const expectedReward =
+        (penalty * BigInt(Math.floor(REWARD_RATES.winnerShare * 100))) / 100n;
+      expect(baseReward).toBe(expectedReward);
+
+      // Crucially: reward must be less than penalty
+      expect(baseReward).toBeLessThan(penalty);
+    });
+
+    it("should not create money from nothing in full settlement", () => {
+      let dispute = setupDisputeInPhase("deliberation");
+      dispute = { ...dispute, winner: "challenger", exposedFalsehood: false };
+
+      const settlement = calculateSettlement(dispute);
+
+      // Winner reward must not exceed loser penalty
+      expect(settlement.winnerReward).toBeLessThanOrEqual(
+        settlement.loserPenalty,
+      );
+    });
+  });
+
+  describe("PP Review: Early Detection Bonus (P1-D1)", () => {
+    it("should not grant early detection bonus without evidence timing data", () => {
+      let dispute = setupDisputeInPhase("deliberation");
+      dispute = { ...dispute, winner: "challenger" };
+
+      // Early detection should return false until proper tracking implemented
+      expect(qualifiesForEarlyDetection(dispute)).toBe(false);
+    });
+
+    it("should not grant early detection when defender wins", () => {
+      let dispute = setupDisputeInPhase("deliberation");
+      dispute = { ...dispute, winner: "defender" };
+
+      expect(qualifiesForEarlyDetection(dispute)).toBe(false);
+    });
+  });
+
+  describe("PP Review: Escalation Loser Check (P1-D2)", () => {
+    it("should prevent winner from escalating at tier 1", () => {
+      let dispute = setupDisputeInPhase("deliberation");
+
+      // Add votes where challenger is winning
+      const votes = new Map();
+      votes.set("did:lgm:arbiter-1", {
+        arbiter: "did:lgm:arbiter-1",
+        vote: "challenger",
+        justificationHash: "j1",
+        votedAtBlock: 100n,
+        lockedStake: 77n * 10n ** 18n,
+      });
+      votes.set("did:lgm:arbiter-2", {
+        arbiter: "did:lgm:arbiter-2",
+        vote: "challenger",
+        justificationHash: "j2",
+        votedAtBlock: 100n,
+        lockedStake: 77n * 10n ** 18n,
+      });
+      votes.set("did:lgm:arbiter-3", {
+        arbiter: "did:lgm:arbiter-3",
+        vote: "defender",
+        justificationHash: "j3",
+        votedAtBlock: 100n,
+        lockedStake: 77n * 10n ** 18n,
+      });
+      dispute = { ...dispute, votes };
+
+      // Challenger is winning — should NOT be able to escalate
+      const challengerResult = canPartyEscalate(
+        dispute,
+        dispute.challenger.did,
+        200n,
+      );
+      expect(challengerResult.canEscalate).toBe(false);
+      expect(challengerResult.reason).toBe("Winners cannot escalate");
+    });
+
+    it("should allow loser to escalate at tier 1", () => {
+      let dispute = setupDisputeInPhase("deliberation");
+
+      // Add votes where challenger is winning (defender is losing)
+      const votes = new Map();
+      votes.set("did:lgm:arbiter-1", {
+        arbiter: "did:lgm:arbiter-1",
+        vote: "challenger",
+        justificationHash: "j1",
+        votedAtBlock: 100n,
+        lockedStake: 77n * 10n ** 18n,
+      });
+      votes.set("did:lgm:arbiter-2", {
+        arbiter: "did:lgm:arbiter-2",
+        vote: "defender",
+        justificationHash: "j2",
+        votedAtBlock: 100n,
+        lockedStake: 77n * 10n ** 18n,
+      });
+      dispute = { ...dispute, votes };
+
+      // Defender is losing — should be able to escalate
+      const defenderResult = canPartyEscalate(
+        dispute,
+        dispute.defender.did,
+        200n,
+      );
+      // This checks that the loser CAN escalate (no "Winners cannot escalate" block)
+      // It may still fail for other reasons (appeal window etc), but not the winner check
+      if (!defenderResult.canEscalate) {
+        expect(defenderResult.reason).not.toBe("Winners cannot escalate");
+      }
+    });
+  });
+
+  describe("PP Review: Arbiter Weight Precision (P1-D4)", () => {
+    it("should compute stake ratio without precision loss for large stakes", () => {
+      const validator = {
+        did: "did:lgm:validator-1",
+        publicKey: "pubkey-1",
+        stake: 1000n * 10n ** 18n, // 1000 LGM
+        reputation: 0.9,
+        isActive: true,
+        registeredAtBlock: 0n,
+        lastActiveBlock: 100n,
+      };
+
+      const config = {
+        targetCount: 7,
+        vrfSeed: new Uint8Array(32),
+        domainWeighting: false,
+        stakeWeighting: true,
+        minReputation: 0.5,
+        domain: "science",
+        excludeValidators: new Set<string>(),
+      };
+
+      const weight = calculateArbiterWeight(validator, config, null, 100n);
+
+      // 1000 LGM / 77 LGM ≈ 12.987 → sqrt ≈ 3.604
+      // weight = 0.9 (reputation) × 3.604 ≈ 3.243
+      expect(weight).toBeGreaterThan(3.0);
+      expect(weight).toBeLessThan(3.5);
+    });
+
+    it("should handle minimum stake validators correctly", () => {
+      const validator = {
+        did: "did:lgm:validator-min",
+        publicKey: "pubkey-min",
+        stake: DISPUTE_ECONOMICS.minArbiterStake, // Exactly 77 LGM
+        reputation: 1.0,
+        isActive: true,
+        registeredAtBlock: 0n,
+        lastActiveBlock: 100n,
+      };
+
+      const config = {
+        targetCount: 7,
+        vrfSeed: new Uint8Array(32),
+        domainWeighting: false,
+        stakeWeighting: true,
+        minReputation: 0.5,
+        domain: "science",
+        excludeValidators: new Set<string>(),
+      };
+
+      const weight = calculateArbiterWeight(validator, config, null, 100n);
+
+      // 77 LGM / 77 LGM = 1.0 → sqrt(1) = 1.0
+      // weight = 1.0 (reputation) × 1.0 = 1.0
+      expect(weight).toBe(1.0);
     });
   });
 });

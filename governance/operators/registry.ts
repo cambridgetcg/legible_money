@@ -353,7 +353,11 @@ export class OperatorRegistry {
     // Add undisclosed agent to list (for tracking)
     if (!operator.agents.includes(undisclosedAgent)) {
       operator.agents.push(undisclosedAgent);
-      this.agentToOperator.set(undisclosedAgent, operatorId);
+      // Only set mapping if agent isn't already mapped to a different operator
+      const existingOperator = this.agentToOperator.get(undisclosedAgent);
+      if (existingOperator === undefined) {
+        this.agentToOperator.set(undisclosedAgent, operatorId);
+      }
     }
 
     return { success: true, slashedAmount };
@@ -366,16 +370,17 @@ export class OperatorRegistry {
     operatorId: string,
     operatorVoteWeight: bigint,
     totalVoteWeight: bigint,
-  ): { exceeds: boolean; actualWeight: number; cap: number } {
-    const actualWeight =
+  ): { exceeds: boolean; actualWeightBps: bigint; capBps: bigint } {
+    const actualWeightBps =
       totalVoteWeight > 0n
-        ? Number(operatorVoteWeight) / Number(totalVoteWeight)
-        : 0;
+        ? (operatorVoteWeight * 10000n) / totalVoteWeight
+        : 0n;
+    const capBps = BigInt(Math.round(this.limits.maxVoteWeight * 10000));
 
     return {
-      exceeds: actualWeight > this.limits.maxVoteWeight,
-      actualWeight,
-      cap: this.limits.maxVoteWeight,
+      exceeds: actualWeightBps > capBps,
+      actualWeightBps,
+      capBps,
     };
   }
 
@@ -413,25 +418,19 @@ export class OperatorRegistry {
     );
     const maxWeight =
       (totalVoteWeight *
-        BigInt(Math.floor(this.limits.maxVoteWeight * 10000))) /
+        BigInt(Math.round(this.limits.maxVoteWeight * 10000))) /
       10000n;
 
     if (operatorWeight <= maxWeight) {
       return agentVotes; // No capping needed
     }
 
-    // Calculate scaling factor
-    const scaleFactor = Number(maxWeight) / Number(operatorWeight);
-
-    // Apply cap proportionally
+    // Apply cap proportionally using pure BigInt math
     const cappedVotes = new Map(agentVotes);
     for (const agent of operator.agents) {
       const originalVote = agentVotes.get(agent);
       if (originalVote) {
-        cappedVotes.set(
-          agent,
-          BigInt(Math.floor(Number(originalVote) * scaleFactor)),
-        );
+        cappedVotes.set(agent, (originalVote * maxWeight) / operatorWeight);
       }
     }
 

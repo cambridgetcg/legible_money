@@ -243,21 +243,33 @@ export function calculateCrossStratumDiscount(
 ): number {
   if (dependencies.length === 0) return 1.0;
 
-  let totalDiscount = 1.0;
-  const discountPerBoundary = 0.95; // 5% reduction per stratum crossed
+  // Use BPS integer arithmetic for determinism (Math.pow is non-deterministic across platforms)
+  let totalDiscountBps = 10000; // 1.0 in BPS
+  const discountPerBoundaryBps = 9500; // 0.95 in BPS
 
   for (const dep of dependencies) {
     const distance = getStratumDistance(primaryStratum, dep.primaryStratum);
     if (distance > 0) {
-      const boundaryDiscount = Math.pow(discountPerBoundary, distance);
-      // Weight by dependency strength
-      const weightedDiscount =
-        1 - (1 - boundaryDiscount) * dep.dependencyStrength;
-      totalDiscount *= weightedDiscount;
+      // Iterative exponentiation: 0.95^distance in BPS
+      let boundaryDiscountBps = 10000;
+      for (let i = 0; i < distance; i++) {
+        boundaryDiscountBps = Math.trunc(
+          (boundaryDiscountBps * discountPerBoundaryBps) / 10000,
+        );
+      }
+      // weightedDiscount = 1 - (1 - boundaryDiscount) * dependencyStrength
+      const strengthBps = Math.round(dep.dependencyStrength * 10000);
+      const penaltyBps = Math.trunc(
+        ((10000 - boundaryDiscountBps) * strengthBps) / 10000,
+      );
+      const weightedDiscountBps = 10000 - penaltyBps;
+      totalDiscountBps = Math.trunc(
+        (totalDiscountBps * weightedDiscountBps) / 10000,
+      );
     }
   }
 
-  return totalDiscount;
+  return totalDiscountBps / 10000;
 }
 
 // ============================================================================

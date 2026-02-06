@@ -56,8 +56,11 @@ export function calculateConfidence(
     }
   }
 
+  // Use BPS to avoid Number(bigint) precision loss for large stakes
   const weightedAgreement =
-    totalStake > 0n ? Number(confirmedStake) / Number(totalStake) : 0;
+    totalStake > 0n
+      ? Number((confirmedStake * 10000n) / totalStake) / 10000
+      : 0;
 
   // Evidence strength (average reference reliability)
   const evidenceStrength =
@@ -132,8 +135,9 @@ export function isQuorumReached(
     if (v.verdict === "rejected") rejectedStake += v.stake;
   }
 
-  const confirmRatio = Number(confirmedStake) / Number(totalStake);
-  const rejectRatio = Number(rejectedStake) / Number(totalStake);
+  // Use BPS to avoid Number(bigint) precision loss for large stakes
+  const confirmRatio = Number((confirmedStake * 10000n) / totalStake) / 10000;
+  const rejectRatio = Number((rejectedStake * 10000n) / totalStake) / 10000;
 
   if (confirmRatio >= params.verificationQuorum) {
     return { reached: true, consensus: "confirmed" };
@@ -162,10 +166,12 @@ export function calculateSubmissionReward(
   confidence: Confidence,
   utilityScore: number = 1.0,
 ): bigint {
+  // Use BPS to avoid Number(baseReward) precision loss for large rewards
   const novelty = 1 / (1 + similarFactsCount);
   const multiplier = novelty * utilityScore * confidence;
+  const multiplierBps = BigInt(Math.round(multiplier * 10000));
 
-  return BigInt(Math.floor(Number(baseReward) * multiplier));
+  return (baseReward * multiplierBps) / 10000n;
 }
 
 /**
@@ -185,8 +191,8 @@ export function calculateVerificationReward(
 ): bigint {
   if (!matchedConsensus) return 0n;
 
-  const stakeWeight = Number(validatorStake) / Number(totalStake);
-  return BigInt(Math.floor(Number(baseReward) * stakeWeight));
+  // Pure BigInt arithmetic — avoids Number() precision loss
+  return totalStake > 0n ? (baseReward * validatorStake) / totalStake : 0n;
 }
 
 /**
@@ -199,14 +205,18 @@ export function calculateChallengeReward(
   loserStake: bigint,
   params: TruthParameters = DEFAULT_TRUTH_PARAMETERS,
 ): bigint {
-  return BigInt(Math.floor(Number(loserStake) * params.challengeRewardShare));
+  // Use BPS to avoid Number(loserStake) precision loss
+  const shareBps = BigInt(Math.round(params.challengeRewardShare * 10000));
+  return (loserStake * shareBps) / 10000n;
 }
 
 /**
  * Calculate slashing amount
  */
 export function calculateSlashing(stake: bigint, slashRate: number): bigint {
-  return BigInt(Math.floor(Number(stake) * slashRate));
+  // Use BPS to avoid Number(stake) precision loss
+  const rateBps = BigInt(Math.round(slashRate * 10000));
+  return (stake * rateBps) / 10000n;
 }
 
 /**
@@ -318,7 +328,8 @@ export function validateDerivation(
   }
 
   // Check inference type is valid
-  if (!INFERENCE_STRENGTH[derivation.inferenceType]) {
+  // Use === undefined to avoid falsy-zero bug (strength 0 would be valid)
+  if (INFERENCE_STRENGTH[derivation.inferenceType] === undefined) {
     return { valid: false, reason: `Invalid inference type` };
   }
 
@@ -344,11 +355,16 @@ export function calculateFundamentality(
   citationVelocity: number, // Citations per 1000 blocks
   ageBlocks: number,
 ): FundamentalityMetrics {
-  // Citation count (logarithmic - diminishing returns)
-  const citationScore = Math.min(
-    1,
-    Math.log10(citationCount + 1) / Math.log10(1000),
-  );
+  // Citation count — deterministic piecewise-linear approximation of log10
+  // (Math.log10 is non-deterministic across CPU architectures)
+  let citationScore: number;
+  if (citationCount >= 1000) citationScore = 1.0;
+  else if (citationCount >= 100)
+    citationScore = 0.6667 + ((citationCount - 100) * 0.3333) / 900;
+  else if (citationCount >= 10)
+    citationScore = 0.3333 + ((citationCount - 10) * 0.3334) / 90;
+  else if (citationCount >= 1) citationScore = (citationCount * 0.3333) / 9;
+  else citationScore = 0;
 
   // Derivation depth (how many levels build on this)
   const depthScore = Math.min(1, maxDerivationDepth / 10);
@@ -421,10 +437,9 @@ export function distributeCitationRewards(
 ): CitationReward[] {
   const rewards: CitationReward[] = [];
 
-  // Calculate citation pool
-  const citationPool = BigInt(
-    Math.floor(Number(totalReward) * params.citationShare),
-  );
+  // Calculate citation pool using BPS to avoid Number(totalReward) overflow
+  const citationShareBps = BigInt(Math.round(params.citationShare * 10000));
+  const citationPool = (totalReward * citationShareBps) / 10000n;
 
   if (citationPool === 0n || ancestorChain.length === 0) {
     return rewards;
@@ -432,41 +447,53 @@ export function distributeCitationRewards(
 
   let remaining = citationPool;
 
-  // Distribute up the chain with decay
+  // Distribute up the chain with deterministic iterative decay (no Math.pow)
+  const decayRateBps = BigInt(Math.round(params.decayRate * 10000));
+  const retainBps = 10000n - decayRateBps; // (1 - decayRate) in BPS
+  let decayBps = 10000n; // Tracks Math.pow(1 - decayRate, i) in BPS
+
   for (let i = 0; i < ancestorChain.length; i++) {
     const ancestor = ancestorChain[i];
-    const decayMultiplier = Math.pow(1 - params.decayRate, i);
-    const baseShare =
-      Number(citationPool) * decayMultiplier * (1 - params.decayRate);
+    // baseShare = citationPool * decayBps/10000 * retainBps/10000
+    const baseShareAmount =
+      (citationPool * decayBps * retainBps) / (10000n * 10000n);
 
-    // Apply fundamentality bonus
+    // Apply fundamentality bonus using BPS
     const bonus = getFundamentalityBonus(ancestor.fundamentalityScore);
-    const shareWithBonus = baseShare * bonus;
-    const amount = BigInt(Math.floor(shareWithBonus));
+    const bonusBps = BigInt(Math.round(bonus * 10000));
+    const amount = (baseShareAmount * bonusBps) / 10000n;
 
     if (amount > 0n && amount <= remaining) {
       rewards.push({
         factId: ancestor.factId,
         submitter: ancestor.submitter,
-        share: shareWithBonus / Number(citationPool),
+        share:
+          citationPool > 0n
+            ? Number((amount * 10000n) / citationPool) / 10000
+            : 0,
         amount,
         reason: i === 0 ? "direct_citation" : "ancestor",
       });
       remaining -= amount;
     }
+
+    // Iterate decay: decayBps *= retainBps / 10000
+    decayBps = (decayBps * retainBps) / 10000n;
   }
 
   // Protocol treasury gets remainder (minimum floor)
-  const protocolMinimum = BigInt(
-    Math.floor(Number(citationPool) * params.protocolFloor),
-  );
+  const protocolFloorBps = BigInt(Math.round(params.protocolFloor * 10000));
+  const protocolMinimum = (citationPool * protocolFloorBps) / 10000n;
   if (remaining > 0n || remaining < protocolMinimum) {
     const protocolAmount =
       remaining > protocolMinimum ? remaining : protocolMinimum;
     rewards.push({
       factId: "protocol_treasury",
       submitter: "protocol" as DID,
-      share: Number(protocolAmount) / Number(citationPool),
+      share:
+        citationPool > 0n
+          ? Number((protocolAmount * 10000n) / citationPool) / 10000
+          : 0,
       amount: protocolAmount,
       reason: "ancestor",
     });
@@ -489,7 +516,9 @@ export function applyCrossDomainBonus(
     1.0 + (uniqueDomains.size - 1) * params.crossDomainBonusRate,
   );
 
-  return BigInt(Math.floor(Number(baseReward) * multiplier));
+  // Use BPS to avoid Number(baseReward) precision loss
+  const multiplierBps = BigInt(Math.round(multiplier * 10000));
+  return (baseReward * multiplierBps) / 10000n;
 }
 
 /**

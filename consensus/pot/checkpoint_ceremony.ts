@@ -140,7 +140,7 @@ export function createCheckpointProposal(
     knowledgeRoot: block.header.knowledgeRoot,
     proposer: proposerPublicKey,
     proposerSignature: signature,
-    createdAt: Date.now(),
+    createdAt: block.header.timestamp, // P1: Use deterministic block timestamp
   };
 }
 
@@ -183,11 +183,16 @@ export function createPrevote(
   vote: "yes" | "no",
   validatorKey: PrivateKey,
   validatorPublicKey: PublicKey,
+  currentBlock?: bigint,
 ): CheckpointPrevote {
+  // P0-1 FIX: Capture timestamp ONCE to avoid mismatch between signed data
+  // and stored submittedAt (two Date.now() calls can return different values)
+  const timestamp =
+    currentBlock !== undefined ? Number(currentBlock) : Date.now();
   const voteData = {
     proposalHash,
     vote,
-    timestamp: Date.now(),
+    timestamp,
   };
 
   const signature = signDomainSeparated(
@@ -201,7 +206,7 @@ export function createPrevote(
     validator: validatorPublicKey,
     vote,
     signature,
-    submittedAt: Date.now(),
+    submittedAt: timestamp,
   };
 }
 
@@ -374,7 +379,7 @@ export function createPrecommit(
     proposalHash: ceremony.id,
     validator: validatorPublicKey,
     checkpointSignature: signature,
-    submittedAt: Date.now(),
+    submittedAt: Number(ceremony.startBlock), // P1: Use block-based timestamp
   };
 }
 
@@ -573,7 +578,7 @@ export function finalizeCeremony(
     knowledgeRoot: ceremony.proposal.knowledgeRoot,
     signatures,
     totalSigningStake: ceremony.precommitStake,
-    createdAt: Date.now(),
+    createdAt: ceremony.proposal.createdAt, // P1: Use proposal's block timestamp (deterministic)
     aggregation, // GAP-026 FIX: Add aggregation for efficient verification
   };
 

@@ -28,7 +28,7 @@
  *   JUSTICE: More stake = more scrutiny = more certain outcomes
  */
 
-import type { ValidatorState } from '../../state/types.js';
+import type { ValidatorState } from "../../state/types.js";
 import {
   ESCALATION_TIERS,
   type Dispute,
@@ -37,8 +37,8 @@ import {
   type ArbiterSelectionConfig,
   type DomainExpertise,
   type TierResult,
-} from './types.js';
-import { selectArbiters, generateDisputeSeed } from './arbitrator_selection.js';
+} from "./types.js";
+import { selectArbiters, generateDisputeSeed } from "./arbitrator_selection.js";
 
 // ============ Escalation Eligibility ============
 
@@ -48,7 +48,7 @@ import { selectArbiters, generateDisputeSeed } from './arbitrator_selection.js';
 export function canPartyEscalate(
   dispute: Dispute,
   partyDid: string,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): {
   canEscalate: boolean;
   reason?: string;
@@ -59,46 +59,73 @@ export function canPartyEscalate(
   const isDefender = dispute.defender.did === partyDid;
 
   if (!isChallenger && !isDefender) {
-    return { canEscalate: false, reason: 'Not a party to this dispute' };
+    return { canEscalate: false, reason: "Not a party to this dispute" };
   }
 
   // Must be in deliberation phase
-  if (dispute.state.phase !== 'deliberation') {
-    return { canEscalate: false, reason: 'Can only escalate from deliberation phase' };
+  if (dispute.state.phase !== "deliberation") {
+    return {
+      canEscalate: false,
+      reason: "Can only escalate from deliberation phase",
+    };
   }
 
   // Must not be at max tier
   if (dispute.state.escalationTier >= 3) {
-    return { canEscalate: false, reason: 'Already at maximum escalation tier' };
+    return { canEscalate: false, reason: "Already at maximum escalation tier" };
   }
 
   // Check appeal window
   const config = ESCALATION_TIERS[dispute.state.escalationTier];
-  const appealDeadline = dispute.state.phaseDeadline + BigInt(config.appealWindow);
+  const appealDeadline =
+    dispute.state.phaseDeadline + BigInt(config.appealWindow);
 
   if (currentBlock > appealDeadline) {
-    return { canEscalate: false, reason: 'Appeal window has closed' };
+    return { canEscalate: false, reason: "Appeal window has closed" };
   }
 
-  // Party must have lost current tier (only loser can escalate)
+  // P1-D2 FIX: Party must have lost current tier (only loser can escalate).
+  // Was using previousResults[currentTierIndex] which is undefined at tier 1
+  // (current tier result not yet stored). Now computes current tier result directly.
+  const partyRole = isChallenger ? "challenger" : "defender";
+
+  // Check previous tier results first
   const previousResults = dispute.state.previousTierResults || [];
   const currentTierIndex = dispute.state.escalationTier - 1;
 
   if (currentTierIndex >= 0 && previousResults[currentTierIndex]) {
     const result = previousResults[currentTierIndex];
-    const partyRole = isChallenger ? 'challenger' : 'defender';
-
     if (result.winner === partyRole) {
-      return { canEscalate: false, reason: 'Winners cannot escalate' };
+      return { canEscalate: false, reason: "Winners cannot escalate" };
+    }
+  }
+
+  // Also check current tier votes (handles tier 1 where no previous results exist)
+  if (dispute.votes.size > 0) {
+    let challengerVotes = 0;
+    let defenderVotes = 0;
+    for (const vote of dispute.votes.values()) {
+      if (vote.vote === "challenger") challengerVotes++;
+      if (vote.vote === "defender") defenderVotes++;
+    }
+    // If this party is currently winning, they cannot escalate
+    if (partyRole === "challenger" && challengerVotes > defenderVotes) {
+      return { canEscalate: false, reason: "Winners cannot escalate" };
+    }
+    if (partyRole === "defender" && defenderVotes > challengerVotes) {
+      return { canEscalate: false, reason: "Winners cannot escalate" };
     }
   }
 
   // Calculate required stake for next tier
   const nextTier = (dispute.state.escalationTier + 1) as EscalationTier;
   const nextConfig = ESCALATION_TIERS[nextTier];
-  const baseStake = isChallenger ? dispute.challenger.stake : dispute.defender.stake;
+  const baseStake = isChallenger
+    ? dispute.challenger.stake
+    : dispute.defender.stake;
   const requiredStake =
-    (baseStake * BigInt(Math.floor(nextConfig.stakeMultiplier * 100))) / 100n - baseStake;
+    (baseStake * BigInt(Math.floor(nextConfig.stakeMultiplier * 100))) / 100n -
+    baseStake;
 
   return {
     canEscalate: true,
@@ -109,12 +136,11 @@ export function canPartyEscalate(
 /**
  * Get escalation cost for next tier
  */
-export function getEscalationCost(
-  dispute: Dispute,
-  partyDid: string
-): bigint {
+export function getEscalationCost(dispute: Dispute, partyDid: string): bigint {
   const isChallenger = dispute.challenger.did === partyDid;
-  const baseStake = isChallenger ? dispute.challenger.stake : dispute.defender.stake;
+  const baseStake = isChallenger
+    ? dispute.challenger.stake
+    : dispute.defender.stake;
 
   const currentTier = dispute.state.escalationTier;
   if (currentTier >= 3) {
@@ -125,7 +151,10 @@ export function getEscalationCost(
   const nextConfig = ESCALATION_TIERS[nextTier];
 
   // Additional stake needed = (multiplier - 1) × base stake
-  return (baseStake * BigInt(Math.floor((nextConfig.stakeMultiplier - 1) * 100))) / 100n;
+  return (
+    (baseStake * BigInt(Math.floor((nextConfig.stakeMultiplier - 1) * 100))) /
+    100n
+  );
 }
 
 // ============ Tier Configuration ============
@@ -142,9 +171,9 @@ export function getTierConfig(tier: EscalationTier): EscalationConfig {
  */
 export function getTierDisplayName(tier: EscalationTier): string {
   const names: Record<EscalationTier, string> = {
-    1: 'Validator Arbitration',
-    2: 'Domain Expert Review',
-    3: 'Governance Decision',
+    1: "Validator Arbitration",
+    2: "Domain Expert Review",
+    3: "Governance Decision",
   };
   return names[tier];
 }
@@ -154,9 +183,9 @@ export function getTierDisplayName(tier: EscalationTier): string {
  */
 export function getTierDescription(tier: EscalationTier): string {
   const descriptions: Record<EscalationTier, string> = {
-    1: '7 validators vote with simple majority. Standard stakes apply.',
-    2: '11 domain experts vote with 2/3 supermajority. 2x stake required.',
-    3: '21 governance arbiters vote with 3/4 supermajority. 5x stake required. Final decision.',
+    1: "7 validators vote with simple majority. Standard stakes apply.",
+    2: "11 domain experts vote with 2/3 supermajority. 2x stake required.",
+    3: "21 governance arbiters vote with 3/4 supermajority. 5x stake required. Final decision.",
   };
   return descriptions[tier];
 }
@@ -169,7 +198,7 @@ export function getTierDescription(tier: EscalationTier): string {
 export function buildTierSelectionConfig(
   dispute: Dispute,
   tier: EscalationTier,
-  blockHash: string
+  blockHash: string,
 ): ArbiterSelectionConfig {
   const config = ESCALATION_TIERS[tier];
 
@@ -206,7 +235,7 @@ export function selectTierArbiters(
   validators: ValidatorState[],
   expertiseMap: Map<string, DomainExpertise[]>,
   blockHash: string,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): ReturnType<typeof selectArbiters> {
   const config = buildTierSelectionConfig(dispute, tier, blockHash);
   return selectArbiters(validators, config, expertiseMap, currentBlock);
@@ -219,7 +248,7 @@ export function selectTierArbiters(
  */
 export function isQuorumReached(
   dispute: Dispute,
-  tier: EscalationTier
+  tier: EscalationTier,
 ): { reached: boolean; current: number; required: number } {
   const config = ESCALATION_TIERS[tier];
   const voteCount = dispute.votes.size;
@@ -237,10 +266,10 @@ export function isQuorumReached(
  */
 export function hasSuperMajority(
   dispute: Dispute,
-  tier: EscalationTier
+  tier: EscalationTier,
 ): {
   hasSupermajority: boolean;
-  winner?: 'challenger' | 'defender';
+  winner?: "challenger" | "defender";
   ratio: number;
 } {
   const config = ESCALATION_TIERS[tier];
@@ -249,8 +278,8 @@ export function hasSuperMajority(
   let defenderVotes = 0;
 
   for (const vote of dispute.votes.values()) {
-    if (vote.vote === 'challenger') challengerVotes++;
-    if (vote.vote === 'defender') defenderVotes++;
+    if (vote.vote === "challenger") challengerVotes++;
+    if (vote.vote === "defender") defenderVotes++;
   }
 
   const totalVotes = challengerVotes + defenderVotes;
@@ -264,7 +293,7 @@ export function hasSuperMajority(
   if (challengerRatio >= config.quorumRequirement) {
     return {
       hasSupermajority: true,
-      winner: 'challenger',
+      winner: "challenger",
       ratio: challengerRatio,
     };
   }
@@ -272,7 +301,7 @@ export function hasSuperMajority(
   if (defenderRatio >= config.quorumRequirement) {
     return {
       hasSupermajority: true,
-      winner: 'defender',
+      winner: "defender",
       ratio: defenderRatio,
     };
   }
@@ -293,7 +322,7 @@ export function getEscalationHistory(dispute: Dispute): {
     tier: EscalationTier;
     name: string;
     result: TierResult | null;
-    status: 'completed' | 'current' | 'pending';
+    status: "completed" | "current" | "pending";
   }>;
 } {
   const previousResults = dispute.state.previousTierResults || [];
@@ -303,20 +332,20 @@ export function getEscalationHistory(dispute: Dispute): {
     tier: EscalationTier;
     name: string;
     result: TierResult | null;
-    status: 'completed' | 'current' | 'pending';
+    status: "completed" | "current" | "pending";
   }> = [];
 
   for (let t = 1; t <= 3; t++) {
     const tier = t as EscalationTier;
-    const previousResult = previousResults.find(r => r.tier === tier);
+    const previousResult = previousResults.find((r) => r.tier === tier);
 
-    let status: 'completed' | 'current' | 'pending';
+    let status: "completed" | "current" | "pending";
     if (tier < currentTier) {
-      status = 'completed';
+      status = "completed";
     } else if (tier === currentTier) {
-      status = 'current';
+      status = "current";
     } else {
-      status = 'pending';
+      status = "pending";
     }
 
     tiers.push({
@@ -353,7 +382,7 @@ export function processEscalation(
   dispute: Dispute,
   escalator: string,
   additionalStake: bigint,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): {
   success: boolean;
   error?: string;
@@ -368,7 +397,10 @@ export function processEscalation(
   }
 
   // Validate stake
-  if (eligibility.requiredStake && additionalStake < eligibility.requiredStake) {
+  if (
+    eligibility.requiredStake &&
+    additionalStake < eligibility.requiredStake
+  ) {
     return {
       success: false,
       error: `Insufficient stake. Required: ${eligibility.requiredStake}, provided: ${additionalStake}`,
@@ -389,9 +421,7 @@ export function processEscalation(
 /**
  * Compare results across tiers (for audit/analysis)
  */
-export function analyzeTierConsistency(
-  dispute: Dispute
-): {
+export function analyzeTierConsistency(dispute: Dispute): {
   consistent: boolean;
   flippedTiers: number[];
   analysis: string;
@@ -401,7 +431,7 @@ export function analyzeTierConsistency(
     return {
       consistent: true,
       flippedTiers: [],
-      analysis: 'Insufficient tiers for consistency analysis',
+      analysis: "Insufficient tiers for consistency analysis",
     };
   }
 
@@ -410,7 +440,7 @@ export function analyzeTierConsistency(
 
   for (let i = 0; i < previousResults.length; i++) {
     const result = previousResults[i];
-    if (result.winner !== 'draw') {
+    if (result.winner !== "draw") {
       if (previousWinner && result.winner !== previousWinner) {
         flippedTiers.push(result.tier);
       }
@@ -420,8 +450,8 @@ export function analyzeTierConsistency(
 
   const consistent = flippedTiers.length === 0;
   let analysis = consistent
-    ? 'All tiers reached the same conclusion'
-    : `Result flipped at tier(s): ${flippedTiers.join(', ')}`;
+    ? "All tiers reached the same conclusion"
+    : `Result flipped at tier(s): ${flippedTiers.join(", ")}`;
 
   // Add context about final outcome
   if (previousResults.length > 0) {

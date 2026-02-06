@@ -125,7 +125,7 @@ export class ChildAccountManager {
     // Apply participation-based override (highest priority)
     if (this.participationResolver) {
       const score = this.participationResolver(account);
-      if (score !== null) {
+      if (score !== null && score.periodsGranted >= 1) {
         resolved = {
           ...resolved,
           periodsUntilExpiration: score.periodsGranted,

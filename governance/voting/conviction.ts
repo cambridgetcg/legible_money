@@ -135,6 +135,7 @@ export function getTierForDuration(lockBlocks: bigint): string {
 /**
  * Calculate continuous conviction multiplier based on elapsed time.
  * Conviction grows linearly from 1.0 to the tier maximum over the lock period.
+ * Uses basis-point integer math for determinism.
  */
 export function calculateConvictionMultiplier(
   lockDuration: bigint,
@@ -152,14 +153,18 @@ export function calculateConvictionMultiplier(
     return targetMultiplier;
   }
 
-  // Linear interpolation from 1.0 to target
-  const progress = Number(elapsedBlocks) / Number(lockDuration);
-  return 1.0 + (targetMultiplier - 1.0) * progress;
+  // Linear interpolation using basis points for determinism
+  // progressBps = (elapsedBlocks * 10000) / lockDuration
+  const progressBps = Number((elapsedBlocks * 10000n) / lockDuration);
+  const rangeBps = Math.round((targetMultiplier - 1.0) * 10000);
+  // result = 1.0 + (range * progress) / 10000
+  return 1.0 + (rangeBps * progressBps) / (10000 * 10000);
 }
 
 /**
  * Calculate accumulated conviction over time.
  * Conviction = integral of multiplier over time = area under curve.
+ * Uses basis-point arithmetic for determinism.
  */
 export function calculateAccumulatedConviction(
   baseVotes: number,
@@ -172,24 +177,28 @@ export function calculateAccumulatedConviction(
   }
 
   const targetMultiplier = getMultiplierForDuration(lockDuration);
+  // Average multiplier over full lock period = (1.0 + target) / 2
+  // In basis points: ((10000 + targetBps) / 2)
+  const targetBps = Math.round(targetMultiplier * 10000);
+  const avgLockBps = ((10000 + targetBps) / 2) | 0;
 
   if (elapsedBlocks >= lockDuration) {
-    // Lock complete: linear at target multiplier after that
-    const lockPeriodConviction =
-      baseVotes * Number(lockDuration) * ((1.0 + targetMultiplier) / 2);
+    // Lock complete: trapezoidal area during lock + rectangular area after
+    const lockBlocks = Number(lockDuration);
+    const lockConviction = (baseVotes * lockBlocks * avgLockBps) / 10000;
     const postLockBlocks = Number(elapsedBlocks - lockDuration);
-    const postLockConviction = baseVotes * postLockBlocks * targetMultiplier;
-    return lockPeriodConviction + postLockConviction;
+    const postLockConviction = (baseVotes * postLockBlocks * targetBps) / 10000;
+    return lockConviction + postLockConviction;
   }
 
   // During lock: triangular growth
-  // Area = base * height / 2, where height varies linearly
   const currentMultiplier = calculateConvictionMultiplier(
     lockDuration,
     elapsedBlocks,
   );
-  const averageMultiplier = (1.0 + currentMultiplier) / 2;
-  return baseVotes * Number(elapsedBlocks) * averageMultiplier;
+  const currentBps = Math.round(currentMultiplier * 10000);
+  const avgBps = ((10000 + currentBps) / 2) | 0;
+  return (baseVotes * Number(elapsedBlocks) * avgBps) / 10000;
 }
 
 // ============ Conviction Vote Management ============
