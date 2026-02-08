@@ -1,0 +1,121 @@
+syntax = "proto3";
+package legible.channels.v1;
+
+option go_package = "github.com/legible-money/legible/x/channels/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the payment channels module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc OpenChannel(MsgOpenChannel) returns (MsgOpenChannelResponse);
+  rpc UpdateChannel(MsgUpdateChannel) returns (MsgUpdateChannelResponse);
+  rpc CloseChannel(MsgCloseChannel) returns (MsgCloseChannelResponse);
+  rpc SettleChannel(MsgSettleChannel) returns (MsgSettleChannelResponse);
+  rpc DisputeChannel(MsgDisputeChannel) returns (MsgDisputeChannelResponse);
+}
+
+// ============================================================================
+// Messages
+// ============================================================================
+
+message MsgOpenChannel {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string receiver = 2;
+  string deposit = 3;
+  uint64 timeout_height = 4;
+}
+
+message MsgOpenChannelResponse {
+  string channel_id = 1;
+}
+
+message MsgUpdateChannel {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string channel_id = 2;
+  string new_balance_sender = 3;
+  string new_balance_receiver = 4;
+  uint64 sequence = 5;
+  bytes signature = 6;
+}
+
+message MsgUpdateChannelResponse {}
+
+message MsgCloseChannel {
+  option (cosmos.msg.v1.signer) = "closer";
+  string closer = 1;
+  string channel_id = 2;
+  string final_balance_sender = 3;
+  string final_balance_receiver = 4;
+  uint64 sequence = 5;
+  bytes counterparty_signature = 6;
+}
+
+message MsgCloseChannelResponse {}
+
+message MsgSettleChannel {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string channel_id = 2;
+}
+
+message MsgSettleChannelResponse {
+  string amount_to_sender = 1;
+  string amount_to_receiver = 2;
+}
+
+message MsgDisputeChannel {
+  option (cosmos.msg.v1.signer) = "disputer";
+  string disputer = 1;
+  string channel_id = 2;
+  string claimed_balance_sender = 3;
+  string claimed_balance_receiver = 4;
+  uint64 sequence = 5;
+  bytes proof_signature = 6;
+}
+
+message MsgDisputeChannelResponse {}
+
+// ============================================================================
+// State Types
+// ============================================================================
+
+message PaymentChannel {
+  string id = 1;
+  string sender = 2;
+  string receiver = 3;
+  string total_deposit = 4;
+  string balance_sender = 5;
+  string balance_receiver = 6;
+  uint64 sequence = 7;
+  ChannelStatus status = 8;
+  uint64 opened_at = 9;
+  uint64 timeout_height = 10;
+  uint64 close_requested_at = 11;
+}
+
+enum ChannelStatus {
+  CHANNEL_STATUS_UNSPECIFIED = 0;
+  CHANNEL_STATUS_OPEN = 1;
+  CHANNEL_STATUS_CLOSING = 2;
+  CHANNEL_STATUS_DISPUTED = 3;
+  CHANNEL_STATUS_SETTLED = 4;
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+  repeated PaymentChannel channels = 2;
+}
+
+message Params {
+  uint64 dispute_period = 1;
+  string min_channel_deposit = 2;
+  uint64 max_channel_duration = 3;
+}

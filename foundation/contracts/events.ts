@@ -216,12 +216,7 @@ export interface DisputeResolvedPayload {
 export interface RewardDistributedPayload {
   recipient: DID;
   amount: Amount;
-  reason:
-    | "block_production"
-    | "verification"
-    | "claim_submission"
-    | "citation"
-    | "dispute_win";
+  reason: "block_production" | "verification" | "citation" | "dispute_win";
   sourceId?: string; // Block hash, claim ID, etc.
 }
 

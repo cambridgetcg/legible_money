@@ -1,0 +1,137 @@
+syntax = "proto3";
+package legible.bvm.v1;
+
+option go_package = "github.com/legible-money/legible/x/bvm/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the BVM (Bytecode Virtual Machine) module's transaction service.
+// BVM is Legible Money's execution engine with 47+ opcodes and knowledge bridge.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc DeployContract(MsgDeployContract) returns (MsgDeployContractResponse);
+  rpc CallContract(MsgCallContract) returns (MsgCallContractResponse);
+  rpc ScheduleExecution(MsgScheduleExecution) returns (MsgScheduleExecutionResponse);
+}
+
+// ============================================================================
+// Messages
+// ============================================================================
+
+message MsgDeployContract {
+  option (cosmos.msg.v1.signer) = "deployer";
+  string deployer = 1;
+  bytes bytecode = 2;
+  bytes constructor_args = 3;
+  string initial_deposit = 4;
+  ContractConfig config = 5;
+}
+
+message ContractConfig {
+  // Maximum gas per self-invocation
+  uint64 max_gas_per_invocation = 1;
+  // Whether the contract can self-invoke
+  bool self_invoking = 2;
+  // DMSS schedule pattern (if self-invoking)
+  string schedule_pattern = 3;
+}
+
+message MsgDeployContractResponse {
+  string contract_address = 1;
+}
+
+message MsgCallContract {
+  option (cosmos.msg.v1.signer) = "caller";
+  string caller = 1;
+  string contract_address = 2;
+  bytes input_data = 3;
+  string value = 4;
+  uint64 gas_limit = 5;
+  // STATICCALL mode: no state modifications allowed
+  bool static_call = 6;
+}
+
+message MsgCallContractResponse {
+  bytes return_data = 1;
+  uint64 gas_used = 2;
+  repeated ContractEvent events = 3;
+}
+
+message MsgScheduleExecution {
+  option (cosmos.msg.v1.signer) = "scheduler";
+  string scheduler = 1;
+  string contract_address = 2;
+  bytes input_data = 3;
+  ScheduleCondition condition = 4;
+}
+
+message MsgScheduleExecutionResponse {
+  string schedule_id = 1;
+}
+
+// ============================================================================
+// Contract State Types
+// ============================================================================
+
+message Contract {
+  string address = 1;
+  string deployer = 2;
+  bytes code_hash = 3;
+  string balance = 4;
+  ContractConfig config = 5;
+  bool paused = 6;
+  uint64 deployed_at = 7;
+  uint64 last_invocation = 8;
+  uint64 total_invocations = 9;
+}
+
+message ContractEvent {
+  string contract_address = 1;
+  string event_type = 2;
+  map<string, string> attributes = 3;
+}
+
+// DMSS schedule condition for self-invoking contracts.
+message ScheduleCondition {
+  oneof condition {
+    BlockInterval block_interval = 1;
+    TimeCondition time_condition = 2;
+    StateCondition state_condition = 3;
+  }
+}
+
+message BlockInterval {
+  uint64 every_n_blocks = 1;
+  uint64 start_height = 2;
+  uint64 end_height = 3;
+}
+
+message TimeCondition {
+  uint64 after_timestamp = 1;
+  uint64 repeat_interval_ms = 2;
+}
+
+message StateCondition {
+  string key = 1;
+  string operator = 2;  // "eq", "gt", "lt", "gte", "lte"
+  bytes value = 3;
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+  repeated Contract contracts = 2;
+}
+
+message Params {
+  uint64 max_contract_size = 1;
+  uint64 max_gas_per_block = 2;
+  string contract_deploy_fee = 3;
+  uint64 max_call_depth = 4;
+  // Knowledge bridge: max fact lookups per execution
+  uint32 max_knowledge_queries = 5;
+}

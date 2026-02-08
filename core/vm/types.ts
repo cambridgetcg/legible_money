@@ -883,6 +883,54 @@ export class NullKnowledgeService implements BVMKnowledgeService {
   }
 }
 
+// ============ Token Service Interface ============
+
+/**
+ * BVM Token Service
+ *
+ * Bridge between BVM execution engine and token system.
+ * Enables token operations from contract code.
+ */
+export interface BVMTokenService {
+  /**
+   * Get balance for an address
+   */
+  getBalance(address: string): bigint;
+
+  /**
+   * Transfer tokens between addresses
+   */
+  transfer(from: string, to: string, amount: bigint): boolean;
+
+  /**
+   * Mint tokens to an address (system only)
+   */
+  mint(to: string, amount: bigint): boolean;
+
+  /**
+   * Burn tokens from an address
+   */
+  burn(from: string, amount: bigint): boolean;
+}
+
+/**
+ * Null implementation of BVMTokenService
+ */
+export class NullTokenService implements BVMTokenService {
+  getBalance(_address: string): bigint {
+    return 0n;
+  }
+  transfer(_from: string, _to: string, _amount: bigint): boolean {
+    return false;
+  }
+  mint(_to: string, _amount: bigint): boolean {
+    return false;
+  }
+  burn(_from: string, _amount: bigint): boolean {
+    return false;
+  }
+}
+
 // ============ Error Types ============
 
 export class BVMError extends Error {

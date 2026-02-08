@@ -1,0 +1,257 @@
+{
+  "description": "Genesis validator bootstrap manifest for multi-model AI agent fleet",
+  "version": "1.0.0",
+  "network": "lgm-devnet-1",
+
+  "bootstrap": {
+    "phase": "genesis",
+    "minValidators": 3,
+    "targetValidators": 7,
+    "stakePerValidator": "11111000000000000000000",
+    "totalStakeRequired": "77777000000000000000000",
+    "fundingSource": "did:lgm-devnet:treasury"
+  },
+
+  "validators": [
+    {
+      "id": "genesis-val-1",
+      "name": "Athena",
+      "description": "Primary genesis validator — balanced general knowledge",
+      "agent": {
+        "model": "claude-sonnet-4-5-20250929",
+        "provider": "anthropic",
+        "role": "generalist",
+        "verificationStyle": "methodical",
+        "domainSpecializations": [
+          "mathematics.formal",
+          "logic.foundational",
+          "technology.computation"
+        ],
+        "strengths": "Formal reasoning, mathematical proofs, code verification",
+        "temperature": 0.1
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "aws",
+        "region": "us-east-1",
+        "instance": "c6i.xlarge",
+        "storage": "100gb-gp3",
+        "estimatedMonthlyCost": "$150"
+      }
+    },
+    {
+      "id": "genesis-val-2",
+      "name": "Hermes",
+      "description": "Fast empirical verification specialist",
+      "agent": {
+        "model": "gpt-4o",
+        "provider": "openai",
+        "role": "empiricist",
+        "verificationStyle": "rapid-cross-reference",
+        "domainSpecializations": [
+          "science.empirical",
+          "history.documented",
+          "social.economics"
+        ],
+        "strengths": "Broad factual recall, cross-domain linking, temporal awareness",
+        "temperature": 0.2
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "aws",
+        "region": "eu-west-1",
+        "instance": "c6i.xlarge",
+        "storage": "100gb-gp3",
+        "estimatedMonthlyCost": "$150"
+      }
+    },
+    {
+      "id": "genesis-val-3",
+      "name": "Thoth",
+      "description": "Deep analytical verification — challenges assumptions",
+      "agent": {
+        "model": "gemini-2.5-pro",
+        "provider": "google",
+        "role": "skeptic",
+        "verificationStyle": "adversarial-analysis",
+        "domainSpecializations": [
+          "science.physics",
+          "mathematics.analysis",
+          "technology.ai"
+        ],
+        "strengths": "Multimodal reasoning, long-context analysis, adversarial probing",
+        "temperature": 0.3
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "gcp",
+        "region": "us-central1",
+        "instance": "c3-standard-4",
+        "storage": "100gb-ssd",
+        "estimatedMonthlyCost": "$140"
+      }
+    },
+    {
+      "id": "genesis-val-4",
+      "name": "Prometheus",
+      "description": "Open-weight specialist — transparent reasoning chain",
+      "agent": {
+        "model": "llama-3.3-70b",
+        "provider": "self-hosted",
+        "role": "transparency-advocate",
+        "verificationStyle": "chain-of-thought",
+        "domainSpecializations": [
+          "technology.blockchain",
+          "social.governance",
+          "science.biology"
+        ],
+        "strengths": "Reproducible reasoning, open verification, community alignment",
+        "temperature": 0.2
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "aws",
+        "region": "ap-southeast-1",
+        "instance": "g5.2xlarge",
+        "storage": "200gb-gp3",
+        "estimatedMonthlyCost": "$350"
+      }
+    },
+    {
+      "id": "genesis-val-5",
+      "name": "Seshat",
+      "description": "Citation and provenance specialist",
+      "agent": {
+        "model": "mistral-large",
+        "provider": "mistral",
+        "role": "citation-verifier",
+        "verificationStyle": "source-tracing",
+        "domainSpecializations": [
+          "history.documented",
+          "social.legal",
+          "social.cultural"
+        ],
+        "strengths": "Multilingual analysis, European legal frameworks, citation verification",
+        "temperature": 0.15
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "aws",
+        "region": "eu-central-1",
+        "instance": "c6i.xlarge",
+        "storage": "100gb-gp3",
+        "estimatedMonthlyCost": "$150"
+      }
+    },
+    {
+      "id": "genesis-val-6",
+      "name": "Maat",
+      "description": "Epistemic calibration specialist — confidence accuracy",
+      "agent": {
+        "model": "claude-opus-4-6",
+        "provider": "anthropic",
+        "role": "calibrator",
+        "verificationStyle": "bayesian-assessment",
+        "domainSpecializations": [
+          "mathematics.logic",
+          "science.empirical",
+          "technology.cryptography"
+        ],
+        "strengths": "Uncertainty quantification, epistemic humility, nuanced confidence scoring",
+        "temperature": 0.1
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "aws",
+        "region": "us-west-2",
+        "instance": "c6i.xlarge",
+        "storage": "100gb-gp3",
+        "estimatedMonthlyCost": "$200"
+      }
+    },
+    {
+      "id": "genesis-val-7",
+      "name": "Nabu",
+      "description": "Emerging knowledge and prediction specialist",
+      "agent": {
+        "model": "gpt-4o-mini",
+        "provider": "openai",
+        "role": "scout",
+        "verificationStyle": "rapid-triage",
+        "domainSpecializations": [
+          "social.economics",
+          "technology.networks",
+          "science.ecology"
+        ],
+        "strengths": "High throughput, cost-effective bulk verification, trend detection",
+        "temperature": 0.25
+      },
+      "stake": "11111000000000000000000",
+      "commission": 0.05,
+      "deployment": {
+        "provider": "aws",
+        "region": "ap-northeast-1",
+        "instance": "c6i.large",
+        "storage": "50gb-gp3",
+        "estimatedMonthlyCost": "$80"
+      }
+    }
+  ],
+
+  "diversityPolicy": {
+    "description": "Ensures epistemic diversity across the validator set",
+    "rules": {
+      "maxSameProvider": 3,
+      "maxSameModel": 2,
+      "maxSameRegion": 2,
+      "minUniqueRoles": 4,
+      "requiredRoles": ["generalist", "skeptic", "calibrator"]
+    }
+  },
+
+  "phases": {
+    "genesis": {
+      "description": "Network launch — foundation team operates all validators",
+      "validators": ["genesis-val-1", "genesis-val-2", "genesis-val-3"],
+      "minRequired": 3,
+      "duration": "Until organic validators join",
+      "estimatedMonthlyCost": "$440"
+    },
+    "expansion": {
+      "description": "Week 1-4 — add diverse model validators for PoT strength",
+      "validators": ["genesis-val-1", "genesis-val-2", "genesis-val-3", "genesis-val-4", "genesis-val-5", "genesis-val-6", "genesis-val-7"],
+      "minRequired": 5,
+      "duration": "4 weeks",
+      "estimatedMonthlyCost": "$1,220"
+    },
+    "organic": {
+      "description": "Month 2+ — community validators join, foundation scales down",
+      "scaleDownPolicy": {
+        "triggerCondition": "organic_validators >= 11",
+        "action": "Decommission lowest-priority foundation validators",
+        "retainMinimum": 3,
+        "decommissionOrder": ["genesis-val-7", "genesis-val-5", "genesis-val-4", "genesis-val-2"]
+      }
+    }
+  },
+
+  "operationalConfig": {
+    "healthCheckIntervalMs": 30000,
+    "maxMissedBlocksBeforeAlert": 5,
+    "autoRestartOnCrash": true,
+    "logRetentionDays": 30,
+    "metricsEndpoint": "/metrics",
+    "alerting": {
+      "slashingAlert": true,
+      "downtimeAlert": true,
+      "lowStakeAlert": true,
+      "channels": ["ops-discord-webhook", "pagerduty"]
+    }
+  }
+}

@@ -126,6 +126,7 @@ interface GenesisFile {
   initialAccounts: Array<{
     did: string;
     balance: string;
+    label?: string;
   }>;
   genesisAxioms: Array<{
     id: string;
@@ -245,7 +246,7 @@ function validateGenesis(genesis: GenesisFile): GenesisValidationResult {
         warnings.push(`Account ${index}: DID does not use 'did:lgm:' method`);
       }
 
-      if (!account.balance) {
+      if (account.balance === undefined || account.balance === null) {
         errors.push(`Account ${index}: missing balance`);
       } else {
         try {
@@ -440,8 +441,10 @@ function mergeConsensusParams(
         genesis.verificationReward as string | number | bigint,
       ),
     }),
-    ...(genesis.claimReward !== undefined && {
-      claimReward: BigInt(genesis.claimReward as string | number | bigint),
+    ...(genesis.citationRewardPerFact !== undefined && {
+      citationRewardPerFact: BigInt(
+        genesis.citationRewardPerFact as string | number | bigint,
+      ),
     }),
     ...(genesis.unbondingPeriod !== undefined && {
       unbondingPeriod: BigInt(
@@ -668,13 +671,16 @@ class LegibleMoneyNode extends EventEmitter {
       axioms: genesis.genesisAxioms,
     };
 
-    // Apply genesis configuration
+    // Apply genesis configuration — all fund accounts from MAX_SUPPLY allocation
+    console.log("[GENESIS] Creating genesis accounts:");
     for (const account of genesisConfig.accounts) {
       state.createAccount(
         account.did,
         account.operationalKeyHash,
         account.balance,
       );
+      const lgm = account.balance / 10n ** 18n;
+      console.log(`  ${account.did}: ${lgm} LGM`);
     }
 
     for (const validator of genesisConfig.validators) {

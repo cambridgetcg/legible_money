@@ -1,0 +1,164 @@
+syntax = "proto3";
+package legible.emergency.v1;
+
+option go_package = "github.com/legible-money/legible/x/emergency/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the emergency kill switch module's transaction service.
+// 3-phase BFT protocol: Halt → Revert → Resume.
+// Guardian-only (Tier 3) with 75% halt / 80% revert+resume quorum thresholds.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc ProposeHalt(MsgProposeHalt) returns (MsgProposeHaltResponse);
+  rpc VoteHalt(MsgVoteHalt) returns (MsgVoteHaltResponse);
+  rpc ProposeRevert(MsgProposeRevert) returns (MsgProposeRevertResponse);
+  rpc VoteRevert(MsgVoteRevert) returns (MsgVoteRevertResponse);
+  rpc ProposeResume(MsgProposeResume) returns (MsgProposeResumeResponse);
+  rpc VoteResume(MsgVoteResume) returns (MsgVoteResumeResponse);
+}
+
+// ============================================================================
+// Messages
+// ============================================================================
+
+message MsgProposeHalt {
+  option (cosmos.msg.v1.signer) = "proposer";
+  // Must be a Tier 3 (Guardian) validator
+  string proposer = 1;
+  string reason = 2;
+  EmergencyCategory category = 3;
+}
+
+message MsgProposeHaltResponse {
+  string proposal_id = 1;
+}
+
+message MsgVoteHalt {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+  bool approve = 3;
+}
+
+message MsgVoteHaltResponse {
+  bool quorum_reached = 1;
+  bool chain_halted = 2;
+}
+
+message MsgProposeRevert {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;
+  uint64 revert_to_height = 2;
+  string justification = 3;
+}
+
+message MsgProposeRevertResponse {
+  string proposal_id = 1;
+}
+
+message MsgVoteRevert {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+  bool approve = 3;
+}
+
+message MsgVoteRevertResponse {
+  bool quorum_reached = 1;
+  bool revert_executed = 2;
+}
+
+message MsgProposeResume {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;
+  string justification = 2;
+}
+
+message MsgProposeResumeResponse {
+  string proposal_id = 1;
+}
+
+message MsgVoteResume {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+  bool approve = 3;
+}
+
+message MsgVoteResumeResponse {
+  bool quorum_reached = 1;
+  bool chain_resumed = 2;
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum EmergencyCategory {
+  EMERGENCY_CATEGORY_UNSPECIFIED = 0;
+  EMERGENCY_CATEGORY_SECURITY_BREACH = 1;
+  EMERGENCY_CATEGORY_CONSENSUS_FAILURE = 2;
+  EMERGENCY_CATEGORY_ECONOMIC_EXPLOIT = 3;
+  EMERGENCY_CATEGORY_STATE_CORRUPTION = 4;
+}
+
+enum EmergencyStatus {
+  EMERGENCY_STATUS_UNSPECIFIED = 0;
+  EMERGENCY_STATUS_NORMAL = 1;
+  EMERGENCY_STATUS_HALT_PROPOSED = 2;
+  EMERGENCY_STATUS_HALTED = 3;
+  EMERGENCY_STATUS_REVERT_PROPOSED = 4;
+  EMERGENCY_STATUS_REVERTED = 5;
+  EMERGENCY_STATUS_RESUME_PROPOSED = 6;
+}
+
+// ============================================================================
+// State Types
+// ============================================================================
+
+message EmergencyProposal {
+  string id = 1;
+  EmergencyPhase phase = 2;
+  string proposer = 3;
+  string reason = 4;
+  uint64 proposed_at = 5;
+  repeated EmergencyVote votes = 6;
+  bool executed = 7;
+  uint64 revert_to_height = 8;  // Only for revert proposals
+}
+
+message EmergencyVote {
+  string voter = 1;
+  bool approve = 2;
+  uint64 voted_at = 3;
+}
+
+enum EmergencyPhase {
+  EMERGENCY_PHASE_UNSPECIFIED = 0;
+  EMERGENCY_PHASE_HALT = 1;
+  EMERGENCY_PHASE_REVERT = 2;
+  EMERGENCY_PHASE_RESUME = 3;
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+  EmergencyStatus status = 2;
+  repeated EmergencyProposal audit_log = 3;
+}
+
+message Params {
+  // Quorum thresholds (0-1000000)
+  uint32 halt_quorum = 1;     // Default: 750000 (75%)
+  uint32 revert_quorum = 2;   // Default: 800000 (80%)
+  uint32 resume_quorum = 3;   // Default: 800000 (80%)
+  // Anti-abuse limits
+  uint32 max_proposals_per_epoch = 4;       // Default: 3
+  uint32 max_proposals_per_guardian = 5;    // Default: 1
+  uint64 cooldown_blocks = 6;               // Default: 111
+}

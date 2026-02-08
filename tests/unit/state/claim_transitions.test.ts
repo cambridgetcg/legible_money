@@ -37,10 +37,10 @@ const TEST_CONSENSUS_PARAMS: ConsensusParams = {
   rejectionThreshold: 0.77,
   contestedThreshold: 0.55,
   minValidatorStake: 1111n * ONE_LGM,
-  minClaimStake: 100n * ONE_LGM,
+  minClaimStake: 11n * ONE_LGM,
   blockReward: 11n * ONE_LGM,
   verificationReward: 1n * ONE_LGM,
-  claimReward: 5n * ONE_LGM,
+  citationRewardPerFact: 1n * ONE_LGM,
   wrongVerificationSlash: 0.11,
   missedVerificationSlash: 0.05,
   invalidClaimSlash: 0.22,
@@ -111,6 +111,13 @@ describe.sequential("Claim Submission Workflow", () => {
     state.createAccount(
       "did:lgm:fee-pool",
       "fee-pool-hash",
+      1000000n * ONE_LGM,
+    );
+
+    // Create reward pool account (citation rewards funded from here)
+    state.createAccount(
+      "did:lgm:reward-pool",
+      "reward-pool-hash",
       1000000n * ONE_LGM,
     );
 
@@ -879,8 +886,8 @@ describe.sequential("Claim Submission Workflow", () => {
         ]);
 
         const factAfter = state.getFact("fact:reference-001")!;
-        // 15% of claimReward (5 LGM) = 0.75 LGM, all to one cited fact
-        const expectedReward = (TEST_CONSENSUS_PARAMS.claimReward * 15n) / 100n;
+        // Each cited fact gets citationRewardPerFact (1 LGM)
+        const expectedReward = TEST_CONSENSUS_PARAMS.citationRewardPerFact;
         expect(factAfter.totalCitationRewards).toBe(expectedReward);
       });
 
@@ -905,7 +912,9 @@ describe.sequential("Claim Submission Workflow", () => {
         submitAndVerifyClaim(`Claim citing ${secondFact}`, [secondFact]);
 
         const balanceAfter = state.getAccount(SECOND_DID)!.balance;
-        const expectedReward = (TEST_CONSENSUS_PARAMS.claimReward * 15n) / 100n;
+        // Citation reward routed through 22% evidence tax: recipient gets 78%
+        const grossReward = TEST_CONSENSUS_PARAMS.citationRewardPerFact;
+        const expectedReward = grossReward - (grossReward * 2200n) / 10000n;
         expect(balanceAfter - balanceBefore).toBe(expectedReward);
       });
 

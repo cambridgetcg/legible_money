@@ -1,0 +1,243 @@
+syntax = "proto3";
+package legible.tokens.v1;
+
+option go_package = "github.com/legible-money/legible/x/tokens/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the secondary tokens (LGM-20) module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc CreateToken(MsgCreateToken) returns (MsgCreateTokenResponse);
+  rpc MintToken(MsgMintToken) returns (MsgMintTokenResponse);
+  rpc BurnToken(MsgBurnToken) returns (MsgBurnTokenResponse);
+  rpc TransferToken(MsgTransferToken) returns (MsgTransferTokenResponse);
+  rpc ApproveToken(MsgApproveToken) returns (MsgApproveTokenResponse);
+  rpc TransferFrom(MsgTransferFrom) returns (MsgTransferFromResponse);
+  rpc PauseToken(MsgPauseToken) returns (MsgPauseTokenResponse);
+  rpc UnpauseToken(MsgUnpauseToken) returns (MsgUnpauseTokenResponse);
+  rpc DelegatePower(MsgDelegatePower) returns (MsgDelegatePowerResponse);
+  rpc WrapToken(MsgWrapToken) returns (MsgWrapTokenResponse);
+  rpc UnwrapToken(MsgUnwrapToken) returns (MsgUnwrapTokenResponse);
+  rpc AddLiquidity(MsgAddLiquidity) returns (MsgAddLiquidityResponse);
+  rpc RemoveLiquidity(MsgRemoveLiquidity) returns (MsgRemoveLiquidityResponse);
+  rpc Swap(MsgSwap) returns (MsgSwapResponse);
+}
+
+// ============================================================================
+// Token Lifecycle Messages
+// ============================================================================
+
+message MsgCreateToken {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string name = 2;
+  string symbol = 3;
+  uint32 decimals = 4;
+  string initial_supply = 5;
+  string max_supply = 6;
+  TokenFeatures features = 7;
+}
+
+message TokenFeatures {
+  bool mintable = 1;
+  bool burnable = 2;
+  bool pausable = 3;
+  bool wrappable = 4;
+}
+
+message MsgCreateTokenResponse {
+  string token_id = 1;
+}
+
+message MsgMintToken {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string token_id = 2;
+  string to = 3;
+  string amount = 4;
+}
+
+message MsgMintTokenResponse {}
+
+message MsgBurnToken {
+  option (cosmos.msg.v1.signer) = "burner";
+  string burner = 1;
+  string token_id = 2;
+  string amount = 3;
+}
+
+message MsgBurnTokenResponse {}
+
+message MsgTransferToken {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string token_id = 2;
+  string to = 3;
+  string amount = 4;
+}
+
+message MsgTransferTokenResponse {}
+
+message MsgApproveToken {
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1;
+  string token_id = 2;
+  string spender = 3;
+  string amount = 4;
+}
+
+message MsgApproveTokenResponse {}
+
+message MsgTransferFrom {
+  option (cosmos.msg.v1.signer) = "spender";
+  string spender = 1;
+  string token_id = 2;
+  string from = 3;
+  string to = 4;
+  string amount = 5;
+}
+
+message MsgTransferFromResponse {}
+
+message MsgPauseToken {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string token_id = 2;
+}
+
+message MsgPauseTokenResponse {}
+
+message MsgUnpauseToken {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string token_id = 2;
+}
+
+message MsgUnpauseTokenResponse {}
+
+message MsgDelegatePower {
+  option (cosmos.msg.v1.signer) = "delegator";
+  string delegator = 1;
+  string token_id = 2;
+  string delegate = 3;
+  string amount = 4;
+}
+
+message MsgDelegatePowerResponse {}
+
+// ============================================================================
+// Wrapping Messages (LGM-20 ↔ IBC-compatible)
+// ============================================================================
+
+message MsgWrapToken {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string token_id = 2;
+  string amount = 3;
+}
+
+message MsgWrapTokenResponse {
+  string wrapped_denom = 1;
+}
+
+message MsgUnwrapToken {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string wrapped_denom = 2;
+  string amount = 3;
+}
+
+message MsgUnwrapTokenResponse {
+  string token_id = 1;
+}
+
+// ============================================================================
+// Liquidity Pool Messages
+// ============================================================================
+
+message MsgAddLiquidity {
+  option (cosmos.msg.v1.signer) = "provider";
+  string provider = 1;
+  string token_a_id = 2;
+  string token_b_id = 3;
+  string amount_a = 4;
+  string amount_b = 5;
+  string min_lp_tokens = 6;
+}
+
+message MsgAddLiquidityResponse {
+  string lp_tokens_minted = 1;
+  string pool_id = 2;
+}
+
+message MsgRemoveLiquidity {
+  option (cosmos.msg.v1.signer) = "provider";
+  string provider = 1;
+  string pool_id = 2;
+  string lp_tokens = 3;
+  string min_amount_a = 4;
+  string min_amount_b = 5;
+}
+
+message MsgRemoveLiquidityResponse {
+  string amount_a = 1;
+  string amount_b = 2;
+}
+
+message MsgSwap {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string pool_id = 2;
+  string token_in_id = 3;
+  string amount_in = 4;
+  string min_amount_out = 5;
+}
+
+message MsgSwapResponse {
+  string amount_out = 1;
+}
+
+// ============================================================================
+// State Types
+// ============================================================================
+
+message TokenDefinition {
+  string id = 1;
+  string creator = 2;
+  string name = 3;
+  string symbol = 4;
+  uint32 decimals = 5;
+  string total_supply = 6;
+  string max_supply = 7;
+  TokenFeatures features = 8;
+  bool paused = 9;
+  uint64 created_at = 10;
+}
+
+message LiquidityPool {
+  string id = 1;
+  string token_a_id = 2;
+  string token_b_id = 3;
+  string reserve_a = 4;
+  string reserve_b = 5;
+  string total_lp_supply = 6;
+  uint32 fee_bps = 7;  // Fee in basis points (e.g., 30 = 0.3%)
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+  repeated TokenDefinition tokens = 2;
+  repeated LiquidityPool pools = 3;
+}
+
+message Params {
+  string token_creation_fee = 1;
+  uint32 default_pool_fee_bps = 2;
+  string min_liquidity = 3;
+}

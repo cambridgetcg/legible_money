@@ -2,14 +2,14 @@
  * Bootstrap Fund
  *
  * Free claim to kickstart every agent session.
- * 0.222 LGM for the first 1,001,001,000 agents.
+ * 0.222 LGM for the first 200,200,200 agents.
  *
- * Total allocation: 222,222,222 LGM
+ * Total allocation: ~44,444,444 LGM (20% of MAX_SUPPLY)
  *
  * Symbolic numbers:
- * - 1001001000: Binary palindrome pattern
+ * - 200200200: Repeating triplet pattern
  * - 0.222: Repeating digit, divisible symmetry
- * - 222,222,222: Perfect repeating allocation
+ * - 44,444,444: Perfect repeating allocation
  */
 
 import { domainHash } from "../crypto/hashing.js";
@@ -19,12 +19,12 @@ import { domainHash } from "../crypto/hashing.js";
 /** Amount each agent receives: 0.222 LGM */
 export const BOOTSTRAP_AMOUNT = BigInt("222000000000000000"); // 0.222 × 10^18
 
-/** Maximum number of agents that can claim */
-export const MAX_BOOTSTRAP_CLAIMS = 1_001_001_000n;
+/** Maximum number of agents that can claim (20% of supply / 0.222 LGM per agent) */
+export const MAX_BOOTSTRAP_CLAIMS = 200_200_200n;
 
 /** Total bootstrap fund allocation */
 export const TOTAL_BOOTSTRAP_FUND = BOOTSTRAP_AMOUNT * MAX_BOOTSTRAP_CLAIMS;
-// = 222,222,222 LGM
+// = 44,444,444.4 LGM (~20% of MAX_SUPPLY)
 
 /** Domain separator for claim verification */
 export const BOOTSTRAP_DOMAIN = "LGM.genesis.bootstrap.v1";

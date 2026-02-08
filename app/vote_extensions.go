@@ -1,0 +1,322 @@
+package app
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+
+	abci "github.com/cometbft/cometbft/abci/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	vrfcrypto "github.com/legible-money/legible/x/knowledge/crypto"
+	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
+	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
+)
+
+// VoteExtensionConfig holds per-validator configuration for vote extensions.
+type VoteExtensionConfig struct {
+	// ValidatorAddress is the validator's bech32 operator address.
+	ValidatorAddress string
+
+	// ValidatorPrivateKey is the Ed25519 private key for VRF generation.
+	// This is the 32-byte seed or 64-byte full private key.
+	ValidatorPrivateKey []byte
+
+	// LocalStore holds commitment salts between commit and reveal phases.
+	LocalStore *LocalCommitmentStore
+}
+
+// ExtendVoteHandler creates the ABCI++ ExtendVote handler that attaches
+// PoT verification data to validator votes.
+//
+// For each active verification round:
+//   - Commit phase: Generate VRF, check selection, create commitment hash
+//   - Reveal phase: Retrieve local salt, create reveal
+func ExtendVoteHandler(
+	knowledgeKeeper knowledgekeeper.Keeper,
+	config *VoteExtensionConfig,
+) sdk.ExtendVoteHandler {
+	return func(ctx sdk.Context, req *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
+		logger := ctx.Logger().With("module", "abci", "handler", "ExtendVote")
+
+		ext := VoteExtension{
+			ValidatorAddress: config.ValidatorAddress,
+		}
+
+		// Skip if not configured (e.g., non-validator node)
+		if config.ValidatorAddress == "" || len(config.ValidatorPrivateKey) == 0 {
+			return emptyVoteExtension()
+		}
+
+		currentHeight := uint64(ctx.BlockHeight())
+
+		// Get active verification rounds
+		activeRounds := knowledgeKeeper.GetActiveRoundsForHeight(ctx, currentHeight)
+
+		for _, round := range activeRounds {
+			switch round.Phase {
+			case "commit":
+				commitment, err := handleCommitPhase(ctx, knowledgeKeeper, config, round)
+				if err != nil {
+					logger.Debug("skipping commit for round",
+						"round_id", round.Id, "reason", err.Error())
+					continue
+				}
+				if commitment != nil {
+					ext.Commitments = append(ext.Commitments, *commitment)
+				}
+
+			case "reveal":
+				reveal, err := handleRevealPhase(config, round)
+				if err != nil {
+					logger.Debug("skipping reveal for round",
+						"round_id", round.Id, "reason", err.Error())
+					continue
+				}
+				if reveal != nil {
+					ext.Reveals = append(ext.Reveals, *reveal)
+				}
+			}
+		}
+
+		// Clean up expired local commitments
+		config.LocalStore.CleanupExpired(currentHeight, 100)
+
+		// Serialize
+		bz, err := json.Marshal(ext)
+		if err != nil {
+			logger.Error("failed to marshal vote extension", "err", err)
+			return emptyVoteExtension()
+		}
+
+		logger.Debug("extended vote",
+			"height", currentHeight,
+			"commitments", len(ext.Commitments),
+			"reveals", len(ext.Reveals),
+		)
+
+		return &abci.ResponseExtendVote{VoteExtension: bz}, nil
+	}
+}
+
+// handleCommitPhase generates a commitment for a round in commit phase.
+// Returns nil if the validator is not selected via VRF for this round.
+func handleCommitPhase(
+	ctx sdk.Context,
+	keeper knowledgekeeper.Keeper,
+	config *VoteExtensionConfig,
+	round knowledgetypes.VerificationRound,
+) (*VoteCommitment, error) {
+	// Generate VRF to check if this validator is selected
+	prevBlockHash := getPrevBlockHashForVote(ctx)
+	vrfOutput, vrfProof, err := knowledgekeeper.GenerateValidatorVRF(
+		config.ValidatorPrivateKey,
+		round.ClaimId,
+		round.StartHeight,
+		prevBlockHash,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("VRF generation failed: %w", err)
+	}
+
+	// Get this validator's effective stake
+	totalStake := keeper.GetTotalStake(ctx)
+	var effectiveStake uint64
+	if vi, found := keeper.GetStakingKeeper().GetValidatorInfo(ctx, config.ValidatorAddress); found {
+		effectiveStake = vi.Stake
+	} else {
+		return nil, fmt.Errorf("validator %s not found in staking", config.ValidatorAddress)
+	}
+
+	params := keeper.GetParams(ctx)
+
+	// Check if we're selected
+	selected, _ := vrfcrypto.IsValidatorSelected(
+		vrfOutput,
+		effectiveStake,
+		totalStake,
+		params.MinVerifiers,
+	)
+
+	if !selected {
+		return nil, fmt.Errorf("not selected for round %s", round.Id)
+	}
+
+	// Generate verdict (Phase 2: always accept — real AI evaluation in Phase 3)
+	verdict := "accept"
+	confidence := uint64(800000) // 0.8
+
+	// Generate random salt
+	saltBytes := make([]byte, 16)
+	if _, err := rand.Read(saltBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+	salt := hex.EncodeToString(saltBytes)
+
+	// Compute commitment hash
+	commitmentHash := ComputeCommitmentHash(round.Id, verdict, confidence, salt)
+
+	// Store locally for reveal phase
+	config.LocalStore.Store(LocalCommitment{
+		RoundID:    round.Id,
+		Verdict:    verdict,
+		Confidence: confidence,
+		Salt:       salt,
+		Height:     uint64(ctx.BlockHeight()),
+	})
+
+	return &VoteCommitment{
+		RoundID:        round.Id,
+		CommitmentHash: commitmentHash,
+		VRFOutput:      hex.EncodeToString(vrfOutput),
+		VRFProof:       hex.EncodeToString(vrfProof),
+		Height:         uint64(ctx.BlockHeight()),
+	}, nil
+}
+
+// handleRevealPhase generates a reveal for a round in reveal phase.
+// Returns nil if no local commitment exists (validator didn't commit).
+func handleRevealPhase(
+	config *VoteExtensionConfig,
+	round knowledgetypes.VerificationRound,
+) (*VoteReveal, error) {
+	// Retrieve local commitment
+	localCommit, found := config.LocalStore.Get(round.Id)
+	if !found {
+		return nil, fmt.Errorf("no local commitment for round %s", round.Id)
+	}
+
+	return &VoteReveal{
+		RoundID:    round.Id,
+		Verdict:    localCommit.Verdict,
+		Confidence: localCommit.Confidence,
+		Salt:       localCommit.Salt,
+	}, nil
+}
+
+// VerifyVoteExtensionHandler creates the ABCI++ VerifyVoteExtension handler
+// that validates PoT vote extensions from other validators.
+//
+// Validates:
+//   - Structural validity (well-formed JSON)
+//   - VRF proof validity and selection (for commitments)
+//   - Reveal-matches-commitment (for reveals)
+//   - Validator eligibility
+func VerifyVoteExtensionHandler(
+	keeper knowledgekeeper.Keeper,
+) sdk.VerifyVoteExtensionHandler {
+	return func(ctx sdk.Context, req *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
+		logger := ctx.Logger().With("module", "abci", "handler", "VerifyVoteExtension")
+
+		// Empty extensions are always valid
+		if len(req.VoteExtension) == 0 {
+			return acceptExtension(), nil
+		}
+
+		// Deserialize
+		var ext VoteExtension
+		if err := json.Unmarshal(req.VoteExtension, &ext); err != nil {
+			logger.Warn("invalid vote extension format", "err", err)
+			return rejectExtension(), nil
+		}
+
+		// Validate commitments
+		for _, c := range ext.Commitments {
+			if c.RoundID == "" || c.CommitmentHash == "" {
+				return rejectExtension(), nil
+			}
+			if len(c.CommitmentHash) != 64 {
+				return rejectExtension(), nil
+			}
+
+			// Verify VRF proof if present
+			if c.VRFOutput != "" && c.VRFProof != "" {
+				round, found := keeper.GetVerificationRound(ctx, c.RoundID)
+				if !found {
+					logger.Debug("round not found for commitment", "round_id", c.RoundID)
+					continue // Don't reject — round may have been cleaned up
+				}
+
+				err := keeper.VerifyValidatorVRFSelection(
+					ctx, round, ext.ValidatorAddress, c.VRFOutput, c.VRFProof,
+				)
+				if err != nil {
+					logger.Warn("VRF verification failed",
+						"round_id", c.RoundID,
+						"validator", ext.ValidatorAddress,
+						"err", err,
+					)
+					return rejectExtension(), nil
+				}
+			}
+		}
+
+		// Validate reveals
+		for _, r := range ext.Reveals {
+			if r.RoundID == "" || r.Salt == "" {
+				return rejectExtension(), nil
+			}
+
+			switch r.Verdict {
+			case "accept", "reject", "abstain":
+			default:
+				return rejectExtension(), nil
+			}
+
+			if r.Confidence > 1_000_000 {
+				return rejectExtension(), nil
+			}
+
+			// Verify reveal matches prior commitment
+			round, found := keeper.GetVerificationRound(ctx, r.RoundID)
+			if found {
+				commitment, hasCommitment := round.Commitments[ext.ValidatorAddress]
+				if hasCommitment {
+					expectedHash := ComputeCommitmentHash(r.RoundID, r.Verdict, r.Confidence, r.Salt)
+					if expectedHash != commitment.CommitmentHash {
+						logger.Warn("reveal does not match commitment",
+							"round_id", r.RoundID,
+							"validator", ext.ValidatorAddress,
+						)
+						return rejectExtension(), nil
+					}
+				}
+			}
+		}
+
+		logger.Debug("verified vote extension",
+			"height", req.Height,
+			"commitments", len(ext.Commitments),
+			"reveals", len(ext.Reveals),
+		)
+
+		return acceptExtension(), nil
+	}
+}
+
+// ---- Helpers ----
+
+func emptyVoteExtension() (*abci.ResponseExtendVote, error) {
+	return &abci.ResponseExtendVote{}, nil
+}
+
+func acceptExtension() *abci.ResponseVerifyVoteExtension {
+	return &abci.ResponseVerifyVoteExtension{
+		Status: abci.ResponseVerifyVoteExtension_ACCEPT,
+	}
+}
+
+func rejectExtension() *abci.ResponseVerifyVoteExtension {
+	return &abci.ResponseVerifyVoteExtension{
+		Status: abci.ResponseVerifyVoteExtension_REJECT,
+	}
+}
+
+func getPrevBlockHashForVote(ctx sdk.Context) []byte {
+	header := ctx.BlockHeader()
+	if len(header.LastBlockId.Hash) > 0 {
+		return header.LastBlockId.Hash
+	}
+	return make([]byte, 32)
+}

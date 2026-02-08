@@ -605,9 +605,9 @@ export interface ParticipationScore {
  * Controls weights, thresholds, and decay for the scoring formula.
  */
 export interface ParticipationConfig {
-  /** Minimum periods (for zero participation). Maps to ~2 days when periodDurationMs = 1 day. */
+  /** Minimum periods (for zero participation). With weekly periods: ~2 weeks. */
   minPeriods: number;
-  /** Maximum periods (for full participation). Maps to ~6 months when periodDurationMs = 1 day. */
+  /** Maximum periods (for full participation). With weekly periods: ~3.5 years. */
   maxPeriods: number;
   /** Half-life for activity decay in blocks. After this many blocks of inactivity, score halves. */
   decayHalfLifeBlocks: bigint;
@@ -635,31 +635,45 @@ export interface ParticipationConfig {
 /**
  * Default participation configuration.
  *
- * With daily periods (periodDurationMs = 86400000):
- * - minPeriods: 2 (2 days for zero contribution)
- * - maxPeriods: 182 (~6 months for max contribution)
+ * With weekly periods (periodDurationMs = 604,800,000):
+ * - minPeriods: 2 (~2 weeks for zero contribution)
+ * - maxPeriods: 182 (~3.5 years for max contribution)
  *
- * Decay half-life: ~2.9 days at 2521ms blocks (100,000 blocks).
+ * Decay half-life: ~14.6 days at 2521ms blocks (500,000 blocks).
+ * Aligned to ~2x the period duration so one week of inactivity costs ~20-30%
+ * of score, not 80%. Matches the timescale at which tokens actually expire.
+ *
+ * Weight rationale (truth-work > capital):
+ * - verifications (0.40): Core PoT activity — highest priority
+ * - claims (0.30): Knowledge submission — second priority
+ * - stake (0.15): Sybil defense, not truth-work — reduced from 0.20
+ * - queries (0.10): Knowledge consumption — reduced until fully wired on-chain
+ * - governance (0.05): Guardian-only — minimal until broader access
+ *
+ * Threshold rationale:
+ * - verificationsForMax: 2000 — sustained weeks of activity, not 1-2 days
+ * - claimsForMax: 50 — quality-gated by 77% validator agreement
+ * - stakeForMax: 10,000 LGM — meaningful commitment between Tier 2 and 3
  */
 export const DEFAULT_PARTICIPATION_CONFIG: ParticipationConfig = {
   minPeriods: 2,
   maxPeriods: 182,
-  decayHalfLifeBlocks: 100_000n,
+  decayHalfLifeBlocks: 500_000n,
   weights: {
-    claims: 0.25,
-    verifications: 0.3,
-    queries: 0.15,
-    governance: 0.1,
-    stake: 0.2,
+    claims: 0.3,
+    verifications: 0.4,
+    queries: 0.1,
+    governance: 0.05,
+    stake: 0.15,
   },
   thresholds: {
     claimsForMax: 50,
-    verificationsForMax: 200,
+    verificationsForMax: 2000,
     queriesForMax: 100,
     votesForMax: 20,
     stakeForMax: 10_000n * 10n ** 18n,
   },
-  minAccountAgeBlocks: 0n,
+  minAccountAgeBlocks: 34_272n,
 };
 
 /**

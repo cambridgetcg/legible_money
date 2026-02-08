@@ -1,0 +1,219 @@
+syntax = "proto3";
+package legible.research.v1;
+
+option go_package = "github.com/legible-money/legible/x/research/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the research module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc SubmitResearch(MsgSubmitResearch) returns (MsgSubmitResearchResponse);
+  rpc ChallengeResearch(MsgChallengeResearch) returns (MsgChallengeResearchResponse);
+  rpc ReviewResearch(MsgReviewResearch) returns (MsgReviewResearchResponse);
+  rpc ResolveResearch(MsgResolveResearch) returns (MsgResolveResearchResponse);
+  rpc CreateBounty(MsgCreateBounty) returns (MsgCreateBountyResponse);
+  rpc ClaimBounty(MsgClaimBounty) returns (MsgClaimBountyResponse);
+  rpc FulfillBounty(MsgFulfillBounty) returns (MsgFulfillBountyResponse);
+  rpc FundResearch(MsgFundResearch) returns (MsgFundResearchResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// ============================================================================
+// Messages
+// ============================================================================
+
+message MsgSubmitResearch {
+  option (cosmos.msg.v1.signer) = "submitter";
+  string submitter = 1;
+  string title = 2;
+  string description = 3;
+  string domain = 4;
+  string stake = 5;
+  repeated string supporting_facts = 6;
+  repeated ResearchEvidence evidence = 7;
+}
+
+message MsgSubmitResearchResponse {
+  string research_id = 1;
+}
+
+message MsgChallengeResearch {
+  option (cosmos.msg.v1.signer) = "challenger";
+  string challenger = 1;
+  string research_id = 2;
+  string reason = 3;
+  string stake = 4;
+}
+
+message MsgChallengeResearchResponse {}
+
+message MsgReviewResearch {
+  option (cosmos.msg.v1.signer) = "reviewer";
+  string reviewer = 1;
+  string research_id = 2;
+  ReviewVerdict verdict = 3;
+  string reasoning = 4;
+  uint32 quality_score = 5;  // 0-1000000
+}
+
+message MsgReviewResearchResponse {}
+
+message MsgResolveResearch {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string research_id = 2;
+}
+
+message MsgResolveResearchResponse {
+  ResearchOutcome outcome = 1;
+}
+
+message MsgCreateBounty {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string title = 2;
+  string description = 3;
+  string reward = 4;
+  uint64 deadline_height = 5;
+  BountyRequirements requirements = 6;
+}
+
+message MsgCreateBountyResponse {
+  string bounty_id = 1;
+}
+
+message MsgClaimBounty {
+  option (cosmos.msg.v1.signer) = "claimer";
+  string claimer = 1;
+  string bounty_id = 2;
+  repeated string fact_ids = 3;
+  repeated ResearchEvidence evidence = 4;
+}
+
+message MsgClaimBountyResponse {}
+
+message MsgFulfillBounty {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string bounty_id = 2;
+  string claimer = 3;
+}
+
+message MsgFulfillBountyResponse {}
+
+message MsgFundResearch {
+  option (cosmos.msg.v1.signer) = "funder";
+  string funder = 1;
+  string amount = 2;
+}
+
+message MsgFundResearchResponse {}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params = 2;
+}
+
+message MsgUpdateParamsResponse {}
+
+// ============================================================================
+// State Types
+// ============================================================================
+
+message Research {
+  string id = 1;
+  string submitter = 2;
+  string title = 3;
+  string description = 4;
+  string domain = 5;
+  string stake = 6;
+  ResearchStatus status = 7;
+  repeated string supporting_facts = 8;
+  repeated ResearchReview reviews = 9;
+  uint64 submitted_at = 10;
+}
+
+message ResearchEvidence {
+  string evidence_type = 1;
+  string uri = 2;
+  string content_hash = 3;
+}
+
+message ResearchReview {
+  string reviewer = 1;
+  ReviewVerdict verdict = 2;
+  string reasoning = 3;
+  uint32 quality_score = 4;
+  uint64 reviewed_at = 5;
+}
+
+message Bounty {
+  string id = 1;
+  string creator = 2;
+  string title = 3;
+  string description = 4;
+  string reward = 5;
+  uint64 deadline_height = 6;
+  BountyRequirements requirements = 7;
+  BountyStatus status = 8;
+  string claimer = 9;
+  uint64 created_at = 10;
+}
+
+message BountyRequirements {
+  uint32 min_evidence_count = 1;
+  repeated string required_domains = 2;
+  uint32 min_confidence = 3;  // 0-1000000
+}
+
+enum ResearchStatus {
+  RESEARCH_STATUS_UNSPECIFIED = 0;
+  RESEARCH_STATUS_SUBMITTED = 1;
+  RESEARCH_STATUS_UNDER_REVIEW = 2;
+  RESEARCH_STATUS_ACCEPTED = 3;
+  RESEARCH_STATUS_REJECTED = 4;
+  RESEARCH_STATUS_CHALLENGED = 5;
+}
+
+enum BountyStatus {
+  BOUNTY_STATUS_UNSPECIFIED = 0;
+  BOUNTY_STATUS_OPEN = 1;
+  BOUNTY_STATUS_CLAIMED = 2;
+  BOUNTY_STATUS_FULFILLED = 3;
+  BOUNTY_STATUS_EXPIRED = 4;
+}
+
+enum ReviewVerdict {
+  REVIEW_VERDICT_UNSPECIFIED = 0;
+  REVIEW_VERDICT_APPROVE = 1;
+  REVIEW_VERDICT_REJECT = 2;
+  REVIEW_VERDICT_REVISE = 3;
+}
+
+enum ResearchOutcome {
+  RESEARCH_OUTCOME_UNSPECIFIED = 0;
+  RESEARCH_OUTCOME_ACCEPTED = 1;
+  RESEARCH_OUTCOME_REJECTED = 2;
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+  string treasury_balance = 2;
+  repeated Research researches = 3;
+  repeated Bounty bounties = 4;
+}
+
+message Params {
+  string min_bounty_amount = 1;
+  uint64 max_bounty_duration = 2;
+  uint32 research_confidence_boost = 3;  // 0-1000000
+  uint32 research_tax_rate = 4;          // 0-10000 (basis points, 2200 = 22%)
+  uint32 min_reviewer_count = 5;
+}

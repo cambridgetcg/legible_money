@@ -1,0 +1,109 @@
+syntax = "proto3";
+package legible.knowledge.v1;
+
+option go_package = "github.com/legible-money/legible/x/knowledge/types";
+
+import "legible/knowledge/v1/claim.proto";
+
+// ============================================================================
+// IBC Knowledge Oracle Packet Types
+// Port: "knowledge", Version: "lgm-knowledge-1", Ordering: UNORDERED
+// ============================================================================
+
+// FactQueryPacket queries a specific fact by ID.
+message FactQueryPacket {
+  string query_id = 1;
+  string fact_id = 2;
+  bool include_proof = 3;
+  uint32 min_confidence = 4;  // 0-1000000
+}
+
+// FactResponsePacket returns fact data in response to a query.
+message FactResponsePacket {
+  string query_id = 1;
+  bool found = 2;
+  Fact fact = 3;
+  MerkleProofData proof = 4;
+  uint64 height = 5;
+}
+
+// DomainQueryPacket queries facts within a knowledge domain.
+message DomainQueryPacket {
+  string query_id = 1;
+  string domain = 2;
+  uint32 min_confidence = 3;  // 0-1000000
+  uint32 limit = 4;
+  string cursor = 5;
+}
+
+// DomainResponsePacket returns domain facts.
+message DomainResponsePacket {
+  string query_id = 1;
+  repeated Fact facts = 2;
+  uint64 total_count = 3;
+  string next_cursor = 4;
+  uint64 height = 5;
+}
+
+// SubscriptionPacket subscribes to updates for a domain or fact.
+message SubscriptionPacket {
+  string subscription_id = 1;
+  SubscriptionTarget target = 2;
+  SubscriptionAction action = 3;
+}
+
+message SubscriptionTarget {
+  oneof target {
+    string fact_id = 1;
+    string domain = 2;
+    bool all = 3;
+  }
+}
+
+enum SubscriptionAction {
+  SUBSCRIPTION_ACTION_UNSPECIFIED = 0;
+  SUBSCRIPTION_ACTION_SUBSCRIBE = 1;
+  SUBSCRIPTION_ACTION_UNSUBSCRIBE = 2;
+}
+
+// UpdateNotificationPacket notifies subscribers of fact changes.
+message UpdateNotificationPacket {
+  string subscription_id = 1;
+  UpdateType update_type = 2;
+  Fact fact = 3;
+  uint64 height = 4;
+}
+
+enum UpdateType {
+  UPDATE_TYPE_UNSPECIFIED = 0;
+  UPDATE_TYPE_CREATED = 1;
+  UPDATE_TYPE_UPDATED = 2;
+  UPDATE_TYPE_CHALLENGED = 3;
+  UPDATE_TYPE_FALSIFIED = 4;
+}
+
+// MerkleProofData for IBC state verification.
+message MerkleProofData {
+  repeated ProofNode nodes = 1;
+  string state_root = 2;
+  string leaf_hash = 3;
+}
+
+message ProofNode {
+  bytes hash = 1;
+  bool is_left = 2;
+}
+
+// ============================================================================
+// Vote Extension for ABCI++ PoT Integration (Phase 2)
+// ============================================================================
+
+// VoteExtension carries PoT verification data in CometBFT votes.
+message VoteExtension {
+  // Commit phase: validator submits commitment hashes
+  repeated VerificationCommitment commitments = 1;
+  // Reveal phase: validator reveals verdicts
+  repeated VerificationReveal reveals = 2;
+  // VRF proof for proposer eligibility
+  bytes vrf_proof = 3;
+}

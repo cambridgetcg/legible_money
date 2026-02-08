@@ -49,7 +49,7 @@ export interface ConsensusParams {
   // Rewards
   blockReward: bigint; // Reward for block production
   verificationReward: bigint; // Base reward for verification
-  claimReward: bigint; // Base reward for accepted claim
+  citationRewardPerFact: bigint; // Reward per cited fact (funded from verification reward pool)
 
   // Slashing
   wrongVerificationSlash: number; // Fraction slashed for wrong verdict
@@ -64,6 +64,10 @@ export interface ConsensusParams {
 
   // Staking
   unbondingPeriod: bigint; // Blocks required for unbonding (~7 days at 2.5s blocks)
+
+  // Emergency governance (Genesis Council for initial operations)
+  genesisEmergencyCouncil?: string[]; // Genesis guardian public keys
+  genesisEmergencyCouncilExpiryBlock?: bigint; // Block height when genesis council expires
 }
 
 export const DEFAULT_CONSENSUS_PARAMS: ConsensusParams = {
@@ -86,11 +90,11 @@ export const DEFAULT_CONSENSUS_PARAMS: ConsensusParams = {
   contestedThreshold: 0.55,
 
   minValidatorStake: 1111n * 10n ** 18n, // 1111 LGM
-  minClaimStake: 111n * 10n ** 18n, // 111 LGM
+  minClaimStake: 11n * 10n ** 18n, // 11 LGM
 
   blockReward: 11n * 10n ** 18n, // 11 LGM
   verificationReward: 1n * 10n ** 18n, // 1 LGM
-  claimReward: 5n * 10n ** 18n, // 5 LGM
+  citationRewardPerFact: 1n * 10n ** 18n, // 1 LGM per cited fact (from reward pool)
 
   wrongVerificationSlash: 0.11, // 11%
   missedVerificationSlash: 0.05, // 5%
@@ -119,6 +123,9 @@ export interface Validator {
   correctVerifications: number;
   missedVerifications: number;
   slashCount: number;
+
+  // Emergency governance tier (1 = standard, 2 = experienced, 3 = guardian)
+  tier?: number;
 }
 
 export interface ValidatorSet {
@@ -543,6 +550,101 @@ export function getTypedPayload<T extends TransactionType>(
   }
   return tx.payload as Extract<TransactionPayload, { type: T }>;
 }
+
+// ============ Validator Tier Types ============
+
+/**
+ * Validator tier levels (0-3)
+ */
+export type ValidatorTier = 0 | 1 | 2 | 3;
+
+/**
+ * Configuration for a single validator tier
+ */
+export interface ValidatorTierConfig {
+  tier: ValidatorTier;
+  name: string;
+  minStake: bigint;
+  minVerifications: number;
+  minAccuracy: number;
+  maxSlashCount: number;
+  selectionWeight: number;
+  rewardMultiplier: number;
+  allowedEpistemicCategories: string[];
+}
+
+/**
+ * Validator tier configuration (frozen)
+ */
+export const VALIDATOR_TIER_CONFIG: Record<ValidatorTier, ValidatorTierConfig> =
+  {
+    0: {
+      tier: 0,
+      name: "Apprentice",
+      minStake: 0n,
+      minVerifications: 0,
+      minAccuracy: 0,
+      maxSlashCount: Infinity,
+      selectionWeight: 0.1,
+      rewardMultiplier: 0.1,
+      allowedEpistemicCategories: ["protocol", "computational", "formal"],
+    },
+    1: {
+      tier: 1,
+      name: "Verified",
+      minStake: 0n,
+      minVerifications: 22,
+      minAccuracy: 0.77,
+      maxSlashCount: Infinity,
+      selectionWeight: 0.5,
+      rewardMultiplier: 0.5,
+      allowedEpistemicCategories: [
+        "protocol",
+        "computational",
+        "formal",
+        "empirical",
+      ],
+    },
+    2: {
+      tier: 2,
+      name: "Bonded",
+      minStake: 1111n * 10n ** 18n,
+      minVerifications: 0,
+      minAccuracy: 0,
+      maxSlashCount: Infinity,
+      selectionWeight: 1.0,
+      rewardMultiplier: 1.0,
+      allowedEpistemicCategories: [
+        "protocol",
+        "computational",
+        "formal",
+        "empirical",
+        "oracle",
+        "attestation",
+      ],
+    },
+    3: {
+      tier: 3,
+      name: "Guardian",
+      minStake: 11111n * 10n ** 18n,
+      minVerifications: 1111,
+      minAccuracy: 0.77,
+      maxSlashCount: 0,
+      selectionWeight: 1.5,
+      rewardMultiplier: 1.5,
+      allowedEpistemicCategories: [
+        "protocol",
+        "computational",
+        "formal",
+        "empirical",
+        "oracle",
+        "attestation",
+        "predictive",
+        "social",
+        "contested",
+      ],
+    },
+  } as const;
 
 export type TransactionType =
   | "transfer"

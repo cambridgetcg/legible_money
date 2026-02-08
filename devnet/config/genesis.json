@@ -44,16 +44,59 @@
   ],
   "initialAccounts": [
     {
-      "did": "did:lgm-devnet:faucet",
-      "balance": "1000000000000000000000000000"
+      "did": "did:lgm:reward-pool",
+      "label": "Block Reward Fund (60%)",
+      "balance": "133333333200000000000000000"
     },
     {
-      "did": "did:lgm-devnet:treasury",
-      "balance": "500000000000000000000000000"
+      "did": "did:lgm:genesis:bootstrap-fund",
+      "label": "Bootstrap Fund (20%)",
+      "balance": "44444444400000000000000000"
     },
     {
       "did": "did:lgm:research",
-      "balance": "100000000000000000000000000"
+      "label": "Research Treasury (77% of 10%)",
+      "balance": "17111111094000000000000000"
+    },
+    {
+      "did": "did:lgm:treasury-foundation",
+      "label": "Foundation Treasury (7% of 10%)",
+      "balance": "1555555554000000000000000"
+    },
+    {
+      "did": "did:lgm:treasury-community",
+      "label": "Community Treasury (7% of 10%)",
+      "balance": "1555555554000000000000000"
+    },
+    {
+      "did": "did:lgm:treasury-developers",
+      "label": "Developer Treasury (7% of 10%)",
+      "balance": "1555555554000000000000000"
+    },
+    {
+      "did": "did:lgm:treasury-reserve",
+      "label": "Reserve Treasury (2% of 10%)",
+      "balance": "444444444000000000000000"
+    },
+    {
+      "did": "did:lgm:genesis:validator-fund",
+      "label": "Validator Genesis Fund (5%)",
+      "balance": "11111111100000000000000000"
+    },
+    {
+      "did": "did:lgm:community-pool",
+      "label": "Community Pool (5%)",
+      "balance": "11111111100000000000000000"
+    },
+    {
+      "did": "did:lgm:protocol-treasury",
+      "label": "Protocol Treasury (operational)",
+      "balance": "0"
+    },
+    {
+      "did": "did:lgm:fee-pool",
+      "label": "Fee Pool (collects tx fees for block producers)",
+      "balance": "0"
     }
   ],
   "genesisAxioms": [
@@ -64,12 +107,12 @@
     },
     {
       "id": "axiom:logic:non-contradiction",
-      "claim": "¬(A ∧ ¬A) (Law of Non-Contradiction)",
+      "claim": "\u00ac(A \u2227 \u00acA) (Law of Non-Contradiction)",
       "domain": "logic.foundational"
     },
     {
       "id": "axiom:logic:excluded-middle",
-      "claim": "A ∨ ¬A (Law of Excluded Middle)",
+      "claim": "A \u2228 \u00acA (Law of Excluded Middle)",
       "domain": "logic.foundational"
     },
     {

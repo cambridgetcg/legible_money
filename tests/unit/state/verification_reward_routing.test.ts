@@ -148,57 +148,7 @@ function createIsolatedTestSetup() {
 
 describe("GAP-006: Verification Reward Routing", () => {
   describe("Accepted Claims", () => {
-    it("should create vesting schedule for claim submitter when claim is accepted", () => {
-      const { state, params, submitterDid, claimId } =
-        createIsolatedTestSetup();
-
-      const fact = createTestFact(claimId, "Water boils at 100°C at sea level");
-      const result = createTestVerificationResult(claimId, "accepted", fact);
-
-      applyVerificationResult(state, result, 200n, params);
-
-      // Verify vesting was created
-      const vesting = state.getVestingForClaim(claimId);
-      expect(vesting).not.toBeNull();
-      expect(vesting!.claimId).toBe(claimId);
-      expect(vesting!.recipient).toBe(submitterDid);
-    });
-
-    it("should route 22% of claim reward across 5 treasury funds", () => {
-      const { state, params, claimId } = createIsolatedTestSetup();
-
-      const fact = createTestFact(claimId, "Water boils at 100°C at sea level");
-      const result = createTestVerificationResult(claimId, "accepted", fact);
-
-      const researchBefore = state.getAccount(RESEARCH_TREASURY_DID)!.balance;
-
-      applyVerificationResult(state, result, 200n, params);
-
-      const researchAfter = state.getAccount(RESEARCH_TREASURY_DID)!.balance;
-      const claimReward = params.claimReward; // 5 LGM
-      // Total evidence tax = 22% of claim reward
-      const totalEvidenceTax = (claimReward * 2200n) / 10000n;
-      // Research fund gets 77% of the evidence tax
-      const expectedResearchShare = (totalEvidenceTax * 7700n) / 10000n;
-
-      expect(researchAfter - researchBefore).toBe(expectedResearchShare);
-
-      // Total across all 5 treasury funds should equal the full 22%
-      const foundationBalance = state.getBalance("did:lgm:treasury-foundation");
-      const communityBalance = state.getBalance("did:lgm:treasury-community");
-      const developersBalance = state.getBalance("did:lgm:treasury-developers");
-      const reserveBalance = state.getBalance("did:lgm:treasury-reserve");
-      const totalTreasury =
-        researchAfter -
-        researchBefore +
-        foundationBalance +
-        communityBalance +
-        developersBalance +
-        reserveBalance;
-      expect(totalTreasury).toBe(totalEvidenceTax);
-    });
-
-    it("should vest 78% of claim reward to submitter", () => {
+    it("should NOT create vesting schedule on acceptance (usage-based rewards only)", () => {
       const { state, params, claimId } = createIsolatedTestSetup();
 
       const fact = createTestFact(claimId, "Water boils at 100°C at sea level");
@@ -206,13 +156,9 @@ describe("GAP-006: Verification Reward Routing", () => {
 
       applyVerificationResult(state, result, 200n, params);
 
+      // No vesting created — rewards come only from usage (citations, API queries)
       const vesting = state.getVestingForClaim(claimId);
-      const claimReward = params.claimReward; // 5 LGM
-      const expectedVestingAmount =
-        claimReward - BigInt(Math.floor(Number(claimReward) * 0.22));
-
-      expect(vesting).not.toBeNull();
-      expect(vesting!.totalAmount).toBe(expectedVestingAmount);
+      expect(vesting).toBeNull();
     });
 
     it("should return staked claim stake to submitter", () => {
@@ -249,7 +195,7 @@ describe("GAP-006: Verification Reward Routing", () => {
       expect(claim!.resultFactId).toBe(claimId);
     });
 
-    it("should determine correct vesting category based on claim type", () => {
+    it("should NOT create vesting for any claim type (usage-based only)", () => {
       const { state, params, submitterDid, claimStake } =
         createIsolatedTestSetup();
 
@@ -278,28 +224,9 @@ describe("GAP-006: Verification Reward Routing", () => {
 
       applyVerificationResult(state, formalResult, 200n, params);
 
+      // No vesting created — rewards come only from usage
       const vesting = state.getVestingForClaim(formalClaimId);
-      expect(vesting).not.toBeNull();
-      // Formal claims should get 'formal_proof' category
-      expect(vesting!.category).toBe("formal_proof");
-    });
-
-    it("should NOT create duplicate vesting for same claim", () => {
-      const { state, params, submitterDid, claimId } =
-        createIsolatedTestSetup();
-
-      const fact = createTestFact(claimId, "Water boils at 100°C at sea level");
-      const result = createTestVerificationResult(claimId, "accepted", fact);
-
-      // Apply once
-      applyVerificationResult(state, result, 200n, params);
-
-      // Get all vestings for this recipient
-      const vestings = state.getVestingsForRecipient(submitterDid);
-
-      // Should only have one vesting for this claim
-      const claimVestings = vestings.filter((v) => v.claimId === claimId);
-      expect(claimVestings).toHaveLength(1);
+      expect(vesting).toBeNull();
     });
   });
 
@@ -473,9 +400,9 @@ describe("GAP-006: Verification Reward Routing", () => {
         applyVerificationResult(state, result, 200n, params);
       }).not.toThrow();
 
-      // Vesting should still be created (reward comes from protocol, not stake)
+      // No vesting — rewards come only from usage (citations, API queries)
       const vesting = state.getVestingForClaim(zeroStakeClaimId);
-      expect(vesting).not.toBeNull();
+      expect(vesting).toBeNull();
     });
 
     it("should handle missing claim gracefully (no crash)", () => {

@@ -1,0 +1,27 @@
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/legible-money/legible
+    except:
+      - buf.build/cosmos/cosmos-sdk
+      - buf.build/googleapis/googleapis
+      - buf.build/cosmos/gogo-proto
+plugins:
+  - plugin: buf.build/protocolbuffers/go
+    out: ..
+    opt:
+      - paths=source_relative
+  - plugin: buf.build/grpc/go
+    out: ..
+    opt:
+      - paths=source_relative
+  - plugin: buf.build/cosmos/cosmos-proto
+    out: ..
+    opt:
+      - paths=source_relative
+  - plugin: buf.build/grpc-ecosystem/grpc-gateway
+    out: ..
+    opt:
+      - paths=source_relative
+      - logtostderr=true

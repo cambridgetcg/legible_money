@@ -192,7 +192,7 @@ export interface ConsensusParams {
   minClaimStake: Amount;
   blockReward: Amount;
   verificationReward: Amount;
-  claimReward: Amount;
+  citationRewardPerFact: Amount;
   wrongVerificationSlash: number;
   missedVerificationSlash: number;
   invalidClaimSlash: number;

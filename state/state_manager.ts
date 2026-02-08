@@ -125,6 +125,25 @@ export class StateManager {
   // Subscription state: serviceId → Map<callerDid, expiresAtBlock>
   private subscriptions: Map<string, Map<string, bigint>> = new Map();
 
+  // Emergency state
+  private emergencyStatus:
+    | "normal"
+    | "halt_voting"
+    | "halted"
+    | "revert_voting"
+    | "reverting"
+    | "resume_voting" = "normal";
+  private lastHaltBlock: bigint | null = null;
+  private haltSnapshotId: string | null = null;
+  private emergencyAuditLog: Array<{
+    timestamp: number;
+    blockNumber: bigint;
+    action: string;
+    actor: string;
+    ceremonyId: string;
+    details: string;
+  }> = [];
+
   private config: StateConfig;
   private version: bigint = 0n;
   private lastBlockHash: string = "0".repeat(64);
@@ -150,6 +169,23 @@ export class StateManager {
     governance: GovernanceStateTree;
     schedules: ReturnType<ScheduleProcessStateManager["exportState"]>;
     subscriptions: Map<string, Map<string, bigint>>;
+    emergencyStatus:
+      | "normal"
+      | "halt_voting"
+      | "halted"
+      | "revert_voting"
+      | "reverting"
+      | "resume_voting";
+    lastHaltBlock: bigint | null;
+    haltSnapshotId: string | null;
+    emergencyAuditLog: Array<{
+      timestamp: number;
+      blockNumber: bigint;
+      action: string;
+      actor: string;
+      ceremonyId: string;
+      details: string;
+    }>;
     version: bigint;
   } | null = null;
 
@@ -1838,6 +1874,92 @@ export class StateManager {
     return this.governance.getNextExpenseNumber();
   }
 
+  // ============ Emergency State Management ============
+
+  /**
+   * Get the current emergency status
+   */
+  getEmergencyStatus():
+    | "normal"
+    | "halt_voting"
+    | "halted"
+    | "revert_voting"
+    | "reverting"
+    | "resume_voting" {
+    return this.emergencyStatus;
+  }
+
+  /**
+   * Set the emergency status
+   */
+  setEmergencyStatus(
+    status:
+      | "normal"
+      | "halt_voting"
+      | "halted"
+      | "revert_voting"
+      | "reverting"
+      | "resume_voting",
+  ): void {
+    this.emergencyStatus = status;
+  }
+
+  /**
+   * Get the block number of the last halt
+   */
+  getLastHaltBlock(): bigint | null {
+    return this.lastHaltBlock;
+  }
+
+  /**
+   * Set the block number of the last halt
+   */
+  setLastHaltBlock(blockNumber: bigint | null): void {
+    this.lastHaltBlock = blockNumber;
+  }
+
+  /**
+   * Get the halt snapshot ID
+   */
+  getHaltSnapshotId(): string | null {
+    return this.haltSnapshotId;
+  }
+
+  /**
+   * Set the halt snapshot ID
+   */
+  setHaltSnapshotId(snapshotId: string | null): void {
+    this.haltSnapshotId = snapshotId;
+  }
+
+  /**
+   * Append an entry to the emergency audit log
+   */
+  appendEmergencyAuditEntry(entry: {
+    timestamp: number;
+    blockNumber: bigint;
+    action: string;
+    actor: string;
+    ceremonyId: string;
+    details: string;
+  }): void {
+    this.emergencyAuditLog.push(entry);
+  }
+
+  /**
+   * Get the full emergency audit log
+   */
+  getEmergencyAuditLog(): Array<{
+    timestamp: number;
+    blockNumber: bigint;
+    action: string;
+    actor: string;
+    ceremonyId: string;
+    details: string;
+  }> {
+    return [...this.emergencyAuditLog];
+  }
+
   // ============ Atomic Operations ============
 
   /**
@@ -1869,6 +1991,10 @@ export class StateManager {
       governance: this.governance.clone(),
       schedules: this.schedules.exportState(),
       subscriptions: cloneSubscriptions(this.subscriptions),
+      emergencyStatus: this.emergencyStatus,
+      lastHaltBlock: this.lastHaltBlock,
+      haltSnapshotId: this.haltSnapshotId,
+      emergencyAuditLog: [...this.emergencyAuditLog],
       version: this.version,
     };
   }
@@ -1920,6 +2046,10 @@ export class StateManager {
     this.governance = this.checkpoint.governance;
     this.schedules.importState(this.checkpoint.schedules);
     this.subscriptions = this.checkpoint.subscriptions;
+    this.emergencyStatus = this.checkpoint.emergencyStatus;
+    this.lastHaltBlock = this.checkpoint.lastHaltBlock;
+    this.haltSnapshotId = this.checkpoint.haltSnapshotId;
+    this.emergencyAuditLog = this.checkpoint.emergencyAuditLog;
     this.version = this.checkpoint.version;
     this.checkpoint = null;
   }
@@ -3033,10 +3163,28 @@ function cloneSubscriptions(
 // ============ Factory Functions ============
 
 /**
+ * System accounts that must exist for protocol operations.
+ * Created with zero balance if not explicitly provided in genesis.
+ */
+const SYSTEM_ACCOUNT_DIDS = [
+  "did:lgm:reward-pool", // Block reward source (REWARD_POOL_DID)
+  "did:lgm:fee-pool", // Transaction fee collection (FEE_POOL_DID)
+  "did:lgm:protocol-treasury", // Protocol treasury (PROTOCOL_TREASURY_DID)
+  "did:lgm:research", // Research treasury
+  "did:lgm:treasury-foundation",
+  "did:lgm:treasury-community",
+  "did:lgm:treasury-developers",
+  "did:lgm:treasury-reserve",
+];
+
+/**
  * Create state manager from genesis configuration
  */
 export function createStateFromGenesis(genesis: GenesisConfig): StateManager {
   const manager = new StateManager();
+
+  // Track which DIDs have been created
+  const createdDids = new Set<string>();
 
   // Create initial accounts
   for (const account of genesis.accounts) {
@@ -3045,6 +3193,14 @@ export function createStateFromGenesis(genesis: GenesisConfig): StateManager {
       account.operationalKeyHash,
       account.balance,
     );
+    createdDids.add(account.did);
+  }
+
+  // Ensure all system accounts exist (create with zero balance if missing)
+  for (const did of SYSTEM_ACCOUNT_DIDS) {
+    if (!createdDids.has(did)) {
+      manager.createAccount(did, "", 0n);
+    }
   }
 
   // Create initial validators

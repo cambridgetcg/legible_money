@@ -390,6 +390,15 @@ export interface EmissionSchedule {
 
   /** Research share rate (22% of all rewards) */
   researchShareRate: number;
+
+  /** Initial block reward fund balance (set at genesis). When set, enables fund health tapering. */
+  initialFundBalance?: bigint;
+
+  /** Fund health threshold — taper begins below this fraction of initial (default 0.10) */
+  fundHealthThreshold?: number;
+
+  /** API suppression exponent (default 2 = quadratic: 1 - s²) */
+  apiSuppressionExponent?: number;
 }
 
 export const DEFAULT_EMISSION_SCHEDULE: EmissionSchedule = {
@@ -408,33 +417,91 @@ export const DEFAULT_EMISSION_SCHEDULE: EmissionSchedule = {
 
   // 22% to research fund
   researchShareRate: 0.22,
+
+  // 60% of MAX_SUPPLY — computed as (222_222_222 × 10^18 × 6000) / 10000
+  initialFundBalance: (222_222_222n * 10n ** 18n * 6000n) / 10000n,
+
+  // Taper begins when fund drops below 10% of initial
+  fundHealthThreshold: 0.1,
+
+  // Quadratic API suppression: reward *= (1 - s²)
+  apiSuppressionExponent: 2,
 };
 
 /**
  * Calculate block reward at a given block height
  *
- * Uses bigint-safe arithmetic: applies the decay multiplier in basis points
- * to avoid Number precision loss on amounts exceeding MAX_SAFE_INTEGER.
+ * R(block) = max(R_initial × timeDecay × apiSuppressor × fundHealth, R_floor)
+ *
+ * - timeDecay: decayFactor^epoch (existing exponential decay)
+ * - apiSuppressor: max(0, 1 - s^exp) where s = apiRevenuePerBlock / baseReward
+ * - fundHealth: linear taper when fund drops below healthThreshold of initial
+ *
+ * All new params are optional — omitting them gives identical behavior to
+ * the original time-only decay, preserving backward compatibility.
  */
 export function calculateBlockReward(
   blockNumber: bigint,
   schedule: EmissionSchedule = DEFAULT_EMISSION_SCHEDULE,
+  apiRevenuePerBlock?: bigint,
+  currentFundBalance?: bigint,
 ): bigint {
   const epoch = blockNumber / schedule.blocksPerEpoch;
   const epochNumber = Number(epoch);
 
-  // R(epoch) = R_initial × decay^epoch
-  // Compute decay as basis points (10000 = 100%) to keep bigint precision
-  // decayFactor 0.90 → 9000 bps per epoch
+  // 1. Time decay: R_initial × decay^epoch (bigint-safe via micro-units)
   const decayBps = BigInt(
     Math.round(Math.pow(schedule.decayFactor, epochNumber) * 1_000_000),
   );
-  const decayedReward = (schedule.initialReward * decayBps) / 1_000_000n;
+  let reward = (schedule.initialReward * decayBps) / 1_000_000n;
 
-  // Apply floor
-  return decayedReward > schedule.floorReward
-    ? decayedReward
-    : schedule.floorReward;
+  // 2. API suppression: reward *= max(0, 1 - s^exp)
+  //    where s = apiRevenuePerBlock / reward, capped at 1.0
+  if (
+    apiRevenuePerBlock !== undefined &&
+    apiRevenuePerBlock > 0n &&
+    reward > 0n
+  ) {
+    // s in basis points (10000 = 1.0)
+    const sBps = (apiRevenuePerBlock * 10000n) / reward;
+    const sCapped = sBps > 10000n ? 10000n : sBps;
+    const exp = schedule.apiSuppressionExponent ?? 2;
+
+    // s^exp in basis points
+    let sExpBps: bigint;
+    if (exp === 2) {
+      sExpBps = (sCapped * sCapped) / 10000n;
+    } else {
+      // Linear fallback for exp === 1
+      sExpBps = sCapped;
+    }
+
+    const suppressorBps = sExpBps > 10000n ? 0n : 10000n - sExpBps;
+    reward = (reward * suppressorBps) / 10000n;
+  }
+
+  // 3. Fund health factor: linear taper when fund drops below threshold
+  if (currentFundBalance !== undefined && schedule.initialFundBalance) {
+    // Hard stop: no reward if fund is empty
+    if (currentFundBalance <= 0n) return 0n;
+
+    const thresholdMicro = BigInt(
+      Math.round((schedule.fundHealthThreshold ?? 0.1) * 1_000_000),
+    );
+    const healthFloor =
+      (schedule.initialFundBalance * thresholdMicro) / 1_000_000n;
+
+    if (currentFundBalance < healthFloor && healthFloor > 0n) {
+      // Linear taper: reward *= fundBalance / healthFloor
+      reward = (reward * currentFundBalance) / healthFloor;
+    }
+  }
+
+  // 4. Apply floor (only if fund has balance or fund tracking is disabled)
+  if (currentFundBalance === undefined || currentFundBalance > 0n) {
+    return reward > schedule.floorReward ? reward : schedule.floorReward;
+  }
+  return reward;
 }
 
 /**

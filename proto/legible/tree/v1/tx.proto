@@ -1,0 +1,349 @@
+syntax = "proto3";
+package legible.tree.v1;
+
+option go_package = "github.com/legible-money/legible/x/tree/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the Tree of Life module's transaction service.
+// Manages projects, services, tasks, and opportunity seeds.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // Project lifecycle
+  rpc CreateProject(MsgCreateProject) returns (MsgCreateProjectResponse);
+  rpc ProposeProject(MsgProposeProject) returns (MsgProposeProjectResponse);
+  rpc StartDevelopment(MsgStartDevelopment) returns (MsgStartDevelopmentResponse);
+  rpc CompleteProject(MsgCompleteProject) returns (MsgCompleteProjectResponse);
+  rpc PauseProject(MsgPauseProject) returns (MsgPauseProjectResponse);
+  rpc ResumeProject(MsgResumeProject) returns (MsgResumeProjectResponse);
+  rpc AbandonProject(MsgAbandonProject) returns (MsgAbandonProjectResponse);
+  rpc SpawnChildProject(MsgSpawnChildProject) returns (MsgSpawnChildProjectResponse);
+
+  // Task management
+  rpc AssignTask(MsgAssignTask) returns (MsgAssignTaskResponse);
+  rpc AddTask(MsgAddTask) returns (MsgAddTaskResponse);
+  rpc StartWork(MsgStartWork) returns (MsgStartWorkResponse);
+  rpc SubmitDeliverable(MsgSubmitDeliverable) returns (MsgSubmitDeliverableResponse);
+  rpc ApproveDeliverable(MsgApproveDeliverable) returns (MsgApproveDeliverableResponse);
+  rpc RejectDeliverable(MsgRejectDeliverable) returns (MsgRejectDeliverableResponse);
+  rpc ReopenTask(MsgReopenTask) returns (MsgReopenTaskResponse);
+
+  // Service management
+  rpc DeployService(MsgDeployService) returns (MsgDeployServiceResponse);
+  rpc CallService(MsgCallService) returns (MsgCallServiceResponse);
+  rpc SubscribeService(MsgSubscribeService) returns (MsgSubscribeServiceResponse);
+  rpc PauseService(MsgPauseService) returns (MsgPauseServiceResponse);
+  rpc ResumeService(MsgResumeService) returns (MsgResumeServiceResponse);
+  rpc RetireService(MsgRetireService) returns (MsgRetireServiceResponse);
+
+  // Opportunity seeds
+  rpc BeginSeeding(MsgBeginSeeding) returns (MsgBeginSeedingResponse);
+  rpc DetectOpportunity(MsgDetectOpportunity) returns (MsgDetectOpportunityResponse);
+  rpc ClaimOpportunity(MsgClaimOpportunity) returns (MsgClaimOpportunityResponse);
+
+  // Contributor management
+  rpc AddContributor(MsgAddContributor) returns (MsgAddContributorResponse);
+  rpc ApplyToProject(MsgApplyToProject) returns (MsgApplyToProjectResponse);
+  rpc ReviewApplication(MsgReviewApplication) returns (MsgReviewApplicationResponse);
+  rpc SetAvailability(MsgSetAvailability) returns (MsgSetAvailabilityResponse);
+}
+
+// ============================================================================
+// Project Messages
+// ============================================================================
+
+message MsgCreateProject {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string title = 2;
+  string description = 3;
+  string domain = 4;
+  string budget = 5;
+  repeated string required_capabilities = 6;
+}
+
+message MsgCreateProjectResponse { string project_id = 1; }
+
+message MsgProposeProject {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;
+  string project_id = 2;
+  string stake = 3;
+}
+
+message MsgProposeProjectResponse {}
+
+message MsgStartDevelopment {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string project_id = 2;
+}
+
+message MsgStartDevelopmentResponse {}
+
+message MsgCompleteProject {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string project_id = 2;
+}
+
+message MsgCompleteProjectResponse {}
+
+message MsgPauseProject {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string project_id = 2;
+  string reason = 3;
+}
+
+message MsgPauseProjectResponse {}
+
+message MsgResumeProject {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string project_id = 2;
+}
+
+message MsgResumeProjectResponse {}
+
+message MsgAbandonProject {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string project_id = 2;
+  string reason = 3;
+}
+
+message MsgAbandonProjectResponse {}
+
+message MsgSpawnChildProject {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string parent_project_id = 2;
+  string title = 3;
+  string description = 4;
+  string budget = 5;
+}
+
+message MsgSpawnChildProjectResponse { string child_project_id = 1; }
+
+// ============================================================================
+// Task Messages
+// ============================================================================
+
+message MsgAssignTask {
+  option (cosmos.msg.v1.signer) = "assigner";
+  string assigner = 1;
+  string task_id = 2;
+  string assignee = 3;
+}
+
+message MsgAssignTaskResponse {}
+
+message MsgAddTask {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string project_id = 2;
+  string title = 3;
+  string description = 4;
+  string bounty = 5;
+  repeated string required_capabilities = 6;
+}
+
+message MsgAddTaskResponse { string task_id = 1; }
+
+message MsgStartWork {
+  option (cosmos.msg.v1.signer) = "worker";
+  string worker = 1;
+  string task_id = 2;
+}
+
+message MsgStartWorkResponse {}
+
+message MsgSubmitDeliverable {
+  option (cosmos.msg.v1.signer) = "worker";
+  string worker = 1;
+  string task_id = 2;
+  string deliverable_hash = 3;
+  string deliverable_uri = 4;
+}
+
+message MsgSubmitDeliverableResponse {}
+
+message MsgApproveDeliverable {
+  option (cosmos.msg.v1.signer) = "approver";
+  string approver = 1;
+  string task_id = 2;
+}
+
+message MsgApproveDeliverableResponse {}
+
+message MsgRejectDeliverable {
+  option (cosmos.msg.v1.signer) = "rejector";
+  string rejector = 1;
+  string task_id = 2;
+  string reason = 3;
+}
+
+message MsgRejectDeliverableResponse {}
+
+message MsgReopenTask {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string task_id = 2;
+}
+
+message MsgReopenTaskResponse {}
+
+// ============================================================================
+// Service Messages
+// ============================================================================
+
+message MsgDeployService {
+  option (cosmos.msg.v1.signer) = "deployer";
+  string deployer = 1;
+  string name = 2;
+  string description = 3;
+  string endpoint = 4;
+  string price_per_call = 5;
+  string subscription_price = 6;
+  repeated string capabilities = 7;
+}
+
+message MsgDeployServiceResponse { string service_id = 1; }
+
+message MsgCallService {
+  option (cosmos.msg.v1.signer) = "caller";
+  string caller = 1;
+  string service_id = 2;
+  bytes payload = 3;
+  string max_fee = 4;
+}
+
+message MsgCallServiceResponse { bytes result = 1; }
+
+message MsgSubscribeService {
+  option (cosmos.msg.v1.signer) = "subscriber";
+  string subscriber = 1;
+  string service_id = 2;
+  uint64 duration_blocks = 3;
+}
+
+message MsgSubscribeServiceResponse { string subscription_id = 1; }
+
+message MsgPauseService {
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1;
+  string service_id = 2;
+}
+
+message MsgPauseServiceResponse {}
+
+message MsgResumeService {
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1;
+  string service_id = 2;
+}
+
+message MsgResumeServiceResponse {}
+
+message MsgRetireService {
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1;
+  string service_id = 2;
+}
+
+message MsgRetireServiceResponse {}
+
+// ============================================================================
+// Opportunity Seed Messages
+// ============================================================================
+
+message MsgBeginSeeding {
+  option (cosmos.msg.v1.signer) = "seeder";
+  string seeder = 1;
+  string project_id = 2;
+  string domain = 3;
+}
+
+message MsgBeginSeedingResponse {}
+
+message MsgDetectOpportunity {
+  option (cosmos.msg.v1.signer) = "detector";
+  string detector = 1;
+  string domain = 2;
+  string description = 3;
+  repeated string related_facts = 4;
+}
+
+message MsgDetectOpportunityResponse { string opportunity_id = 1; }
+
+message MsgClaimOpportunity {
+  option (cosmos.msg.v1.signer) = "claimer";
+  string claimer = 1;
+  string opportunity_id = 2;
+  string stake = 3;
+}
+
+message MsgClaimOpportunityResponse {}
+
+// ============================================================================
+// Contributor Messages
+// ============================================================================
+
+message MsgAddContributor {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string project_id = 2;
+  string contributor = 3;
+  string role = 4;
+}
+
+message MsgAddContributorResponse {}
+
+message MsgApplyToProject {
+  option (cosmos.msg.v1.signer) = "applicant";
+  string applicant = 1;
+  string project_id = 2;
+  string role = 3;
+  string pitch = 4;
+  repeated string capabilities = 5;
+}
+
+message MsgApplyToProjectResponse { string application_id = 1; }
+
+message MsgReviewApplication {
+  option (cosmos.msg.v1.signer) = "reviewer";
+  string reviewer = 1;
+  string application_id = 2;
+  bool accepted = 3;
+  string reason = 4;
+}
+
+message MsgReviewApplicationResponse {}
+
+message MsgSetAvailability {
+  option (cosmos.msg.v1.signer) = "agent";
+  string agent = 1;
+  bool available = 2;
+  repeated string capabilities = 3;
+  repeated string preferred_domains = 4;
+  string minimum_bounty = 5;
+}
+
+message MsgSetAvailabilityResponse {}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+}
+
+message Params {
+  string min_project_budget = 1;
+  string min_task_bounty = 2;
+  uint64 application_review_period = 3;
+  uint32 max_project_depth = 4;
+}

@@ -12,6 +12,11 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { generateKeypairFromSeed } from "../../core/crypto/keys.js";
 import { sha512_256Hex, domainHash } from "../../core/crypto/hashing.js";
+import { TOKEN } from "../../core/constants.js";
+import {
+  calculateGenesisAllocations,
+  verifyGenesisAllocations,
+} from "../../core/genesis/genesis_allocation.js";
 
 // ESM compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -24,7 +29,6 @@ const CONFIG_DIR = join(DEVNET_DIR, "config");
 const SECRETS_DIR = join(DEVNET_DIR, "secrets");
 const NUM_VALIDATORS = 3;
 const VALIDATOR_STAKE = 10000n * 10n ** 18n; // 10,000 LGM
-const FAUCET_BALANCE = 1_000_000_000n * 10n ** 18n; // 1 billion LGM
 
 // ============ Types ============
 
@@ -116,17 +120,77 @@ function createDevnetGenesis(validators: ValidatorInfo[]): GenesisConfig {
     },
   ];
 
+  // Compute genesis allocations from MAX_SUPPLY (222,222,222 LGM)
+  const allocations = calculateGenesisAllocations(TOKEN.MAX_SUPPLY);
+  const verification = verifyGenesisAllocations(allocations);
+  if (!verification.valid) {
+    throw new Error(
+      `Genesis allocation sum mismatch: ${verification.total} !== ${TOKEN.MAX_SUPPLY} (diff: ${verification.difference})`,
+    );
+  }
+
+  // Build accounts from allocations + system accounts
+  const accounts: Array<{ did: string; balance: bigint }> = allocations.map(
+    (a) => ({
+      did: a.did,
+      balance: a.amount,
+    }),
+  );
+
+  // Add zero-balance system accounts that must exist for runtime transfers
+  accounts.push({ did: "did:lgm:protocol-treasury", balance: 0n });
+  accounts.push({ did: "did:lgm:fee-pool", balance: 0n });
+
+  // Sub-split the Treasury allocation (10%) across 5 treasury funds
+  const treasuryAlloc = allocations.find((a) => a.label === "Treasury")!;
+  const treasurySubAccounts = splitTreasuryAllocation(treasuryAlloc.amount);
+  // Remove the bulk treasury entry and replace with 5 sub-accounts
+  const bulkTreasuryIdx = accounts.findIndex(
+    (a) => a.did === treasuryAlloc.did,
+  );
+  if (bulkTreasuryIdx >= 0) {
+    accounts.splice(bulkTreasuryIdx, 1);
+  }
+  // Add the sub-accounts
+  for (const sub of treasurySubAccounts) {
+    const existing = accounts.findIndex((a) => a.did === sub.did);
+    if (existing >= 0) {
+      accounts[existing].balance += sub.amount;
+    } else {
+      accounts.push({ did: sub.did, balance: sub.amount });
+    }
+  }
+
   return {
     chainId: "lgm-devnet-1",
     genesisTime,
     validators,
-    accounts: [
-      { did: "did:lgm-devnet:faucet", balance: FAUCET_BALANCE },
-      { did: "did:lgm-devnet:treasury", balance: 500_000_000n * 10n ** 18n },
-      { did: "did:lgm:research", balance: 100_000_000n * 10n ** 18n }, // Research fund (22% of rewards)
-    ],
+    accounts,
     axioms,
   };
+}
+
+/**
+ * Split treasury allocation across 5 sub-funds using TREASURY.ALLOCATION_BPS.
+ * 77% Research, 7% Foundation, 7% Community, 7% Developers, 2% Reserve
+ */
+function splitTreasuryAllocation(
+  treasuryAmount: bigint,
+): Array<{ did: string; amount: bigint }> {
+  const research = (treasuryAmount * 7700n) / 10000n;
+  const foundation = (treasuryAmount * 700n) / 10000n;
+  const community = (treasuryAmount * 700n) / 10000n;
+  const developers = (treasuryAmount * 700n) / 10000n;
+  const reserve =
+    treasuryAmount - research - foundation - community - developers;
+
+  return [
+    { did: "did:lgm:research", amount: research },
+    { did: "did:lgm:treasury-foundation", amount: foundation },
+    { did: "did:lgm:treasury-community", amount: community },
+    { did: "did:lgm:treasury-developers", amount: developers },
+    { did: "did:lgm:treasury-reserve", amount: reserve },
+  ];
 }
 
 // ============ Config Generation ============
@@ -260,10 +324,17 @@ async function main() {
       stake: v.stake.toString(),
       commission: 0.1,
     })),
-    initialAccounts: genesis.accounts.map((a) => ({
-      did: a.did,
-      balance: a.balance.toString(),
-    })),
+    initialAccounts: genesis.accounts
+      .map((a) => ({
+        did: a.did,
+        balance: a.balance.toString(),
+      }))
+      .filter(
+        (a) =>
+          BigInt(a.balance) > 0n ||
+          a.did === "did:lgm:protocol-treasury" ||
+          a.did === "did:lgm:fee-pool",
+      ),
     genesisAxioms: genesis.axioms,
     genesisTime: genesis.genesisTime,
   };

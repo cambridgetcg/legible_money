@@ -1,0 +1,326 @@
+// Package crypto provides VRF (Verifiable Random Function) for fair validator selection.
+//
+// Based on ECVRF using Ed25519 (RFC 9381 simplified).
+// Properties:
+// - Uniqueness: For any input, only one valid output per key
+// - Unpredictability: Output cannot be predicted without private key
+// - Verifiability: Anyone can verify output with public key
+package crypto
+
+import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"math/big"
+
+	"filippo.io/edwards25519"
+)
+
+var (
+	ErrInvalidProofLength = errors.New("VRF proof must be 96 bytes (32 Gamma + 32 c + 32 s)")
+	ErrInvalidPublicKey   = errors.New("invalid Ed25519 public key")
+	ErrInvalidProof       = errors.New("VRF proof verification failed")
+	ErrHashToCurveFailed  = errors.New("failed to hash to curve after 256 attempts")
+
+	// curveOrder is the Ed25519 group order (ℓ).
+	curveOrder, _ = new(big.Int).SetString("7237005577332262213973186563042994240857116359379907606001950938285454250989", 10)
+)
+
+// GenerateVRF produces a VRF output and proof from a seed and Ed25519 private key.
+// The private key should be a 64-byte Ed25519 private key (seed + public key)
+// or a 32-byte seed.
+func GenerateVRF(seed, privateKey []byte) (output, proof []byte, err error) {
+	// Normalize private key to 32-byte seed
+	var skSeed []byte
+	switch len(privateKey) {
+	case 64:
+		skSeed = privateKey[:32]
+	case 32:
+		skSeed = privateKey
+	default:
+		return nil, nil, fmt.Errorf("private key must be 32 or 64 bytes, got %d", len(privateKey))
+	}
+
+	// Domain-separate the seed
+	domainSeparated := domainHash("LGM.vrf.v1", seed)
+
+	// H = hash_to_curve(domain_separated_input)
+	H, err := hashToCurve(domainSeparated)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Derive scalar from Ed25519 seed (SHA-512 + clamp)
+	skScalar := deriveScalarFromSeed(skSeed)
+
+	// Gamma = sk * H
+	Gamma := new(edwards25519.Point).ScalarMult(skScalar, H)
+
+	// Generate deterministic nonce: k = hash(sk_seed || H_bytes) mod ℓ
+	kHash := sha512.Sum512(append(skSeed, H.Bytes()...))
+	k := scalarFromBytes(kHash[:32])
+
+	// U = k * G
+	G := edwards25519.NewGeneratorPoint()
+	U := new(edwards25519.Point).ScalarMult(k, G)
+
+	// V = k * H
+	V := new(edwards25519.Point).ScalarMult(k, H)
+
+	// Derive public key for challenge computation
+	pk := ed25519.NewKeyFromSeed(skSeed).Public().(ed25519.PublicKey)
+
+	// c = hash(H, pk, Gamma, U, V) mod ℓ
+	c := computeChallenge(H.Bytes(), pk, Gamma.Bytes(), U.Bytes(), V.Bytes())
+
+	// s = k - c * sk (mod ℓ)
+	cTimesSk := new(edwards25519.Scalar).Multiply(c, skScalar)
+	s := new(edwards25519.Scalar).Subtract(k, cTimesSk)
+
+	// Output = SHA-256(Gamma)
+	outputHash := sha256.Sum256(Gamma.Bytes())
+	output = outputHash[:]
+
+	// Proof = (Gamma || c || s) = 96 bytes
+	proof = make([]byte, 96)
+	copy(proof[0:32], Gamma.Bytes())
+	copy(proof[32:64], c.Bytes())
+	copy(proof[64:96], s.Bytes())
+
+	return output, proof, nil
+}
+
+// VerifyVRF verifies a VRF proof and returns the output if valid.
+func VerifyVRF(seed, publicKey, proof []byte) (output []byte, valid bool) {
+	if len(proof) != 96 {
+		return nil, false
+	}
+	if len(publicKey) != 32 {
+		return nil, false
+	}
+
+	// Parse proof components
+	Gamma, err := new(edwards25519.Point).SetBytes(proof[0:32])
+	if err != nil {
+		return nil, false
+	}
+	c, err := new(edwards25519.Scalar).SetCanonicalBytes(proof[32:64])
+	if err != nil {
+		return nil, false
+	}
+	s, err := new(edwards25519.Scalar).SetCanonicalBytes(proof[64:96])
+	if err != nil {
+		return nil, false
+	}
+
+	// Domain-separate the seed
+	domainSeparated := domainHash("LGM.vrf.v1", seed)
+
+	// H = hash_to_curve(domain_separated_input)
+	H, err := hashToCurve(domainSeparated)
+	if err != nil {
+		return nil, false
+	}
+
+	// Parse public key as point
+	PK, err := new(edwards25519.Point).SetBytes(publicKey)
+	if err != nil {
+		return nil, false
+	}
+
+	// U' = s*G + c*PK
+	G := edwards25519.NewGeneratorPoint()
+	sG := new(edwards25519.Point).ScalarMult(s, G)
+	cPK := new(edwards25519.Point).ScalarMult(c, PK)
+	Uprime := new(edwards25519.Point).Add(sG, cPK)
+
+	// V' = s*H + c*Gamma
+	sH := new(edwards25519.Point).ScalarMult(s, H)
+	cGamma := new(edwards25519.Point).ScalarMult(c, Gamma)
+	Vprime := new(edwards25519.Point).Add(sH, cGamma)
+
+	// c' = hash(H, pk, Gamma, U', V')
+	cPrime := computeChallenge(H.Bytes(), publicKey, Gamma.Bytes(), Uprime.Bytes(), Vprime.Bytes())
+
+	// Verify c == c'
+	if c.Equal(cPrime) != 1 {
+		return nil, false
+	}
+
+	// Output = SHA-256(Gamma)
+	outputHash := sha256.Sum256(Gamma.Bytes())
+	return outputHash[:], true
+}
+
+// IsValidatorSelected checks if a validator is selected based on VRF output and stake.
+// Selection probability = (stake / totalStake) * targetCount.
+// Returns selected status and priority (lower = higher priority).
+func IsValidatorSelected(vrfOutput []byte, stake, totalStake uint64, targetCount uint32) (selected bool, priority uint64) {
+	if len(vrfOutput) < 8 || totalStake == 0 {
+		return false, 0
+	}
+
+	// Use first 8 bytes as priority value
+	outputNum := binary.BigEndian.Uint64(vrfOutput[:8])
+	maxNum := new(big.Int).SetUint64(0)
+	maxNum.SetBit(maxNum, 64, 1) // 2^64
+
+	// Selection: outputNum * totalStake < stake * targetCount * 2^64
+	left := new(big.Int).SetUint64(outputNum)
+	left.Mul(left, new(big.Int).SetUint64(totalStake))
+
+	right := new(big.Int).SetUint64(stake)
+	right.Mul(right, new(big.Int).SetUint64(uint64(targetCount)))
+	right.Mul(right, maxNum)
+
+	selected = left.Cmp(right) < 0
+	priority = outputNum
+
+	return selected, priority
+}
+
+// GenerateVRFSeed creates a deterministic seed for verification round VRF.
+// seed = SHA-256("LGM.vrf.seed.v1:" || claimID || ":" || blockNumber || ":" || prevBlockHash)
+func GenerateVRFSeed(claimID string, blockNumber uint64, prevBlockHash []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte("LGM.vrf.seed.v1:verification:"))
+	h.Write([]byte(claimID))
+	h.Write([]byte(":"))
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, blockNumber)
+	h.Write(buf)
+	h.Write([]byte(":"))
+	h.Write(prevBlockHash)
+	return h.Sum(nil)
+}
+
+// GenerateBlockSeed creates a deterministic seed for block proposal VRF.
+func GenerateBlockSeed(prevBlockHash []byte, blockNumber, epoch uint64) []byte {
+	h := sha256.New()
+	h.Write([]byte("LGM.vrf.blockseed.v1:"))
+	h.Write(prevBlockHash)
+	h.Write([]byte(":"))
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, blockNumber)
+	h.Write(buf)
+	h.Write([]byte(":"))
+	binary.BigEndian.PutUint64(buf, epoch)
+	h.Write(buf)
+	return h.Sum(nil)
+}
+
+// ---- Internal helpers ----
+
+// domainHash produces a domain-separated SHA-256 hash.
+func domainHash(domain string, data []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte(domain))
+	h.Write([]byte(":"))
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+// deriveScalarFromSeed derives the Ed25519 scalar from a 32-byte seed.
+// Ed25519 key derivation: seed → SHA-512 → first 32 bytes clamped.
+func deriveScalarFromSeed(seed []byte) *edwards25519.Scalar {
+	h := sha512.Sum512(seed)
+	scalar := h[:32]
+
+	// Clamp (standard Ed25519 clamping)
+	scalar[0] &= 248  // Clear bits 0, 1, 2
+	scalar[31] &= 127 // Clear bit 255
+	scalar[31] |= 64  // Set bit 254
+
+	s, err := new(edwards25519.Scalar).SetBytesWithClamping(seed)
+	if err != nil {
+		// Fallback: use the manually clamped bytes
+		s, _ = new(edwards25519.Scalar).SetCanonicalBytes(scalar)
+	}
+	return s
+}
+
+// hashToCurve implements a simplified hash-to-curve for Ed25519.
+// Tries successive attempts until finding a valid curve point,
+// then multiplies by cofactor (8) to ensure prime-order subgroup.
+func hashToCurve(input []byte) (*edwards25519.Point, error) {
+	for attempt := 0; attempt < 256; attempt++ {
+		h := sha512.Sum512(append(input, byte(attempt)))
+		point, err := new(edwards25519.Point).SetBytes(h[:32])
+		if err != nil {
+			continue
+		}
+
+		// Multiply by cofactor (8) to clear low-order components
+		eight := scalarFromUint64(8)
+		cleared := new(edwards25519.Point).ScalarMult(eight, point)
+
+		// Check result is not identity
+		if cleared.Equal(edwards25519.NewIdentityPoint()) == 1 {
+			continue
+		}
+
+		return cleared, nil
+	}
+	return nil, ErrHashToCurveFailed
+}
+
+// computeChallenge computes c = SHA-512(H || pk || Gamma || U || V) mod ℓ,
+// taking only the first 24 bytes of the hash to reduce bias.
+func computeChallenge(h, pk, gamma, u, v []byte) *edwards25519.Scalar {
+	combined := make([]byte, 0, len(h)+len(pk)+len(gamma)+len(u)+len(v))
+	combined = append(combined, h...)
+	combined = append(combined, pk...)
+	combined = append(combined, gamma...)
+	combined = append(combined, u...)
+	combined = append(combined, v...)
+
+	hash := sha512.Sum512(combined)
+
+	// Use first 24 bytes to reduce modular bias
+	num := new(big.Int).SetBytes(hash[:24])
+	num.Mod(num, curveOrder)
+
+	// Convert to 32-byte little-endian for edwards25519.Scalar
+	b := num.Bytes()
+	// Reverse for little-endian
+	le := make([]byte, 32)
+	for i, v := range b {
+		le[len(b)-1-i] = v
+	}
+
+	s, err := new(edwards25519.Scalar).SetCanonicalBytes(le)
+	if err != nil {
+		// Should not happen with proper mod reduction
+		return new(edwards25519.Scalar)
+	}
+	return s
+}
+
+// scalarFromBytes creates a scalar from 32 bytes by reducing mod ℓ.
+func scalarFromBytes(b []byte) *edwards25519.Scalar {
+	num := new(big.Int).SetBytes(b)
+	num.Mod(num, curveOrder)
+
+	be := num.Bytes()
+	le := make([]byte, 32)
+	for i, v := range be {
+		le[len(be)-1-i] = v
+	}
+
+	s, err := new(edwards25519.Scalar).SetCanonicalBytes(le)
+	if err != nil {
+		return new(edwards25519.Scalar)
+	}
+	return s
+}
+
+// scalarFromUint64 creates a scalar from a uint64 value.
+func scalarFromUint64(v uint64) *edwards25519.Scalar {
+	b := make([]byte, 32)
+	binary.LittleEndian.PutUint64(b, v)
+	s, _ := new(edwards25519.Scalar).SetCanonicalBytes(b)
+	return s
+}

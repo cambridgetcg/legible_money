@@ -1,13 +1,43 @@
 # Current Project State
 
-> **Last Updated**: 2026-02-06
-> **Session**: KnowledgeStateTree Tests + Tree of Knowledge Review
+> **Last Updated**: 2026-02-08
+> **Session**: Cosmos SDK Migration — Phase 2 Complete + Emergency Module
 
 ---
 
 ## Active Development Phase
 
-**Modular Architecture Migration** ✅ COMPLETE (Phases 1-4)
+### Cosmos SDK Migration — Phase 1: Core Chain MVC with IBC ✅ COMPLETE
+
+Built a compilable Cosmos SDK chain binary (`legbled`) with 83 Go files (~9,913 LOC).
+
+**Build status**: `go build ./...` ✅ | `go vet ./...` ✅ | Binary runs ✅
+
+| Component | Files | Status |
+|-----------|-------|--------|
+| App layer (app.go, ante.go, abci.go, gas.go) | 4 | ✅ Complete |
+| CLI (main.go, root.go, config.go, genesis.go) | 4 | ✅ Complete |
+| x/knowledge (keeper, msg_server, state, types, module) | 12 | ✅ Full implementation |
+| x/auth (dual-key, DID mapping, key rotation) | 7 | ✅ Full implementation |
+| x/staking (4-tier graduated validators) | 10 | ✅ Full implementation |
+| x/emergency (3-phase BFT kill switch) | 9 | ✅ Full implementation |
+| 9 stub modules (Phase 3+) | ~45 | ✅ Scaffolded |
+| Migration tool stub | 1 | ✅ Scaffolded |
+| Proto files | 5 | Existing (from earlier) |
+
+**Key capabilities**:
+- 16 standard Cosmos SDK keepers + 4 custom Legible Money keepers
+- IBC with capability keeper (ScopedIBCKeeper, ScopedTransferKeeper)
+- ABCI++ vote extension stubs for PoT consensus (Phase 2)
+- LGM gas cost table (38 tx types) + fee routing (22% research / 78% validators)
+- CometBFT config: 2521ms block time
+- `add-genesis-account` + `migrate-genesis` (Phase 5 stub) CLI commands
+
+**Next**: Phase 2 (Knowledge + PoT on ABCI++), integration tests, protobuf generation
+
+---
+
+**Modular Architecture Migration (TypeScript)** ✅ COMPLETE (Phases 1-4)
 
 Completed 4-phase architecture modularization following ARCH patterns:
 - Phase 1: Foundation Extraction ✅

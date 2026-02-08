@@ -30,7 +30,7 @@ import {
   type GenesisConfig,
   calculateSustainabilityMetrics,
   assessLoopHealth,
-} from './types.js';
+} from "./types.js";
 
 // ============ Loop State ============
 
@@ -49,6 +49,12 @@ export interface LoopState {
 
   /** Cumulative block rewards emitted */
   totalBlockRewardsEmitted: bigint;
+
+  /** Current block reward fund balance (draws down from genesis allocation) */
+  blockRewardFundBalance: bigint;
+
+  /** Projected block at which fund will be exhausted (null if self-sustaining) */
+  projectedFundExhaustionBlock: bigint | null;
 
   /** API revenue metrics (rolling window) */
   apiRevenueMetrics: APIRevenueMetrics;
@@ -164,27 +170,37 @@ export interface LoopEfficiency {
 }
 
 export function calculateLoopEfficiency(state: LoopState): LoopEfficiency {
-  const bountyConversionRate = state.bountyPool.activeBountiesCount > 0
-    ? state.bountyPool.bountiesFulfilledThisEpoch / state.bountyPool.bountiesCreatedThisEpoch
-    : 0;
+  const bountyConversionRate =
+    state.bountyPool.activeBountiesCount > 0
+      ? state.bountyPool.bountiesFulfilledThisEpoch /
+        state.bountyPool.bountiesCreatedThisEpoch
+      : 0;
 
-  const truthDiscoveryCost = state.knowledgeBase.factsAddedThisEpoch > 0
-    ? state.researchFund.totalBountyFunding / BigInt(state.knowledgeBase.factsAddedThisEpoch)
-    : 0n;
+  const truthDiscoveryCost =
+    state.knowledgeBase.factsAddedThisEpoch > 0
+      ? state.researchFund.totalBountyFunding /
+        BigInt(state.knowledgeBase.factsAddedThisEpoch)
+      : 0n;
 
-  const apiValuePerFact = state.knowledgeBase.totalFacts > 0
-    ? state.apiRevenueMetrics.totalRevenue / BigInt(state.knowledgeBase.totalFacts)
-    : 0n;
+  const apiValuePerFact =
+    state.knowledgeBase.totalFacts > 0
+      ? state.apiRevenueMetrics.totalRevenue /
+        BigInt(state.knowledgeBase.totalFacts)
+      : 0n;
 
-  const knowledgeMonetizationRate = state.knowledgeBase.totalFacts > 0
-    ? state.apiRevenueMetrics.totalRevenue / BigInt(state.knowledgeBase.totalFacts)
-    : 0n;
+  const knowledgeMonetizationRate =
+    state.knowledgeBase.totalFacts > 0
+      ? state.apiRevenueMetrics.totalRevenue /
+        BigInt(state.knowledgeBase.totalFacts)
+      : 0n;
 
   // Loop velocity: how many times value circulates per epoch
   // API revenue → research → bounty → fact → API (one loop)
-  const loopVelocity = state.researchFund.totalInflow > 0n
-    ? Number(state.apiRevenueMetrics.totalRevenue) / Number(state.researchFund.totalInflow)
-    : 0;
+  const loopVelocity =
+    state.researchFund.totalInflow > 0n
+      ? Number(state.apiRevenueMetrics.totalRevenue) /
+        Number(state.researchFund.totalInflow)
+      : 0;
 
   return {
     bountyConversionRate,
@@ -211,7 +227,7 @@ export type LoopEvent =
   | FactFalsifiedEvent;
 
 export interface BlockProducedEvent {
-  type: 'block_produced';
+  type: "block_produced";
   blockNumber: bigint;
   blockReward: bigint;
   researchShare: bigint;
@@ -219,7 +235,7 @@ export interface BlockProducedEvent {
 }
 
 export interface APICallEvent {
-  type: 'api_call';
+  type: "api_call";
   callId: string;
   revenue: bigint;
   factsUsed: string[];
@@ -228,7 +244,7 @@ export interface APICallEvent {
 }
 
 export interface ClaimSubmittedEvent {
-  type: 'claim_submitted';
+  type: "claim_submitted";
   claimId: string;
   submitter: string;
   stake: bigint;
@@ -236,16 +252,16 @@ export interface ClaimSubmittedEvent {
 }
 
 export interface ClaimVerifiedEvent {
-  type: 'claim_verified';
+  type: "claim_verified";
   claimId: string;
-  outcome: 'accepted' | 'rejected' | 'contested';
+  outcome: "accepted" | "rejected" | "contested";
   factId?: string;
   rewards: Map<string, bigint>;
   researchShare: bigint;
 }
 
 export interface BountyCreatedEvent {
-  type: 'bounty_created';
+  type: "bounty_created";
   bountyId: string;
   value: bigint;
   targetClaim: string;
@@ -253,23 +269,23 @@ export interface BountyCreatedEvent {
 }
 
 export interface BountyFulfilledEvent {
-  type: 'bounty_fulfilled';
+  type: "bounty_fulfilled";
   bountyId: string;
   fulfiller: string;
   researchId: string;
-  outcome: 'confirms' | 'refutes' | 'inconclusive' | 'fraud_detected';
+  outcome: "confirms" | "refutes" | "inconclusive" | "fraud_detected";
 }
 
 export interface ResearchSubmittedEvent {
-  type: 'research_submitted';
+  type: "research_submitted";
   researchId: string;
   researcher: string;
   targetClaim: string;
-  outcome: 'confirms' | 'refutes' | 'inconclusive' | 'fraud_detected';
+  outcome: "confirms" | "refutes" | "inconclusive" | "fraud_detected";
 }
 
 export interface FactFalsifiedEvent {
-  type: 'fact_falsified';
+  type: "fact_falsified";
   factId: string;
   challenger: string;
   clawbackAmount: bigint;
@@ -296,6 +312,8 @@ export class LoopController {
       currentEpoch: 0n,
       emissionSchedule: config.emissionSchedule,
       totalBlockRewardsEmitted: 0n,
+      blockRewardFundBalance: config.emissionSchedule.initialFundBalance ?? 0n,
+      projectedFundExhaustionBlock: null,
       apiRevenueMetrics: {
         totalCalls: 0n,
         totalRevenue: 0n,
@@ -327,7 +345,7 @@ export class LoopController {
         factsChallengedThisEpoch: 0,
         factsFalsifiedThisEpoch: 0,
         averageConfidence: 1.0, // Seed facts are axiomatic
-        activeDomains: new Set(config.seedFacts.map(f => f.domain)).size,
+        activeDomains: new Set(config.seedFacts.map((f) => f.domain)).size,
         topRevenueGenerators: [],
       },
       sustainability: this.calculateInitialSustainability(config),
@@ -335,7 +353,9 @@ export class LoopController {
     };
   }
 
-  private calculateInitialSustainability(config: GenesisConfig): SustainabilityMetrics {
+  private calculateInitialSustainability(
+    config: GenesisConfig,
+  ): SustainabilityMetrics {
     return calculateSustainabilityMetrics(
       0n,
       {
@@ -349,7 +369,7 @@ export class LoopController {
       },
       0n,
       0n,
-      config.emissionSchedule
+      config.emissionSchedule,
     );
   }
 
@@ -362,7 +382,7 @@ export class LoopController {
       0, // api calls
       0, // pending bounties
       0, // fulfilled bounties
-      config.seedFacts.length // seed facts
+      config.seedFacts.length, // seed facts
     );
   }
 
@@ -373,22 +393,22 @@ export class LoopController {
     this.eventHistory.push(event);
 
     switch (event.type) {
-      case 'block_produced':
+      case "block_produced":
         this.handleBlockProduced(event);
         break;
-      case 'api_call':
+      case "api_call":
         this.handleAPICall(event);
         break;
-      case 'claim_verified':
+      case "claim_verified":
         this.handleClaimVerified(event);
         break;
-      case 'bounty_created':
+      case "bounty_created":
         this.handleBountyCreated(event);
         break;
-      case 'bounty_fulfilled':
+      case "bounty_fulfilled":
         this.handleBountyFulfilled(event);
         break;
-      case 'fact_falsified':
+      case "fact_falsified":
         this.handleFactFalsified(event);
         break;
     }
@@ -398,10 +418,21 @@ export class LoopController {
 
   private handleBlockProduced(event: BlockProducedEvent): void {
     this.state.currentBlock = event.blockNumber;
-    this.state.currentEpoch = event.blockNumber / this.state.emissionSchedule.blocksPerEpoch;
+    this.state.currentEpoch =
+      event.blockNumber / this.state.emissionSchedule.blocksPerEpoch;
     this.state.totalBlockRewardsEmitted += event.blockReward;
+    this.state.blockRewardFundBalance -= event.blockReward;
     this.state.researchFund.balance += event.researchShare;
     this.state.researchFund.totalInflow += event.researchShare;
+
+    // Project fund exhaustion based on current draw rate
+    if (event.blockReward > 0n && this.state.blockRewardFundBalance > 0n) {
+      this.state.projectedFundExhaustionBlock =
+        event.blockNumber +
+        this.state.blockRewardFundBalance / event.blockReward;
+    } else if (this.state.blockRewardFundBalance <= 0n) {
+      this.state.projectedFundExhaustionBlock = event.blockNumber;
+    }
   }
 
   private handleAPICall(event: APICallEvent): void {
@@ -418,7 +449,7 @@ export class LoopController {
   }
 
   private handleClaimVerified(event: ClaimVerifiedEvent): void {
-    if (event.outcome === 'accepted' && event.factId) {
+    if (event.outcome === "accepted" && event.factId) {
       this.state.knowledgeBase.totalFacts++;
       this.state.knowledgeBase.factsAddedThisEpoch++;
     }
@@ -438,9 +469,9 @@ export class LoopController {
     this.state.bountyPool.activeBountiesCount--;
     this.state.bountyPool.bountiesFulfilledThisEpoch++;
 
-    if (event.outcome === 'confirms') {
+    if (event.outcome === "confirms") {
       this.state.knowledgeBase.factsAddedThisEpoch++;
-    } else if (event.outcome === 'fraud_detected') {
+    } else if (event.outcome === "fraud_detected") {
       this.state.knowledgeBase.factsFalsifiedThisEpoch++;
     }
   }
@@ -452,11 +483,13 @@ export class LoopController {
 
   private updateMetrics(): void {
     // Update rolling averages
-    const blocks = this.state.currentBlock - this.state.apiRevenueMetrics.periodStart;
+    const blocks =
+      this.state.currentBlock - this.state.apiRevenueMetrics.periodStart;
     if (blocks > 0n) {
       this.state.apiRevenueMetrics.averageRevenuePerCall =
         this.state.apiRevenueMetrics.totalCalls > 0n
-          ? this.state.apiRevenueMetrics.totalRevenue / this.state.apiRevenueMetrics.totalCalls
+          ? this.state.apiRevenueMetrics.totalRevenue /
+            this.state.apiRevenueMetrics.totalCalls
           : 0n;
 
       this.state.researchFund.inflowPerBlock =
@@ -471,15 +504,17 @@ export class LoopController {
       this.state.apiRevenueMetrics,
       this.state.researchFund.balance,
       this.state.bountyPool.activeBountiesValue,
-      this.state.emissionSchedule
+      this.state.emissionSchedule,
     );
 
     // Recalculate health
-    const periodBlocks = this.state.apiRevenueMetrics.periodEnd -
+    const periodBlocks =
+      this.state.apiRevenueMetrics.periodEnd -
       this.state.apiRevenueMetrics.periodStart;
-    const apiCallsPerBlock = periodBlocks > 0n
-      ? Number(this.state.apiRevenueMetrics.totalCalls) / Number(periodBlocks)
-      : 0;
+    const apiCallsPerBlock =
+      periodBlocks > 0n
+        ? Number(this.state.apiRevenueMetrics.totalCalls) / Number(periodBlocks)
+        : 0;
 
     this.state.health = assessLoopHealth(
       this.state.sustainability,
@@ -489,7 +524,7 @@ export class LoopController {
       apiCallsPerBlock,
       this.state.bountyPool.activeBountiesCount,
       this.state.bountyPool.bountiesFulfilledThisEpoch,
-      this.state.knowledgeBase.factsAddedThisEpoch
+      this.state.knowledgeBase.factsAddedThisEpoch,
     );
   }
 
@@ -515,11 +550,12 @@ export class LoopController {
 
     // Project API revenue growth (simplified linear projection)
     const currentRevenue = this.state.apiRevenueMetrics.totalRevenue;
-    const blocks = this.state.apiRevenueMetrics.periodEnd -
+    const blocks =
+      this.state.apiRevenueMetrics.periodEnd -
       this.state.apiRevenueMetrics.periodStart;
     const revenueGrowthRate = blocks > 0n ? currentRevenue / blocks : 0n;
 
-    const projectedRevenue = currentRevenue + (revenueGrowthRate * futureBlocks);
+    const projectedRevenue = currentRevenue + revenueGrowthRate * futureBlocks;
 
     const projectedMetrics: APIRevenueMetrics = {
       ...this.state.apiRevenueMetrics,
@@ -532,7 +568,7 @@ export class LoopController {
       projectedMetrics,
       this.state.researchFund.balance,
       this.state.bountyPool.activeBountiesValue,
-      this.state.emissionSchedule
+      this.state.emissionSchedule,
     );
   }
 
@@ -544,24 +580,34 @@ export class LoopController {
     const efficiency = this.getEfficiency();
 
     if (efficiency.bountyConversionRate < 0.3) {
-      recommendations.push('Increase bounty rewards to attract more researchers');
+      recommendations.push(
+        "Increase bounty rewards to attract more researchers",
+      );
     }
 
     if (efficiency.truthDiscoveryCost > 100n * 10n ** 18n) {
-      recommendations.push('Research is expensive - consider batch verification');
+      recommendations.push(
+        "Research is expensive - consider batch verification",
+      );
     }
 
     if (efficiency.knowledgeMonetizationRate < 1n * 10n ** 18n) {
-      recommendations.push('Knowledge is undermonetized - increase API adoption');
+      recommendations.push(
+        "Knowledge is undermonetized - increase API adoption",
+      );
     }
 
     if (!this.state.sustainability.isSelfSustaining) {
-      recommendations.push('Focus on API adoption to achieve sustainability');
+      recommendations.push("Focus on API adoption to achieve sustainability");
     }
 
-    if (this.state.knowledgeBase.factsFalsifiedThisEpoch >
-        this.state.knowledgeBase.factsAddedThisEpoch * 0.1) {
-      recommendations.push('High falsification rate - tighten verification standards');
+    if (
+      this.state.knowledgeBase.factsFalsifiedThisEpoch >
+      this.state.knowledgeBase.factsAddedThisEpoch * 0.1
+    ) {
+      recommendations.push(
+        "High falsification rate - tighten verification standards",
+      );
     }
 
     return [...recommendations, ...this.state.health.recommendations];
@@ -593,17 +639,18 @@ export function calculateOptimalBountyValue(
   verificationCostEstimate: bigint,
   _expectedFactValue: bigint,
   researchFundBalance: bigint,
-  urgency: 'low' | 'medium' | 'high' = 'medium'
+  urgency: "low" | "medium" | "high" = "medium",
 ): bigint {
   // Base: cover verification cost
   let bounty = verificationCostEstimate;
 
   // Add profit margin for researcher
-  const profitMargin = 0.20; // 20%
+  const profitMargin = 0.2; // 20%
   bounty += (bounty * BigInt(Math.floor(profitMargin * 100))) / 100n;
 
   // Adjust for urgency
-  const urgencyMultiplier = urgency === 'high' ? 1.5 : urgency === 'medium' ? 1.0 : 0.75;
+  const urgencyMultiplier =
+    urgency === "high" ? 1.5 : urgency === "medium" ? 1.0 : 0.75;
   bounty = (bounty * BigInt(Math.floor(urgencyMultiplier * 100))) / 100n;
 
   // Cap at 1% of research fund
@@ -637,9 +684,9 @@ export function prioritizeClaimsForBounties(
     lastVerifiedBlock: bigint;
     queryCount: number;
   }>,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): string[] {
-  const scored = claims.map(claim => {
+  const scored = claims.map((claim) => {
     // Query frequency score (normalized)
     const queryScore = Math.log(claim.queryCount + 1) / Math.log(100);
 
@@ -650,11 +697,12 @@ export function prioritizeClaimsForBounties(
     const blocksAgo = Number(currentBlock - claim.lastVerifiedBlock);
     const stalenessScore = Math.min(blocksAgo / 1000000, 1);
 
-    const totalScore = (queryScore * 0.4) + (confidenceScore * 0.3) + (stalenessScore * 0.3);
+    const totalScore =
+      queryScore * 0.4 + confidenceScore * 0.3 + stalenessScore * 0.3;
 
     return { claimId: claim.claimId, score: totalScore };
   });
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.map(s => s.claimId);
+  return scored.map((s) => s.claimId);
 }

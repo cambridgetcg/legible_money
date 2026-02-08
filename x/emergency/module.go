@@ -1,0 +1,162 @@
+package emergency
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spf13/cobra"
+
+	"cosmossdk.io/core/appmodule"
+
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/codec"
+	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/module"
+
+	"github.com/legible-money/legible/x/emergency/keeper"
+	"github.com/legible-money/legible/x/emergency/types"
+)
+
+var (
+	_ module.AppModule      = AppModule{}
+	_ module.AppModuleBasic = AppModuleBasic{}
+	_ appmodule.AppModule   = AppModule{}
+)
+
+// AppModuleBasic implements the AppModuleBasic interface.
+type AppModuleBasic struct {
+	cdc codec.Codec
+}
+
+// Name returns the module name.
+func (AppModuleBasic) Name() string { return types.ModuleName }
+
+// RegisterLegacyAminoCodec registers the module's amino codec.
+func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	types.RegisterCodec(cdc)
+}
+
+// RegisterInterfaces registers the module's interface types.
+func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
+	types.RegisterInterfaces(reg)
+}
+
+// DefaultGenesis returns the module's default genesis state.
+func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
+	return cdc.MustMarshalJSON(types.DefaultGenesisState())
+}
+
+// ValidateGenesis performs genesis state validation.
+func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
+	var genState types.GenesisState
+	if err := cdc.UnmarshalJSON(bz, &genState); err != nil {
+		return err
+	}
+	return genState.Validate()
+}
+
+// RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
+func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
+}
+
+// GetTxCmd returns the module's tx CLI command.
+func (a AppModuleBasic) GetTxCmd() *cobra.Command {
+	return nil
+}
+
+// GetQueryCmd returns the module's query CLI command.
+func (AppModuleBasic) GetQueryCmd() *cobra.Command {
+	return nil
+}
+
+// AppModule implements the AppModule interface.
+type AppModule struct {
+	AppModuleBasic
+
+	keeper keeper.Keeper
+}
+
+// NewAppModule creates a new AppModule.
+func NewAppModule(cdc codec.Codec, keeper keeper.Keeper) AppModule {
+	return AppModule{
+		AppModuleBasic: AppModuleBasic{cdc: cdc},
+		keeper:         keeper,
+	}
+}
+
+// IsOnePerModuleType implements the depinject.OnePerModuleType interface.
+func (am AppModule) IsOnePerModuleType() {}
+
+// IsAppModule implements the appmodule.AppModule interface.
+func (am AppModule) IsAppModule() {}
+
+// RegisterServices registers module services.
+func (am AppModule) RegisterServices(cfg module.Configurator) {
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+}
+
+// InitGenesis initializes the module from genesis.
+func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
+	var genState types.GenesisState
+	cdc.MustUnmarshalJSON(data, &genState)
+	am.keeper.InitGenesis(ctx, genState)
+}
+
+// ExportGenesis exports the module's genesis state.
+func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
+	genState := am.keeper.ExportGenesis(ctx)
+	return cdc.MustMarshalJSON(genState)
+}
+
+// ConsensusVersion returns the module's consensus version.
+func (AppModule) ConsensusVersion() uint64 { return 1 }
+
+// BeginBlock checks ceremony progress and handles phase transitions.
+func (am AppModule) BeginBlock(goCtx context.Context) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	ceremony, found := am.keeper.GetActiveCeremony(ctx)
+	if !found {
+		return nil
+	}
+
+	finalized, err := am.keeper.CheckCeremonyProgress(ctx, ceremony.Id)
+	if err != nil {
+		am.keeper.Logger(ctx).Error("failed to check ceremony progress",
+			"ceremony_id", ceremony.Id, "error", err)
+		return nil
+	}
+
+	if finalized {
+		am.keeper.HandleCeremonyFinalization(ctx, ceremony.Id)
+	} else {
+		// Re-read ceremony to check if it failed
+		ceremony, found = am.keeper.GetCeremony(ctx, ceremony.Id)
+		if found && ceremony.Phase == types.PhaseFailed {
+			am.keeper.HandleCeremonyFailure(ctx, ceremony.Id)
+		}
+	}
+
+	return nil
+}
+
+// EndBlock resets per-epoch proposal counts at epoch boundaries.
+func (am AppModule) EndBlock(goCtx context.Context) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	params := am.keeper.GetParams(ctx)
+	if params.EpochBlocks == 0 {
+		return nil
+	}
+
+	currentBlock := uint64(ctx.BlockHeight())
+	if currentBlock%params.EpochBlocks == 0 {
+		am.keeper.ResetEpochCounters(ctx)
+		am.keeper.Logger(ctx).Info("reset emergency epoch counters", "block", currentBlock)
+	}
+
+	return nil
+}

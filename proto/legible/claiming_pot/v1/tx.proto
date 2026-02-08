@@ -1,0 +1,120 @@
+syntax = "proto3";
+package legible.claiming_pot.v1;
+
+option go_package = "github.com/legible-money/legible/x/claiming_pot/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the claiming pot module's transaction service.
+// Claiming pots are collective reward pools for collaborative verification.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc CreatePot(MsgCreatePot) returns (MsgCreatePotResponse);
+  rpc FundPot(MsgFundPot) returns (MsgFundPotResponse);
+  rpc ClaimFromPot(MsgClaimFromPot) returns (MsgClaimFromPotResponse);
+  rpc ClosePot(MsgClosePot) returns (MsgClosePotResponse);
+}
+
+// ============================================================================
+// Messages
+// ============================================================================
+
+message MsgCreatePot {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string name = 2;
+  string domain = 3;
+  string initial_funding = 4;
+  PotDistributionRule distribution_rule = 5;
+  uint64 expiry_height = 6;
+}
+
+message MsgCreatePotResponse {
+  string pot_id = 1;
+}
+
+message MsgFundPot {
+  option (cosmos.msg.v1.signer) = "funder";
+  string funder = 1;
+  string pot_id = 2;
+  string amount = 3;
+}
+
+message MsgFundPotResponse {}
+
+message MsgClaimFromPot {
+  option (cosmos.msg.v1.signer) = "claimer";
+  string claimer = 1;
+  string pot_id = 2;
+  repeated string proof_fact_ids = 3;
+}
+
+message MsgClaimFromPotResponse {
+  string amount_claimed = 1;
+}
+
+message MsgClosePot {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string pot_id = 2;
+}
+
+message MsgClosePotResponse {
+  string refunded_amount = 1;
+}
+
+// ============================================================================
+// State Types
+// ============================================================================
+
+message ClaimingPot {
+  string id = 1;
+  string creator = 2;
+  string name = 3;
+  string domain = 4;
+  string total_funded = 5;
+  string remaining = 6;
+  PotDistributionRule distribution_rule = 7;
+  PotStatus status = 8;
+  uint64 created_at = 9;
+  uint64 expiry_height = 10;
+  repeated PotClaim claims = 11;
+}
+
+message PotClaim {
+  string claimer = 1;
+  string amount = 2;
+  repeated string fact_ids = 3;
+  uint64 claimed_at = 4;
+}
+
+enum PotDistributionRule {
+  POT_DISTRIBUTION_RULE_UNSPECIFIED = 0;
+  POT_DISTRIBUTION_RULE_EQUAL = 1;
+  POT_DISTRIBUTION_RULE_PROPORTIONAL = 2;
+  POT_DISTRIBUTION_RULE_FIRST_COME = 3;
+}
+
+enum PotStatus {
+  POT_STATUS_UNSPECIFIED = 0;
+  POT_STATUS_ACTIVE = 1;
+  POT_STATUS_DEPLETED = 2;
+  POT_STATUS_EXPIRED = 3;
+  POT_STATUS_CLOSED = 4;
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+  repeated ClaimingPot pots = 2;
+}
+
+message Params {
+  string min_pot_funding = 1;
+  uint64 max_pot_duration = 2;
+  uint32 max_claims_per_pot = 3;
+}

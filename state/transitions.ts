@@ -183,12 +183,11 @@ import {
   type AccelerateVestingPayload,
   type FalsifyVestingPayload,
 } from "../core/rewards/types.js";
-import { determineVestingCategory } from "../core/rewards/vesting_engine.js";
+// determineVestingCategory removed — no longer needed (usage-based rewards only)
 import {
   routeReward,
   routeBlockReward,
   routeVerificationReward,
-  routeClaimReward,
   splitEvidenceTax,
 } from "../core/billing/reward_router.js";
 import {
@@ -1458,11 +1457,10 @@ function executeClaimCompleteVerification(
     }
 
     // Distribute citation rewards to cited facts' submitters
-    // 15% of claimReward split equally among cited facts (KNOWLEDGE_ECONOMICS.md)
+    // Each cited fact gets a flat reward from the verification reward pool, with 22% evidence tax
     if (citedFactIds.size > 0) {
-      const CITATION_SHARE = 15n;
-      const citationPool = (params.claimReward * CITATION_SHARE) / 100n;
-      const rewardPerFact = citationPool / BigInt(citedFactIds.size);
+      const rewardPerFact =
+        params.citationRewardPerFact ?? 1000000000000000000n;
 
       if (rewardPerFact > 0n) {
         for (const citedFactId of citedFactIds) {
@@ -1472,7 +1470,30 @@ function executeClaimCompleteVerification(
           const citedClaimId = "claim:" + citedFactId.replace("fact:", "");
           const citedClaim = state.getClaim(citedClaimId);
           if (citedClaim?.submitter) {
-            state.transfer(FEE_POOL_DID, citedClaim.submitter, rewardPerFact);
+            // Route through evidence tax (22% to research, 78% to submitter)
+            const routed = routeReward({
+              source: "citation",
+              amount: rewardPerFact,
+              recipient: citedClaim.submitter,
+              factId: citedFactId,
+              blockNumber,
+            });
+
+            if (routed.researchShare > 0n) {
+              const treasurySplit = splitEvidenceTax(routed.researchShare);
+              for (const entry of treasurySplit) {
+                if (entry.amount > 0n) {
+                  state.transfer(REWARD_POOL_DID, entry.did, entry.amount);
+                }
+              }
+            }
+            if (routed.recipientAmount > 0n) {
+              state.transfer(
+                REWARD_POOL_DID,
+                citedClaim.submitter,
+                routed.recipientAmount,
+              );
+            }
           }
         }
       }
@@ -4376,76 +4397,11 @@ function executeSlashValidator(state: StateManager, tx: Transaction): bigint {
 // ============ Verification Result Application ============
 
 /**
- * Infer evidence types from claim properties for vesting category determination.
- * Maps claim type and stratum to evidence types used by the vesting system.
- *
- * GAP-006 FIX: Helper for vesting category determination
- */
-function inferEvidenceTypesFromClaim(claim: ClaimState): string[] {
-  const types: string[] = [];
-
-  // Infer from claim type
-  switch (claim.claimType) {
-    case "formal":
-    case "logical":
-      types.push("formal_proof");
-      break;
-    case "on_chain":
-    case "blockchain":
-      types.push("on_chain");
-      break;
-    case "computational":
-      types.push("computational");
-      break;
-    case "empirical":
-      types.push("peer_reviewed"); // Default for empirical claims
-      break;
-    case "attestation":
-      types.push("attestation");
-      break;
-    case "oracle":
-      types.push("chainlink_feed");
-      break;
-  }
-
-  // Also infer from stratum (more precise)
-  switch (claim.stratum) {
-    case "fundamental":
-      if (!types.includes("formal_proof")) {
-        types.push("formal_proof");
-      }
-      break;
-    case "technological":
-      if (!types.includes("computational")) {
-        types.push("computational");
-      }
-      types.push("cryptographic_proof");
-      break;
-    case "physical":
-    case "chemical":
-    case "biological":
-    case "cognitive":
-    case "social":
-      if (!types.includes("peer_reviewed")) {
-        types.push("peer_reviewed");
-      }
-      break;
-  }
-
-  // Default if nothing inferred
-  if (types.length === 0) {
-    types.push("peer_reviewed");
-  }
-
-  return types;
-}
-
-/**
  * Apply verification result to state
  * Called after consensus completes a verification round
  *
  * GAP-2 FIX: Routes all rewards through reward router for 22% research share
- * GAP-006 FIX: Creates vesting schedule for claim submitter when claim is accepted
+ * No acceptance reward — rewards come only from usage (citations, API queries)
  */
 export function applyVerificationResult(
   state: StateManager,
@@ -4537,63 +4493,17 @@ export function applyVerificationResult(
         multidimensionalConfidence: vrMultiConfidence,
       });
 
-      // GAP-006 FIX: Create vesting schedule for claim submitter
+      // No acceptance reward — rewards come only from usage (citations, API queries).
+      // Return stake and update status.
       const claim = claimForStratum;
       if (claim && claim.submitter) {
-        // Check if vesting already exists for this claim (prevent duplicates)
-        const existingVesting = state.getVestingForClaim(result.claimId);
-        if (!existingVesting) {
-          // Determine vesting category from claim properties
-          const evidenceTypes = inferEvidenceTypesFromClaim(claim);
-          const category = determineVestingCategory(
-            claim.claimType,
-            evidenceTypes,
-            false, // Not replicated initially
-            false, // Not contested (it was accepted)
-          );
-
-          // Route claim reward through reward router (22% research, 78% vesting)
-          const claimRewardAmount = params.claimReward;
-          const routed = routeClaimReward(
-            claimRewardAmount,
-            claim.submitter,
-            result.claimId,
-            blockNumber,
-          );
-
-          // Transfer research share split across 5 treasury funds
-          if (routed.researchShare > 0n) {
-            const treasurySplit = splitEvidenceTax(routed.researchShare);
-            for (const entry of treasurySplit) {
-              if (entry.amount > 0n) {
-                state.transfer(REWARD_POOL_DID, entry.did, entry.amount);
-              }
-            }
-          }
-
-          // Create vesting schedule with remaining amount (78%)
-          if (routed.recipientAmount > 0n) {
-            state.createVesting(
-              {
-                claimId: result.claimId,
-                recipient: claim.submitter,
-                amount: routed.recipientAmount,
-                category,
-              },
-              blockNumber,
-            );
-          }
-
-          // Return the claim stake to submitter (was locked during submission)
-          if (claim.stake > 0n && state.accountExists(claim.submitter)) {
-            state.unstake(claim.submitter, claim.stake);
-          }
-
-          // Update claim status to accepted
-          state.updateClaimStatus(result.claimId, "accepted", blockNumber, {
-            resultFactId: result.claimId,
-          });
+        if (claim.stake > 0n && state.accountExists(claim.submitter)) {
+          state.unstake(claim.submitter, claim.stake);
         }
+
+        state.updateClaimStatus(result.claimId, "accepted", blockNumber, {
+          resultFactId: result.claimId,
+        });
       }
     }
 
@@ -4833,21 +4743,47 @@ export function applyBlockReward(
   producerDid: string,
   blockNumber: bigint,
   emissionSchedule: EmissionSchedule = DEFAULT_EMISSION_SCHEDULE,
+  apiRevenuePerBlock?: bigint,
 ): { blockReward: bigint; feeReward: bigint; researchShare: bigint } {
   state.beginTransaction();
 
   try {
-    // 1. Calculate block reward from emission schedule
-    const rawBlockReward = calculateBlockReward(blockNumber, emissionSchedule);
+    // 1. Get current fund balance (finite fund — no infinite minting)
+    const fundBalance = state.getBalance(REWARD_POOL_DID);
 
-    // 2. Route block reward through reward router for 22% split
+    // 2. Calculate block reward with API suppression + fund health
+    const rawBlockReward = calculateBlockReward(
+      blockNumber,
+      emissionSchedule,
+      apiRevenuePerBlock,
+      fundBalance,
+    );
+
+    // 3. Cap at available fund balance
+    const actualReward =
+      rawBlockReward > fundBalance ? fundBalance : rawBlockReward;
+
+    // Skip transfers if no reward (fund exhausted or API fully sustains)
+    if (actualReward <= 0n) {
+      // Still collect fee pool even when block reward is zero
+      const feePoolBalance = state.getBalance(FEE_POOL_DID);
+      let feeReward = 0n;
+      if (feePoolBalance > 0n) {
+        state.transfer(FEE_POOL_DID, producerDid, feePoolBalance);
+        feeReward = feePoolBalance;
+      }
+      state.commitTransaction();
+      return { blockReward: 0n, feeReward, researchShare: 0n };
+    }
+
+    // 4. Route block reward through reward router for 22% split
     const routedBlockReward = routeBlockReward(
-      rawBlockReward,
+      actualReward,
       producerDid,
       blockNumber,
     );
 
-    // 3. Transfer research share (22%) split across 5 treasury funds
+    // 5. Transfer research share (22%) split across 5 treasury funds
     if (routedBlockReward.researchShare > 0n) {
       const treasurySplit = splitEvidenceTax(routedBlockReward.researchShare);
       for (const entry of treasurySplit) {
@@ -4857,7 +4793,7 @@ export function applyBlockReward(
       }
     }
 
-    // 4. Transfer producer share (78%) to block producer
+    // 6. Transfer producer share (78%) to block producer
     if (routedBlockReward.recipientAmount > 0n) {
       state.transfer(
         REWARD_POOL_DID,
@@ -4866,7 +4802,7 @@ export function applyBlockReward(
       );
     }
 
-    // 5. Collect accumulated fees from fee pool
+    // 7. Collect accumulated fees from fee pool
     const feePoolBalance = state.getBalance(FEE_POOL_DID);
     let feeReward = 0n;
 
@@ -4880,7 +4816,7 @@ export function applyBlockReward(
     state.commitTransaction();
 
     return {
-      blockReward: rawBlockReward,
+      blockReward: actualReward,
       feeReward,
       researchShare: routedBlockReward.researchShare,
     };

@@ -15,20 +15,24 @@
  *   CREATIVITY: Novel attack scenarios explored
  */
 
-import { createTestNetwork, TestNetwork, sleep } from '../framework/test_harness.js';
+import {
+  createTestNetwork,
+  TestNetwork,
+  sleep,
+} from "../framework/test_harness.js";
 import {
   calculateEmissionForBlock,
   calculateCumulativeEmission,
   calculateResearchFundBalance,
   type EmissionSchedule,
   DEFAULT_EMISSION_SCHEDULE,
-} from '../../core/genesis/types.js';
+} from "../../core/genesis/types.js";
 import {
   calculateReleasedRewards,
   getVestingConfigForCategory,
   type EpistemicCategory,
-} from '../../core/rewards/release_curve.js';
-import { RESEARCH_SHARE_RATE } from '../../core/research/types.js';
+} from "../../core/rewards/release_curve.js";
+import { RESEARCH_SHARE_RATE } from "../../core/research/types.js";
 
 // ============ Types ============
 
@@ -123,7 +127,7 @@ interface AttackResistance {
  */
 export async function runEconomicSimulation(
   config: SimulationConfig,
-  emissionSchedule: EmissionSchedule = DEFAULT_EMISSION_SCHEDULE
+  emissionSchedule: EmissionSchedule = DEFAULT_EMISSION_SCHEDULE,
 ): Promise<SimulationResult> {
   const history: BlockMetrics[] = [];
   let metrics: EconomicMetrics = {
@@ -151,7 +155,7 @@ export async function runEconomicSimulation(
       config,
       emissionSchedule,
       activeVestings,
-      metrics
+      metrics,
     );
 
     // Update metrics
@@ -165,7 +169,11 @@ export async function runEconomicSimulation(
   }
 
   // Analyze sustainability
-  const sustainability = analyzeSustainability(history, metrics, emissionSchedule);
+  const sustainability = analyzeSustainability(
+    history,
+    metrics,
+    emissionSchedule,
+  );
 
   // Analyze attack resistance
   const attackResistance = analyzeAttackResistance(metrics, config);
@@ -188,7 +196,7 @@ function simulateBlock(
     category: EpistemicCategory;
     isFalsified: boolean;
   }>,
-  metrics: EconomicMetrics
+  metrics: EconomicMetrics,
 ): BlockMetrics {
   // Calculate block reward (with decay)
   const blockReward = calculateEmissionForBlock(blockNumber, emissionSchedule);
@@ -197,7 +205,8 @@ function simulateBlock(
   const apiRevenue = BigInt(config.apiCallsPerBlock) * config.avgFeePerCall;
 
   // Calculate research contribution (22% of API revenue)
-  const researchContribution = (apiRevenue * BigInt(Math.floor(RESEARCH_SHARE_RATE * 1000))) / 1000n;
+  const researchContribution =
+    (apiRevenue * BigInt(Math.floor(RESEARCH_SHARE_RATE * 1000))) / 1000n;
 
   // Simulate new claims
   for (let i = 0; i < config.claimsPerBlock; i++) {
@@ -214,7 +223,9 @@ function simulateBlock(
   }
 
   // Simulate challenges and falsifications
-  const claimsToChallenge = Math.floor(activeVestings.length * config.challengeRate);
+  const claimsToChallenge = Math.floor(
+    activeVestings.length * config.challengeRate,
+  );
   let rewardsFalsified = 0n;
 
   for (let i = 0; i < claimsToChallenge; i++) {
@@ -233,7 +244,7 @@ function simulateBlock(
         vesting.startBlock,
         blockNumber,
         0, // No acceleration
-        0n  // No paused blocks
+        0n, // No paused blocks
       );
 
       const unvested = vesting.amount - released;
@@ -253,7 +264,7 @@ function simulateBlock(
         vesting.startBlock,
         blockNumber,
         0,
-        0n
+        0n,
       );
       rewardsClaimed += released;
     }
@@ -279,15 +290,18 @@ function simulateBlock(
 
 function updateMetrics(
   current: EconomicMetrics,
-  block: BlockMetrics
+  block: BlockMetrics,
 ): EconomicMetrics {
   return {
     blockNumber: block.blockNumber,
     totalSupply: current.totalSupply + block.blockReward,
-    circulatingSupply: current.circulatingSupply + block.blockReward - block.rewardsFalsified,
+    circulatingSupply:
+      current.circulatingSupply + block.blockReward - block.rewardsFalsified,
     stakedSupply: current.stakedSupply, // Would need staking simulation
-    researchFundBalance: current.researchFundBalance + block.researchContribution,
-    totalRewardsDistributed: current.totalRewardsDistributed + block.rewardsClaimed,
+    researchFundBalance:
+      current.researchFundBalance + block.researchContribution,
+    totalRewardsDistributed:
+      current.totalRewardsDistributed + block.rewardsClaimed,
     totalBurned: current.totalBurned + block.rewardsFalsified,
   };
 }
@@ -295,13 +309,15 @@ function updateMetrics(
 function analyzeSustainability(
   history: BlockMetrics[],
   metrics: EconomicMetrics,
-  emissionSchedule: EmissionSchedule
+  emissionSchedule: EmissionSchedule,
 ): SustainabilityAnalysis {
   // Calculate average research income
-  const totalResearchIncome = history.reduce((sum, h) => sum + h.researchContribution, 0n);
-  const avgResearchIncomePerBlock = history.length > 0
-    ? totalResearchIncome / BigInt(history.length)
-    : 0n;
+  const totalResearchIncome = history.reduce(
+    (sum, h) => sum + h.researchContribution,
+    0n,
+  );
+  const avgResearchIncomePerBlock =
+    history.length > 0 ? totalResearchIncome / BigInt(history.length) : 0n;
 
   // Estimate bounty expenditure (assume 80% of income goes to bounties)
   const avgBountyExpenditure = (avgResearchIncomePerBlock * 80n) / 100n;
@@ -309,21 +325,37 @@ function analyzeSustainability(
   // Calculate runway
   const netIncomePerBlock = avgResearchIncomePerBlock - avgBountyExpenditure;
   const blocksPerMonth = 1_036_800n; // ~30 days at 2521ms blocks
-  const runwayMonths = netIncomePerBlock > 0n
-    ? Number(metrics.researchFundBalance / (netIncomePerBlock * blocksPerMonth))
-    : 0;
+  const runwayMonths =
+    netIncomePerBlock > 0n
+      ? Number(
+          metrics.researchFundBalance / (netIncomePerBlock * blocksPerMonth),
+        )
+      : 0;
 
   // Project supply
   const blocksPerYear = 12_500_000n;
-  const projectedSupply1Year = calculateCumulativeEmission(blocksPerYear, emissionSchedule);
-  const projectedSupply5Years = calculateCumulativeEmission(blocksPerYear * 5n, emissionSchedule);
+  const projectedSupply1Year = calculateCumulativeEmission(
+    blocksPerYear,
+    emissionSchedule,
+  );
+  const projectedSupply5Years = calculateCumulativeEmission(
+    blocksPerYear * 5n,
+    emissionSchedule,
+  );
 
   // Calculate emission decay effectiveness
-  const firstYearEmission = calculateCumulativeEmission(blocksPerYear, emissionSchedule);
-  const secondYearEmission = calculateCumulativeEmission(blocksPerYear * 2n, emissionSchedule) - firstYearEmission;
-  const emissionDecayEffectiveness = secondYearEmission > 0n
-    ? Number(firstYearEmission - secondYearEmission) / Number(firstYearEmission)
-    : 0;
+  const firstYearEmission = calculateCumulativeEmission(
+    blocksPerYear,
+    emissionSchedule,
+  );
+  const secondYearEmission =
+    calculateCumulativeEmission(blocksPerYear * 2n, emissionSchedule) -
+    firstYearEmission;
+  const emissionDecayEffectiveness =
+    secondYearEmission > 0n
+      ? Number(firstYearEmission - secondYearEmission) /
+        Number(firstYearEmission)
+      : 0;
 
   return {
     isSustainable: netIncomePerBlock > 0n,
@@ -336,7 +368,7 @@ function analyzeSustainability(
 
 function analyzeAttackResistance(
   metrics: EconomicMetrics,
-  config: SimulationConfig
+  config: SimulationConfig,
 ): AttackResistance {
   // 51% attack cost = 51% of staked supply (must acquire and stake)
   const attackCost51Percent = (metrics.stakedSupply * 51n) / 100n;
@@ -347,16 +379,18 @@ function analyzeAttackResistance(
 
   // Long-range attack resistance
   // Higher with finality and checkpoints
-  const longRangeResistance = 0.90; // 19-block finality helps
+  const longRangeResistance = 0.9; // 19-block finality helps
 
   // Max profit from false claim
-  // Claim reward - stake - probability of detection * penalty
-  const claimReward = 100n * 10n ** 18n;
+  // No acceptance reward — only citation/usage revenue. A false claim earns nothing
+  // because nobody will cite falsehoods. Net profit = -stake -detection*penalty.
   const claimStake = 10n * 10n ** 18n;
-  const detectionProbability = 1 - config.falsificationRate; // If not falsified, others detect
-  const penalty = claimStake + (claimReward * 30n) / 100n;
+  const detectionProbability = 1 - config.falsificationRate;
+  const penalty = claimStake + (claimStake * 30n) / 100n;
 
-  const expectedProfit = claimReward - claimStake -
+  const expectedProfit =
+    0n -
+    claimStake -
     BigInt(Math.floor(Number(penalty) * detectionProbability));
 
   return {
@@ -369,13 +403,13 @@ function analyzeAttackResistance(
 
 function randomCategory(): EpistemicCategory {
   const rand = Math.random();
-  if (rand < 0.05) return 'axiomatic';
-  if (rand < 0.10) return 'formal_proof';
-  if (rand < 0.20) return 'on_chain';
-  if (rand < 0.40) return 'peer_reviewed';
-  if (rand < 0.60) return 'replicated';
-  if (rand < 0.80) return 'attestation';
-  return 'contested';
+  if (rand < 0.05) return "axiomatic";
+  if (rand < 0.1) return "formal_proof";
+  if (rand < 0.2) return "on_chain";
+  if (rand < 0.4) return "peer_reviewed";
+  if (rand < 0.6) return "replicated";
+  if (rand < 0.8) return "attestation";
+  return "contested";
 }
 
 // ============ Scenario Tests ============
@@ -384,17 +418,17 @@ function randomCategory(): EpistemicCategory {
  * Test emission schedule decay
  */
 export async function testEmissionDecay(): Promise<void> {
-  console.log('\n=== Testing Emission Decay ===\n');
+  console.log("\n=== Testing Emission Decay ===\n");
 
   const schedule = DEFAULT_EMISSION_SCHEDULE;
 
   // Calculate emissions at various points
   const checkpoints = [
     0n,
-    240_000n,      // 1 epoch
-    2_400_000n,    // 10 epochs
-    12_500_000n,   // ~1 year
-    62_500_000n,   // ~5 years
+    240_000n, // 1 epoch
+    2_400_000n, // 10 epochs
+    12_500_000n, // ~1 year
+    62_500_000n, // ~5 years
   ];
 
   for (const block of checkpoints) {
@@ -404,7 +438,7 @@ export async function testEmissionDecay(): Promise<void> {
     console.log(`Block ${block}:`);
     console.log(`  Emission: ${Number(emission) / 1e18} LGM`);
     console.log(`  Cumulative: ${Number(cumulative) / 1e18} LGM`);
-    console.log('');
+    console.log("");
   }
 }
 
@@ -412,13 +446,13 @@ export async function testEmissionDecay(): Promise<void> {
  * Test vesting curves for different categories
  */
 export async function testVestingCurves(): Promise<void> {
-  console.log('\n=== Testing Vesting Curves ===\n');
+  console.log("\n=== Testing Vesting Curves ===\n");
 
   const categories: EpistemicCategory[] = [
-    'axiomatic',
-    'peer_reviewed',
-    'attestation',
-    'contested',
+    "axiomatic",
+    "peer_reviewed",
+    "attestation",
+    "contested",
   ];
 
   const rewardAmount = 1000n * 10n ** 18n;
@@ -435,13 +469,16 @@ export async function testVestingCurves(): Promise<void> {
         0n,
         block,
         0,
-        0n
+        0n,
       );
 
-      const percentReleased = (Number(released) / Number(rewardAmount) * 100).toFixed(1);
+      const percentReleased = (
+        (Number(released) / Number(rewardAmount)) *
+        100
+      ).toFixed(1);
       console.log(`  Block ${block}: ${percentReleased}% released`);
     }
-    console.log('');
+    console.log("");
   }
 }
 
@@ -449,7 +486,7 @@ export async function testVestingCurves(): Promise<void> {
  * Run full economic simulation
  */
 export async function runFullSimulation(): Promise<void> {
-  console.log('\n=== Running Full Economic Simulation ===\n');
+  console.log("\n=== Running Full Economic Simulation ===\n");
 
   const config: SimulationConfig = {
     blocks: 100000n, // ~3 days
@@ -460,48 +497,68 @@ export async function runFullSimulation(): Promise<void> {
     falsificationRate: 0.3, // 30% of challenges succeed
   };
 
-  console.log('Simulation config:');
+  console.log("Simulation config:");
   console.log(`  Blocks: ${config.blocks}`);
   console.log(`  API calls/block: ${config.apiCallsPerBlock}`);
   console.log(`  Claims/block: ${config.claimsPerBlock}`);
   console.log(`  Challenge rate: ${config.challengeRate * 100}%`);
   console.log(`  Falsification rate: ${config.falsificationRate * 100}%`);
-  console.log('');
+  console.log("");
 
   const result = await runEconomicSimulation(config);
 
-  console.log('Final Metrics:');
-  console.log(`  Total Supply: ${Number(result.finalMetrics.totalSupply) / 1e18} LGM`);
-  console.log(`  Circulating: ${Number(result.finalMetrics.circulatingSupply) / 1e18} LGM`);
-  console.log(`  Research Fund: ${Number(result.finalMetrics.researchFundBalance) / 1e18} LGM`);
-  console.log(`  Total Burned: ${Number(result.finalMetrics.totalBurned) / 1e18} LGM`);
-  console.log('');
+  console.log("Final Metrics:");
+  console.log(
+    `  Total Supply: ${Number(result.finalMetrics.totalSupply) / 1e18} LGM`,
+  );
+  console.log(
+    `  Circulating: ${Number(result.finalMetrics.circulatingSupply) / 1e18} LGM`,
+  );
+  console.log(
+    `  Research Fund: ${Number(result.finalMetrics.researchFundBalance) / 1e18} LGM`,
+  );
+  console.log(
+    `  Total Burned: ${Number(result.finalMetrics.totalBurned) / 1e18} LGM`,
+  );
+  console.log("");
 
-  console.log('Sustainability:');
+  console.log("Sustainability:");
   console.log(`  Is Sustainable: ${result.sustainability.isSustainable}`);
-  console.log(`  Runway: ${result.sustainability.runwayMonths.toFixed(1)} months`);
-  console.log(`  Emission Decay: ${(result.sustainability.emissionDecayEffectiveness * 100).toFixed(1)}%`);
-  console.log('');
+  console.log(
+    `  Runway: ${result.sustainability.runwayMonths.toFixed(1)} months`,
+  );
+  console.log(
+    `  Emission Decay: ${(result.sustainability.emissionDecayEffectiveness * 100).toFixed(1)}%`,
+  );
+  console.log("");
 
-  console.log('Attack Resistance:');
-  console.log(`  51% Attack Cost: ${Number(result.attackResistance.attackCost51Percent) / 1e18} LGM`);
-  console.log(`  Nothing-at-Stake: ${(result.attackResistance.nothingAtStakeResistance * 100).toFixed(0)}%`);
-  console.log(`  Long-Range: ${(result.attackResistance.longRangeResistance * 100).toFixed(0)}%`);
-  console.log(`  Max False Claim Profit: ${Number(result.attackResistance.maxFalseClaimProfit) / 1e18} LGM`);
+  console.log("Attack Resistance:");
+  console.log(
+    `  51% Attack Cost: ${Number(result.attackResistance.attackCost51Percent) / 1e18} LGM`,
+  );
+  console.log(
+    `  Nothing-at-Stake: ${(result.attackResistance.nothingAtStakeResistance * 100).toFixed(0)}%`,
+  );
+  console.log(
+    `  Long-Range: ${(result.attackResistance.longRangeResistance * 100).toFixed(0)}%`,
+  );
+  console.log(
+    `  Max False Claim Profit: ${Number(result.attackResistance.maxFalseClaimProfit) / 1e18} LGM`,
+  );
 }
 
 // ============ Main ============
 
 async function main(): Promise<void> {
-  console.log('╔═══════════════════════════════════════════════════════════╗');
-  console.log('║        LEGIBLE MONEY ECONOMIC SIMULATION                  ║');
-  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log("╔═══════════════════════════════════════════════════════════╗");
+  console.log("║        LEGIBLE MONEY ECONOMIC SIMULATION                  ║");
+  console.log("╚═══════════════════════════════════════════════════════════╝");
 
   await testEmissionDecay();
   await testVestingCurves();
   await runFullSimulation();
 
-  console.log('\n✅ Economic simulation complete\n');
+  console.log("\n✅ Economic simulation complete\n");
 }
 
 // Run if executed directly

@@ -35,8 +35,8 @@ function createMetrics(
     knowledgeQueriesMade: 0,
     governanceVotes: 0,
     activeStake: 0n,
-    lastActivityBlock: 1000n,
-    currentBlock: 1000n,
+    lastActivityBlock: 100_000n,
+    currentBlock: 100_000n, // Above minAccountAgeBlocks (34,272)
     accountCreatedBlock: 0n,
     ...overrides,
   };
@@ -70,7 +70,7 @@ describe.sequential("componentScore", () => {
   });
 
   it("should floor fractional scores", () => {
-    // 33 / 100 * 1000 = 330.0 → 330
+    // 33 / 100 * 1000 = 330.0 -> 330
     expect(componentScore(33, 100)).toBe(330);
   });
 });
@@ -167,7 +167,7 @@ describe.sequential("calculateParticipationScore", () => {
       governanceVotes: DEFAULT_PARTICIPATION_CONFIG.thresholds.votesForMax,
       activeStake: DEFAULT_PARTICIPATION_CONFIG.thresholds.stakeForMax,
       lastActivityBlock: 0n,
-      currentBlock: 100_000n, // One half-life elapsed
+      currentBlock: 500_000n, // One half-life elapsed (500K blocks ~14.6 days)
     });
     const result = calculateParticipationScore(metrics);
     expect(result.decayFactor).toBeCloseTo(0.5, 3);
@@ -191,7 +191,7 @@ describe.sequential("calculateParticipationScore", () => {
     expect(result.periodsGranted).toBe(config.minPeriods);
   });
 
-  it("should weight verifications highest (0.30)", () => {
+  it("should weight verifications highest (0.40)", () => {
     const verificationsOnly = createMetrics({
       verificationsCorrect:
         DEFAULT_PARTICIPATION_CONFIG.thresholds.verificationsForMax,
@@ -211,20 +211,20 @@ describe.sequential("calculateParticipationScore", () => {
       activeStake: DEFAULT_PARTICIPATION_CONFIG.thresholds.stakeForMax,
     });
     const result = calculateParticipationScore(metrics);
-    // Weight is 0.20, so raw score = 1000 * 0.20 = 200
-    expect(result.score).toBe(200);
+    // Weight is 0.15, so raw score = 1000 * 0.15 = 150
+    expect(result.score).toBe(150);
     expect(result.components.stake).toBe(1000);
   });
 
   it("should handle partial participation", () => {
     const metrics = createMetrics({
       claimsAccepted: 25, // Half of threshold 50
-      verificationsCorrect: 100, // Half of threshold 200
+      verificationsCorrect: 1000, // Half of threshold 2000
     });
     const result = calculateParticipationScore(metrics);
-    // Claims: 500 * 0.25 = 125, Verifications: 500 * 0.30 = 150
-    // Total: 275
-    expect(result.score).toBe(275);
+    // Claims: 500 * 0.30 = 150, Verifications: 500 * 0.40 = 200
+    // Total: 350
+    expect(result.score).toBe(350);
     expect(result.components.claims).toBe(500);
     expect(result.components.verifications).toBe(500);
   });
@@ -239,7 +239,7 @@ describe.sequential("calculateParticipationScore", () => {
       governanceVotes: DEFAULT_PARTICIPATION_CONFIG.thresholds.votesForMax,
       activeStake: DEFAULT_PARTICIPATION_CONFIG.thresholds.stakeForMax,
       lastActivityBlock: 0n,
-      currentBlock: 200_000n, // Two half-lives
+      currentBlock: 1_000_000n, // Two half-lives (1M blocks ~29 days)
     });
     const result = calculateParticipationScore(metrics);
     expect(result.decayFactor).toBeCloseTo(0.25, 3);
@@ -297,7 +297,7 @@ describe.sequential("createParticipationResolver", () => {
       (account) => {
         if (account === TEST_DID) return createMetrics({ claimsAccepted: 50 });
         if (account === TEST_DID_2)
-          return createMetrics({ verificationsCorrect: 200 });
+          return createMetrics({ verificationsCorrect: 2000 });
         return null;
       },
       DEFAULT_PARTICIPATION_CONFIG,

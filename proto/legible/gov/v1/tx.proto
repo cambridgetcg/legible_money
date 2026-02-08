@@ -1,0 +1,363 @@
+syntax = "proto3";
+package legible.gov.v1;
+
+option go_package = "github.com/legible-money/legible/x/gov/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the extended governance module's transaction service.
+// Extends standard Cosmos x/gov with LIP (Legible Improvement Proposal)
+// lifecycle and quadratic voting.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // LIP lifecycle
+  rpc SubmitLIP(MsgSubmitLIP) returns (MsgSubmitLIPResponse);
+  rpc StakeLIP(MsgStakeLIP) returns (MsgStakeLIPResponse);
+  rpc AmendLIP(MsgAmendLIP) returns (MsgAmendLIPResponse);
+  rpc AdvanceLIPStage(MsgAdvanceLIPStage) returns (MsgAdvanceLIPStageResponse);
+  rpc WithdrawLIP(MsgWithdrawLIP) returns (MsgWithdrawLIPResponse);
+
+  // Voting (quadratic)
+  rpc CastVote(MsgCastVote) returns (MsgCastVoteResponse);
+  rpc LockVote(MsgLockVote) returns (MsgLockVoteResponse);
+  rpc UnlockVote(MsgUnlockVote) returns (MsgUnlockVoteResponse);
+  rpc SwitchVote(MsgSwitchVote) returns (MsgSwitchVoteResponse);
+
+  // Review (for code/spec review phase)
+  rpc CommitReview(MsgCommitReview) returns (MsgCommitReviewResponse);
+  rpc RevealReview(MsgRevealReview) returns (MsgRevealReviewResponse);
+  rpc FinalizeReview(MsgFinalizeReview) returns (MsgFinalizeReviewResponse);
+
+  // Disbursement (research fund spending)
+  rpc SubmitDisbursement(MsgSubmitDisbursement) returns (MsgSubmitDisbursementResponse);
+  rpc StakeDisbursement(MsgStakeDisbursement) returns (MsgStakeDisbursementResponse);
+  rpc AdvanceDisbursement(MsgAdvanceDisbursement) returns (MsgAdvanceDisbursementResponse);
+  rpc ExecuteDisbursement(MsgExecuteDisbursement) returns (MsgExecuteDisbursementResponse);
+  rpc CancelDisbursement(MsgCancelDisbursement) returns (MsgCancelDisbursementResponse);
+
+  // Operator registry
+  rpc RegisterOperator(MsgRegisterOperator) returns (MsgRegisterOperatorResponse);
+  rpc AddAgent(MsgAddAgent) returns (MsgAddAgentResponse);
+  rpc RemoveAgent(MsgRemoveAgent) returns (MsgRemoveAgentResponse);
+  rpc SlashOperator(MsgSlashOperator) returns (MsgSlashOperatorResponse);
+
+  // Software deployment
+  rpc CreateDeployment(MsgCreateDeployment) returns (MsgCreateDeploymentResponse);
+  rpc AdvanceDeployment(MsgAdvanceDeployment) returns (MsgAdvanceDeploymentResponse);
+  rpc ApproveDeployment(MsgApproveDeployment) returns (MsgApproveDeploymentResponse);
+  rpc RollbackDeployment(MsgRollbackDeployment) returns (MsgRollbackDeploymentResponse);
+}
+
+// ============================================================================
+// LIP Messages
+// ============================================================================
+
+message MsgSubmitLIP {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;
+  string title = 2;
+  string description = 3;
+  LIPType lip_type = 4;
+  string initial_stake = 5;
+  string specification = 6;
+}
+
+message MsgSubmitLIPResponse { string lip_id = 1; }
+
+message MsgStakeLIP {
+  option (cosmos.msg.v1.signer) = "staker";
+  string staker = 1;
+  string lip_id = 2;
+  string amount = 3;
+}
+
+message MsgStakeLIPResponse {}
+
+message MsgAmendLIP {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;
+  string lip_id = 2;
+  string amended_specification = 3;
+}
+
+message MsgAmendLIPResponse {}
+
+message MsgAdvanceLIPStage {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string lip_id = 2;
+}
+
+message MsgAdvanceLIPStageResponse {
+  LIPStage new_stage = 1;
+}
+
+message MsgWithdrawLIP {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;
+  string lip_id = 2;
+}
+
+message MsgWithdrawLIPResponse {}
+
+// ============================================================================
+// Voting Messages (Quadratic)
+// ============================================================================
+
+message MsgCastVote {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+  VoteOption option = 3;
+  string stake = 4;  // Quadratic: voting power = sqrt(stake)
+}
+
+message MsgCastVoteResponse {
+  string effective_voting_power = 1;
+}
+
+message MsgLockVote {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+  uint64 lock_duration = 3;  // Lock multiplier for conviction
+}
+
+message MsgLockVoteResponse {}
+
+message MsgUnlockVote {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+}
+
+message MsgUnlockVoteResponse {}
+
+message MsgSwitchVote {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;
+  string proposal_id = 2;
+  VoteOption new_option = 3;
+}
+
+message MsgSwitchVoteResponse {}
+
+// ============================================================================
+// Review Messages
+// ============================================================================
+
+message MsgCommitReview {
+  option (cosmos.msg.v1.signer) = "reviewer";
+  string reviewer = 1;
+  string lip_id = 2;
+  string commitment_hash = 3;
+}
+
+message MsgCommitReviewResponse {}
+
+message MsgRevealReview {
+  option (cosmos.msg.v1.signer) = "reviewer";
+  string reviewer = 1;
+  string lip_id = 2;
+  ReviewVerdict verdict = 3;
+  string comments = 4;
+  string nonce = 5;
+}
+
+message MsgRevealReviewResponse {}
+
+message MsgFinalizeReview {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string lip_id = 2;
+}
+
+message MsgFinalizeReviewResponse {}
+
+// ============================================================================
+// Disbursement Messages (Research Fund Spending)
+// ============================================================================
+
+message MsgSubmitDisbursement {
+  option (cosmos.msg.v1.signer) = "submitter";
+  string submitter = 1;
+  string title = 2;
+  string description = 3;
+  string amount = 4;
+  string recipient = 5;
+  string justification = 6;
+}
+
+message MsgSubmitDisbursementResponse { string disbursement_id = 1; }
+
+message MsgStakeDisbursement {
+  option (cosmos.msg.v1.signer) = "staker";
+  string staker = 1;
+  string disbursement_id = 2;
+  string amount = 3;
+}
+
+message MsgStakeDisbursementResponse {}
+
+message MsgAdvanceDisbursement {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string disbursement_id = 2;
+}
+
+message MsgAdvanceDisbursementResponse {}
+
+message MsgExecuteDisbursement {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string disbursement_id = 2;
+}
+
+message MsgExecuteDisbursementResponse {}
+
+message MsgCancelDisbursement {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string disbursement_id = 2;
+  string reason = 3;
+}
+
+message MsgCancelDisbursementResponse {}
+
+// ============================================================================
+// Operator Messages
+// ============================================================================
+
+message MsgRegisterOperator {
+  option (cosmos.msg.v1.signer) = "operator";
+  string operator = 1;
+  string name = 2;
+  string description = 3;
+  string stake = 4;
+}
+
+message MsgRegisterOperatorResponse { string operator_id = 1; }
+
+message MsgAddAgent {
+  option (cosmos.msg.v1.signer) = "operator";
+  string operator = 1;
+  string agent_address = 2;
+  repeated string permissions = 3;
+}
+
+message MsgAddAgentResponse {}
+
+message MsgRemoveAgent {
+  option (cosmos.msg.v1.signer) = "operator";
+  string operator = 1;
+  string agent_address = 2;
+}
+
+message MsgRemoveAgentResponse {}
+
+message MsgSlashOperator {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string operator_id = 2;
+  string amount = 3;
+  string reason = 4;
+}
+
+message MsgSlashOperatorResponse {}
+
+// ============================================================================
+// Deployment Messages
+// ============================================================================
+
+message MsgCreateDeployment {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1;
+  string lip_id = 2;
+  string artifact_hash = 3;
+  string artifact_uri = 4;
+}
+
+message MsgCreateDeploymentResponse { string deployment_id = 1; }
+
+message MsgAdvanceDeployment {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string deployment_id = 2;
+}
+
+message MsgAdvanceDeploymentResponse {}
+
+message MsgApproveDeployment {
+  option (cosmos.msg.v1.signer) = "approver";
+  string approver = 1;
+  string deployment_id = 2;
+}
+
+message MsgApproveDeploymentResponse {}
+
+message MsgRollbackDeployment {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string deployment_id = 2;
+  string reason = 3;
+}
+
+message MsgRollbackDeploymentResponse {}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum LIPType {
+  LIP_TYPE_UNSPECIFIED = 0;
+  LIP_TYPE_PARAMETER_CHANGE = 1;
+  LIP_TYPE_SOFTWARE_UPGRADE = 2;
+  LIP_TYPE_KNOWLEDGE_POLICY = 3;
+  LIP_TYPE_ECONOMIC_POLICY = 4;
+  LIP_TYPE_COMMUNITY = 5;
+}
+
+enum LIPStage {
+  LIP_STAGE_UNSPECIFIED = 0;
+  LIP_STAGE_DRAFT = 1;
+  LIP_STAGE_REVIEW = 2;
+  LIP_STAGE_VOTING = 3;
+  LIP_STAGE_IMPLEMENTATION = 4;
+  LIP_STAGE_DEPLOYMENT = 5;
+  LIP_STAGE_ACTIVE = 6;
+  LIP_STAGE_WITHDRAWN = 7;
+  LIP_STAGE_REJECTED = 8;
+}
+
+enum VoteOption {
+  VOTE_OPTION_UNSPECIFIED = 0;
+  VOTE_OPTION_YES = 1;
+  VOTE_OPTION_NO = 2;
+  VOTE_OPTION_ABSTAIN = 3;
+  VOTE_OPTION_NO_WITH_VETO = 4;
+}
+
+enum ReviewVerdict {
+  REVIEW_VERDICT_UNSPECIFIED = 0;
+  REVIEW_VERDICT_APPROVE = 1;
+  REVIEW_VERDICT_REQUEST_CHANGES = 2;
+  REVIEW_VERDICT_REJECT = 3;
+}
+
+// ============================================================================
+// Genesis
+// ============================================================================
+
+message GenesisState {
+  Params params = 1;
+}
+
+message Params {
+  string min_lip_stake = 1;
+  uint64 review_period = 2;
+  uint64 voting_period = 3;
+  uint32 quorum_pct = 4;  // 0-1000000
+  uint32 threshold_pct = 5;  // 0-1000000
+  string min_disbursement_stake = 6;
+}

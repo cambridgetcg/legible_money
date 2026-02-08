@@ -1,0 +1,91 @@
+syntax = "proto3";
+package legible.staking.v1;
+
+option go_package = "github.com/legible-money/legible/x/staking/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the staking module's extended transaction service.
+// Extends standard Cosmos x/staking with graduated validator tiers and VRF.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // RegisterValidator registers a new validator (supports zero-stake Tier 0).
+  rpc RegisterValidator(MsgRegisterValidator) returns (MsgRegisterValidatorResponse);
+}
+
+// MsgRegisterValidator registers as a validator.
+// Supports zero-stake onboarding for Tier 0 (Apprentice) validators.
+message MsgRegisterValidator {
+  option (cosmos.msg.v1.signer) = "validator_address";
+  string validator_address = 1;
+  bytes pub_key = 2;
+  string self_delegation = 3;  // Can be "0" for Tier 0
+  uint32 commission_rate = 4;  // 0-1000000 (6 decimals)
+  ValidatorDescription description = 5;
+}
+
+message ValidatorDescription {
+  string moniker = 1;
+  string identity = 2;
+  string website = 3;
+  string details = 4;
+}
+
+message MsgRegisterValidatorResponse {
+  ValidatorTier initial_tier = 1;
+}
+
+// ============================================================================
+// Graduated Validator Tier Types
+// ============================================================================
+
+// ValidatorTier represents the 4-tier graduated validator system.
+enum ValidatorTier {
+  VALIDATOR_TIER_UNSPECIFIED = 0;
+  // Tier 0: Zero-stake, protocol/analytic/formal only, 0.1x reward
+  VALIDATOR_TIER_APPRENTICE = 1;
+  // Tier 1: 22 verifications at 77% accuracy, +empirical/historical, 0.5x reward
+  VALIDATOR_TIER_VERIFIED = 2;
+  // Tier 2: 1,111 LGM staked, all categories, 1.0x reward
+  VALIDATOR_TIER_BONDED = 3;
+  // Tier 3: 11,111 LGM + 1,111 verifications + 77% accuracy + 0 slashes, 1.5x reward + governance
+  VALIDATOR_TIER_GUARDIAN = 4;
+}
+
+// ValidatorTierInfo tracks tier-specific data for a validator.
+message ValidatorTierInfo {
+  ValidatorTier current_tier = 1;
+  uint64 total_verifications = 2;
+  uint64 correct_verifications = 3;
+  uint32 accuracy_pct = 4;         // 0-1000000
+  uint64 slash_count = 5;
+  // Virtual stake for Tier 0/1 VRF selection (111 LGM equivalent)
+  string virtual_stake = 6;
+  // Allowed epistemic categories for this tier
+  repeated string allowed_categories = 7;
+  // Reward multiplier (0-1500000, i.e. 0x-1.5x)
+  uint32 reward_multiplier = 8;
+}
+
+// ValidatorTierParams defines the configurable tier thresholds.
+message ValidatorTierParams {
+  // Tier 1 requirements
+  uint64 tier1_min_verifications = 1;
+  uint32 tier1_min_accuracy = 2;  // 0-1000000
+
+  // Tier 2 requirements
+  string tier2_min_stake = 3;
+
+  // Tier 3 requirements
+  string tier3_min_stake = 4;
+  uint64 tier3_min_verifications = 5;
+  uint32 tier3_min_accuracy = 6;
+  uint64 tier3_max_slashes = 7;
+
+  // Sybil cap for Tier 0 (Apprentice) validators
+  uint32 max_apprentice_validators = 8;
+
+  // Virtual stake amount for Tier 0/1 VRF selection
+  string virtual_stake_amount = 9;
+}

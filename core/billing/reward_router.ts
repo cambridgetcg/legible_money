@@ -33,7 +33,6 @@ export const RESEARCH_SHARE_RATE_BPS = 2200n;
 export type RewardSource =
   | "block_production" // Block producer reward
   | "verification" // Validator verification reward
-  | "claim_submission" // Claim submitter reward
   | "api_call" // API provider/knowledge pool
   | "citation" // Citation/ancestor reward
   | "challenge_win" // Challenge winner reward
@@ -110,6 +109,35 @@ export interface RewardDistributionEvent {
   recipientAmount: bigint;
   recipient: DID;
   factId?: string;
+}
+
+// ============ Progressive Unlock (M-2) ============
+
+/**
+ * M-2: Compute effective research share rate in basis points,
+ * linearly ramping from minBps to maxBps over rampBlocks.
+ *
+ * At block 0: returns minBps (5% default)
+ * At rampBlocks: returns maxBps (22% = RESEARCH_SHARE_RATE_BPS)
+ * After rampBlocks: returns maxBps
+ * If rampBlocks is 0: returns maxBps (no ramp — backward compatible)
+ */
+export function getEffectiveResearchShareBps(
+  blockNumber: bigint,
+  minBps: number = 500,
+  rampBlocks: bigint = 0n,
+  maxBps: bigint = RESEARCH_SHARE_RATE_BPS,
+): bigint {
+  // No ramp configured — use full rate immediately
+  if (rampBlocks <= 0n) return maxBps;
+
+  // Past ramp period — full rate
+  if (blockNumber >= rampBlocks) return maxBps;
+
+  // Linear interpolation: minBps + (maxBps - minBps) * blockNumber / rampBlocks
+  const minBpsBig = BigInt(minBps);
+  const range = maxBps - minBpsBig;
+  return minBpsBig + (range * blockNumber) / rampBlocks;
 }
 
 // ============ Router Implementation ============
@@ -229,24 +257,6 @@ export function routeVerificationReward(
     source: "verification",
     amount,
     recipient: validator,
-    factId,
-    blockNumber,
-  });
-}
-
-/**
- * Route claim submission reward
- */
-export function routeClaimReward(
-  amount: bigint,
-  submitter: DID,
-  factId: string,
-  blockNumber: bigint,
-): RoutedReward {
-  return routeReward({
-    source: "claim_submission",
-    amount,
-    recipient: submitter,
     factId,
     blockNumber,
   });
@@ -432,7 +442,6 @@ export function createEmptyStats(): RewardStats {
   const sources: RewardSource[] = [
     "block_production",
     "verification",
-    "claim_submission",
     "api_call",
     "citation",
     "challenge_win",

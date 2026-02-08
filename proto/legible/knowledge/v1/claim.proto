@@ -1,0 +1,213 @@
+syntax = "proto3";
+package legible.knowledge.v1;
+
+option go_package = "github.com/legible-money/legible/x/knowledge/types";
+
+import "legible/knowledge/v1/stratum.proto";
+
+// ============================================================================
+// Claim Lifecycle Types
+// ============================================================================
+
+// Claim represents a knowledge claim submitted for verification.
+message Claim {
+  string id = 1;
+  string submitter = 2;
+  string claim_text = 3;
+  string domain = 4;
+  string stake = 5;
+  repeated string references = 6;
+  repeated ClaimEvidence evidence = 7;
+  ClaimStatus status = 8;
+  uint64 submitted_at = 9;
+  string verification_round_id = 10;
+  LogicZone logic_zone = 11;
+  EpistemicCategory epistemic_category = 12;
+  // Content hash for locale-invariant matching (CLAIM-SECURITY §6.8)
+  string content_hash = 13;
+}
+
+// ClaimEvidence is supporting evidence for a claim.
+message ClaimEvidence {
+  string evidence_type = 1;
+  string uri = 2;
+  string content_hash = 3;
+  map<string, string> metadata = 4;
+}
+
+enum ClaimStatus {
+  CLAIM_STATUS_UNSPECIFIED = 0;
+  CLAIM_STATUS_PENDING = 1;
+  CLAIM_STATUS_VERIFYING = 2;
+  CLAIM_STATUS_ACCEPTED = 3;
+  CLAIM_STATUS_REJECTED = 4;
+  CLAIM_STATUS_CHALLENGED = 5;
+  CLAIM_STATUS_WITHDRAWN = 6;
+}
+
+// ============================================================================
+// Fact Types
+// ============================================================================
+
+// Fact represents verified knowledge stored on-chain.
+message Fact {
+  string id = 1;
+  string claim_text = 2;
+  string domain = 3;
+  uint32 confidence = 4;  // 0-1000000 (6 decimal places)
+  FactStatus status = 5;
+  string submitter = 6;
+  repeated string references = 7;
+  uint64 verified_at = 8;
+  uint32 verifier_count = 9;
+  LogicZone logic_zone = 10;
+  EpistemicCategory epistemic_category = 11;
+  // Decay tracking (lazy evaluation)
+  uint64 last_confidence_update = 12;
+  uint32 base_confidence = 13;
+}
+
+enum FactStatus {
+  FACT_STATUS_UNSPECIFIED = 0;
+  FACT_STATUS_ACTIVE = 1;
+  FACT_STATUS_CHALLENGED = 2;
+  FACT_STATUS_FALSIFIED = 3;
+  FACT_STATUS_EXPIRED = 4;
+}
+
+// FactReference links facts together in a knowledge graph.
+message FactReference {
+  string from_fact_id = 1;
+  string to_fact_id = 2;
+  ReferenceType reference_type = 3;
+  uint32 strength = 4;  // 0-1000000
+  uint64 created_at = 5;
+}
+
+// ============================================================================
+// Verification Round Types
+// ============================================================================
+
+// VerificationRound tracks a multi-block commit-reveal verification cycle.
+message VerificationRound {
+  string id = 1;
+  string claim_id = 2;
+  VerificationPhase phase = 3;
+  uint64 started_at = 4;
+  uint64 commit_deadline = 5;
+  uint64 reveal_deadline = 6;
+  repeated string selected_validators = 7;
+  repeated VerificationCommitment commitments = 8;
+  repeated VerificationReveal reveals = 9;
+  VerificationResult result = 10;
+}
+
+enum VerificationPhase {
+  VERIFICATION_PHASE_UNSPECIFIED = 0;
+  VERIFICATION_PHASE_COMMIT = 1;
+  VERIFICATION_PHASE_REVEAL = 2;
+  VERIFICATION_PHASE_COMPLETE = 3;
+  VERIFICATION_PHASE_EXPIRED = 4;
+}
+
+// VerificationCommitment is a validator's commitment hash (phase 1).
+message VerificationCommitment {
+  string validator = 1;
+  string commitment_hash = 2;
+  uint64 committed_at = 3;
+}
+
+// VerificationReveal is a validator's revealed verdict (phase 2).
+message VerificationReveal {
+  string validator = 1;
+  Verdict verdict = 2;
+  uint32 confidence = 3;  // 0-1000000
+  string nonce = 4;
+  string reasoning = 5;
+  uint64 revealed_at = 6;
+}
+
+enum Verdict {
+  VERDICT_UNSPECIFIED = 0;
+  VERDICT_CONFIRMED = 1;
+  VERDICT_REJECTED = 2;
+  VERDICT_UNCERTAIN = 3;
+}
+
+// VerificationResult is the aggregated outcome of a verification round.
+message VerificationResult {
+  Verdict consensus_verdict = 1;
+  uint32 aggregate_confidence = 2;  // 0-1000000
+  uint32 agreement_ratio = 3;       // 0-1000000
+  uint64 completed_at = 4;
+  bool quorum_reached = 5;
+}
+
+// ============================================================================
+// Knowledge Claim Tx Messages (extends the ontology tx.proto)
+// ============================================================================
+
+// MsgSubmitClaim submits a knowledge claim for verification.
+message MsgSubmitClaim {
+  option (cosmos.msg.v1.signer) = "submitter";
+  string submitter = 1;
+  string claim_text = 2;
+  string domain = 3;
+  string stake = 4;
+  repeated string references = 5;
+  repeated ClaimEvidence evidence = 6;
+}
+
+message MsgSubmitClaimResponse {
+  string claim_id = 1;
+  string round_id = 2;
+  uint64 estimated_completion_height = 3;
+}
+
+// MsgSubmitCommitment submits a verification commitment (phase 1).
+message MsgSubmitCommitment {
+  option (cosmos.msg.v1.signer) = "validator";
+  string validator = 1;
+  string round_id = 2;
+  string commitment_hash = 3;
+}
+
+message MsgSubmitCommitmentResponse {}
+
+// MsgSubmitReveal submits a verification reveal (phase 2).
+message MsgSubmitReveal {
+  option (cosmos.msg.v1.signer) = "validator";
+  string validator = 1;
+  string round_id = 2;
+  Verdict verdict = 3;
+  uint32 confidence = 4;
+  string nonce = 5;
+  string reasoning = 6;
+}
+
+message MsgSubmitRevealResponse {
+  bool accepted = 1;
+}
+
+// MsgChallengeFact challenges an existing verified fact.
+message MsgChallengeFact {
+  option (cosmos.msg.v1.signer) = "challenger";
+  string challenger = 1;
+  string fact_id = 2;
+  string reason = 3;
+  string stake = 4;
+  repeated ClaimEvidence counter_evidence = 5;
+}
+
+message MsgChallengeFactResponse {
+  string challenge_round_id = 1;
+}
+
+// MsgAddFact is a system message to add a verified fact (internal use).
+message MsgAddFact {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Fact fact = 2;
+}
+
+message MsgAddFactResponse {}

@@ -472,3 +472,33 @@ export const SERVICE_BASE_DOMAIN = "services.legible.money" as const;
 
 /** Number of hex chars from service ID used in the subdomain label. */
 export const SERVICE_SUBDOMAIN_SHORT_ID_LEN = 8 as const;
+
+// ============ System Contracts ============
+
+/**
+ * System contracts - protocol-intrinsic self-invoking contracts
+ */
+export const SYSTEM_CONTRACTS = {
+  RAI_RETRIEVAL: {
+    DID: "did:lgm:system-rai-retrieval",
+    SELECTORS: {
+      SWEEP_EXPIRED: new Uint8Array([0x01, 0x00, 0x00, 0x00]),
+      DISTRIBUTE_RAI: new Uint8Array([0x02, 0x00, 0x00, 0x00]),
+    },
+  },
+} as const;
+
+// ============ Evidence Audit Constants ============
+
+/**
+ * Evidence audit parameters
+ */
+export const EVIDENCE_AUDIT = {
+  BASE_AUDIT_REWARD: 11n * 10n ** 18n, // 11 LGM base reward
+  ACCURACY_TOLERANCE: 0.1, // Within 0.1 of ground truth
+  EARLY_AUDIT_WINDOW: 111, // 111 blocks (~4.6 min) for early bonus
+  EARLY_AUDIT_MULTIPLIER: 1.5, // 1.5x for early audits
+  MAX_ACCURACY_MULTIPLIER: 2.0, // 2.0x cap on accuracy multiplier
+  MIN_AUDITOR_ACCOUNT_AGE: 1111n, // 1111 blocks (~1 hour) minimum age
+  AUDIT_COOLDOWN_BLOCKS: 22, // 22 blocks (~55s) between audits
+} as const;
