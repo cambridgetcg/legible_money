@@ -40,4 +40,40 @@ var (
 
 	// ErrSessionDurationExceeded is returned when session duration exceeds max
 	ErrSessionDurationExceeded = errors.Register(ModuleName, 13, "session duration exceeds maximum")
+
+	// ErrAccountAlreadyExists is returned when account already exists
+	ErrAccountAlreadyExists = errors.Register(ModuleName, 14, "account already exists")
+
+	// ErrInvalidPublicKey is returned when public key format is invalid
+	ErrInvalidPublicKey = errors.Register(ModuleName, 15, "invalid public key")
+
+	// ErrSessionCapabilityDenied is returned when session key lacks capability
+	ErrSessionCapabilityDenied = errors.Register(ModuleName, 16, "session key capability denied")
+
+	// ErrDIDResolutionFailed is returned when DID cannot be resolved
+	ErrDIDResolutionFailed = errors.Register(ModuleName, 17, "DID resolution failed")
+
+	// ErrUnauthorized is returned for unauthorized operations
+	ErrUnauthorized = errors.Register(ModuleName, 18, "unauthorized")
+
+	// ErrRecoveryNotFound is returned when no recovery request exists
+	ErrRecoveryNotFound = errors.Register(ModuleName, 19, "recovery request not found")
+
+	// ErrRecoveryAlreadyActive is returned when recovery is already in progress
+	ErrRecoveryAlreadyActive = errors.Register(ModuleName, 20, "recovery already active")
+
+	// ErrRecoveryNotExecutable is returned when recovery cannot be executed yet
+	ErrRecoveryNotExecutable = errors.Register(ModuleName, 21, "recovery not executable")
+
+	// ErrRecoveryConfigNotFound is returned when recovery config is not set
+	ErrRecoveryConfigNotFound = errors.Register(ModuleName, 22, "recovery config not found")
+
+	// ErrInvalidShard is returned when recovery shard is invalid
+	ErrInvalidShard = errors.Register(ModuleName, 23, "invalid recovery shard")
+
+	// ErrRecoveryChallenged is returned when recovery was successfully challenged
+	ErrRecoveryChallenged = errors.Register(ModuleName, 24, "recovery has been challenged")
+
+	// ErrAccountNotFrozen is returned when trying to unfreeze a non-frozen account
+	ErrAccountNotFrozen = errors.Register(ModuleName, 25, "account is not frozen")
 )

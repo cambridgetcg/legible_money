@@ -1,8 +1,11 @@
 package keeper
 
 import (
+	"context"
+	"encoding/hex"
 	"fmt"
 
+	cosmosed25519 "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/auth/types"
@@ -19,8 +22,82 @@ func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
-// RotateKey handles key rotation for operational or session keys
-func (ms msgServer) RotateKey(goCtx sdk.Context, msg *types.MsgRotateKey) (*types.MsgRotateKeyResponse, error) {
+// RegisterAccount creates a new Legible account with DID mapping
+func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegisterAccount) (*types.MsgRegisterAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Check if account already exists
+	if _, found := ms.GetAccount(ctx, msg.Sender); found {
+		return nil, types.ErrAccountAlreadyExists
+	}
+
+	// Check if DID already registered
+	if _, found := ms.GetDIDMapping(ctx, msg.Did); found {
+		return nil, types.ErrDuplicateDID
+	}
+
+	currentHeight := uint64(ctx.BlockHeight())
+
+	// Create Legible account
+	account := types.LegibleAccount{
+		Address:               msg.Sender,
+		Did:                   msg.Did,
+		PublicKey:             msg.PublicKey,
+		AccountType:           msg.AccountType,
+		OperationalKeyHash:    msg.OperationalKeyHash,
+		OperationalPublicKey:  msg.PublicKey, // identity key is initial operational key
+		OperationalKeyVersion: 1,
+		SessionKeyCount:       0,
+		ReputationScore:       500000, // 0.5 default
+		CreatedAtBlock:        currentHeight,
+		LastActiveBlock:       currentHeight,
+		Flags: types.AccountFlags{
+			CanSubmitClaims: true,
+			CanChallenge:    true,
+		},
+	}
+	ms.SetAccount(ctx, account)
+
+	// Create DID mapping
+	mapping := types.DIDMapping{
+		Did:    msg.Did,
+		Bech32: msg.Sender,
+		PubKey: msg.PublicKey,
+	}
+	ms.SetDIDMapping(ctx, mapping)
+
+	// Sync Ed25519 pubkey to Cosmos BaseAccount for standard sig verification
+	senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	if ms.accountKeeper != nil {
+		cosmosAcc := ms.accountKeeper.GetAccount(ctx, senderAddr)
+		if cosmosAcc == nil {
+			cosmosAcc = ms.accountKeeper.NewAccountWithAddress(ctx, senderAddr)
+		}
+		if cosmosAcc != nil {
+			keyBytes, err := hex.DecodeString(msg.PublicKey)
+			if err == nil && len(keyBytes) == 32 {
+				pubKey := &cosmosed25519.PubKey{Key: keyBytes}
+				if err := cosmosAcc.SetPubKey(pubKey); err == nil {
+					ms.accountKeeper.SetAccount(ctx, cosmosAcc)
+				}
+			}
+		}
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"account_registered",
+			sdk.NewAttribute("address", msg.Sender),
+			sdk.NewAttribute("did", msg.Did),
+			sdk.NewAttribute("account_type", msg.AccountType),
+		),
+	)
+
+	return &types.MsgRegisterAccountResponse{}, nil
+}
+
+// RotateKey handles key rotation for operational keys
+func (ms msgServer) RotateKey(goCtx context.Context, msg *types.MsgRotateKey) (*types.MsgRotateKeyResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Get account
@@ -43,9 +120,6 @@ func (ms msgServer) RotateKey(goCtx sdk.Context, msg *types.MsgRotateKey) (*type
 		return nil, types.ErrKeyRotationCooldown
 	}
 
-	// TODO: Verify signature from old key (msg.Signature)
-	// This would require access to the old key's public key and crypto verification
-
 	// Update key based on type
 	switch msg.KeyType {
 	case "operational":
@@ -53,8 +127,26 @@ func (ms msgServer) RotateKey(goCtx sdk.Context, msg *types.MsgRotateKey) (*type
 		account.OperationalKeyVersion++
 		ms.SetLastRotation(ctx, msg.Sender, currentHeight)
 
+		// Store the new operational public key if provided
+		if msg.NewPublicKey != "" {
+			account.OperationalPublicKey = msg.NewPublicKey
+
+			// Sync Ed25519 pubkey to Cosmos BaseAccount for future sig verification
+			if ms.accountKeeper != nil {
+				senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
+				if cosmosAcc := ms.accountKeeper.GetAccount(ctx, senderAddr); cosmosAcc != nil {
+					keyBytes, decErr := hex.DecodeString(msg.NewPublicKey)
+					if decErr == nil && len(keyBytes) == 32 {
+						pubKey := &cosmosed25519.PubKey{Key: keyBytes}
+						if setErr := cosmosAcc.SetPubKey(pubKey); setErr == nil {
+							ms.accountKeeper.SetAccount(ctx, cosmosAcc)
+						}
+					}
+				}
+			}
+		}
+
 	case "session":
-		// For session keys, we don't update the account directly
 		// Session keys are managed separately via CreateSession/RevokeSession
 		return nil, types.ErrInvalidKeyType
 
@@ -66,7 +158,6 @@ func (ms msgServer) RotateKey(goCtx sdk.Context, msg *types.MsgRotateKey) (*type
 	account.LastActiveBlock = currentHeight
 	ms.SetAccount(ctx, account)
 
-	// Emit event
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"key_rotated",
@@ -80,7 +171,7 @@ func (ms msgServer) RotateKey(goCtx sdk.Context, msg *types.MsgRotateKey) (*type
 }
 
 // CreateSession creates a new session key with limited capabilities
-func (ms msgServer) CreateSession(goCtx sdk.Context, msg *types.MsgCreateSession) (*types.MsgCreateSessionResponse, error) {
+func (ms msgServer) CreateSession(goCtx context.Context, msg *types.MsgCreateSession) (*types.MsgCreateSessionResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Get account
@@ -115,6 +206,7 @@ func (ms msgServer) CreateSession(goCtx sdk.Context, msg *types.MsgCreateSession
 	// Create session key
 	session := types.SessionKey{
 		KeyHash:        msg.SessionKeyHash,
+		PublicKey:      msg.SessionPublicKey,
 		Owner:          msg.Owner,
 		Capabilities:   msg.Capabilities,
 		ExpiresAtBlock: expiresAt,
@@ -129,7 +221,6 @@ func (ms msgServer) CreateSession(goCtx sdk.Context, msg *types.MsgCreateSession
 	account.LastActiveBlock = currentHeight
 	ms.SetAccount(ctx, account)
 
-	// Emit event
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"session_created",
@@ -145,7 +236,7 @@ func (ms msgServer) CreateSession(goCtx sdk.Context, msg *types.MsgCreateSession
 }
 
 // RevokeSession revokes an existing session key
-func (ms msgServer) RevokeSession(goCtx sdk.Context, msg *types.MsgRevokeSession) (*types.MsgRevokeSessionResponse, error) {
+func (ms msgServer) RevokeSession(goCtx context.Context, msg *types.MsgRevokeSession) (*types.MsgRevokeSessionResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Get account
@@ -170,7 +261,6 @@ func (ms msgServer) RevokeSession(goCtx sdk.Context, msg *types.MsgRevokeSession
 	account.LastActiveBlock = uint64(ctx.BlockHeight())
 	ms.SetAccount(ctx, account)
 
-	// Emit event
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"session_revoked",
@@ -180,4 +270,327 @@ func (ms msgServer) RevokeSession(goCtx sdk.Context, msg *types.MsgRevokeSession
 	)
 
 	return &types.MsgRevokeSessionResponse{}, nil
+}
+
+// FreezeAccount freezes an account. Owner can self-freeze; authority can freeze anyone.
+func (ms msgServer) FreezeAccount(goCtx context.Context, msg *types.MsgFreezeAccount) (*types.MsgFreezeAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	account, found := ms.GetAccount(ctx, msg.Address)
+	if !found {
+		return nil, types.ErrAccountNotFound
+	}
+
+	if account.Flags.Frozen {
+		return nil, types.ErrAccountFrozen
+	}
+
+	// Authorization: self-freeze or authority
+	if msg.Sender != msg.Address && msg.Sender != ms.Keeper.GetAuthority() {
+		return nil, fmt.Errorf("%w: only account owner or authority can freeze", types.ErrUnauthorized)
+	}
+
+	account.Flags.Frozen = true
+	ms.SetAccount(ctx, account)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"account_frozen",
+			sdk.NewAttribute("address", msg.Address),
+			sdk.NewAttribute("frozen_by", msg.Sender),
+			sdk.NewAttribute("reason", msg.Reason),
+		),
+	)
+
+	return &types.MsgFreezeAccountResponse{}, nil
+}
+
+// UnfreezeAccount unfreezes a frozen account. Authority-only.
+func (ms msgServer) UnfreezeAccount(goCtx context.Context, msg *types.MsgUnfreezeAccount) (*types.MsgUnfreezeAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg.Authority != ms.Keeper.GetAuthority() {
+		return nil, fmt.Errorf("%w: only authority can unfreeze accounts", types.ErrUnauthorized)
+	}
+
+	account, found := ms.GetAccount(ctx, msg.Address)
+	if !found {
+		return nil, types.ErrAccountNotFound
+	}
+
+	if !account.Flags.Frozen {
+		return nil, types.ErrAccountNotFrozen
+	}
+
+	account.Flags.Frozen = false
+	ms.SetAccount(ctx, account)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"account_unfrozen",
+			sdk.NewAttribute("address", msg.Address),
+			sdk.NewAttribute("unfrozen_by", msg.Authority),
+		),
+	)
+
+	return &types.MsgUnfreezeAccountResponse{}, nil
+}
+
+// SetRecoveryConfig stores recovery configuration for the sender's account.
+func (ms msgServer) SetRecoveryConfig(goCtx context.Context, msg *types.MsgSetRecoveryConfig) (*types.MsgSetRecoveryConfigResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if _, found := ms.GetAccount(ctx, msg.Sender); !found {
+		return nil, types.ErrAccountNotFound
+	}
+
+	ms.Keeper.SetRecoveryConfig(ctx, msg.Sender, msg.Config)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"recovery_config_set",
+			sdk.NewAttribute("address", msg.Sender),
+			sdk.NewAttribute("threshold", fmt.Sprintf("%d", msg.Config.Threshold)),
+			sdk.NewAttribute("total_shards", fmt.Sprintf("%d", msg.Config.TotalShards)),
+		),
+	)
+
+	return &types.MsgSetRecoveryConfigResponse{}, nil
+}
+
+// InitiateRecovery begins account recovery. The sender must be an authorized shard holder.
+func (ms msgServer) InitiateRecovery(goCtx context.Context, msg *types.MsgInitiateRecovery) (*types.MsgInitiateRecoveryResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Verify target account exists
+	account, found := ms.GetAccount(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrAccountNotFound
+	}
+
+	// Check no active recovery
+	if _, exists := ms.Keeper.GetRecoveryRequest(ctx, msg.AccountAddress); exists {
+		return nil, types.ErrRecoveryAlreadyActive
+	}
+
+	// Get recovery config
+	config, found := ms.Keeper.GetRecoveryConfig(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrRecoveryConfigNotFound
+	}
+
+	// Verify sender is an authorized initiator
+	authorized := false
+	for _, holder := range config.ShardHolders {
+		if holder.Identifier == msg.Sender && holder.CanInitiateRecovery {
+			authorized = true
+			break
+		}
+	}
+	if !authorized {
+		return nil, fmt.Errorf("%w: sender is not an authorized recovery initiator", types.ErrUnauthorized)
+	}
+
+	currentHeight := uint64(ctx.BlockHeight())
+	delayBlocks := config.RecoveryDelayBlocks
+	if delayBlocks == 0 {
+		delayBlocks = ms.Keeper.GetParams(ctx).RecoveryDelayBlocks
+	}
+	challengeBlocks := config.ChallengePeriodBlocks
+	if challengeBlocks == 0 {
+		challengeBlocks = ms.Keeper.GetParams(ctx).ChallengePeriodBlocks
+	}
+
+	req := types.RecoveryRequest{
+		AccountAddress:     msg.AccountAddress,
+		InitiatedBy:        msg.Sender,
+		NewOperationalKey:  msg.NewOperationalKey,
+		ShardsProvided:     []uint32{},
+		ShardsRequired:     config.Threshold,
+		InitiatedAtBlock:   currentHeight,
+		DelayExpiresAt:     currentHeight + delayBlocks,
+		ChallengeExpiresAt: currentHeight + delayBlocks + challengeBlocks,
+		Status:             "pending",
+	}
+
+	ms.Keeper.SetRecoveryRequest(ctx, req)
+
+	// Set account InRecovery flag
+	account.Flags.InRecovery = true
+	ms.SetAccount(ctx, account)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"recovery_initiated",
+			sdk.NewAttribute("account", msg.AccountAddress),
+			sdk.NewAttribute("initiated_by", msg.Sender),
+			sdk.NewAttribute("delay_expires_at", fmt.Sprintf("%d", req.DelayExpiresAt)),
+		),
+	)
+
+	return &types.MsgInitiateRecoveryResponse{}, nil
+}
+
+// SubmitRecoveryShard provides a shard to an active recovery request.
+func (ms msgServer) SubmitRecoveryShard(goCtx context.Context, msg *types.MsgSubmitRecoveryShard) (*types.MsgSubmitRecoveryShardResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	req, found := ms.Keeper.GetRecoveryRequest(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrRecoveryNotFound
+	}
+
+	if req.Status != "pending" {
+		return nil, fmt.Errorf("recovery is in '%s' status, shards can only be submitted while 'pending'", req.Status)
+	}
+
+	// Verify sender holds the claimed shard index
+	config, found := ms.Keeper.GetRecoveryConfig(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrRecoveryConfigNotFound
+	}
+
+	shardAuthorized := false
+	for _, holder := range config.ShardHolders {
+		if holder.ShardIndex == msg.ShardIndex && holder.Identifier == msg.Sender {
+			shardAuthorized = true
+			break
+		}
+	}
+	if !shardAuthorized {
+		return nil, fmt.Errorf("%w: sender does not hold shard index %d", types.ErrInvalidShard, msg.ShardIndex)
+	}
+
+	// Check shard not already submitted
+	for _, idx := range req.ShardsProvided {
+		if idx == msg.ShardIndex {
+			return nil, fmt.Errorf("%w: shard %d already submitted", types.ErrInvalidShard, msg.ShardIndex)
+		}
+	}
+
+	req.ShardsProvided = append(req.ShardsProvided, msg.ShardIndex)
+
+	// Check threshold met
+	if uint32(len(req.ShardsProvided)) >= req.ShardsRequired {
+		req.Status = "delayed"
+	}
+
+	ms.Keeper.SetRecoveryRequest(ctx, req)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"recovery_shard_submitted",
+			sdk.NewAttribute("account", msg.AccountAddress),
+			sdk.NewAttribute("shard_index", fmt.Sprintf("%d", msg.ShardIndex)),
+			sdk.NewAttribute("shards_count", fmt.Sprintf("%d/%d", len(req.ShardsProvided), req.ShardsRequired)),
+			sdk.NewAttribute("status", req.Status),
+		),
+	)
+
+	return &types.MsgSubmitRecoveryShardResponse{}, nil
+}
+
+// ChallengeRecovery challenges an active recovery. Only the account owner can challenge.
+func (ms msgServer) ChallengeRecovery(goCtx context.Context, msg *types.MsgChallengeRecovery) (*types.MsgChallengeRecoveryResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	req, found := ms.Keeper.GetRecoveryRequest(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrRecoveryNotFound
+	}
+
+	if req.Status != "challengeable" {
+		return nil, fmt.Errorf("recovery is in '%s' status, can only challenge while 'challengeable'", req.Status)
+	}
+
+	// Only the account owner or authority can challenge
+	if msg.Sender != msg.AccountAddress && msg.Sender != ms.Keeper.GetAuthority() {
+		return nil, fmt.Errorf("%w: only account owner or authority can challenge recovery", types.ErrUnauthorized)
+	}
+
+	// Cancel recovery
+	req.Status = "cancelled"
+	req.ChallengerAddress = msg.Sender
+	req.ChallengeReason = msg.Reason
+	ms.Keeper.SetRecoveryRequest(ctx, req)
+
+	// Clear InRecovery flag
+	if account, accFound := ms.GetAccount(ctx, msg.AccountAddress); accFound {
+		account.Flags.InRecovery = false
+		ms.SetAccount(ctx, account)
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"recovery_challenged",
+			sdk.NewAttribute("account", msg.AccountAddress),
+			sdk.NewAttribute("challenger", msg.Sender),
+			sdk.NewAttribute("reason", msg.Reason),
+		),
+	)
+
+	return &types.MsgChallengeRecoveryResponse{}, nil
+}
+
+// ExecuteRecovery completes a recovery after delay + challenge period have passed.
+func (ms msgServer) ExecuteRecovery(goCtx context.Context, msg *types.MsgExecuteRecovery) (*types.MsgExecuteRecoveryResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	req, found := ms.Keeper.GetRecoveryRequest(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrRecoveryNotFound
+	}
+
+	if req.Status != "executable" {
+		return nil, fmt.Errorf("%w: recovery status is '%s', must be 'executable'", types.ErrRecoveryNotExecutable, req.Status)
+	}
+
+	// Execute recovery: rotate operational key
+	account, found := ms.GetAccount(ctx, msg.AccountAddress)
+	if !found {
+		return nil, types.ErrAccountNotFound
+	}
+
+	account.OperationalPublicKey = req.NewOperationalKey
+	account.OperationalKeyVersion++
+	account.Flags.InRecovery = false
+	account.LastActiveBlock = uint64(ctx.BlockHeight())
+	ms.SetAccount(ctx, account)
+
+	// Sync to Cosmos BaseAccount
+	if ms.accountKeeper != nil {
+		senderAddr, _ := sdk.AccAddressFromBech32(msg.AccountAddress)
+		if cosmosAcc := ms.accountKeeper.GetAccount(ctx, senderAddr); cosmosAcc != nil {
+			keyBytes, decErr := hex.DecodeString(req.NewOperationalKey)
+			if decErr == nil && len(keyBytes) == 32 {
+				pubKey := &cosmosed25519.PubKey{Key: keyBytes}
+				if setErr := cosmosAcc.SetPubKey(pubKey); setErr == nil {
+					ms.accountKeeper.SetAccount(ctx, cosmosAcc)
+				}
+			}
+		}
+	}
+
+	// Revoke all existing session keys (security measure)
+	sessions := ms.GetSessionKeysForOwner(ctx, msg.AccountAddress)
+	for _, session := range sessions {
+		ms.DeleteSessionKey(ctx, msg.AccountAddress, session.KeyHash)
+	}
+	account.SessionKeyCount = 0
+	ms.SetAccount(ctx, account)
+
+	// Mark request as completed
+	req.Status = "completed"
+	ms.Keeper.SetRecoveryRequest(ctx, req)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"recovery_executed",
+			sdk.NewAttribute("account", msg.AccountAddress),
+			sdk.NewAttribute("executed_by", msg.Sender),
+			sdk.NewAttribute("new_key_version", fmt.Sprintf("%d", account.OperationalKeyVersion)),
+		),
+	)
+
+	return &types.MsgExecuteRecoveryResponse{}, nil
 }

@@ -15,43 +15,202 @@ type ProtoMessage interface {
 	ProtoMessage()
 }
 
+// Fact status constants (9-state lifecycle from TS reference)
+const (
+	FactStatusPending    = "pending"
+	FactStatusVerified   = "verified"
+	FactStatusActive     = "active"
+	FactStatusContested  = "contested"
+	FactStatusChallenged = "challenged"
+	FactStatusSuperseded = "superseded"
+	FactStatusExpired    = "expired"
+	FactStatusDisproven  = "disproven"
+	FactStatusRevoked    = "revoked"
+)
+
+// Fact maturity levels
+const (
+	MaturityEmerging    = "emerging"
+	MaturityEstablished = "established"
+	MaturityCanonical   = "canonical"
+)
+
+// CategoryDecayProfile defines per-category confidence decay parameters.
+// Half-life in blocks (0 = eternal, no decay). From TS EPISTEMIC_PROFILES.
+type CategoryDecayProfile struct {
+	HalfLifeBlocks      uint64 // 0 = eternal (analytic, formal, protocol)
+	MaxConfidence        uint64 // stratum ceiling (basis points, 0-1_000_000)
+	MinConfidence        uint64 // floor after decay
+	ReverificationBonus  uint64 // bonus on successful re-verification
+	RequiresReverification bool
+}
+
+// CATEGORY_DECAY maps epistemic category to decay profile.
+// Values from TS core/knowledge/types.ts EPISTEMIC_PROFILES.
+// Block time: 2521ms → BLOCKS_PER_DAY = 34272
+var CATEGORY_DECAY = map[string]CategoryDecayProfile{
+	"analytic":      {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	"formal":        {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	"protocol":      {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	"empirical":     {HalfLifeBlocks: 100_000, MaxConfidence: 990_000, MinConfidence: 300_000, ReverificationBonus: 50_000, RequiresReverification: true},
+	"historical":    {HalfLifeBlocks: 500_000, MaxConfidence: 950_000, MinConfidence: 200_000, ReverificationBonus: 30_000, RequiresReverification: true},
+	"predictive":    {HalfLifeBlocks: 20_000, MaxConfidence: 900_000, MinConfidence: 100_000, ReverificationBonus: 80_000, RequiresReverification: true},
+	"social":        {HalfLifeBlocks: 150_000, MaxConfidence: 850_000, MinConfidence: 200_000, ReverificationBonus: 40_000, RequiresReverification: true},
+	"replicated":    {HalfLifeBlocks: 1_000_000, MaxConfidence: 995_000, MinConfidence: 300_000, ReverificationBonus: 20_000, RequiresReverification: true},
+	"computational": {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+}
+
+// Stratum confidence ceilings (from TS ontology/types.ts STRATUM_CONFIDENCE_CEILING)
+var STRATUM_CONFIDENCE_CEILING = map[string]uint64{
+	"fundamental":   1_000_000,
+	"physical":      990_000,
+	"chemical":      980_000,
+	"biological":    950_000,
+	"cognitive":     900_000,
+	"social":        850_000,
+	"technological": 1_000_000,
+}
+
+// Citation economics constants (from TS core/knowledge/types.ts)
+const (
+	CitationShareBPS          = 150_000 // 15% of verification rewards to citation pool
+	CitationDecayPerLevel     = 500_000 // 50% decay per ancestor level
+	CitationProtocolFloorBPS  = 20_000  // 2% protocol floor
+	CrossDomainBonusRate      = 200_000 // 20% cross-domain bonus
+	MaxCrossDomainBonus       = 2_000_000 // 2.0x max
+
+	// Fundamentality thresholds
+	FundamentalityNotable     = 250_000 // 0.25
+	FundamentalityFoundational = 500_000 // 0.50
+	FundamentalityFundamental  = 750_000 // 0.75
+	FundamentalityAxiomatic    = 900_000 // 0.90
+
+	// Fundamentality reward multipliers
+	FundamentalityBonusNotable     = 1_100_000 // 1.1x
+	FundamentalityBonusFoundational = 1_250_000 // 1.25x
+	FundamentalityBonusFundamental  = 1_500_000 // 1.5x
+	FundamentalityBonusAxiomatic    = 2_000_000 // 2.0x
+)
+
+// Confidence propagation constants
+const (
+	PropagationThreshold  = 10_000  // 1% change triggers propagation (basis points)
+	MaxPropagationDepth   = 10      // max BFS hops
+	CyclePenaltyFactor    = 400_000 // 0.4× penalty for cycle members
+)
+
+// Reverification constants
+const (
+	ReverificationThreshold = 600_000  // 60% confidence floor
+	StalenessMultiplier     = 2        // age > 2× halfLife → needs reverification
+	MinConfidenceThreshold  = 300_000  // 30% — below this, fact expires
+)
+
+// Evidence confidence bonus constants.
+// Evidence bonus is ADDITIVE to the verification confidence, capped at MaxEvidenceBonus.
+const (
+	MaxEvidenceBonus = 150_000 // 15% maximum additive evidence bonus (basis points)
+)
+
+// EVIDENCE_TYPE_STRENGTH maps evidence types to intrinsic strength values.
+// Values are in basis points (0-1,000,000), translated from TS EVIDENCE_TYPE_STRENGTH.
+var EVIDENCE_TYPE_STRENGTH = map[string]uint64{
+	"on_chain":    1_000_000, // 1.0 — highest: immutable on-chain data
+	"computation": 950_000,   // 0.95 — deterministic computational verification
+	"experiment":  850_000,   // 0.85 — experimental/peer-reviewed
+	"oracle_feed": 700_000,   // 0.70 — external oracle data
+	"document":    600_000,   // 0.60 — archived documents
+	"attestation": 500_000,   // 0.50 — human/agent attestation
+}
+
+// Maturity criteria
+const (
+	MaturityEstablishedMinConf         = 800_000 // 0.8 confidence
+	MaturityEstablishedMinAge          = 34_272  // ~1 day in blocks
+	MaturityEstablishedMinVerifications = 3
+	MaturityCanonicalMinConf           = 900_000 // 0.9 confidence
+	MaturityCanonicalMinAge            = 342_720 // ~10 days in blocks
+	MaturityCanonicalMinVerifications  = 10
+)
+
 // Fact represents a verified knowledge claim
 type Fact struct {
-	Id                  string   `json:"id"`
-	ClaimText           string   `json:"claim_text"`
-	Domain              string   `json:"domain"`
-	EpistemicCategory   string   `json:"epistemic_category"` // protocol, analytic, formal, empirical, historical, computational, social
-	Confidence          uint64   `json:"confidence"`         // 0-1000000 (6 decimal precision)
-	Status              string   `json:"status"`             // verified, contested, falsified, expired
-	Submitter           string   `json:"submitter"`          // bech32 address
-	SubmitterDid        string   `json:"submitter_did"`
-	References          []string `json:"references"`      // fact IDs
-	VerifiedAtHeight    uint64   `json:"verified_at_height"`
-	VerifierCount       uint32   `json:"verifier_count"`
-	LogicZone           string   `json:"logic_zone"`
-	CreatedAtHeight     uint64   `json:"created_at_height"`
-	LastVerifiedHeight  uint64   `json:"last_verified_height"`
+	Id                   string   `json:"id"`
+	ClaimText            string   `json:"claim_text"`
+	Domain               string   `json:"domain"`
+	EpistemicCategory    string   `json:"epistemic_category"` // protocol, analytic, formal, empirical, historical, computational, social, predictive, replicated
+	Confidence           uint64   `json:"confidence"`         // 0-1000000 (6 decimal precision)
+	Status               string   `json:"status"`             // pending, verified, active, contested, challenged, superseded, expired, disproven, revoked
+	Submitter            string   `json:"submitter"`          // bech32 address
+	SubmitterDid         string   `json:"submitter_did"`
+	References           []string `json:"references"`      // fact IDs
+	VerifiedAtHeight     uint64   `json:"verified_at_height"`
+	VerifierCount        uint32   `json:"verifier_count"`
+	LogicZone            string   `json:"logic_zone"`
+	CreatedAtHeight      uint64   `json:"created_at_height"`
+	LastVerifiedHeight   uint64   `json:"last_verified_height"`
+	LastConfidenceUpdate uint64   `json:"last_confidence_update,omitempty"` // block of last decay calculation
+	BaseConfidence       uint64   `json:"base_confidence,omitempty"`       // confidence before decay applied
+
+	// Expiration fields
+	ExpiresAtBlock uint64 `json:"expires_at_block,omitempty"` // explicit expiration (0 = no explicit expiry)
+
+	// Citation economics fields
+	CitationCount         uint64 `json:"citation_count,omitempty"`
+	LastCitedBlock        uint64 `json:"last_cited_block,omitempty"`
+	TotalCitationRewards  uint64 `json:"total_citation_rewards,omitempty"` // cumulative ulgm earned
+
+	// Supersession fields
+	SupersededBy       string `json:"superseded_by,omitempty"`        // fact ID that supersedes this one
+	SupersededAtHeight uint64 `json:"superseded_at_height,omitempty"`
+
+	// Maturity and stratum fields
+	Maturity       string `json:"maturity,omitempty"`        // emerging, established, canonical
+	StratumCeiling uint64 `json:"stratum_ceiling,omitempty"` // inherited ceiling from stratum (0 = no ceiling)
+	ChallengeCount uint32 `json:"challenge_count,omitempty"` // number of challenges received
+
+	// Evidence fields (transferred from claim on acceptance)
+	EvidenceSummaries []FactEvidenceSummary `json:"evidence_summaries,omitempty"` // evidence that supported this fact
+	EvidenceBonus     uint64                `json:"evidence_bonus,omitempty"`     // bonus applied during verification (basis points)
+}
+
+// FactEvidenceSummary is a snapshot of evidence that supported a fact at verification time.
+// Stored on the Fact so evidence provenance is preserved after the claim is consumed.
+type FactEvidenceSummary struct {
+	EvidenceId   string `json:"evidence_id"`
+	EvidenceType string `json:"evidence_type"`
+	Reliability  uint64 `json:"reliability"`   // basis points at time of verification
+	TypeStrength uint64 `json:"type_strength"` // intrinsic type strength (basis points)
 }
 
 func (f *Fact) Reset()        {}
 func (f *Fact) String() string { return fmt.Sprintf("%+v", *f) }
 func (f *Fact) ProtoMessage()  {}
 
+// ClaimEvidence is supporting evidence for a knowledge claim.
+type ClaimEvidence struct {
+	EvidenceType string            `json:"evidence_type"`
+	URI          string            `json:"uri"`
+	ContentHash  string            `json:"content_hash"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+}
+
 // Claim represents a knowledge claim pending verification
 type Claim struct {
-	Id                string   `json:"id"`
-	ClaimText         string   `json:"claim_text"`
-	ContentHash       string   `json:"content_hash"`
-	Domain            string   `json:"domain"`
-	EpistemicCategory string   `json:"epistemic_category"`
-	Submitter         string   `json:"submitter"`     // bech32 address
-	SubmitterDid      string   `json:"submitter_did"`
-	StakeAmount       string   `json:"stake_amount"` // bigint as string
-	Status            string   `json:"status"`       // pending, in_verification, accepted, rejected, challenged, expired
-	SubmittedAtHeight uint64   `json:"submitted_at_height"`
-	References        []string `json:"references"` // fact IDs
-	LogicZone         string   `json:"logic_zone"`
-	RoundId           string   `json:"round_id"`
+	Id                string          `json:"id"`
+	ClaimText         string          `json:"claim_text"`
+	ContentHash       string          `json:"content_hash"`
+	Domain            string          `json:"domain"`
+	EpistemicCategory string          `json:"epistemic_category"`
+	Submitter         string          `json:"submitter"`     // bech32 address
+	SubmitterDid      string          `json:"submitter_did"`
+	StakeAmount       string          `json:"stake_amount"` // bigint as string
+	Status            string          `json:"status"`       // pending, in_verification, accepted, rejected, challenged, expired
+	SubmittedAtHeight uint64          `json:"submitted_at_height"`
+	References        []string        `json:"references"` // fact IDs
+	LogicZone         string          `json:"logic_zone"`
+	RoundId           string          `json:"round_id"`
+	Evidence          []ClaimEvidence `json:"evidence,omitempty"` // supporting evidence
 }
 
 func (c *Claim) Reset()        {}
@@ -98,6 +257,7 @@ type VerificationReveal struct {
 	Confidence        uint64 `json:"confidence"`
 	Justification     string `json:"justification"`
 	VrfProof          string `json:"vrf_proof"`
+	Salt              string `json:"salt,omitempty"` // salt used in commitment hash, stored for auditability
 	SubmittedAtHeight uint64 `json:"submitted_at_height"`
 }
 
@@ -107,10 +267,11 @@ func (vr *VerificationReveal) ProtoMessage()  {}
 
 // FactReference represents a relationship between facts
 type FactReference struct {
-	FromFactId    string `json:"from_fact_id"`
-	ToFactId      string `json:"to_fact_id"`
-	ReferenceType string `json:"reference_type"` // supports, contradicts, extends, qualifies
-	Weight        uint64 `json:"weight"`
+	FromFactId      string `json:"from_fact_id"`
+	ToFactId        string `json:"to_fact_id"`
+	ReferenceType   string `json:"reference_type"` // supports, contradicts, extends, qualifies
+	Weight          uint64 `json:"weight"`
+	CreatedAtHeight uint64 `json:"created_at_height,omitempty"` // block when reference was created
 }
 
 func (fr *FactReference) Reset()        {}
@@ -132,13 +293,16 @@ func (vi *ValidatorInfo) ProtoMessage()  {}
 
 // VerificationResult represents the aggregated outcome of a verification round.
 type VerificationResult struct {
-	Verdict        string            `json:"verdict"`          // accepted, rejected, contested, insufficient
-	Confidence     uint64            `json:"confidence"`       // 0-1000000 (6 decimal precision)
-	AgreementRatio uint64            `json:"agreement_ratio"`  // 0-1000000
-	TotalWeight    uint64            `json:"total_weight"`     // total stake weight of participants
-	Rewards        map[string]uint64 `json:"rewards"`          // validator → reward amount
-	Slashes        map[string]uint64 `json:"slashes"`          // validator → slash amount
-	ParticipantCount uint32          `json:"participant_count"`
+	Verdict           string            `json:"verdict"`          // accepted, rejected, contested, insufficient
+	Confidence        uint64            `json:"confidence"`       // 0-1000000 (6 decimal precision)
+	AgreementRatio    uint64            `json:"agreement_ratio"`  // 0-1000000
+	TotalWeight       uint64            `json:"total_weight"`     // total stake weight of participants
+	Rewards           map[string]uint64 `json:"rewards"`          // validator → reward amount
+	Slashes           map[string]uint64 `json:"slashes"`          // validator → slash amount
+	ParticipantCount  uint32            `json:"participant_count"`
+	CompletedAtHeight uint64            `json:"completed_at_height,omitempty"` // block height when aggregation completed
+	QuorumReached     bool              `json:"quorum_reached"`                // whether quorum threshold was met
+	EvidenceBonus     uint64            `json:"evidence_bonus,omitempty"`      // additive evidence bonus applied (basis points)
 }
 
 func (vr *VerificationResult) Reset()        {}
@@ -193,6 +357,9 @@ type Params struct {
 	AcceptanceThreshold             uint64 `json:"acceptance_threshold"`            // 0-1000000, default 770000 (77%)
 	QuorumThreshold                 uint64 `json:"quorum_threshold"`               // 0-1000000, default 660000 (66%)
 	MaxValidatorsPerRound           uint32 `json:"max_validators_per_round"`       // default 22
+	InvalidClaimSlashBps            uint64 `json:"invalid_claim_slash_bps"`        // slash on rejection (220000 = 22%)
+	VerificationRewardAmount        uint64 `json:"verification_reward_amount"`     // ulgm per correct verification (default 100000 = 0.1 LGM)
+	ResearchTaxRate                 uint64 `json:"research_tax_rate"`              // basis points taxed from rewards to research fund (default 220000 = 22%)
 }
 
 func (p *Params) Reset()        {}
@@ -387,14 +554,15 @@ func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
 // MsgSubmitClaim submits a knowledge claim for verification
 type MsgSubmitClaim struct {
-	ClaimText         string   `json:"claim_text"`
-	Domain            string   `json:"domain"`
-	EpistemicCategory string   `json:"epistemic_category"`
-	Submitter         string   `json:"submitter"`      // bech32 address
-	SubmitterDid      string   `json:"submitter_did"`
-	StakeAmount       string   `json:"stake_amount"`   // bigint as string
-	References        []string `json:"references"`     // fact IDs
-	LogicZone         string   `json:"logic_zone"`
+	ClaimText         string          `json:"claim_text"`
+	Domain            string          `json:"domain"`
+	EpistemicCategory string          `json:"epistemic_category"`
+	Submitter         string          `json:"submitter"`      // bech32 address
+	SubmitterDid      string          `json:"submitter_did"`
+	StakeAmount       string          `json:"stake_amount"`   // bigint as string
+	References        []string        `json:"references"`     // fact IDs
+	LogicZone         string          `json:"logic_zone"`
+	Evidence          []ClaimEvidence `json:"evidence,omitempty"` // supporting evidence
 }
 
 func (msg *MsgSubmitClaim) Reset()        {}

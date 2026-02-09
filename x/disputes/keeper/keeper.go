@@ -22,6 +22,7 @@ type Keeper struct {
 	bankKeeper      types.BankKeeper
 	knowledgeKeeper types.KnowledgeKeeper
 	stakingKeeper   types.StakingKeeper
+	vestingKeeper   types.VestingKeeper // nil-safe: vesting integration is optional
 
 	// Module authority (typically governance module address)
 	authority string
@@ -44,6 +45,11 @@ func NewKeeper(
 		stakingKeeper:   sk,
 		authority:       authority,
 	}
+}
+
+// SetVestingKeeper sets the vesting keeper after initialization (avoids circular deps).
+func (k *Keeper) SetVestingKeeper(vk types.VestingKeeper) {
+	k.vestingKeeper = vk
 }
 
 // Logger returns a module-specific logger.

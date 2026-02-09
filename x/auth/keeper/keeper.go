@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/log"
@@ -45,7 +46,10 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // SetAccount stores a Legible account
 func (k Keeper) SetAccount(ctx sdk.Context, account types.LegibleAccount) {
 	store := ctx.KVStore(k.storeKey)
-	bz := k.cdc.MustMarshal(&account)
+	bz, err := json.Marshal(account)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal account: %v", err))
+	}
 	store.Set(types.AccountKey(account.Address), bz)
 }
 
@@ -58,7 +62,9 @@ func (k Keeper) GetAccount(ctx sdk.Context, address string) (types.LegibleAccoun
 	}
 
 	var account types.LegibleAccount
-	k.cdc.MustUnmarshal(bz, &account)
+	if err := json.Unmarshal(bz, &account); err != nil {
+		return types.LegibleAccount{}, false
+	}
 	return account, true
 }
 
@@ -74,7 +80,10 @@ func (k Keeper) GetAccountByDID(ctx sdk.Context, did string) (types.LegibleAccou
 // SetDIDMapping stores a DID -> bech32 mapping
 func (k Keeper) SetDIDMapping(ctx sdk.Context, mapping types.DIDMapping) {
 	store := ctx.KVStore(k.storeKey)
-	bz := k.cdc.MustMarshal(&mapping)
+	bz, err := json.Marshal(mapping)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal DID mapping: %v", err))
+	}
 	store.Set(types.DIDMappingKey(mapping.Did), bz)
 }
 
@@ -87,7 +96,9 @@ func (k Keeper) GetDIDMapping(ctx sdk.Context, did string) (types.DIDMapping, bo
 	}
 
 	var mapping types.DIDMapping
-	k.cdc.MustUnmarshal(bz, &mapping)
+	if err := json.Unmarshal(bz, &mapping); err != nil {
+		return types.DIDMapping{}, false
+	}
 	return mapping, true
 }
 
@@ -103,7 +114,10 @@ func (k Keeper) GetAddressForDID(ctx sdk.Context, did string) (string, bool) {
 // SetSessionKey stores a session key
 func (k Keeper) SetSessionKey(ctx sdk.Context, session types.SessionKey) {
 	store := ctx.KVStore(k.storeKey)
-	bz := k.cdc.MustMarshal(&session)
+	bz, err := json.Marshal(session)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal session key: %v", err))
+	}
 	store.Set(types.SessionKeyKey(session.Owner, session.KeyHash), bz)
 }
 
@@ -116,7 +130,9 @@ func (k Keeper) GetSessionKey(ctx sdk.Context, owner, keyHash string) (types.Ses
 	}
 
 	var session types.SessionKey
-	k.cdc.MustUnmarshal(bz, &session)
+	if err := json.Unmarshal(bz, &session); err != nil {
+		return types.SessionKey{}, false
+	}
 	return session, true
 }
 
@@ -136,7 +152,9 @@ func (k Keeper) GetSessionKeysForOwner(ctx sdk.Context, owner string) []types.Se
 	var sessions []types.SessionKey
 	for ; iterator.Valid(); iterator.Next() {
 		var session types.SessionKey
-		k.cdc.MustUnmarshal(iterator.Value(), &session)
+		if err := json.Unmarshal(iterator.Value(), &session); err != nil {
+			continue
+		}
 		sessions = append(sessions, session)
 	}
 	return sessions
@@ -171,7 +189,10 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 		return err
 	}
 	store := ctx.KVStore(k.storeKey)
-	bz := k.cdc.MustMarshal(&params)
+	bz, err := json.Marshal(params)
+	if err != nil {
+		return fmt.Errorf("failed to marshal params: %w", err)
+	}
 	store.Set(types.ParamsKey, bz)
 	return nil
 }
@@ -185,7 +206,9 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	var params types.Params
-	k.cdc.MustUnmarshal(bz, &params)
+	if err := json.Unmarshal(bz, &params); err != nil {
+		return types.DefaultParams()
+	}
 	return params
 }
 
@@ -205,6 +228,149 @@ func (k Keeper) GetLastRotation(ctx sdk.Context, address string) uint64 {
 	return types.BytesToUint64(bz)
 }
 
+// SetRecoveryConfig stores recovery configuration for an account
+func (k Keeper) SetRecoveryConfig(ctx sdk.Context, address string, config types.RecoveryConfig) {
+	store := ctx.KVStore(k.storeKey)
+	bz, err := json.Marshal(config)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal recovery config: %v", err))
+	}
+	store.Set(types.RecoveryConfigKey(address), bz)
+}
+
+// GetRecoveryConfig retrieves recovery configuration for an account
+func (k Keeper) GetRecoveryConfig(ctx sdk.Context, address string) (types.RecoveryConfig, bool) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(types.RecoveryConfigKey(address))
+	if bz == nil {
+		return types.RecoveryConfig{}, false
+	}
+	var config types.RecoveryConfig
+	if err := json.Unmarshal(bz, &config); err != nil {
+		return types.RecoveryConfig{}, false
+	}
+	return config, true
+}
+
+// SetRecoveryRequest stores a recovery request
+func (k Keeper) SetRecoveryRequest(ctx sdk.Context, req types.RecoveryRequest) {
+	store := ctx.KVStore(k.storeKey)
+	bz, err := json.Marshal(req)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal recovery request: %v", err))
+	}
+	store.Set(types.RecoveryRequestKey(req.AccountAddress), bz)
+}
+
+// GetRecoveryRequest retrieves a recovery request by account address
+func (k Keeper) GetRecoveryRequest(ctx sdk.Context, address string) (types.RecoveryRequest, bool) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(types.RecoveryRequestKey(address))
+	if bz == nil {
+		return types.RecoveryRequest{}, false
+	}
+	var req types.RecoveryRequest
+	if err := json.Unmarshal(bz, &req); err != nil {
+		return types.RecoveryRequest{}, false
+	}
+	return req, true
+}
+
+// DeleteRecoveryRequest removes a recovery request
+func (k Keeper) DeleteRecoveryRequest(ctx sdk.Context, address string) {
+	store := ctx.KVStore(k.storeKey)
+	store.Delete(types.RecoveryRequestKey(address))
+}
+
+// IterateRecoveryRequests iterates over all recovery requests
+func (k Keeper) IterateRecoveryRequests(ctx sdk.Context, cb func(types.RecoveryRequest) bool) {
+	store := ctx.KVStore(k.storeKey)
+	iterator := storetypes.KVStorePrefixIterator(store, types.RecoveryRequestPrefix)
+	defer iterator.Close()
+
+	for ; iterator.Valid(); iterator.Next() {
+		var req types.RecoveryRequest
+		if err := json.Unmarshal(iterator.Value(), &req); err != nil {
+			continue
+		}
+		if cb(req) {
+			break
+		}
+	}
+}
+
+// CleanupExpiredSessions removes expired session keys and decrements account counters.
+// Called from BeginBlocker.
+func (k Keeper) CleanupExpiredSessions(ctx sdk.Context) {
+	currentHeight := uint64(ctx.BlockHeight())
+	store := ctx.KVStore(k.storeKey)
+	iterator := storetypes.KVStorePrefixIterator(store, types.SessionKeyPrefix)
+	defer iterator.Close()
+
+	type deletion struct {
+		key   []byte
+		owner string
+	}
+	var toDelete []deletion
+
+	for ; iterator.Valid(); iterator.Next() {
+		var session types.SessionKey
+		if err := json.Unmarshal(iterator.Value(), &session); err != nil {
+			continue
+		}
+		if session.ExpiresAtBlock <= currentHeight {
+			keyCopy := make([]byte, len(iterator.Key()))
+			copy(keyCopy, iterator.Key())
+			toDelete = append(toDelete, deletion{key: keyCopy, owner: session.Owner})
+		}
+	}
+
+	// Apply deletions outside of iteration
+	for _, d := range toDelete {
+		store.Delete(d.key)
+		// Decrement session key count on account
+		if account, found := k.GetAccount(ctx, d.owner); found {
+			if account.SessionKeyCount > 0 {
+				account.SessionKeyCount--
+				k.SetAccount(ctx, account)
+			}
+		}
+	}
+}
+
+// ProcessRecoveryTimeouts advances recovery request statuses based on block height.
+// Called from BeginBlocker.
+func (k Keeper) ProcessRecoveryTimeouts(ctx sdk.Context) {
+	currentHeight := uint64(ctx.BlockHeight())
+
+	k.IterateRecoveryRequests(ctx, func(req types.RecoveryRequest) bool {
+		changed := false
+
+		switch req.Status {
+		case "delayed":
+			if currentHeight >= req.DelayExpiresAt {
+				req.Status = "challengeable"
+				changed = true
+			}
+		case "challengeable":
+			if currentHeight >= req.ChallengeExpiresAt {
+				req.Status = "executable"
+				changed = true
+			}
+		}
+
+		if changed {
+			k.SetRecoveryRequest(ctx, req)
+		}
+		return false
+	})
+}
+
+// GetAuthority returns the module authority address
+func (k Keeper) GetAuthority() string {
+	return k.authority
+}
+
 // IterateAccounts iterates over all accounts
 func (k Keeper) IterateAccounts(ctx sdk.Context, cb func(types.LegibleAccount) bool) {
 	store := ctx.KVStore(k.storeKey)
@@ -213,7 +379,9 @@ func (k Keeper) IterateAccounts(ctx sdk.Context, cb func(types.LegibleAccount) b
 
 	for ; iterator.Valid(); iterator.Next() {
 		var account types.LegibleAccount
-		k.cdc.MustUnmarshal(iterator.Value(), &account)
+		if err := json.Unmarshal(iterator.Value(), &account); err != nil {
+			continue
+		}
 		if cb(account) {
 			break
 		}
@@ -263,7 +431,9 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	defer iterator.Close()
 	for ; iterator.Valid(); iterator.Next() {
 		var mapping types.DIDMapping
-		k.cdc.MustUnmarshal(iterator.Value(), &mapping)
+		if err := json.Unmarshal(iterator.Value(), &mapping); err != nil {
+			continue
+		}
 		mappings = append(mappings, mapping)
 	}
 
@@ -273,7 +443,9 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	defer sessionIterator.Close()
 	for ; sessionIterator.Valid(); sessionIterator.Next() {
 		var session types.SessionKey
-		k.cdc.MustUnmarshal(sessionIterator.Value(), &session)
+		if err := json.Unmarshal(sessionIterator.Value(), &session); err != nil {
+			continue
+		}
 		sessions = append(sessions, session)
 	}
 

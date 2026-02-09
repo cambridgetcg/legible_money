@@ -215,13 +215,13 @@ func DefaultParams() Params {
 		MaxProposalsPerEpoch:            3,
 		MaxProposalsPerGuardianPerEpoch: 1,
 		CooldownBlocks:                  111,
-		MinGuardianStake:                "111111000000000000000000000", // 111,111 LGM (18 decimals)
+		MinGuardianStake:                "111111000000", // 111,111 LGM in ulgm
 		MinDistinctVoters:               4,
 		MaxRevertDepth:                  111111,
 		EpochBlocks:                     34272, // ~1 day at 2521ms blocks
 		GenesisCouncil:                  []string{},
 		CouncilExpiryBlock:              0,
-		CouncilVirtualStake:             "11111000000000000000000", // 11,111 LGM
+		CouncilVirtualStake:             "11111000000", // 11,111 LGM in ulgm
 	}
 }
 
@@ -589,14 +589,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the emergency module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgProposeHalt{},
-		&MsgVoteHalt{},
-		&MsgProposeRevert{},
-		&MsgVoteRevert{},
-		&MsgProposeResume{},
-		&MsgVoteResume{},
-	)
+	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
 }
 
 // gRPC service descriptors for msg server

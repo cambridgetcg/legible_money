@@ -46,13 +46,17 @@ func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
 
 // DefaultGenesis returns the module's default genesis state.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	return cdc.MustMarshalJSON(types.DefaultGenesis())
+	bz, err := json.Marshal(types.DefaultGenesis())
+	if err != nil {
+		panic("failed to marshal default genesis: " + err.Error())
+	}
+	return bz
 }
 
 // ValidateGenesis performs genesis state validation.
 func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
 	var genState types.GenesisState
-	if err := cdc.UnmarshalJSON(bz, &genState); err != nil {
+	if err := json.Unmarshal(bz, &genState); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
 	}
 	return genState.Validate()
@@ -103,14 +107,20 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 // InitGenesis initializes the module from genesis.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	var genState types.GenesisState
-	cdc.MustUnmarshalJSON(data, &genState)
+	if err := json.Unmarshal(data, &genState); err != nil {
+		panic("failed to unmarshal genesis: " + err.Error())
+	}
 	am.keeper.InitGenesis(ctx, genState)
 }
 
 // ExportGenesis exports the module's genesis state.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	genState := am.keeper.ExportGenesis(ctx)
-	return cdc.MustMarshalJSON(genState)
+	bz, err := json.Marshal(genState)
+	if err != nil {
+		panic("failed to marshal genesis: " + err.Error())
+	}
+	return bz
 }
 
 // ConsensusVersion returns the module's consensus version.
@@ -131,9 +141,39 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 }
 
 // EndBlock executes end-block logic.
-// Cleans up completed rounds older than 100 blocks.
+// 1. Cleans up completed rounds older than 100 blocks.
+// 2. Expires stale facts (max 50 per block, amortized).
+// 3. Scans for facts needing reverification (max 10 per block).
+// 4. Applies cycle penalties every 1000 blocks.
 func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	am.keeper.CleanupExpiredRounds(sdkCtx, 100)
+
+	// Expire facts that have decayed below threshold or exceeded staleness
+	expired := am.keeper.ExpireStaleFactsInEndBlocker(sdkCtx, 50)
+	if expired > 0 {
+		am.keeper.Logger(sdkCtx).Info("expired stale facts",
+			"count", expired,
+			"height", sdkCtx.BlockHeight())
+	}
+
+	// Scan for facts needing reverification (emit events for external tooling)
+	triggered := am.keeper.TriggerReverificationScan(sdkCtx, 10)
+	if triggered > 0 {
+		am.keeper.Logger(sdkCtx).Info("reverification needed",
+			"count", triggered,
+			"height", sdkCtx.BlockHeight())
+	}
+
+	// Apply cycle penalties every 1000 blocks
+	if sdkCtx.BlockHeight()%1000 == 0 {
+		penalized := am.keeper.ApplyCyclePenalties(sdkCtx)
+		if penalized > 0 {
+			am.keeper.Logger(sdkCtx).Info("cycle penalties applied",
+				"count", penalized,
+				"height", sdkCtx.BlockHeight())
+		}
+	}
+
 	return nil
 }

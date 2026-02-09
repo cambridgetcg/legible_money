@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/spf13/cast"
 
 	"cosmossdk.io/log"
@@ -95,6 +96,9 @@ import (
 	// CometBFT
 	abci "github.com/cometbft/cometbft/abci/types"
 
+	// Crypto codec for keyring support
+	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+
 	// gRPC services
 	nodeservice "github.com/cosmos/cosmos-sdk/client/grpc/node"
 	cmtservice "github.com/cosmos/cosmos-sdk/client/grpc/cmtservice"
@@ -115,6 +119,66 @@ import (
 	emergencymodule "github.com/legible-money/legible/x/emergency"
 	emergencykeeper "github.com/legible-money/legible/x/emergency/keeper"
 	emergencytypes "github.com/legible-money/legible/x/emergency/types"
+
+	tokensmodule "github.com/legible-money/legible/x/tokens"
+	tokenskeeper "github.com/legible-money/legible/x/tokens/keeper"
+	tokenstypes "github.com/legible-money/legible/x/tokens/types"
+
+	lgmgov "github.com/legible-money/legible/x/gov"
+	lgmgovkeeper "github.com/legible-money/legible/x/gov/keeper"
+	lgmgovtypes "github.com/legible-money/legible/x/gov/types"
+
+	researchmodule "github.com/legible-money/legible/x/research"
+	researchkeeper "github.com/legible-money/legible/x/research/keeper"
+	researchtypes "github.com/legible-money/legible/x/research/types"
+
+	vestingrewardsmodule "github.com/legible-money/legible/x/vesting_rewards"
+	vestingrewardskeeper "github.com/legible-money/legible/x/vesting_rewards/keeper"
+	vestingrewardstypes "github.com/legible-money/legible/x/vesting_rewards/types"
+
+	ontologymodule "github.com/legible-money/legible/x/ontology"
+	ontologykeeper "github.com/legible-money/legible/x/ontology/keeper"
+	ontologytypes "github.com/legible-money/legible/x/ontology/types"
+
+	disputesmodule "github.com/legible-money/legible/x/disputes"
+	disputeskeeper "github.com/legible-money/legible/x/disputes/keeper"
+	disputestypes "github.com/legible-money/legible/x/disputes/types"
+
+	evidencemgmtmodule "github.com/legible-money/legible/x/evidence_mgmt"
+	evidencemgmtkeeper "github.com/legible-money/legible/x/evidence_mgmt/keeper"
+	evidencemgmttypes "github.com/legible-money/legible/x/evidence_mgmt/types"
+
+	claimingpotmodule "github.com/legible-money/legible/x/claiming_pot"
+	claimingpotkeeper "github.com/legible-money/legible/x/claiming_pot/keeper"
+	claimingpottypes "github.com/legible-money/legible/x/claiming_pot/types"
+
+	channelsmodule "github.com/legible-money/legible/x/channels"
+	channelskeeper "github.com/legible-money/legible/x/channels/keeper"
+	channelstypes "github.com/legible-money/legible/x/channels/types"
+
+	treemodule "github.com/legible-money/legible/x/tree"
+	treekeeper "github.com/legible-money/legible/x/tree/keeper"
+	treetypes "github.com/legible-money/legible/x/tree/types"
+
+	bvmmodule "github.com/legible-money/legible/x/bvm"
+	bvmkeeper "github.com/legible-money/legible/x/bvm/keeper"
+	bvmtypes "github.com/legible-money/legible/x/bvm/types"
+
+	homemodule "github.com/legible-money/legible/x/home"
+	homekeeper "github.com/legible-money/legible/x/home/keeper"
+	hometypes "github.com/legible-money/legible/x/home/types"
+
+	qualificationmodule "github.com/legible-money/legible/x/qualification"
+	qualificationkeeper "github.com/legible-money/legible/x/qualification/keeper"
+	qualificationtypes "github.com/legible-money/legible/x/qualification/types"
+
+	capturedefensemodule "github.com/legible-money/legible/x/capture_defense"
+	capturedefensekeeper "github.com/legible-money/legible/x/capture_defense/keeper"
+	capturedefensetypes "github.com/legible-money/legible/x/capture_defense/types"
+
+	capturechallengemodule "github.com/legible-money/legible/x/capture_challenge"
+	capturechallengekeeper "github.com/legible-money/legible/x/capture_challenge/keeper"
+	capturechallengetypes "github.com/legible-money/legible/x/capture_challenge/types"
 )
 
 const (
@@ -162,6 +226,25 @@ var (
 		consensus.AppModuleBasic{},
 		ibc.AppModuleBasic{},
 		ibctransfer.AppModuleBasic{},
+		// Custom Legible Money modules
+		knowledgemodule.AppModuleBasic{},
+		legibleauth.AppModuleBasic{},
+		legiblestaking.AppModuleBasic{},
+		emergencymodule.AppModuleBasic{},
+		tokensmodule.AppModuleBasic{},
+		lgmgov.AppModuleBasic{},
+		researchmodule.AppModuleBasic{},
+		vestingrewardsmodule.AppModuleBasic{},
+		ontologymodule.AppModuleBasic{},
+		disputesmodule.AppModuleBasic{},
+		evidencemgmtmodule.AppModuleBasic{},
+		claimingpotmodule.AppModuleBasic{},
+		treemodule.AppModuleBasic{},
+		bvmmodule.AppModuleBasic{},
+		homemodule.AppModuleBasic{},
+		qualificationmodule.AppModuleBasic{},
+		capturedefensemodule.AppModuleBasic{},
+		capturechallengemodule.AppModuleBasic{},
 	)
 
 	// Module account permissions.
@@ -174,10 +257,19 @@ var (
 		govtypes.ModuleName:            {authtypes.Burner},
 		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
 		// Custom Legible Money module accounts
+		vestingrewardstypes.ModuleName:  {authtypes.Minter, authtypes.Burner},
 		knowledgetypes.ModuleName:       nil,
 		legiblestakingtypes.ModuleName:  {authtypes.Burner, authtypes.Staking},
+		tokenstypes.ModuleName:          {authtypes.Burner},
 		ResearchFundName:                {authtypes.Burner},
 		BurnModuleName:                  {authtypes.Burner},
+		disputestypes.ModuleName:        {authtypes.Burner},
+		evidencemgmttypes.ModuleName:    {authtypes.Burner},
+		claimingpottypes.ModuleName:     {authtypes.Burner},
+		channelstypes.ModuleName:        {authtypes.Burner},
+		qualificationtypes.ModuleName:     {authtypes.Burner},
+		capturedefensetypes.ModuleName:    {authtypes.Burner},
+		capturechallengetypes.ModuleName:  {authtypes.Burner},
 	}
 )
 
@@ -194,6 +286,9 @@ func init() {
 	config.SetBech32PrefixForValidator(AccountAddressPrefix+"valoper", AccountAddressPrefix+"valoperpub")
 	config.SetBech32PrefixForConsensusNode(AccountAddressPrefix+"valcons", AccountAddressPrefix+"valconspub")
 	config.Seal()
+
+	// Set the default bond denom to ulgm (micro-LGM).
+	sdk.DefaultBondDenom = "ulgm"
 }
 
 // LegibleApp extends baseapp.BaseApp with all Cosmos SDK modules.
@@ -237,15 +332,21 @@ type LegibleApp struct {
 	LegibleAuthKeeper    legibleauthkeeper.Keeper
 	LegibleStakingKeeper legiblestakingkeeper.Keeper
 	EmergencyKeeper      emergencykeeper.Keeper
-	// Phase 3+:
-	// OntologyKeeper    ontologykeeper.Keeper
-	// DisputeKeeper     disputekeeper.Keeper
-	// ResearchKeeper    researchkeeper.Keeper
-	// VestingKeeper     vestingkeeper.Keeper
-	// TokensKeeper      tokenskeeper.Keeper
-	// ChannelsKeeper    channelskeeper.Keeper
-	// TreeKeeper        treekeeper.Keeper
-	// BVMKeeper         bvmkeeper.Keeper
+	TokensKeeper         tokenskeeper.Keeper
+	LegibleGovKeeper     lgmgovkeeper.Keeper
+	ResearchKeeper       researchkeeper.Keeper
+	OntologyKeeper       ontologykeeper.Keeper
+	DisputesKeeper       disputeskeeper.Keeper
+	EvidenceMgmtKeeper   evidencemgmtkeeper.Keeper
+	ClaimingPotKeeper    claimingpotkeeper.Keeper
+	ChannelsKeeper       channelskeeper.Keeper
+	TreeKeeper           treekeeper.Keeper
+	BVMKeeper            bvmkeeper.Keeper
+	HomeKeeper           homekeeper.Keeper
+	QualificationKeeper    qualificationkeeper.Keeper
+	CaptureDefenseKeeper   capturedefensekeeper.Keeper
+	CaptureChallengeKeeper capturechallengekeeper.Keeper
+	VestingRewardsKeeper   vestingrewardskeeper.Keeper
 
 	// Vote extension config for PoT consensus (node-local, set at startup)
 	VoteExtConfig *VoteExtensionConfig
@@ -269,13 +370,27 @@ func NewLegibleApp(
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) *LegibleApp {
-	interfaceRegistry, _ := types.NewInterfaceRegistryWithOptions(types.InterfaceRegistryOptions{
-		ProtoFiles:     nil,
-		SigningOptions: signing.Options{},
+	interfaceRegistry, err := types.NewInterfaceRegistryWithOptions(types.InterfaceRegistryOptions{
+		ProtoFiles: proto.HybridResolver,
+		SigningOptions: signing.Options{
+			AddressCodec:          addresscodec.NewBech32Codec(AccountAddressPrefix),
+			ValidatorAddressCodec: addresscodec.NewBech32Codec(AccountAddressPrefix + "valoper"),
+		},
 	})
+	if err != nil {
+		panic(err)
+	}
 	appCodec := codec.NewProtoCodec(interfaceRegistry)
 	legacyAmino := codec.NewLegacyAmino()
 	txConfig := authtx.NewTxConfig(appCodec, authtx.DefaultSignModes)
+
+	// Register standard SDK and module interfaces so that RegisterServices can
+	// find message types (e.g. evidence, staking, gov).
+	sdk.RegisterLegacyAminoCodec(legacyAmino)
+	sdk.RegisterInterfaces(interfaceRegistry)
+	cryptocodec.RegisterInterfaces(interfaceRegistry)
+	ModuleBasics.RegisterInterfaces(interfaceRegistry)
+	ModuleBasics.RegisterLegacyAminoCodec(legacyAmino)
 
 	bApp := baseapp.NewBaseApp(AppName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
 	bApp.SetCommitMultiStoreTracer(traceStore)
@@ -299,11 +414,27 @@ func NewLegibleApp(
 		capabilitytypes.StoreKey,
 		ibcexported.StoreKey,
 		ibctransfertypes.StoreKey,
+		"consensus", // x/consensus module store key
 		// Custom Legible Money module store keys
 		knowledgetypes.StoreKey,
 		legibleauthtypes.StoreKey,
 		legiblestakingtypes.StoreKey,
 		emergencytypes.StoreKey,
+		tokenstypes.StoreKey,
+		lgmgovtypes.StoreKey,
+		researchtypes.StoreKey,
+		vestingrewardstypes.StoreKey,
+		ontologytypes.StoreKey,
+		disputestypes.StoreKey,
+		evidencemgmttypes.StoreKey,
+		claimingpottypes.StoreKey,
+		channelstypes.StoreKey,
+		treetypes.StoreKey,
+		bvmtypes.StoreKey,
+		hometypes.StoreKey,
+		qualificationtypes.StoreKey,
+		capturedefensetypes.StoreKey,
+		capturechallengetypes.StoreKey,
 	)
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
@@ -322,6 +453,14 @@ func NewLegibleApp(
 	// ---- Module Keepers ----
 
 	app.ParamsKeeper = initParamsKeeper(appCodec, legacyAmino, keys[paramstypes.StoreKey], tkeys[paramstypes.TStoreKey])
+
+	app.ConsensusKeeper = consensuskeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys["consensus"]),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		runtime.EventService{},
+	)
+	bApp.SetParamStore(app.ConsensusKeeper.ParamsStore)
 
 	app.AccountKeeper = authkeeper.NewAccountKeeper(
 		appCodec,
@@ -414,6 +553,13 @@ func NewLegibleApp(
 		runtime.ProvideCometInfoService(),
 	)
 
+	// ---- Staking Hooks ----
+	// Wire the slashing and distribution modules as hooks on the staking module
+	// so that validator signing info is created when validators are added during genesis.
+	app.StakingKeeper.SetHooks(
+		stakingtypes.NewMultiStakingHooks(app.DistrKeeper.Hooks(), app.SlashingKeeper.Hooks()),
+	)
+
 	// ---- Capability Keeper (required by IBC) ----
 
 	app.CapabilityKeeper = capabilitykeeper.NewKeeper(
@@ -459,12 +605,20 @@ func NewLegibleApp(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	app.TokensKeeper = tokenskeeper.NewKeeper(
+		appCodec,
+		keys[tokenstypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	app.LegibleStakingKeeper = legiblestakingkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[legiblestakingtypes.StoreKey]),
 		app.AccountKeeper,
 		app.BankKeeper,
 		app.LegibleAuthKeeper,
+		app.TokensKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
@@ -475,6 +629,107 @@ func NewLegibleApp(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	app.LegibleGovKeeper = lgmgovkeeper.NewKeeper(
+		appCodec,
+		keys[lgmgovtypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		NewStakeQueryAdapter(app.LegibleStakingKeeper),
+		app.BankKeeper,
+	)
+
+	app.ResearchKeeper = researchkeeper.NewKeeper(
+		appCodec,
+		keys[researchtypes.StoreKey],
+		app.BankKeeper,
+		NewStakeQueryAdapter(app.LegibleStakingKeeper),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.VestingRewardsKeeper = vestingrewardskeeper.NewKeeper(
+		appCodec,
+		keys[vestingrewardstypes.StoreKey],
+		app.BankKeeper,
+		NewVestingStakingAdapter(app.LegibleStakingKeeper),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.OntologyKeeper = ontologykeeper.NewKeeper(
+		appCodec,
+		keys[ontologytypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.EvidenceMgmtKeeper = evidencemgmtkeeper.NewKeeper(
+		appCodec,
+		keys[evidencemgmttypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.ClaimingPotKeeper = claimingpotkeeper.NewKeeper(
+		appCodec,
+		keys[claimingpottypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.ChannelsKeeper = channelskeeper.NewKeeper(
+		appCodec,
+		keys[channelstypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.TreeKeeper = treekeeper.NewKeeper(
+		appCodec,
+		keys[treetypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.BVMKeeper = bvmkeeper.NewKeeper(
+		appCodec,
+		keys[bvmtypes.StoreKey],
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.QualificationKeeper = qualificationkeeper.NewKeeper(
+		appCodec,
+		keys[qualificationtypes.StoreKey],
+		app.OntologyKeeper,
+		app.LegibleStakingKeeper,
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.CaptureDefenseKeeper = capturedefensekeeper.NewKeeper(
+		appCodec,
+		keys[capturedefensetypes.StoreKey],
+		NewStakingKeeperAdapter(app.LegibleStakingKeeper),
+		NewCaptureDefenseOntologyAdapter(app.OntologyKeeper),
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.CaptureChallengeKeeper = capturechallengekeeper.NewKeeper(
+		appCodec,
+		keys[capturechallengetypes.StoreKey],
+		app.CaptureDefenseKeeper,
+		NewStakingKeeperAdapter(app.LegibleStakingKeeper),
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.HomeKeeper = homekeeper.NewKeeper(
+		appCodec,
+		keys[hometypes.StoreKey],
+		app.BankKeeper,
+		nil, // tokensKeeper — nil-safe, wire when needed
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	app.KnowledgeKeeper = knowledgekeeper.NewKeeper(
 		appCodec,
 		keys[knowledgetypes.StoreKey],
@@ -482,8 +737,31 @@ func NewLegibleApp(
 		app.AccountKeeper,
 		app.BankKeeper,
 		NewStakingKeeperAdapter(app.LegibleStakingKeeper),
+		app.TokensKeeper,
+		app.QualificationKeeper,
+		app.CaptureDefenseKeeper,
+		app.VestingRewardsKeeper,
+		NewEvidenceMgmtKeeperAdapter(app.EvidenceMgmtKeeper),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+
+	// Wire ontology keeper into knowledge for dynamic stratum ceilings
+	app.KnowledgeKeeper.SetOntologyKeeper(app.OntologyKeeper)
+
+	// Wire cross-module keepers into BVM for opcode host functions
+	app.BVMKeeper.SetKnowledgeKeeper(NewBVMKnowledgeAdapter(app.KnowledgeKeeper))
+	app.BVMKeeper.SetStakingKeeper(NewBVMStakingAdapter(app.LegibleStakingKeeper))
+	app.BVMKeeper.SetAuthKeeper(NewBVMAuthAdapter(app.LegibleAuthKeeper))
+
+	app.DisputesKeeper = disputeskeeper.NewKeeper(
+		appCodec,
+		keys[disputestypes.StoreKey],
+		app.BankKeeper,
+		NewDisputeKnowledgeAdapter(app.KnowledgeKeeper),
+		NewDisputeStakingAdapter(app.LegibleStakingKeeper),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+	app.DisputesKeeper.SetVestingKeeper(NewDisputeVestingAdapter(app.VestingRewardsKeeper))
 
 	// ---- Gov Keeper (depends on other keepers for proposal handlers) ----
 
@@ -541,6 +819,21 @@ func NewLegibleApp(
 		legibleauth.NewAppModule(appCodec, app.LegibleAuthKeeper),
 		legiblestaking.NewAppModule(appCodec, app.LegibleStakingKeeper),
 		emergencymodule.NewAppModule(appCodec, app.EmergencyKeeper),
+		tokensmodule.NewAppModule(appCodec, app.TokensKeeper),
+		lgmgov.NewAppModule(appCodec, app.LegibleGovKeeper),
+		researchmodule.NewAppModule(appCodec, app.ResearchKeeper),
+		vestingrewardsmodule.NewAppModule(appCodec, app.VestingRewardsKeeper),
+		ontologymodule.NewAppModule(appCodec, app.OntologyKeeper),
+		disputesmodule.NewAppModule(appCodec, app.DisputesKeeper),
+		evidencemgmtmodule.NewAppModule(appCodec, app.EvidenceMgmtKeeper),
+		claimingpotmodule.NewAppModule(appCodec, app.ClaimingPotKeeper),
+		channelsmodule.NewAppModule(appCodec, app.ChannelsKeeper),
+		treemodule.NewAppModule(appCodec, app.TreeKeeper),
+		bvmmodule.NewAppModule(appCodec, app.BVMKeeper),
+		homemodule.NewAppModule(appCodec, app.HomeKeeper),
+		qualificationmodule.NewAppModule(appCodec, app.QualificationKeeper),
+		capturedefensemodule.NewAppModule(appCodec, app.CaptureDefenseKeeper),
+		capturechallengemodule.NewAppModule(appCodec, app.CaptureChallengeKeeper),
 	)
 
 	// Module init order — standard Cosmos SDK ordering.
@@ -555,7 +848,22 @@ func NewLegibleApp(
 		ibctransfertypes.ModuleName,
 		// Custom Legible Money modules
 		emergencytypes.ModuleName,      // Emergency ceremony progress (must run before knowledge)
+		vestingrewardstypes.ModuleName, // Vesting reward minting (before staking unbondings)
+		tokenstypes.ModuleName,         // Sweep expired tokens before unbonding returns
 		legiblestakingtypes.ModuleName, // Process mature unbondings
+		lgmgovtypes.ModuleName,         // Check voting deadlines
+		researchtypes.ModuleName,       // Expire bounties past deadline
+		ontologytypes.ModuleName,       // Process expired domain proposals
+		disputestypes.ModuleName,           // Process expired disputes
+		evidencemgmttypes.ModuleName,       // Expire stale evidence + prune oracles
+		claimingpottypes.ModuleName,        // Expire old pots
+		channelstypes.ModuleName,           // Resolve expired disputes
+		treetypes.ModuleName,               // Expire seeds, check task deadlines
+		bvmtypes.ModuleName,                // Execute pending contract schedules
+		hometypes.ModuleName,               // Deadman switches, session cleanup
+		qualificationtypes.ModuleName,      // Promote probationary, expire stale qualifications
+		capturedefensetypes.ModuleName,     // Expire qualifications, decay reputations
+		capturechallengetypes.ModuleName,   // Advance challenge phases
 		knowledgetypes.ModuleName,
 	)
 
@@ -569,7 +877,22 @@ func NewLegibleApp(
 		// Custom Legible Money modules
 		legiblestakingtypes.ModuleName, // Tier transition safety checks
 		knowledgetypes.ModuleName,
+		tokenstypes.ModuleName,         // Post-block period accounting
 		emergencytypes.ModuleName,      // Reset epoch counters
+		lgmgovtypes.ModuleName,         // Finalize governance
+		researchtypes.ModuleName,
+		vestingrewardstypes.ModuleName, // Process vesting schedule releases
+		ontologytypes.ModuleName,       // Finalize domain proposals
+		disputestypes.ModuleName,           // Finalize disputes
+		evidencemgmttypes.ModuleName,       // Evidence end-block cleanup
+		claimingpottypes.ModuleName,
+		channelstypes.ModuleName,
+		treetypes.ModuleName,
+		bvmtypes.ModuleName,
+		hometypes.ModuleName,               // Cleanup old alerts
+		qualificationtypes.ModuleName,
+		capturedefensetypes.ModuleName,     // Periodic capture detection
+		capturechallengetypes.ModuleName,   // Auto-fund bounty pools
 	)
 
 	app.ModuleManager.SetOrderInitGenesis(
@@ -592,14 +915,28 @@ func NewLegibleApp(
 		// Custom Legible Money modules (init after standard modules)
 		legibleauthtypes.ModuleName,
 		legiblestakingtypes.ModuleName,
+		vestingrewardstypes.ModuleName,
+		tokenstypes.ModuleName,
 		emergencytypes.ModuleName,
+		lgmgovtypes.ModuleName,
+		researchtypes.ModuleName,
+		ontologytypes.ModuleName,
+		disputestypes.ModuleName,
+		evidencemgmttypes.ModuleName,
+		claimingpottypes.ModuleName,
+		channelstypes.ModuleName,
+		treetypes.ModuleName,
+		bvmtypes.ModuleName,
+		hometypes.ModuleName,
+		qualificationtypes.ModuleName,
+		capturedefensetypes.ModuleName,
+		capturechallengetypes.ModuleName,
 		knowledgetypes.ModuleName,
 	)
 
 	app.ModuleManager.RegisterInvariants(app.CrisisKeeper)
 	app.configurator = module.NewConfigurator(appCodec, bApp.MsgServiceRouter(), bApp.GRPCQueryRouter())
-	err := app.ModuleManager.RegisterServices(app.configurator)
-	if err != nil {
+	if err = app.ModuleManager.RegisterServices(app.configurator); err != nil {
 		panic(err)
 	}
 
@@ -613,6 +950,7 @@ func NewLegibleApp(
 
 	// Set InitChainer
 	app.SetInitChainer(app.InitChainer)
+	app.SetPreBlocker(app.PreBlocker)
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetEndBlocker(app.EndBlocker)
 
@@ -648,7 +986,46 @@ func (app *LegibleApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) 
 	if err := json.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
 		panic(err)
 	}
-	return app.ModuleManager.InitGenesis(ctx, app.appCodec, genesisState)
+	resp, err := app.ModuleManager.InitGenesis(ctx, app.appCodec, genesisState)
+	if err != nil {
+		return nil, err
+	}
+
+	// Workaround: cosmos-db GoLevelDB returns nil for keys with empty values,
+	// but IAVL's SaveEmptyRoot writes []byte{} as value. This causes GetRoot
+	// to return ErrVersionDoesNotExist for any IAVL store that has no keys
+	// written during genesis, breaking all gRPC/REST state queries. Ensure
+	// every KV store has at least one key so no IAVL tree is empty at commit.
+	app.ensureNonEmptyStores(ctx)
+
+	return resp, nil
+}
+
+// ensureNonEmptyStores writes a sentinel key to any KV store that would
+// otherwise be empty after genesis. This prevents the GoLevelDB empty-value
+// bug in IAVL from making stores unqueryable.
+func (app *LegibleApp) ensureNonEmptyStores(ctx sdk.Context) {
+	sentinel := []byte("__store_initialized")
+	for _, key := range app.keys {
+		store := ctx.KVStore(key)
+		if !store.Has(sentinel) {
+			store.Set(sentinel, []byte{0x01})
+		}
+	}
+}
+
+// PreBlocker runs before BeginBlocker on each block. It processes the vote
+// extension injection pseudo-tx (if present) so that commitments and reveals
+// are stored in keeper state before the knowledge module's BeginBlocker
+// advances round phases.
+func (app *LegibleApp) PreBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+	for _, tx := range req.Txs {
+		if isVoteExtInjectionTx(tx) {
+			app.ProcessVoteExtInjection(ctx, tx)
+			break // at most one injection tx per block
+		}
+	}
+	return &sdk.ResponsePreBlock{}, nil
 }
 
 // BeginBlocker runs begin-block logic for all modules.
@@ -810,4 +1187,52 @@ func skipUpgradeHeights(appOpts servertypes.AppOptions) map[int64]bool {
 		skipHeights[int64(h)] = true
 	}
 	return skipHeights
+}
+
+// EncodingConfig holds the codec, interface registry, and tx config used by
+// the CLI and app initialization. Exported so root.go can create a client
+// context with a real codec before the app is instantiated.
+type EncodingConfig struct {
+	InterfaceRegistry types.InterfaceRegistry
+	Codec             codec.Codec
+	TxConfig          client.TxConfig
+	Amino             *codec.LegacyAmino
+}
+
+// MakeEncodingConfig creates the encoding config for the CLI layer.
+// This mirrors the codec setup inside NewLegibleApp so that commands like
+// `init`, `validate-genesis`, and `gentx` can marshal/unmarshal genesis
+// state before the full app is constructed.
+func MakeEncodingConfig() EncodingConfig {
+	interfaceRegistry, err := types.NewInterfaceRegistryWithOptions(types.InterfaceRegistryOptions{
+		ProtoFiles: proto.HybridResolver,
+		SigningOptions: signing.Options{
+			AddressCodec:          addresscodec.NewBech32Codec(AccountAddressPrefix),
+			ValidatorAddressCodec: addresscodec.NewBech32Codec(AccountAddressPrefix + "valoper"),
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	appCodec := codec.NewProtoCodec(interfaceRegistry)
+	legacyAmino := codec.NewLegacyAmino()
+	txConfig := authtx.NewTxConfig(appCodec, authtx.DefaultSignModes)
+
+	// Register standard SDK types (crypto keys, tx types) needed by the keyring
+	// and genesis commands before the full app is constructed.
+	sdk.RegisterLegacyAminoCodec(legacyAmino)
+	sdk.RegisterInterfaces(interfaceRegistry)
+	cryptocodec.RegisterInterfaces(interfaceRegistry)
+
+	// Register module interfaces so the codec can handle
+	// genesis types (e.g. slashing, staking, gov).
+	ModuleBasics.RegisterInterfaces(interfaceRegistry)
+	ModuleBasics.RegisterLegacyAminoCodec(legacyAmino)
+
+	return EncodingConfig{
+		InterfaceRegistry: interfaceRegistry,
+		Codec:             appCodec,
+		TxConfig:          txConfig,
+		Amino:             legacyAmino,
+	}
 }

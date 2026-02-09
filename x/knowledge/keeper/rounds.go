@@ -2,6 +2,9 @@ package keeper
 
 import (
 	"fmt"
+	"math/big"
+
+	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -188,7 +191,11 @@ func (k Keeper) GetRevealsForRound(ctx sdk.Context, roundID string) ([]types.Ver
 }
 
 // CompleteRound marks a round as complete with the given result.
-// If accepted, creates a fact from the claim. Distributes rewards and slashes.
+// If accepted: creates a fact, returns claim stake, creates vesting schedule.
+// If rejected: slashes a portion of claim stake (InvalidClaimSlashBps), returns the rest.
+// If contested: creates a contested fact, keeps stake locked.
+// If insufficient: keeps stake locked (can be reclaimed via new round).
+// Distributes rewards and slashes to validators.
 func (k Keeper) CompleteRound(
 	ctx sdk.Context,
 	round types.VerificationRound,
@@ -199,33 +206,103 @@ func (k Keeper) CompleteRound(
 	round.FinalConfidence = result.Confidence
 	round.CompletedAtHeight = uint64(ctx.BlockHeight())
 
-	// Update claim status
+	// Update claim status and handle stake settlement
 	claim, claimFound := k.GetClaim(ctx, round.ClaimId)
 	if claimFound {
+		params := k.GetParams(ctx)
+
 		switch result.Verdict {
 		case "accepted":
 			claim.Status = "accepted"
 			k.SetClaim(ctx, claim)
 
 			// Create fact from accepted claim
+			height := uint64(ctx.BlockHeight())
 			factID := GenerateFactID(claim.Id, round.Id)
 			fact := types.Fact{
-				Id:                 factID,
-				ClaimText:          claim.ClaimText,
-				Domain:             claim.Domain,
-				EpistemicCategory:  claim.EpistemicCategory,
-				Confidence:         result.Confidence,
-				Status:             "verified",
-				Submitter:          claim.Submitter,
-				SubmitterDid:       claim.SubmitterDid,
-				References:         claim.References,
-				VerifiedAtHeight:   uint64(ctx.BlockHeight()),
-				VerifierCount:      result.ParticipantCount,
-				LogicZone:          claim.LogicZone,
-				CreatedAtHeight:    uint64(ctx.BlockHeight()),
-				LastVerifiedHeight: uint64(ctx.BlockHeight()),
+				Id:                   factID,
+				ClaimText:            claim.ClaimText,
+				Domain:               claim.Domain,
+				EpistemicCategory:    claim.EpistemicCategory,
+				Confidence:           result.Confidence,
+				Status:               types.FactStatusVerified,
+				Submitter:            claim.Submitter,
+				SubmitterDid:         claim.SubmitterDid,
+				References:           claim.References,
+				VerifiedAtHeight:     height,
+				VerifierCount:        result.ParticipantCount,
+				LogicZone:            claim.LogicZone,
+				CreatedAtHeight:      height,
+				LastVerifiedHeight:   height,
+				LastConfidenceUpdate: height,
+				BaseConfidence:       result.Confidence,
+				Maturity:             types.MaturityEmerging,
 			}
+
+			// Transfer evidence summaries from claim to fact (evidence provenance survives)
+			if k.evidenceMgmtKeeper != nil {
+				evidences := k.evidenceMgmtKeeper.GetEvidenceByClaimId(ctx, claim.Id)
+				summaries := make([]types.FactEvidenceSummary, 0, len(evidences))
+				for _, ev := range evidences {
+					if ev.Status == "rejected" || ev.Status == "expired" {
+						continue
+					}
+					typeStrength, ok := types.EVIDENCE_TYPE_STRENGTH[ev.EvidenceType]
+					if !ok {
+						typeStrength = 400_000
+					}
+					summaries = append(summaries, types.FactEvidenceSummary{
+						EvidenceId:   ev.Id,
+						EvidenceType: ev.EvidenceType,
+						Reliability:  ev.Reliability,
+						TypeStrength: typeStrength,
+					})
+				}
+				fact.EvidenceSummaries = summaries
+				fact.EvidenceBonus = result.EvidenceBonus
+			}
+
 			k.SetFact(ctx, fact)
+
+			// Return staked amount to submitter (G-1 fix)
+			k.returnClaimStake(ctx, claim)
+
+			// Create truth-linked vesting schedule (G-5 fix)
+			if k.vestingRewardsKeeper != nil && claim.StakeAmount != "" {
+				if err := k.vestingRewardsKeeper.CreateVestingScheduleFromKnowledge(
+					ctx, claim.Id, factID, claim.Submitter, claim.StakeAmount, claim.EpistemicCategory,
+				); err != nil {
+					k.Logger(ctx).Error("failed to create vesting schedule",
+						"claim_id", claim.Id, "fact_id", factID, "error", err)
+				}
+			}
+
+			// Create fact references from claim references
+			for _, refID := range claim.References {
+				k.SetFactReference(ctx, types.FactReference{
+					FromFactId:      factID,
+					ToFactId:        refID,
+					ReferenceType:   "supports",
+					Weight:          1_000_000,
+					CreatedAtHeight: height,
+				})
+				// Increment citation count on referenced facts
+				if err := k.IncrementCitationCount(ctx, refID); err != nil {
+					k.Logger(ctx).Error("failed to increment citation count",
+						"fact_id", refID, "error", err)
+				}
+			}
+
+			// Distribute citation rewards (15% of verification rewards to cited facts)
+			if len(claim.References) > 0 {
+				totalReward := uint64(0)
+				for _, r := range result.Rewards {
+					totalReward += r
+				}
+				if totalReward > 0 {
+					k.DistributeCitationRewards(ctx, factID, totalReward)
+				}
+			}
 
 			ctx.EventManager().EmitEvent(
 				sdk.NewEvent("fact_created",
@@ -240,13 +317,53 @@ func (k Keeper) CompleteRound(
 			claim.Status = "rejected"
 			k.SetClaim(ctx, claim)
 
+			// Slash a portion of stake, return the rest (G-2 fix)
+			k.slashAndReturnClaimStake(ctx, claim, params.InvalidClaimSlashBps)
+
 		case "contested":
 			claim.Status = "contested"
 			k.SetClaim(ctx, claim)
 
+			// Create contested fact (G-7 fix) — lower confidence, tracks dispute
+			height := uint64(ctx.BlockHeight())
+			factID := GenerateFactID(claim.Id, round.Id)
+			fact := types.Fact{
+				Id:                   factID,
+				ClaimText:            claim.ClaimText,
+				Domain:               claim.Domain,
+				EpistemicCategory:    claim.EpistemicCategory,
+				Confidence:           result.Confidence,
+				Status:               types.FactStatusContested,
+				Submitter:            claim.Submitter,
+				SubmitterDid:         claim.SubmitterDid,
+				References:           claim.References,
+				VerifiedAtHeight:     height,
+				VerifierCount:        result.ParticipantCount,
+				LogicZone:            claim.LogicZone,
+				CreatedAtHeight:      height,
+				LastVerifiedHeight:   height,
+				LastConfidenceUpdate: height,
+				BaseConfidence:       result.Confidence,
+				Maturity:             types.MaturityEmerging,
+			}
+			k.SetFact(ctx, fact)
+
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent("contested_fact_created",
+					sdk.NewAttribute("fact_id", factID),
+					sdk.NewAttribute("claim_id", claim.Id),
+					sdk.NewAttribute("confidence", fmt.Sprintf("%d", result.Confidence)),
+				),
+			)
+
+			// Stake remains locked for contested claims (may resolve via challenge/reverification)
+
 		case "insufficient":
 			claim.Status = "insufficient"
 			k.SetClaim(ctx, claim)
+
+			// Return stake on insufficient participation — not the submitter's fault
+			k.returnClaimStake(ctx, claim)
 		}
 	}
 
@@ -270,6 +387,115 @@ func (k Keeper) CompleteRound(
 	)
 
 	return nil
+}
+
+// returnClaimStake returns the full staked amount from the knowledge module back to the claim submitter.
+func (k Keeper) returnClaimStake(ctx sdk.Context, claim types.Claim) {
+	if k.bankKeeper == nil || claim.StakeAmount == "" {
+		return
+	}
+
+	stakeAmount := new(big.Int)
+	if _, ok := stakeAmount.SetString(claim.StakeAmount, 10); !ok || stakeAmount.Sign() <= 0 {
+		return
+	}
+
+	submitterAddr, err := sdk.AccAddressFromBech32(claim.Submitter)
+	if err != nil {
+		k.Logger(ctx).Error("invalid submitter address for stake return",
+			"submitter", claim.Submitter, "error", err)
+		return
+	}
+
+	returnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(stakeAmount)))
+	if err := k.bankKeeper.SendCoinsFromModuleToAccount(
+		ctx, types.ModuleName, submitterAddr, returnCoins,
+	); err != nil {
+		k.Logger(ctx).Error("failed to return claim stake",
+			"claim_id", claim.Id, "submitter", claim.Submitter, "amount", claim.StakeAmount, "error", err)
+		return
+	}
+
+	// Credit back to period overlay
+	if k.tokensKeeper != nil {
+		if err := k.tokensKeeper.CreditBalance(ctx, claim.Submitter, claim.StakeAmount, uint64(ctx.BlockHeight())); err != nil {
+			k.Logger(ctx).Error("failed to credit period balance for stake return",
+				"submitter", claim.Submitter, "error", err)
+		}
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("claim_stake_returned",
+			sdk.NewAttribute("claim_id", claim.Id),
+			sdk.NewAttribute("submitter", claim.Submitter),
+			sdk.NewAttribute("amount", claim.StakeAmount),
+		),
+	)
+}
+
+// slashAndReturnClaimStake slashes a portion of the claim stake and returns the remainder.
+// slashBps is in basis points (1_000_000 = 100%). E.g., 220000 = 22%.
+func (k Keeper) slashAndReturnClaimStake(ctx sdk.Context, claim types.Claim, slashBps uint64) {
+	if k.bankKeeper == nil || claim.StakeAmount == "" {
+		return
+	}
+
+	stakeAmount := new(big.Int)
+	if _, ok := stakeAmount.SetString(claim.StakeAmount, 10); !ok || stakeAmount.Sign() <= 0 {
+		return
+	}
+
+	// Calculate slash and return amounts
+	slashAmount := new(big.Int).Mul(stakeAmount, big.NewInt(int64(slashBps)))
+	slashAmount.Div(slashAmount, big.NewInt(1_000_000))
+
+	returnAmount := new(big.Int).Sub(stakeAmount, slashAmount)
+
+	submitterAddr, err := sdk.AccAddressFromBech32(claim.Submitter)
+	if err != nil {
+		k.Logger(ctx).Error("invalid submitter address for slash",
+			"submitter", claim.Submitter, "error", err)
+		return
+	}
+
+	// Return the non-slashed portion to submitter
+	if returnAmount.Sign() > 0 {
+		returnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(returnAmount)))
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(
+			ctx, types.ModuleName, submitterAddr, returnCoins,
+		); err != nil {
+			k.Logger(ctx).Error("failed to return remaining stake",
+				"claim_id", claim.Id, "amount", returnAmount.String(), "error", err)
+		}
+
+		// Credit back to period overlay
+		if k.tokensKeeper != nil {
+			if err := k.tokensKeeper.CreditBalance(ctx, claim.Submitter, returnAmount.String(), uint64(ctx.BlockHeight())); err != nil {
+				k.Logger(ctx).Error("failed to credit period balance for partial return",
+					"submitter", claim.Submitter, "error", err)
+			}
+		}
+	}
+
+	// Burn the slashed portion (deflationary — TS chain routes to BURN_DID)
+	if slashAmount.Sign() > 0 && k.bankKeeper != nil {
+		burnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(slashAmount)))
+		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, burnCoins); err != nil {
+			k.Logger(ctx).Error("failed to burn slashed stake",
+				"claim_id", claim.Id, "amount", slashAmount.String(), "error", err)
+		}
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("claim_stake_slashed",
+			sdk.NewAttribute("claim_id", claim.Id),
+			sdk.NewAttribute("submitter", claim.Submitter),
+			sdk.NewAttribute("total_stake", claim.StakeAmount),
+			sdk.NewAttribute("slashed", slashAmount.String()),
+			sdk.NewAttribute("returned", returnAmount.String()),
+			sdk.NewAttribute("slash_bps", fmt.Sprintf("%d", slashBps)),
+		),
+	)
 }
 
 // CleanupExpiredRounds removes rounds that completed more than retentionBlocks ago.

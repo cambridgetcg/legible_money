@@ -18,6 +18,10 @@ type Keeper struct {
 	cdc      codec.Codec
 	storeKey storetypes.StoreKey
 
+	// Dependency keepers
+	bankKeeper    types.BankKeeper
+	stakingKeeper types.StakingKeeper
+
 	// Module authority (typically governance module address)
 	authority string
 }
@@ -26,12 +30,16 @@ type Keeper struct {
 func NewKeeper(
 	cdc codec.Codec,
 	storeKey storetypes.StoreKey,
+	bk types.BankKeeper,
+	sk types.StakingKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:       cdc,
-		storeKey:  storeKey,
-		authority: authority,
+		cdc:           cdc,
+		storeKey:      storeKey,
+		bankKeeper:    bk,
+		stakingKeeper: sk,
+		authority:     authority,
 	}
 }
 
@@ -43,6 +51,11 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // GetAuthority returns the module authority address.
 func (k Keeper) GetAuthority() string {
 	return k.authority
+}
+
+// GetStakingKeeper returns the staking keeper for external use.
+func (k Keeper) GetStakingKeeper() types.StakingKeeper {
+	return k.stakingKeeper
 }
 
 // GetParams returns the module parameters.
@@ -118,7 +131,44 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) types.GenesisState {
 	return types.GenesisState{
 		Params:           k.GetParams(ctx),
-		CategoryConfigs:  types.DefaultCategoryConfigs(), // TODO: iterate store
+		CategoryConfigs:  k.GetAllCategoryConfigs(ctx),
 		VestingSchedules: k.GetAllActiveVestingSchedules(ctx),
 	}
+}
+
+// GetAllCategoryConfigs returns all stored category configs, falling back to defaults.
+func (k Keeper) GetAllCategoryConfigs(ctx sdk.Context) []types.CategoryConfig {
+	store := ctx.KVStore(k.storeKey)
+	iter := storetypes.KVStorePrefixIterator(store, types.CategoryConfigKeyPrefix)
+	defer iter.Close()
+
+	var configs []types.CategoryConfig
+	for ; iter.Valid(); iter.Next() {
+		var cfg types.CategoryConfig
+		if err := json.Unmarshal(iter.Value(), &cfg); err != nil {
+			continue
+		}
+		configs = append(configs, cfg)
+	}
+
+	// Fall back to defaults if store is empty
+	if len(configs) == 0 {
+		return types.DefaultCategoryConfigs()
+	}
+	return configs
+}
+
+// GetBlockRewardDistribution retrieves the block reward distribution for a specific height.
+func (k Keeper) GetBlockRewardDistribution(ctx sdk.Context, blockHeight uint64) (types.BlockRewardDistribution, bool) {
+	store := ctx.KVStore(k.storeKey)
+	key := append(types.BlockRewardKeyPrefix, sdk.Uint64ToBigEndian(blockHeight)...)
+	bz := store.Get(key)
+	if bz == nil {
+		return types.BlockRewardDistribution{}, false
+	}
+	var dist types.BlockRewardDistribution
+	if err := json.Unmarshal(bz, &dist); err != nil {
+		return types.BlockRewardDistribution{}, false
+	}
+	return dist, true
 }

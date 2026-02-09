@@ -294,7 +294,7 @@ func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.
 
 // ---------- Fact Reference Operations ----------
 
-// SetFactReference stores a fact-to-fact reference.
+// SetFactReference stores a fact-to-fact reference with bidirectional indexes.
 func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
 	store := ctx.KVStore(k.storeKey)
 	key := factRefKey(ref.FromFactId, ref.ToFactId)
@@ -303,9 +303,13 @@ func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
 		panic(fmt.Sprintf("failed to marshal fact reference: %v", err))
 	}
 	store.Set(key, bz)
+
+	// Maintain incoming reference index (toFact → fromFact)
+	incomingKey := incomingRefKey(ref.ToFactId, ref.FromFactId)
+	store.Set(incomingKey, bz)
 }
 
-// GetFactReferences returns all references from a fact.
+// GetFactReferences returns all outgoing references from a fact.
 func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.FactReference {
 	store := ctx.KVStore(k.storeKey)
 	prefix := append(types.FactReferenceKeyPrefix, []byte(fromFactID+":")...)
@@ -321,6 +325,48 @@ func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.Fa
 		refs = append(refs, ref)
 	}
 	return refs
+}
+
+// GetIncomingReferences returns all references pointing TO a fact.
+func (k Keeper) GetIncomingReferences(ctx sdk.Context, toFactID string) []types.FactReference {
+	store := ctx.KVStore(k.storeKey)
+	prefix := append(types.IncomingRefIndexPrefix, []byte(toFactID+":")...)
+	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	defer iter.Close()
+
+	var refs []types.FactReference
+	for ; iter.Valid(); iter.Next() {
+		var ref types.FactReference
+		if err := json.Unmarshal(iter.Value(), &ref); err != nil {
+			continue
+		}
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+// GetSupportingFacts returns facts that support the given fact.
+func (k Keeper) GetSupportingFacts(ctx sdk.Context, factID string) []types.FactReference {
+	incoming := k.GetIncomingReferences(ctx, factID)
+	var supporting []types.FactReference
+	for _, ref := range incoming {
+		if ref.ReferenceType == "supports" {
+			supporting = append(supporting, ref)
+		}
+	}
+	return supporting
+}
+
+// GetContradictingFacts returns facts that contradict the given fact.
+func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []types.FactReference {
+	incoming := k.GetIncomingReferences(ctx, factID)
+	var contradicting []types.FactReference
+	for _, ref := range incoming {
+		if ref.ReferenceType == "contradicts" {
+			contradicting = append(contradicting, ref)
+		}
+	}
+	return contradicting
 }
 
 // ---------- Domain Operations ----------
@@ -438,4 +484,8 @@ func domainFactIndexKey(domain, factID string) []byte {
 
 func domainKey(name string) []byte {
 	return append([]byte{0x07}, []byte(name)...)
+}
+
+func incomingRefKey(toID, fromID string) []byte {
+	return append(types.IncomingRefIndexPrefix, []byte(toID+":"+fromID)...)
 }

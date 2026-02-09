@@ -73,15 +73,19 @@ enum LogicZone {
   LOGIC_ZONE_EMPIRICAL = 4;      // Probabilistic
 }
 
-// EpistemicCategory defines the type of knowledge
+// EpistemicCategory defines the type of knowledge.
+// Matches Go isValidEpistemicCategory() and TS core/knowledge/types.ts.
 enum EpistemicCategory {
   EPISTEMIC_CATEGORY_UNSPECIFIED = 0;
-  EPISTEMIC_CATEGORY_ANALYTIC = 1;   // True by definition
-  EPISTEMIC_CATEGORY_FORMAL = 2;     // Mathematically derived
-  EPISTEMIC_CATEGORY_EMPIRICAL = 3;  // Observationally verified
-  EPISTEMIC_CATEGORY_SOCIAL = 4;     // Socially constructed
-  EPISTEMIC_CATEGORY_PROTOCOL = 5;   // Protocol-defined
-  EPISTEMIC_CATEGORY_HISTORICAL = 6; // Historical record
+  EPISTEMIC_CATEGORY_ANALYTIC = 1;      // True by definition
+  EPISTEMIC_CATEGORY_FORMAL = 2;        // Mathematically derived
+  EPISTEMIC_CATEGORY_EMPIRICAL = 3;     // Observationally verified
+  EPISTEMIC_CATEGORY_SOCIAL = 4;        // Socially constructed
+  EPISTEMIC_CATEGORY_PROTOCOL = 5;      // Protocol-defined
+  EPISTEMIC_CATEGORY_HISTORICAL = 6;    // Historical record
+  EPISTEMIC_CATEGORY_COMPUTATIONAL = 7; // Computationally verified
+  EPISTEMIC_CATEGORY_PREDICTIVE = 8;    // Forward-looking predictions
+  EPISTEMIC_CATEGORY_REPLICATED = 9;    // Independently replicated results
 }
 
 // ============================================================================

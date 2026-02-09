@@ -20,9 +20,15 @@ type Keeper struct {
 	memKey   storetypes.StoreKey
 
 	// Dependency keepers
-	accountKeeper types.AccountKeeper
-	bankKeeper    types.BankKeeper
-	stakingKeeper types.StakingKeeper
+	accountKeeper         types.AccountKeeper
+	bankKeeper            types.BankKeeper
+	stakingKeeper         types.StakingKeeper
+	tokensKeeper          types.TokensKeeper
+	qualificationKeeper   types.DomainQualificationKeeper
+	captureDefenseKeeper  types.CaptureDefenseKeeper
+	vestingRewardsKeeper  types.VestingRewardsKeeper
+	evidenceMgmtKeeper   types.EvidenceMgmtKeeper
+	ontologyKeeper       types.OntologyKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -35,16 +41,26 @@ func NewKeeper(
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
 	sk types.StakingKeeper,
+	tk types.TokensKeeper,
+	qk types.DomainQualificationKeeper,
+	cdk types.CaptureDefenseKeeper,
+	vrk types.VestingRewardsKeeper,
+	emk types.EvidenceMgmtKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:           cdc,
-		storeKey:      storeKey,
-		memKey:        memKey,
-		accountKeeper: ak,
-		bankKeeper:    bk,
-		stakingKeeper: sk,
-		authority:     authority,
+		cdc:                   cdc,
+		storeKey:              storeKey,
+		memKey:                memKey,
+		accountKeeper:         ak,
+		bankKeeper:            bk,
+		stakingKeeper:         sk,
+		tokensKeeper:          tk,
+		qualificationKeeper:   qk,
+		captureDefenseKeeper:  cdk,
+		vestingRewardsKeeper:  vrk,
+		evidenceMgmtKeeper:    emk,
+		authority:             authority,
 	}
 }
 
@@ -61,6 +77,11 @@ func (k Keeper) GetAuthority() string {
 // GetStakingKeeper returns the staking keeper interface for external use.
 func (k Keeper) GetStakingKeeper() types.StakingKeeper {
 	return k.stakingKeeper
+}
+
+// SetOntologyKeeper sets the ontology keeper after initialization (avoids circular deps).
+func (k *Keeper) SetOntologyKeeper(ok types.OntologyKeeper) {
+	k.ontologyKeeper = ok
 }
 
 // InitGenesis initializes the module's state from genesis.

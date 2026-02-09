@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"math/big"
 
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
+)
+
+const (
+	// ResearchFundModuleName is the module account name for the research fund.
+	ResearchFundModuleName = "research_fund"
 )
 
 // RouteReward routes a reward through the research share deduction.
@@ -117,6 +124,46 @@ func (k Keeper) DistributeBlockReward(
 		ResearchShare:  routing.ResearchShare,
 		TotalMinted:    routing.OriginalAmount,
 		ValidatorCount: activeValidatorCount,
+	}
+
+	// Mint and distribute coins via bank keeper (nil-safe for tests/devnet)
+	if k.bankKeeper != nil {
+		totalMintedBig := new(big.Int)
+		totalMintedBig.SetString(routing.OriginalAmount, 10)
+
+		if totalMintedBig.Sign() > 0 {
+			mintCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(totalMintedBig)))
+
+			// Mint to vesting_rewards module account
+			if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, mintCoins); err != nil {
+				k.Logger(ctx).Error("failed to mint block reward", "error", err)
+				k.SetBlockRewardDistribution(ctx, dist)
+				return dist, err
+			}
+
+			// Send producer share (78%) to block producer
+			producerBig := new(big.Int)
+			producerBig.SetString(routing.RecipientAmount, 10)
+			if producerBig.Sign() > 0 {
+				producerAddr, err := sdk.AccAddressFromBech32(producer)
+				if err == nil {
+					producerCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(producerBig)))
+					if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, producerAddr, producerCoins); err != nil {
+						k.Logger(ctx).Error("failed to send producer reward", "error", err)
+					}
+				}
+			}
+
+			// Send research share (22%) to research fund
+			researchBig := new(big.Int)
+			researchBig.SetString(routing.ResearchShare, 10)
+			if researchBig.Sign() > 0 {
+				researchCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(researchBig)))
+				if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, ResearchFundModuleName, researchCoins); err != nil {
+					k.Logger(ctx).Error("failed to send research share", "error", err)
+				}
+			}
+		}
 	}
 
 	k.SetBlockRewardDistribution(ctx, dist)

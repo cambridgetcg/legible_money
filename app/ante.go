@@ -14,40 +14,42 @@ import (
 	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
 )
 
-// NewAnteHandler returns an AnteHandler that:
-// 1. Runs standard Cosmos SDK ante decorators (sequence, signature, etc.)
-// 2. Applies LGM-specific gas cost validation
-// 3. Routes fees: 22% to research fund, 78% to validators
+// NewAnteHandler returns an AnteHandler with:
+// 1. Standard Cosmos SDK decorators (explicit chain, not wrapped)
+// 2. LGM-specific gas cost validation
+// 3. Fee routing: 22% to research fund, 78% to validators
+// 4. Legible Money custom decorators:
+//    - DID resolution and validation
+//    - Frozen account enforcement + LastActiveBlock tracking
+//    - Session key capability enforcement
 func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
-	anteHandler, err := ante.NewAnteHandler(
-		ante.HandlerOptions{
-			AccountKeeper:   app.AccountKeeper,
-			BankKeeper:      app.BankKeeper,
-			FeegrantKeeper:  app.FeeGrantKeeper,
-			SignModeHandler: app.txConfig.SignModeHandler(),
-			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
-		},
-	)
-	if err != nil {
-		panic(err)
-	}
-
 	return sdk.ChainAnteDecorators(
+		// --- IBC ---
 		ibcante.NewRedundantRelayDecorator(app.IBCKeeper),
+
+		// --- LGM Pre-Auth ---
 		NewLGMGasDecorator(),
 		NewFeeRouterDecorator(app.BankKeeper),
-		anteHandlerDecorator{inner: anteHandler},
+		NewLegibleDIDDecorator(app.LegibleAuthKeeper),
+
+		// --- Standard Cosmos SDK Decorators (explicit chain) ---
+		ante.NewSetUpContextDecorator(),
+		ante.NewExtensionOptionsDecorator(nil),
+		ante.NewValidateBasicDecorator(),
+		ante.NewTxTimeoutHeightDecorator(),
+		ante.NewValidateMemoDecorator(app.AccountKeeper),
+		ante.NewConsumeGasForTxSizeDecorator(app.AccountKeeper),
+		ante.NewDeductFeeDecorator(app.AccountKeeper, app.BankKeeper, app.FeeGrantKeeper, nil),
+		ante.NewSetPubKeyDecorator(app.AccountKeeper),
+		ante.NewValidateSigCountDecorator(app.AccountKeeper),
+		ante.NewSigGasConsumeDecorator(app.AccountKeeper, ante.DefaultSigVerificationGasConsumer),
+		ante.NewSigVerificationDecorator(app.AccountKeeper, app.txConfig.SignModeHandler()),
+		ante.NewIncrementSequenceDecorator(app.AccountKeeper),
+
+		// --- Legible Money Post-Auth ---
+		NewLegibleAccountDecorator(app.LegibleAuthKeeper),
+		NewLegibleCapabilityDecorator(app.LegibleAuthKeeper, app.AccountKeeper),
 	)
-}
-
-// anteHandlerDecorator wraps an sdk.AnteHandler to satisfy the AnteDecorator
-// interface so it can be chained with other decorators.
-type anteHandlerDecorator struct {
-	inner sdk.AnteHandler
-}
-
-func (d anteHandlerDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	return d.inner(ctx, tx, simulate)
 }
 
 // ---------- LGM Gas Decorator ----------
@@ -156,9 +158,10 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.knowledge.v1.MsgRegisterStratum": TransactionGasCosts["register_stratum"],
 
 	// Auth module (agent keys)
-	"/legible.auth.v1.MsgRotateKey":     TransactionGasCosts["rotate_key"],
-	"/legible.auth.v1.MsgCreateSession": TransactionGasCosts["create_session"],
-	"/legible.auth.v1.MsgRevokeSession": TransactionGasCosts["revoke_session"],
+	"/legible.auth.v1.MsgRegisterAccount": TransactionGasCosts["register_account"],
+	"/legible.auth.v1.MsgRotateKey":       TransactionGasCosts["rotate_key"],
+	"/legible.auth.v1.MsgCreateSession":   TransactionGasCosts["create_session"],
+	"/legible.auth.v1.MsgRevokeSession":   TransactionGasCosts["revoke_session"],
 
 	// Staking module (extended)
 	"/legible.staking.v1.MsgRegisterValidator": TransactionGasCosts["register_validator"],
@@ -264,6 +267,15 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.claiming_pot.v1.MsgFundPot":       TransactionGasCosts["fund_pot"],
 	"/legible.claiming_pot.v1.MsgClaimFromPot":  TransactionGasCosts["claim_from_pot"],
 	"/legible.claiming_pot.v1.MsgClosePot":      TransactionGasCosts["close_pot"],
+
+	// Capture defense
+	"/legible.capture_defense.v1.MsgRequestQualification": TransactionGasCosts["request_capture_qualification"],
+	"/legible.capture_defense.v1.MsgEndorseQualification": TransactionGasCosts["endorse_capture_qualification"],
+
+	// Capture challenge
+	"/legible.capture_challenge.v1.MsgSubmitChallenge":  TransactionGasCosts["submit_capture_challenge"],
+	"/legible.capture_challenge.v1.MsgAddEvidence":      TransactionGasCosts["add_challenge_evidence"],
+	"/legible.capture_challenge.v1.MsgResolveChallenge": TransactionGasCosts["resolve_capture_challenge"],
 }
 
 // ---------- Fee Router Decorator ----------

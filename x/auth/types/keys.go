@@ -26,6 +26,12 @@ var (
 
 	// LastRotationPrefix is the prefix for tracking last key rotation
 	LastRotationPrefix = []byte{0x05}
+
+	// RecoveryRequestPrefix is the prefix for recovery requests
+	RecoveryRequestPrefix = []byte{0x06}
+
+	// RecoveryConfigPrefix is the prefix for recovery configuration per account
+	RecoveryConfigPrefix = []byte{0x07}
 )
 
 // AccountKey returns the store key for an account by bech32 address
@@ -54,6 +60,16 @@ func SessionKeyOwnerPrefix(owner string) []byte {
 // LastRotationKey returns the store key for last rotation timestamp
 func LastRotationKey(address string) []byte {
 	return append(LastRotationPrefix, []byte(address)...)
+}
+
+// RecoveryRequestKey returns the store key for a recovery request by account address
+func RecoveryRequestKey(address string) []byte {
+	return append(RecoveryRequestPrefix, []byte(address)...)
+}
+
+// RecoveryConfigKey returns the store key for a recovery config by account address
+func RecoveryConfigKey(address string) []byte {
+	return append(RecoveryConfigPrefix, []byte(address)...)
 }
 
 // Uint64ToBytes converts uint64 to bytes for storage

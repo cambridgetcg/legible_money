@@ -55,10 +55,18 @@ var TransactionGasCosts = map[string]uint64{
 	"emergency_resume":    0,
 
 	// Agent identity
-	"rotate_key":      30_000,
-	"create_session":  40_000,
-	"revoke_session":  25_000,
-	"recover_account": 80_000,
+	"register_account": 50_000,
+	"rotate_key":       30_000,
+	"create_session":   40_000,
+	"revoke_session":        25_000,
+	"recover_account":       80_000,
+	"freeze_account":        30_000,
+	"unfreeze_account":      30_000,
+	"set_recovery_config":   60_000,
+	"initiate_recovery":     80_000,
+	"submit_recovery_shard": 40_000,
+	"challenge_recovery":    50_000,
+	"execute_recovery":      80_000,
 
 	// Ontology
 	"propose_domain":    80_000,
@@ -86,6 +94,7 @@ var TransactionGasCosts = map[string]uint64{
 	"commit_evidence":   40_000,
 	"reveal_evidence":   50_000,
 	"arbiter_vote":      30_000,
+	"vote_dispute":      30_000, // alias matching MsgVoteDispute
 	"escalate_dispute":  60_000,
 	"settle_dispute":    80_000,
 	"timeout_dispute":   40_000,
@@ -187,6 +196,33 @@ var TransactionGasCosts = map[string]uint64{
 	"fund_pot":       40_000,
 	"claim_from_pot": 30_000,
 	"close_pot":      40_000,
+
+	// Agent Home
+	"create_home":         150_000,
+	"update_home":          40_000,
+	"update_memory_cid":    30_000,
+	"home_start_session":   30_000,
+	"home_end_session":     20_000,
+	"home_register_key":    50_000,
+	"home_revoke_key":      25_000,
+	"configure_guardian":    50_000,
+	"acknowledge_alert":    20_000,
+	"set_spending_limit":   40_000,
+
+	// Domain qualification
+	"request_qualification":  80_000,
+	"endorse_validator":      50_000,
+	"renew_qualification":    30_000,
+	"withdraw_qualification": 50_000,
+
+	// Capture defense
+	"request_capture_qualification": 80_000,
+	"endorse_capture_qualification": 40_000,
+
+	// Capture challenge
+	"submit_capture_challenge":  100_000,
+	"add_challenge_evidence":     50_000,
+	"resolve_capture_challenge":  80_000,
 }
 
 // Fee routing constants (basis points, 10000 = 100%).
@@ -210,6 +246,7 @@ var SystemTxTypes = map[string]bool{
 	"emergency_halt":      true,
 	"emergency_revert":    true,
 	"emergency_resume":    true,
+	"block_reward":        true,
 }
 
 // EstimateTransactionGas returns the base gas cost for a transaction type.

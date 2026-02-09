@@ -232,8 +232,202 @@ func (m *MsgFalsifyClaimResponse) Reset()         { *m = MsgFalsifyClaimResponse
 func (m *MsgFalsifyClaimResponse) String() string { return proto.CompactTextString(m) }
 func (m *MsgFalsifyClaimResponse) ProtoMessage()  {}
 
+// MsgCreateVesting creates a new truth-linked vesting schedule.
+// Only callable by authority (system/governance).
+type MsgCreateVesting struct {
+	Authority   string          // module authority
+	ClaimId     string          // the claim this reward is for
+	FactId      string          // the fact (once claim is accepted)
+	Recipient   string          // bech32 address of reward recipient
+	TotalAmount string          // total reward amount (ulgm)
+	Category    VestingCategory // epistemic category
+	Source      RewardSource    // reward origin
+}
+
+func (m *MsgCreateVesting) Reset()         { *m = MsgCreateVesting{} }
+func (m *MsgCreateVesting) String() string { return proto.CompactTextString(m) }
+func (m *MsgCreateVesting) ProtoMessage()  {}
+
+func (m *MsgCreateVesting) ValidateBasic() error {
+	if m.Authority == "" {
+		return fmt.Errorf("authority required")
+	}
+	if m.ClaimId == "" {
+		return fmt.Errorf("claim ID required")
+	}
+	if _, err := sdk.AccAddressFromBech32(m.Recipient); err != nil {
+		return fmt.Errorf("invalid recipient address: %w", err)
+	}
+	if m.TotalAmount == "" || m.TotalAmount == "0" {
+		return fmt.Errorf("total amount must be positive")
+	}
+	return nil
+}
+
+func (m *MsgCreateVesting) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgCreateVestingResponse is the response.
+type MsgCreateVestingResponse struct {
+	VestingId string
+}
+
+func (m *MsgCreateVestingResponse) Reset()         { *m = MsgCreateVestingResponse{} }
+func (m *MsgCreateVestingResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgCreateVestingResponse) ProtoMessage()  {}
+
+// MsgPauseVesting pauses a vesting schedule (due to active challenge).
+// Only callable by authority (governance/dispute module).
+type MsgPauseVesting struct {
+	Authority string // module authority
+	VestingId string // vesting schedule to pause
+	Reason    string // reason for pause
+}
+
+func (m *MsgPauseVesting) Reset()         { *m = MsgPauseVesting{} }
+func (m *MsgPauseVesting) String() string { return proto.CompactTextString(m) }
+func (m *MsgPauseVesting) ProtoMessage()  {}
+
+func (m *MsgPauseVesting) ValidateBasic() error {
+	if m.Authority == "" {
+		return fmt.Errorf("authority required")
+	}
+	if m.VestingId == "" {
+		return fmt.Errorf("vesting ID required")
+	}
+	return nil
+}
+
+func (m *MsgPauseVesting) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgPauseVestingResponse is the response.
+type MsgPauseVestingResponse struct{}
+
+func (m *MsgPauseVestingResponse) Reset()         { *m = MsgPauseVestingResponse{} }
+func (m *MsgPauseVestingResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgPauseVestingResponse) ProtoMessage()  {}
+
+// MsgResumeVesting resumes a paused vesting schedule.
+// Only callable by authority (governance/dispute module).
+type MsgResumeVesting struct {
+	Authority string // module authority
+	VestingId string // vesting schedule to resume
+}
+
+func (m *MsgResumeVesting) Reset()         { *m = MsgResumeVesting{} }
+func (m *MsgResumeVesting) String() string { return proto.CompactTextString(m) }
+func (m *MsgResumeVesting) ProtoMessage()  {}
+
+func (m *MsgResumeVesting) ValidateBasic() error {
+	if m.Authority == "" {
+		return fmt.Errorf("authority required")
+	}
+	if m.VestingId == "" {
+		return fmt.Errorf("vesting ID required")
+	}
+	return nil
+}
+
+func (m *MsgResumeVesting) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgResumeVestingResponse is the response.
+type MsgResumeVestingResponse struct{}
+
+func (m *MsgResumeVestingResponse) Reset()         { *m = MsgResumeVestingResponse{} }
+func (m *MsgResumeVestingResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgResumeVestingResponse) ProtoMessage()  {}
+
+// MsgAccelerateVesting records evidence that accelerates vesting.
+// AccelerationType: "defense" (successful challenge defense) or "replication" (independent replication).
+type MsgAccelerateVesting struct {
+	Authority          string // module authority
+	VestingId          string // vesting schedule to accelerate
+	AccelerationType   string // "defense" or "replication"
+	EvidenceReference  string // reference to evidence (claim ID, etc.)
+}
+
+func (m *MsgAccelerateVesting) Reset()         { *m = MsgAccelerateVesting{} }
+func (m *MsgAccelerateVesting) String() string { return proto.CompactTextString(m) }
+func (m *MsgAccelerateVesting) ProtoMessage()  {}
+
+func (m *MsgAccelerateVesting) ValidateBasic() error {
+	if m.Authority == "" {
+		return fmt.Errorf("authority required")
+	}
+	if m.VestingId == "" {
+		return fmt.Errorf("vesting ID required")
+	}
+	if m.AccelerationType != "defense" && m.AccelerationType != "replication" {
+		return fmt.Errorf("acceleration type must be 'defense' or 'replication'")
+	}
+	return nil
+}
+
+func (m *MsgAccelerateVesting) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgAccelerateVestingResponse is the response.
+type MsgAccelerateVestingResponse struct {
+	DefenseCount     uint32
+	ReplicationCount uint32
+}
+
+func (m *MsgAccelerateVestingResponse) Reset()         { *m = MsgAccelerateVestingResponse{} }
+func (m *MsgAccelerateVestingResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgAccelerateVestingResponse) ProtoMessage()  {}
+
+// MsgCompleteVesting marks a vesting schedule as completed.
+// Can be called by recipient (when max release reached) or authority (governance).
+type MsgCompleteVesting struct {
+	Sender    string // bech32 sender (recipient or authority)
+	VestingId string // vesting schedule to complete
+}
+
+func (m *MsgCompleteVesting) Reset()         { *m = MsgCompleteVesting{} }
+func (m *MsgCompleteVesting) String() string { return proto.CompactTextString(m) }
+func (m *MsgCompleteVesting) ProtoMessage()  {}
+
+func (m *MsgCompleteVesting) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if m.VestingId == "" {
+		return fmt.Errorf("vesting ID required")
+	}
+	return nil
+}
+
+func (m *MsgCompleteVesting) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgCompleteVestingResponse is the response.
+type MsgCompleteVestingResponse struct {
+	FinalReleasedAmount string
+}
+
+func (m *MsgCompleteVestingResponse) Reset()         { *m = MsgCompleteVestingResponse{} }
+func (m *MsgCompleteVestingResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgCompleteVestingResponse) ProtoMessage()  {}
+
 // MsgServer is the msg server interface
 type MsgServer interface {
 	ClaimVestedRewards(context.Context, *MsgClaimVestedRewards) (*MsgClaimVestedRewardsResponse, error)
 	FalsifyClaim(context.Context, *MsgFalsifyClaim) (*MsgFalsifyClaimResponse, error)
+	CreateVesting(context.Context, *MsgCreateVesting) (*MsgCreateVestingResponse, error)
+	PauseVesting(context.Context, *MsgPauseVesting) (*MsgPauseVestingResponse, error)
+	ResumeVesting(context.Context, *MsgResumeVesting) (*MsgResumeVestingResponse, error)
+	AccelerateVesting(context.Context, *MsgAccelerateVesting) (*MsgAccelerateVestingResponse, error)
+	CompleteVesting(context.Context, *MsgCompleteVesting) (*MsgCompleteVestingResponse, error)
 }

@@ -1,0 +1,483 @@
+package types
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/cosmos/cosmos-sdk/codec"
+	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/gogoproto/proto"
+	"google.golang.org/grpc"
+)
+
+// --- Constants ---
+
+const (
+	// Challenge stake and rewards (in ulgm)
+	MinChallengeStake              = "77000000"   // 77 LGM
+	CaptureExposureBonus           = "777000000"  // 777 LGM bonus
+	ChallengeStakeMultiplierBPS    = 7_700_000    // 7.7x in basis points (/ 1,000,000)
+	FailedChallengePenaltyBPS      = 770_000      // 77%
+	ValidatorSlashOnUpheldBPS      = 300_000      // 30%
+
+	// Evidence
+	MinEvidencePieces              = 3
+	EvidencePeriodBlocks    uint64 = 777
+	ReviewPeriodBlocks      uint64 = 7_777
+
+	// Bounty pools
+	BaseBountyPool                 = "2222000000" // 2222 LGM
+	BountyReplenishmentRateBPS     = 10_000       // 1% of verification rewards
+
+	// Domain recovery
+	DomainPauseDurationBlocks uint64 = 777
+)
+
+// --- Enums ---
+
+// ChallengeStatus represents the lifecycle of a capture challenge.
+type ChallengeStatus string
+
+const (
+	ChallengeSubmitted            ChallengeStatus = "submitted"
+	ChallengeEvidencePeriod       ChallengeStatus = "evidence_period"
+	ChallengeUnderReview          ChallengeStatus = "under_review"
+	ChallengeUpheld               ChallengeStatus = "upheld"
+	ChallengeRejected             ChallengeStatus = "rejected"
+	ChallengePartial              ChallengeStatus = "partial"
+	ChallengeExpired              ChallengeStatus = "expired"
+)
+
+// EvidenceType categorizes the kind of capture evidence.
+type EvidenceType string
+
+const (
+	EvidenceCoordinatedVoting   EvidenceType = "coordinated_voting"
+	EvidenceTimingCorrelation   EvidenceType = "timing_correlation"
+	EvidenceOffChainCoordination EvidenceType = "off_chain_coordination"
+	EvidenceFalseFactAccepted   EvidenceType = "false_fact_accepted"
+	EvidenceStakeManipulation   EvidenceType = "stake_manipulation"
+	EvidenceQualificationFraud  EvidenceType = "qualification_fraud"
+	EvidenceSystematicBias      EvidenceType = "systematic_bias"
+)
+
+// --- Core Types ---
+
+// CaptureEvidence represents a single piece of evidence in a challenge.
+type CaptureEvidence struct {
+	Id          string       `json:"id"`
+	Type        EvidenceType `json:"type"`
+	Description string       `json:"description"`
+	FactIds     []string     `json:"fact_ids,omitempty"`
+	ValidatorIds []string    `json:"validator_ids,omitempty"`
+	BlockStart  uint64       `json:"block_start,omitempty"`
+	BlockEnd    uint64       `json:"block_end,omitempty"`
+	DataHash    string       `json:"data_hash"`
+	SubmittedAt uint64       `json:"submitted_at"`
+	SubmittedBy string       `json:"submitted_by"`
+}
+
+// CaptureResolution records how a challenge was resolved.
+type CaptureResolution struct {
+	Outcome          string            `json:"outcome"` // "upheld", "rejected", "partial"
+	ChallengerReward string            `json:"challenger_reward"`
+	ValidatorSlashes map[string]string `json:"validator_slashes"`
+	FactsInvalidated []string          `json:"facts_invalidated"`
+	ResolvedAtBlock  uint64            `json:"resolved_at_block"`
+	ResolvedBy       string            `json:"resolved_by"` // "governance", "automatic", "settlement"
+	Justification    string            `json:"justification"`
+}
+
+// CaptureChallenge represents an active or completed capture challenge.
+type CaptureChallenge struct {
+	Id                 string            `json:"id"`
+	Domain             string            `json:"domain"`
+	Challenger         string            `json:"challenger"`
+	ChallengeStake     string            `json:"challenge_stake"`
+	Evidence           []CaptureEvidence `json:"evidence"`
+	AccusedValidators  []string          `json:"accused_validators"`
+	SubmittedAtBlock   uint64            `json:"submitted_at_block"`
+	EvidenceDeadline   uint64            `json:"evidence_deadline"`
+	ReviewDeadline     uint64            `json:"review_deadline"`
+	Status             ChallengeStatus   `json:"status"`
+	Resolution         *CaptureResolution `json:"resolution,omitempty"`
+	DomainPausedUntil  uint64            `json:"domain_paused_until,omitempty"`
+}
+
+func (c *CaptureChallenge) Reset()         { *c = CaptureChallenge{} }
+func (c *CaptureChallenge) String() string { return proto.CompactTextString(c) }
+func (c *CaptureChallenge) ProtoMessage()  {}
+
+// DomainBountyPool tracks the bounty pool for a domain.
+type DomainBountyPool struct {
+	Domain             string `json:"domain"`
+	Balance            string `json:"balance"`
+	ChallengesSubmitted uint64 `json:"challenges_submitted"`
+	ChallengesUpheld   uint64 `json:"challenges_upheld"`
+	ChallengesRejected uint64 `json:"challenges_rejected"`
+	TotalRewardsPaid   string `json:"total_rewards_paid"`
+	CaptureRiskScore   uint64 `json:"capture_risk_score"` // basis points
+	LastAnalyzedBlock  uint64 `json:"last_analyzed_block"`
+	AutoGenerated      bool   `json:"auto_generated"`
+	CreatedAtBlock     uint64 `json:"created_at_block"`
+	LastUpdatedBlock   uint64 `json:"last_updated_block"`
+}
+
+func (p *DomainBountyPool) Reset()         { *p = DomainBountyPool{} }
+func (p *DomainBountyPool) String() string { return proto.CompactTextString(p) }
+func (p *DomainBountyPool) ProtoMessage()  {}
+
+// --- Params ---
+
+// Params defines the capture challenge module parameters.
+type Params struct {
+	EvidencePeriodBlocks      uint64 `json:"evidence_period_blocks"`
+	ReviewPeriodBlocks        uint64 `json:"review_period_blocks"`
+	DomainPauseDurationBlocks uint64 `json:"domain_pause_duration_blocks"`
+}
+
+func (p *Params) Reset()         { *p = Params{} }
+func (p *Params) String() string { return proto.CompactTextString(p) }
+func (p *Params) ProtoMessage()  {}
+
+// DefaultParams returns the default capture challenge parameters.
+func DefaultParams() Params {
+	return Params{
+		EvidencePeriodBlocks:      EvidencePeriodBlocks,
+		ReviewPeriodBlocks:        ReviewPeriodBlocks,
+		DomainPauseDurationBlocks: DomainPauseDurationBlocks,
+	}
+}
+
+// Validate performs basic param validation.
+func (p Params) Validate() error {
+	if p.EvidencePeriodBlocks == 0 {
+		return fmt.Errorf("evidence period blocks must be positive")
+	}
+	if p.ReviewPeriodBlocks == 0 {
+		return fmt.Errorf("review period blocks must be positive")
+	}
+	return nil
+}
+
+// --- Genesis ---
+
+// GenesisState defines the capture challenge module's genesis state.
+type GenesisState struct {
+	Params      Params             `json:"params"`
+	Challenges  []CaptureChallenge `json:"challenges"`
+	BountyPools []DomainBountyPool `json:"bounty_pools"`
+}
+
+func (gs *GenesisState) Reset()         { *gs = GenesisState{} }
+func (gs *GenesisState) String() string { return proto.CompactTextString(gs) }
+func (gs *GenesisState) ProtoMessage()  {}
+
+// DefaultGenesisState returns the default genesis state.
+func DefaultGenesisState() *GenesisState {
+	return &GenesisState{
+		Params:      DefaultParams(),
+		Challenges:  []CaptureChallenge{},
+		BountyPools: []DomainBountyPool{},
+	}
+}
+
+// Validate validates the genesis state.
+func (gs GenesisState) Validate() error {
+	return gs.Params.Validate()
+}
+
+// --- Message Types ---
+
+// MsgSubmitChallenge submits a new capture challenge.
+type MsgSubmitChallenge struct {
+	Challenger        string            `json:"challenger"`
+	Domain            string            `json:"domain"`
+	Evidence          []CaptureEvidence `json:"evidence"`
+	Stake             string            `json:"stake"`
+	AccusedValidators []string          `json:"accused_validators"`
+}
+
+func (m *MsgSubmitChallenge) Reset()         { *m = MsgSubmitChallenge{} }
+func (m *MsgSubmitChallenge) String() string { return proto.CompactTextString(m) }
+func (m *MsgSubmitChallenge) ProtoMessage()  {}
+
+func (m *MsgSubmitChallenge) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Challenger); err != nil {
+		return fmt.Errorf("invalid challenger address: %w", err)
+	}
+	if m.Domain == "" {
+		return fmt.Errorf("domain is required")
+	}
+	if len(m.Evidence) < MinEvidencePieces {
+		return ErrInsufficientEvidence
+	}
+	return nil
+}
+
+func (m *MsgSubmitChallenge) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Challenger)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgSubmitChallengeResponse is the response.
+type MsgSubmitChallengeResponse struct {
+	ChallengeId string `json:"challenge_id"`
+}
+
+func (m *MsgSubmitChallengeResponse) Reset()         { *m = MsgSubmitChallengeResponse{} }
+func (m *MsgSubmitChallengeResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgSubmitChallengeResponse) ProtoMessage()  {}
+
+// MsgAddEvidence adds additional evidence to an active challenge.
+type MsgAddEvidence struct {
+	Challenger  string          `json:"challenger"`
+	ChallengeId string         `json:"challenge_id"`
+	Evidence    CaptureEvidence `json:"evidence"`
+}
+
+func (m *MsgAddEvidence) Reset()         { *m = MsgAddEvidence{} }
+func (m *MsgAddEvidence) String() string { return proto.CompactTextString(m) }
+func (m *MsgAddEvidence) ProtoMessage()  {}
+
+func (m *MsgAddEvidence) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Challenger); err != nil {
+		return fmt.Errorf("invalid challenger address: %w", err)
+	}
+	if m.ChallengeId == "" {
+		return fmt.Errorf("challenge_id is required")
+	}
+	return nil
+}
+
+func (m *MsgAddEvidence) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Challenger)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgAddEvidenceResponse is the response.
+type MsgAddEvidenceResponse struct {
+	EvidenceCount int `json:"evidence_count"`
+}
+
+func (m *MsgAddEvidenceResponse) Reset()         { *m = MsgAddEvidenceResponse{} }
+func (m *MsgAddEvidenceResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgAddEvidenceResponse) ProtoMessage()  {}
+
+// MsgResolveChallenge resolves a challenge (governance or auto).
+type MsgResolveChallenge struct {
+	Resolver      string `json:"resolver"` // authority address
+	ChallengeId   string `json:"challenge_id"`
+	Outcome       string `json:"outcome"` // "upheld", "rejected", "partial"
+	Justification string `json:"justification"`
+}
+
+func (m *MsgResolveChallenge) Reset()         { *m = MsgResolveChallenge{} }
+func (m *MsgResolveChallenge) String() string { return proto.CompactTextString(m) }
+func (m *MsgResolveChallenge) ProtoMessage()  {}
+
+func (m *MsgResolveChallenge) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Resolver); err != nil {
+		return fmt.Errorf("invalid resolver address: %w", err)
+	}
+	if m.ChallengeId == "" {
+		return fmt.Errorf("challenge_id is required")
+	}
+	switch m.Outcome {
+	case "upheld", "rejected", "partial":
+	default:
+		return fmt.Errorf("invalid outcome: %s", m.Outcome)
+	}
+	return nil
+}
+
+func (m *MsgResolveChallenge) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Resolver)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgResolveChallengeResponse is the response.
+type MsgResolveChallengeResponse struct {
+	ChallengerReward string `json:"challenger_reward"`
+}
+
+func (m *MsgResolveChallengeResponse) Reset()         { *m = MsgResolveChallengeResponse{} }
+func (m *MsgResolveChallengeResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgResolveChallengeResponse) ProtoMessage()  {}
+
+// --- Service Interfaces ---
+
+// MsgServer defines the capture challenge module's message server interface.
+type MsgServer interface {
+	SubmitChallenge(context.Context, *MsgSubmitChallenge) (*MsgSubmitChallengeResponse, error)
+	AddEvidence(context.Context, *MsgAddEvidence) (*MsgAddEvidenceResponse, error)
+	ResolveChallenge(context.Context, *MsgResolveChallenge) (*MsgResolveChallengeResponse, error)
+}
+
+// QueryServer defines the capture challenge module's query server interface.
+type QueryServer interface {
+	Challenge(context.Context, *QueryChallengeRequest) (*QueryChallengeResponse, error)
+	ActiveChallenges(context.Context, *QueryActiveChallengesRequest) (*QueryActiveChallengesResponse, error)
+	BountyPool(context.Context, *QueryBountyPoolRequest) (*QueryBountyPoolResponse, error)
+}
+
+// --- Query Types ---
+
+type QueryChallengeRequest struct {
+	ChallengeId string `json:"challenge_id"`
+}
+
+type QueryChallengeResponse struct {
+	Challenge *CaptureChallenge `json:"challenge,omitempty"`
+	Found     bool              `json:"found"`
+}
+
+type QueryActiveChallengesRequest struct {
+	Domain string `json:"domain,omitempty"`
+}
+
+type QueryActiveChallengesResponse struct {
+	Challenges []CaptureChallenge `json:"challenges"`
+}
+
+type QueryBountyPoolRequest struct {
+	Domain string `json:"domain"`
+}
+
+type QueryBountyPoolResponse struct {
+	Pool  *DomainBountyPool `json:"pool,omitempty"`
+	Found bool              `json:"found"`
+}
+
+// --- Codec Registration ---
+
+// RegisterCodec registers the capture challenge module's types with the amino codec.
+func RegisterCodec(cdc *codec.LegacyAmino) {
+	cdc.RegisterConcrete(&MsgSubmitChallenge{}, "capture_challenge/SubmitChallenge", nil)
+	cdc.RegisterConcrete(&MsgAddEvidence{}, "capture_challenge/AddEvidence", nil)
+	cdc.RegisterConcrete(&MsgResolveChallenge{}, "capture_challenge/ResolveChallenge", nil)
+}
+
+// RegisterInterfaces registers the module's interfaces.
+func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
+	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+}
+
+// gRPC service descriptors for msg server
+var _Msg_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "legible.capture_challenge.v1.Msg",
+	HandlerType: (*MsgServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{MethodName: "SubmitChallenge", Handler: _Msg_SubmitChallenge_Handler},
+		{MethodName: "AddEvidence", Handler: _Msg_AddEvidence_Handler},
+		{MethodName: "ResolveChallenge", Handler: _Msg_ResolveChallenge_Handler},
+	},
+	Streams: []grpc.StreamDesc{},
+}
+
+func _Msg_SubmitChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitChallenge)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Msg/SubmitChallenge"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitChallenge(ctx, req.(*MsgSubmitChallenge))
+	})
+}
+
+func _Msg_AddEvidence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgAddEvidence)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).AddEvidence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Msg/AddEvidence"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).AddEvidence(ctx, req.(*MsgAddEvidence))
+	})
+}
+
+func _Msg_ResolveChallenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgResolveChallenge)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ResolveChallenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Msg/ResolveChallenge"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ResolveChallenge(ctx, req.(*MsgResolveChallenge))
+	})
+}
+
+// RegisterMsgServer registers the capture challenge msg server.
+func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
+	s.RegisterService(&_Msg_serviceDesc, srv)
+}
+
+// gRPC service descriptors for query server
+var _Query_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "legible.capture_challenge.v1.Query",
+	HandlerType: (*QueryServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{MethodName: "Challenge", Handler: _Query_Challenge_Handler},
+		{MethodName: "ActiveChallenges", Handler: _Query_ActiveChallenges_Handler},
+		{MethodName: "BountyPool", Handler: _Query_BountyPool_Handler},
+	},
+	Streams: []grpc.StreamDesc{},
+}
+
+func _Query_Challenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryChallengeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Challenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Query/Challenge"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Challenge(ctx, req.(*QueryChallengeRequest))
+	})
+}
+
+func _Query_ActiveChallenges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryActiveChallengesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ActiveChallenges(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Query/ActiveChallenges"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ActiveChallenges(ctx, req.(*QueryActiveChallengesRequest))
+	})
+}
+
+func _Query_BountyPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryBountyPoolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).BountyPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Query/BountyPool"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).BountyPool(ctx, req.(*QueryBountyPoolRequest))
+	})
+}
+
+// RegisterQueryServer registers the capture challenge query server.
+func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
+	s.RegisterService(&_Query_serviceDesc, srv)
+}

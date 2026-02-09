@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/big"
 
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
@@ -80,6 +82,39 @@ func (k Keeper) CreateVestingSchedule(
 	)
 
 	return schedule, nil
+}
+
+// CreateVestingScheduleFromKnowledge is an adapter called by x/knowledge when a claim is accepted.
+// It maps epistemic categories to vesting categories and delegates to CreateVestingSchedule.
+func (k Keeper) CreateVestingScheduleFromKnowledge(
+	ctx sdk.Context,
+	claimId, factId, recipient, totalAmount, epistemicCategory string,
+) error {
+	category := mapEpistemicToVestingCategory(epistemicCategory)
+	_, err := k.CreateVestingSchedule(ctx, claimId, factId, recipient, totalAmount, category, types.SourceVerification)
+	return err
+}
+
+// mapEpistemicToVestingCategory maps knowledge epistemic categories to vesting categories.
+func mapEpistemicToVestingCategory(epistemic string) types.VestingCategory {
+	switch epistemic {
+	case "protocol", "analytic":
+		return types.CategoryAxiomatic
+	case "formal":
+		return types.CategoryFormalProof
+	case "computational":
+		return types.CategoryComputational
+	case "empirical":
+		return types.CategoryPeerReviewed
+	case "historical":
+		return types.CategoryAttestation
+	case "replicated":
+		return types.CategoryReplicated
+	case "social", "predictive":
+		return types.CategoryAttestation
+	default:
+		return types.CategoryPeerReviewed
+	}
 }
 
 // CalculateReleasedAmount computes how much reward has been released at a given block.
@@ -283,6 +318,18 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, recipient string, vestingId string
 		return "0", types.ErrNothingToClaim
 	}
 
+	// Send claimed coins from module to recipient (nil-safe for tests)
+	if k.bankKeeper != nil && totalClaimed.Sign() > 0 {
+		recipientAddr, err := sdk.AccAddressFromBech32(recipient)
+		if err == nil {
+			claimedCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(totalClaimed)))
+			if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, recipientAddr, claimedCoins); err != nil {
+				k.Logger(ctx).Error("failed to send claimed rewards", "recipient", recipient, "error", err)
+				return "0", fmt.Errorf("failed to send claimed rewards: %w", err)
+			}
+		}
+	}
+
 	return totalClaimed.String(), nil
 }
 
@@ -343,6 +390,26 @@ func (k Keeper) RecordDefense(ctx sdk.Context, vestingId string) error {
 	schedule.UpdatedAt = uint64(ctx.BlockHeight())
 	k.SetVestingSchedule(ctx, schedule)
 	return nil
+}
+
+// PauseVestingByClaimId pauses the vesting schedule associated with a claim.
+// Used by x/disputes when a dispute is opened against a fact.
+func (k Keeper) PauseVestingByClaimId(ctx sdk.Context, claimId string) error {
+	schedule, found := k.GetVestingByClaimId(ctx, claimId)
+	if !found {
+		return nil // No vesting schedule for this claim — not an error
+	}
+	return k.PauseVesting(ctx, schedule.Id)
+}
+
+// ResumeVestingByClaimId resumes the vesting schedule associated with a claim.
+// Used by x/disputes when a dispute is resolved in favor of the defender.
+func (k Keeper) ResumeVestingByClaimId(ctx sdk.Context, claimId string) error {
+	schedule, found := k.GetVestingByClaimId(ctx, claimId)
+	if !found {
+		return nil // No vesting schedule for this claim — not an error
+	}
+	return k.ResumeVesting(ctx, schedule.Id)
 }
 
 // RecordReplication records an independent replication, accelerating vesting.

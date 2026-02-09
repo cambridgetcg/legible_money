@@ -24,6 +24,10 @@ type KnowledgeKeeper interface {
 	SetFact(ctx sdk.Context, fact Fact)
 	// GetClaim retrieves a claim by ID.
 	GetClaim(ctx sdk.Context, claimID string) (Claim, bool)
+	// GetReferringFacts returns fact IDs that reference the given fact.
+	// Used for confidence cascade when a fact is retracted.
+	// Returns nil if not implemented (nil-safe — hook skips cascade).
+	GetReferringFacts(ctx sdk.Context, factID string) []string
 }
 
 // StakingKeeper defines the expected staking keeper interface.
@@ -36,6 +40,32 @@ type StakingKeeper interface {
 	// GetEffectiveStake returns the effective stake for a validator.
 	GetEffectiveStake(ctx context.Context, operatorAddr string) uint64
 }
+
+// VestingKeeper defines the expected vesting_rewards keeper interface.
+// Used to pause/resume vesting when disputes are opened/resolved.
+type VestingKeeper interface {
+	// PauseVestingByClaimId pauses the vesting schedule for a claim (if one exists).
+	PauseVestingByClaimId(ctx sdk.Context, claimId string) error
+	// ResumeVestingByClaimId resumes the vesting schedule for a claim (if one exists).
+	ResumeVestingByClaimId(ctx sdk.Context, claimId string) error
+	// FalsifyClaim triggers clawback when a claim is proven false via dispute.
+	// Returns the clawback record with amounts forfeited/redistributed.
+	FalsifyClaim(ctx sdk.Context, claimId string, challenger string) (ClawbackRecord, error)
+}
+
+// ClawbackRecord mirrors vesting_rewards types to avoid circular imports.
+type ClawbackRecord struct {
+	Id               string `json:"id"`
+	ClaimId          string `json:"claim_id"`
+	ReleasedClawback string `json:"released_clawback"`
+	UnvestedForfeited string `json:"unvested_forfeited"`
+	ChallengerReward string `json:"challenger_reward"`
+	BlockHeight      uint64 `json:"block_height"`
+}
+
+func (c *ClawbackRecord) Reset()        {}
+func (c *ClawbackRecord) String() string { return "" }
+func (c *ClawbackRecord) ProtoMessage()  {}
 
 // Fact is a local mirror of the knowledge module's Fact type.
 // Avoids circular imports by defining a compatible subset here.
@@ -53,6 +83,7 @@ type Fact struct {
 	LogicZone          string   `json:"logic_zone"`
 	CreatedAtHeight    uint64   `json:"created_at_height"`
 	LastVerifiedHeight uint64   `json:"last_verified_height"`
+	ChallengeCount     uint32   `json:"challenge_count,omitempty"`
 }
 
 func (f *Fact) Reset()        {}

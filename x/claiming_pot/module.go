@@ -3,7 +3,6 @@ package claiming_pot
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
@@ -35,34 +34,47 @@ type AppModuleBasic struct {
 func (AppModuleBasic) Name() string { return types.ModuleName }
 
 // RegisterLegacyAminoCodec registers the module's amino codec.
-func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {}
+func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	types.RegisterCodec(cdc)
+}
 
 // RegisterInterfaces registers the module's interface types.
-func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {}
+func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
+	types.RegisterInterfaces(reg)
+}
 
 // DefaultGenesis returns the module's default genesis state.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	return json.RawMessage(`{}`)
+	gs := types.DefaultGenesisState()
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic("failed to marshal default genesis: " + err.Error())
+	}
+	return bz
 }
 
 // ValidateGenesis performs genesis state validation.
 func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
-	return nil
+	var gs types.GenesisState
+	if err := json.Unmarshal(bz, &gs); err != nil {
+		return err
+	}
+	return gs.Validate()
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Phase 2: Register query service gateway routes
+	// Hand-written types lack REST gateway bindings.
 }
 
 // GetTxCmd returns the module's tx CLI command.
 func (a AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
+	return nil
 }
 
 // GetQueryCmd returns the module's query CLI command.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
+	return nil
 }
 
 // AppModule implements the AppModule interface.
@@ -88,34 +100,49 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Phase 2: Register msg server and query server
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 }
 
 // InitGenesis initializes the module from genesis.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	am.keeper.InitGenesis(ctx)
+	var gs types.GenesisState
+	if err := json.Unmarshal(data, &gs); err != nil {
+		panic("failed to unmarshal claiming_pot genesis: " + err.Error())
+	}
+	am.keeper.InitGenesis(ctx, gs)
 }
 
 // ExportGenesis exports the module's genesis state.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
-	am.keeper.ExportGenesis(ctx)
-	return json.RawMessage(`{}`)
+	gs := am.keeper.ExportGenesis(ctx)
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic("failed to marshal claiming_pot genesis: " + err.Error())
+	}
+	return bz
 }
 
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic.
-func (am AppModule) BeginBlock(ctx context.Context) error {
-	// Phase 2: Check pot maturity, process contribution deadlines
+// BeginBlock executes begin-block logic: expire old pots.
+func (am AppModule) BeginBlock(goCtx context.Context) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	currentBlock := uint64(ctx.BlockHeight())
+
+	am.keeper.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+		if pot.Status == types.PotStatusActive && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
+			pot.Status = types.PotStatusExpired
+			am.keeper.SetPot(ctx, pot)
+		}
+		return false
+	})
+
 	return nil
 }
 
 // EndBlock executes end-block logic.
 func (am AppModule) EndBlock(ctx context.Context) error {
-	// Phase 2: Distribute finalized pot rewards to members
 	return nil
 }
-
-// Ensure unused imports are referenced.
-var _ = fmt.Sprintf

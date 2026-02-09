@@ -70,7 +70,7 @@ func DefaultTierConfigs() []TierConfig {
 		},
 		{
 			Tier:              TierBonded,
-			MinStake:          "1111000000000000000000", // 1111 LGM in ulgm (18 decimals)
+			MinStake:          "1111000000", // 1,111 LGM in ulgm (6 decimals)
 			MinVerifications:  0,
 			MinAccuracy:       0,
 			MaxSlashCount:     -1,
@@ -80,7 +80,7 @@ func DefaultTierConfigs() []TierConfig {
 		},
 		{
 			Tier:              TierGuardian,
-			MinStake:          "11111000000000000000000", // 11111 LGM
+			MinStake:          "11111000000", // 11,111 LGM in ulgm (6 decimals)
 			MinVerifications:  1111,
 			MinAccuracy:       770000, // 77%
 			MaxSlashCount:     0,      // zero slashes allowed
@@ -137,13 +137,14 @@ func (d *Delegation) ProtoMessage()  {}
 
 // UnbondingEntry represents an unbonding delegation
 type UnbondingEntry struct {
-	Id                 string // unique identifier
-	DelegatorAddress   string // bech32 delegator
-	ValidatorAddress   string // bech32 validator
-	Amount             string // unbonding amount
-	InitiatedAtHeight  uint64 // when unbonding started
-	CompletesAtHeight  uint64 // when unbonding completes
-	Status             string // "pending" or "completed"
+	Id                 string `json:"id"`                            // unique identifier
+	DelegatorAddress   string `json:"delegator_address"`             // bech32 delegator
+	ValidatorAddress   string `json:"validator_address"`             // bech32 validator
+	Amount             string `json:"amount"`                        // unbonding amount
+	InitiatedAtHeight  uint64 `json:"initiated_at_height"`           // when unbonding started
+	CompletesAtHeight  uint64 `json:"completes_at_height"`           // when unbonding completes
+	Status             string `json:"status"`                        // "pending" or "completed"
+	OriginPeriod       uint64 `json:"origin_period,omitempty"`       // token expiration period preservation
 }
 
 func (u *UnbondingEntry) Reset()         { *u = UnbondingEntry{} }
@@ -163,7 +164,7 @@ func DefaultParams() Params {
 	return Params{
 		MaxApprenticeValidators: 111,
 		UnbondingPeriod:         268560, // ~7 days
-		VirtualStake:            "111000000000000000000", // 111 LGM
+		VirtualStake:            "111000000", // 111 LGM in ulgm
 		MaxValidators:           100,
 		MinSelfDelegation:       "0",
 	}
@@ -294,8 +295,133 @@ func (m *MsgUpdateValidatorStakeResponse) Reset()         { *m = MsgUpdateValida
 func (m *MsgUpdateValidatorStakeResponse) String() string { return proto.CompactTextString(m) }
 func (m *MsgUpdateValidatorStakeResponse) ProtoMessage()  {}
 
+// --- Delegation Message Types ---
+
+// MsgDelegate delegates tokens to a validator.
+type MsgDelegate struct {
+	Delegator string // bech32 delegator address
+	Validator string // bech32 validator operator address
+	Amount    string // amount to delegate (bigint as string in ulgm)
+}
+
+func (m *MsgDelegate) Reset()         { *m = MsgDelegate{} }
+func (m *MsgDelegate) String() string { return proto.CompactTextString(m) }
+func (m *MsgDelegate) ProtoMessage()  {}
+
+func (m *MsgDelegate) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Delegator); err != nil {
+		return fmt.Errorf("invalid delegator address: %w", err)
+	}
+	if _, err := sdk.AccAddressFromBech32(m.Validator); err != nil {
+		return fmt.Errorf("invalid validator address: %w", err)
+	}
+	if m.Amount == "" || m.Amount == "0" {
+		return fmt.Errorf("amount must be positive")
+	}
+	return nil
+}
+
+func (m *MsgDelegate) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Delegator)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgDelegateResponse is the response for MsgDelegate.
+type MsgDelegateResponse struct {
+	NewDelegation string // total delegation to this validator
+}
+
+func (m *MsgDelegateResponse) Reset()         { *m = MsgDelegateResponse{} }
+func (m *MsgDelegateResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgDelegateResponse) ProtoMessage()  {}
+
+// MsgUndelegate undelegates tokens from a validator (initiates unbonding).
+type MsgUndelegate struct {
+	Delegator string // bech32 delegator address
+	Validator string // bech32 validator operator address
+	Amount    string // amount to undelegate (bigint as string in ulgm)
+}
+
+func (m *MsgUndelegate) Reset()         { *m = MsgUndelegate{} }
+func (m *MsgUndelegate) String() string { return proto.CompactTextString(m) }
+func (m *MsgUndelegate) ProtoMessage()  {}
+
+func (m *MsgUndelegate) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Delegator); err != nil {
+		return fmt.Errorf("invalid delegator address: %w", err)
+	}
+	if _, err := sdk.AccAddressFromBech32(m.Validator); err != nil {
+		return fmt.Errorf("invalid validator address: %w", err)
+	}
+	if m.Amount == "" || m.Amount == "0" {
+		return fmt.Errorf("amount must be positive")
+	}
+	return nil
+}
+
+func (m *MsgUndelegate) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Delegator)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgUndelegateResponse is the response for MsgUndelegate.
+type MsgUndelegateResponse struct {
+	UnbondingId       string // unbonding entry ID
+	CompletesAtHeight uint64 // when unbonding completes
+}
+
+func (m *MsgUndelegateResponse) Reset()         { *m = MsgUndelegateResponse{} }
+func (m *MsgUndelegateResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgUndelegateResponse) ProtoMessage()  {}
+
+// MsgRedelegate moves delegation from one validator to another.
+type MsgRedelegate struct {
+	Delegator    string // bech32 delegator address
+	SrcValidator string // bech32 source validator operator address
+	DstValidator string // bech32 destination validator operator address
+	Amount       string // amount to redelegate (bigint as string in ulgm)
+}
+
+func (m *MsgRedelegate) Reset()         { *m = MsgRedelegate{} }
+func (m *MsgRedelegate) String() string { return proto.CompactTextString(m) }
+func (m *MsgRedelegate) ProtoMessage()  {}
+
+func (m *MsgRedelegate) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Delegator); err != nil {
+		return fmt.Errorf("invalid delegator address: %w", err)
+	}
+	if _, err := sdk.AccAddressFromBech32(m.SrcValidator); err != nil {
+		return fmt.Errorf("invalid source validator address: %w", err)
+	}
+	if _, err := sdk.AccAddressFromBech32(m.DstValidator); err != nil {
+		return fmt.Errorf("invalid destination validator address: %w", err)
+	}
+	if m.SrcValidator == m.DstValidator {
+		return fmt.Errorf("source and destination validators cannot be the same")
+	}
+	if m.Amount == "" || m.Amount == "0" {
+		return fmt.Errorf("amount must be positive")
+	}
+	return nil
+}
+
+func (m *MsgRedelegate) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Delegator)
+	return []sdk.AccAddress{addr}
+}
+
+// MsgRedelegateResponse is the response for MsgRedelegate.
+type MsgRedelegateResponse struct{}
+
+func (m *MsgRedelegateResponse) Reset()         { *m = MsgRedelegateResponse{} }
+func (m *MsgRedelegateResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgRedelegateResponse) ProtoMessage()  {}
+
 // MsgServer is the msg server interface
 type MsgServer interface {
 	RegisterValidator(context.Context, *MsgRegisterValidator) (*MsgRegisterValidatorResponse, error)
 	UpdateValidatorStake(context.Context, *MsgUpdateValidatorStake) (*MsgUpdateValidatorStakeResponse, error)
+	Delegate(context.Context, *MsgDelegate) (*MsgDelegateResponse, error)
+	Undelegate(context.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
+	Redelegate(context.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
 }

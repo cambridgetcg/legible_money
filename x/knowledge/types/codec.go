@@ -3,7 +3,6 @@ package types
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"google.golang.org/grpc"
 )
@@ -22,18 +21,8 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 }
 
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgProposeDomain{},
-		&MsgEndorseDomainProposal{},
-		&MsgChallengeDomainProposal{},
-		&MsgRegisterStratum{},
-		&MsgUpdateParams{},
-		&MsgSubmitClaim{},
-		&MsgSubmitCommitment{},
-		&MsgSubmitReveal{},
-		&MsgChallengeFact{},
-		&MsgAddFact{},
-	)
+	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	// Genesis and keeper use json.Marshal — no proto codec needed.
 }
 
 var (

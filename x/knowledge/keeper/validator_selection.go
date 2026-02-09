@@ -16,6 +16,26 @@ func (k Keeper) GetEligibleValidators(ctx sdk.Context) []types.ValidatorInfo {
 	return k.stakingKeeper.GetActiveValidatorInfos(ctx)
 }
 
+// GetEligibleValidatorsForDomain returns validators eligible to verify claims
+// in a specific domain. Filters by domain qualification when the qualification
+// keeper is available, falling back to all active validators otherwise.
+func (k Keeper) GetEligibleValidatorsForDomain(ctx sdk.Context, domain string) []types.ValidatorInfo {
+	all := k.stakingKeeper.GetActiveValidatorInfos(ctx)
+	if k.qualificationKeeper == nil {
+		return all // graceful nil-safe fallback
+	}
+	var qualified []types.ValidatorInfo
+	for _, v := range all {
+		if k.qualificationKeeper.IsQualified(ctx, v.Address, domain) {
+			qualified = append(qualified, v)
+		}
+	}
+	if len(qualified) == 0 {
+		return all // don't block verification if no one qualified
+	}
+	return qualified
+}
+
 // GetTotalStake returns the total stake of all active validators.
 func (k Keeper) GetTotalStake(ctx sdk.Context) uint64 {
 	return k.stakingKeeper.GetTotalStake(ctx)

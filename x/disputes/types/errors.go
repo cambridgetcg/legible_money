@@ -22,4 +22,6 @@ var (
 	ErrVotingDeadlinePassed   = errors.Register(ModuleName, 18, "voting deadline has passed")
 	ErrNoArbitersAvailable    = errors.Register(ModuleName, 19, "no eligible arbiters available")
 	ErrTierConfigNotFound     = errors.Register(ModuleName, 20, "tier configuration not found")
+	ErrEvidenceHashMismatch   = errors.Register(ModuleName, 21, "evidence content does not match committed hash")
+	ErrRefusalToReveal        = errors.Register(ModuleName, 22, "committed evidence was not revealed before deadline")
 )

@@ -31,4 +31,6 @@ var (
 	FactReferenceKeyPrefix     = []byte{0x04}
 	DomainFactIndexPrefix      = []byte{0x05}
 	ParamsKey                  = []byte{0x06}
+	// 0x07 used by domainKey in state.go
+	IncomingRefIndexPrefix     = []byte{0x08} // toFactId:fromFactId → reference lookup
 )

@@ -12,9 +12,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/config"
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	"github.com/cosmos/cosmos-sdk/client/keys"
+	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
@@ -23,9 +26,15 @@ import (
 
 // NewRootCmd creates the root command for the legbled daemon.
 func NewRootCmd() *cobra.Command {
+	encodingConfig := legibleapp.MakeEncodingConfig()
+
 	initClientCtx := client.Context{}.
+		WithCodec(encodingConfig.Codec).
+		WithInterfaceRegistry(encodingConfig.InterfaceRegistry).
+		WithTxConfig(encodingConfig.TxConfig).
+		WithLegacyAmino(encodingConfig.Amino).
 		WithInput(os.Stdin).
-		WithAccountRetriever(nil).
+		WithAccountRetriever(authtypes.AccountRetriever{}).
 		WithHomeDir(legibleapp.DefaultNodeHome).
 		WithViper("LGM")
 
@@ -59,11 +68,11 @@ Consensus: Proof of Truth`,
 		},
 	}
 
-	initRootCmd(rootCmd)
+	initRootCmd(rootCmd, encodingConfig)
 	return rootCmd
 }
 
-func initRootCmd(rootCmd *cobra.Command) {
+func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfig) {
 	rootCmd.AddCommand(
 		genutilcli.InitCmd(legibleapp.ModuleBasics, legibleapp.DefaultNodeHome),
 		debug.Cmd(),
@@ -85,8 +94,8 @@ func initRootCmd(rootCmd *cobra.Command) {
 
 	// Genesis commands
 	rootCmd.AddCommand(
-		genutilcli.CollectGenTxsCmd(nil, legibleapp.DefaultNodeHome, genutiltypes.DefaultMessageValidator, nil),
-		genutilcli.GenTxCmd(legibleapp.ModuleBasics, nil, nil, legibleapp.DefaultNodeHome, nil),
+		genutilcli.CollectGenTxsCmd(banktypes.GenesisBalancesIterator{}, legibleapp.DefaultNodeHome, genutiltypes.DefaultMessageValidator, addresscodec.NewBech32Codec("lgmvaloper")),
+		genutilcli.GenTxCmd(legibleapp.ModuleBasics, encodingConfig.TxConfig, banktypes.GenesisBalancesIterator{}, legibleapp.DefaultNodeHome, addresscodec.NewBech32Codec("lgmvaloper")),
 		genutilcli.ValidateGenesisCmd(legibleapp.ModuleBasics),
 		AddGenesisAccountCmd(legibleapp.DefaultNodeHome),
 		MigrateGenesisCmd(),
@@ -101,6 +110,7 @@ func newApp(
 ) servertypes.Application {
 	return legibleapp.NewLegibleApp(
 		logger, db, traceStore, true, appOpts,
+		server.DefaultBaseappOptions(appOpts)...,
 	)
 }
 

@@ -99,6 +99,7 @@ func (am AppModule) IsAppModule() {}
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 }
 
 // InitGenesis initializes the module from genesis.
@@ -125,8 +126,38 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 // BeginBlock executes begin-block logic.
+// Distributes block rewards to the block producer with 22% research tax.
 func (am AppModule) BeginBlock(ctx context.Context) error {
-	// Truth-link checks and vesting updates happen via EndBlocker
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	height := sdkCtx.BlockHeight()
+
+	// Skip genesis block
+	if height <= 1 {
+		return nil
+	}
+
+	// Get block proposer from header
+	proposerAddr := sdkCtx.BlockHeader().ProposerAddress
+	if len(proposerAddr) == 0 {
+		return nil
+	}
+	producer := sdk.AccAddress(proposerAddr).String()
+
+	// Get active validator count for reward scaling
+	var activeValidatorCount uint32
+	if sk := am.keeper.GetStakingKeeper(); sk != nil {
+		activeValidatorCount = sk.GetActiveValidatorCount(sdkCtx)
+	}
+
+	// Check if block has transactions (PoT: 0% for empty blocks)
+	hasTransactions := len(sdkCtx.BlockHeader().DataHash) > 0 && activeValidatorCount > 0
+
+	_, err := am.keeper.DistributeBlockReward(sdkCtx, producer, activeValidatorCount, hasTransactions)
+	if err != nil {
+		am.keeper.Logger(sdkCtx).Error("failed to distribute block reward",
+			"block", height, "error", err)
+	}
+
 	return nil
 }
 

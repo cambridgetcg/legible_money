@@ -412,17 +412,86 @@ type MsgServer interface {
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 
-// Placeholder service descriptor for codec registration.
 var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.evidence_mgmt.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{MethodName: "SubmitEvidence", Handler: nil},
-		{MethodName: "AuditEvidence", Handler: nil},
-		{MethodName: "RegisterOracle", Handler: nil},
-		{MethodName: "SubmitOracleData", Handler: nil},
-		{MethodName: "UpdateParams", Handler: nil},
+		{MethodName: "SubmitEvidence", Handler: _Msg_SubmitEvidence_Handler},
+		{MethodName: "AuditEvidence", Handler: _Msg_AuditEvidence_Handler},
+		{MethodName: "RegisterOracle", Handler: _Msg_RegisterOracle_Handler},
+		{MethodName: "SubmitOracleData", Handler: _Msg_SubmitOracleData_Handler},
+		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "legible/evidence_mgmt/v1/tx.proto",
+}
+
+func _Msg_SubmitEvidence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitEvidence)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitEvidence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.evidence_mgmt.v1.Msg/SubmitEvidence"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitEvidence(ctx, req.(*MsgSubmitEvidence))
+	})
+}
+
+func _Msg_AuditEvidence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgAuditEvidence)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).AuditEvidence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.evidence_mgmt.v1.Msg/AuditEvidence"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).AuditEvidence(ctx, req.(*MsgAuditEvidence))
+	})
+}
+
+func _Msg_RegisterOracle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgRegisterOracle)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).RegisterOracle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.evidence_mgmt.v1.Msg/RegisterOracle"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).RegisterOracle(ctx, req.(*MsgRegisterOracle))
+	})
+}
+
+func _Msg_SubmitOracleData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitOracleData)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitOracleData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.evidence_mgmt.v1.Msg/SubmitOracleData"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitOracleData(ctx, req.(*MsgSubmitOracleData))
+	})
+}
+
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.evidence_mgmt.v1.Msg/UpdateParams"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
+	})
 }

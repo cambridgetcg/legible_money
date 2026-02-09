@@ -77,6 +77,14 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
 
+	// Debit from period overlay (FIFO from oldest periods)
+	if k.tokensKeeper != nil {
+		if err := k.tokensKeeper.DebitBalance(ctx, msg.Submitter, msg.StakeAmount); err != nil {
+			k.Logger(ctx).Error("failed to debit period balance for claim stake",
+				"submitter", msg.Submitter, "error", err)
+		}
+	}
+
 	// Generate deterministic IDs
 	height := uint64(ctx.BlockHeight())
 	claimID := GenerateClaimID(msg.Submitter, contentHash, height)
@@ -97,6 +105,7 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		References:        msg.References,
 		LogicZone:         msg.LogicZone,
 		RoundId:           roundID,
+		Evidence:          msg.Evidence,
 	}
 	k.SetClaim(ctx, claim)
 
@@ -154,6 +163,21 @@ func (k msgServer) SubmitCommitment(goCtx context.Context, msg *types.MsgSubmitC
 	if uint64(ctx.BlockHeight()) > round.CommitDeadlineHeight {
 		return nil, fmt.Errorf("%w: commit deadline passed at height %d",
 			types.ErrDeadlinePassed, round.CommitDeadlineHeight)
+	}
+
+	// Enforce VRF selection: only selected validators may commit
+	if len(round.SelectedValidators) > 0 {
+		isSelected := false
+		for _, v := range round.SelectedValidators {
+			if v == msg.Validator {
+				isSelected = true
+				break
+			}
+		}
+		if !isSelected {
+			return nil, fmt.Errorf("%w: validator %s not selected for round %s",
+				types.ErrVRFSelectionFailed, msg.Validator, msg.RoundId)
+		}
 	}
 
 	// Check validator hasn't already committed
@@ -237,6 +261,7 @@ func (k msgServer) SubmitReveal(goCtx context.Context, msg *types.MsgSubmitRevea
 		Confidence:        msg.Confidence,
 		Justification:     msg.Justification,
 		VrfProof:          msg.VrfProof,
+		Salt:              msg.Salt,
 		SubmittedAtHeight: uint64(ctx.BlockHeight()),
 	}
 
@@ -313,6 +338,14 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
 
+	// Debit from period overlay (FIFO from oldest periods)
+	if k.tokensKeeper != nil {
+		if err := k.tokensKeeper.DebitBalance(ctx, msg.Challenger, msg.Stake); err != nil {
+			k.Logger(ctx).Error("failed to debit period balance for challenge stake",
+				"challenger", msg.Challenger, "error", err)
+		}
+	}
+
 	// Mark fact as contested
 	fact.Status = "contested"
 	k.SetFact(ctx, fact)
@@ -361,29 +394,32 @@ func (k msgServer) AddFact(goCtx context.Context, msg *types.MsgAddFact) (*types
 	factID := GenerateFactID(contentHash, fmt.Sprintf("gov:%d", height))
 
 	fact := types.Fact{
-		Id:                 factID,
-		ClaimText:          msg.ClaimText,
-		Domain:             msg.Domain,
-		EpistemicCategory:  msg.EpistemicCategory,
-		Confidence:         msg.Confidence,
-		Status:             "verified",
-		Submitter:          msg.Authority,
-		References:         msg.References,
-		VerifiedAtHeight:   height,
-		VerifierCount:      0, // Governance-added, no verifiers
-		LogicZone:          msg.LogicZone,
-		CreatedAtHeight:    height,
-		LastVerifiedHeight: height,
+		Id:                   factID,
+		ClaimText:            msg.ClaimText,
+		Domain:               msg.Domain,
+		EpistemicCategory:    msg.EpistemicCategory,
+		Confidence:           msg.Confidence,
+		Status:               "verified",
+		Submitter:            msg.Authority,
+		References:           msg.References,
+		VerifiedAtHeight:     height,
+		VerifierCount:        0, // Governance-added, no verifiers
+		LogicZone:            msg.LogicZone,
+		CreatedAtHeight:      height,
+		LastVerifiedHeight:   height,
+		LastConfidenceUpdate: height,
+		BaseConfidence:       msg.Confidence,
 	}
 	k.SetFact(ctx, fact)
 
 	// Set references
 	for _, refID := range msg.References {
 		k.SetFactReference(ctx, types.FactReference{
-			FromFactId:    factID,
-			ToFactId:      refID,
-			ReferenceType: "supports",
-			Weight:        100,
+			FromFactId:      factID,
+			ToFactId:        refID,
+			ReferenceType:   "supports",
+			Weight:          100,
+			CreatedAtHeight: height,
 		})
 	}
 
@@ -424,6 +460,14 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 		ctx, proposerAddr, types.ModuleName, sdk.NewCoins(stakeCoin),
 	); err != nil {
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
+	}
+
+	// Debit from period overlay (FIFO from oldest periods)
+	if k.tokensKeeper != nil {
+		if err := k.tokensKeeper.DebitBalance(ctx, msg.Proposer, msg.Stake); err != nil {
+			k.Logger(ctx).Error("failed to debit period balance for domain proposal stake",
+				"proposer", msg.Proposer, "error", err)
+		}
 	}
 
 	domain := types.OntologicalDomain{
@@ -534,10 +578,12 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 
 // ---------- Internal Helpers ----------
 
-// isValidEpistemicCategory checks if the category is one of the 7 valid types.
+// isValidEpistemicCategory checks if the category is one of the valid types.
+// Matches the TS reference: analytic, formal, protocol, empirical, historical, computational, social, predictive, replicated.
 func isValidEpistemicCategory(cat string) bool {
 	switch cat {
-	case "protocol", "analytic", "formal", "empirical", "historical", "computational", "social":
+	case "protocol", "analytic", "formal", "empirical", "historical",
+		"computational", "social", "predictive", "replicated":
 		return true
 	}
 	return false

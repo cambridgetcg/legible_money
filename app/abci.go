@@ -6,23 +6,20 @@
 // TS → ABCI++ Mapping:
 //   tryProduceBlock()          →  PrepareProposal
 //   validateBlock()            →  ProcessProposal
-//   submitCommitment/Reveal    →  ExtendVote
-//   verifyCommitment           →  VerifyVoteExtension
+//   submitCommitment/Reveal    →  ExtendVote (vote_extensions.go)
+//   verifyCommitment           →  VerifyVoteExtension (vote_extensions.go)
 //   applyBlock()               →  FinalizeBlock
 //
-// Vote Extension Format:
-//   Serialized VoteExtension protobuf containing:
-//   - VerificationCommitment entries (commit phase)
-//   - VerificationReveal entries (reveal phase)
-//   - VRF proof for proposer eligibility
-//
-// Multi-block round lifecycle:
-//   Block N:   Claim submitted → round created
-//   Block N+1: PrepareProposal collects vote extensions with commitments
-//   Block N+K: PrepareProposal collects reveals, aggregates completed rounds
+// Vote Extension Data Flow:
+//   1. ExtendVote: Validators attach commitments/reveals to CometBFT votes
+//   2. PrepareProposal: Proposer collects extensions, creates injection tx
+//   3. ProcessProposal: Validators verify injection tx format
+//   4. PreBlocker: All validators process injection tx, store in keeper state
+//   5. BeginBlocker: Phase transitions and aggregation via knowledge module
 package app
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -33,10 +30,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	emergencytypes "github.com/legible-money/legible/x/emergency/types"
+	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 )
 
 // VoteExtension is the PoT-specific data validators attach to their votes.
-// This is serialized as JSON for Phase 1; Phase 2 will use protobuf.
+// This is serialized as JSON for Phase 2; Phase 3 will use protobuf.
 type VoteExtension struct {
 	// Commitments from validators in the commit phase.
 	Commitments []VoteCommitment `json:"commitments,omitempty"`
@@ -63,11 +61,68 @@ type VoteCommitment struct {
 
 // VoteReveal represents a validator's revealed verification verdict.
 type VoteReveal struct {
-	RoundID      string `json:"round_id"`
-	Verdict      string `json:"verdict"`    // "accept", "reject", "abstain"
-	Confidence   uint64 `json:"confidence"` // 0-1000000
-	Salt         string `json:"salt"`
+	RoundID       string `json:"round_id"`
+	Verdict       string `json:"verdict"`    // "accept", "reject", "abstain"
+	Confidence    uint64 `json:"confidence"` // 0-1000000
+	Salt          string `json:"salt"`
 	Justification string `json:"justification,omitempty"`
+}
+
+// ---- Vote Extension Injection ----
+
+// VoteExtInjectionPrefix is the 4-byte magic header for injected vote extension txs.
+// These are pseudo-txs included at position 0 of a block by the proposer.
+var VoteExtInjectionPrefix = []byte{0x00, 'V', 'E', 'X'}
+
+// VoteExtInjection contains all commitments and reveals from the previous block's
+// vote extensions. The proposer encodes this in PrepareProposal; all validators
+// process it in PreBlocker to store data in the knowledge keeper.
+type VoteExtInjection struct {
+	Commitments []InjectedCommitment `json:"commitments"`
+	Reveals     []InjectedReveal     `json:"reveals"`
+}
+
+// InjectedCommitment is a commitment extracted from a vote extension.
+type InjectedCommitment struct {
+	RoundID        string `json:"round_id"`
+	Validator      string `json:"validator"`
+	CommitmentHash string `json:"commitment_hash"`
+	VRFOutput      string `json:"vrf_output,omitempty"`
+	VRFProof       string `json:"vrf_proof,omitempty"`
+}
+
+// InjectedReveal is a reveal extracted from a vote extension.
+type InjectedReveal struct {
+	RoundID    string `json:"round_id"`
+	Validator  string `json:"validator"`
+	Verdict    string `json:"verdict"`
+	Confidence uint64 `json:"confidence"`
+	Salt       string `json:"salt"`
+}
+
+// isVoteExtInjectionTx checks if a tx has the vote extension injection prefix.
+func isVoteExtInjectionTx(tx []byte) bool {
+	return len(tx) > len(VoteExtInjectionPrefix) &&
+		bytes.Equal(tx[:len(VoteExtInjectionPrefix)], VoteExtInjectionPrefix)
+}
+
+// encodeVoteExtInjection serializes a VoteExtInjection with the magic prefix.
+func encodeVoteExtInjection(inj VoteExtInjection) ([]byte, error) {
+	data, err := json.Marshal(inj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal vote extension injection: %w", err)
+	}
+	return append(VoteExtInjectionPrefix, data...), nil
+}
+
+// decodeVoteExtInjection deserializes a VoteExtInjection from prefixed bytes.
+func decodeVoteExtInjection(tx []byte) (VoteExtInjection, error) {
+	var inj VoteExtInjection
+	if !isVoteExtInjectionTx(tx) {
+		return inj, fmt.Errorf("not a vote extension injection tx")
+	}
+	err := json.Unmarshal(tx[len(VoteExtInjectionPrefix):], &inj)
+	return inj, err
 }
 
 // PrepareProposalHandler selects transactions for the next block.
@@ -75,8 +130,7 @@ type VoteReveal struct {
 // In PoT, this is equivalent to tryProduceBlock():
 // 1. Select pending transactions from CometBFT mempool
 // 2. Collect vote extensions from the previous block
-// 3. Process completed verification rounds
-// 4. Include round completion/fact creation txs in the block
+// 3. Inject vote extension data (commitments/reveals) as a pseudo-tx at position 0
 func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
 		logger := ctx.Logger().With("module", "abci", "handler", "PrepareProposal")
@@ -105,24 +159,24 @@ func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
 		}
 
 		// Start with transactions from mempool
-		txs := make([][]byte, 0, len(req.Txs))
+		txs := make([][]byte, 0, len(req.Txs)+1)
 
 		// Process vote extensions from previous block (if available)
 		if len(req.LocalLastCommit.Votes) > 0 {
-			completedRounds := app.processVoteExtensions(ctx, req.LocalLastCommit.Votes, logger)
+			injection := app.processVoteExtensions(ctx, req.LocalLastCommit.Votes)
 
-			// Generate system transactions for completed rounds
-			for _, round := range completedRounds {
-				sysTx, err := app.createRoundCompletionTx(ctx, round)
+			// Inject vote extension data as a pseudo-tx at position 0
+			if len(injection.Commitments) > 0 || len(injection.Reveals) > 0 {
+				injBytes, err := encodeVoteExtInjection(injection)
 				if err != nil {
-					logger.Error("failed to create round completion tx",
-						"round_id", round.RoundID,
-						"err", err,
+					logger.Error("failed to encode vote extension injection", "err", err)
+				} else {
+					txs = append(txs, injBytes)
+
+					logger.Info("injecting vote extension data",
+						"commitments", len(injection.Commitments),
+						"reveals", len(injection.Reveals),
 					)
-					continue
-				}
-				if sysTx != nil {
-					txs = append(txs, sysTx)
 				}
 			}
 		}
@@ -152,8 +206,8 @@ func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
 // ProcessProposalHandler validates a proposed block.
 //
 // In PoT, this is equivalent to validateBlock():
-// 1. Re-execute all transactions
-// 2. Verify round completion transactions are valid
+// 1. Recognize and validate vote extension injection tx (position 0)
+// 2. Validate all regular transactions
 // 3. Verify VRF proofs for proposer eligibility
 func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
@@ -162,6 +216,10 @@ func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
 		// Emergency halt guard: reject proposals containing non-emergency txs
 		if app.EmergencyKeeper.IsHalted(ctx) {
 			for _, txBytes := range req.Txs {
+				// Skip vote extension injection tx during halt check
+				if isVoteExtInjectionTx(txBytes) {
+					continue
+				}
 				tx, err := app.txConfig.TxDecoder()(txBytes)
 				if err != nil {
 					continue
@@ -181,6 +239,18 @@ func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
 
 		// Validate each transaction in the proposal
 		for i, txBytes := range req.Txs {
+			// Skip vote extension injection tx (validated separately)
+			if isVoteExtInjectionTx(txBytes) {
+				// Validate the injection format
+				if _, err := decodeVoteExtInjection(txBytes); err != nil {
+					logger.Warn("invalid vote extension injection tx", "index", i, "err", err)
+					return &abci.ResponseProcessProposal{
+						Status: abci.ResponseProcessProposal_REJECT,
+					}, nil
+				}
+				continue
+			}
+
 			tx, err := app.txConfig.TxDecoder()(txBytes)
 			if err != nil {
 				logger.Warn("invalid tx in proposal", "index", i, "err", err)
@@ -208,11 +278,6 @@ func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
 			}
 		}
 
-		// Note: In CometBFT v0.38, ProcessProposal receives CommitInfo (not ExtendedCommitInfo).
-		// Vote extensions are available in PrepareProposal via LocalLastCommit (ExtendedCommitInfo).
-		// The proposer should have already incorporated valid extensions into the block.
-		// VerifyVoteExtension handles individual extension validation before they reach here.
-
 		logger.Debug("accepted proposal",
 			"height", req.Height,
 			"txs", len(req.Txs),
@@ -224,165 +289,16 @@ func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
 	}
 }
 
-// ExtendVoteHandler allows validators to attach PoT verdicts as vote extensions.
-//
-// In PoT, this is equivalent to submitCommitment() and submitReveal():
-// - During commit phase: attach commitment hashes for active rounds
-// - During reveal phase: attach reveals for rounds where validator committed
-func (app *LegibleApp) ExtendVoteHandler() sdk.ExtendVoteHandler {
-	return func(ctx sdk.Context, req *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
-		logger := ctx.Logger().With("module", "abci", "handler", "ExtendVote")
-
-		ext := VoteExtension{
-			ValidatorAddress: "", // Set by the validator's local config
-		}
-
-		// TODO (Phase 2): Query active verification rounds from knowledge keeper
-		// For each round this validator is selected for:
-		//   - If in commit phase: generate commitment hash, add to ext.Commitments
-		//   - If in reveal phase: reveal verdict, add to ext.Reveals
-		//
-		// Pseudocode:
-		//   activeRounds := app.KnowledgeKeeper.GetActiveRoundsForValidator(ctx, validatorAddr)
-		//   for _, round := range activeRounds {
-		//     if round.Phase == "commit" {
-		//       commitment := generateCommitment(round, verdict, confidence, salt)
-		//       ext.Commitments = append(ext.Commitments, commitment)
-		//     } else if round.Phase == "reveal" {
-		//       reveal := generateReveal(round, verdict, confidence, salt)
-		//       ext.Reveals = append(ext.Reveals, reveal)
-		//     }
-		//   }
-
-		// Serialize vote extension
-		bz, err := json.Marshal(ext)
-		if err != nil {
-			logger.Error("failed to marshal vote extension", "err", err)
-			return &abci.ResponseExtendVote{}, nil
-		}
-
-		logger.Debug("extended vote",
-			"height", req.Height,
-			"commitments", len(ext.Commitments),
-			"reveals", len(ext.Reveals),
-		)
-
-		return &abci.ResponseExtendVote{
-			VoteExtension: bz,
-		}, nil
-	}
-}
-
-// VerifyVoteExtensionHandler validates PoT vote extensions from other validators.
-//
-// In PoT, this is equivalent to verifyCommitment():
-// - Verify commitment hashes are well-formed
-// - Verify VRF proofs show the validator was selected
-// - Verify reveals match prior commitments
-func (app *LegibleApp) VerifyVoteExtensionHandler() sdk.VerifyVoteExtensionHandler {
-	return func(ctx sdk.Context, req *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
-		logger := ctx.Logger().With("module", "abci", "handler", "VerifyVoteExtension")
-
-		// Empty extensions are always valid (validator may not be selected for any round)
-		if len(req.VoteExtension) == 0 {
-			return &abci.ResponseVerifyVoteExtension{
-				Status: abci.ResponseVerifyVoteExtension_ACCEPT,
-			}, nil
-		}
-
-		// Deserialize vote extension
-		var ext VoteExtension
-		if err := json.Unmarshal(req.VoteExtension, &ext); err != nil {
-			logger.Warn("invalid vote extension format", "err", err)
-			return &abci.ResponseVerifyVoteExtension{
-				Status: abci.ResponseVerifyVoteExtension_REJECT,
-			}, nil
-		}
-
-		// Validate commitments
-		for _, c := range ext.Commitments {
-			if c.RoundID == "" || c.CommitmentHash == "" {
-				logger.Warn("invalid commitment in vote extension",
-					"round_id", c.RoundID,
-				)
-				return &abci.ResponseVerifyVoteExtension{
-					Status: abci.ResponseVerifyVoteExtension_REJECT,
-				}, nil
-			}
-
-			// Commitment hash must be 64 hex chars (SHA-256)
-			if len(c.CommitmentHash) != 64 {
-				return &abci.ResponseVerifyVoteExtension{
-					Status: abci.ResponseVerifyVoteExtension_REJECT,
-				}, nil
-			}
-		}
-
-		// Validate reveals
-		for _, r := range ext.Reveals {
-			if r.RoundID == "" || r.Salt == "" {
-				return &abci.ResponseVerifyVoteExtension{
-					Status: abci.ResponseVerifyVoteExtension_REJECT,
-				}, nil
-			}
-
-			// Verdict must be valid
-			switch r.Verdict {
-			case "accept", "reject", "abstain":
-				// OK
-			default:
-				return &abci.ResponseVerifyVoteExtension{
-					Status: abci.ResponseVerifyVoteExtension_REJECT,
-				}, nil
-			}
-
-			// Confidence must be in range [0, 1000000]
-			if r.Confidence > 1_000_000 {
-				return &abci.ResponseVerifyVoteExtension{
-					Status: abci.ResponseVerifyVoteExtension_REJECT,
-				}, nil
-			}
-
-			// TODO (Phase 2): Verify reveal matches prior commitment
-			// commitmentHash := sha256(verdict || confidence || salt)
-			// stored := app.KnowledgeKeeper.GetCommitment(ctx, r.RoundID, validatorAddr)
-			// if stored.CommitmentHash != computedHash { REJECT }
-		}
-
-		logger.Debug("verified vote extension",
-			"height", req.Height,
-			"validator", fmt.Sprintf("%x", req.ValidatorAddress),
-			"commitments", len(ext.Commitments),
-			"reveals", len(ext.Reveals),
-		)
-
-		return &abci.ResponseVerifyVoteExtension{
-			Status: abci.ResponseVerifyVoteExtension_ACCEPT,
-		}, nil
-	}
-}
-
 // ---------- Internal Methods ----------
 
-// completedRound represents a verification round that has gathered sufficient reveals.
-type completedRound struct {
-	RoundID        string
-	ClaimID        string
-	Verdict        string // "accepted", "rejected", "inconclusive"
-	Confidence     uint64
-	Reveals        []VoteReveal
-	ValidatorCount int
-}
-
-// processVoteExtensions aggregates vote extensions from the previous block
-// and determines which verification rounds have completed.
+// processVoteExtensions collects commitments and reveals from vote extensions.
+// Returns a VoteExtInjection containing all vote extension data to inject
+// into the block for deterministic processing by all validators.
 func (app *LegibleApp) processVoteExtensions(
 	ctx sdk.Context,
 	votes []abci.ExtendedVoteInfo,
-	logger interface{ Debug(string, ...interface{}) },
-) []completedRound {
-	// Aggregate reveals by round ID
-	roundReveals := make(map[string][]VoteReveal)
+) VoteExtInjection {
+	var inj VoteExtInjection
 
 	for _, vote := range votes {
 		if len(vote.VoteExtension) == 0 {
@@ -394,98 +310,124 @@ func (app *LegibleApp) processVoteExtensions(
 			continue
 		}
 
-		for _, reveal := range ext.Reveals {
-			roundReveals[reveal.RoundID] = append(roundReveals[reveal.RoundID], reveal)
-		}
-	}
-
-	// Check which rounds have sufficient reveals to complete
-	var completed []completedRound
-	for roundID, reveals := range roundReveals {
-		// TODO (Phase 2): Get round from knowledge keeper to check MinVerifiers
-		// round := app.KnowledgeKeeper.GetVerificationRound(ctx, roundID)
-		// minVerifiers := app.KnowledgeKeeper.GetParams(ctx).MinVerifiers
-
-		minVerifiers := 3 // Default minimum
-		if len(reveals) < minVerifiers {
+		// Skip extensions with no validator address
+		if ext.ValidatorAddress == "" {
 			continue
 		}
 
-		// Aggregate verdicts using stake-weighted confidence
-		verdict, confidence := aggregateVerdicts(reveals)
+		// Collect commitments
+		for _, c := range ext.Commitments {
+			if c.RoundID == "" || c.CommitmentHash == "" {
+				continue
+			}
+			inj.Commitments = append(inj.Commitments, InjectedCommitment{
+				RoundID:        c.RoundID,
+				Validator:      ext.ValidatorAddress,
+				CommitmentHash: c.CommitmentHash,
+				VRFOutput:      c.VRFOutput,
+				VRFProof:       c.VRFProof,
+			})
+		}
 
-		completed = append(completed, completedRound{
-			RoundID:        roundID,
-			Verdict:        verdict,
-			Confidence:     confidence,
-			Reveals:        reveals,
-			ValidatorCount: len(reveals),
-		})
+		// Collect reveals
+		for _, r := range ext.Reveals {
+			if r.RoundID == "" || r.Salt == "" {
+				continue
+			}
+			inj.Reveals = append(inj.Reveals, InjectedReveal{
+				RoundID:    r.RoundID,
+				Validator:  ext.ValidatorAddress,
+				Verdict:    r.Verdict,
+				Confidence: r.Confidence,
+				Salt:       r.Salt,
+			})
+		}
 	}
 
-	// Sort completed rounds by round ID for deterministic ordering
-	sort.Slice(completed, func(i, j int) bool {
-		return completed[i].RoundID < completed[j].RoundID
+	// Sort for deterministic ordering (all validators must process the same data)
+	sort.Slice(inj.Commitments, func(i, j int) bool {
+		if inj.Commitments[i].RoundID != inj.Commitments[j].RoundID {
+			return inj.Commitments[i].RoundID < inj.Commitments[j].RoundID
+		}
+		return inj.Commitments[i].Validator < inj.Commitments[j].Validator
+	})
+	sort.Slice(inj.Reveals, func(i, j int) bool {
+		if inj.Reveals[i].RoundID != inj.Reveals[j].RoundID {
+			return inj.Reveals[i].RoundID < inj.Reveals[j].RoundID
+		}
+		return inj.Reveals[i].Validator < inj.Reveals[j].Validator
 	})
 
-	return completed
+	return inj
 }
 
-// aggregateVerdicts computes the final verdict from multiple reveals.
-// Uses simple majority with confidence weighting.
-// Phase 2 will use stake-weighted confidence aggregation.
-func aggregateVerdicts(reveals []VoteReveal) (string, uint64) {
-	var acceptVotes, rejectVotes, abstainVotes uint64
-	var totalConfidence uint64
+// ProcessVoteExtInjection processes a vote extension injection tx by storing
+// commitments and reveals in the knowledge keeper state.
+// Called from PreBlocker before BeginBlock phase transitions.
+func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
+	logger := ctx.Logger().With("module", "abci", "handler", "PreBlocker")
 
-	for _, r := range reveals {
-		switch r.Verdict {
-		case "accept":
-			acceptVotes += r.Confidence
-		case "reject":
-			rejectVotes += r.Confidence
-		case "abstain":
-			abstainVotes += r.Confidence
+	inj, err := decodeVoteExtInjection(data)
+	if err != nil {
+		logger.Error("failed to decode vote extension injection", "err", err)
+		return
+	}
+
+	height := uint64(ctx.BlockHeight())
+	storedCommitments := 0
+	storedReveals := 0
+
+	// Store commitments in keeper state
+	for _, c := range inj.Commitments {
+		commitment := knowledgetypes.VerificationCommitment{
+			Validator:         c.Validator,
+			CommitmentHash:    c.CommitmentHash,
+			SubmittedAtHeight: height,
 		}
-		totalConfidence += r.Confidence
+
+		if err := app.KnowledgeKeeper.StoreCommitmentInRound(ctx, c.RoundID, commitment); err != nil {
+			// Log but don't fail — round may have expired or validator already committed
+			logger.Debug("skipped commitment from vote extension",
+				"round_id", c.RoundID,
+				"validator", c.Validator,
+				"reason", err.Error(),
+			)
+			continue
+		}
+		storedCommitments++
 	}
 
-	if totalConfidence == 0 {
-		return "inconclusive", 0
+	// Store reveals in keeper state
+	for _, r := range inj.Reveals {
+		reveal := knowledgetypes.VerificationReveal{
+			Validator:         r.Validator,
+			Verdict:           r.Verdict,
+			Confidence:        r.Confidence,
+			Salt:              r.Salt,
+			SubmittedAtHeight: height,
+		}
+
+		if err := app.KnowledgeKeeper.StoreRevealInRound(ctx, r.RoundID, reveal); err != nil {
+			// Log but don't fail — round may have transitioned or validator already revealed
+			logger.Debug("skipped reveal from vote extension",
+				"round_id", r.RoundID,
+				"validator", r.Validator,
+				"reason", err.Error(),
+			)
+			continue
+		}
+		storedReveals++
 	}
 
-	// Determine verdict by highest weighted votes
-	if acceptVotes > rejectVotes && acceptVotes > abstainVotes {
-		// Confidence = accept weight / total weight, scaled to 0-1000000
-		confidence := (acceptVotes * 1_000_000) / totalConfidence
-		return "accepted", confidence
+	if storedCommitments > 0 || storedReveals > 0 {
+		logger.Info("processed vote extension injection",
+			"height", height,
+			"commitments_stored", storedCommitments,
+			"commitments_total", len(inj.Commitments),
+			"reveals_stored", storedReveals,
+			"reveals_total", len(inj.Reveals),
+		)
 	}
-	if rejectVotes > acceptVotes && rejectVotes > abstainVotes {
-		confidence := (rejectVotes * 1_000_000) / totalConfidence
-		return "rejected", confidence
-	}
-
-	return "inconclusive", 0
-}
-
-// createRoundCompletionTx generates a system transaction to finalize a
-// completed verification round. This is an authority-gated AddFact or
-// status update.
-func (app *LegibleApp) createRoundCompletionTx(ctx sdk.Context, round completedRound) ([]byte, error) {
-	// TODO (Phase 2): Create actual Cosmos SDK transaction
-	// The system tx would be either:
-	//   - MsgAddFact (if verdict == "accepted")
-	//   - Internal state update (if verdict == "rejected" or "inconclusive")
-	//
-	// For now, log the completion
-	ctx.Logger().Info("verification round completed",
-		"round_id", round.RoundID,
-		"verdict", round.Verdict,
-		"confidence", round.Confidence,
-		"validators", round.ValidatorCount,
-	)
-
-	return nil, nil
 }
 
 // isValidVoteExtension performs basic structural validation of a vote extension.

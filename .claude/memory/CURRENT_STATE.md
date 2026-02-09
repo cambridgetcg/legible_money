@@ -1,7 +1,7 @@
 # Current Project State
 
-> **Last Updated**: 2026-02-08
-> **Session**: Cosmos SDK Migration — Phase 2 Complete + Emergency Module
+> **Last Updated**: 2026-02-09
+> **Session**: DevNet launch testing — chain running, all queries working
 
 ---
 
@@ -18,7 +18,8 @@ Built a compilable Cosmos SDK chain binary (`legbled`) with 83 Go files (~9,913 
 | App layer (app.go, ante.go, abci.go, gas.go) | 4 | ✅ Complete |
 | CLI (main.go, root.go, config.go, genesis.go) | 4 | ✅ Complete |
 | x/knowledge (keeper, msg_server, state, types, module) | 12 | ✅ Full implementation |
-| x/auth (dual-key, DID mapping, key rotation) | 7 | ✅ Full implementation |
+| x/auth (dual-key, DID mapping, key rotation, gRPC) | 11 | ✅ Full implementation + Phases 1-4 complete |
+| app/ante_legible.go (3 custom ante decorators) | 1 | ✅ Account/Capability/DID decorators |
 | x/staking (4-tier graduated validators) | 10 | ✅ Full implementation |
 | x/emergency (3-phase BFT kill switch) | 9 | ✅ Full implementation |
 | 9 stub modules (Phase 3+) | ~45 | ✅ Scaffolded |
@@ -230,6 +231,43 @@ See: `docs/FOUNDATIONAL_ARCHITECTURE.md`
 ---
 
 ## Recent Completions
+
+### 2026-02-08: x/tokens Wiring + x/auth Phase 1 Activation
+
+**x/tokens dual-ledger period overlay** — Complete
+- `app/app.go`: TokensKeeper init, store key, module manager, begin/end/init ordering
+- `x/staking/types/expected_keepers.go`: TokensKeeper interface (DebitBalance, CreditBalance, CreditBalanceToSpecificPeriod, GetCurrentPeriod)
+- `x/staking/types/types.go`: UnbondingEntry.OriginPeriod field for period preservation
+- `x/staking/keeper/keeper.go`: tokensKeeper field, NewKeeper updated, BeginBlocker credits with OriginPeriod
+- `x/staking/keeper/msg_server.go`: DebitBalance after stake transfers, OriginPeriod on unbonding entries
+- `x/knowledge/types/expected_keepers.go`: TokensKeeper interface (DebitBalance, CreditBalance)
+- `x/knowledge/keeper/keeper.go`: tokensKeeper field, NewKeeper updated with `tk` param
+- `x/knowledge/keeper/msg_server.go`: DebitBalance at 3 sites (SubmitClaim, ChallengeFact, ProposeDomain)
+- `x/knowledge/keeper/keeper_test.go`: mockTokensKeeper added
+- Key: nil-safe `if k.tokensKeeper != nil` guards — tokens overlay is optional
+
+**x/auth Phase 1: Dead code activation** — Complete
+- Activated the entire x/auth gRPC pipeline (was no-op stub)
+- `x/auth/types/types.go`: MsgRegisterAccount type, MsgServer interface → context.Context, sdk.Msg implementations
+- `x/auth/types/codec.go` (NEW): RegisterCodec, RegisterInterfaces, RegisterMsgServer with real _Msg_serviceDesc (4 handlers)
+- `x/auth/types/query.go` (NEW): QueryServer interface, RegisterQueryServer with _Query_serviceDesc (4 queries)
+- `x/auth/types/errors.go`: ErrAccountAlreadyExists
+- `x/auth/keeper/msg_server.go` (REWRITTEN): context.Context signatures, RegisterAccount handler
+- `x/auth/keeper/grpc_query.go` (NEW): 4 query implementations (Account, AccountByDID, SessionKeys, Params)
+- `x/auth/keeper/keeper.go` (REWRITTEN): json.Marshal/Unmarshal replacing cdc.MustMarshal (protobuf incompatible)
+- `x/auth/module.go` (REWRITTEN): Real RegisterServices delegation
+- `x/auth/keeper/keeper_test.go` (NEW): 22 tests (all passing)
+- `app/ante.go`: Gas mapping for MsgRegisterAccount
+- `app/gas.go`: register_account: 50,000 gas
+
+**Build & Test status**: `go build ./...` ✅ | `go vet ./...` ✅ | 68 Go tests passing (22 auth + 16 knowledge + 30 emergency)
+
+**Auth bridge phases remaining** (not yet started):
+- Phase 2: Custom ante decorators (replace SetPubKeyDecorator + SigVerificationDecorator with Ed25519-aware versions)
+- Phase 3: Session key capability enforcement (LegibleCapabilityDecorator)
+- Phase 4: DID-native addressing (tx signing with DID resolution)
+
+---
 
 ### 2026-02-05: DevNet Launch Blockers B1, B2 & B3 (Session 3)
 **B1: Persistence Layer** ✅ FIXED

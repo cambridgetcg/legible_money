@@ -5,7 +5,8 @@ const (
 	ModuleName = "evidence_mgmt"
 
 	// StoreKey defines the primary module store key.
-	StoreKey = ModuleName
+	// Renamed from ModuleName to avoid prefix collision with the standard SDK "evidence" module.
+	StoreKey = "evid_mgmt"
 
 	// RouterKey defines the routing key.
 	RouterKey = ModuleName

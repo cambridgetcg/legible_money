@@ -88,6 +88,14 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 			return nil, fmt.Errorf("failed to transfer initial stake: %w", err)
 		}
 
+		// Debit from period overlay (FIFO from oldest periods)
+		if k.tokensKeeper != nil {
+			if err := k.tokensKeeper.DebitBalance(ctx, msg.Sender, initialStake.String()); err != nil {
+				k.Logger(ctx).Error("failed to debit period balance for initial stake",
+					"validator", msg.Sender, "error", err)
+			}
+		}
+
 		// Create self-delegation
 		delegation := types.Delegation{
 			DelegatorAddress:  msg.Sender,
@@ -119,6 +127,324 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 		ValidatorAddress: msg.Sender,
 		InitialTier:      initialTier,
 	}, nil
+}
+
+// Delegate handles external delegation to a validator.
+func (k Keeper) Delegate(ctx sdk.Context, msg *types.MsgDelegate) (*types.MsgDelegateResponse, error) {
+	delegatorAddr, err := sdk.AccAddressFromBech32(msg.Delegator)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get validator
+	validator, found := k.GetValidator(ctx, msg.Validator)
+	if !found {
+		return nil, types.ErrValidatorNotFound
+	}
+	if !validator.IsActive {
+		return nil, types.ErrValidatorInactive
+	}
+
+	// Parse amount
+	amountInt := new(big.Int)
+	if _, ok := amountInt.SetString(msg.Amount, 10); !ok {
+		return nil, fmt.Errorf("invalid amount: %s", msg.Amount)
+	}
+
+	// Transfer tokens from delegator to staking module
+	coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(amountInt)))
+	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, delegatorAddr, types.ModuleName, coins); err != nil {
+		return nil, fmt.Errorf("failed to transfer delegation: %w", err)
+	}
+
+	// Debit from period overlay
+	if k.tokensKeeper != nil {
+		if err := k.tokensKeeper.DebitBalance(ctx, msg.Delegator, amountInt.String()); err != nil {
+			k.Logger(ctx).Error("failed to debit period balance for delegation",
+				"delegator", msg.Delegator, "error", err)
+		}
+	}
+
+	// Update or create delegation
+	delegation, found := k.GetDelegation(ctx, msg.Delegator, msg.Validator)
+	if !found {
+		delegation = types.Delegation{
+			DelegatorAddress:  msg.Delegator,
+			ValidatorAddress:  msg.Validator,
+			Amount:            amountInt.String(),
+			DelegatedAtHeight: uint64(ctx.BlockHeight()),
+		}
+	} else {
+		delInt := new(big.Int)
+		delInt.SetString(delegation.Amount, 10)
+		delInt.Add(delInt, amountInt)
+		delegation.Amount = delInt.String()
+	}
+	if err := k.SetDelegation(ctx, delegation); err != nil {
+		return nil, err
+	}
+
+	// Update validator DelegatedStake and TotalStake
+	delegatedInt := new(big.Int)
+	delegatedInt.SetString(validator.DelegatedStake, 10)
+	delegatedInt.Add(delegatedInt, amountInt)
+	validator.DelegatedStake = delegatedInt.String()
+
+	stakeInt := new(big.Int)
+	stakeInt.SetString(validator.Stake, 10)
+	totalStake := new(big.Int).Add(stakeInt, delegatedInt)
+	validator.TotalStake = totalStake.String()
+
+	// Check for tier transition
+	if newTier, changed := k.CheckTierTransition(ctx, validator); changed {
+		oldTier := validator.Tier
+		validator.Tier = newTier
+		ctx.EventManager().EmitEvent(
+			sdk.NewEvent("validator_tier_changed",
+				sdk.NewAttribute("validator", msg.Validator),
+				sdk.NewAttribute("old_tier", oldTier.String()),
+				sdk.NewAttribute("new_tier", newTier.String()),
+			),
+		)
+	}
+
+	if err := k.SetValidator(ctx, validator); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("delegation_created",
+			sdk.NewAttribute("delegator", msg.Delegator),
+			sdk.NewAttribute("validator", msg.Validator),
+			sdk.NewAttribute("amount", msg.Amount),
+		),
+	)
+
+	return &types.MsgDelegateResponse{NewDelegation: delegation.Amount}, nil
+}
+
+// Undelegate handles undelegation from a validator (initiates unbonding).
+func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.MsgUndelegateResponse, error) {
+	// Get delegation
+	delegation, found := k.GetDelegation(ctx, msg.Delegator, msg.Validator)
+	if !found {
+		return nil, types.ErrDelegationNotFound
+	}
+
+	// Parse amounts
+	amountInt := new(big.Int)
+	if _, ok := amountInt.SetString(msg.Amount, 10); !ok {
+		return nil, fmt.Errorf("invalid amount: %s", msg.Amount)
+	}
+
+	delInt := new(big.Int)
+	delInt.SetString(delegation.Amount, 10)
+	if delInt.Cmp(amountInt) < 0 {
+		return nil, types.ErrInsufficientStake
+	}
+
+	// Get validator
+	validator, found := k.GetValidator(ctx, msg.Validator)
+	if !found {
+		return nil, types.ErrValidatorNotFound
+	}
+
+	// Reduce delegation
+	newDelAmount := new(big.Int).Sub(delInt, amountInt)
+	if newDelAmount.Sign() == 0 {
+		// Delete delegation entirely
+		if err := k.DeleteDelegation(ctx, msg.Delegator, msg.Validator); err != nil {
+			return nil, err
+		}
+	} else {
+		delegation.Amount = newDelAmount.String()
+		if err := k.SetDelegation(ctx, delegation); err != nil {
+			return nil, err
+		}
+	}
+
+	// Create unbonding entry
+	params := k.GetParams(ctx)
+	currentHeight := uint64(ctx.BlockHeight())
+	unbondingId := fmt.Sprintf("%s_%s_%d", msg.Delegator, msg.Validator, currentHeight)
+
+	var originPeriod uint64
+	if k.tokensKeeper != nil {
+		originPeriod = k.tokensKeeper.GetCurrentPeriod(ctx)
+	}
+
+	unbonding := types.UnbondingEntry{
+		Id:                unbondingId,
+		DelegatorAddress:  msg.Delegator,
+		ValidatorAddress:  msg.Validator,
+		Amount:            msg.Amount,
+		InitiatedAtHeight: currentHeight,
+		CompletesAtHeight: currentHeight + params.UnbondingPeriod,
+		Status:            "pending",
+		OriginPeriod:      originPeriod,
+	}
+	if err := k.SetUnbonding(ctx, unbonding); err != nil {
+		return nil, err
+	}
+
+	// Update validator DelegatedStake and TotalStake
+	delegatedInt := new(big.Int)
+	delegatedInt.SetString(validator.DelegatedStake, 10)
+	delegatedInt.Sub(delegatedInt, amountInt)
+	if delegatedInt.Sign() < 0 {
+		delegatedInt.SetInt64(0)
+	}
+	validator.DelegatedStake = delegatedInt.String()
+
+	stakeInt := new(big.Int)
+	stakeInt.SetString(validator.Stake, 10)
+	totalStake := new(big.Int).Add(stakeInt, delegatedInt)
+	validator.TotalStake = totalStake.String()
+
+	// Check for tier transition
+	if newTier, changed := k.CheckTierTransition(ctx, validator); changed {
+		oldTier := validator.Tier
+		validator.Tier = newTier
+		ctx.EventManager().EmitEvent(
+			sdk.NewEvent("validator_tier_changed",
+				sdk.NewAttribute("validator", msg.Validator),
+				sdk.NewAttribute("old_tier", oldTier.String()),
+				sdk.NewAttribute("new_tier", newTier.String()),
+			),
+		)
+	}
+
+	if err := k.SetValidator(ctx, validator); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("delegation_unbonding",
+			sdk.NewAttribute("delegator", msg.Delegator),
+			sdk.NewAttribute("validator", msg.Validator),
+			sdk.NewAttribute("amount", msg.Amount),
+			sdk.NewAttribute("completes_at", fmt.Sprintf("%d", unbonding.CompletesAtHeight)),
+		),
+	)
+
+	return &types.MsgUndelegateResponse{
+		UnbondingId:       unbondingId,
+		CompletesAtHeight: unbonding.CompletesAtHeight,
+	}, nil
+}
+
+// Redelegate moves delegation from one validator to another.
+func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
+	// Check source delegation exists
+	srcDelegation, found := k.GetDelegation(ctx, msg.Delegator, msg.SrcValidator)
+	if !found {
+		return nil, types.ErrDelegationNotFound
+	}
+
+	// Parse amounts
+	amountInt := new(big.Int)
+	if _, ok := amountInt.SetString(msg.Amount, 10); !ok {
+		return nil, fmt.Errorf("invalid amount: %s", msg.Amount)
+	}
+
+	srcDelInt := new(big.Int)
+	srcDelInt.SetString(srcDelegation.Amount, 10)
+	if srcDelInt.Cmp(amountInt) < 0 {
+		return nil, types.ErrInsufficientStake
+	}
+
+	// Check destination validator exists and is active
+	dstValidator, found := k.GetValidator(ctx, msg.DstValidator)
+	if !found {
+		return nil, types.ErrValidatorNotFound
+	}
+	if !dstValidator.IsActive {
+		return nil, types.ErrValidatorInactive
+	}
+
+	// Get source validator
+	srcValidator, found := k.GetValidator(ctx, msg.SrcValidator)
+	if !found {
+		return nil, types.ErrValidatorNotFound
+	}
+
+	// Reduce source delegation
+	newSrcAmount := new(big.Int).Sub(srcDelInt, amountInt)
+	if newSrcAmount.Sign() == 0 {
+		if err := k.DeleteDelegation(ctx, msg.Delegator, msg.SrcValidator); err != nil {
+			return nil, err
+		}
+	} else {
+		srcDelegation.Amount = newSrcAmount.String()
+		if err := k.SetDelegation(ctx, srcDelegation); err != nil {
+			return nil, err
+		}
+	}
+
+	// Increase destination delegation
+	dstDelegation, found := k.GetDelegation(ctx, msg.Delegator, msg.DstValidator)
+	if !found {
+		dstDelegation = types.Delegation{
+			DelegatorAddress:  msg.Delegator,
+			ValidatorAddress:  msg.DstValidator,
+			Amount:            amountInt.String(),
+			DelegatedAtHeight: uint64(ctx.BlockHeight()),
+		}
+	} else {
+		dstDelInt := new(big.Int)
+		dstDelInt.SetString(dstDelegation.Amount, 10)
+		dstDelInt.Add(dstDelInt, amountInt)
+		dstDelegation.Amount = dstDelInt.String()
+	}
+	if err := k.SetDelegation(ctx, dstDelegation); err != nil {
+		return nil, err
+	}
+
+	// Update source validator DelegatedStake
+	srcDelegatedInt := new(big.Int)
+	srcDelegatedInt.SetString(srcValidator.DelegatedStake, 10)
+	srcDelegatedInt.Sub(srcDelegatedInt, amountInt)
+	if srcDelegatedInt.Sign() < 0 {
+		srcDelegatedInt.SetInt64(0)
+	}
+	srcValidator.DelegatedStake = srcDelegatedInt.String()
+	srcStakeInt := new(big.Int)
+	srcStakeInt.SetString(srcValidator.Stake, 10)
+	srcValidator.TotalStake = new(big.Int).Add(srcStakeInt, srcDelegatedInt).String()
+
+	if newTier, changed := k.CheckTierTransition(ctx, srcValidator); changed {
+		srcValidator.Tier = newTier
+	}
+	if err := k.SetValidator(ctx, srcValidator); err != nil {
+		return nil, err
+	}
+
+	// Update destination validator DelegatedStake
+	dstDelegatedInt := new(big.Int)
+	dstDelegatedInt.SetString(dstValidator.DelegatedStake, 10)
+	dstDelegatedInt.Add(dstDelegatedInt, amountInt)
+	dstValidator.DelegatedStake = dstDelegatedInt.String()
+	dstStakeInt := new(big.Int)
+	dstStakeInt.SetString(dstValidator.Stake, 10)
+	dstValidator.TotalStake = new(big.Int).Add(dstStakeInt, dstDelegatedInt).String()
+
+	if newTier, changed := k.CheckTierTransition(ctx, dstValidator); changed {
+		dstValidator.Tier = newTier
+	}
+	if err := k.SetValidator(ctx, dstValidator); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("delegation_redelegated",
+			sdk.NewAttribute("delegator", msg.Delegator),
+			sdk.NewAttribute("src_validator", msg.SrcValidator),
+			sdk.NewAttribute("dst_validator", msg.DstValidator),
+			sdk.NewAttribute("amount", msg.Amount),
+		),
+	)
+
+	return &types.MsgRedelegateResponse{}, nil
 }
 
 // UpdateValidatorStake handles stake increase/decrease
@@ -153,6 +479,14 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 			return nil, fmt.Errorf("failed to transfer stake: %w", err)
 		}
 
+		// Debit from period overlay (FIFO from oldest periods)
+		if k.tokensKeeper != nil {
+			if err := k.tokensKeeper.DebitBalance(ctx, msg.Validator, amountInt.String()); err != nil {
+				k.Logger(ctx).Error("failed to debit period balance for stake increase",
+					"validator", msg.Validator, "error", err)
+			}
+		}
+
 		newStake = new(big.Int).Add(stakeInt, amountInt)
 
 		// Update self-delegation
@@ -184,9 +518,15 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 
 		newStake = new(big.Int).Sub(stakeInt, amountInt)
 
-		// Create unbonding entry
+		// Create unbonding entry with period preservation
 		params := k.GetParams(ctx)
 		unbondingId := fmt.Sprintf("%s_%d", msg.Validator, ctx.BlockHeight())
+
+		var originPeriod uint64
+		if k.tokensKeeper != nil {
+			originPeriod = k.tokensKeeper.GetCurrentPeriod(ctx)
+		}
+
 		unbonding := types.UnbondingEntry{
 			Id:                unbondingId,
 			DelegatorAddress:  msg.Validator,
@@ -195,6 +535,7 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 			InitiatedAtHeight: uint64(ctx.BlockHeight()),
 			CompletesAtHeight: uint64(ctx.BlockHeight()) + params.UnbondingPeriod,
 			Status:            "pending",
+			OriginPeriod:      originPeriod,
 		}
 		if err := k.SetUnbonding(ctx, unbonding); err != nil {
 			return nil, err

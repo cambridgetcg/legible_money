@@ -241,3 +241,54 @@ func evidenceKey(disputeId, evidenceId string) []byte {
 func voteKey(disputeId, arbiter string) []byte {
 	return append(types.VoteKeyPrefix, []byte(disputeId+":"+arbiter)...)
 }
+
+func commitmentKey(disputeId, submitter string) []byte {
+	return append(types.EvidenceCommitmentPrefix, []byte(disputeId+":"+submitter)...)
+}
+
+// ---------- Evidence Commitment CRUD ----------
+
+// SetEvidenceCommitment stores an evidence commitment.
+func (k Keeper) SetEvidenceCommitment(ctx sdk.Context, commitment types.EvidenceCommitment) {
+	store := ctx.KVStore(k.storeKey)
+	bz, err := json.Marshal(commitment)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal evidence commitment: %v", err))
+	}
+	store.Set(commitmentKey(commitment.DisputeId, commitment.Submitter), bz)
+}
+
+// GetEvidenceCommitment retrieves an evidence commitment.
+func (k Keeper) GetEvidenceCommitment(ctx sdk.Context, disputeId, submitter string) (types.EvidenceCommitment, bool) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(commitmentKey(disputeId, submitter))
+	if bz == nil {
+		return types.EvidenceCommitment{}, false
+	}
+	var commitment types.EvidenceCommitment
+	if err := json.Unmarshal(bz, &commitment); err != nil {
+		return types.EvidenceCommitment{}, false
+	}
+	return commitment, true
+}
+
+// GetUnrevealedCommitments returns all unrevealed commitments for a dispute.
+func (k Keeper) GetUnrevealedCommitments(ctx sdk.Context, disputeId string) []types.EvidenceCommitment {
+	store := ctx.KVStore(k.storeKey)
+	prefix := append(types.EvidenceCommitmentPrefix, []byte(disputeId+":")...)
+
+	var commitments []types.EvidenceCommitment
+	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var commitment types.EvidenceCommitment
+		if err := json.Unmarshal(iter.Value(), &commitment); err != nil {
+			continue
+		}
+		if !commitment.Revealed {
+			commitments = append(commitments, commitment)
+		}
+	}
+	return commitments
+}

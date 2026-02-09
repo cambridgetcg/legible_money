@@ -35,28 +35,27 @@ func (AppModuleBasic) Name() string {
 
 // RegisterLegacyAminoCodec registers the auth module's types on the LegacyAmino codec
 func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	// Register messages with legacy amino
+	types.RegisterCodec(cdc)
 }
 
 // RegisterInterfaces registers the module's interface types
 func (AppModuleBasic) RegisterInterfaces(registry codectypes.InterfaceRegistry) {
-	// Register message types
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&types.MsgRotateKey{},
-		&types.MsgCreateSession{},
-		&types.MsgRevokeSession{},
-	)
+	types.RegisterInterfaces(registry)
 }
 
 // DefaultGenesis returns default genesis state
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	return cdc.MustMarshalJSON(types.DefaultGenesis())
+	bz, err := json.Marshal(types.DefaultGenesis())
+	if err != nil {
+		panic("failed to marshal default genesis: " + err.Error())
+	}
+	return bz
 }
 
 // ValidateGenesis performs genesis state validation
 func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
 	var data types.GenesisState
-	if err := cdc.UnmarshalJSON(bz, &data); err != nil {
+	if err := json.Unmarshal(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
 	}
 	return data.Validate()
@@ -64,18 +63,16 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Register gRPC gateway routes (would normally be auto-generated)
+	// Phase 2: Register query service gateway routes
 }
 
 // GetTxCmd returns the root tx command
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	// Return CLI transaction commands
 	return nil
 }
 
 // GetQueryCmd returns the root query command
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	// Return CLI query commands
 	return nil
 }
 
@@ -107,22 +104,21 @@ func (AppModule) Name() string {
 
 // RegisterServices registers module services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Register message server
-	RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-
-	// Register query server (when implemented)
-	// types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 }
 
 // RegisterInvariants registers the auth module invariants
 func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
-	// Register invariants (e.g., account count matches DID mapping count)
+	// Phase 2: Register invariants (e.g., account count matches DID mapping count)
 }
 
 // InitGenesis performs genesis initialization
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	var genesisState types.GenesisState
-	cdc.MustUnmarshalJSON(data, &genesisState)
+	if err := json.Unmarshal(data, &genesisState); err != nil {
+		panic("failed to unmarshal genesis: " + err.Error())
+	}
 
 	if err := am.keeper.InitGenesis(ctx, genesisState); err != nil {
 		panic(fmt.Sprintf("failed to initialize %s genesis state: %v", types.ModuleName, err))
@@ -132,16 +128,20 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 // ExportGenesis returns the exported genesis state
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := am.keeper.ExportGenesis(ctx)
-	return cdc.MustMarshalJSON(gs)
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic("failed to marshal genesis: " + err.Error())
+	}
+	return bz
+}
+
+// BeginBlock runs at the beginning of every block.
+func (am AppModule) BeginBlock(ctx sdk.Context) {
+	am.keeper.CleanupExpiredSessions(ctx)
+	am.keeper.ProcessRecoveryTimeouts(ctx)
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion
 func (AppModule) ConsensusVersion() uint64 {
 	return 1
-}
-
-// RegisterMsgServer is a stub to satisfy interface (normally generated)
-func RegisterMsgServer(server interface{}, impl types.MsgServer) {
-	// Normally this would register gRPC handlers
-	// For now it's a no-op stub
 }

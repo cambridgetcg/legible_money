@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
 // ---------- Dispute Status & Outcome Enums ----------
@@ -78,6 +77,20 @@ type DisputeEvidence struct {
 func (e *DisputeEvidence) Reset()        {}
 func (e *DisputeEvidence) String() string { return fmt.Sprintf("%+v", *e) }
 func (e *DisputeEvidence) ProtoMessage()  {}
+
+// EvidenceCommitment represents a committed (but not yet revealed) evidence hash.
+type EvidenceCommitment struct {
+	DisputeId   string `json:"dispute_id"`
+	Submitter   string `json:"submitter"`    // bech32 address
+	Side        string `json:"side"`         // "challenger" or "defender"
+	ContentHash string `json:"content_hash"` // SHA-256 of evidence content
+	CommittedAt uint64 `json:"committed_at"` // block height
+	Revealed    bool   `json:"revealed"`     // whether the reveal has been submitted
+}
+
+func (c *EvidenceCommitment) Reset()        {}
+func (c *EvidenceCommitment) String() string { return fmt.Sprintf("%+v", *c) }
+func (c *EvidenceCommitment) ProtoMessage()  {}
 
 // DisputeVote represents an arbiter's vote.
 type DisputeVote struct {
@@ -186,7 +199,53 @@ func (msg *MsgOpenDisputeResponse) Reset()        {}
 func (msg *MsgOpenDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgOpenDisputeResponse) ProtoMessage()  {}
 
-// MsgSubmitEvidence submits evidence for a dispute.
+// MsgCommitEvidence commits a hash of evidence (phase 1 of commit-reveal).
+type MsgCommitEvidence struct {
+	Submitter   string `json:"submitter"`    // bech32 address
+	DisputeId   string `json:"dispute_id"`
+	Side        string `json:"side"`         // "challenger" or "defender"
+	ContentHash string `json:"content_hash"` // SHA-256 hex of evidence content
+}
+
+func (msg *MsgCommitEvidence) Reset()        {}
+func (msg *MsgCommitEvidence) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgCommitEvidence) ProtoMessage()  {}
+
+func (msg *MsgCommitEvidence) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgCommitEvidence) ValidateBasic() error {
+	if msg.Submitter == "" {
+		return fmt.Errorf("submitter cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Submitter); err != nil {
+		return fmt.Errorf("invalid submitter address: %w", err)
+	}
+	if msg.DisputeId == "" {
+		return fmt.Errorf("dispute ID cannot be empty")
+	}
+	if msg.Side != "challenger" && msg.Side != "defender" {
+		return fmt.Errorf("side must be 'challenger' or 'defender'")
+	}
+	if msg.ContentHash == "" {
+		return fmt.Errorf("content hash cannot be empty")
+	}
+	if len(msg.ContentHash) != 64 {
+		return fmt.Errorf("content hash must be 64 hex characters (SHA-256)")
+	}
+	return nil
+}
+
+// MsgCommitEvidenceResponse is the response to MsgCommitEvidence.
+type MsgCommitEvidenceResponse struct{}
+
+func (msg *MsgCommitEvidenceResponse) Reset()        {}
+func (msg *MsgCommitEvidenceResponse) String() string { return "" }
+func (msg *MsgCommitEvidenceResponse) ProtoMessage()  {}
+
+// MsgSubmitEvidence reveals evidence for a dispute (phase 2 of commit-reveal).
 type MsgSubmitEvidence struct {
 	Submitter string `json:"submitter"` // bech32 address
 	DisputeId string `json:"dispute_id"`
@@ -310,26 +369,92 @@ func (msg *MsgEscalateDisputeResponse) Reset()        {}
 func (msg *MsgEscalateDisputeResponse) String() string { return "" }
 func (msg *MsgEscalateDisputeResponse) ProtoMessage()  {}
 
+// MsgSettleDispute triggers settlement of a dispute that's past its voting deadline.
+// Any account can submit this — it's a permissionless trigger for tally + resolution.
+type MsgSettleDispute struct {
+	Sender    string `json:"sender"`     // bech32 address of the trigger sender (pays gas)
+	DisputeId string `json:"dispute_id"`
+}
+
+func (msg *MsgSettleDispute) Reset()        {}
+func (msg *MsgSettleDispute) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgSettleDispute) ProtoMessage()  {}
+
+func (msg *MsgSettleDispute) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgSettleDispute) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.DisputeId == "" {
+		return fmt.Errorf("dispute ID cannot be empty")
+	}
+	return nil
+}
+
+// MsgSettleDisputeResponse is the response to MsgSettleDispute.
+type MsgSettleDisputeResponse struct {
+	Outcome string `json:"outcome"` // "upheld", "overturned", or "inconclusive"
+}
+
+func (msg *MsgSettleDisputeResponse) Reset()        {}
+func (msg *MsgSettleDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgSettleDisputeResponse) ProtoMessage()  {}
+
+// MsgTimeoutDispute triggers timeout processing of an expired dispute.
+// Any account can submit this — permissionless trigger for evidence→voting transition or expiration.
+type MsgTimeoutDispute struct {
+	Sender    string `json:"sender"`     // bech32 address of the trigger sender (pays gas)
+	DisputeId string `json:"dispute_id"`
+}
+
+func (msg *MsgTimeoutDispute) Reset()        {}
+func (msg *MsgTimeoutDispute) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgTimeoutDispute) ProtoMessage()  {}
+
+func (msg *MsgTimeoutDispute) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgTimeoutDispute) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.DisputeId == "" {
+		return fmt.Errorf("dispute ID cannot be empty")
+	}
+	return nil
+}
+
+// MsgTimeoutDisputeResponse is the response to MsgTimeoutDispute.
+type MsgTimeoutDisputeResponse struct {
+	NewStatus string `json:"new_status"` // new dispute status after timeout processing
+}
+
+func (msg *MsgTimeoutDisputeResponse) Reset()        {}
+func (msg *MsgTimeoutDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgTimeoutDisputeResponse) ProtoMessage()  {}
+
 // ---------- MsgServer Interface ----------
 
 // MsgServer is the service interface for the disputes module.
 type MsgServer interface {
 	OpenDispute(context.Context, *MsgOpenDispute) (*MsgOpenDisputeResponse, error)
+	CommitEvidence(context.Context, *MsgCommitEvidence) (*MsgCommitEvidenceResponse, error)
 	SubmitEvidence(context.Context, *MsgSubmitEvidence) (*MsgSubmitEvidenceResponse, error)
 	VoteDispute(context.Context, *MsgVoteDispute) (*MsgVoteDisputeResponse, error)
 	EscalateDispute(context.Context, *MsgEscalateDispute) (*MsgEscalateDisputeResponse, error)
+	SettleDispute(context.Context, *MsgSettleDispute) (*MsgSettleDisputeResponse, error)
+	TimeoutDispute(context.Context, *MsgTimeoutDispute) (*MsgTimeoutDisputeResponse, error)
 }
 
-// Placeholder service descriptor for codec registration.
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.disputes.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "OpenDispute", Handler: nil},
-		{MethodName: "SubmitEvidence", Handler: nil},
-		{MethodName: "VoteDispute", Handler: nil},
-		{MethodName: "EscalateDispute", Handler: nil},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/disputes/v1/tx.proto",
-}

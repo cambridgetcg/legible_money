@@ -7,8 +7,10 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	evidencemgmtkeeper "github.com/legible-money/legible/x/evidence_mgmt/keeper"
 	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 	legiblestakingkeeper "github.com/legible-money/legible/x/staking/keeper"
+	vestingrewardstypes "github.com/legible-money/legible/x/vesting_rewards/types"
 )
 
 // StakingKeeperAdapter wraps the Legible staking keeper to satisfy
@@ -98,6 +100,61 @@ func (a *StakingKeeperAdapter) RecordVerification(ctx context.Context, operatorA
 func (a *StakingKeeperAdapter) SlashValidator(ctx context.Context, operatorAddr string, amount string, reason string) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	return a.keeper.SlashValidator(sdkCtx, operatorAddr, amount, reason)
+}
+
+// VestingStakingAdapter wraps the Legible staking keeper to satisfy
+// the vesting_rewards module's StakingKeeper interface.
+type VestingStakingAdapter struct {
+	keeper legiblestakingkeeper.Keeper
+}
+
+func NewVestingStakingAdapter(keeper legiblestakingkeeper.Keeper) *VestingStakingAdapter {
+	return &VestingStakingAdapter{keeper: keeper}
+}
+
+var _ vestingrewardstypes.StakingKeeper = (*VestingStakingAdapter)(nil)
+
+// GetActiveValidatorCount returns the number of active validators.
+func (a *VestingStakingAdapter) GetActiveValidatorCount(ctx sdk.Context) uint32 {
+	validators := a.keeper.GetActiveValidatorSet(ctx)
+	return uint32(len(validators))
+}
+
+// ---------- Evidence Management Keeper Adapter ----------
+
+// EvidenceMgmtKeeperAdapter wraps the evidence_mgmt keeper to satisfy
+// the knowledge module's EvidenceMgmtKeeper interface.
+// It bridges x/evidence_mgmt types to x/knowledge/types.EvidenceRecord.
+type EvidenceMgmtKeeperAdapter struct {
+	keeper evidencemgmtkeeper.Keeper
+}
+
+// NewEvidenceMgmtKeeperAdapter creates a new adapter.
+func NewEvidenceMgmtKeeperAdapter(keeper evidencemgmtkeeper.Keeper) *EvidenceMgmtKeeperAdapter {
+	return &EvidenceMgmtKeeperAdapter{keeper: keeper}
+}
+
+var _ knowledgetypes.EvidenceMgmtKeeper = (*EvidenceMgmtKeeperAdapter)(nil)
+
+// GetEvidenceByClaimId returns all evidence for a claim, mapped to EvidenceRecord.
+func (a *EvidenceMgmtKeeperAdapter) GetEvidenceByClaimId(ctx sdk.Context, claimId string) []knowledgetypes.EvidenceRecord {
+	evidences := a.keeper.GetEvidenceByClaimId(ctx, claimId)
+	records := make([]knowledgetypes.EvidenceRecord, len(evidences))
+	for i, e := range evidences {
+		records[i] = knowledgetypes.EvidenceRecord{
+			Id:           e.Id,
+			ClaimId:      e.ClaimId,
+			EvidenceType: string(e.EvidenceType),
+			Status:       string(e.Status),
+			Reliability:  e.Reliability,
+		}
+	}
+	return records
+}
+
+// ComputeReliability delegates to the evidence_mgmt keeper.
+func (a *EvidenceMgmtKeeperAdapter) ComputeReliability(ctx sdk.Context, evidenceId string) (uint64, error) {
+	return a.keeper.ComputeReliability(ctx, evidenceId)
 }
 
 // bigIntStringToUint64 converts a bigint string to uint64, capping at MaxUint64.

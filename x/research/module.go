@@ -35,35 +35,39 @@ type AppModuleBasic struct {
 func (AppModuleBasic) Name() string { return types.ModuleName }
 
 // RegisterLegacyAminoCodec registers the module's amino codec.
-func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {}
+func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	types.RegisterCodec(cdc)
+}
 
 // RegisterInterfaces registers the module's interface types.
-func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {}
+func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
+	types.RegisterInterfaces(reg)
+}
 
 // DefaultGenesis returns the module's default genesis state.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	return json.RawMessage(`{}`)
+	gs := types.DefaultGenesis()
+	bz, _ := json.Marshal(gs)
+	return bz
 }
 
 // ValidateGenesis performs genesis state validation.
 func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
-	return nil
+	var gs types.GenesisState
+	if err := json.Unmarshal(bz, &gs); err != nil {
+		return fmt.Errorf("failed to unmarshal %s genesis: %w", types.ModuleName, err)
+	}
+	return gs.Validate()
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
-func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Phase 2: Register query service gateway routes
-}
+func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {}
 
 // GetTxCmd returns the module's tx CLI command.
-func (a AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
-}
+func (a AppModuleBasic) GetTxCmd() *cobra.Command { return nil }
 
 // GetQueryCmd returns the module's query CLI command.
-func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
-}
+func (AppModuleBasic) GetQueryCmd() *cobra.Command { return nil }
 
 // AppModule implements the AppModule interface.
 type AppModule struct {
@@ -88,34 +92,51 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Phase 2: Register msg server and query server
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 }
 
 // InitGenesis initializes the module from genesis.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	am.keeper.InitGenesis(ctx)
+	var gs types.GenesisState
+	json.Unmarshal(data, &gs)
+	am.keeper.InitGenesis(ctx, gs)
 }
 
 // ExportGenesis exports the module's genesis state.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
-	am.keeper.ExportGenesis(ctx)
-	return json.RawMessage(`{}`)
+	gs := am.keeper.ExportGenesis(ctx)
+	bz, _ := json.Marshal(gs)
+	return bz
 }
 
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic.
-func (am AppModule) BeginBlock(ctx context.Context) error {
-	// Phase 2: Process peer review deadlines, bounty expirations
+// BeginBlock processes bounty expirations.
+func (am AppModule) BeginBlock(goCtx context.Context) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Expire bounties past their deadline
+	am.keeper.IterateBounties(ctx, func(b types.Bounty) bool {
+		if b.Status == types.BountyStatusOpen && uint64(ctx.BlockHeight()) > b.DeadlineHeight {
+			b.Status = types.BountyStatusExpired
+			am.keeper.SetBounty(ctx, b)
+
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					"bounty_expired",
+					sdk.NewAttribute("bounty_id", b.Id),
+				),
+			)
+		}
+		return false
+	})
+
 	return nil
 }
 
-// EndBlock executes end-block logic.
+// EndBlock is a no-op for now.
 func (am AppModule) EndBlock(ctx context.Context) error {
-	// Phase 2: Disburse research treasury rewards, finalize reviews
 	return nil
 }
-
-// Ensure unused imports are referenced.
-var _ = fmt.Sprintf

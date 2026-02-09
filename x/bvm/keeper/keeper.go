@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/log"
@@ -14,23 +15,29 @@ import (
 
 // Keeper manages the bvm module's state.
 type Keeper struct {
-	cdc      codec.Codec
-	storeKey storetypes.StoreKey
+	cdc        codec.Codec
+	storeKey   storetypes.StoreKey
+	bankKeeper types.BankKeeper
+	authority  string
 
-	// Module authority (typically governance module address)
-	authority string
+	// Optional cross-module keepers (set via SetXxxKeeper after init)
+	knowledgeKeeper types.KnowledgeKeeper
+	stakingKeeper   types.StakingKeeper
+	authKeeper      types.AuthKeeper
 }
 
 // NewKeeper creates a new bvm module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
 	storeKey storetypes.StoreKey,
+	bk types.BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:       cdc,
-		storeKey:  storeKey,
-		authority: authority,
+		cdc:        cdc,
+		storeKey:   storeKey,
+		bankKeeper: bk,
+		authority:  authority,
 	}
 }
 
@@ -45,11 +52,97 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context) {
-	// Phase 2: Initialize system contracts, DMSS schedules from genesis
+func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
+	k.SetParams(ctx, gs.Params)
+
+	for _, contract := range gs.Contracts {
+		k.SetContract(ctx, contract)
+	}
+	for _, code := range gs.Code {
+		k.SetCode(ctx, code)
+	}
+	for _, schedule := range gs.Schedules {
+		k.SetSchedule(ctx, schedule)
+	}
+	for _, entry := range gs.State {
+		k.SetContractState(ctx, entry.ContractAddress, entry.Key, entry.Value)
+	}
 }
 
 // ExportGenesis exports the module's state.
-func (k Keeper) ExportGenesis(ctx sdk.Context) {
-	// Phase 2: Export deployed contracts, code store, DMSS schedules
+func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	gs := &types.GenesisState{
+		Params:    k.GetParams(ctx),
+		Contracts: []types.DeployedContract{},
+		Code:      []types.ContractCode{},
+		Schedules: []types.ContractSchedule{},
+		State:     []types.ContractStateEntry{},
+	}
+
+	k.IterateContracts(ctx, func(c types.DeployedContract) bool {
+		gs.Contracts = append(gs.Contracts, c)
+		return false
+	})
+	k.IterateCode(ctx, func(c types.ContractCode) bool {
+		gs.Code = append(gs.Code, c)
+		return false
+	})
+	k.IterateSchedules(ctx, func(s types.ContractSchedule) bool {
+		gs.Schedules = append(gs.Schedules, s)
+		return false
+	})
+
+	// Export contract state for each contract
+	for _, contract := range gs.Contracts {
+		k.IterateContractState(ctx, contract.Address, func(key, value string) bool {
+			gs.State = append(gs.State, types.ContractStateEntry{
+				ContractAddress: contract.Address,
+				Key:             key,
+				Value:           value,
+			})
+			return false
+		})
+	}
+
+	return gs
+}
+
+// ExportGenesisJSON exports the module's genesis state as JSON.
+func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
+	gs := k.ExportGenesis(ctx)
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal bvm genesis: %v", err))
+	}
+	return bz
+}
+
+// SetKnowledgeKeeper sets the knowledge keeper for cross-module BVM opcodes.
+func (k *Keeper) SetKnowledgeKeeper(kk types.KnowledgeKeeper) {
+	k.knowledgeKeeper = kk
+}
+
+// SetStakingKeeper sets the staking keeper for cross-module BVM opcodes.
+func (k *Keeper) SetStakingKeeper(sk types.StakingKeeper) {
+	k.stakingKeeper = sk
+}
+
+// SetAuthKeeper sets the auth keeper for cross-module BVM opcodes.
+func (k *Keeper) SetAuthKeeper(ak types.AuthKeeper) {
+	k.authKeeper = ak
+}
+
+// GetKnowledgeKeeper returns the knowledge keeper.
+func (k Keeper) GetKnowledgeKeeper() types.KnowledgeKeeper {
+	return k.knowledgeKeeper
+}
+
+// GetStakingKeeper returns the staking keeper.
+func (k Keeper) GetStakingKeeper() types.StakingKeeper {
+	return k.stakingKeeper
+}
+
+// GetAuthKeeper returns the auth keeper.
+func (k Keeper) GetAuthKeeper() types.AuthKeeper {
+	return k.authKeeper
 }

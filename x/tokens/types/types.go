@@ -321,13 +321,69 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.tokens.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{MethodName: "Transfer", Handler: nil},
-		{MethodName: "ApproveAllowance", Handler: nil},
-		{MethodName: "Burn", Handler: nil},
-		{MethodName: "UpdateParams", Handler: nil},
+		{MethodName: "Transfer", Handler: _Msg_Transfer_Handler},
+		{MethodName: "ApproveAllowance", Handler: _Msg_ApproveAllowance_Handler},
+		{MethodName: "Burn", Handler: _Msg_Burn_Handler},
+		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "legible/tokens/v1/tx.proto",
+}
+
+func _Msg_Transfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgTransfer)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).Transfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/Transfer"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).Transfer(ctx, req.(*MsgTransfer))
+	})
+}
+
+func _Msg_ApproveAllowance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgApproveAllowance)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ApproveAllowance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/ApproveAllowance"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ApproveAllowance(ctx, req.(*MsgApproveAllowance))
+	})
+}
+
+func _Msg_Burn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgBurn)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).Burn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/Burn"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).Burn(ctx, req.(*MsgBurn))
+	})
+}
+
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/UpdateParams"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
+	})
 }
 
 // RegisterMsgServer registers the MsgServer implementation with the gRPC server.

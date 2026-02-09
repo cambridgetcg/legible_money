@@ -56,6 +56,9 @@ func DefaultParams() Params {
 		AcceptanceThreshold:            770000,  // 77% agreement required
 		QuorumThreshold:                660000,  // 66% participation required
 		MaxValidatorsPerRound:          22,
+		InvalidClaimSlashBps:           220000,  // 22% slash on rejection (matches TS)
+		VerificationRewardAmount:       100000,  // 0.1 LGM per correct verification
+		ResearchTaxRate:                220000,  // 22% of rewards taxed to research fund (matches TS)
 	}
 }
 

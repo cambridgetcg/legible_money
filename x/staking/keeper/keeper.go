@@ -21,6 +21,7 @@ type Keeper struct {
 	accountKeeper types.AccountKeeper
 	bankKeeper    types.BankKeeper
 	authKeeper    types.LegibleAuthKeeper
+	tokensKeeper  types.TokensKeeper
 	authority     string // module authority (gov module)
 }
 
@@ -30,6 +31,7 @@ func NewKeeper(
 	accountKeeper types.AccountKeeper,
 	bankKeeper types.BankKeeper,
 	authKeeper types.LegibleAuthKeeper,
+	tokensKeeper types.TokensKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
@@ -38,6 +40,7 @@ func NewKeeper(
 		accountKeeper: accountKeeper,
 		bankKeeper:    bankKeeper,
 		authKeeper:    authKeeper,
+		tokensKeeper:  tokensKeeper,
 		authority:     authority,
 	}
 }
@@ -299,6 +302,58 @@ func (k Keeper) DeleteUnbonding(ctx sdk.Context, id string) error {
 	return store.Delete(key)
 }
 
+// GetUnbondingsForDelegator returns all unbonding entries for a delegator
+func (k Keeper) GetUnbondingsForDelegator(ctx sdk.Context, delegatorAddr string) []types.UnbondingEntry {
+	var entries []types.UnbondingEntry
+	k.IterateUnbondings(ctx, func(u types.UnbondingEntry) bool {
+		if u.DelegatorAddress == delegatorAddr {
+			entries = append(entries, u)
+		}
+		return false
+	})
+	return entries
+}
+
+// IterateUnbondings iterates over all unbonding entries
+func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(types.UnbondingEntry) bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	iterator, err := store.Iterator(types.UnbondingKeyPrefix, prefixEndBytes(types.UnbondingKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iterator.Close()
+
+	for ; iterator.Valid(); iterator.Next() {
+		var unbonding types.UnbondingEntry
+		if err := json.Unmarshal(iterator.Value(), &unbonding); err != nil {
+			continue
+		}
+		if cb(unbonding) {
+			break
+		}
+	}
+}
+
+// IterateDelegations iterates over all delegations
+func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	iterator, err := store.Iterator(types.DelegationKeyPrefix, prefixEndBytes(types.DelegationKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iterator.Close()
+
+	for ; iterator.Valid(); iterator.Next() {
+		var delegation types.Delegation
+		if err := json.Unmarshal(iterator.Value(), &delegation); err != nil {
+			continue
+		}
+		if cb(delegation) {
+			break
+		}
+	}
+}
+
 // --- Tier Configuration ---
 
 // SetTierConfig stores a tier configuration
@@ -543,13 +598,17 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		return false
 	})
 
-	// Export delegations (simplified - would need iteration helper)
 	var delegations []types.Delegation
-	// TODO: Implement delegation iteration
+	k.IterateDelegations(ctx, func(d types.Delegation) bool {
+		delegations = append(delegations, d)
+		return false
+	})
 
-	// Export unbondings
 	var unbondings []types.UnbondingEntry
-	// TODO: Implement unbonding iteration
+	k.IterateUnbondings(ctx, func(u types.UnbondingEntry) bool {
+		unbondings = append(unbondings, u)
+		return false
+	})
 
 	return &types.GenesisState{
 		Params:           params,
@@ -579,6 +638,18 @@ func (k msgServer) RegisterValidator(goCtx context.Context, msg *types.MsgRegist
 
 func (k msgServer) UpdateValidatorStake(goCtx context.Context, msg *types.MsgUpdateValidatorStake) (*types.MsgUpdateValidatorStakeResponse, error) {
 	return k.Keeper.UpdateValidatorStake(sdk.UnwrapSDKContext(goCtx), msg)
+}
+
+func (k msgServer) Delegate(goCtx context.Context, msg *types.MsgDelegate) (*types.MsgDelegateResponse, error) {
+	return k.Keeper.Delegate(sdk.UnwrapSDKContext(goCtx), msg)
+}
+
+func (k msgServer) Undelegate(goCtx context.Context, msg *types.MsgUndelegate) (*types.MsgUndelegateResponse, error) {
+	return k.Keeper.Undelegate(sdk.UnwrapSDKContext(goCtx), msg)
+}
+
+func (k msgServer) Redelegate(goCtx context.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
+	return k.Keeper.Redelegate(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
 // --- Block Processing ---
@@ -611,6 +682,21 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 				"error", err,
 			)
 			continue
+		}
+
+		// Credit tokens in period overlay, preserving the original period
+		if k.tokensKeeper != nil {
+			if unbonding.OriginPeriod > 0 {
+				if err := k.tokensKeeper.CreditBalanceToSpecificPeriod(ctx, unbonding.DelegatorAddress, unbonding.Amount, unbonding.OriginPeriod); err != nil {
+					k.Logger(ctx).Error("failed to credit period balance for unbonding",
+						"id", unbonding.Id, "error", err)
+				}
+			} else {
+				if err := k.tokensKeeper.CreditBalance(ctx, unbonding.DelegatorAddress, unbonding.Amount, uint64(ctx.BlockHeight())); err != nil {
+					k.Logger(ctx).Error("failed to credit period balance for unbonding",
+						"id", unbonding.Id, "error", err)
+				}
+			}
 		}
 
 		// Mark as completed
