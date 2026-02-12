@@ -1,0 +1,24 @@
+syntax = "proto3";
+package legible.channels.v1;
+
+option go_package = "github.com/legible-money/legible/x/channels/types";
+
+import "legible/channels/v1/state.proto";
+
+// GenesisState defines the channels module's genesis state.
+message GenesisState {
+  Params params                      = 1;
+  repeated PaymentChannel channels   = 2;
+  repeated ChannelDispute disputes   = 3;
+}
+
+// Params defines the channels module parameters.
+message Params {
+  string min_deposit              = 1;  // bigint as string (ulgm)
+  uint64 max_channel_duration     = 2;  // blocks
+  uint64 default_settlement_freq  = 3;  // blocks
+  uint64 dispute_period_blocks    = 4;
+  uint64 expiry_grace_period      = 5;  // blocks
+  uint64 fraud_penalty_bps        = 6;  // basis points
+  uint64 max_channels_per_payer   = 7;
+}

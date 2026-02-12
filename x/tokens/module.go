@@ -140,6 +140,23 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 		)
 	}
 
+	// Distribute RAI if enough blocks have passed and pool has balance
+	if am.keeper.ShouldDistributeRAI(sdkCtx, params.RaiDistributionRate) {
+		recipients := am.keeper.GetEligibleRAIRecipients(sdkCtx)
+		if len(recipients) > 0 {
+			dist, err := am.keeper.DistributeRAI(sdkCtx, recipients)
+			if err != nil {
+				am.keeper.Logger(sdkCtx).Error("RAI distribution failed", "error", err)
+			} else {
+				am.keeper.Logger(sdkCtx).Info("BeginBlock RAI distribution",
+					"distribution_id", dist.Id,
+					"recipients", dist.RecipientCount,
+					"total", dist.TotalAmount,
+				)
+			}
+		}
+	}
+
 	return nil
 }
 

@@ -16,12 +16,18 @@ type AgentKeeper interface {
 // AgentHost bridges BVM agent opcodes to Cosmos keeper state.
 // Agent beliefs/relationships are stored in contract state under reserved key prefixes.
 type AgentHost struct {
-	ctx     context.Context
-	stateDB StateDB
+	ctx          context.Context
+	stateDB      StateDB
+	schedKeeper  ScheduleKeeper // nil-safe: methods degrade gracefully
 }
 
 func NewAgentHost(ctx context.Context, stateDB StateDB) *AgentHost {
 	return &AgentHost{ctx: ctx, stateDB: stateDB}
+}
+
+// NewAgentHostWithSchedules creates an AgentHost wired to persist schedules.
+func NewAgentHostWithSchedules(ctx context.Context, stateDB StateDB, sk ScheduleKeeper) *AgentHost {
+	return &AgentHost{ctx: ctx, stateDB: stateDB, schedKeeper: sk}
 }
 
 // --- Agent Identity (0xE0-0xE3) ---
@@ -146,21 +152,58 @@ func (h *AgentHost) Delegate(callerDID string, targetDID, capability, constraint
 // --- Agent Autonomy (0xEC-0xEF) ---
 
 func (h *AgentHost) ScheduleSelf(contract []byte, callData []byte, executeBlock uint64, gasLimit uint64) []byte {
-	input := fmt.Sprintf("schedule/%x/%x/%d", contract, callData, executeBlock)
-	hash := sha256.Sum256([]byte(input))
+	if h.schedKeeper == nil {
+		// Graceful degradation: return deterministic ID but don't persist
+		input := fmt.Sprintf("schedule/%x/%x/%d", contract, callData, executeBlock)
+		hash := sha256.Sum256([]byte(input))
+		return hash[:]
+	}
+
+	// Enforce per-contract schedule limit
+	contractAddr := string(contract)
+	if h.schedKeeper.CountActiveSchedules(contractAddr) >= h.schedKeeper.MaxSchedulesAllowed() {
+		return nil // Signal failure to the contract
+	}
+
+	scheduleId, err := h.schedKeeper.CreateSchedule(
+		contractAddr,
+		contractAddr, // self-invocation: caller is the contract itself
+		hex.EncodeToString(callData), // method stored as hex of calldata
+		"",            // no separate payload
+		executeBlock,
+		gasLimit,
+	)
+	if err != nil {
+		return nil
+	}
+
+	hash := sha256.Sum256([]byte(scheduleId))
 	return hash[:]
 }
 
 func (h *AgentHost) CancelScheduleHost(scheduleId []byte) bool {
-	return len(scheduleId) > 0
+	if h.schedKeeper == nil {
+		return false
+	}
+	id := hex.EncodeToString(scheduleId)
+	err := h.schedKeeper.CancelScheduleByID(id, "")
+	return err == nil
 }
 
 func (h *AgentHost) ModifySchedule(scheduleId []byte, newBlock uint64) bool {
-	return len(scheduleId) > 0 && newBlock > 0
+	if h.schedKeeper == nil || newBlock == 0 {
+		return false
+	}
+	id := hex.EncodeToString(scheduleId)
+	err := h.schedKeeper.ModifyScheduleBlock(id, "", newBlock)
+	return err == nil
 }
 
 func (h *AgentHost) GetScheduleCount(contract []byte) uint64 {
-	return 0
+	if h.schedKeeper == nil {
+		return 0
+	}
+	return h.schedKeeper.CountActiveSchedules(string(contract))
 }
 
 // --- Extended Relationships (0xC0-0xC3) ---

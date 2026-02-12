@@ -32,6 +32,9 @@ var (
 
 	// RecoveryConfigPrefix is the prefix for recovery configuration per account
 	RecoveryConfigPrefix = []byte{0x07}
+
+	// BootstrapClaimPrefix tracks which accounts have claimed their bootstrap fund
+	BootstrapClaimPrefix = []byte{0x08}
 )
 
 // AccountKey returns the store key for an account by bech32 address
@@ -70,6 +73,11 @@ func RecoveryRequestKey(address string) []byte {
 // RecoveryConfigKey returns the store key for a recovery config by account address
 func RecoveryConfigKey(address string) []byte {
 	return append(RecoveryConfigPrefix, []byte(address)...)
+}
+
+// BootstrapClaimKey returns the store key for tracking a bootstrap claim by address
+func BootstrapClaimKey(address string) []byte {
+	return append(BootstrapClaimPrefix, []byte(address)...)
 }
 
 // Uint64ToBytes converts uint64 to bytes for storage

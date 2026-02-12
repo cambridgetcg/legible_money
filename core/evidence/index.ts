@@ -10,7 +10,7 @@
  */
 
 // Core types
-export * from './types.js';
+export * from "./types.js";
 
 // Archiving system
 export {
@@ -34,11 +34,11 @@ export {
   IPFSArchiveProvider,
   ArweaveArchiveProvider,
   WaybackArchiveProvider,
-} from './archiving.js';
+} from "./archiving.js";
 export type {
   ArchiveVerificationResult,
   ArchiveProviderInterface,
-} from './archiving.js';
+} from "./archiving.js";
 
 // Deduplication system
 export {
@@ -53,7 +53,7 @@ export {
   checkEvidenceDuplicate,
   calculateConfirmationCredit,
   DeduplicationIndex,
-} from './deduplication.js';
+} from "./deduplication.js";
 
 // Expiry system
 export {
@@ -73,8 +73,8 @@ export {
   createDefaultExpiry,
   applyFreshnessToConfidence,
   calculateEffectiveReliability,
-} from './expiry.js';
-export type { ExpiredEvidenceResult } from './expiry.js';
+} from "./expiry.js";
+export type { ExpiredEvidenceResult } from "./expiry.js";
 
 // Chainlink integration
 export {
@@ -90,4 +90,19 @@ export {
   checkSequencerStatus,
   updateSequencerStatus,
   ChainlinkFeedRegistry,
-} from './chainlink.js';
+} from "./chainlink.js";
+
+// Prediction market integration
+export {
+  PREDICTION_MARKET_CONFIDENCE,
+  PLATFORM_REPUTATION,
+  PLATFORM_DISPUTE_WINDOWS,
+  createMarketRegistration,
+  hashMarketResolution,
+  validateMarketForEvidence,
+  processPredictionMarketResolution,
+  calculatePredictionMarketConfidence,
+  mapPredictionMarketToPoTConfidence,
+  isDisputeWindowElapsed,
+  PredictionMarketRegistry,
+} from "./prediction_market.js";

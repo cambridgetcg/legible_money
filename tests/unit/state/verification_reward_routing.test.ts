@@ -42,7 +42,7 @@ function createTestClaim(
   claimId: string,
   submitter: string,
   claimText: string,
-  stake: bigint = 111n * 10n ** 18n,
+  stake: bigint = 111n * 10n ** 15n,
 ): ClaimState {
   return {
     id: claimId,
@@ -54,7 +54,7 @@ function createTestClaim(
     stake,
     submittedAt: 100n,
     references: [],
-    status: "verifying",
+    status: "in_verification",
     statusChangedAt: 100n,
     verificationRoundId: "round-001",
   };

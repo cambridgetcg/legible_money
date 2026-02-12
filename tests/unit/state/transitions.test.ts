@@ -40,8 +40,8 @@ function createTestState(): StateManager {
 function createTestParams(): ConsensusParams {
   return {
     targetBlockTimeMs: 2521,
-    minValidatorStake: 1000n * 10n ** 18n,
-    minClaimStake: 10n * 10n ** 18n,
+    minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+    minClaimStake: 10n * 10n ** 15n,
     validatorQuorum: 0.66,
     verificationRoundBlocks: 20,
     commitPhaseBlocks: 6,
@@ -367,12 +367,12 @@ describe.sequential("Unstake Transactions", () => {
     state.createAccount("did:lgm:research", "research-hash", 0n);
 
     // First stake
-    const stakeTx = createStakeTx(validatorKey.publicKey, 10000n * 10n ** 18n);
+    const stakeTx = createStakeTx(validatorKey.publicKey, 10000n * 10n ** 15n);
     executeTransaction(state, stakeTx, 1n, params);
   });
 
   it("should execute valid unstake transaction", () => {
-    const unstakeAmount = 5000n * 10n ** 18n;
+    const unstakeAmount = 5000n * 10n ** 15n;
     const currentNonce = state.getNonce(validatorDid);
     const tx = createUnstakeTx(
       validatorKey.publicKey,
@@ -388,7 +388,7 @@ describe.sequential("Unstake Transactions", () => {
   });
 
   it("should reduce staked balance", () => {
-    const unstakeAmount = 5000n * 10n ** 18n;
+    const unstakeAmount = 5000n * 10n ** 15n;
     const stakedBefore = state.getAccount(validatorDid)?.stakedBalance ?? 0n;
     const currentNonce = state.getNonce(validatorDid);
 
@@ -405,7 +405,7 @@ describe.sequential("Unstake Transactions", () => {
   });
 
   it("should reject unstake more than staked", () => {
-    const unstakeAmount = 50000n * 10n ** 18n; // More than staked
+    const unstakeAmount = 50000n * 10n ** 15n; // More than staked
     const currentNonce = state.getNonce(validatorDid);
     const tx = createUnstakeTx(
       validatorKey.publicKey,

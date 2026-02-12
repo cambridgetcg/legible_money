@@ -126,7 +126,7 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 	// Expire seeds past their expiry block
 	expiredSeeds := am.keeper.GetExpiredSeeds(ctx, currentBlock)
 	for _, seed := range expiredSeeds {
-		seed.Status = types.SeedExpired
+		seed.Status = string(types.SeedExpired)
 		am.keeper.SetSeed(ctx, seed)
 	}
 

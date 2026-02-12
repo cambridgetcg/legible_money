@@ -62,8 +62,8 @@ func (k Keeper) QualifyViaStakeCommitment(ctx sdk.Context, validatorAddr, domain
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
-		Pathway:                types.PathwayStakeCommitment,
-		Status:                 types.StatusProbationary,
+		Pathway:                string(types.PathwayStakeCommitment),
+		Status:                 string(types.StatusProbationary),
 		EarnedAtBlock:          currentBlock,
 		ExpiresAtBlock:         0, // no expiry for stake commitment
 		Metrics:                emptyMetrics(),
@@ -115,8 +115,8 @@ func (k Keeper) QualifyViaTrackRecord(ctx sdk.Context, validatorAddr, domain str
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
-		Pathway:                types.PathwayTrackRecord,
-		Status:                 types.StatusActive, // track record = immediate active
+		Pathway:                string(types.PathwayTrackRecord),
+		Status:                 string(types.StatusActive), // track record = immediate active
 		EarnedAtBlock:          currentBlock,
 		ExpiresAtBlock:         currentBlock + params.InactivityExpiration,
 		Metrics:                emptyMetrics(),
@@ -166,8 +166,8 @@ func (k Keeper) QualifyViaCrossReference(ctx sdk.Context, validatorAddr, domain 
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
-		Pathway:                types.PathwayCrossReference,
-		Status:                 types.StatusProbationary,
+		Pathway:                string(types.PathwayCrossReference),
+		Status:                 string(types.StatusProbationary),
 		EarnedAtBlock:          currentBlock,
 		ExpiresAtBlock:         currentBlock + params.InactivityExpiration,
 		Metrics:                emptyMetrics(),
@@ -197,14 +197,14 @@ func (k Keeper) QualifyViaStratumInheritance(ctx sdk.Context, validatorAddr, dom
 
 	// Verify source qualification exists and is active
 	sourceQ, found := k.GetQualification(ctx, validatorAddr, inheritFrom)
-	if !found || (sourceQ.Status != types.StatusActive && sourceQ.Status != types.StatusProbationary) {
+	if !found || (sourceQ.Status != string(types.StatusActive) && sourceQ.Status != string(types.StatusProbationary)) {
 		return nil, fmt.Errorf("%w: not qualified in source domain %s", types.ErrNoInheritanceSource, inheritFrom)
 	}
 
 	// Verify source domain is in a lower (more verifiable) stratum
 	if k.ontologyKeeper != nil {
 		sourceDomain, sourceFound := k.ontologyKeeper.GetDomain(ctx, inheritFrom)
-		if sourceFound && uint32(sourceDomain.Stratum) >= stratum {
+		if sourceFound && sourceDomain.Stratum >= stratum {
 			return nil, fmt.Errorf("%w: source domain stratum %d must be lower than target stratum %d",
 				types.ErrNoInheritanceSource, sourceDomain.Stratum, stratum)
 		}
@@ -217,8 +217,8 @@ func (k Keeper) QualifyViaStratumInheritance(ctx sdk.Context, validatorAddr, dom
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
-		Pathway:                types.PathwayStratumInheritance,
-		Status:                 types.StatusProbationary,
+		Pathway:                string(types.PathwayStratumInheritance),
+		Status:                 string(types.StatusProbationary),
 		EarnedAtBlock:          currentBlock,
 		ExpiresAtBlock:         currentBlock + params.InactivityExpiration,
 		Metrics:                emptyMetrics(),
@@ -244,8 +244,8 @@ func (k Keeper) getDomainStratum(ctx sdk.Context, domain string) (uint32, error)
 	return uint32(d.Stratum), nil
 }
 
-func emptyMetrics() types.QualificationMetrics {
-	return types.QualificationMetrics{
+func emptyMetrics() *types.QualificationMetrics {
+	return &types.QualificationMetrics{
 		EffectiveWeightBps: 10000, // 100% default
 	}
 }

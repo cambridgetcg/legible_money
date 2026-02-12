@@ -67,13 +67,13 @@ export const REWARD_RATES = {
  */
 export const DISPUTE_ECONOMICS = {
   /** Minimum stake to initiate challenge */
-  minChallengeStake: 111n * 10n ** 18n, // 111 LGM
+  minChallengeStake: 111n * 10n ** 15n, // 0.111 LGM (affordable with 0.222 LGM genesis balance)
 
   /** Defender must match challenger stake */
-  minDefenseStake: 111n * 10n ** 18n, // 111 LGM
+  minDefenseStake: 111n * 10n ** 15n, // 0.111 LGM
 
   /** Minimum stake to be eligible as arbiter */
-  minArbiterStake: 77n * 10n ** 18n, // 77 LGM
+  minArbiterStake: 77n * 10n ** 15n, // 0.077 LGM
 
   /** Stake multipliers by escalation tier */
   tierMultipliers: {
@@ -160,6 +160,7 @@ export const DISPUTE_EVIDENCE_WEIGHTS: Record<EvidenceType, number> = {
   chainlink_ccip: 0.88,
   computational: 0.87,
   chainlink_functions: 0.85,
+  prediction_market: 0.85,
   peer_reviewed: 0.85,
   institutional: 0.75,
   oracle: 0.7,

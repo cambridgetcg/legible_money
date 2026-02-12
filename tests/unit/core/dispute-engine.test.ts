@@ -108,7 +108,7 @@ function createTestEvidence(id: string, type: string = "on_chain"): Evidence {
 
 function createTestArbiter(
   did: string,
-  stake: bigint = 100n * 10n ** 18n,
+  stake: bigint = 100n * 10n ** 15n,
 ): SelectedArbiter {
   return {
     publicKey: `pubkey-${did}`,
@@ -224,28 +224,28 @@ function setupDisputeInPhase(
     vote: "challenger",
     justificationHash: "j1",
     votedAtBlock: currentBlock,
-    lockedStake: 77n * 10n ** 18n,
+    lockedStake: 77n * 10n ** 15n,
   });
   votes.set("did:lgm:arbiter-2", {
     arbiter: "did:lgm:arbiter-2",
     vote: "challenger",
     justificationHash: "j2",
     votedAtBlock: currentBlock,
-    lockedStake: 77n * 10n ** 18n,
+    lockedStake: 77n * 10n ** 15n,
   });
   votes.set("did:lgm:arbiter-3", {
     arbiter: "did:lgm:arbiter-3",
     vote: "challenger",
     justificationHash: "j3",
     votedAtBlock: currentBlock,
-    lockedStake: 77n * 10n ** 18n,
+    lockedStake: 77n * 10n ** 15n,
   });
   votes.set("did:lgm:arbiter-4", {
     arbiter: "did:lgm:arbiter-4",
     vote: "defender",
     justificationHash: "j4",
     votedAtBlock: currentBlock,
-    lockedStake: 77n * 10n ** 18n,
+    lockedStake: 77n * 10n ** 15n,
   });
   dispute = { ...dispute, votes };
 
@@ -741,7 +741,7 @@ describe("GAP-003: Dispute Engine", () => {
           vote: "challenger",
           justificationHash: "justification-hash",
         },
-        77n * 10n ** 18n,
+        77n * 10n ** 15n,
         150n,
       );
 
@@ -760,7 +760,7 @@ describe("GAP-003: Dispute Engine", () => {
             vote: "challenger",
             justificationHash: "hash",
           },
-          77n * 10n ** 18n,
+          77n * 10n ** 15n,
           150n,
         ),
       ).toThrow(/Not selected as arbiter/);
@@ -777,7 +777,7 @@ describe("GAP-003: Dispute Engine", () => {
           vote: "challenger",
           justificationHash: "hash1",
         },
-        77n * 10n ** 18n,
+        77n * 10n ** 15n,
         150n,
       );
 
@@ -789,7 +789,7 @@ describe("GAP-003: Dispute Engine", () => {
             vote: "defender",
             justificationHash: "hash2",
           },
-          77n * 10n ** 18n,
+          77n * 10n ** 15n,
           160n,
         ),
       ).toThrow(/Already voted/);
@@ -807,7 +807,7 @@ describe("GAP-003: Dispute Engine", () => {
             vote: "challenger",
             justificationHash: "hash",
           },
-          77n * 10n ** 18n,
+          77n * 10n ** 15n,
           deadlineBlock,
         ),
       ).toThrow(/deadline/i);
@@ -824,7 +824,7 @@ describe("GAP-003: Dispute Engine", () => {
             vote: "challenger",
             justificationHash: "hash",
           },
-          77n * 10n ** 18n,
+          77n * 10n ** 15n,
           150n,
         ),
       ).toThrow(/phase/i);
@@ -840,28 +840,28 @@ describe("GAP-003: Dispute Engine", () => {
         vote: "challenger",
         justificationHash: "j1",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a2", {
         arbiter: "a2",
         vote: "challenger",
         justificationHash: "j2",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a3", {
         arbiter: "a3",
         vote: "challenger",
         justificationHash: "j3",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a4", {
         arbiter: "a4",
         vote: "defender",
         justificationHash: "j4",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       dispute = { ...dispute, votes };
 
@@ -877,28 +877,28 @@ describe("GAP-003: Dispute Engine", () => {
         vote: "defender",
         justificationHash: "j1",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a2", {
         arbiter: "a2",
         vote: "defender",
         justificationHash: "j2",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a3", {
         arbiter: "a3",
         vote: "defender",
         justificationHash: "j3",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a4", {
         arbiter: "a4",
         vote: "challenger",
         justificationHash: "j4",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       dispute = { ...dispute, votes };
 
@@ -914,28 +914,28 @@ describe("GAP-003: Dispute Engine", () => {
         vote: "challenger",
         justificationHash: "j1",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a2", {
         arbiter: "a2",
         vote: "challenger",
         justificationHash: "j2",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a3", {
         arbiter: "a3",
         vote: "defender",
         justificationHash: "j3",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a4", {
         arbiter: "a4",
         vote: "defender",
         justificationHash: "j4",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       dispute = { ...dispute, votes };
 
@@ -1124,7 +1124,7 @@ describe("GAP-003: Dispute Engine", () => {
 
   describe("Economic Constants", () => {
     it("should have correct minimum challenge stake", () => {
-      expect(DISPUTE_ECONOMICS.minChallengeStake).toBe(111n * 10n ** 18n);
+      expect(DISPUTE_ECONOMICS.minChallengeStake).toBe(111n * 10n ** 15n);
     });
 
     it("should have correct punishment rates", () => {
@@ -1255,14 +1255,14 @@ describe("GAP-003: Dispute Engine", () => {
         vote: "abstain",
         justificationHash: "j1",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("a2", {
         arbiter: "a2",
         vote: "abstain",
         justificationHash: "j2",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       dispute = { ...dispute, votes };
 
@@ -1341,21 +1341,21 @@ describe("GAP-003: Dispute Engine", () => {
         vote: "challenger",
         justificationHash: "j1",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("did:lgm:arbiter-2", {
         arbiter: "did:lgm:arbiter-2",
         vote: "challenger",
         justificationHash: "j2",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("did:lgm:arbiter-3", {
         arbiter: "did:lgm:arbiter-3",
         vote: "defender",
         justificationHash: "j3",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       dispute = { ...dispute, votes };
 
@@ -1379,14 +1379,14 @@ describe("GAP-003: Dispute Engine", () => {
         vote: "challenger",
         justificationHash: "j1",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       votes.set("did:lgm:arbiter-2", {
         arbiter: "did:lgm:arbiter-2",
         vote: "defender",
         justificationHash: "j2",
         votedAtBlock: 100n,
-        lockedStake: 77n * 10n ** 18n,
+        lockedStake: 77n * 10n ** 15n,
       });
       dispute = { ...dispute, votes };
 
@@ -1409,7 +1409,7 @@ describe("GAP-003: Dispute Engine", () => {
       const validator = {
         did: "did:lgm:validator-1",
         publicKey: "pubkey-1",
-        stake: 1000n * 10n ** 18n, // 1000 LGM
+        stake: 1000n * 10n ** 15n, // 1 LGM (stake, not balance)
         reputation: 0.9,
         isActive: true,
         registeredAtBlock: 0n,

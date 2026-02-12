@@ -43,7 +43,7 @@ const BLOCK = 100n;
 function createTestParams(): ConsensusParams {
   return {
     targetBlockTimeMs: 2521,
-    minValidatorStake: 1000n * ONE_LGM,
+    minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
     minClaimStake: CLAIM_AMOUNT,
     validatorQuorum: 0.66,
     verificationRoundBlocks: 20,

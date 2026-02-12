@@ -463,6 +463,7 @@ export type FactStatus =
   | "pending" // Claim submitted, awaiting verification
   | "verified" // Accepted by validators
   | "active" // Currently accepted in state
+  | "provisional" // Adversarial: fact created during challenge window, can be overturned
   | "contested" // Mixed verification results
   | "challenged" // Under active dispute
   | "superseded" // Replaced by newer fact
@@ -874,6 +875,100 @@ export const DEFAULT_CITATION_PARAMETERS: CitationParameters = {
 /**
  * Default truth parameters
  */
+// ============ Negative Knowledge System ============
+
+/**
+ * Negation types for counter-facts
+ */
+export type NegationType =
+  | "rejection" // Claim evaluated and rejected by validators
+  | "contradiction" // Explicit counter-claim with evidence
+  | "falsification" // Research outcome = "refutes"
+  | "supersession"; // Newer evidence overturns prior acceptance
+
+/**
+ * Counter-fact lifecycle status
+ */
+export type CounterFactStatus =
+  | "pending" // Awaiting verification
+  | "provisional" // In challenge window
+  | "verified" // Confirmed false
+  | "contested" // Mixed verification
+  | "overturned"; // Counter-fact itself was disproved
+
+/**
+ * CounterFact represents a verified negative knowledge assertion.
+ *
+ * For any proposition P, the knowledge graph can now store:
+ *   Fact(P)        → confidence_truth  [0, 1_000_000]  (existing)
+ *   CounterFact(P) → confidence_false  [0, 1_000_000]  (new)
+ *
+ * Bidirectional confidence = truth - falsity (derived, can be negative).
+ */
+export interface CounterFact {
+  id: string; // "cfact-{hash}"
+  targetFactId: string; // Fact being negated (if exists)
+  targetClaimId: string; // Original rejected claim
+  negationType: NegationType;
+  confidence: Confidence; // How confident we are it's false [0, 1.0]
+  justification: string;
+  evidenceIds: string[];
+  submitter: DID;
+  submitterAddress: string;
+  verifiers: DID[];
+  domain: string;
+  logicZone: string;
+  epistemicCategory: EpistemicCategory;
+  status: CounterFactStatus;
+  createdAtBlock: number;
+  verifiedAtBlock?: number;
+  roundId?: string;
+  incompletenessAck?: boolean; // Gödelian: negation may be undecidable
+}
+
+/**
+ * Bidirectional confidence for a proposition.
+ * Truth and falsity are epistemically independent.
+ */
+export interface BidirectionalConfidence {
+  factId: string;
+  truthConfidence: Confidence;
+  falsityConfidence: Confidence;
+  netConfidence: number; // truth - falsity (can be negative)
+  counterFactCount: number;
+  status: "established" | "contested" | "disproven" | "uncertain";
+}
+
+/**
+ * Compute bidirectional status from net confidence.
+ */
+export function computeBidirectionalStatus(
+  net: number,
+): BidirectionalConfidence["status"] {
+  if (net > 0.6) return "established";
+  if (net < -0.6) return "disproven";
+  if (Math.abs(net) < 0.2) return "uncertain";
+  return "contested";
+}
+
+/**
+ * Negative knowledge constants (matching Go x/knowledge/types/types.go)
+ */
+export const NEGATIVE_KNOWLEDGE = {
+  MAX_CONTRADICTIONS_PER_EPOCH: 3,
+  MIN_CONTRADICTION_STAKE_RATIO: 0.5, // 50% of target fact stake
+  FAILED_CONTRADICTION_SLASH: 0.5, // 50%
+  FALSIFICATION_REWARD_CAP: 3.0, // 3× original stake
+  FALSIFICATION_POOL_SHARE: 0.15, // 15% of epoch rewards
+  COUNTER_FACT_HIGH_CONFIDENCE: 0.7,
+  COUNTER_FACT_MEDIUM_CONFIDENCE: 0.4,
+  COUNTER_FACT_HIGH_PENALTY: 0.08, // basis points scaled to 0-1
+  COUNTER_FACT_MEDIUM_PENALTY: 0.04,
+  COUNTER_FACT_LOW_PENALTY: 0.01,
+  MAX_COUNTER_FACT_PENALTY: 0.4,
+  ALREADY_DISPROVEN_PENALTY: 0.2,
+} as const;
+
 export const DEFAULT_TRUTH_PARAMETERS: TruthParameters = {
   minVerifiers: 5,
   verificationQuorum: 0.66, // 66% agreement
@@ -882,15 +977,15 @@ export const DEFAULT_TRUTH_PARAMETERS: TruthParameters = {
   confidenceDecayRate: 0.0001, // 0.01% per block
   minConfidenceThreshold: 0.3,
 
-  minSubmissionStake: 100n * 10n ** 18n, // 100 LGM
-  minVerificationStake: 50n * 10n ** 18n, // 50 LGM
-  minChallengeStake: 200n * 10n ** 18n, // 200 LGM
+  minSubmissionStake: 100n * 10n ** 15n, // 0.1 LGM (affordable with 0.222 LGM genesis balance)
+  minVerificationStake: 50n * 10n ** 15n, // 0.05 LGM
+  minChallengeStake: 200n * 10n ** 15n, // 0.2 LGM
 
-  submissionRewardBase: 50n * 10n ** 18n, // 50 LGM
-  verificationRewardBase: 10n * 10n ** 18n, // 10 LGM
+  submissionRewardBase: 50n * 10n ** 15n, // 0.05 LGM
+  verificationRewardBase: 10n * 10n ** 15n, // 0.01 LGM
   challengeRewardShare: 0.5, // 50% of loser's stake
 
-  wrongVerificationSlash: 0.1, // 10% stake
+  wrongVerificationSlash: 0.06, // 6% stake
   rejectedSubmissionSlash: 0.2, // 20% stake
   failedChallengeSlash: 0.3, // 30% stake
 };

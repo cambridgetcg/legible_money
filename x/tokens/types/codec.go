@@ -7,6 +7,7 @@ import (
 
 func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgTransfer{}, "tokens/Transfer", nil)
+	cdc.RegisterConcrete(&MsgTransferFrom{}, "tokens/TransferFrom", nil)
 	cdc.RegisterConcrete(&MsgApproveAllowance{}, "tokens/ApproveAllowance", nil)
 	cdc.RegisterConcrete(&MsgBurn{}, "tokens/Burn", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "tokens/UpdateParams", nil)

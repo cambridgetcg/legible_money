@@ -74,8 +74,7 @@ function createTestValidator(
     correctVerifications: 0,
     missedVerifications: 0,
     slashCount: 0,
-    tier:
-      stake >= 11111n * 10n ** 18n ? 3 : stake >= 1111n * 10n ** 18n ? 2 : 0,
+    tier: stake >= 111n * 10n ** 15n ? 3 : stake >= 111n * 10n ** 14n ? 2 : 0,
   };
 }
 

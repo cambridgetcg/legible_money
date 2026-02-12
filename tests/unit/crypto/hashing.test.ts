@@ -86,10 +86,10 @@ describe("sha512_256 / sha512_256Hex", () => {
     expect(hex).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("is the first 32 bytes of the full SHA-512", () => {
-    const full = sha512Hash("test");
-    const truncated = sha512_256("test");
-    expect(truncated).toEqual(full.slice(0, 32));
+  it("produces SHA-256 output (aligned with Go/Cosmos SDK)", () => {
+    const fromSha256 = sha256Hash("test");
+    const fromAlias = sha512_256("test");
+    expect(fromAlias).toEqual(fromSha256);
   });
 
   it("is deterministic", () => {
@@ -118,9 +118,9 @@ describe("sha256Hash / sha256Hex", () => {
     expect(sha256Hex("proof of truth")).toBe(sha256Hex("proof of truth"));
   });
 
-  it("differs from SHA-512/256 for the same input", () => {
-    // SHA-256 and SHA-512/256 are distinct algorithms
-    expect(sha256Hex("test")).not.toBe(sha512_256Hex("test"));
+  it("matches SHA-512/256 (both now use SHA-256)", () => {
+    // sha512_256 now delegates to sha256 for Go/Cosmos SDK alignment
+    expect(sha256Hex("test")).toBe(sha512_256Hex("test"));
   });
 });
 
@@ -177,7 +177,7 @@ describe("domainHash", () => {
   it("returns a Uint8Array (HashBytes)", () => {
     const result = domainHash("LGM.test.v1", "data");
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(64); // SHA-512 output
+    expect(result.length).toBe(32); // SHA-256 output (aligned with Go)
   });
 
   it("is deterministic", () => {
@@ -202,7 +202,7 @@ describe("domainHash", () => {
     const data = new Uint8Array([1, 2, 3, 4]);
     const result = domainHash("LGM.test.v1", data);
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(64);
+    expect(result.length).toBe(32);
   });
 });
 

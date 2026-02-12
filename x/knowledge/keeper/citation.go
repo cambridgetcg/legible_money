@@ -152,17 +152,11 @@ func (k Keeper) DistributeCitationRewards(
 }
 
 // calculateFundamentalityBonus returns the reward multiplier for a fact based on
-// how many other facts depend on it (citation count as proxy for fundamentality).
-//
-// From TS: fundamentality scoring uses citation_count thresholds.
-func (k Keeper) calculateFundamentalityBonus(_ sdk.Context, factID string) uint64 {
-	// Use the fact's citation count as fundamentality proxy
-	// Higher citation count → more fundamental → higher bonus
-	// Default 1.0x (1_000_000 basis points)
-	// This is evaluated inline since we already have the fact in callers;
-	// the factID parameter allows future ontology-based scoring.
-	_ = factID
-	return 1_000_000 // Base 1.0x; fundamentality bonus applied via FundamentalityScore below
+// how many other facts depend on it (incoming citation count as proxy for fundamentality).
+// Facts cited by 50+ other facts get 2.0x; 20+ get 1.5x; 10+ get 1.25x; 3+ get 1.1x.
+func (k Keeper) calculateFundamentalityBonus(ctx sdk.Context, factID string) uint64 {
+	score := k.CalculateFundamentalityScore(ctx, factID)
+	return GetFundamentalityMultiplier(score)
 }
 
 // CalculateFundamentalityScore computes a fundamentality score for a fact

@@ -29,8 +29,12 @@ func (k Keeper) ValidatorQualifications(goCtx context.Context, req *types.QueryV
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	quals := k.GetValidatorQualifications(ctx, req.ValidatorAddr)
+	qualPtrs := make([]*types.DomainQualification, len(quals))
+	for i := range quals {
+		qualPtrs[i] = &quals[i]
+	}
 	return &types.QueryValidatorQualificationsResponse{
-		Qualifications: quals,
+		Qualifications: qualPtrs,
 	}, nil
 }
 
@@ -40,7 +44,7 @@ func (k Keeper) DomainReputation(goCtx context.Context, req *types.QueryDomainRe
 
 	result := k.GetEffectiveReputation(ctx, req.ValidatorAddr, req.Domain)
 	return &types.QueryDomainReputationResponse{
-		Reputation: result,
+		Reputation: &result,
 	}, nil
 }
 

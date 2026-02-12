@@ -1,0 +1,20 @@
+syntax = "proto3";
+package legible.capture_challenge.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_challenge/types";
+
+import "legible/capture_challenge/v1/state.proto";
+
+// GenesisState defines the capture challenge module's genesis state.
+message GenesisState {
+  Params params = 1;
+  repeated CaptureChallenge challenges = 2;
+  repeated DomainBountyPool bounty_pools = 3;
+}
+
+// Params defines the capture challenge module parameters.
+message Params {
+  uint64 evidence_period_blocks = 1;
+  uint64 review_period_blocks = 2;
+  uint64 domain_pause_duration_blocks = 3;
+}

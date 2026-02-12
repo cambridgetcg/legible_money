@@ -41,7 +41,7 @@ const VALIDATOR_DYNAMICS_CONFIG: Partial<TestNetworkConfig> = {
   validatorCount: 4,
   fullNodeCount: 0,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
   testAccounts: 5,
   autoBlocks: false,
   blockInterval: 100,
@@ -55,14 +55,14 @@ const VALIDATOR_DYNAMICS_CONFIG: Partial<TestNetworkConfig> = {
     validatorQuorum: 0.66,
     acceptanceThreshold: 0.66,
     rejectionThreshold: 0.66,
-    minClaimStake: 10n * 10n ** 18n,
+    minClaimStake: 10n * 10n ** 15n,
     verificationReward: 1n * 10n ** 18n,
-    wrongVerificationSlash: 0.1,
-    missedVerificationSlash: 0.05,
+    wrongVerificationSlash: 0.06,
+    missedVerificationSlash: 0.0001,
     // Epoch-related params
     epochLength: 100n, // 100 blocks per epoch
     unbondingPeriod: 50n, // 50 blocks to unbond
-    minValidatorStake: 1000n * 10n ** 18n, // 1000 LGM minimum
+    minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM (tier 0 entry)
   } as Partial<ConsensusParams>,
 };
 
@@ -113,7 +113,7 @@ describe.sequential("Validator Dynamics", () => {
       const state = network.getState();
       const newValidator = createNewValidator(
         "new-validator-1",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
 
       // Fund the new validator account
@@ -136,7 +136,7 @@ describe.sequential("Validator Dynamics", () => {
 
     it("should reject validator with insufficient stake", async () => {
       const state = network.getState();
-      const minStake = 1000n * 10n ** 18n;
+      const minStake = 1000n * 10n ** 15n;
       const insufficientStake = minStake - 1n;
 
       const newValidator = createNewValidator(
@@ -178,7 +178,7 @@ describe.sequential("Validator Dynamics", () => {
       const state = network.getState();
       const newValidator = createNewValidator(
         "epoch-validator",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
 
       // Fund and register
@@ -210,7 +210,7 @@ describe.sequential("Validator Dynamics", () => {
       const state = network.getState();
       const newValidator = createNewValidator(
         "selection-pool",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
 
       // Fund and register
@@ -246,7 +246,7 @@ describe.sequential("Validator Dynamics", () => {
 
       // To test account staking (which is what state transitions use),
       // first stake some funds from the validator's balance
-      const stakeAmount = 1000n * 10n ** 18n;
+      const stakeAmount = 1000n * 10n ** 15n;
       state.stake(exitingValidator.did, stakeAmount);
 
       // Verify stake was applied to account
@@ -322,7 +322,7 @@ describe.sequential("Validator Dynamics", () => {
       expect(slashAmount).toBe(initialStake / 2n);
 
       // If stake falls below minimum, validator is removed
-      const minStake = 1000n * 10n ** 18n;
+      const minStake = 1000n * 10n ** 15n;
       const remainingStake = initialStake - slashAmount;
 
       if (remainingStake < minStake) {
@@ -344,7 +344,7 @@ describe.sequential("Validator Dynamics", () => {
       const initialStakedBalance = accountBefore?.stakedBalance || 0n;
 
       // Add stake from balance
-      const stakeAmount = 1000n * 10n ** 18n;
+      const stakeAmount = 1000n * 10n ** 15n;
       state.stake(validator.did, stakeAmount);
 
       const accountAfter = state.getAccount(validator.did);
@@ -358,14 +358,14 @@ describe.sequential("Validator Dynamics", () => {
       const validator = validators[0];
 
       // First stake some funds
-      const stakeAmount = 2000n * 10n ** 18n;
+      const stakeAmount = 2000n * 10n ** 15n;
       state.stake(validator.did, stakeAmount);
 
       const accountAfterStake = state.getAccount(validator.did);
       expect(accountAfterStake?.stakedBalance).toBe(stakeAmount);
 
       // Unstake portion
-      const unstakeAmount = 1000n * 10n ** 18n;
+      const unstakeAmount = 1000n * 10n ** 15n;
       state.unstake(validator.did, unstakeAmount);
 
       const accountAfterUnstake = state.getAccount(validator.did);
@@ -379,7 +379,7 @@ describe.sequential("Validator Dynamics", () => {
       const validator = validators[0];
 
       // Stake funds
-      const stakeAmount = 1000n * 10n ** 18n;
+      const stakeAmount = 1000n * 10n ** 15n;
       state.stake(validator.did, stakeAmount);
 
       const accountAfter = state.getAccount(validator.did);
@@ -395,7 +395,7 @@ describe.sequential("Validator Dynamics", () => {
     it("should reject stake below minimum", async () => {
       const state = network.getState();
       const validator = validators[0];
-      const minStake = 1000n * 10n ** 18n;
+      const minStake = 1000n * 10n ** 15n;
 
       const initialState = state.getValidator(validator.publicKey);
       const initialStake = initialState?.stake || 0n;
@@ -420,7 +420,7 @@ describe.sequential("Validator Dynamics", () => {
       const validator = validators[0];
       const delegator = accounts[0];
 
-      const delegationAmount = 100n * 10n ** 18n;
+      const delegationAmount = 100n * 10n ** 15n;
 
       // Delegate
       state.delegate(delegator.did, validator.publicKey, delegationAmount);
@@ -441,7 +441,7 @@ describe.sequential("Validator Dynamics", () => {
       const validatorState = state.getValidator(validator.publicKey);
       const initialDelegated = validatorState?.delegatedStake || 0n;
 
-      const delegationAmount = 500n * 10n ** 18n;
+      const delegationAmount = 500n * 10n ** 15n;
       state.delegate(delegator.did, validator.publicKey, delegationAmount);
 
       const updatedState = state.getValidator(validator.publicKey);
@@ -456,7 +456,7 @@ describe.sequential("Validator Dynamics", () => {
       const delegator = accounts[0];
 
       // First delegate
-      const delegationAmount = 100n * 10n ** 18n;
+      const delegationAmount = 100n * 10n ** 15n;
       state.delegate(delegator.did, validator.publicKey, delegationAmount);
 
       // Then undelegate
@@ -480,7 +480,7 @@ describe.sequential("Validator Dynamics", () => {
       // Create an inactive validator
       const inactiveValidator = createNewValidator(
         "inactive",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
 
       // Register but don't activate
@@ -497,7 +497,7 @@ describe.sequential("Validator Dynamics", () => {
       );
 
       // Delegation should succeed (validator is pending but valid)
-      const delegationAmount = 100n * 10n ** 18n;
+      const delegationAmount = 100n * 10n ** 15n;
       state.delegate(
         delegator.did,
         inactiveValidator.publicKey,
@@ -525,7 +525,7 @@ describe.sequential("Validator Dynamics", () => {
       // Add new validator
       const newValidator = createNewValidator(
         "epoch-test",
-        15_000n * 10n ** 18n,
+        15_000n * 10n ** 15n,
       );
       const funder = accounts[0];
       state.transfer(funder.did, newValidator.did, newValidator.stake * 2n);
@@ -569,7 +569,7 @@ describe.sequential("Validator Dynamics", () => {
       const exitingValidator = validators[0];
 
       // First stake some funds
-      const stakeAmount = 1000n * 10n ** 18n;
+      const stakeAmount = 1000n * 10n ** 15n;
       state.stake(exitingValidator.did, stakeAmount);
 
       // Initiate exit (unstake)
@@ -593,7 +593,7 @@ describe.sequential("Validator Dynamics", () => {
       // Add validator
       const newValidator = createNewValidator(
         "quorum-test",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
       const funder = accounts[0];
       state.transfer(funder.did, newValidator.did, newValidator.stake * 2n);
@@ -635,7 +635,7 @@ describe.sequential("Validator Dynamics", () => {
       // Add new validator mid-round
       const newValidator = createNewValidator(
         "mid-round",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
       const funder = accounts[1];
       state.transfer(funder.did, newValidator.did, newValidator.stake * 2n);
@@ -666,7 +666,7 @@ describe.sequential("Validator Dynamics", () => {
       // Add validator
       const newValidator = createNewValidator(
         "finality-test",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
       const funder = accounts[0];
       state.transfer(funder.did, newValidator.did, newValidator.stake * 2n);
@@ -693,7 +693,7 @@ describe.sequential("Validator Dynamics", () => {
       // Make changes
       const newValidator = createNewValidator(
         "state-test",
-        10_000n * 10n ** 18n,
+        10_000n * 10n ** 15n,
       );
       const funder = accounts[0];
       state.transfer(funder.did, newValidator.did, newValidator.stake * 2n);

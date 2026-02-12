@@ -1,0 +1,24 @@
+syntax = "proto3";
+package legible.disputes.v1;
+
+option go_package = "github.com/legible-money/legible/x/disputes/types";
+
+import "legible/disputes/v1/state.proto";
+
+// GenesisState defines the disputes module's genesis state.
+message GenesisState {
+  Params params = 1;
+  repeated Dispute disputes = 2;
+  repeated DisputeEvidence evidence = 3;
+  repeated DisputeVote votes = 4;
+}
+
+// Params defines the disputes module parameters.
+message Params {
+  repeated TierConfig tier_configs = 1;
+  uint32 max_active_disputes = 2;
+  uint64 escalation_delay = 3;
+  uint64 slash_rate_loser = 4;
+  uint64 reward_rate_winner = 5;
+  uint64 arbiter_reward_rate = 6;
+}

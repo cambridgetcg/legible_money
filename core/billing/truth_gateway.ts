@@ -11,13 +11,19 @@
  *
  * THE VALUE EQUATION:
  * ==================
- * Query Value = Base Fee + Confidence Premium + Fundamentality Premium - Freshness Discount
+ * Query Price = Base Fee × Marginal Information Value
  *
- * WHERE:
- * - Base Fee: Minimum cost per query
- * - Confidence Premium: Higher confidence = higher value = higher cost
- * - Fundamentality Premium: More fundamental facts (cited by many) cost more
- * - Freshness Discount: Recently verified facts may have lower confidence
+ * Marginal Information Value = how much querying this fact improves agent output
+ * beyond what the LLM already knows from training data.
+ *
+ * THREE FACTORS:
+ * - Confidence (bell curve): Medium-high (0.4–0.85) = peak value (verified but
+ *   not yet common knowledge). Very high (>0.85) = already known, discount.
+ *   Very low (<0.4) = too uncertain, surcharge for risk.
+ * - Novelty (inverted citations): Few citations = novel = highest value. Many
+ *   citations = well-known = LLM already has this = discount.
+ * - Freshness (inverted): Recently verified = most likely NOT in LLM training
+ *   data = premium. Old facts = probably in training data already.
  *
  * FLOW:
  * ====
@@ -220,34 +226,51 @@ export function calculateQueryPrice(
     // Base cost
     const baseCost = params.basePricePerCall;
 
-    // Confidence premium (higher confidence = more valuable)
-    // Premium = base × (confidence - 0.5) × rate
-    // Only apply premium above 0.5 confidence
-    const confidenceMultiplier =
-      fact.confidence > 0.5
-        ? 1 + (fact.confidence - 0.5) * params.confidencePremiumRate
-        : 1;
+    // Marginal Information Value pricing: price ∝ how much querying this fact
+    // actually improves agent output beyond what the LLM already knows.
+    //
+    // 1. Confidence value curve (bell-shaped):
+    //    - Low (<0.4): uncertain, risky to use → surcharge
+    //    - Medium (0.4–0.85): verified but not common knowledge → peak value zone
+    //    - High (>0.85): already in LLM training data → discount
+    let confidenceMultiplier: number;
+    if (fact.confidence < 0.4) {
+      confidenceMultiplier =
+        1 + (0.4 - fact.confidence) * params.confidencePremiumRate;
+    } else if (fact.confidence > 0.85) {
+      confidenceMultiplier =
+        1 - (fact.confidence - 0.85) * params.confidencePremiumRate;
+    } else {
+      confidenceMultiplier = 1; // Peak value zone: base rate
+    }
+    confidenceMultiplier = Math.max(0.5, Math.min(1.5, confidenceMultiplier));
     const confidencePremium =
       (baseCost * BigInt(Math.floor((confidenceMultiplier - 1) * 1000))) /
       1000n;
 
-    // Fundamentality premium (more cited = more fundamental = more valuable)
-    // Premium based on citation count (log scale)
-    const fundamentalityMultiplier =
-      1 +
-      (Math.log(fact.citationCount + 1) * params.fundamentalityPremiumRate) /
-        10;
+    // 2. Novelty discount (inverted fundamentality):
+    //    Highly cited facts are well-known — agents already have this in
+    //    training data. Novel facts (few citations) are where the knowledge
+    //    tree genuinely reduces hallucination.
+    const fundamentalityMultiplier = Math.max(
+      0.5,
+      1 -
+        (Math.log(fact.citationCount + 1) * params.fundamentalityPremiumRate) /
+          10,
+    );
     const fundamentalityPremium =
       (baseCost * BigInt(Math.floor((fundamentalityMultiplier - 1) * 1000))) /
       1000n;
 
-    // Freshness discount (recently verified = less certain)
-    // Discount for facts verified in last 1000 blocks
+    // 3. Freshness premium (inverted):
+    //    Recently verified facts are most likely to contain information NOT
+    //    in LLM training data — highest marginal information value.
     const blocksSinceVerification = currentBlock - fact.verifiedAtBlock;
     const freshnessDiscount =
       blocksSinceVerification < 1000n
-        ? (baseCost * BigInt(Math.floor(params.freshnessDiscountRate * 1000))) /
-          1000n
+        ? -(
+            baseCost * BigInt(Math.floor(params.freshnessDiscountRate * 1000))
+          ) / 1000n
         : 0n;
 
     // Total for this fact

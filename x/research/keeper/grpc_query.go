@@ -28,10 +28,14 @@ func (q queryServer) Research(goCtx context.Context, req *types.QueryResearchReq
 		return nil, types.ErrSubmissionNotFound
 	}
 
-	reviews := q.Keeper.GetReviewsForResearch(ctx, req.ResearchId)
+	reviewValues := q.Keeper.GetReviewsForResearch(ctx, req.ResearchId)
+	reviews := make([]*types.PeerReview, len(reviewValues))
+	for i := range reviewValues {
+		reviews[i] = &reviewValues[i]
+	}
 
 	return &types.QueryResearchResponse{
-		Research: research,
+		Research: &research,
 		Reviews:  reviews,
 	}, nil
 }
@@ -40,7 +44,7 @@ func (q queryServer) Research(goCtx context.Context, req *types.QueryResearchReq
 func (q queryServer) Submissions(goCtx context.Context, req *types.QuerySubmissionsRequest) (*types.QuerySubmissionsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	var results []types.Research
+	var results []*types.Research
 	q.Keeper.IterateResearches(ctx, func(r types.Research) bool {
 		if req.Status != "" && string(r.Status) != req.Status {
 			return false
@@ -48,7 +52,8 @@ func (q queryServer) Submissions(goCtx context.Context, req *types.QuerySubmissi
 		if req.Domain != "" && r.Domain != req.Domain {
 			return false
 		}
-		results = append(results, r)
+		rCopy := r
+		results = append(results, &rCopy)
 		return false
 	})
 
@@ -64,15 +69,16 @@ func (q queryServer) Bounty(goCtx context.Context, req *types.QueryBountyRequest
 		return nil, types.ErrBountyNotFound
 	}
 
-	return &types.QueryBountyResponse{Bounty: bounty}, nil
+	return &types.QueryBountyResponse{Bounty: &bounty}, nil
 }
 
 // Params returns the module parameters and treasury balance.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
+	params := q.Keeper.GetParams(ctx)
 	return &types.QueryParamsResponse{
-		Params:          q.Keeper.GetParams(ctx),
+		Params:          &params,
 		TreasuryBalance: q.Keeper.GetTreasuryBalance(ctx),
 	}, nil
 }

@@ -1,0 +1,35 @@
+syntax = "proto3";
+package legible.gov.v1;
+
+option go_package = "github.com/legible-money/legible/x/gov/types";
+
+import "legible/gov/v1/state.proto";
+
+// GenesisState defines the gov module's genesis state.
+message GenesisState {
+  Params params                                   = 1;
+  repeated LIP lips                               = 2;
+  repeated QuadraticVote votes                    = 3;
+  repeated DisbursementProposal disbursements     = 4;
+  uint64 next_lip_number                          = 5;
+  uint64 next_disb_number                         = 6;
+}
+
+// Params defines the governance module parameters.
+message Params {
+  uint64 voting_period_blocks           = 1;
+  uint64 review_period_blocks           = 2;
+  uint64 last_call_period_blocks        = 3;
+  string base_cost_per_vote             = 4;  // bigint as string (ulgm)
+  uint32 max_votes_per_voter            = 5;
+  uint64 support_threshold_bps          = 6;  // basis points
+  uint64 quorum_threshold_bps           = 7;  // basis points
+  string disbursement_stake             = 8;  // bigint as string (ulgm)
+  uint64 disbursement_timelock_blocks   = 9;
+  uint64 disbursement_support_bps       = 10; // basis points
+  uint64 disbursement_quorum_bps        = 11; // basis points
+  string lip_stake_consensus            = 12; // bigint as string (ulgm)
+  string lip_stake_economics            = 13; // bigint as string (ulgm)
+  string lip_stake_interface            = 14; // bigint as string (ulgm)
+  string lip_stake_process              = 15; // bigint as string (ulgm)
+}

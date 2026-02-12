@@ -21,4 +21,7 @@ var (
 	ErrMaxVotesExceeded      = errors.Register(ModuleName, 17, "maximum votes per voter exceeded")
 	ErrTerminalStage         = errors.Register(ModuleName, 18, "proposal is in a terminal stage")
 	ErrUnauthorized          = errors.Register(ModuleName, 19, "unauthorized")
+	ErrNotConsensusCategory  = errors.Register(ModuleName, 20, "upgrade plans can only be attached to consensus-category LIPs")
+	ErrUpgradePlanExists     = errors.Register(ModuleName, 21, "upgrade plan already attached to this LIP")
+	ErrInvalidUpgradePlan    = errors.Register(ModuleName, 22, "invalid upgrade plan")
 )

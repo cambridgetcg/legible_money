@@ -1040,6 +1040,26 @@ func (interp *Interpreter) executeOpcode(
 	return actionContinue
 }
 
+// checkCapability returns true if the execution context permits the given capability.
+// If Capabilities is nil (no session key restriction), all capabilities are allowed.
+func checkCapability(ctx *ExecutionContext, cap string) bool {
+	if ctx.Capabilities == nil {
+		return true
+	}
+	switch cap {
+	case "stake":
+		return ctx.Capabilities.CanStake
+	case "transfer":
+		return ctx.Capabilities.CanTransfer
+	case "submit_claims":
+		return ctx.Capabilities.CanSubmitClaims
+	case "vote":
+		return ctx.Capabilities.CanVote
+	default:
+		return true
+	}
+}
+
 // executeAgentOpcode handles all Legible Money extension opcodes.
 func (interp *Interpreter) executeAgentOpcode(
 	opcode byte,
@@ -1104,6 +1124,16 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(count))
 
 	case SUBMIT_CLAIM:
+		if !checkCapability(ctx, "submit_claims") {
+			// Pop 3 inputs, push 0 (denied)
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		domain, ok1 := pop()
 		dataHash, ok2 := pop()
 		evidenceHash, ok3 := pop()
@@ -1121,6 +1151,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case COMMIT_VOTE:
+		if !checkCapability(ctx, "vote") {
+			for i := 0; i < 2; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		claimId, ok1 := pop()
 		voteHash, ok2 := pop()
 		if !ok1 || !ok2 {
@@ -1135,6 +1174,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case REVEAL_VOTE:
+		if !checkCapability(ctx, "vote") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		claimId, ok1 := pop()
 		vote, ok2 := pop()
 		salt, ok3 := pop()
@@ -1395,6 +1443,13 @@ func (interp *Interpreter) executeAgentOpcode(
 
 	// Treasury (0xD0-0xD7)
 	case CLAIM_VESTING:
+		if !checkCapability(ctx, "transfer") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		vestingId, ok := pop()
 		if !ok {
 			return actionError
@@ -1417,6 +1472,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(count))
 
 	case STAKE:
+		if !checkCapability(ctx, "stake") {
+			for i := 0; i < 2; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		amount, ok1 := pop()
 		validatorDID, ok2 := pop()
 		if !ok1 || !ok2 {
@@ -1431,6 +1495,13 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case UNSTAKE:
+		if !checkCapability(ctx, "stake") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		stakeId, ok := pop()
 		if !ok {
 			return actionError
@@ -1458,6 +1529,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(nextExpiry))
 
 	case EXTEND_EXPIRING:
+		if !checkCapability(ctx, "transfer") {
+			for i := 0; i < 2; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		periodId, ok1 := pop()
 		newExpiry, ok2 := pop()
 		if !ok1 || !ok2 {
@@ -1471,6 +1551,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case SET_SPEND_LIMIT:
+		if !checkCapability(ctx, "transfer") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		limitType, ok1 := pop()
 		amount, ok2 := pop()
 		period, ok3 := pop()

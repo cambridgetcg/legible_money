@@ -805,15 +805,15 @@ export function createDefaultGenesisConfig(
       maxValidators: 21,
       validatorQuorum: 0.66,
 
-      minValidatorStake: 1000n * 10n ** 18n,
-      minClaimStake: 100n * 10n ** 18n,
+      minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM (tier 0 entry)
+      minClaimStake: 11n * 10n ** 15n, // 0.011 LGM (affordable with 0.222 LGM genesis balance)
 
       acceptanceThreshold: 0.8,
       rejectionThreshold: 0.8,
       contestedThreshold: 0.6,
 
-      wrongVerificationSlash: 0.1,
-      missedVerificationSlash: 0.05,
+      wrongVerificationSlash: 0.06,
+      missedVerificationSlash: 0.0001,
       invalidClaimSlash: 0.2,
 
       researchShareRate: 0.22,

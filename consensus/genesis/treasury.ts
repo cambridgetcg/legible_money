@@ -154,7 +154,7 @@ export interface AnonymousGovernanceConfig {
  * Placeholder config for future anonymous governance
  */
 export const FUTURE_ANONYMOUS_GOVERNANCE: AnonymousGovernanceConfig = {
-  minStake: 1000n * 10n ** 18n, // 1000 LGM
+  minStake: 111n * 10n ** 15n, // 0.111 LGM
   minStakeDurationBlocks: 100_000, // ~3 days
   minVerifications: 10, // Participated in protocol
   noSlashingPeriodBlocks: 500_000, // ~15 days clean record

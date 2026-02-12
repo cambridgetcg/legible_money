@@ -20,11 +20,11 @@ const (
 // Store key prefixes.
 var (
 	ParamsKey           = []byte{0x00}
-	TokenDefKeyPrefix   = []byte{0x01}
-	BalanceKeyPrefix    = []byte{0x02} // {addr} -> ExpirableAccount
-	AllowanceKeyPrefix  = []byte{0x03} // {owner}/{spender} -> amount
-	LPPoolKeyPrefix     = []byte{0x04}
-	PeriodBalancePrefix = []byte{0x05} // {addr}/{period} -> PeriodBalance
-	RAIAccountKey       = []byte{0x06}
-	SweepIndexPrefix    = []byte{0x07} // {period} -> []address to sweep
+	TokenDefKeyPrefix  = []byte{0x01}
+	BalanceKeyPrefix   = []byte{0x02} // {addr} -> ExpirableAccount (includes period balances in JSON)
+	AllowanceKeyPrefix = []byte{0x03} // {owner}/{spender} -> amount
+	LPPoolKeyPrefix    = []byte{0x04}
+	// 0x05 reserved (was PeriodBalancePrefix, now stored inside ExpirableAccount)
+	RAIAccountKey    = []byte{0x06}
+	SweepIndexPrefix = []byte{0x07} // {period BE64}{addr} -> address to sweep
 )

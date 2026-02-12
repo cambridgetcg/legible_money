@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	storetypes "cosmossdk.io/store/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/qualification/types"
@@ -16,22 +14,26 @@ import (
 
 // SetQualification stores a domain qualification and maintains indexes.
 func (k Keeper) SetQualification(ctx sdk.Context, q types.DomainQualification) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(q)
 	if err != nil {
 		panic("failed to marshal domain qualification: " + err.Error())
 	}
-	store.Set(types.QualificationKey(q.ValidatorAddr, q.Domain), bz)
+	if err := store.Set(types.QualificationKey(q.ValidatorAddr, q.Domain), bz); err != nil {
+		panic("failed to set qualification: " + err.Error())
+	}
 
 	// Maintain domain→validator index
-	store.Set(types.DomainValidatorIndexKey(q.Domain, q.ValidatorAddr), []byte{})
+	if err := store.Set(types.DomainValidatorIndexKey(q.Domain, q.ValidatorAddr), []byte{}); err != nil {
+		panic("failed to set domain-validator index: " + err.Error())
+	}
 }
 
 // GetQualification retrieves a domain qualification.
 func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) (types.DomainQualification, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.QualificationKey(validatorAddr, domain))
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.QualificationKey(validatorAddr, domain))
+	if err != nil || bz == nil {
 		return types.DomainQualification{}, false
 	}
 	var q types.DomainQualification
@@ -43,16 +45,19 @@ func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) 
 
 // DeleteQualification removes a domain qualification and its indexes.
 func (k Keeper) DeleteQualification(ctx sdk.Context, validatorAddr, domain string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(types.QualificationKey(validatorAddr, domain))
-	store.Delete(types.DomainValidatorIndexKey(domain, validatorAddr))
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Delete(types.QualificationKey(validatorAddr, domain))
+	_ = store.Delete(types.DomainValidatorIndexKey(domain, validatorAddr))
 }
 
 // GetQualificationsByValidator returns all qualifications for a validator.
 func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr string) []types.DomainQualification {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.ValidatorQualificationPrefix(validatorAddr)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var qualifications []types.DomainQualification
@@ -70,23 +75,29 @@ func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr stri
 
 // SetEndorsement stores an endorsement and maintains indexes.
 func (k Keeper) SetEndorsement(ctx sdk.Context, e types.QualificationEndorsement) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(e)
 	if err != nil {
 		panic("failed to marshal endorsement: " + err.Error())
 	}
-	store.Set(types.EndorsementKey(e.Id), bz)
+	if err := store.Set(types.EndorsementKey(e.Id), bz); err != nil {
+		panic("failed to set endorsement: " + err.Error())
+	}
 
 	// Maintain indexes
-	store.Set(types.EndorserIndexKey(e.EndorserAddr, e.Id), []byte{})
-	store.Set(types.TargetIndexKey(e.TargetValidator, e.Id), []byte{})
+	if err := store.Set(types.EndorserIndexKey(e.EndorserAddr, e.Id), []byte{}); err != nil {
+		panic("failed to set endorser index: " + err.Error())
+	}
+	if err := store.Set(types.TargetIndexKey(e.TargetValidator, e.Id), []byte{}); err != nil {
+		panic("failed to set target index: " + err.Error())
+	}
 }
 
 // GetEndorsement retrieves an endorsement by ID.
 func (k Keeper) GetEndorsement(ctx sdk.Context, id string) (types.QualificationEndorsement, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.EndorsementKey(id))
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.EndorsementKey(id))
+	if err != nil || bz == nil {
 		return types.QualificationEndorsement{}, false
 	}
 	var e types.QualificationEndorsement
@@ -98,17 +109,20 @@ func (k Keeper) GetEndorsement(ctx sdk.Context, id string) (types.QualificationE
 
 // DeleteEndorsement removes an endorsement and its indexes.
 func (k Keeper) DeleteEndorsement(ctx sdk.Context, e types.QualificationEndorsement) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(types.EndorsementKey(e.Id))
-	store.Delete(types.EndorserIndexKey(e.EndorserAddr, e.Id))
-	store.Delete(types.TargetIndexKey(e.TargetValidator, e.Id))
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Delete(types.EndorsementKey(e.Id))
+	_ = store.Delete(types.EndorserIndexKey(e.EndorserAddr, e.Id))
+	_ = store.Delete(types.TargetIndexKey(e.TargetValidator, e.Id))
 }
 
 // GetEndorsementsForValidator returns all endorsements targeting a validator.
 func (k Keeper) GetEndorsementsForValidator(ctx sdk.Context, targetAddr string) []types.QualificationEndorsement {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.TargetValidatorPrefix(targetAddr)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var endorsements []types.QualificationEndorsement
@@ -142,16 +156,18 @@ func (k Keeper) GetEndorsementsForValidatorInDomain(ctx sdk.Context, targetAddr,
 
 // GetNextEndorsementId increments and returns the next endorsement ID.
 func (k Keeper) GetNextEndorsementId(ctx sdk.Context) string {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.EndorsementCounterKey)
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.EndorsementCounterKey)
 	var counter uint64
-	if bz != nil {
+	if err == nil && bz != nil {
 		counter = binary.BigEndian.Uint64(bz)
 	}
 	counter++
 	newBz := make([]byte, 8)
 	binary.BigEndian.PutUint64(newBz, counter)
-	store.Set(types.EndorsementCounterKey, newBz)
+	if err := store.Set(types.EndorsementCounterKey, newBz); err != nil {
+		panic("failed to set endorsement counter: " + err.Error())
+	}
 	return fmt.Sprintf("endorse_%d", counter)
 }
 
@@ -159,9 +175,9 @@ func (k Keeper) GetNextEndorsementId(ctx sdk.Context) string {
 
 // GetParams returns the qualification module parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ParamsKey)
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.ParamsKey)
+	if err != nil || bz == nil {
 		return types.DefaultParams()
 	}
 	var params types.Params
@@ -173,10 +189,12 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams stores the qualification module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(params)
 	if err != nil {
 		panic("failed to marshal qualification params: " + err.Error())
 	}
-	store.Set(types.ParamsKey, bz)
+	if err := store.Set(types.ParamsKey, bz); err != nil {
+		panic("failed to set qualification params: " + err.Error())
+	}
 }

@@ -38,9 +38,11 @@
     "prepare": "husky",
     "benchmark": "tsx tools/benchmark.ts",
     "benchmark:crypto": "tsx tools/benchmark.ts --crypto",
-    "perf:check": "tsx tools/benchmark.ts && npm run typecheck"
+    "perf:check": "tsx tools/benchmark.ts && npm run typecheck",
+    "daemon": "tsx daemon/src/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@chainsafe/libp2p-noise": "^17.0.0",
     "@chainsafe/libp2p-yamux": "^8.0.0",
     "@libp2p/bootstrap": "^12.0.0",

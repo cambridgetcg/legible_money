@@ -1,0 +1,45 @@
+syntax = "proto3";
+package legible.qualification.v1;
+
+option go_package = "github.com/legible-money/legible/x/qualification/types";
+
+// QualificationMetrics tracks verification accuracy and performance metrics.
+message QualificationMetrics {
+  uint32 total_verifications     = 1;
+  uint32 correct_verifications   = 2;
+  uint32 accuracy_bps            = 3;  // basis points (10000 = 100%)
+  uint64 last_verification_block = 4;
+  uint32 consecutive_correct     = 5;
+  uint32 consecutive_incorrect   = 6;
+  uint32 challenges_received     = 7;
+  uint32 challenges_lost         = 8;
+  uint32 effective_weight_bps    = 9;  // basis points (10000 = 100%)
+}
+
+// DomainQualification represents a validator's qualification in a knowledge domain.
+message DomainQualification {
+  string validator_addr            = 1;
+  string domain                    = 2;
+  uint32 stratum                   = 3;
+  string pathway                   = 4;  // "stake_commitment", "track_record", "cross_reference", "stratum_inheritance", "genesis"
+  string status                    = 5;  // "active", "probationary", "suspended", "revoked", "expired"
+  uint64 earned_at_block           = 6;
+  uint64 expires_at_block          = 7;  // 0 = no expiry
+  QualificationMetrics metrics     = 8;
+  string locked_stake              = 9;  // bigint as string (ulgm)
+  uint64 stake_unlocks_at          = 10;
+  repeated string endorsers        = 11;
+  string inherited_from            = 12;
+  uint32 inheritance_discount_bps  = 13; // 10000 = 1.0 (no discount)
+}
+
+// QualificationEndorsement represents one validator endorsing another for a domain.
+message QualificationEndorsement {
+  string id                = 1;
+  string endorser_addr     = 2;
+  string target_validator  = 3;
+  string domain            = 4;
+  string stake             = 5;  // bigint as string (ulgm)
+  uint64 endorsed_at_block = 6;
+  uint64 expires_at_block  = 7;
+}

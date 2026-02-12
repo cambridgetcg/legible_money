@@ -1,0 +1,45 @@
+syntax = "proto3";
+package legible.channels.v1;
+
+option go_package = "github.com/legible-money/legible/x/channels/types";
+
+// PaymentChannel represents a unidirectional payment channel.
+message PaymentChannel {
+  string channel_id            = 1;
+  string payer                 = 2;  // bech32 address
+  string provider              = 3;  // bech32 address
+  string deposited             = 4;  // bigint as string (ulgm)
+  string spent                 = 5;  // bigint as string (ulgm)
+  string available             = 6;  // bigint as string (ulgm)
+  string status                = 7;  // "open", "closing", "disputed", "settled", "closed"
+  uint64 opened_at_block       = 8;
+  uint64 expires_at_block      = 9;
+  uint64 nonce                 = 10;
+  string last_state_hash       = 11;
+  uint64 settlement_frequency  = 12; // blocks between auto-settlements
+  uint64 last_settlement_block = 13;
+  uint64 dispute_deadline      = 14;
+  uint64 dispute_nonce         = 15;
+}
+
+// ChannelStateUpdate represents an off-chain state update for a channel.
+message ChannelStateUpdate {
+  string channel_id          = 1;
+  uint64 nonce               = 2;
+  string spent               = 3;  // bigint as string (ulgm cumulative)
+  string state_hash          = 4;
+  string payer_signature     = 5;
+  string provider_signature  = 6;
+}
+
+// ChannelDispute represents a dispute on a payment channel.
+message ChannelDispute {
+  string channel_id         = 1;
+  string disputer           = 2;  // bech32 address
+  uint64 disputed_nonce     = 3;
+  string disputed_spent     = 4;  // bigint as string (ulgm)
+  string dispute_state_hash = 5;
+  uint64 deadline_block     = 6;
+  bool   resolved           = 7;
+  string resolution         = 8;  // "payer_wins", "provider_wins", "split"
+}

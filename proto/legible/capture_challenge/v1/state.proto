@@ -1,0 +1,60 @@
+syntax = "proto3";
+package legible.capture_challenge.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_challenge/types";
+
+// CaptureEvidence represents a single piece of evidence in a challenge.
+message CaptureEvidence {
+  string id = 1;
+  string type = 2;
+  string description = 3;
+  repeated string fact_ids = 4;
+  repeated string validator_ids = 5;
+  uint64 block_start = 6;
+  uint64 block_end = 7;
+  string data_hash = 8;
+  uint64 submitted_at = 9;
+  string submitted_by = 10;
+}
+
+// CaptureResolution records how a challenge was resolved.
+message CaptureResolution {
+  string outcome = 1;
+  string challenger_reward = 2;
+  map<string, string> validator_slashes = 3;
+  repeated string facts_invalidated = 4;
+  uint64 resolved_at_block = 5;
+  string resolved_by = 6;
+  string justification = 7;
+}
+
+// CaptureChallenge represents an active or completed capture challenge.
+message CaptureChallenge {
+  string id = 1;
+  string domain = 2;
+  string challenger = 3;
+  string challenge_stake = 4;
+  repeated CaptureEvidence evidence = 5;
+  repeated string accused_validators = 6;
+  uint64 submitted_at_block = 7;
+  uint64 evidence_deadline = 8;
+  uint64 review_deadline = 9;
+  string status = 10;
+  CaptureResolution resolution = 11;
+  uint64 domain_paused_until = 12;
+}
+
+// DomainBountyPool tracks the bounty pool for a domain.
+message DomainBountyPool {
+  string domain = 1;
+  string balance = 2;
+  uint64 challenges_submitted = 3;
+  uint64 challenges_upheld = 4;
+  uint64 challenges_rejected = 5;
+  string total_rewards_paid = 6;
+  uint64 capture_risk_score = 7;
+  uint64 last_analyzed_block = 8;
+  bool auto_generated = 9;
+  uint64 created_at_block = 10;
+  uint64 last_updated_block = 11;
+}

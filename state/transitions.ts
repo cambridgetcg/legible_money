@@ -182,7 +182,9 @@ import {
   type ResumeVestingPayload,
   type AccelerateVestingPayload,
   type FalsifyVestingPayload,
+  type ClaimReservePayload,
 } from "../core/rewards/types.js";
+import { calculateReserveClaim } from "../core/rewards/clawback.js";
 // determineVestingCategory removed — no longer needed (usage-based rewards only)
 import {
   routeReward,
@@ -533,6 +535,10 @@ export function executeTransaction(
         gasUsed = executeVestingFalsify(state, tx, blockNumber, params);
         break;
 
+      case "vesting_claim_reserve":
+        gasUsed = executeVestingClaimReserve(state, tx, blockNumber, params);
+        break;
+
       // Domain proposal transactions (Ontological Tree Growth)
       case "domain_propose":
         gasUsed = executeDomainPropose(state, tx, blockNumber, params);
@@ -724,6 +730,27 @@ export function executeTransaction(
         gasUsed = executeResolveUndecidable(state, tx, blockNumber);
         break;
 
+      // Expirable token transactions (Dynamic Array Method)
+      case "token_mint_expirable":
+        gasUsed = executeTokenMintExpirable(state, tx);
+        break;
+
+      case "token_transfer_expirable":
+        gasUsed = executeTokenTransferExpirable(state, tx);
+        break;
+
+      case "expired_token_retrieve":
+        gasUsed = executeExpiredTokenRetrieve(state, tx);
+        break;
+
+      case "rai_distribute":
+        gasUsed = executeRaiDistribute(state, tx, blockNumber);
+        break;
+
+      case "token_extend_expiration":
+        gasUsed = executeTokenExtendExpiration(state, tx);
+        break;
+
       default:
         state.rollbackTransaction();
         return {
@@ -878,7 +905,7 @@ function executeStake(
       ? BigInt(payload.amount)
       : payload.amount;
 
-  if (amount < params.minValidatorStake) {
+  if (params?.minValidatorStake && amount < params.minValidatorStake) {
     throw new StateError(
       `Minimum stake is ${params.minValidatorStake}`,
       "INVALID_TRANSITION",
@@ -907,7 +934,38 @@ function executeUnstake(
       ? BigInt(payload.amount)
       : payload.amount;
 
+  // Get current period for originPeriod tracking
+  const currentPeriod = (state as any).accounts.getCurrentPeriod() as
+    | number
+    | undefined;
+
+  // Reduce staked balance and credit to liquid balance
   state.unstake(senderDid, amount);
+
+  // If period tracking is active, create unbonding entry with originPeriod
+  // so that processUnbondingQueue can release to the correct period
+  if (currentPeriod !== undefined) {
+    const currentBlock = state.getCurrentBlock();
+    const unbondingPeriod = _params?.unbondingPeriod ?? 240000n;
+    const completesAt = currentBlock + unbondingPeriod;
+
+    const existingEntries = state.getPendingUnbondingEntries(senderDid);
+    const nonce = existingEntries.length;
+    const unbondingId = sha512_256Hex(
+      `unstake:${senderDid}:${currentBlock}:${amount}:${nonce}`,
+    );
+
+    state.addUnbondingEntry({
+      id: unbondingId,
+      delegator: senderDid,
+      validator: tx.sender,
+      amount,
+      initiatedAt: currentBlock,
+      completesAt,
+      status: "pending",
+      originPeriod: currentPeriod,
+    });
+  }
 
   return 50000n;
 }
@@ -994,8 +1052,10 @@ function executeUndelegate(
   const currentBlock = state.getCurrentBlock();
   const completesAt = currentBlock + unbondingPeriod;
 
+  const existingEntries = state.getPendingUnbondingEntries(senderDid);
+  const nonce = existingEntries.length;
   const unbondingId = sha512_256Hex(
-    `unbond:${senderDid}:${payload.validator}:${currentBlock}:${undelegateAmount}`,
+    `unbond:${senderDid}:${payload.validator}:${currentBlock}:${undelegateAmount}:${nonce}`,
   );
 
   state.addUnbondingEntry({
@@ -1040,8 +1100,17 @@ export function processUnbondingQueue(
   const maturedEntries = state.getMaturedUnbondingEntries(currentBlock);
 
   for (const entry of maturedEntries) {
-    // Transfer funds from delegation pool back to delegator
-    state.transfer("did:lgm:delegation-pool", entry.delegator, entry.amount);
+    // If originPeriod is set, credit to that specific period (prevents expiry refresh)
+    if (entry.originPeriod !== undefined) {
+      (state as any).accounts.creditBalanceToSpecificPeriod(
+        entry.delegator,
+        entry.amount,
+        entry.originPeriod,
+      );
+    } else {
+      // Transfer funds from delegation pool back to delegator
+      state.transfer("did:lgm:delegation-pool", entry.delegator, entry.amount);
+    }
 
     // Mark entry as completed
     state.completeUnbondingEntry(entry.id);
@@ -1212,6 +1281,13 @@ function executeClaimSubmit(
   state.stake(senderDid, payload.stake);
 
   // 6. Create claim record
+  // In adversarial mode, claims start as "pending_evaluation" (structural eval in next block).
+  // In legacy mode, claims start as "pending" (awaiting verification round assignment).
+  const adversarialEnabled = params.adversarialVerificationEnabled ?? false;
+  const initialStatus: import("./types.js").ClaimStatus = adversarialEnabled
+    ? "pending_evaluation"
+    : "pending";
+
   const claimState: ClaimState = {
     id: claimId,
     claim: payload.claim,
@@ -1225,7 +1301,7 @@ function executeClaimSubmit(
     logicZone,
     decidability: decidabilityResult.decidability,
     goedelianStatus: goedelAnalysis.status,
-    status: "pending",
+    status: initialStatus,
     statusChangedAt: blockNumber,
     derivedFrom: payload.derivedFrom,
     schemaId: payload.schemaId,
@@ -1274,7 +1350,7 @@ function executeClaimStartVerification(
   }
 
   // 3. Update claim status
-  state.updateClaimStatus(payload.claimId, "verifying", blockNumber, {
+  state.updateClaimStatus(payload.claimId, "in_verification", blockNumber, {
     verificationRoundId: payload.roundId,
   });
 
@@ -1311,7 +1387,7 @@ function executeClaimCompleteVerification(
   }
 
   // 2. Validate claim is verifying
-  if (claim.status !== "verifying") {
+  if (claim.status !== "in_verification") {
     throw new StateError(
       `Claim ${payload.claimId} is ${claim.status}, expected verifying`,
       "CLAIM_NOT_VERIFYING",
@@ -1393,7 +1469,7 @@ function executeClaimCompleteVerification(
 
     state.addFact({
       id: factId,
-      claim: claim.claim,
+      claimText: claim.claim,
       domain: claim.domain,
       stratum: claim.stratum,
       epistemicCategory,
@@ -1578,7 +1654,7 @@ function executeClaimCompleteVerification(
 
     state.addFact({
       id: contestedFactId,
-      claim: claim.claim,
+      claimText: claim.claim,
       domain: claim.domain,
       stratum: claim.stratum,
       epistemicCategory: contestedEpistemicCategory,
@@ -1774,7 +1850,7 @@ function executeGovernancePropose(
   const senderDid = resolveSenderDid(tx);
   const account = state.getAccount(senderDid);
 
-  const MIN_PROPOSAL_STAKE = 10000n * 10n ** 18n; // 10000 LGM
+  const MIN_PROPOSAL_STAKE = 10n * 10n ** 15n; // 0.01 LGM (affordable with 0.222 LGM genesis balance)
 
   if (!account || account.stakedBalance < MIN_PROPOSAL_STAKE) {
     throw new StateError(
@@ -3199,11 +3275,13 @@ function executeDisputeSettle(
   }
 
   for (const [arbiterDid, penalty] of settlement.arbiterPenalties) {
-    // Slash arbiter's locked stake
-    const account = state.getAccount(arbiterDid);
-    if (account) {
+    // Slash arbiter's locked stake (not tx.sender — arbiter bears their own penalty)
+    const arbiterValidator = state.getValidator(
+      arbiterDid as unknown as PublicKey,
+    );
+    if (arbiterValidator) {
       state.slashValidator(
-        tx.sender,
+        arbiterValidator.publicKey,
         penalty,
         `Wrong arbitration vote in dispute ${dispute.id}`,
       );
@@ -3712,6 +3790,64 @@ function executeVestingFalsify(
   }
 
   return 150000n; // Vesting falsification gas
+}
+
+/**
+ * Claim reserve from a truth-endured vesting schedule.
+ * Reserve releases linearly after the reserve threshold (default ~90 days),
+ * up to 50% of the original reserve. Remaining 50% stays locked permanently.
+ */
+function executeVestingClaimReserve(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+  _params: ConsensusParams,
+): bigint {
+  const payload = tx.payload as ClaimReservePayload;
+  const senderDid = resolveSenderDid(tx);
+
+  // Validate sender is the claimer
+  if (payload.claimer !== senderDid) {
+    throw new StateError("Sender must be the claimer", "INVALID_TRANSITION");
+  }
+
+  // Get vesting
+  const vesting = state.getVesting(payload.vestingId);
+  if (!vesting) {
+    throw new StateError("Vesting not found", "VESTING_NOT_FOUND");
+  }
+
+  // Validate recipient
+  if (vesting.recipient !== senderDid) {
+    throw new StateError(
+      "Only the vesting recipient can claim reserve",
+      "UNAUTHORIZED",
+    );
+  }
+
+  // Reserve release threshold: ~90 days of blocks (34272 blocks/day * 90)
+  const RESERVE_RELEASE_THRESHOLD = 34272n * 90n;
+
+  const result = calculateReserveClaim(
+    vesting,
+    blockNumber,
+    RESERVE_RELEASE_THRESHOLD,
+  );
+
+  if (!result.canClaim || result.claimableReserve <= 0n) {
+    throw new StateError(
+      "No reserve available to claim yet",
+      "RESERVE_NOT_CLAIMABLE",
+    );
+  }
+
+  // Transfer claimable reserve from escrow to recipient
+  state.transfer("did:lgm:vesting-escrow", senderDid, result.claimableReserve);
+
+  // Update vesting reserve amount to reflect remaining
+  state.updateVestingReserve(payload.vestingId, result.remainingReserve);
+
+  return 50000n; // Reserve claim gas
 }
 
 // ============ Domain Proposal Transaction Handlers ============
@@ -4328,7 +4464,7 @@ function executeAddFact(
   // Add fact to knowledge layer
   state.addFact({
     id: payload.factId,
-    claim: payload.claim || `Verified claim ${payload.factId}`,
+    claimText: payload.claim || `Verified claim ${payload.factId}`,
     domain: payload.domain || "verified",
     stratum,
     epistemicCategory,
@@ -4481,7 +4617,7 @@ export function applyVerificationResult(
 
       state.addFact({
         id: result.claimId,
-        claim: result.fact.claim,
+        claimText: result.fact.claim,
         domain: result.fact.domain,
         stratum: claimForStratum?.stratum,
         confidence: result.finalConfidence,
@@ -4602,7 +4738,7 @@ export function applyEpochTransition(
     // Auto-bounty creation from research fund
     // When the research treasury has sufficient balance, automatically create bounties
     // for facts that would benefit from IRL verification
-    const AUTO_BOUNTY_THRESHOLD = 1000n * 10n ** 18n; // 1000 LGM minimum to trigger
+    const AUTO_BOUNTY_THRESHOLD = 1000n * 10n ** 15n; // 1 LGM minimum to trigger
     const MAX_BOUNTIES_PER_EPOCH = 3;
 
     if (state.accountExists(RESEARCH_TREASURY_DID)) {
@@ -4633,8 +4769,8 @@ export function applyEpochTransition(
             i++
           ) {
             const factId = prioritized[i];
-            const verificationCost = 100n * 10n ** 18n; // 100 LGM base verification cost
-            const expectedValue = 500n * 10n ** 18n; // Expected value of verified fact
+            const verificationCost = 100n * 10n ** 15n; // 0.1 LGM base verification cost
+            const expectedValue = 500n * 10n ** 15n; // 0.5 LGM expected value of verified fact
 
             const bountyValue = calculateOptimalBountyValue(
               verificationCost,
@@ -5357,15 +5493,23 @@ function executeDisputePaymentChannel(
 function executeScheduledExecution(
   state: StateManager,
   tx: Transaction,
-  _blockNumber: bigint,
+  blockNumber: bigint,
   _params: ConsensusParams,
 ): bigint {
+  // F1: Only system sender can execute scheduled executions
+  if (tx.sender !== "system") {
+    throw new StateError(
+      "Scheduled execution requires system sender",
+      "UNAUTHORIZED",
+    );
+  }
+
   const payload = tx.payload as unknown as {
     type: "scheduled_execution";
     processId: string;
     executionIndex: number;
     targetContract: string;
-    functionSelector: Uint8Array;
+    functionSelector: Uint8Array | number[];
     proof: {
       processStateHash: string;
       conditionProof: {
@@ -5377,10 +5521,6 @@ function executeScheduledExecution(
     };
   };
 
-  // Verify this is from a valid schedule process
-  // Note: Full BVM execution would happen here, but for now we just record the execution
-  // The actual contract logic will be executed when BVM integration is complete
-
   // Get the target contract account
   const targetAccount = state.getAccount(payload.targetContract);
   if (!targetAccount) {
@@ -5390,23 +5530,183 @@ function executeScheduledExecution(
     );
   }
 
-  // Note: When full BVM integration is complete, actual contract execution
-  // would happen here using the BVMExecutor. The state changes from BVM
-  // execution would be captured and applied.
-  //
-  // For now, scheduled executions are recorded through the transaction
-  // itself being included in the block. Full execution semantics will be
-  // added when the BVM-to-state bridge is implemented.
-  //
-  // The execution proof in payload.proof provides:
-  // - processStateHash: Hash of schedule process state at execution time
-  // - conditionProof: Proof that trigger conditions were satisfied
-  // - executionNonce: Prevents replay attacks
-  // - signature: Proposer's signature authorizing execution
+  // Dispatch based on function selector
+  const selector = payload.functionSelector;
+  const selectorBytes =
+    selector instanceof Uint8Array ? selector : new Uint8Array(selector);
 
-  // Gas for scheduled execution (fixed cost for now)
-  // In full implementation, this would be based on actual BVM execution
+  if (
+    matchesSelector(
+      selectorBytes,
+      SYSTEM_CONTRACTS.RAI_RETRIEVAL.SELECTORS.SWEEP_EXPIRED,
+    )
+  ) {
+    return executeSweepExpired(state, blockNumber);
+  }
+
+  if (
+    matchesSelector(
+      selectorBytes,
+      SYSTEM_CONTRACTS.RAI_RETRIEVAL.SELECTORS.DISTRIBUTE_RAI,
+    )
+  ) {
+    return executeDistributeRAI(state, blockNumber);
+  }
+
+  // Unknown selector — fall back to default gas (backward compat for BVM contracts)
   return 50000n;
+}
+
+/**
+ * Compare two byte arrays for selector matching
+ */
+function matchesSelector(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Sweep expired period balances to RAI holding treasury.
+ *
+ * F7: Uses block timestamp (via setBlockTimestamp → currentPeriod), NOT proof timestamp.
+ * This prevents an attacker from forging a far-future proof timestamp to sweep prematurely.
+ */
+function executeSweepExpired(
+  state: StateManager,
+  _blockNumber: bigint,
+): bigint {
+  const currentPeriod = (state as any).accounts.getCurrentPeriod() as
+    | number
+    | undefined;
+  if (currentPeriod === undefined) {
+    // Period tracking not active — nothing to sweep
+    return 50000n;
+  }
+
+  const threshold =
+    currentPeriod - DEFAULT_EXPIRATION_CONFIG.periodsUntilExpiration;
+
+  // Find accounts with expired periods
+  const expired = (state as any).accounts.getAccountsWithExpiredPeriods(
+    threshold,
+  ) as Array<{
+    did: string;
+    totalExpired: bigint;
+  }>;
+
+  let accountsProcessed = 0n;
+  const raiHoldingDid = TREASURY.ADDRESSES.RAI_HOLDING;
+
+  for (const entry of expired) {
+    // F6: Skip system/treasury/pot accounts
+    if (isSystemOrTreasuryDid(entry.did)) continue;
+    if (entry.did.startsWith("did:lgm:pot:")) continue;
+
+    // Skip dust amounts
+    if (entry.totalExpired < DEFAULT_EXPIRATION_CONFIG.dustThreshold) continue;
+
+    // Sweep expired periods
+    const swept = (state as any).accounts.sweepExpiredPeriods(
+      entry.did,
+      threshold,
+    ) as bigint;
+    if (swept > 0n) {
+      state.creditBalance(raiHoldingDid, swept);
+      accountsProcessed++;
+    }
+  }
+
+  return 50000n + accountsProcessed * 5000n;
+}
+
+/**
+ * Distribute RAI holding balance equally to eligible agents.
+ *
+ * F2: Excludes accounts younger than 7 * BLOCKS_PER_DAY blocks.
+ * F5: Excludes accounts with balance below dustThreshold.
+ * F6: Excludes pot/system/treasury accounts.
+ */
+function executeDistributeRAI(
+  state: StateManager,
+  blockNumber: bigint,
+): bigint {
+  const raiHoldingDid = TREASURY.ADDRESSES.RAI_HOLDING;
+  const raiBalance = state.getBalance(raiHoldingDid);
+
+  if (raiBalance === 0n) {
+    return 50000n;
+  }
+
+  const MIN_AGE_BLOCKS = 7n * 34272n; // 7 days
+
+  // Get all accounts and filter for eligibility
+  const allAccounts = (state as any).accounts.getAllAccounts() as Array<{
+    did: string;
+    balance: bigint;
+    createdAtBlock?: bigint;
+  }>;
+
+  const eligible: string[] = [];
+
+  for (const account of allAccounts) {
+    // F6: Skip system/treasury/pot accounts
+    if (isSystemOrTreasuryDid(account.did)) continue;
+    if (account.did.startsWith("did:lgm:pot:")) continue;
+
+    // F2: Skip fresh accounts (age < 7 days)
+    const createdAt = account.createdAtBlock ?? 0n;
+    if (blockNumber - createdAt < MIN_AGE_BLOCKS) continue;
+
+    // F5: Skip dust-balance accounts
+    if (account.balance < DEFAULT_EXPIRATION_CONFIG.dustThreshold) continue;
+
+    eligible.push(account.did);
+  }
+
+  if (eligible.length === 0) {
+    return 50000n;
+  }
+
+  // Equal split
+  const perAgent = raiBalance / BigInt(eligible.length);
+  if (perAgent === 0n) {
+    return 50000n;
+  }
+
+  for (const did of eligible) {
+    state.deductBalance(raiHoldingDid, perAgent);
+    state.creditBalance(did, perAgent);
+  }
+
+  return 50000n + BigInt(eligible.length) * 5000n;
+}
+
+/**
+ * Check if a DID belongs to a system/treasury account
+ */
+function isSystemOrTreasuryDid(did: string): boolean {
+  return (
+    did === "system" ||
+    did === FEE_POOL_DID ||
+    did === REWARD_POOL_DID ||
+    did === PROTOCOL_TREASURY_DID ||
+    did === TREASURY.ADDRESSES.RAI_HOLDING ||
+    did === TREASURY.ADDRESSES.RESEARCH ||
+    did === TREASURY.ADDRESSES.RESEARCH_FUND ||
+    did === TREASURY.ADDRESSES.FOUNDATION ||
+    did === TREASURY.ADDRESSES.COMMUNITY ||
+    did === TREASURY.ADDRESSES.DEVELOPERS ||
+    did === TREASURY.ADDRESSES.RESERVE ||
+    did === SYSTEM_CONTRACTS.RAI_RETRIEVAL.DID ||
+    did.startsWith("did:lgm:treasury-") ||
+    did.startsWith("did:lgm:system-") ||
+    did.startsWith("did:lgm:fee-") ||
+    did.startsWith("did:lgm:reward-") ||
+    did.startsWith("did:lgm:protocol-")
+  );
 }
 
 /**
@@ -5473,6 +5773,131 @@ function executeContractCall(
 
   // Gas for contract call (placeholder - actual gas would come from BVM)
   return 100000n;
+}
+
+// ============ Expirable Token Transaction Handlers ============
+
+/**
+ * Mint tokens with expiration tracking (period-aware credit)
+ */
+function executeTokenMintExpirable(
+  state: StateManager,
+  tx: Transaction,
+): bigint {
+  const payload = tx.payload as unknown as {
+    type: "token_mint_expirable";
+    recipient: string;
+    amount: bigint;
+  };
+
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
+  state.creditBalance(payload.recipient, amount);
+  return 60000n;
+}
+
+/**
+ * Transfer tokens with period-preserving semantics
+ */
+function executeTokenTransferExpirable(
+  state: StateManager,
+  tx: Transaction,
+): bigint {
+  const payload = tx.payload as unknown as {
+    type: "token_transfer_expirable";
+    to: string;
+    amount: bigint;
+  };
+
+  const senderDid = resolveSenderDid(tx);
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
+
+  (state as any).accounts.transferPreservingPeriods(
+    senderDid,
+    payload.to,
+    amount,
+    DEFAULT_EXPIRATION_CONFIG.periodsUntilExpiration,
+  );
+
+  return 70000n;
+}
+
+/**
+ * Retrieve expired tokens (manual sweep trigger)
+ */
+function executeExpiredTokenRetrieve(
+  state: StateManager,
+  tx: Transaction,
+): bigint {
+  const senderDid = resolveSenderDid(tx);
+  const currentPeriod = (state as any).accounts.getCurrentPeriod() as
+    | number
+    | undefined;
+  if (currentPeriod === undefined) return 50000n;
+
+  const threshold =
+    currentPeriod - DEFAULT_EXPIRATION_CONFIG.periodsUntilExpiration;
+  const swept = (state as any).accounts.sweepExpiredPeriods(
+    senderDid,
+    threshold,
+  ) as bigint;
+
+  if (swept > 0n) {
+    state.creditBalance(TREASURY.ADDRESSES.RAI_HOLDING, swept);
+  }
+
+  return 60000n;
+}
+
+/**
+ * Distribute RAI holdings to eligible agents (explicit tx trigger)
+ */
+function executeRaiDistribute(
+  state: StateManager,
+  tx: Transaction,
+  blockNumber: bigint,
+): bigint {
+  if (tx.sender !== "system") {
+    throw new StateError(
+      "RAI distribution requires system sender",
+      "UNAUTHORIZED",
+    );
+  }
+  return executeDistributeRAI(state, blockNumber);
+}
+
+/**
+ * Extend token expiration by moving balance to current period
+ */
+function executeTokenExtendExpiration(
+  state: StateManager,
+  tx: Transaction,
+): bigint {
+  const senderDid = resolveSenderDid(tx);
+  const payload = tx.payload as unknown as {
+    type: "token_extend_expiration";
+    amount: bigint;
+  };
+
+  const amount =
+    typeof payload.amount === "string"
+      ? BigInt(payload.amount)
+      : payload.amount;
+  const currentPeriod = (state as any).accounts.getCurrentPeriod() as
+    | number
+    | undefined;
+  if (currentPeriod === undefined) return 50000n;
+
+  // Debit from oldest periods (FIFO) then credit to current period
+  state.deductBalance(senderDid, amount);
+  state.creditBalance(senderDid, amount);
+
+  return 60000n;
 }
 
 /**
@@ -5638,7 +6063,8 @@ import type {
   OpportunitySeed,
 } from "../core/tree/types.js";
 import { MIN_PROJECT_STAKE } from "../core/tree/types.js";
-import { TREASURY } from "../core/constants.js";
+import { TREASURY, SYSTEM_CONTRACTS } from "../core/constants.js";
+import { DEFAULT_EXPIRATION_CONFIG } from "../core/tokens/types.js";
 import type { ContractABI } from "../core/contracts/types.js";
 
 /** Escrow DID for project budget funds */

@@ -8,8 +8,8 @@ import (
 
 	disputestypes "github.com/legible-money/legible/x/disputes/types"
 	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
-	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 	legiblestakingkeeper "github.com/legible-money/legible/x/staking/keeper"
+	stakingtypes "github.com/legible-money/legible/x/staking/types"
 	vestingrewardskeeper "github.com/legible-money/legible/x/vesting_rewards/keeper"
 )
 
@@ -30,28 +30,22 @@ func (a *DisputeKnowledgeAdapter) GetFact(ctx sdk.Context, factID string) (dispu
 	if !found {
 		return disputestypes.Fact{}, false
 	}
-	return convertKnowledgeFact(kFact), true
-}
-
-func (a *DisputeKnowledgeAdapter) SetFact(ctx sdk.Context, fact disputestypes.Fact) {
-	kFact, found := a.keeper.GetFact(ctx, fact.Id)
-	if !found {
-		return
-	}
-	// Update mutable fields from the dispute resolution
-	kFact.Status = fact.Status
-	kFact.Confidence = fact.Confidence
-	kFact.ChallengeCount = fact.ChallengeCount
-	a.keeper.SetFact(ctx, kFact)
-}
-
-func (a *DisputeKnowledgeAdapter) GetReferringFacts(ctx sdk.Context, factID string) []string {
-	refs := a.keeper.GetIncomingReferences(ctx, factID)
-	ids := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		ids = append(ids, ref.FromFactId)
-	}
-	return ids
+	return disputestypes.Fact{
+		Id:                 kFact.Id,
+		ClaimText:          kFact.ClaimText,
+		Domain:             kFact.Domain,
+		EpistemicCategory:  kFact.EpistemicCategory,
+		Confidence:         kFact.Confidence,
+		Status:             kFact.Status,
+		Submitter:          kFact.Submitter,
+		References:         kFact.References,
+		VerifiedAtHeight:   kFact.VerifiedAtHeight,
+		VerifierCount:      kFact.VerifierCount,
+		LogicZone:          kFact.LogicZone,
+		CreatedAtHeight:    kFact.CreatedAtHeight,
+		LastVerifiedHeight: kFact.LastVerifiedHeight,
+		ChallengeCount:     uint32(kFact.ChallengeCount),
+	}, true
 }
 
 func (a *DisputeKnowledgeAdapter) GetClaim(ctx sdk.Context, claimID string) (disputestypes.Claim, bool) {
@@ -66,23 +60,16 @@ func (a *DisputeKnowledgeAdapter) GetClaim(ctx sdk.Context, claimID string) (dis
 	}, true
 }
 
-func convertKnowledgeFact(f knowledgetypes.Fact) disputestypes.Fact {
-	return disputestypes.Fact{
-		Id:                 f.Id,
-		ClaimText:          f.ClaimText,
-		Domain:             f.Domain,
-		EpistemicCategory:  f.EpistemicCategory,
-		Confidence:         f.Confidence,
-		Status:             f.Status,
-		Submitter:          f.Submitter,
-		References:         f.References,
-		VerifiedAtHeight:   f.VerifiedAtHeight,
-		VerifierCount:      f.VerifierCount,
-		LogicZone:          f.LogicZone,
-		CreatedAtHeight:    f.CreatedAtHeight,
-		LastVerifiedHeight: f.LastVerifiedHeight,
-		ChallengeCount:     f.ChallengeCount,
-	}
+func (a *DisputeKnowledgeAdapter) MarkFactChallenged(ctx sdk.Context, factId string) error {
+	return a.keeper.MarkFactChallenged(ctx, factId)
+}
+
+func (a *DisputeKnowledgeAdapter) ResolveFactDispute(ctx sdk.Context, factId, outcome string, reductionBps uint64) (uint64, error) {
+	return a.keeper.ResolveFactDispute(ctx, factId, outcome, reductionBps)
+}
+
+func (a *DisputeKnowledgeAdapter) CascadeFactConfidence(ctx sdk.Context, retractedFactId string, reductionBps uint64) ([]string, error) {
+	return a.keeper.CascadeFactConfidence(ctx, retractedFactId, reductionBps)
 }
 
 // ---------- StakingKeeper Adapter ----------
@@ -107,7 +94,7 @@ func (a *DisputeStakingAdapter) GetActiveValidatorInfos(ctx context.Context) []d
 		infos = append(infos, disputestypes.ValidatorInfo{
 			Address: v.OperatorAddress,
 			Stake:   stake,
-			Tier:    uint32(v.Tier),
+			Tier:    uint32(stakingtypes.ValidatorTierFromString(v.Tier)),
 		})
 	}
 	return infos
@@ -122,7 +109,7 @@ func (a *DisputeStakingAdapter) GetValidatorInfo(ctx context.Context, operatorAd
 	return disputestypes.ValidatorInfo{
 		Address: v.OperatorAddress,
 		Stake:   parseStakeToUint64(v.TotalStake),
-		Tier:    uint32(v.Tier),
+		Tier:    uint32(stakingtypes.ValidatorTierFromString(v.Tier)),
 	}, true
 }
 

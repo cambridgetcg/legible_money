@@ -1,20 +1,38 @@
 package vm
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 )
 
+// VMAuthKeeper provides session key management via the canonical x/auth store.
+// When non-nil, RegisterKey/RevokeKey/QuerySession delegate to x/auth instead of
+// storing keys in BVM contract state, unifying the dual key systems.
+type VMAuthKeeper interface {
+	RegisterSessionKey(ctx context.Context, ownerDID, pubKeyHex string, canTransfer, canStake, canClaims, canVote bool, expiresAtBlock uint64) error
+	RevokeSessionKey(ctx context.Context, ownerDID, keyHash string) error
+	GetSessionForDID(ctx context.Context, ownerDID string, blockHeight uint64) (expiresAt uint64, canTransfer, canStake, canClaims, canVote, found bool)
+}
+
 // TreasuryHost bridges BVM treasury/guardian/access control opcodes to contract state.
 // Treasury positions, alerts, defenses, and access keys are stored under reserved prefixes.
+// When authKeeper is non-nil, access control opcodes delegate to x/auth's canonical store.
 type TreasuryHost struct {
-	stateDB StateDB
+	stateDB    StateDB
+	authKeeper VMAuthKeeper  // nil = legacy contract-state mode
+	ctx        context.Context
 }
 
 func NewTreasuryHost(stateDB StateDB) *TreasuryHost {
 	return &TreasuryHost{stateDB: stateDB}
+}
+
+// NewTreasuryHostWithAuth creates a TreasuryHost that delegates key management to x/auth.
+func NewTreasuryHostWithAuth(stateDB StateDB, ak VMAuthKeeper, ctx context.Context) *TreasuryHost {
+	return &TreasuryHost{stateDB: stateDB, authKeeper: ak, ctx: ctx}
 }
 
 // --- Treasury (0xD0-0xD7) ---
@@ -152,6 +170,24 @@ func (h *TreasuryHost) RegisterKey(callerDID string, keyType, publicKey, permiss
 	if callerDID == "" || len(publicKey) == 0 {
 		return false
 	}
+
+	// If auth keeper is wired, delegate to canonical x/auth session key store.
+	if h.authKeeper != nil {
+		pubKeyHex := hex.EncodeToString(publicKey)
+		// Decode permission bits: bit 0=transfer, 1=stake, 2=claims, 3=vote
+		permVal := new(big.Int).SetBytes(permissions)
+		canTransfer := permVal.Bit(0) == 1
+		canStake := permVal.Bit(1) == 1
+		canClaims := permVal.Bit(2) == 1
+		canVote := permVal.Bit(3) == 1
+		expiresAt := new(big.Int).SetBytes(expiry).Uint64()
+		if err := h.authKeeper.RegisterSessionKey(h.ctx, callerDID, pubKeyHex, canTransfer, canStake, canClaims, canVote, expiresAt); err != nil {
+			return false
+		}
+		return true
+	}
+
+	// Legacy: store in contract state
 	keyHash := sha256.Sum256(publicKey)
 	storeKey := sha256.Sum256([]byte("key/" + callerDID + "/" + hex.EncodeToString(keyHash[:])))
 	b32 := WordToBytes32(new(big.Int).SetBytes(permissions))
@@ -163,6 +199,17 @@ func (h *TreasuryHost) RevokeKey(callerDID string, keyId []byte) bool {
 	if callerDID == "" || len(keyId) == 0 {
 		return false
 	}
+
+	// If auth keeper is wired, delegate to canonical x/auth store.
+	if h.authKeeper != nil {
+		keyHash := hex.EncodeToString(keyId)
+		if err := h.authKeeper.RevokeSessionKey(h.ctx, callerDID, keyHash); err != nil {
+			return false
+		}
+		return true
+	}
+
+	// Legacy: remove from contract state
 	key := sha256.Sum256([]byte("key/" + callerDID + "/" + hex.EncodeToString(keyId)))
 	h.stateDB.SetStorage([]byte("agent_access"), key[:], nil)
 	return true
@@ -184,6 +231,33 @@ func (h *TreasuryHost) QuerySession(callerDID string) ([]byte, []byte, uint64, u
 	if callerDID == "" {
 		return nil, nil, 0, 0
 	}
+
+	// If auth keeper is wired, query canonical x/auth store.
+	if h.authKeeper != nil {
+		expiresAt, canTransfer, canStake, canClaims, canVote, found := h.authKeeper.GetSessionForDID(h.ctx, callerDID, 0)
+		if !found {
+			return nil, nil, 0, 0
+		}
+		// Encode capabilities as permission bitmask
+		var permBits uint64
+		if canTransfer {
+			permBits |= 1
+		}
+		if canStake {
+			permBits |= 2
+		}
+		if canClaims {
+			permBits |= 4
+		}
+		if canVote {
+			permBits |= 8
+		}
+		sessionHash := sha256.Sum256([]byte("session/" + callerDID))
+		permBytes := WordToBytes32(new(big.Int).SetUint64(permBits))
+		return sessionHash[:], permBytes[:], expiresAt, 0
+	}
+
+	// Legacy: read from contract state
 	key := sha256.Sum256([]byte("session/" + callerDID))
 	val := h.stateDB.GetStorage([]byte("agent_access"), key[:])
 	if val == nil {

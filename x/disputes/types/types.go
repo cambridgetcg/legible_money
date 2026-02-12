@@ -7,7 +7,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// ---------- Dispute Status & Outcome Enums ----------
+// ---------- Dispute Status Enum (not in proto) ----------
 
 // DisputeStatus tracks dispute lifecycle.
 type DisputeStatus string
@@ -21,13 +21,21 @@ const (
 	DisputeStatusEscalated DisputeStatus = "escalated"
 )
 
-// DisputeOutcome is the resolution result.
-type DisputeOutcome string
+// ---------- Dispute Outcome (string aliases — proto DisputeOutcome is an int32 enum) ----------
+// These string constants are used by keeper logic for dispute resolution.
 
 const (
-	OutcomeUpheld       DisputeOutcome = "upheld"       // original fact stands
-	OutcomeOverturned   DisputeOutcome = "overturned"   // challenger wins
-	OutcomeInconclusive DisputeOutcome = "inconclusive" // no clear winner
+	OutcomeUpheld               = "upheld"          // original fact stands
+	OutcomeOverturned           = "overturned"       // challenger wins
+	OutcomeInconclusive         = "inconclusive"     // no clear winner
+	OutcomeWeakened             = "weakened"          // partial success — confidence reduced
+	OutcomeUndecidabilityProven = "undecidability"   // Gödel zones — provably unprovable
+)
+
+// DisputeType distinguishes dispute origins.
+const (
+	DisputeTypeStandard             = "standard"              // traditional fact challenge
+	DisputeTypeProvisionalChallenge = "provisional_challenge" // adversarial verification challenge
 )
 
 // EscalationTier defines dispute complexity levels.
@@ -39,101 +47,7 @@ const (
 	TierFinal     EscalationTier = 3 // 15 arbiters, 1111 LGM, 7 days
 )
 
-// ---------- Core Data Types ----------
-
-// Dispute represents a challenge to a verified fact.
-type Dispute struct {
-	Id               string         `json:"id"`
-	FactId           string         `json:"fact_id"`
-	ClaimId          string         `json:"claim_id"`
-	Challenger       string         `json:"challenger"`        // bech32 address
-	Defender         string         `json:"defender"`          // bech32 address of original claim submitter
-	Reason           string         `json:"reason"`
-	Bond             string         `json:"bond"`              // stake locked by challenger (bigint string)
-	Tier             EscalationTier `json:"tier"`              // current escalation tier
-	Status           DisputeStatus  `json:"status"`            // current status
-	Outcome          DisputeOutcome `json:"outcome"`           // final outcome (if resolved)
-	CreatedAt        uint64         `json:"created_at"`        // block height
-	EvidenceDeadline uint64         `json:"evidence_deadline"` // block height deadline for evidence
-	VotingDeadline   uint64         `json:"voting_deadline"`   // block height deadline for voting
-	Arbiters         []string       `json:"arbiters"`          // selected arbiter addresses
-	EvidenceCount    uint32         `json:"evidence_count"`    // total evidence submissions
-}
-
-func (d *Dispute) Reset()        {}
-func (d *Dispute) String() string { return fmt.Sprintf("%+v", *d) }
-func (d *Dispute) ProtoMessage()  {}
-
-// DisputeEvidence represents evidence submitted for a dispute.
-type DisputeEvidence struct {
-	Id          string `json:"id"`
-	DisputeId   string `json:"dispute_id"`
-	Submitter   string `json:"submitter"` // bech32 address
-	Side        string `json:"side"`      // "challenger" or "defender"
-	Content     string `json:"content"`   // evidence content/hash
-	SubmittedAt uint64 `json:"submitted_at"` // block height
-}
-
-func (e *DisputeEvidence) Reset()        {}
-func (e *DisputeEvidence) String() string { return fmt.Sprintf("%+v", *e) }
-func (e *DisputeEvidence) ProtoMessage()  {}
-
-// EvidenceCommitment represents a committed (but not yet revealed) evidence hash.
-type EvidenceCommitment struct {
-	DisputeId   string `json:"dispute_id"`
-	Submitter   string `json:"submitter"`    // bech32 address
-	Side        string `json:"side"`         // "challenger" or "defender"
-	ContentHash string `json:"content_hash"` // SHA-256 of evidence content
-	CommittedAt uint64 `json:"committed_at"` // block height
-	Revealed    bool   `json:"revealed"`     // whether the reveal has been submitted
-}
-
-func (c *EvidenceCommitment) Reset()        {}
-func (c *EvidenceCommitment) String() string { return fmt.Sprintf("%+v", *c) }
-func (c *EvidenceCommitment) ProtoMessage()  {}
-
-// DisputeVote represents an arbiter's vote.
-type DisputeVote struct {
-	DisputeId string `json:"dispute_id"`
-	Arbiter   string `json:"arbiter"` // bech32 address
-	Vote      string `json:"vote"`    // "uphold", "overturn", "abstain"
-	Stake     string `json:"stake"`   // arbiter's stake weight (bigint string)
-	Rationale string `json:"rationale"`
-	VotedAt   uint64 `json:"voted_at"` // block height
-}
-
-func (v *DisputeVote) Reset()        {}
-func (v *DisputeVote) String() string { return fmt.Sprintf("%+v", *v) }
-func (v *DisputeVote) ProtoMessage()  {}
-
-// TierConfig defines requirements for each escalation tier.
-type TierConfig struct {
-	Tier              EscalationTier `json:"tier"`
-	ArbiterCount      uint32         `json:"arbiter_count"`      // number of arbiters
-	MinBond           string         `json:"min_bond"`           // minimum challenger bond (bigint string)
-	EvidencePeriod    uint64         `json:"evidence_period"`    // blocks for evidence submission
-	VotingPeriod      uint64         `json:"voting_period"`      // blocks for voting
-	QuorumThreshold   uint64         `json:"quorum_threshold"`   // basis points (660000 = 66%)
-	MajorityThreshold uint64         `json:"majority_threshold"` // basis points (770000 = 77%)
-}
-
-func (t *TierConfig) Reset()        {}
-func (t *TierConfig) String() string { return fmt.Sprintf("%+v", *t) }
-func (t *TierConfig) ProtoMessage()  {}
-
-// Params for the disputes module.
-type Params struct {
-	TierConfigs       []TierConfig `json:"tier_configs"`
-	MaxActiveDisputes uint32       `json:"max_active_disputes"` // max active disputes per fact
-	EscalationDelay   uint64       `json:"escalation_delay"`    // blocks before escalation allowed
-	SlashRateLoser    uint64       `json:"slash_rate_loser"`    // basis points of bond slashed from loser
-	RewardRateWinner  uint64       `json:"reward_rate_winner"`  // basis points of slashed bond given to winner
-	ArbiterRewardRate uint64       `json:"arbiter_reward_rate"` // basis points of bond given to arbiters
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
+// ---------- Params Validation (method on proto-generated Params) ----------
 
 // Validate performs parameter validation.
 func (p Params) Validate() error {
@@ -152,9 +66,11 @@ func (p Params) Validate() error {
 	return nil
 }
 
-// ---------- Message Types ----------
+// ---------- Hand-Written Message Types (no proto equivalent with same name) ----------
 
 // MsgOpenDispute opens a new dispute against a verified fact.
+// Proto service uses MsgInitiateDispute; this is the hand-written legacy type
+// retained for backward compatibility with existing keeper logic.
 type MsgOpenDispute struct {
 	Challenger string `json:"challenger"` // bech32 address
 	FactId     string `json:"fact_id"`
@@ -199,23 +115,10 @@ func (msg *MsgOpenDisputeResponse) Reset()        {}
 func (msg *MsgOpenDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgOpenDisputeResponse) ProtoMessage()  {}
 
-// MsgCommitEvidence commits a hash of evidence (phase 1 of commit-reveal).
-type MsgCommitEvidence struct {
-	Submitter   string `json:"submitter"`    // bech32 address
-	DisputeId   string `json:"dispute_id"`
-	Side        string `json:"side"`         // "challenger" or "defender"
-	ContentHash string `json:"content_hash"` // SHA-256 hex of evidence content
-}
+// ---------- ValidateBasic / GetSigners for proto-generated Msg types ----------
+// These methods extend the proto structs with SDK validation.
 
-func (msg *MsgCommitEvidence) Reset()        {}
-func (msg *MsgCommitEvidence) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgCommitEvidence) ProtoMessage()  {}
-
-func (msg *MsgCommitEvidence) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
-	return []sdk.AccAddress{addr}
-}
-
+// ValidateBasic validates MsgCommitEvidence fields.
 func (msg *MsgCommitEvidence) ValidateBasic() error {
 	if msg.Submitter == "" {
 		return fmt.Errorf("submitter cannot be empty")
@@ -226,26 +129,20 @@ func (msg *MsgCommitEvidence) ValidateBasic() error {
 	if msg.DisputeId == "" {
 		return fmt.Errorf("dispute ID cannot be empty")
 	}
-	if msg.Side != "challenger" && msg.Side != "defender" {
-		return fmt.Errorf("side must be 'challenger' or 'defender'")
-	}
-	if msg.ContentHash == "" {
-		return fmt.Errorf("content hash cannot be empty")
-	}
-	if len(msg.ContentHash) != 64 {
-		return fmt.Errorf("content hash must be 64 hex characters (SHA-256)")
+	if msg.CommitmentHash == "" {
+		return fmt.Errorf("commitment hash cannot be empty")
 	}
 	return nil
 }
 
-// MsgCommitEvidenceResponse is the response to MsgCommitEvidence.
-type MsgCommitEvidenceResponse struct{}
-
-func (msg *MsgCommitEvidenceResponse) Reset()        {}
-func (msg *MsgCommitEvidenceResponse) String() string { return "" }
-func (msg *MsgCommitEvidenceResponse) ProtoMessage()  {}
+// GetSigners returns the signers of MsgCommitEvidence.
+func (msg *MsgCommitEvidence) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
+	return []sdk.AccAddress{addr}
+}
 
 // MsgSubmitEvidence reveals evidence for a dispute (phase 2 of commit-reveal).
+// Proto service uses MsgRevealEvidence; this is the hand-written legacy type.
 type MsgSubmitEvidence struct {
 	Submitter string `json:"submitter"` // bech32 address
 	DisputeId string `json:"dispute_id"`
@@ -291,6 +188,7 @@ func (msg *MsgSubmitEvidenceResponse) String() string { return fmt.Sprintf("%+v"
 func (msg *MsgSubmitEvidenceResponse) ProtoMessage()  {}
 
 // MsgVoteDispute casts a vote on a dispute.
+// Proto service uses MsgArbiterVote; this is the hand-written legacy type.
 type MsgVoteDispute struct {
 	Arbiter   string `json:"arbiter"` // bech32 address
 	DisputeId string `json:"dispute_id"`
@@ -330,22 +228,9 @@ func (msg *MsgVoteDisputeResponse) Reset()        {}
 func (msg *MsgVoteDisputeResponse) String() string { return "" }
 func (msg *MsgVoteDisputeResponse) ProtoMessage()  {}
 
-// MsgEscalateDispute escalates a dispute to the next tier.
-type MsgEscalateDispute struct {
-	Requester      string `json:"requester"`       // bech32 address
-	DisputeId      string `json:"dispute_id"`
-	AdditionalBond string `json:"additional_bond"` // bigint as string
-}
+// ---------- ValidateBasic / GetSigners for proto MsgEscalateDispute ----------
 
-func (msg *MsgEscalateDispute) Reset()        {}
-func (msg *MsgEscalateDispute) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgEscalateDispute) ProtoMessage()  {}
-
-func (msg *MsgEscalateDispute) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Requester)
-	return []sdk.AccAddress{addr}
-}
-
+// ValidateBasic validates MsgEscalateDispute fields.
 func (msg *MsgEscalateDispute) ValidateBasic() error {
 	if msg.Requester == "" {
 		return fmt.Errorf("requester cannot be empty")
@@ -356,41 +241,27 @@ func (msg *MsgEscalateDispute) ValidateBasic() error {
 	if msg.DisputeId == "" {
 		return fmt.Errorf("dispute ID cannot be empty")
 	}
-	if msg.AdditionalBond == "" {
-		return fmt.Errorf("additional bond cannot be empty")
+	if msg.AdditionalStake == "" {
+		return fmt.Errorf("additional stake cannot be empty")
 	}
 	return nil
 }
 
-// MsgEscalateDisputeResponse is the response to MsgEscalateDispute.
-type MsgEscalateDisputeResponse struct{}
-
-func (msg *MsgEscalateDisputeResponse) Reset()        {}
-func (msg *MsgEscalateDisputeResponse) String() string { return "" }
-func (msg *MsgEscalateDisputeResponse) ProtoMessage()  {}
-
-// MsgSettleDispute triggers settlement of a dispute that's past its voting deadline.
-// Any account can submit this — it's a permissionless trigger for tally + resolution.
-type MsgSettleDispute struct {
-	Sender    string `json:"sender"`     // bech32 address of the trigger sender (pays gas)
-	DisputeId string `json:"dispute_id"`
-}
-
-func (msg *MsgSettleDispute) Reset()        {}
-func (msg *MsgSettleDispute) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSettleDispute) ProtoMessage()  {}
-
-func (msg *MsgSettleDispute) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+// GetSigners returns the signers of MsgEscalateDispute.
+func (msg *MsgEscalateDispute) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Requester)
 	return []sdk.AccAddress{addr}
 }
 
+// ---------- ValidateBasic / GetSigners for proto MsgSettleDispute ----------
+
+// ValidateBasic validates MsgSettleDispute fields.
 func (msg *MsgSettleDispute) ValidateBasic() error {
-	if msg.Sender == "" {
-		return fmt.Errorf("sender cannot be empty")
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
 	}
-	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
-		return fmt.Errorf("invalid sender address: %w", err)
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
 	}
 	if msg.DisputeId == "" {
 		return fmt.Errorf("dispute ID cannot be empty")
@@ -398,37 +269,21 @@ func (msg *MsgSettleDispute) ValidateBasic() error {
 	return nil
 }
 
-// MsgSettleDisputeResponse is the response to MsgSettleDispute.
-type MsgSettleDisputeResponse struct {
-	Outcome string `json:"outcome"` // "upheld", "overturned", or "inconclusive"
-}
-
-func (msg *MsgSettleDisputeResponse) Reset()        {}
-func (msg *MsgSettleDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSettleDisputeResponse) ProtoMessage()  {}
-
-// MsgTimeoutDispute triggers timeout processing of an expired dispute.
-// Any account can submit this — permissionless trigger for evidence→voting transition or expiration.
-type MsgTimeoutDispute struct {
-	Sender    string `json:"sender"`     // bech32 address of the trigger sender (pays gas)
-	DisputeId string `json:"dispute_id"`
-}
-
-func (msg *MsgTimeoutDispute) Reset()        {}
-func (msg *MsgTimeoutDispute) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgTimeoutDispute) ProtoMessage()  {}
-
-func (msg *MsgTimeoutDispute) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+// GetSigners returns the signers of MsgSettleDispute.
+func (msg *MsgSettleDispute) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }
 
+// ---------- ValidateBasic / GetSigners for proto MsgTimeoutDispute ----------
+
+// ValidateBasic validates MsgTimeoutDispute fields.
 func (msg *MsgTimeoutDispute) ValidateBasic() error {
-	if msg.Sender == "" {
-		return fmt.Errorf("sender cannot be empty")
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
 	}
-	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
-		return fmt.Errorf("invalid sender address: %w", err)
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
 	}
 	if msg.DisputeId == "" {
 		return fmt.Errorf("dispute ID cannot be empty")
@@ -436,25 +291,20 @@ func (msg *MsgTimeoutDispute) ValidateBasic() error {
 	return nil
 }
 
-// MsgTimeoutDisputeResponse is the response to MsgTimeoutDispute.
-type MsgTimeoutDisputeResponse struct {
-	NewStatus string `json:"new_status"` // new dispute status after timeout processing
+// GetSigners returns the signers of MsgTimeoutDispute.
+func (msg *MsgTimeoutDispute) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
 }
 
-func (msg *MsgTimeoutDisputeResponse) Reset()        {}
-func (msg *MsgTimeoutDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgTimeoutDisputeResponse) ProtoMessage()  {}
+// ---------- Legacy MsgServer Interface ----------
+// LegacyMsgServer extends the proto MsgServer with hand-written message handlers
+// that use non-proto message types (MsgOpenDispute, MsgSubmitEvidence, MsgVoteDispute).
+// Tests and internal code use this to access both proto and legacy methods.
 
-// ---------- MsgServer Interface ----------
-
-// MsgServer is the service interface for the disputes module.
-type MsgServer interface {
+type LegacyMsgServer interface {
+	MsgServer
 	OpenDispute(context.Context, *MsgOpenDispute) (*MsgOpenDisputeResponse, error)
-	CommitEvidence(context.Context, *MsgCommitEvidence) (*MsgCommitEvidenceResponse, error)
 	SubmitEvidence(context.Context, *MsgSubmitEvidence) (*MsgSubmitEvidenceResponse, error)
 	VoteDispute(context.Context, *MsgVoteDispute) (*MsgVoteDisputeResponse, error)
-	EscalateDispute(context.Context, *MsgEscalateDispute) (*MsgEscalateDisputeResponse, error)
-	SettleDispute(context.Context, *MsgSettleDispute) (*MsgSettleDisputeResponse, error)
-	TimeoutDispute(context.Context, *MsgTimeoutDispute) (*MsgTimeoutDisputeResponse, error)
 }
-

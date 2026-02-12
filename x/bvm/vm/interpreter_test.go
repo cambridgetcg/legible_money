@@ -929,6 +929,118 @@ func TestInterp_CodeSize(t *testing.T) {
 	}
 }
 
+// --- Capability check tests ---
+
+func TestCheckCapability_NilCaps(t *testing.T) {
+	ctx := makeCtx(100000)
+	// nil Capabilities = full permissions
+	if !checkCapability(ctx, "stake") {
+		t.Fatal("expected stake allowed with nil capabilities")
+	}
+	if !checkCapability(ctx, "transfer") {
+		t.Fatal("expected transfer allowed with nil capabilities")
+	}
+	if !checkCapability(ctx, "submit_claims") {
+		t.Fatal("expected submit_claims allowed with nil capabilities")
+	}
+	if !checkCapability(ctx, "vote") {
+		t.Fatal("expected vote allowed with nil capabilities")
+	}
+	if !checkCapability(ctx, "unknown") {
+		t.Fatal("expected unknown capability allowed with nil capabilities")
+	}
+}
+
+func TestCheckCapability_StakeBlocked(t *testing.T) {
+	ctx := makeCtx(100000)
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer:    true,
+		CanStake:       false,
+		CanSubmitClaims: true,
+		CanVote:        true,
+	}
+	if checkCapability(ctx, "stake") {
+		t.Fatal("expected stake blocked")
+	}
+	if !checkCapability(ctx, "transfer") {
+		t.Fatal("expected transfer allowed")
+	}
+	if !checkCapability(ctx, "submit_claims") {
+		t.Fatal("expected submit_claims allowed")
+	}
+	if !checkCapability(ctx, "vote") {
+		t.Fatal("expected vote allowed")
+	}
+}
+
+func TestCheckCapability_TransferBlocked(t *testing.T) {
+	ctx := makeCtx(100000)
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer:    false,
+		CanStake:       true,
+		CanSubmitClaims: true,
+		CanVote:        true,
+	}
+	if checkCapability(ctx, "transfer") {
+		t.Fatal("expected transfer blocked")
+	}
+	if !checkCapability(ctx, "stake") {
+		t.Fatal("expected stake allowed")
+	}
+}
+
+func TestCheckCapability_VoteBlocked(t *testing.T) {
+	ctx := makeCtx(100000)
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer:    true,
+		CanStake:       true,
+		CanSubmitClaims: true,
+		CanVote:        false,
+	}
+	if checkCapability(ctx, "vote") {
+		t.Fatal("expected vote blocked")
+	}
+}
+
+func TestCheckCapability_SubmitClaimsBlocked(t *testing.T) {
+	ctx := makeCtx(100000)
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer:    true,
+		CanStake:       true,
+		CanSubmitClaims: false,
+		CanVote:        true,
+	}
+	if checkCapability(ctx, "submit_claims") {
+		t.Fatal("expected submit_claims blocked")
+	}
+}
+
+func TestCheckCapability_AllBlocked(t *testing.T) {
+	ctx := makeCtx(100000)
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer:    false,
+		CanStake:       false,
+		CanSubmitClaims: false,
+		CanVote:        false,
+	}
+	if checkCapability(ctx, "stake") {
+		t.Fatal("expected stake blocked")
+	}
+	if checkCapability(ctx, "transfer") {
+		t.Fatal("expected transfer blocked")
+	}
+	if checkCapability(ctx, "submit_claims") {
+		t.Fatal("expected submit_claims blocked")
+	}
+	if checkCapability(ctx, "vote") {
+		t.Fatal("expected vote blocked")
+	}
+	// Unknown capabilities default to allowed
+	if !checkCapability(ctx, "unknown_cap") {
+		t.Fatal("expected unknown capability allowed")
+	}
+}
+
 func TestInterp_AgentOpcodeNilHost(t *testing.T) {
 	// Agent opcodes with nil host should gracefully push 0
 	bytecode := []byte{

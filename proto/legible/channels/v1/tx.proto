@@ -79,43 +79,11 @@ message MsgDisputeChannel {
 
 message MsgDisputeChannelResponse {}
 
-// ============================================================================
-// State Types
-// ============================================================================
-
-message PaymentChannel {
-  string id = 1;
-  string sender = 2;
-  string receiver = 3;
-  string total_deposit = 4;
-  string balance_sender = 5;
-  string balance_receiver = 6;
-  uint64 sequence = 7;
-  ChannelStatus status = 8;
-  uint64 opened_at = 9;
-  uint64 timeout_height = 10;
-  uint64 close_requested_at = 11;
-}
-
+// ChannelStatus enum used by transaction processing.
 enum ChannelStatus {
   CHANNEL_STATUS_UNSPECIFIED = 0;
   CHANNEL_STATUS_OPEN = 1;
   CHANNEL_STATUS_CLOSING = 2;
   CHANNEL_STATUS_DISPUTED = 3;
   CHANNEL_STATUS_SETTLED = 4;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-  repeated PaymentChannel channels = 2;
-}
-
-message Params {
-  uint64 dispute_period = 1;
-  string min_channel_deposit = 2;
-  uint64 max_channel_duration = 3;
 }

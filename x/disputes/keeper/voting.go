@@ -18,7 +18,7 @@ func (k Keeper) CastVote(ctx sdk.Context, disputeId, arbiter, vote, rationale st
 	}
 
 	// Check dispute is in voting phase
-	if dispute.Status != types.DisputeStatusVoting {
+	if dispute.Status != string(types.DisputeStatusVoting) {
 		return fmt.Errorf("%w: dispute is in %s phase", types.ErrNotInVotingPhase, dispute.Status)
 	}
 
@@ -79,9 +79,9 @@ func (k Keeper) CastVote(ctx sdk.Context, disputeId, arbiter, vote, rationale st
 
 // TallyVotes computes the outcome of a dispute from the cast votes.
 // Uses stake-weighted voting with quorum and majority thresholds.
-func (k Keeper) TallyVotes(ctx sdk.Context, dispute types.Dispute) (types.DisputeOutcome, error) {
+func (k Keeper) TallyVotes(ctx sdk.Context, dispute types.Dispute) (string, error) {
 	params := k.GetParams(ctx)
-	tierConfig, err := k.GetTierConfig(params, dispute.Tier)
+	tierConfig, err := k.GetTierConfig(params, types.EscalationTier(dispute.Tier))
 	if err != nil {
 		return types.OutcomeInconclusive, err
 	}
@@ -164,14 +164,14 @@ func (k Keeper) TallyVotes(ctx sdk.Context, dispute types.Dispute) (types.Disput
 }
 
 // ResolveDispute finalizes a dispute with the given outcome and distributes rewards/slashes.
-func (k Keeper) ResolveDispute(ctx sdk.Context, dispute types.Dispute, outcome types.DisputeOutcome) error {
-	if dispute.Status == types.DisputeStatusResolved {
+func (k Keeper) ResolveDispute(ctx sdk.Context, dispute types.Dispute, outcome string) error {
+	if dispute.Status == string(types.DisputeStatusResolved) {
 		return fmt.Errorf("%w: %s", types.ErrDisputeAlreadyResolved, dispute.Id)
 	}
 
 	params := k.GetParams(ctx)
-	dispute.Status = types.DisputeStatusResolved
-	dispute.Outcome = outcome
+	dispute.Status = string(types.DisputeStatusResolved)
+	dispute.Outcome = string(outcome)
 
 	// Calculate slashing and reward amounts
 	bondAmount := new(big.Int)
@@ -250,9 +250,10 @@ func (k Keeper) ResolveDispute(ctx sdk.Context, dispute types.Dispute, outcome t
 		for _, arbiter := range dispute.Arbiters {
 			vote, voted := voteMap[arbiter]
 			if !voted {
-				// Non-voter: slash 2% of effective stake for dereliction
+				// Non-voter: slash 10% of effective stake for dereliction
+				// (TS: 10% of minArbiterStake — aligned to 10% rate)
 				arbiterStake := k.stakingKeeper.GetEffectiveStake(ctx, arbiter)
-				nonVoterSlash := new(big.Int).SetUint64(arbiterStake * 2 / 100)
+				nonVoterSlash := new(big.Int).SetUint64(arbiterStake * 10 / 100)
 				if nonVoterSlash.Sign() > 0 {
 					k.burnFromModule(ctx, nonVoterSlash) // burn the slash amount
 					ctx.EventManager().EmitEvent(sdk.NewEvent("arbiter_slashed",
@@ -292,7 +293,7 @@ func (k Keeper) ResolveDispute(ctx sdk.Context, dispute types.Dispute, outcome t
 	}
 
 	// Propagate outcome to fact confidence and status
-	k.resolveFactOutcome(ctx, dispute.FactId, outcome, dispute.Tier)
+	k.resolveFactOutcome(ctx, dispute.FactId, outcome, types.EscalationTier(dispute.Tier))
 
 	// Vesting integration: resume on upheld, clawback on overturned
 	if k.vestingKeeper != nil && dispute.ClaimId != "" {
@@ -355,12 +356,12 @@ func (k Keeper) EscalateDispute(ctx sdk.Context, disputeId, requester, additiona
 		return fmt.Errorf("%w: %s", types.ErrDisputeNotFound, disputeId)
 	}
 
-	if dispute.Status == types.DisputeStatusResolved || dispute.Status == types.DisputeStatusExpired {
+	if dispute.Status == string(types.DisputeStatusResolved) || dispute.Status == string(types.DisputeStatusExpired) {
 		return fmt.Errorf("%w: %s", types.ErrDisputeAlreadyResolved, disputeId)
 	}
 
 	// Check max tier
-	if dispute.Tier >= types.TierFinal {
+	if dispute.Tier >= uint32(types.TierFinal) {
 		return fmt.Errorf("%w", types.ErrMaxEscalation)
 	}
 
@@ -373,7 +374,7 @@ func (k Keeper) EscalateDispute(ctx sdk.Context, disputeId, requester, additiona
 	}
 
 	// Get next tier config
-	nextTier := types.EscalationTier(uint32(dispute.Tier) + 1)
+	nextTier := types.EscalationTier(dispute.Tier + 1)
 	tierConfig, err := k.GetTierConfig(params, nextTier)
 	if err != nil {
 		return err
@@ -412,8 +413,8 @@ func (k Keeper) EscalateDispute(ctx sdk.Context, disputeId, requester, additiona
 	evidenceDeadline := currentHeight + tierConfig.EvidencePeriod
 	votingDeadline := evidenceDeadline + tierConfig.VotingPeriod
 
-	dispute.Tier = nextTier
-	dispute.Status = types.DisputeStatusEvidence
+	dispute.Tier = uint32(nextTier)
+	dispute.Status = string(types.DisputeStatusEvidence)
 	dispute.Bond = newBond.String()
 	dispute.Arbiters = newArbiters
 	dispute.EvidenceDeadline = evidenceDeadline
@@ -460,83 +461,25 @@ const (
 )
 
 // resolveFactOutcome adjusts a fact's confidence and status based on dispute outcome.
-// This is the Go equivalent of TS routeDisputeOutcomeToFact().
-func (k Keeper) resolveFactOutcome(ctx sdk.Context, factId string, outcome types.DisputeOutcome, tier types.EscalationTier) {
-	fact, found := k.knowledgeKeeper.GetFact(ctx, factId)
-	if !found {
-		return
-	}
-
-	previousConfidence := fact.Confidence
-	fact.ChallengeCount++
-
-	switch outcome {
-	case types.OutcomeOverturned:
-		// Challenger wins: reduce confidence by 55% (scale by tier — higher tiers reduce more)
-		tierMultiplier := uint64(tier) // 1, 2, or 3
-		reductionBps := ConfidenceReductionBps
+// Delegates to the knowledge module's ResolveFactDispute method, which owns the
+// invariants for fact state transitions (confidence adjustment, retraction, events).
+func (k Keeper) resolveFactOutcome(ctx sdk.Context, factId string, outcome string, tier types.EscalationTier) {
+	// Compute tier-scaled reduction for overturned outcomes
+	reductionBps := ConfidenceReductionBps
+	if outcome == types.OutcomeOverturned {
+		tierMultiplier := uint64(tier)
 		if tierMultiplier > 1 {
-			// Higher tier escalation = stronger reduction: tier2 = 65%, tier3 = 75%
 			reductionBps = ConfidenceReductionBps + (tierMultiplier-1)*100_000
 			if reductionBps > 900_000 {
 				reductionBps = 900_000
 			}
 		}
-		fact.Confidence = fact.Confidence * (MaxConfidenceBps - reductionBps) / MaxConfidenceBps
-
-		// Determine status based on remaining confidence
-		if fact.Confidence < RetractionThresholdBps {
-			fact.Status = "revoked"
-		} else {
-			fact.Status = "contested"
-		}
-
-	case types.OutcomeUpheld:
-		// Defender wins: boost confidence by 11%
-		fact.Confidence = fact.Confidence * (MaxConfidenceBps + ConfidenceBoostBps) / MaxConfidenceBps
-		if fact.Confidence > MaxConfidenceBps {
-			fact.Confidence = MaxConfidenceBps
-		}
-		// Fact survives — restore to active if it was contested
-		if fact.Status == "contested" || fact.Status == "challenged" {
-			fact.Status = "active"
-		}
-
-	case types.OutcomeInconclusive:
-		// No change to confidence, mark as contested (uncertainty)
-		if fact.Status == "challenged" {
-			fact.Status = "contested"
-		}
 	}
 
-	k.knowledgeKeeper.SetFact(ctx, fact)
-
-	// Emit confidence change event
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			"fact_confidence_changed",
-			sdk.NewAttribute("fact_id", factId),
-			sdk.NewAttribute("previous_confidence", fmt.Sprintf("%d", previousConfidence)),
-			sdk.NewAttribute("new_confidence", fmt.Sprintf("%d", fact.Confidence)),
-			sdk.NewAttribute("outcome", string(outcome)),
-			sdk.NewAttribute("challenge_count", fmt.Sprintf("%d", fact.ChallengeCount)),
-		),
-	)
-
-	// Emit retraction event if fact was revoked
-	if fact.Status == "revoked" {
-		ctx.EventManager().EmitEvent(
-			sdk.NewEvent(
-				"fact_retracted",
-				sdk.NewAttribute("fact_id", factId),
-				sdk.NewAttribute("final_confidence", fmt.Sprintf("%d", fact.Confidence)),
-				sdk.NewAttribute("challenge_count", fmt.Sprintf("%d", fact.ChallengeCount)),
-			),
-		)
-		k.Logger(ctx).Info("fact retracted via dispute",
-			"fact_id", factId,
-			"final_confidence", fact.Confidence,
-		)
+	_, err := k.knowledgeKeeper.ResolveFactDispute(ctx, factId, string(outcome), reductionBps)
+	if err != nil {
+		k.Logger(ctx).Error("failed to resolve fact dispute outcome",
+			"fact_id", factId, "outcome", outcome, "error", err)
 	}
 }
 
@@ -546,7 +489,7 @@ func (k Keeper) resolveFactOutcome(ctx sdk.Context, factId string, outcome types
 // after a dispute has been resolved. This is the extension point for:
 // 1. Confidence cascade to dependent facts (overturned → reduce referencing facts)
 // 2. Structured event emission for other modules (evidence_mgmt, reputation, etc.)
-func (k Keeper) processPostResolution(ctx sdk.Context, dispute types.Dispute, outcome types.DisputeOutcome) {
+func (k Keeper) processPostResolution(ctx sdk.Context, dispute types.Dispute, outcome string) {
 	// 1. Cascade confidence reduction to facts referencing a retracted fact
 	if outcome == types.OutcomeOverturned {
 		k.cascadeConfidenceReduction(ctx, dispute.FactId)
@@ -568,54 +511,15 @@ func (k Keeper) processPostResolution(ctx sdk.Context, dispute types.Dispute, ou
 }
 
 // cascadeConfidenceReduction reduces confidence of facts that reference a retracted fact.
-// Uses a 22% cascade reduction (from TS CONFIDENCE_CASCADE_RATE).
+// Delegates to the knowledge module's CascadeFactConfidence method.
 func (k Keeper) cascadeConfidenceReduction(ctx sdk.Context, retractedFactId string) {
-	// Get facts that reference the retracted fact
-	referringFactIds := k.knowledgeKeeper.GetReferringFacts(ctx, retractedFactId)
-	if len(referringFactIds) == 0 {
-		return
-	}
-
 	const cascadeReductionBps uint64 = 220_000 // 22%
 
-	for _, refFactId := range referringFactIds {
-		fact, found := k.knowledgeKeeper.GetFact(ctx, refFactId)
-		if !found {
-			continue
-		}
-		// Skip already-revoked facts
-		if fact.Status == "revoked" {
-			continue
-		}
-
-		previousConfidence := fact.Confidence
-		fact.Confidence = fact.Confidence * (MaxConfidenceBps - cascadeReductionBps) / MaxConfidenceBps
-
-		// Check if cascade pushes below retraction threshold
-		if fact.Confidence < RetractionThresholdBps {
-			fact.Status = "revoked"
-		} else if fact.Confidence < previousConfidence {
-			fact.Status = "contested"
-		}
-
-		k.knowledgeKeeper.SetFact(ctx, fact)
-
-		ctx.EventManager().EmitEvent(
-			sdk.NewEvent(
-				"fact_confidence_cascaded",
-				sdk.NewAttribute("fact_id", refFactId),
-				sdk.NewAttribute("retracted_reference", retractedFactId),
-				sdk.NewAttribute("previous_confidence", fmt.Sprintf("%d", previousConfidence)),
-				sdk.NewAttribute("new_confidence", fmt.Sprintf("%d", fact.Confidence)),
-				sdk.NewAttribute("status", fact.Status),
-			),
-		)
+	_, err := k.knowledgeKeeper.CascadeFactConfidence(ctx, retractedFactId, cascadeReductionBps)
+	if err != nil {
+		k.Logger(ctx).Error("failed to cascade confidence reduction",
+			"retracted_fact", retractedFactId, "error", err)
 	}
-
-	k.Logger(ctx).Info("confidence cascade applied",
-		"retracted_fact", retractedFactId,
-		"affected_facts", len(referringFactIds),
-	)
 }
 
 // ---------- Internal helpers ----------

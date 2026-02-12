@@ -11,6 +11,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -45,7 +46,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	registry := codectypes.NewInterfaceRegistry()
 	cdc := codec.NewProtoCodec(registry)
 
-	k := keeper.NewKeeper(cdc, storeKey, nil, nil, "lgm1authority")
+	k := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), nil, nil, "lgm1authority")
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
@@ -96,7 +97,7 @@ func TestCreateHome(t *testing.T) {
 	if home.Name != "Agent Alpha Home" {
 		t.Errorf("expected name 'Agent Alpha Home', got '%s'", home.Name)
 	}
-	if home.Status != types.HomeStatusActive {
+	if home.Status != string(types.HomeStatusActive) {
 		t.Errorf("expected active status, got %s", home.Status)
 	}
 	if home.OwnerAddress != owner1 {
@@ -105,7 +106,7 @@ func TestCreateHome(t *testing.T) {
 	if home.ComfortScore != 50 {
 		t.Errorf("expected default comfort score 50, got %d", home.ComfortScore)
 	}
-	if home.Guardian.DefenseStrategy != types.DefenseModerate {
+	if home.Guardian.DefenseStrategy != string(types.DefenseModerate) {
 		t.Errorf("expected default defense strategy moderate, got %s", home.Guardian.DefenseStrategy)
 	}
 
@@ -238,8 +239,8 @@ func TestUpdateMemoryCID(t *testing.T) {
 	}
 
 	home, _ := k.GetHome(ctx, resp.HomeId)
-	if home.MemoryCID != "QmYwAPJzv5CZsnN625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
-		t.Errorf("expected CID to be set, got '%s'", home.MemoryCID)
+	if home.MemoryCid != "QmYwAPJzv5CZsnN625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
+		t.Errorf("expected CID to be set, got '%s'", home.MemoryCid)
 	}
 }
 
@@ -261,8 +262,8 @@ func TestStartEndSession(t *testing.T) {
 		HomeId:      homeResp.HomeId,
 		KeyHash:     "abc123def456",
 		KeyType:     "ed25519",
-		Role:        types.AccessRoleOperator,
-		Permissions: []types.Permission{types.PermReadMemory, types.PermWriteMemory, types.PermVerify},
+		Role:        string(types.AccessRoleOperator),
+		Permissions: []string{string(types.PermReadMemory), string(types.PermWriteMemory), string(types.PermVerify)},
 	})
 	if err != nil {
 		t.Fatalf("register key failed: %v", err)
@@ -273,7 +274,7 @@ func TestStartEndSession(t *testing.T) {
 		Signer:               user1,
 		HomeId:               homeResp.HomeId,
 		KeyHash:              "abc123def456",
-		RequestedPermissions: []types.Permission{types.PermReadMemory, types.PermVerify},
+		RequestedPermissions: []string{string(types.PermReadMemory), string(types.PermVerify)},
 	})
 	if err != nil {
 		t.Fatalf("start session failed: %v", err)
@@ -322,8 +323,8 @@ func TestSessionExpiry(t *testing.T) {
 		HomeId:      homeResp.HomeId,
 		KeyHash:     "expiredkey123",
 		KeyType:     "ed25519",
-		Role:        types.AccessRoleGuest,
-		Permissions: []types.Permission{types.PermReadMemory},
+		Role:        string(types.AccessRoleGuest),
+		Permissions: []string{string(types.PermReadMemory)},
 		ExpiresAt:   50, // Already expired
 	})
 
@@ -354,8 +355,8 @@ func TestRegisterKey(t *testing.T) {
 		HomeId:      homeResp.HomeId,
 		KeyHash:     "mykeyhash001",
 		KeyType:     "secp256k1",
-		Role:        types.AccessRoleOperator,
-		Permissions: []types.Permission{types.PermTransfer, types.PermStake},
+		Role:        string(types.AccessRoleOperator),
+		Permissions: []string{string(types.PermTransfer), string(types.PermStake)},
 	})
 	if err != nil {
 		t.Fatalf("register key failed: %v", err)
@@ -365,7 +366,7 @@ func TestRegisterKey(t *testing.T) {
 	if !found {
 		t.Fatal("key registration not found")
 	}
-	if reg.Role != types.AccessRoleOperator {
+	if reg.Role != string(types.AccessRoleOperator) {
 		t.Errorf("expected operator role, got %s", reg.Role)
 	}
 	if len(reg.Permissions) != 2 {
@@ -389,8 +390,8 @@ func TestRevokeKey(t *testing.T) {
 		HomeId:      homeResp.HomeId,
 		KeyHash:     "revokekey001",
 		KeyType:     "ed25519",
-		Role:        types.AccessRoleOperator,
-		Permissions: []types.Permission{types.PermReadMemory},
+		Role:        string(types.AccessRoleOperator),
+		Permissions: []string{string(types.PermReadMemory)},
 	})
 
 	// Start a session with this key
@@ -444,8 +445,8 @@ func TestMaxKeysEnforced(t *testing.T) {
 			HomeId:      homeResp.HomeId,
 			KeyHash:     string(rune('a'+i)) + "keyhash",
 			KeyType:     "ed25519",
-			Role:        types.AccessRoleGuest,
-			Permissions: []types.Permission{types.PermReadMemory},
+			Role:        string(types.AccessRoleGuest),
+			Permissions: []string{string(types.PermReadMemory)},
 		})
 		if err != nil {
 			t.Fatalf("register key %d failed: %v", i+1, err)
@@ -458,8 +459,8 @@ func TestMaxKeysEnforced(t *testing.T) {
 		HomeId:      homeResp.HomeId,
 		KeyHash:     "dkeyhash",
 		KeyType:     "ed25519",
-		Role:        types.AccessRoleGuest,
-		Permissions: []types.Permission{types.PermReadMemory},
+		Role:        string(types.AccessRoleGuest),
+		Permissions: []string{string(types.PermReadMemory)},
 	})
 	if err == nil {
 		t.Error("expected error for max keys exceeded")
@@ -477,7 +478,7 @@ func TestConfigureGuardian(t *testing.T) {
 		Name:  "Guardian Home",
 	})
 
-	aggressive := types.DefenseAggressive
+	aggressive := string(types.DefenseAggressive)
 	autoDefend := true
 	_, err := msgServer.ConfigureGuardian(ctx, &types.MsgConfigureGuardian{
 		Owner:           owner1,
@@ -487,7 +488,7 @@ func TestConfigureGuardian(t *testing.T) {
 		Deadman: &types.DeadmanConfig{
 			Enabled:             true,
 			InactivityThreshold: 50000,
-			Action:              types.DeadmanAlertGuardians,
+			Action:              string(types.DeadmanAlertGuardians),
 		},
 		RecoveryDIDs:      []string{"did:lgm:recovery1", "did:lgm:recovery2"},
 		RecoveryThreshold: ptrUint32(2),
@@ -497,7 +498,7 @@ func TestConfigureGuardian(t *testing.T) {
 	}
 
 	home, _ := k.GetHome(ctx, homeResp.HomeId)
-	if home.Guardian.DefenseStrategy != types.DefenseAggressive {
+	if home.Guardian.DefenseStrategy != string(types.DefenseAggressive) {
 		t.Errorf("expected aggressive, got %s", home.Guardian.DefenseStrategy)
 	}
 	if !home.Guardian.AutoDefend {
@@ -509,8 +510,8 @@ func TestConfigureGuardian(t *testing.T) {
 	if home.Guardian.Deadman.InactivityThreshold != 50000 {
 		t.Errorf("expected threshold 50000, got %d", home.Guardian.Deadman.InactivityThreshold)
 	}
-	if len(home.Guardian.RecoveryDIDs) != 2 {
-		t.Errorf("expected 2 recovery DIDs, got %d", len(home.Guardian.RecoveryDIDs))
+	if len(home.Guardian.RecoveryDids) != 2 {
+		t.Errorf("expected 2 recovery DIDs, got %d", len(home.Guardian.RecoveryDids))
 	}
 	if home.Guardian.RecoveryThreshold != 2 {
 		t.Errorf("expected recovery threshold 2, got %d", home.Guardian.RecoveryThreshold)
@@ -523,7 +524,7 @@ func TestConfigureGuardian(t *testing.T) {
 		Deadman: &types.DeadmanConfig{
 			Enabled:             true,
 			InactivityThreshold: 100, // Below DeadmanMinThreshold (34272)
-			Action:              types.DeadmanAlertGuardians,
+			Action:              string(types.DeadmanAlertGuardians),
 		},
 	})
 	if err == nil {
@@ -541,13 +542,13 @@ func TestDeadmanSwitch(t *testing.T) {
 		HomeId:       "home-deadman",
 		OwnerAddress: owner1,
 		Name:         "Deadman Test",
-		Status:       types.HomeStatusActive,
-		Guardian: types.HomeGuardian{
-			DefenseStrategy: types.DefenseModerate,
-			Deadman: types.DeadmanConfig{
+		Status:       string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{
+			DefenseStrategy: string(types.DefenseModerate),
+			Deadman: &types.DeadmanConfig{
 				Enabled:             true,
 				InactivityThreshold: 30, // 30 blocks
-				Action:              types.DeadmanAlertGuardians,
+				Action:              string(types.DeadmanAlertGuardians),
 			},
 		},
 		CreatedAtBlock:  10,
@@ -560,12 +561,12 @@ func TestDeadmanSwitch(t *testing.T) {
 		HomeId:       "home-active",
 		OwnerAddress: owner1,
 		Name:         "Active Home",
-		Status:       types.HomeStatusActive,
-		Guardian: types.HomeGuardian{
-			Deadman: types.DeadmanConfig{
+		Status:       string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{
+			Deadman: &types.DeadmanConfig{
 				Enabled:             true,
 				InactivityThreshold: 30,
-				Action:              types.DeadmanAlertGuardians,
+				Action:              string(types.DeadmanAlertGuardians),
 			},
 		},
 		CreatedAtBlock:  10,
@@ -578,13 +579,13 @@ func TestDeadmanSwitch(t *testing.T) {
 
 	// Verify the inactive home was set to guarded
 	h1, _ := k.GetHome(ctx, "home-deadman")
-	if h1.Status != types.HomeStatusGuarded {
+	if h1.Status != string(types.HomeStatusGuarded) {
 		t.Errorf("expected guarded status, got %s", h1.Status)
 	}
 
 	// Verify the active home was NOT touched
 	h2, _ := k.GetHome(ctx, "home-active")
-	if h2.Status != types.HomeStatusActive {
+	if h2.Status != string(types.HomeStatusActive) {
 		t.Errorf("expected active status, got %s", h2.Status)
 	}
 }
@@ -672,7 +673,7 @@ func TestParamsGenesis(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	gs := types.GenesisState{
-		Params: types.Params{
+		Params: &types.Params{
 			MaxHomesPerAccount:   5,
 			MinCreationStake:     "2000000",
 			SessionMaxDuration:   68544,
@@ -682,19 +683,19 @@ func TestParamsGenesis(t *testing.T) {
 			DeadmanMinThreshold:  68544,
 			AlertRetentionBlocks: 685440,
 		},
-		Homes: []types.AgentHome{
+		Homes: []*types.AgentHome{
 			{
 				HomeId:          "genesis-home-1",
 				OwnerAddress:    owner1,
 				Name:            "Genesis Home",
-				Status:          types.HomeStatusActive,
+				Status:          string(types.HomeStatusActive),
 				CreatedAtBlock:  1,
 				LastActiveBlock: 1,
-				Treasury: types.HomeTreasury{
+				Treasury: &types.HomeTreasury{
 					ReservedBalance: "0",
 				},
-				Guardian: types.HomeGuardian{
-					DefenseStrategy: types.DefenseModerate,
+				Guardian: &types.HomeGuardian{
+					DefenseStrategy: string(types.DefenseModerate),
 				},
 			},
 		},

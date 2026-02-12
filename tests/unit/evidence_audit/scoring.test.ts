@@ -63,13 +63,13 @@ describe.sequential("aggregateAuditScores", () => {
     const audit1 = makeAudit({
       id: "audit:1",
       score: 0.9,
-      stake: 100n * 10n ** 18n, // 100 LGM
+      stake: 100n * 10n ** 15n, // 100 LGM
     });
     const audit2 = makeAudit({
       id: "audit:2",
       auditor: TEST_AUDITOR_2,
       score: 0.5,
-      stake: 100n * 10n ** 18n, // 100 LGM
+      stake: 100n * 10n ** 15n, // 100 LGM
     });
 
     const result = aggregateAuditScores([audit1, audit2]);
@@ -77,20 +77,20 @@ describe.sequential("aggregateAuditScores", () => {
     // Equal stake → simple average: (0.9 + 0.5) / 2 = 0.7
     expect(result.weightedScore).toBeCloseTo(0.7, 5);
     expect(result.auditCount).toBe(2);
-    expect(result.totalStake).toBe(200n * 10n ** 18n);
+    expect(result.totalStake).toBe(200n * 10n ** 15n);
   });
 
   it("should weight by stake when stakes differ", () => {
     const audit1 = makeAudit({
       id: "audit:1",
       score: 1.0,
-      stake: 300n * 10n ** 18n, // 3x stake
+      stake: 300n * 10n ** 15n, // 3x stake
     });
     const audit2 = makeAudit({
       id: "audit:2",
       auditor: TEST_AUDITOR_2,
       score: 0.0,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
     });
 
     const result = aggregateAuditScores([audit1, audit2]);

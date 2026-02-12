@@ -306,7 +306,7 @@ message MsgRollbackDeployment {
 message MsgRollbackDeploymentResponse {}
 
 // ============================================================================
-// Enums
+// Enums (used by Msg types, not duplicated in state.proto or genesis.proto)
 // ============================================================================
 
 enum LIPType {
@@ -343,21 +343,4 @@ enum ReviewVerdict {
   REVIEW_VERDICT_APPROVE = 1;
   REVIEW_VERDICT_REQUEST_CHANGES = 2;
   REVIEW_VERDICT_REJECT = 3;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-}
-
-message Params {
-  string min_lip_stake = 1;
-  uint64 review_period = 2;
-  uint64 voting_period = 3;
-  uint32 quorum_pct = 4;  // 0-1000000
-  uint32 threshold_pct = 5;  // 0-1000000
-  string min_disbursement_stake = 6;
 }

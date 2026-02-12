@@ -97,7 +97,7 @@ function makeFailingVoteTally(): VoteTally {
 
 describe("Disbursement Types & Constants", () => {
   it("DISBURSEMENT_STAKE is 2000 LGM", () => {
-    expect(DISBURSEMENT_STAKE).toBe(2000n * ONE_LGM);
+    expect(DISBURSEMENT_STAKE).toBe(2000n * 10n ** 15n);
   });
 
   it("TIMELOCK_BLOCKS is 50000", () => {

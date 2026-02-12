@@ -12,6 +12,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -56,17 +57,15 @@ func (m msgServer) SubmitResearch(
 	// Create research submission
 	researchId := m.Keeper.nextResearchId(ctx)
 	research := types.Research{
-		Id:           researchId,
-		Submitter:    msg.Submitter,
-		Title:        msg.Title,
-		Description:  msg.Description,
-		Domain:       msg.Domain,
-		ResearchType: msg.ResearchType,
-		TargetFactId: msg.TargetFactId,
-		Stake:        msg.Stake,
-		Status:       types.ResearchStatusSubmitted,
-		CreatedAt:    uint64(ctx.BlockHeight()),
-		UpdatedAt:    uint64(ctx.BlockHeight()),
+		Id:          researchId,
+		Submitter:   msg.Submitter,
+		Title:       msg.Title,
+		Description: msg.Description,
+		Domain:      msg.Domain,
+		Stake:       msg.Stake,
+		Status:      string(types.ResearchStatusSubmitted),
+		CreatedAt:   uint64(ctx.BlockHeight()),
+		UpdatedAt:   uint64(ctx.BlockHeight()),
 	}
 	m.Keeper.SetResearch(ctx, research)
 
@@ -76,7 +75,6 @@ func (m msgServer) SubmitResearch(
 			sdk.NewAttribute("research_id", researchId),
 			sdk.NewAttribute("submitter", msg.Submitter),
 			sdk.NewAttribute("domain", msg.Domain),
-			sdk.NewAttribute("research_type", string(msg.ResearchType)),
 			sdk.NewAttribute("stake", msg.Stake),
 		),
 	)
@@ -100,7 +98,7 @@ func (m msgServer) ChallengeResearch(
 	}
 
 	// Only submitted or under_review can be challenged
-	if research.Status != types.ResearchStatusSubmitted && research.Status != types.ResearchStatusUnderReview {
+	if research.Status != string(types.ResearchStatusSubmitted) && research.Status != string(types.ResearchStatusUnderReview) {
 		return nil, types.ErrResearchNotChallengeable
 	}
 
@@ -121,7 +119,7 @@ func (m msgServer) ChallengeResearch(
 	}
 
 	// Update status
-	research.Status = types.ResearchStatusChallenged
+	research.Status = string(types.ResearchStatusChallenged)
 	research.UpdatedAt = uint64(ctx.BlockHeight())
 	m.Keeper.SetResearch(ctx, research)
 
@@ -151,7 +149,7 @@ func (m msgServer) ReviewResearch(
 	}
 
 	// Must be submitted or under_review to accept reviews
-	if research.Status != types.ResearchStatusSubmitted && research.Status != types.ResearchStatusUnderReview {
+	if research.Status != string(types.ResearchStatusSubmitted) && research.Status != string(types.ResearchStatusUnderReview) {
 		return nil, types.ErrResearchNotUnderReview
 	}
 
@@ -160,14 +158,27 @@ func (m msgServer) ReviewResearch(
 		return nil, types.ErrAlreadyReviewed
 	}
 
+	// Map proto enum verdict to string for storage
+	var verdictStr string
+	switch msg.Verdict {
+	case types.ReviewVerdict_REVIEW_VERDICT_APPROVE:
+		verdictStr = "approve"
+	case types.ReviewVerdict_REVIEW_VERDICT_REJECT:
+		verdictStr = "reject"
+	case types.ReviewVerdict_REVIEW_VERDICT_REVISE:
+		verdictStr = "revise"
+	default:
+		verdictStr = "unspecified"
+	}
+
 	// Create peer review
 	reviewId := m.Keeper.nextReviewId(ctx)
 	review := types.PeerReview{
 		Id:         reviewId,
 		ResearchId: msg.ResearchId,
 		Reviewer:   msg.Reviewer,
-		Verdict:    msg.Verdict,
-		Score:      msg.Score,
+		Verdict:    verdictStr,
+		Score:      msg.QualityScore,
 		Reasoning:  msg.Reasoning,
 		ReviewedAt: uint64(ctx.BlockHeight()),
 	}
@@ -176,17 +187,17 @@ func (m msgServer) ReviewResearch(
 	// Update research review counts
 	research.ReviewCount++
 	switch msg.Verdict {
-	case types.ReviewVerdictApprove:
+	case types.ReviewVerdict_REVIEW_VERDICT_APPROVE:
 		research.ApproveCount++
-	case types.ReviewVerdictReject:
+	case types.ReviewVerdict_REVIEW_VERDICT_REJECT:
 		research.RejectCount++
-	case types.ReviewVerdictRevise:
+	case types.ReviewVerdict_REVIEW_VERDICT_REVISE:
 		research.ReviseCount++
 	}
 
 	// Transition to under_review after first review
-	if research.Status == types.ResearchStatusSubmitted {
-		research.Status = types.ResearchStatusUnderReview
+	if research.Status == string(types.ResearchStatusSubmitted) {
+		research.Status = string(types.ResearchStatusUnderReview)
 	}
 
 	// Update aggregate score (simple average of all review scores)
@@ -205,8 +216,8 @@ func (m msgServer) ReviewResearch(
 			"research_reviewed",
 			sdk.NewAttribute("research_id", msg.ResearchId),
 			sdk.NewAttribute("reviewer", msg.Reviewer),
-			sdk.NewAttribute("verdict", string(msg.Verdict)),
-			sdk.NewAttribute("score", fmt.Sprintf("%d", msg.Score)),
+			sdk.NewAttribute("verdict", verdictStr),
+			sdk.NewAttribute("score", fmt.Sprintf("%d", msg.QualityScore)),
 		),
 	)
 
@@ -233,7 +244,7 @@ func (m msgServer) ResolveResearch(
 		return nil, types.ErrSubmissionNotFound
 	}
 
-	if research.Status != types.ResearchStatusUnderReview {
+	if research.Status != string(types.ResearchStatusUnderReview) {
 		return nil, types.ErrResearchNotUnderReview
 	}
 
@@ -243,10 +254,10 @@ func (m msgServer) ResolveResearch(
 	}
 
 	// Determine outcome from aggregate score
-	var outcome string
+	var outcome types.ResearchOutcome
 	if research.AggregateScore >= params.AcceptanceScoreThreshold {
-		outcome = "accepted"
-		research.Status = types.ResearchStatusAccepted
+		outcome = types.ResearchOutcome_RESEARCH_OUTCOME_ACCEPTED
+		research.Status = string(types.ResearchStatusAccepted)
 
 		// Return stake to submitter
 		stakeInt := new(big.Int)
@@ -255,15 +266,15 @@ func (m msgServer) ResolveResearch(
 		coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(stakeInt)))
 		m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, submitterAddr, coins)
 	} else {
-		outcome = "rejected"
-		research.Status = types.ResearchStatusRejected
+		outcome = types.ResearchOutcome_RESEARCH_OUTCOME_REJECTED
+		research.Status = string(types.ResearchStatusRejected)
 
 		// Slash stake
 		stakeInt := new(big.Int)
 		stakeInt.SetString(research.Stake, 10)
 		slashRate := new(big.Int).SetUint64(params.RejectionSlashBps)
 		slashAmount := new(big.Int).Mul(stakeInt, slashRate)
-		slashAmount.Div(slashAmount, new(big.Int).SetUint64(10000))
+		slashAmount.Div(slashAmount, new(big.Int).SetUint64(1000000))
 
 		// Burn slashed amount
 		if slashAmount.Sign() > 0 {
@@ -283,11 +294,19 @@ func (m msgServer) ResolveResearch(
 	research.UpdatedAt = uint64(ctx.BlockHeight())
 	m.Keeper.SetResearch(ctx, research)
 
+	// Map outcome for event attribute
+	var outcomeStr string
+	if outcome == types.ResearchOutcome_RESEARCH_OUTCOME_ACCEPTED {
+		outcomeStr = "accepted"
+	} else {
+		outcomeStr = "rejected"
+	}
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"research_resolved",
 			sdk.NewAttribute("research_id", msg.ResearchId),
-			sdk.NewAttribute("outcome", outcome),
+			sdk.NewAttribute("outcome", outcomeStr),
 			sdk.NewAttribute("aggregate_score", fmt.Sprintf("%d", research.AggregateScore)),
 		),
 	)
@@ -332,10 +351,9 @@ func (m msgServer) CreateBounty(
 		Creator:        msg.Creator,
 		Title:          msg.Title,
 		Description:    msg.Description,
-		Domain:         msg.Domain,
 		Reward:         msg.Reward,
 		DeadlineHeight: msg.DeadlineHeight,
-		Status:         types.BountyStatusOpen,
+		Status:         string(types.BountyStatusOpen),
 		CreatedAt:      uint64(ctx.BlockHeight()),
 	}
 	m.Keeper.SetBounty(ctx, bounty)
@@ -346,7 +364,6 @@ func (m msgServer) CreateBounty(
 			sdk.NewAttribute("bounty_id", bountyId),
 			sdk.NewAttribute("creator", msg.Creator),
 			sdk.NewAttribute("reward", msg.Reward),
-			sdk.NewAttribute("domain", msg.Domain),
 		),
 	)
 
@@ -365,7 +382,7 @@ func (m msgServer) ClaimBounty(
 		return nil, types.ErrBountyNotFound
 	}
 
-	if bounty.Status != types.BountyStatusOpen {
+	if bounty.Status != string(types.BountyStatusOpen) {
 		return nil, types.ErrBountyNotOpen
 	}
 
@@ -374,7 +391,7 @@ func (m msgServer) ClaimBounty(
 		return nil, types.ErrBountyExpired
 	}
 
-	bounty.Status = types.BountyStatusClaimed
+	bounty.Status = string(types.BountyStatusClaimed)
 	bounty.ClaimedBy = msg.Claimer
 	m.Keeper.SetBounty(ctx, bounty)
 
@@ -406,7 +423,7 @@ func (m msgServer) FulfillBounty(
 		return nil, types.ErrBountyNotFound
 	}
 
-	if bounty.Status != types.BountyStatusClaimed {
+	if bounty.Status != string(types.BountyStatusClaimed) {
 		return nil, types.ErrBountyNotClaimed
 	}
 
@@ -419,7 +436,7 @@ func (m msgServer) FulfillBounty(
 		return nil, fmt.Errorf("failed to pay bounty reward: %w", err)
 	}
 
-	bounty.Status = types.BountyStatusFulfilled
+	bounty.Status = string(types.BountyStatusFulfilled)
 	bounty.FulfilledBy = bounty.ClaimedBy
 	m.Keeper.SetBounty(ctx, bounty)
 
@@ -432,7 +449,7 @@ func (m msgServer) FulfillBounty(
 		),
 	)
 
-	return &types.MsgFulfillBountyResponse{Reward: bounty.Reward}, nil
+	return &types.MsgFulfillBountyResponse{}, nil
 }
 
 // FundResearch adds funds to the research treasury.
@@ -467,7 +484,7 @@ func (m msgServer) FundResearch(
 		),
 	)
 
-	return &types.MsgFundResearchResponse{TreasuryBalance: newBalance.String()}, nil
+	return &types.MsgFundResearchResponse{}, nil
 }
 
 // UpdateParams updates module parameters.
@@ -481,7 +498,9 @@ func (m msgServer) UpdateParams(
 		return nil, types.ErrUnauthorized
 	}
 
-	m.Keeper.SetParams(ctx, msg.Params)
+	if msg.Params != nil {
+		m.Keeper.SetParams(ctx, *msg.Params)
+	}
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

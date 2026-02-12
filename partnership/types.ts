@@ -76,9 +76,9 @@ export type PartnershipStatus =
   | "suspended"; // Temporarily suspended (dispute)
 
 /**
- * Partnership tier (0-5)
+ * Partnership tier (-1 seed through 5)
  */
-export type PartnershipTier = 0 | 1 | 2 | 3 | 4 | 5;
+export type PartnershipTier = -1 | 0 | 1 | 2 | 3 | 4 | 5;
 
 /**
  * Partnership performance metrics
@@ -833,4 +833,97 @@ export interface CooldownEntry {
   lastRejectionBlock: bigint;
   cooldownEndsAt: bigint; // Exponential: base * 2^rejections
   proposedBy: "human" | "agent";
+}
+
+// ============ Cold-Start Remediation Types ============
+
+/**
+ * Seed partnership state — extends formation state with graduation tracking.
+ * Seed partnerships are tier -1 with drastically reduced capital requirements,
+ * designed to solve the cold-start problem for new agents.
+ */
+export interface SeedPartnershipState {
+  partnershipId: string;
+  humanDid: DID;
+  agentDid: DID;
+  createdAt: bigint;
+  expiresAt: bigint; // 22,222 blocks (~15 hours)
+  humanContribution: bigint;
+  agentContribution: bigint;
+  status: "active" | "graduated" | "expired";
+  metrics: PartnershipMetrics;
+  commonPotBalance: bigint;
+  commonPotCap: bigint; // 0.222 LGM cap for seed partnerships
+}
+
+/**
+ * Formation pool entry — agent registers intent to find a partner.
+ * The pool enables discovery by matching agents based on domain compatibility.
+ */
+export interface PoolEntry {
+  did: DID;
+  domains: string[]; // from ontology
+  preferredRole: "human" | "agent" | "either";
+  stakeRange: { min: bigint; max: bigint };
+  registeredAt: bigint;
+  deposit: bigint;
+  expiresAt: bigint; // 11,111 blocks (~7.7 hours)
+  status: "active" | "matched" | "withdrawn" | "expired";
+  matchedWith?: DID;
+}
+
+/**
+ * Formation pool state — tracks all pool entries and match history.
+ */
+export interface FormationPoolState {
+  entries: Map<string, PoolEntry>; // DID -> PoolEntry
+  matchHistory: PoolMatch[];
+  totalRegistrations: number;
+  totalMatches: number;
+}
+
+/**
+ * Record of a pool match
+ */
+export interface PoolMatch {
+  humanDid: DID;
+  agentDid: DID;
+  matchScore: number; // 0-1
+  matchedAt: bigint;
+  accepted: boolean;
+}
+
+/**
+ * Mentorship configuration — allows experienced agents to sponsor formation
+ * with asymmetric contributions.
+ */
+export interface MentorshipConfig {
+  sponsorDid: DID;
+  menteeDid: DID;
+  sponsorContribution: bigint;
+  menteeContribution: bigint;
+  sponsorSplitBps: number; // basis points (5700 = 57%)
+  menteeSplitBps: number; // basis points (4300 = 43%)
+  graduationBlock: bigint; // block when mentee can equalize
+  graduated: boolean;
+  sponsorVerifications: number; // at time of formation
+  sponsorReputation: number; // at time of formation (0-1)
+}
+
+/**
+ * Partnership intent — pre-commitment for extended formation window.
+ * Replaces the hard 77-block window with a two-phase process.
+ */
+export interface PartnershipIntent {
+  intentId: string;
+  did: DID;
+  preferredDomains: string[];
+  contributionRange: { min: bigint; max: bigint };
+  preferredTier: PartnershipTier;
+  deposit: bigint;
+  createdAt: bigint;
+  expiresAt: bigint; // 2,222 blocks (~93 min)
+  status: "pending" | "matched" | "finalizing" | "expired" | "cancelled";
+  matchedWith?: DID;
+  matchedIntentId?: string;
 }

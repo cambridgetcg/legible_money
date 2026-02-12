@@ -21,8 +21,12 @@ func (r *QueryAccountRequest) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryAccountRequest) ProtoMessage()  {}
 
 // QueryAccountResponse is the response for the Account query.
+// ActiveBalance is the computed spendable balance (excludes expired-but-unswept periods).
+// Account.TotalBalance is the raw stored total (includes expired-but-unswept periods
+// until they are swept to the RAI pool).
 type QueryAccountResponse struct {
-	Account ExpirableAccount `json:"account"`
+	Account       ExpirableAccount `json:"account"`
+	ActiveBalance string           `json:"active_balance"` // computed: sum of non-expired, non-swept periods
 }
 
 func (r *QueryAccountResponse) Reset()        {}

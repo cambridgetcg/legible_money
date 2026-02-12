@@ -356,7 +356,7 @@ export function updateDefenseStateAfterVerification(
     verdicts: Array.from(reveals.values()).map((r) => r.verdict),
     finalOutcome,
     submissionTimestamps: Array.from(reveals.values()).map((r) =>
-      BigInt(r.submittedAt),
+      BigInt(r.submittedAtHeight),
     ),
   };
 

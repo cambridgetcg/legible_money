@@ -12,6 +12,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -21,11 +22,14 @@ import (
 	capturedefensetypes "github.com/legible-money/legible/x/capture_defense/types"
 )
 
+var testChallengerAddr sdk.AccAddress
+
 func init() {
 	config := sdk.GetConfig()
 	config.SetBech32PrefixForAccount("lgm", "lgmpub")
 	config.SetBech32PrefixForValidator("lgmvaloper", "lgmvaloperpub")
 	config.SetBech32PrefixForConsensusNode("lgmvalcons", "lgmvalconspub")
+	testChallengerAddr = sdk.AccAddress([]byte("capture_test_addr___"))
 }
 
 // ---------- Mock CaptureDefenseKeeper ----------
@@ -95,9 +99,10 @@ func (m mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ string
 
 // ---------- Test Setup ----------
 
-const testAuthority = "lgm10d07y265gmmuvt4z0w9aw880jnsr700jefnezl"
+var testAuthority string
 
 func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockCaptureDefenseKeeper, *mockStakingKeeper) {
+	testAuthority = testChallengerAddr.String()
 	t.Helper()
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
@@ -118,7 +123,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockCaptureDefenseK
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		mockCDK,
 		mockSK,
 		mockBankKeeper{},
@@ -128,18 +133,18 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockCaptureDefenseK
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 
 	// Set default params
-	k.SetParams(ctx, types.DefaultParams())
+	k.SetParams(ctx, *types.DefaultParams())
 
 	return k, ctx, mockCDK, mockSK
 }
 
 // makeEvidence creates N CaptureEvidence pieces for testing.
-func makeEvidence(n int) []types.CaptureEvidence {
-	evidence := make([]types.CaptureEvidence, n)
+func makeEvidence(n int) []*types.CaptureEvidence {
+	evidence := make([]*types.CaptureEvidence, n)
 	for i := 0; i < n; i++ {
-		evidence[i] = types.CaptureEvidence{
+		evidence[i] = &types.CaptureEvidence{
 			Id:          "ev-" + string(rune('a'+i)),
-			Type:        types.EvidenceCoordinatedVoting,
+			Type:        string(types.EvidenceCoordinatedVoting),
 			Description: "Evidence piece " + string(rune('a'+i)),
 			DataHash:    "hash_" + string(rune('a'+i)),
 			SubmittedAt: 10,
@@ -177,7 +182,7 @@ func TestSubmitChallengeSuccess(t *testing.T) {
 	}
 
 	// Verify status is evidence_period
-	if ch.Status != types.ChallengeEvidencePeriod {
+	if ch.Status != string(types.ChallengeEvidencePeriod) {
 		t.Errorf("expected status=%s, got %s", types.ChallengeEvidencePeriod, ch.Status)
 	}
 
@@ -295,7 +300,7 @@ func TestResolveChallengeUpheld(t *testing.T) {
 	ch, resp := submitAndResolve(t, k, ctx, "upheld")
 
 	// Verify status
-	if ch.Status != types.ChallengeUpheld {
+	if ch.Status != string(types.ChallengeUpheld) {
 		t.Errorf("expected status=%s, got %s", types.ChallengeUpheld, ch.Status)
 	}
 
@@ -309,7 +314,7 @@ func TestResolveChallengeUpheld(t *testing.T) {
 
 	// Verify DomainPausedUntil set
 	currentBlock := uint64(ctx.BlockHeight())
-	expectedPause := currentBlock + types.DomainPauseDurationBlocks
+	expectedPause := currentBlock + types.DefaultDomainPauseDurationBlocks
 	if ch.DomainPausedUntil != expectedPause {
 		t.Errorf("expected DomainPausedUntil=%d, got %d", expectedPause, ch.DomainPausedUntil)
 	}
@@ -352,7 +357,7 @@ func TestResolveChallengeRejected(t *testing.T) {
 	ch, _ := submitAndResolve(t, k, ctx, "rejected")
 
 	// Verify status
-	if ch.Status != types.ChallengeRejected {
+	if ch.Status != string(types.ChallengeRejected) {
 		t.Errorf("expected status=%s, got %s", types.ChallengeRejected, ch.Status)
 	}
 
@@ -376,7 +381,7 @@ func TestResolveChallengePartial(t *testing.T) {
 	ch, resp := submitAndResolve(t, k, ctx, "partial")
 
 	// Verify status
-	if ch.Status != types.ChallengePartial {
+	if ch.Status != string(types.ChallengePartial) {
 		t.Errorf("expected status=%s, got %s", types.ChallengePartial, ch.Status)
 	}
 
@@ -402,28 +407,28 @@ func TestAdvanceChallengePhases(t *testing.T) {
 		SubmittedAtBlock: 10,
 		EvidenceDeadline: 100,  // evidence deadline at block 100
 		ReviewDeadline:   8000, // review deadline at block 8000
-		Status:           types.ChallengeEvidencePeriod,
+		Status:           string(types.ChallengeEvidencePeriod),
 	}
 	k.SetChallenge(ctx, ch)
 
 	// At block 50, still in evidence period
 	k.AdvanceChallengePhases(ctx, 50)
 	updated, _ := k.GetChallenge(ctx, "test-phase-challenge")
-	if updated.Status != types.ChallengeEvidencePeriod {
+	if updated.Status != string(types.ChallengeEvidencePeriod) {
 		t.Errorf("expected status=%s at block 50, got %s", types.ChallengeEvidencePeriod, updated.Status)
 	}
 
 	// At block 101, past evidence deadline -- should advance to under_review
 	k.AdvanceChallengePhases(ctx, 101)
 	updated, _ = k.GetChallenge(ctx, "test-phase-challenge")
-	if updated.Status != types.ChallengeUnderReview {
+	if updated.Status != string(types.ChallengeUnderReview) {
 		t.Errorf("expected status=%s at block 101, got %s", types.ChallengeUnderReview, updated.Status)
 	}
 
 	// At block 8001, past review deadline -- should advance to expired
 	k.AdvanceChallengePhases(ctx, 8001)
 	updated, _ = k.GetChallenge(ctx, "test-phase-challenge")
-	if updated.Status != types.ChallengeExpired {
+	if updated.Status != string(types.ChallengeExpired) {
 		t.Errorf("expected status=%s at block 8001, got %s", types.ChallengeExpired, updated.Status)
 	}
 }

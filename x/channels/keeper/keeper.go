@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,25 +15,42 @@ import (
 
 // Keeper manages the channels module's state.
 type Keeper struct {
-	cdc        codec.Codec
-	storeKey   storetypes.StoreKey
-	bankKeeper types.BankKeeper
-	authority  string
+	cdc          codec.Codec
+	storeService store.KVStoreService
+	bankKeeper   types.BankKeeper
+	authority    string
 }
 
 // NewKeeper creates a new channels module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bankKeeper types.BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		storeKey:   storeKey,
-		bankKeeper: bankKeeper,
-		authority:  authority,
+		cdc:          cdc,
+		storeService: storeService,
+		bankKeeper:   bankKeeper,
+		authority:    authority,
 	}
+}
+
+// prefixEndBytes returns the end key for prefix iteration.
+// It increments the last byte of the prefix. If overflow, returns nil (iterate to end).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -48,31 +65,34 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	k.SetParams(ctx, gs.Params)
+	k.SetParams(ctx, *gs.Params)
 	for _, ch := range gs.Channels {
-		k.SetChannel(ctx, ch)
+		k.SetChannel(ctx, *ch)
 	}
 	for _, d := range gs.Disputes {
-		k.SetDispute(ctx, d)
+		k.SetDispute(ctx, *d)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	var channels []types.PaymentChannel
+	var channels []*types.PaymentChannel
 	k.IterateChannels(ctx, func(ch types.PaymentChannel) bool {
-		channels = append(channels, ch)
+		c := ch
+		channels = append(channels, &c)
 		return false
 	})
 
-	var disputes []types.ChannelDispute
+	var disputes []*types.ChannelDispute
 	k.IterateDisputes(ctx, func(d types.ChannelDispute) bool {
-		disputes = append(disputes, d)
+		dd := d
+		disputes = append(disputes, &dd)
 		return false
 	})
 
+	params := k.GetParams(ctx)
 	gs := &types.GenesisState{
-		Params:   k.GetParams(ctx),
+		Params:   &params,
 		Channels: channels,
 		Disputes: disputes,
 	}

@@ -31,5 +31,8 @@ export * from "./domain_capture_integration.js";
 // ============ Challenge/Dispute Integration ============
 export * from "./challenge_integration.js";
 
+// ============ Adversarial Verification (Survive-to-Accept) ============
+export * from "./adversarial.js";
+
 // ============ Add New Features Below ============
 // (Safe zone for parallel agent work - add new exports here alphabetically)

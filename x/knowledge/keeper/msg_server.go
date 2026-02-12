@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 
@@ -12,6 +13,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -53,6 +55,16 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 			types.ErrInvalidClaim, msg.EpistemicCategory)
 	}
 
+	// Validate Gödelian logic zone constraints (if ontology keeper is wired)
+	if k.ontologyKeeper != nil && msg.LogicZone != "" {
+		// Use 10000 bps (100%) as default — actual confidence will be determined by verification,
+		// but we enforce that the zone itself is valid and registered.
+		if err := k.ontologyKeeper.ValidateClaimLogicZone(ctx, msg.LogicZone, 10000); err != nil {
+			// If zone is simply unknown, reject the claim
+			return nil, fmt.Errorf("%w: %v", types.ErrInvalidClaim, err)
+		}
+	}
+
 	// Compute content hash and check for duplicates
 	contentHash := ComputeClaimContentHash(msg.ClaimText, msg.Domain, msg.EpistemicCategory)
 	if _, found := k.GetClaimByContentHash(ctx, contentHash); found {
@@ -90,7 +102,13 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	claimID := GenerateClaimID(msg.Submitter, contentHash, height)
 	roundID := GenerateRoundID(claimID, height)
 
-	// Create claim
+	// Create claim — status depends on adversarial verification mode
+	params2 := k.GetParams(ctx) // re-fetch for adversarial check
+	initialStatus := "pending"
+	if params2.AdversarialVerificationEnabled {
+		initialStatus = types.ClaimStatusPendingEvaluation
+	}
+
 	claim := types.Claim{
 		Id:                claimID,
 		ClaimText:         msg.ClaimText,
@@ -100,7 +118,7 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		Submitter:         msg.Submitter,
 		SubmitterDid:      msg.SubmitterDid,
 		StakeAmount:       msg.StakeAmount,
-		Status:            "pending",
+		Status:            initialStatus,
 		SubmittedAtHeight: height,
 		References:        msg.References,
 		LogicZone:         msg.LogicZone,
@@ -109,7 +127,33 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	}
 	k.SetClaim(ctx, claim)
 
-	// Create verification round (delegates to rounds.go)
+	if params2.AdversarialVerificationEnabled {
+		// Adversarial mode: no verification round, evaluation happens in BeginBlocker
+		ctx.EventManager().EmitEvents(sdk.Events{
+			sdk.NewEvent(
+				"claim_submitted",
+				sdk.NewAttribute("claim_id", claimID),
+				sdk.NewAttribute("domain", msg.Domain),
+				sdk.NewAttribute("category", msg.EpistemicCategory),
+				sdk.NewAttribute("submitter", msg.Submitter),
+				sdk.NewAttribute("stake", msg.StakeAmount),
+				sdk.NewAttribute("height", fmt.Sprintf("%d", height)),
+				sdk.NewAttribute("mode", "adversarial"),
+			),
+		})
+
+		k.Logger(ctx).Info("claim submitted (adversarial mode)",
+			"claim_id", claimID,
+			"domain", msg.Domain,
+			"submitter", msg.Submitter,
+		)
+
+		return &types.MsgSubmitClaimResponse{
+			ClaimId: claimID,
+		}, nil
+	}
+
+	// Legacy mode: create verification round
 	round, err := k.CreateVerificationRound(ctx, claim)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create verification round: %w", err)
@@ -193,7 +237,7 @@ func (k msgServer) SubmitCommitment(goCtx context.Context, msg *types.MsgSubmitC
 	}
 
 	// Store commitment
-	round.Commitments[msg.Validator] = types.VerificationCommitment{
+	round.Commitments[msg.Validator] = &types.VerificationCommitment{
 		Validator:         msg.Validator,
 		CommitmentHash:    msg.CommitmentHash,
 		SubmittedAtHeight: uint64(ctx.BlockHeight()),
@@ -255,7 +299,7 @@ func (k msgServer) SubmitReveal(goCtx context.Context, msg *types.MsgSubmitRevea
 	}
 
 	// Store reveal
-	round.Reveals[msg.Validator] = types.VerificationReveal{
+	round.Reveals[msg.Validator] = &types.VerificationReveal{
 		Validator:         msg.Validator,
 		Verdict:           msg.Verdict,
 		Confidence:        msg.Confidence,
@@ -265,32 +309,10 @@ func (k msgServer) SubmitReveal(goCtx context.Context, msg *types.MsgSubmitRevea
 		SubmittedAtHeight: uint64(ctx.BlockHeight()),
 	}
 
-	// Check if we have enough reveals to aggregate immediately
-	roundCompleted := false
-	params := k.GetParams(ctx)
-	if uint32(len(round.Reveals)) >= params.MinVerifiers {
-		// Use stake-weighted confidence aggregation engine
-		result, aggErr := k.AggregateVerificationResult(ctx, round)
-		if aggErr != nil {
-			k.Logger(ctx).Error("aggregation failed", "round_id", round.Id, "error", aggErr)
-		} else {
-			// Apply rewards and slashes
-			if applyErr := k.ApplyRewardsAndSlashes(ctx, result); applyErr != nil {
-				k.Logger(ctx).Error("failed to apply rewards/slashes",
-					"round_id", round.Id, "error", applyErr)
-			}
-			// Complete the round (creates fact if accepted, updates claim status)
-			if completeErr := k.CompleteRound(ctx, round, result); completeErr != nil {
-				k.Logger(ctx).Error("failed to complete round",
-					"round_id", round.Id, "error", completeErr)
-			}
-			roundCompleted = true
-		}
-	}
-
-	if !roundCompleted {
-		k.SetVerificationRound(ctx, round)
-	}
+	// Persist the reveal. Aggregation happens when the reveal phase ends
+	// (via AdvanceRoundPhases in BeginBlocker), ensuring all validators
+	// have until the deadline to submit their reveals.
+	k.SetVerificationRound(ctx, round)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -363,8 +385,8 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 		CommitDeadlineHeight: height + params.CommitPhaseDuration,
 		RevealDeadlineHeight: height + params.CommitPhaseDuration + params.RevealPhaseDuration,
 		SelectedValidators:   []string{},
-		Commitments:          make(map[string]types.VerificationCommitment),
-		Reveals:              make(map[string]types.VerificationReveal),
+		Commitments:          make(map[string]*types.VerificationCommitment),
+		Reveals:              make(map[string]*types.VerificationReveal),
 	}
 	k.SetVerificationRound(ctx, round)
 
@@ -379,6 +401,43 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 	)
 
 	return &types.MsgChallengeFactResponse{RoundId: roundID}, nil
+}
+
+// ChallengeProvisionalFact handles MsgChallengeProvisionalFact — opens a challenge
+// against a provisionally accepted fact during its challenge window.
+func (k msgServer) ChallengeProvisionalFact(goCtx context.Context, msg *types.MsgChallengeProvisionalFact) (*types.MsgChallengeProvisionalFactResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	params := k.GetParams(ctx)
+
+	if !params.AdversarialVerificationEnabled {
+		return nil, types.ErrAdversarialDisabled
+	}
+
+	challenge, err := k.Keeper.OpenChallenge(
+		ctx,
+		msg.Challenger,
+		msg.ClaimId,
+		msg.FactId,
+		msg.Stake,
+		msg.Reason,
+		msg.EvidenceIds,
+		msg.CounterClaim,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &types.MsgChallengeProvisionalFactResponse{
+		ChallengeId: challenge.Id,
+	}
+
+	// For Path B (arbiter resolution), open a dispute via disputes module
+	if challenge.ResolutionPath == "arbiter" && challenge.FactId != "" {
+		// The dispute will be handled by the existing disputes module
+		resp.DisputeId = challenge.DisputeId
+	}
+
+	return resp, nil
 }
 
 // AddFact handles MsgAddFact — governance-gated fact creation (for genesis/migration).
@@ -572,8 +631,173 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, msg.Params)
+	if msg.Params != nil {
+		k.SetParams(ctx, *msg.Params)
+	}
 	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+// SubmitContradiction handles MsgSubmitContradiction — submits an explicit counter-claim
+// asserting that an existing fact is false (Path B: explicit contradiction).
+//
+// Workflow:
+// 1. Validate target fact exists and is in a contradictable state
+// 2. Verify submitter is not contradicting their own fact
+// 3. Check rate limiting (max 3 contradictions per agent per epoch)
+// 4. Validate stake meets minimum ratio (50% of target fact's original stake)
+// 5. Lock contradiction stake
+// 6. Create counter-fact with "pending" status
+// 7. Optionally open contradiction verification round
+func (k msgServer) SubmitContradiction(goCtx context.Context, msg *types.MsgSubmitContradiction) (*types.MsgSubmitContradictionResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	height := uint64(ctx.BlockHeight())
+
+	// 1. Validate target fact exists
+	fact, found := k.GetFact(ctx, msg.TargetFactId)
+	if !found {
+		return nil, fmt.Errorf("%w: fact %s not found", types.ErrFactNotFound, msg.TargetFactId)
+	}
+
+	// Only verified or contested facts can be contradicted
+	if fact.Status != types.FactStatusVerified && fact.Status != types.FactStatusContested {
+		return nil, fmt.Errorf("%w: fact is %s, only verified/contested facts can be contradicted",
+			types.ErrFactAlreadyDisproven, fact.Status)
+	}
+
+	// 2. Cannot contradict own fact
+	if fact.Submitter == msg.Submitter {
+		return nil, types.ErrCannotContradictSelf
+	}
+
+	// 3. Rate limiting: max 3 contradictions per agent per epoch
+	epoch := height / 240_000 // ~1 epoch per ~1 week at 2521ms blocks
+	count := k.GetContradictionCount(ctx, msg.Submitter, epoch)
+	if count >= types.MaxContradictionsPerAgentPerEpoch {
+		return nil, fmt.Errorf("%w: already submitted %d contradictions this epoch (max %d)",
+			types.ErrContradictionRateLimited, count, types.MaxContradictionsPerAgentPerEpoch)
+	}
+
+	// 4. Validate stake meets minimum ratio (50% of target fact's original stake)
+	stakeAmount := new(big.Int)
+	if _, ok := stakeAmount.SetString(msg.Stake, 10); !ok || stakeAmount.Sign() <= 0 {
+		return nil, fmt.Errorf("%w: invalid stake amount", types.ErrInsufficientStake)
+	}
+
+	// Enforce MinContradictionStakeRatio against target fact's original stake
+	if fact.OriginalStake != "" {
+		factStake := new(big.Int)
+		if _, ok := factStake.SetString(fact.OriginalStake, 10); ok && factStake.Sign() > 0 {
+			// minRequired = factStake * MinContradictionStakeRatio / 1_000_000
+			minRequired := new(big.Int).Mul(factStake, big.NewInt(types.MinContradictionStakeRatio))
+			minRequired.Div(minRequired, big.NewInt(1_000_000))
+			if stakeAmount.Cmp(minRequired) < 0 {
+				return nil, fmt.Errorf("%w: stake %s < minimum %s (50%% of target fact stake %s)",
+					types.ErrContradictionStakeTooLow, stakeAmount.String(), minRequired.String(), fact.OriginalStake)
+			}
+		}
+	}
+
+	// Check Gödelian zone constraint
+	zone := msg.LogicZone
+	if zone == "" {
+		zone = fact.LogicZone
+	}
+	if k.ontologyKeeper != nil && zone != "" {
+		if k.ontologyKeeper.RequiresIncompletenessAck(ctx, zone) && !msg.IncompletenessAck {
+			return nil, fmt.Errorf("%w: Gödelian zone %q requires incompleteness acknowledgment",
+				types.ErrGoedelIncompletenessRequired, zone)
+		}
+	}
+
+	// 5. Lock contradiction stake
+	submitterAddr, err := sdk.AccAddressFromBech32(msg.Submitter)
+	if err != nil {
+		return nil, fmt.Errorf("invalid submitter address: %w", err)
+	}
+
+	stakeCoin := sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(stakeAmount))
+	if err := k.bankKeeper.SendCoinsFromAccountToModule(
+		ctx, submitterAddr, types.ModuleName, sdk.NewCoins(stakeCoin),
+	); err != nil {
+		return nil, fmt.Errorf("%w: %v", types.ErrContradictionStakeTooLow, err)
+	}
+
+	// Debit from period overlay
+	if k.tokensKeeper != nil {
+		if err := k.tokensKeeper.DebitBalance(ctx, msg.Submitter, msg.Stake); err != nil {
+			k.Logger(ctx).Error("failed to debit period balance for contradiction stake",
+				"submitter", msg.Submitter, "error", err)
+		}
+	}
+
+	// 6. Create counter-fact
+	cfID := GenerateCounterFactID(msg.TargetFactId, "", msg.Submitter, height)
+	counterFact := types.CounterFact{
+		Id:                cfID,
+		TargetFactId:      msg.TargetFactId,
+		NegationType:      types.NegationTypeContradiction,
+		Confidence:        0, // Set by verification round
+		Justification:     msg.CounterClaim,
+		EvidenceIds:       msg.EvidenceIds,
+		Submitter:         msg.Submitter,
+		SubmitterDid:      msg.SubmitterDid,
+		Domain:            fact.Domain,
+		LogicZone:         zone,
+		EpistemicCategory: fact.EpistemicCategory,
+		Status:            types.CounterFactStatusPending,
+		CreatedAtHeight:   height,
+		IncompletenessAck: msg.IncompletenessAck,
+		StakeAmount:       msg.Stake,
+	}
+	k.SetCounterFact(ctx, counterFact)
+
+	// Increment rate limit counter
+	k.IncrementContradictionCount(ctx, msg.Submitter, epoch)
+
+	// 7. Open contradiction verification round
+	params := k.GetParams(ctx)
+	roundID := GenerateRoundID(cfID, height)
+
+	round := types.VerificationRound{
+		Id:                   roundID,
+		ClaimId:              cfID, // counter-fact ID as claim reference
+		Phase:                "commit",
+		Type:                 types.RoundTypeContradiction,
+		StartHeight:          height,
+		CommitDeadlineHeight: height + params.CommitPhaseDuration,
+		RevealDeadlineHeight: height + params.CommitPhaseDuration + params.RevealPhaseDuration,
+		SelectedValidators:   []string{},
+		Commitments:          make(map[string]*types.VerificationCommitment),
+		Reveals:              make(map[string]*types.VerificationReveal),
+	}
+	k.SetVerificationRound(ctx, round)
+
+	// Update counter-fact with round ID
+	counterFact.RoundId = roundID
+	k.SetCounterFact(ctx, counterFact)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("contradiction_submitted",
+			sdk.NewAttribute("counter_fact_id", cfID),
+			sdk.NewAttribute("target_fact_id", msg.TargetFactId),
+			sdk.NewAttribute("round_id", roundID),
+			sdk.NewAttribute("submitter", msg.Submitter),
+			sdk.NewAttribute("stake", msg.Stake),
+			sdk.NewAttribute("negation_type", types.NegationTypeContradiction),
+		),
+	)
+
+	k.Logger(ctx).Info("contradiction submitted",
+		"counter_fact_id", cfID,
+		"target_fact_id", msg.TargetFactId,
+		"round_id", roundID,
+		"submitter", msg.Submitter,
+	)
+
+	return &types.MsgSubmitContradictionResponse{
+		CounterFactId: cfID,
+		RoundId:       roundID,
+	}, nil
 }
 
 // ---------- Internal Helpers ----------
@@ -590,7 +814,37 @@ func isValidEpistemicCategory(cat string) bool {
 }
 
 // ComputeCommitmentHash generates a commitment hash for verification.
-// hash = SHA-256(roundID || verdict || confidence_bytes || salt)
+// Uses length-prefixed fields with domain separation to prevent collision:
+//   hash = SHA-256("LGM.commitment.v1:" || len(roundID) || roundID || len(verdict) || verdict || confidence_le64 || len(salt) || salt)
 func ComputeCommitmentHash(roundID, verdict string, confidence uint64, salt string) string {
-	return ComputeClaimContentHash(roundID+verdict+fmt.Sprintf("%d", confidence), salt, "commitment")
+	h := sha256.New()
+	h.Write([]byte("LGM.commitment.v1:"))
+	// Length-prefix each variable-length field to prevent ambiguity
+	writeLP(h, []byte(roundID))
+	writeLP(h, []byte(verdict))
+	// Fixed-width 8-byte little-endian for confidence
+	confBytes := make([]byte, 8)
+	confBytes[0] = byte(confidence)
+	confBytes[1] = byte(confidence >> 8)
+	confBytes[2] = byte(confidence >> 16)
+	confBytes[3] = byte(confidence >> 24)
+	confBytes[4] = byte(confidence >> 32)
+	confBytes[5] = byte(confidence >> 40)
+	confBytes[6] = byte(confidence >> 48)
+	confBytes[7] = byte(confidence >> 56)
+	h.Write(confBytes)
+	writeLP(h, []byte(salt))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// writeLP writes a length-prefixed byte slice: 4-byte big-endian length + data.
+func writeLP(h interface{ Write([]byte) (int, error) }, data []byte) {
+	lenBytes := make([]byte, 4)
+	l := uint32(len(data))
+	lenBytes[0] = byte(l >> 24)
+	lenBytes[1] = byte(l >> 16)
+	lenBytes[2] = byte(l >> 8)
+	lenBytes[3] = byte(l)
+	h.Write(lenBytes)
+	h.Write(data)
 }

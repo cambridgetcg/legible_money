@@ -13,6 +13,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -40,6 +41,9 @@ func (m mockBankKeeper) GetBalance(_ context.Context, _ sdk.AccAddress, _ string
 }
 func (m mockBankKeeper) GetAllBalances(_ context.Context, _ sdk.AccAddress) sdk.Coins {
 	return sdk.NewCoins()
+}
+func (m mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ string, _ sdk.AccAddress, _ sdk.Coins) error {
+	return nil
 }
 
 // ---------- Test Setup ----------
@@ -69,7 +73,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		mockCosmosAccountKeeper{},
 		mockBankKeeper{},
 		"authority",
@@ -229,9 +233,8 @@ func TestRotateKey_Success(t *testing.T) {
 	// Rotate operational key
 	_, err = ms.RotateKey(ctx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "newkey",
-		Signature:  "sig",
+		NewOperationalKey: []byte("newkey"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -239,8 +242,10 @@ func TestRotateKey_Success(t *testing.T) {
 
 	// Verify key was rotated
 	account, _ := k.GetAccount(ctx, testAddr1)
-	if account.OperationalKeyHash != "newkey" {
-		t.Errorf("expected newkey, got %s", account.OperationalKeyHash)
+	// The handler hex-encodes NewOperationalKey into OperationalPublicKey
+	expectedHex := "6e65776b6579" // hex("newkey")
+	if account.OperationalPublicKey != expectedHex {
+		t.Errorf("expected OperationalPublicKey %s, got %s", expectedHex, account.OperationalPublicKey)
 	}
 	if account.OperationalKeyVersion != 2 {
 		t.Errorf("expected version 2, got %d", account.OperationalKeyVersion)
@@ -253,9 +258,8 @@ func TestRotateKey_NotFound(t *testing.T) {
 
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "newkey",
-		Signature:  "sig",
+		NewOperationalKey: []byte("newkey"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent account")
@@ -277,9 +281,8 @@ func TestRotateKey_Cooldown(t *testing.T) {
 	// First rotation
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "key2",
-		Signature:  "sig",
+		NewOperationalKey: []byte("key2"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
 		t.Fatalf("first rotation failed: %v", err)
@@ -288,9 +291,8 @@ func TestRotateKey_Cooldown(t *testing.T) {
 	// Immediate second rotation should fail (cooldown)
 	_, err = ms.RotateKey(ctx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "key3",
-		Signature:  "sig",
+		NewOperationalKey: []byte("key3"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
 		t.Fatal("expected cooldown error")
@@ -301,9 +303,8 @@ func TestRotateKey_Cooldown(t *testing.T) {
 	newCtx := ctx.WithBlockHeight(int64(100 + params.KeyRotationCooldown + 1))
 	_, err = ms.RotateKey(newCtx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "key3",
-		Signature:  "sig",
+		NewOperationalKey: []byte("key3"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
 		t.Fatalf("rotation after cooldown should succeed: %v", err)
@@ -327,9 +328,8 @@ func TestRotateKey_FrozenAccount(t *testing.T) {
 
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "newkey",
-		Signature:  "sig",
+		NewOperationalKey: []byte("newkey"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
 		t.Fatal("expected error for frozen account")
@@ -347,14 +347,15 @@ func TestRotateKey_InvalidKeyType(t *testing.T) {
 		AccountType: "agent",
 	})
 
+	// Proto MsgRotateKey no longer has a KeyType field; sending an empty
+	// NewOperationalKey should be rejected as invalid.
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		KeyType:    "session",
-		NewKeyHash: "newkey",
-		Signature:  "sig",
+		Sender:                 testAddr1,
+		NewOperationalKey:      nil,
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
-		t.Fatal("expected error for session key type")
+		t.Fatal("expected error for empty operational key")
 	}
 }
 
@@ -373,29 +374,30 @@ func TestCreateSession_Success(t *testing.T) {
 
 	resp, err := ms.CreateSession(ctx, &types.MsgCreateSession{
 		Owner:          testAddr1,
-		SessionKeyHash: "session1",
-		Capabilities: types.SessionCapabilities{
+		SessionPubKey:  []byte("session1"),
+		Capabilities: &types.SessionCapabilities{
 			CanTransfer:     true,
 			CanSubmitClaims: true,
 		},
-		Duration: 1000,
+		ExpiresAtHeight: 1100, // 100 (block height) + 1000
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.ExpiresAtBlock != 1100 { // 100 (block height) + 1000
-		t.Errorf("expected expiry 1100, got %d", resp.ExpiresAtBlock)
+	if resp.SessionId == "" {
+		t.Error("expected non-empty SessionId")
 	}
 
-	// Verify session stored
-	session, found := k.GetSessionKey(ctx, testAddr1, "session1")
+	// Verify session stored (key hash is hex-encoded SessionPubKey)
+	keyHash := resp.SessionId
+	session, found := k.GetSessionKey(ctx, testAddr1, keyHash)
 	if !found {
 		t.Fatal("session not found")
 	}
-	if !session.Capabilities.CanTransfer {
+	if session.Capabilities == nil || !session.Capabilities.CanTransfer {
 		t.Error("expected CanTransfer true")
 	}
-	if !session.Capabilities.CanSubmitClaims {
+	if session.Capabilities == nil || !session.Capabilities.CanSubmitClaims {
 		t.Error("expected CanSubmitClaims true")
 	}
 
@@ -422,10 +424,10 @@ func TestCreateSession_MaxSessionKeys(t *testing.T) {
 	// Create max sessions
 	for i := uint32(0); i < params.MaxSessionKeys; i++ {
 		_, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-			Owner:          testAddr1,
-			SessionKeyHash: string(rune('a' + int(i))),
-			Capabilities:   types.SessionCapabilities{},
-			Duration:       1000,
+			Owner:           testAddr1,
+			SessionPubKey:   []byte(string(rune('a' + int(i)))),
+			Capabilities:    &types.SessionCapabilities{},
+			ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error creating session %d: %v", i, err)
@@ -434,10 +436,10 @@ func TestCreateSession_MaxSessionKeys(t *testing.T) {
 
 	// Next should fail
 	_, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "overflow",
-		Capabilities:   types.SessionCapabilities{},
-		Duration:       1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("overflow"),
+		Capabilities:    &types.SessionCapabilities{},
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 	if err == nil {
 		t.Fatal("expected error for exceeding max session keys")
@@ -458,9 +460,9 @@ func TestCreateSession_DurationExceeded(t *testing.T) {
 	params := k.GetParams(ctx)
 
 	_, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "session1",
-		Duration:       params.MaxSessionDuration + 1,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("session1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + params.MaxSessionDuration + 1,
 	})
 	if err == nil {
 		t.Fatal("expected error for exceeding max duration")
@@ -480,22 +482,22 @@ func TestRevokeSession_Success(t *testing.T) {
 		AccountType: "agent",
 	})
 
-	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "session1",
-		Duration:       1000,
+	createResp, _ := ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("session1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 
 	_, err := ms.RevokeSession(ctx, &types.MsgRevokeSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "session1",
+		Owner:     testAddr1,
+		SessionId: createResp.SessionId,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Verify session deleted
-	_, found := k.GetSessionKey(ctx, testAddr1, "session1")
+	_, found := k.GetSessionKey(ctx, testAddr1, createResp.SessionId)
 	if found {
 		t.Fatal("session should be deleted after revocation")
 	}
@@ -519,8 +521,8 @@ func TestRevokeSession_NotFound(t *testing.T) {
 	})
 
 	_, err := ms.RevokeSession(ctx, &types.MsgRevokeSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "nonexistent",
+		Owner:     testAddr1,
+		SessionId: "nonexistent",
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent session")
@@ -597,14 +599,14 @@ func TestQuerySessionKeys(t *testing.T) {
 	})
 
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s2",
-		Duration:       2000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s2"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 2000,
 	})
 
 	resp, err := qs.SessionKeys(ctx, &types.QuerySessionKeysRequest{Owner: testAddr1})
@@ -689,9 +691,9 @@ func TestInitExportGenesis(t *testing.T) {
 
 	// Create a session
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 
 	// Export genesis
@@ -699,8 +701,8 @@ func TestInitExportGenesis(t *testing.T) {
 	if len(gs.Accounts) != 2 {
 		t.Errorf("expected 2 accounts in genesis, got %d", len(gs.Accounts))
 	}
-	if len(gs.DIDMappings) != 2 {
-		t.Errorf("expected 2 DID mappings in genesis, got %d", len(gs.DIDMappings))
+	if len(gs.DidMappings) != 2 {
+		t.Errorf("expected 2 DID mappings in genesis, got %d", len(gs.DidMappings))
 	}
 	if len(gs.SessionKeys) != 1 {
 		t.Errorf("expected 1 session key in genesis, got %d", len(gs.SessionKeys))
@@ -810,24 +812,21 @@ func TestRotateKey_StoresNewPublicKey(t *testing.T) {
 		OperationalKeyHash: "oldkey",
 	})
 
-	// Rotate with a new public key
+	// Rotate with a new operational key (proto carries raw bytes)
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:       testAddr1,
-		KeyType:      "operational",
-		NewKeyHash:   "newkey",
-		NewPublicKey: testPubKey2,
-		Signature:    "sig",
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("newkey"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	account, _ := k.GetAccount(ctx, testAddr1)
-	if account.OperationalPublicKey != testPubKey2 {
-		t.Errorf("expected OperationalPublicKey %s, got %s", testPubKey2, account.OperationalPublicKey)
-	}
-	if account.OperationalKeyHash != "newkey" {
-		t.Errorf("expected key hash newkey, got %s", account.OperationalKeyHash)
+	// The handler hex-encodes NewOperationalKey into OperationalPublicKey
+	expectedHex := "6e65776b6579" // hex("newkey")
+	if account.OperationalPublicKey != expectedHex {
+		t.Errorf("expected OperationalPublicKey %s, got %s", expectedHex, account.OperationalPublicKey)
 	}
 	if account.OperationalKeyVersion != 2 {
 		t.Errorf("expected version 2, got %d", account.OperationalKeyVersion)
@@ -846,15 +845,15 @@ func TestRotateKey_WithoutNewPublicKey_PreservesExisting(t *testing.T) {
 		OperationalKeyHash: "oldkey",
 	})
 
-	// Rotate without providing NewPublicKey
+	// Rotating without providing NewOperationalKey should fail,
+	// preserving the existing key.
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "newkey",
-		Signature:  "sig",
+		Sender:                 testAddr1,
+		NewOperationalKey:      nil,
+		AuthorizationSignature: []byte("sig"),
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error when NewOperationalKey is nil")
 	}
 
 	account, _ := k.GetAccount(ctx, testAddr1)
@@ -877,27 +876,28 @@ func TestCreateSession_StoresSessionPublicKey(t *testing.T) {
 		AccountType: "agent",
 	})
 
-	sessionPubKey := "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
-	_, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:            testAddr1,
-		SessionKeyHash:   "session1",
-		SessionPublicKey: sessionPubKey,
-		Capabilities: types.SessionCapabilities{
+	sessionPubKeyBytes := []byte{0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10}
+	resp, err := ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:         testAddr1,
+		SessionPubKey: sessionPubKeyBytes,
+		Capabilities: &types.SessionCapabilities{
 			CanTransfer:     true,
 			CanSubmitClaims: true,
 		},
-		Duration: 1000,
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	session, found := k.GetSessionKey(ctx, testAddr1, "session1")
+	session, found := k.GetSessionKey(ctx, testAddr1, resp.SessionId)
 	if !found {
 		t.Fatal("session not found")
 	}
-	if session.PublicKey != sessionPubKey {
-		t.Errorf("expected session PublicKey %s, got %s", sessionPubKey, session.PublicKey)
+	// The handler hex-encodes SessionPubKey into both KeyHash and PublicKey
+	expectedHex := "fedcba9876543210"
+	if session.PublicKey != expectedHex {
+		t.Errorf("expected session PublicKey %s, got %s", expectedHex, session.PublicKey)
 	}
 }
 
@@ -914,13 +914,12 @@ func TestGetSessionKeysForOwner_ReturnsAll(t *testing.T) {
 
 	// Create 3 sessions with different pubkeys
 	for i := 0; i < 3; i++ {
-		hash := string(rune('a' + i))
+		pubKey := []byte{byte('a' + i), 0x01, 0x02, 0x03}
 		_, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-			Owner:            testAddr1,
-			SessionKeyHash:   hash,
-			SessionPublicKey: "deadbeef" + hash + "0000000000000000000000000000000000000000000000000000000",
-			Capabilities:     types.SessionCapabilities{CanTransfer: i%2 == 0},
-			Duration:         1000,
+			Owner:           testAddr1,
+			SessionPubKey:   pubKey,
+			Capabilities:    &types.SessionCapabilities{CanTransfer: i%2 == 0},
+			ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 		})
 		if err != nil {
 			t.Fatalf("session %d: %v", i, err)
@@ -960,9 +959,9 @@ func TestCreateSession_FrozenAccount(t *testing.T) {
 	k.SetAccount(ctx, account)
 
 	_, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "session1",
-		Duration:       1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("session1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 	if err == nil {
 		t.Fatal("expected error for frozen account")
@@ -1010,27 +1009,14 @@ func TestGetAccountByDID_ReturnsFullAccount(t *testing.T) {
 // ---------- ValidateBasic Phase 2-4 Tests ----------
 
 func TestMsgRotateKey_ValidateBasic(t *testing.T) {
-	// Valid with NewPublicKey
+	// Valid
 	msg := types.MsgRotateKey{
-		Sender:       testAddr1,
-		KeyType:      "operational",
-		NewKeyHash:   "newhash",
-		NewPublicKey: testPubKey2,
-		Signature:    "sig",
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("newhash"),
+		AuthorizationSignature: []byte("sig"),
 	}
 	if err := msg.ValidateBasic(); err != nil {
 		t.Errorf("expected valid, got error: %v", err)
-	}
-
-	// Valid without NewPublicKey (backward compatible)
-	msg2 := types.MsgRotateKey{
-		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "newhash",
-		Signature:  "sig",
-	}
-	if err := msg2.ValidateBasic(); err != nil {
-		t.Errorf("expected valid without new pubkey, got error: %v", err)
 	}
 
 	// Invalid sender
@@ -1042,10 +1028,9 @@ func TestMsgRotateKey_ValidateBasic(t *testing.T) {
 
 func TestMsgCreateSession_ValidateBasic(t *testing.T) {
 	msg := types.MsgCreateSession{
-		Owner:            testAddr1,
-		SessionKeyHash:   "s1",
-		SessionPublicKey: testPubKey2,
-		Duration:         1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: 1100,
 	}
 	if err := msg.ValidateBasic(); err != nil {
 		t.Errorf("expected valid, got error: %v", err)
@@ -1057,27 +1042,27 @@ func TestMsgCreateSession_ValidateBasic(t *testing.T) {
 		t.Error("expected error for invalid owner")
 	}
 
-	// Zero duration
+	// Empty SessionPubKey
 	msg.Owner = testAddr1
-	msg.Duration = 0
+	msg.SessionPubKey = nil
 	if err := msg.ValidateBasic(); err == nil {
-		t.Error("expected error for zero duration")
+		t.Error("expected error for empty session pub key")
 	}
 }
 
 func TestMsgRevokeSession_ValidateBasic(t *testing.T) {
 	msg := types.MsgRevokeSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
+		Owner:     testAddr1,
+		SessionId: "s1",
 	}
 	if err := msg.ValidateBasic(); err != nil {
 		t.Errorf("expected valid, got error: %v", err)
 	}
 
-	// Empty key hash
-	msg.SessionKeyHash = ""
+	// Empty session id
+	msg.SessionId = ""
 	if err := msg.ValidateBasic(); err == nil {
-		t.Error("expected error for empty session key hash")
+		t.Error("expected error for empty session id")
 	}
 }
 
@@ -1120,9 +1105,8 @@ func TestRotateKey_UpdatesLastActive(t *testing.T) {
 
 	_, err := ms.RotateKey(advancedCtx, &types.MsgRotateKey{
 		Sender:     testAddr1,
-		KeyType:    "operational",
-		NewKeyHash: "newkey",
-		Signature:  "sig",
+		NewOperationalKey: []byte("newkey"),
+		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1149,9 +1133,9 @@ func TestCreateSession_UpdatesLastActive(t *testing.T) {
 	advancedCtx := ctx.WithBlockHeight(200)
 
 	_, err := ms.CreateSession(advancedCtx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(advancedCtx.BlockHeight()) + 1000,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1173,16 +1157,16 @@ func TestRevokeSession_UpdatesLastActive(t *testing.T) {
 		PublicKey:   testPubKey1,
 		AccountType: "agent",
 	})
-	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       1000,
+	createResp, _ := ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 
 	advancedCtx := ctx.WithBlockHeight(250)
 	_, err := ms.RevokeSession(advancedCtx, &types.MsgRevokeSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
+		Owner:     testAddr1,
+		SessionId: createResp.SessionId,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1410,10 +1394,10 @@ func TestSetRecoveryConfig_Success(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   2,
 		TotalShards: 3,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
-			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,
@@ -1471,10 +1455,10 @@ func TestInitiateRecovery_Success(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   2,
 		TotalShards: 3,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
-			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,
@@ -1538,8 +1522,8 @@ func TestInitiateRecovery_UnauthorizedInitiator(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   2,
 		TotalShards: 3,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: false}, // cannot initiate
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: false}, // cannot initiate
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1571,8 +1555,8 @@ func TestInitiateRecovery_AlreadyActive(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1635,10 +1619,10 @@ func TestSubmitRecoveryShard_Success(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   2,
 		TotalShards: 3,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
-			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,
@@ -1702,9 +1686,9 @@ func TestSubmitRecoveryShard_DuplicateShard(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   2,
 		TotalShards: 2,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1750,9 +1734,9 @@ func TestSubmitRecoveryShard_WrongSender(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 2,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1793,8 +1777,8 @@ func TestChallengeRecovery_OwnerCancels(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   100,
 		ChallengePeriodBlocks: 100,
@@ -1865,8 +1849,8 @@ func TestChallengeRecovery_NotChallengeable(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1905,8 +1889,8 @@ func TestChallengeRecovery_ThirdPartyBlocked(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   10,
 		ChallengePeriodBlocks: 10,
@@ -1957,21 +1941,21 @@ func TestExecuteRecovery_FullLifecycle(t *testing.T) {
 
 	// Create some sessions that should be revoked on recovery
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       10000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 10000,
 	})
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s2",
-		Duration:       10000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s2"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 10000,
 	})
 
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   10,
 		ChallengePeriodBlocks: 10,
@@ -2062,8 +2046,8 @@ func TestExecuteRecovery_NotExecutable(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -2101,15 +2085,15 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	})
 
 	// Create sessions with different expirations
-	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "short",
-		Duration:       50, // expires at block 150
+	shortResp, _ := ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("short"),
+		ExpiresAtHeight: 150, // expires at block 150
 	})
-	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "long",
-		Duration:       1000, // expires at block 1100
+	longResp, _ := ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("long"),
+		ExpiresAtHeight: 1100, // expires at block 1100
 	})
 
 	account, _ := k.GetAccount(ctx, testAddr1)
@@ -2122,13 +2106,13 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	k.CleanupExpiredSessions(expiredCtx)
 
 	// Short session should be gone
-	_, found := k.GetSessionKey(expiredCtx, testAddr1, "short")
+	_, found := k.GetSessionKey(expiredCtx, testAddr1, shortResp.SessionId)
 	if found {
 		t.Fatal("expected short session to be cleaned up")
 	}
 
 	// Long session should remain
-	_, found = k.GetSessionKey(expiredCtx, testAddr1, "long")
+	_, found = k.GetSessionKey(expiredCtx, testAddr1, longResp.SessionId)
 	if !found {
 		t.Fatal("expected long session to still exist")
 	}
@@ -2152,14 +2136,14 @@ func TestCleanupExpiredSessions_AllExpired(t *testing.T) {
 	})
 
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       10,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: 110, // expires at block 110
 	})
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s2",
-		Duration:       20,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s2"),
+		ExpiresAtHeight: 120, // expires at block 120
 	})
 
 	// Advance past all expirations
@@ -2189,9 +2173,9 @@ func TestCleanupExpiredSessions_NoneExpired(t *testing.T) {
 	})
 
 	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionKeyHash: "s1",
-		Duration:       1000,
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
 	})
 
 	// Don't advance — nothing expired
@@ -2219,8 +2203,8 @@ func TestProcessRecoveryTimeouts_DelayedToChallengeable(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   50,
 		ChallengePeriodBlocks: 50,
@@ -2278,8 +2262,8 @@ func TestProcessRecoveryTimeouts_ChallengeableToExecutable(t *testing.T) {
 	config := types.RecoveryConfig{
 		Threshold:   1,
 		TotalShards: 1,
-		ShardHolders: []types.ShardHolder{
-			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   10,
 		ChallengePeriodBlocks: 10,
@@ -2384,5 +2368,269 @@ func TestMsgExecuteRecovery_ValidateBasic(t *testing.T) {
 	msg.AccountAddress = ""
 	if err := msg.ValidateBasic(); err == nil {
 		t.Error("expected error for empty account address")
+	}
+}
+
+// ---------- UpdateParams Tests ----------
+
+func TestUpdateParams_AuthoritySuccess(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	newParams := types.Params{
+		MaxSessionKeys:      10,
+		MaxSessionDuration:  50000,
+		KeyRotationCooldown: 222,
+		RecoveryDelayBlocks: 2000,
+		ChallengePeriodBlocks: 1000,
+		BootstrapEnabled:    false,
+		BootstrapAmount:     "0",
+	}
+
+	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: "authority",
+		Params:    &newParams,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stored := k.GetParams(ctx)
+	if stored.MaxSessionKeys != 10 {
+		t.Errorf("expected MaxSessionKeys 10, got %d", stored.MaxSessionKeys)
+	}
+	if stored.MaxSessionDuration != 50000 {
+		t.Errorf("expected MaxSessionDuration 50000, got %d", stored.MaxSessionDuration)
+	}
+	if stored.KeyRotationCooldown != 222 {
+		t.Errorf("expected KeyRotationCooldown 222, got %d", stored.KeyRotationCooldown)
+	}
+	if stored.BootstrapEnabled {
+		t.Error("expected BootstrapEnabled false")
+	}
+}
+
+func TestUpdateParams_NonAuthorityRejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	defaultParams := types.DefaultParams()
+	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: testAddr1,
+		Params:    &defaultParams,
+	})
+	if err == nil {
+		t.Fatal("expected error for non-authority UpdateParams")
+	}
+}
+
+func TestUpdateParams_InvalidParamsRejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	// MaxSessionKeys=0 fails validation
+	invalidParams := types.Params{
+		MaxSessionKeys:     0,
+		MaxSessionDuration: 1000,
+	}
+	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: "authority",
+		Params:    &invalidParams,
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid params")
+	}
+}
+
+func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
+	dp := types.DefaultParams()
+	msg := types.MsgUpdateParams{
+		Authority: testAddr1,
+		Params:    &dp,
+	}
+	if err := msg.ValidateBasic(); err != nil {
+		t.Errorf("expected valid, got error: %v", err)
+	}
+
+	msg.Authority = "invalid"
+	if err := msg.ValidateBasic(); err == nil {
+		t.Error("expected error for invalid authority")
+	}
+}
+
+// ---------- Genesis Roundtrip with RecoveryConfig Tests ----------
+
+func TestGenesisRoundtrip_WithRecoveryConfigs(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	// Register account
+	_, _ = ms.RegisterAccount(ctx, &types.MsgRegisterAccount{
+		Sender:      testAddr1,
+		Did:         testDID1,
+		PublicKey:   testPubKey1,
+		AccountType: "agent",
+	})
+
+	// Set recovery config
+	config := types.RecoveryConfig{
+		Threshold:             2,
+		TotalShards:           3,
+		ShardHolders: []*types.ShardHolder{
+			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1},
+			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2},
+		},
+		RecoveryDelayBlocks:   500,
+		ChallengePeriodBlocks: 250,
+	}
+	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
+		Sender: testAddr1,
+		Config: config,
+	})
+
+	// Export genesis
+	gs := k.ExportGenesis(ctx)
+	if len(gs.RecoveryConfigs) != 1 {
+		t.Fatalf("expected 1 recovery config in export, got %d", len(gs.RecoveryConfigs))
+	}
+	if gs.RecoveryConfigs[0].AccountAddress != testAddr1 {
+		t.Errorf("expected AccountAddress %s, got %s", testAddr1, gs.RecoveryConfigs[0].AccountAddress)
+	}
+	if gs.RecoveryConfigs[0].Threshold != 2 {
+		t.Errorf("expected threshold 2, got %d", gs.RecoveryConfigs[0].Threshold)
+	}
+
+	// Import into fresh keeper
+	k2, ctx2 := setupKeeper(t)
+	if err := k2.InitGenesis(ctx2, *gs); err != nil {
+		t.Fatalf("InitGenesis failed: %v", err)
+	}
+
+	// Verify recovery config survived roundtrip
+	rc, found := k2.GetRecoveryConfig(ctx2, testAddr1)
+	if !found {
+		t.Fatal("recovery config lost during genesis roundtrip")
+	}
+	if rc.Threshold != 2 {
+		t.Errorf("expected threshold 2 after roundtrip, got %d", rc.Threshold)
+	}
+	if rc.TotalShards != 3 {
+		t.Errorf("expected total shards 3, got %d", rc.TotalShards)
+	}
+	if len(rc.ShardHolders) != 3 {
+		t.Errorf("expected 3 shard holders, got %d", len(rc.ShardHolders))
+	}
+	if rc.RecoveryDelayBlocks != 500 {
+		t.Errorf("expected delay 500, got %d", rc.RecoveryDelayBlocks)
+	}
+
+	// Verify accounts survived
+	acc, found := k2.GetAccount(ctx2, testAddr1)
+	if !found {
+		t.Fatal("account lost during genesis roundtrip")
+	}
+	if acc.Did != testDID1 {
+		t.Errorf("expected DID %s, got %s", testDID1, acc.Did)
+	}
+}
+
+// ---------- Invariant Tests ----------
+
+func TestAccountDIDParityInvariant_Passes(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	_, _ = ms.RegisterAccount(ctx, &types.MsgRegisterAccount{
+		Sender:      testAddr1,
+		Did:         testDID1,
+		PublicKey:   testPubKey1,
+		AccountType: "agent",
+	})
+
+	inv := keeper.AccountDIDParityInvariant(k)
+	msg, broken := inv(ctx)
+	if broken {
+		t.Errorf("invariant should pass: %s", msg)
+	}
+}
+
+func TestAccountDIDParityInvariant_DetectsOrphanedAccount(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Manually insert account without DID mapping (simulates corruption)
+	account := types.LegibleAccount{
+		Address:     testAddr1,
+		Did:         testDID1,
+		PublicKey:   testPubKey1,
+		AccountType: "agent",
+	}
+	k.SetAccount(ctx, account)
+
+	inv := keeper.AccountDIDParityInvariant(k)
+	_, broken := inv(ctx)
+	if !broken {
+		t.Error("invariant should detect orphaned account without DID mapping")
+	}
+}
+
+func TestSessionCountConsistencyInvariant_Passes(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	_, _ = ms.RegisterAccount(ctx, &types.MsgRegisterAccount{
+		Sender:      testAddr1,
+		Did:         testDID1,
+		PublicKey:   testPubKey1,
+		AccountType: "agent",
+	})
+	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
+	})
+
+	inv := keeper.SessionCountConsistencyInvariant(k)
+	msg, broken := inv(ctx)
+	if broken {
+		t.Errorf("invariant should pass: %s", msg)
+	}
+}
+
+func TestSessionCountConsistencyInvariant_DetectsMismatch(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	_, _ = ms.RegisterAccount(ctx, &types.MsgRegisterAccount{
+		Sender:      testAddr1,
+		Did:         testDID1,
+		PublicKey:   testPubKey1,
+		AccountType: "agent",
+	})
+
+	// Create session then manually corrupt the count
+	_, _ = ms.CreateSession(ctx, &types.MsgCreateSession{
+		Owner:           testAddr1,
+		SessionPubKey:   []byte("s1"),
+		ExpiresAtHeight: uint64(ctx.BlockHeight()) + 1000,
+	})
+	account, _ := k.GetAccount(ctx, testAddr1)
+	account.SessionKeyCount = 99 // wrong!
+	k.SetAccount(ctx, account)
+
+	inv := keeper.SessionCountConsistencyInvariant(k)
+	_, broken := inv(ctx)
+	if !broken {
+		t.Error("invariant should detect session count mismatch")
+	}
+}
+
+func TestParamsValidInvariant_Passes(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	inv := keeper.ParamsValidInvariant(k)
+	msg, broken := inv(ctx)
+	if broken {
+		t.Errorf("invariant should pass with default params: %s", msg)
 	}
 }

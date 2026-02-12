@@ -234,6 +234,9 @@ export const TREASURY = {
 
     // Emergency reserve - only for critical situations
     RESERVE: "did:lgm:treasury-reserve",
+
+    // RAI holding - collects swept expired tokens for redistribution
+    RAI_HOLDING: "did:lgm:treasury-rai-holding",
   },
 
   // ============ Research Fund Operations ============
@@ -274,12 +277,12 @@ export const TREASURY = {
   RESEARCH_OPERATIONS: {
     // Peer review parameters
     MIN_REVIEWERS: 3,
-    REVIEW_STAKE: 55n * 10n ** 18n, // 55 LGM to become reviewer
+    REVIEW_STAKE: 55n * 10n ** 15n, // 0.055 LGM to become reviewer
     REVIEW_REWARD_SHARE: 0.11, // 11% of grant goes to reviewers
 
     // Grant parameters
-    MIN_GRANT_AMOUNT: 111n * 10n ** 18n, // 111 LGM minimum grant
-    MAX_GRANT_AMOUNT: 55555n * 10n ** 18n, // 55,555 LGM maximum grant
+    MIN_GRANT_AMOUNT: 111n * 10n ** 15n, // 0.111 LGM minimum grant
+    MAX_GRANT_AMOUNT: 55555n * 10n ** 15n, // 55.555 LGM maximum grant
     GRANT_VESTING_BLOCKS: 1111111n, // ~32 days vesting
 
     // Verification parameters
@@ -319,19 +322,19 @@ export const TREASURY = {
   DEVELOPER_OPERATIONS: {
     // Bug bounty rewards by severity
     BUG_BOUNTY_REWARDS: {
-      critical: 11111n * 10n ** 18n, // 11,111 LGM - consensus break, fund theft
-      high: 5555n * 10n ** 18n, // 5,555 LGM - state corruption, DoS
-      medium: 1111n * 10n ** 18n, // 1,111 LGM - logic errors
-      low: 222n * 10n ** 18n, // 222 LGM - minor issues
-      informational: 55n * 10n ** 18n, // 55 LGM - suggestions
+      critical: 11111n * 10n ** 15n, // 11.111 LGM - consensus break, fund theft
+      high: 5555n * 10n ** 15n, // 5.555 LGM - state corruption, DoS
+      medium: 1111n * 10n ** 15n, // 1.111 LGM - logic errors
+      low: 222n * 10n ** 15n, // 0.222 LGM - minor issues
+      informational: 55n * 10n ** 15n, // 0.055 LGM - suggestions
     },
 
     // Code review parameters
-    REVIEW_STAKE: 77n * 10n ** 18n, // 77 LGM to claim review bounty
+    REVIEW_STAKE: 77n * 10n ** 15n, // 0.077 LGM to claim review bounty
     REVIEW_EXCELLENCE_BONUS: 0.55, // Up to 55% bonus for exceptional reviews
 
     // Improvement proposal parameters
-    PROPOSAL_STAKE: 111n * 10n ** 18n, // 111 LGM to submit proposal
+    PROPOSAL_STAKE: 111n * 10n ** 15n, // 0.111 LGM to submit proposal
     PROPOSAL_REVIEW_PERIOD: 7777n, // ~5.4 hours for community review
 
     // Implementation bounty parameters
@@ -343,7 +346,7 @@ export const TREASURY = {
     },
 
     // Vesting for large payouts (prevents gaming)
-    VESTING_THRESHOLD: 1111n * 10n ** 18n, // Payouts > 1111 LGM vest
+    VESTING_THRESHOLD: 1111n * 10n ** 15n, // Payouts > 1.111 LGM vest
     VESTING_PERIOD_BLOCKS: 77777n, // ~5.4 hours vesting
     VESTING_CLIFF_BLOCKS: 1111n, // ~46 min cliff
 
@@ -352,8 +355,8 @@ export const TREASURY = {
     CLAWBACK_RATE: 0.77, // 77% clawback if implementation causes issues
 
     // Maximum payouts per period (anti-drain)
-    MAX_PAYOUT_PER_BLOCK: 111n * 10n ** 18n, // Max 111 LGM per block
-    MAX_PAYOUT_PER_EPOCH: 11111n * 10n ** 18n, // Max 11,111 LGM per epoch
+    MAX_PAYOUT_PER_BLOCK: 111n * 10n ** 15n, // Max 0.111 LGM per block
+    MAX_PAYOUT_PER_EPOCH: 11111n * 10n ** 15n, // Max 11.111 LGM per epoch
   },
 
   // ============ Governance Model ============
@@ -494,7 +497,7 @@ export const SYSTEM_CONTRACTS = {
  * Evidence audit parameters
  */
 export const EVIDENCE_AUDIT = {
-  BASE_AUDIT_REWARD: 11n * 10n ** 18n, // 11 LGM base reward
+  BASE_AUDIT_REWARD: 11n * 10n ** 15n, // 0.011 LGM base reward
   ACCURACY_TOLERANCE: 0.1, // Within 0.1 of ground truth
   EARLY_AUDIT_WINDOW: 111, // 111 blocks (~4.6 min) for early bonus
   EARLY_AUDIT_MULTIPLIER: 1.5, // 1.5x for early audits

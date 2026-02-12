@@ -107,7 +107,7 @@ describe.sequential("RPC E2E - Full Lifecycle", () => {
     // Note: The fact may or may not exist depending on verification timing
     expect(factResult.blockNumber).toBeDefined();
     if (factResult.fact) {
-      expect(factResult.fact.claim).toBeTruthy(); // Claim text exists (may be hashed/summarized)
+      expect(factResult.fact.claimText).toBeTruthy(); // Claim text exists (may be hashed/summarized)
       expect(factResult.fact.confidence).toBeGreaterThan(0);
     }
   });

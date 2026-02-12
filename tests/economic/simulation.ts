@@ -384,7 +384,7 @@ function analyzeAttackResistance(
   // Max profit from false claim
   // No acceptance reward — only citation/usage revenue. A false claim earns nothing
   // because nobody will cite falsehoods. Net profit = -stake -detection*penalty.
-  const claimStake = 10n * 10n ** 18n;
+  const claimStake = 10n * 10n ** 15n;
   const detectionProbability = 1 - config.falsificationRate;
   const penalty = claimStake + (claimStake * 30n) / 100n;
 

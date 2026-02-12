@@ -364,48 +364,57 @@ export function updateValidatorStats(
 }
 
 /**
- * Slash a validator by fraction (basis points internally)
- * @deprecated Use slashValidatorByAmount for exact slashing without float precision loss
- */
-export function slashValidator(
-  validator: Validator,
-  slashFraction: number,
-  reason: string,
-): { validator: Validator; slashedAmount: bigint } {
-  // SECURITY: Use basis points (1/10000) to avoid float precision issues
-  // slashFraction is expected to be 0.0-1.0, convert to basis points
-  const basisPoints = BigInt(Math.floor(slashFraction * 10000));
-  const slashedAmount = (validator.stake * basisPoints) / 10000n;
-
-  return slashValidatorByAmount(validator, slashedAmount, reason);
-}
-
-/**
  * VULN-010 FIX: Slash a validator by exact bigint amount
  * Avoids float precision loss when slash amount is already known
+ *
+ * R2 remediation: Per-epoch slash cap — if maxSlashesPerEpoch reached, skip slash
+ * R4 remediation: Slash floor — 0-amount slashes don't increment slashCount
  */
 export function slashValidatorByAmount(
   validator: Validator,
   slashAmount: bigint,
   _reason: string,
-): { validator: Validator; slashedAmount: bigint } {
+  options?: {
+    maxSlashesPerEpoch?: number;
+    maxSlashCount?: number;
+    currentBlock?: number;
+  },
+): { validator: Validator; slashedAmount: bigint; capped: boolean } {
+  const maxPerEpoch = options?.maxSlashesPerEpoch ?? 2;
+  const maxSlashCount = options?.maxSlashCount ?? 3;
+
+  // R2: Per-epoch slash cap — skip if cap reached
+  const slashesThisEpoch = validator.slashesThisEpoch ?? 0;
+  if (slashesThisEpoch >= maxPerEpoch) {
+    return { validator, slashedAmount: 0n, capped: true };
+  }
+
   // SECURITY: Ensure we don't slash more than the validator has
   const actualSlash =
     slashAmount > validator.stake ? validator.stake : slashAmount;
 
+  // R4: Slash floor — don't increment slashCount if actual slash amount is 0
+  const incrementSlash = actualSlash > 0n;
+
   const updated: Validator = {
     ...validator,
     stake: validator.stake - actualSlash,
-    slashCount: validator.slashCount + 1,
+    slashCount: incrementSlash
+      ? validator.slashCount + 1
+      : validator.slashCount,
+    slashesThisEpoch: incrementSlash ? slashesThisEpoch + 1 : slashesThisEpoch,
+    lastSlashedBlock: incrementSlash
+      ? (options?.currentBlock ?? validator.lastSlashedBlock)
+      : validator.lastSlashedBlock,
     reputation: Math.max(0, validator.reputation - 0.1),
   };
 
-  // Deactivate if stake too low or too many slashes
-  if (updated.slashCount >= 3) {
+  // Deactivate if too many slashes (configurable, default 3)
+  if (updated.slashCount >= maxSlashCount) {
     updated.isActive = false;
   }
 
-  return { validator: updated, slashedAmount: actualSlash };
+  return { validator: updated, slashedAmount: actualSlash, capped: false };
 }
 
 /**
@@ -465,6 +474,10 @@ export const DEFAULT_EPOCH_LENGTH = 1111n;
 
 /**
  * Compute next epoch validator set
+ *
+ * R1 remediation: Slash count decay — decrement slashCount by 1 per epoch
+ * if no new slash occurred since last epoch boundary.
+ * R2 remediation: Reset slashesThisEpoch counter at epoch boundary.
  */
 export function computeNextEpochValidators(
   currentSet: ValidatorSet,
@@ -479,9 +492,25 @@ export function computeNextEpochValidators(
   }>,
   removedValidators: PublicKey[],
   newEpoch: bigint,
+  _options?: { currentBlock?: number; slashDecayPeriodBlocks?: number },
 ): ValidatorSet {
   const newSet = new Map(currentSet.validators);
   let totalStake = currentSet.totalStake;
+
+  // R1: Slash count decay + R2: Reset epoch slash counter
+  for (const [key, validator] of newSet) {
+    const updated = { ...validator };
+
+    // R1: Decay slashCount by 1 if no slash this epoch
+    if (updated.slashCount > 0 && (updated.slashesThisEpoch ?? 0) === 0) {
+      updated.slashCount = Math.max(0, updated.slashCount - 1);
+    }
+
+    // R2: Reset per-epoch slash counter
+    updated.slashesThisEpoch = 0;
+
+    newSet.set(key, updated);
+  }
 
   // Apply stake changes
   for (const change of pendingStakeChanges) {
@@ -507,6 +536,8 @@ export function computeNextEpochValidators(
       correctVerifications: 0,
       missedVerifications: 0,
       slashCount: 0,
+      slashesThisEpoch: 0,
+      lastSlashedBlock: 0,
     });
     totalStake += newVal.stake;
   }

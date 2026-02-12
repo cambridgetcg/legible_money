@@ -53,7 +53,7 @@ const BYZANTINE_TEST_CONFIG: Partial<TestNetworkConfig> = {
   validatorCount: 7, // BFT requires 3f+1 validators for f faults
   fullNodeCount: 0,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
   testAccounts: 3,
   autoBlocks: false,
   blockInterval: 60000, // Long interval to prevent background block production during tests
@@ -67,10 +67,10 @@ const BYZANTINE_TEST_CONFIG: Partial<TestNetworkConfig> = {
     validatorQuorum: 0.66,
     acceptanceThreshold: 0.66,
     rejectionThreshold: 0.66,
-    minClaimStake: 10n * 10n ** 18n,
+    minClaimStake: 10n * 10n ** 15n,
     verificationReward: 1n * 10n ** 18n,
-    wrongVerificationSlash: 0.1,
-    missedVerificationSlash: 0.05,
+    wrongVerificationSlash: 0.06,
+    missedVerificationSlash: 0.0001,
   } as Partial<ConsensusParams>,
 };
 
@@ -85,7 +85,7 @@ function createTestClaim(
     claim,
     domain,
     submitter: "",
-    stake: 100n * 10n ** 18n,
+    stake: 100n * 10n ** 15n,
     submittedAt: Date.now(),
     references: [
       {
@@ -231,7 +231,7 @@ describe.sequential("Byzantine Fault - Block Equivocation", () => {
   });
 
   it("should calculate full stake slash for equivocation", () => {
-    const stake = 10_000n * 10n ** 18n;
+    const stake = 10_000n * 10n ** 15n;
     const slashAmount = calculateEquivocationSlash(stake);
 
     // Equivocation results in 100% stake slash
@@ -393,7 +393,7 @@ describe.sequential("Byzantine Fault - Reveal Misbehavior", () => {
         validator: validator.publicKey,
         verdict: badReveal.verdict,
         confidence: badReveal.confidence,
-        nonce: badReveal.nonce,
+        salt: badReveal.salt,
         referencesChecked: badReveal.referencesChecked,
         signature: badReveal.signature,
       }),
@@ -433,7 +433,7 @@ describe.sequential("Byzantine Fault - Reveal Misbehavior", () => {
         validator: v,
         verdict: "confirmed" as const,
         confidence: 0.9,
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -509,7 +509,7 @@ describe.sequential("Byzantine Fault - Colluding Validators", () => {
         validator: v,
         verdict: verdicts[i],
         confidence: confidences[i],
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -561,7 +561,7 @@ describe.sequential("Byzantine Fault - Colluding Validators", () => {
         validator: v,
         verdict: verdicts[i],
         confidence: confidences[i],
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -613,7 +613,7 @@ describe.sequential("Byzantine Fault - Colluding Validators", () => {
         validator: v,
         verdict: verdicts[i],
         confidence: confidences[i],
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -678,7 +678,7 @@ describe.sequential("Byzantine Fault - Quorum Requirements", () => {
         validator: v,
         verdict: "confirmed" as const,
         confidence: 0.9,
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -719,7 +719,7 @@ describe.sequential("Byzantine Fault - Quorum Requirements", () => {
         validator: v,
         verdict: "confirmed" as const,
         confidence: 0.9,
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -880,7 +880,7 @@ describe.sequential("Byzantine Fault - Slashing Mechanics", () => {
         validator: v,
         verdict: verdicts[i],
         confidence: verdicts[i] === "confirmed" ? 0.9 : 0.1,
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 
@@ -893,7 +893,7 @@ describe.sequential("Byzantine Fault - Slashing Mechanics", () => {
   });
 
   it("should handle equivocation slashing (full stake)", () => {
-    const stakes = [1000n * 10n ** 18n, 50_000n * 10n ** 18n, 1n * 10n ** 18n];
+    const stakes = [1000n * 10n ** 15n, 50_000n * 10n ** 15n, 1n * 10n ** 15n];
 
     for (const stake of stakes) {
       const slash = calculateEquivocationSlash(stake);
@@ -995,7 +995,7 @@ describe.sequential("Byzantine Fault - Network Resilience", () => {
         validator: v,
         verdict: "confirmed" as const,
         confidence: 0.9,
-        nonce: nonces.get(v.publicKey)!,
+        salt: nonces.get(v.publicKey)!,
       })),
     );
 

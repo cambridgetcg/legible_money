@@ -1,0 +1,31 @@
+syntax = "proto3";
+package legible.staking.v1;
+
+option go_package = "github.com/legible-money/legible/x/staking/types";
+
+import "legible/staking/v1/state.proto";
+
+// GenesisState defines the staking module's genesis state.
+message GenesisState {
+  Params                    params            = 1;
+  repeated LegibleValidator validators        = 2;
+  repeated Delegation       delegations       = 3;
+  repeated UnbondingEntry   unbonding_entries = 4;
+  repeated TierConfig       tier_configs      = 5;
+  uint64                    unbonding_seq     = 6; // monotonic unbonding sequence counter
+}
+
+// Params defines the staking module parameters.
+message Params {
+  uint32 max_apprentice_validators  = 1; // max tier 0 validators (Sybil defense)
+  uint64 unbonding_period           = 2; // blocks (268560 ~7 days at 2.521s/block)
+  string virtual_stake              = 3; // virtual stake for tier 0/1 (bigint as string)
+  uint32 max_validators             = 4; // max total validators
+  string min_self_delegation        = 5; // minimum self-delegation (bigint as string)
+  // Anti-grief parameters (R1-R4 remediation)
+  uint32 max_slashes_per_epoch      = 6; // R2: max slashes per validator per epoch (default: 2)
+  uint64 slash_decay_period_blocks  = 7; // R1: blocks between slash count decays (default: 34272 = 1 epoch)
+  uint32 max_slash_count_deactivate = 8; // slashes to deactivate (default: 3)
+  string min_stake_for_verification = 9; // R3: min real stake to participate in VRF (default: "100000000")
+  uint64 slash_escalation_bps       = 10; // per-prior-slash escalation factor in BPS (default: 100000 = 10%)
+}

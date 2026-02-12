@@ -1,24 +1,20 @@
 package types
 
-// GenesisState defines the research module's genesis state.
-type GenesisState struct {
-	Params          Params     `json:"params"`
-	Submissions     []Research `json:"submissions"`
-	Bounties        []Bounty   `json:"bounties"`
-	TreasuryBalance string     `json:"treasury_balance"`
-}
+// Note: GenesisState struct is now defined in genesis.pb.go (proto-generated).
 
 // DefaultGenesis returns the default research module genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:          DefaultParams(),
-		Submissions:     []Research{},
-		Bounties:        []Bounty{},
-		TreasuryBalance: "0",
+		Params:          &p,
+		Researches:      []*Research{},
+		Bounties:        []*Bounty{},
+		PeerReviews:     []*PeerReview{},
+		TreasuryBalance: &TreasuryBalance{Balance: "0"},
 	}
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	return nil
 }

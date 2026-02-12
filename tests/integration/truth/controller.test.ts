@@ -168,9 +168,9 @@ function createTestContext(
   const validatorSelector = new MockValidatorSelector();
 
   // Set up initial stakes
-  state.setStake(claimantDid, 1000n * 10n ** 18n); // 1000 LGM
+  state.setStake(claimantDid, 1000n * 10n ** 15n); // 1 LGM (stake, not balance)
   for (const validatorDid of validatorDids) {
-    state.setStake(validatorDid, 500n * 10n ** 18n); // 500 LGM each
+    state.setStake(validatorDid, 500n * 10n ** 15n); // 0.5 LGM each
   }
 
   validatorSelector.setValidators(validatorDids);
@@ -225,7 +225,7 @@ describe("TruthController - Claim Submission", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.99,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     };
 
@@ -244,7 +244,7 @@ describe("TruthController - Claim Submission", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     };
 
@@ -260,7 +260,7 @@ describe("TruthController - Claim Submission", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     };
 
@@ -279,7 +279,7 @@ describe("TruthController - Claim Submission", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 10n * 10n ** 18n, // Below minimum
+      stake: 10n * 10n ** 15n, // Below minimum
       evidenceIds: [],
     };
 
@@ -298,7 +298,7 @@ describe("TruthController - Claim Submission", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     };
 
@@ -318,7 +318,7 @@ describe("TruthController - Evidence Handling", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -354,7 +354,7 @@ describe("TruthController - Evidence Handling", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -390,7 +390,7 @@ describe("TruthController - Evidence Handling", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -426,7 +426,7 @@ describe("TruthController - Evidence Handling", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -464,13 +464,13 @@ describe("TruthController - Evidence Requests", () => {
     const ctx = createTestContext();
     const request = await ctx.controller.requestEvidence(
       "climate science data",
-      50n * 10n ** 18n,
+      20n * 10n ** 15n,
       100n,
     );
 
     expect(request.messageType).toBe("evidence_request");
     expect(request.payload.topic).toBe("climate science data");
-    expect(request.payload.bounty).toBe(50n * 10n ** 18n);
+    expect(request.payload.bounty).toBe(20n * 10n ** 15n);
   });
 
   it("should broadcast evidence request", async () => {
@@ -504,7 +504,7 @@ describe("TruthController - Verification Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -530,7 +530,7 @@ describe("TruthController - Verification Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -581,7 +581,7 @@ describe("TruthController - Verification Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -627,7 +627,7 @@ describe("TruthController - Verification Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -681,7 +681,7 @@ describe("TruthController - Verification Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -735,7 +735,7 @@ describe("TruthController - Challenge Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -746,7 +746,7 @@ describe("TruthController - Challenge Flow", () => {
       "claim",
       "This claim contradicts established facts",
       ["counter-evidence-1"],
-      200n * 10n ** 18n,
+      200n * 10n ** 15n,
     );
 
     expect(challenge.messageType).toBe("challenge");
@@ -763,7 +763,7 @@ describe("TruthController - Challenge Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -772,7 +772,7 @@ describe("TruthController - Challenge Flow", () => {
       "claim",
       "Challenge reason",
       ["counter-evidence-1"],
-      200n * 10n ** 18n,
+      200n * 10n ** 15n,
     );
 
     const tracked = ctx.controller.getClaim(claimMessage.messageId);
@@ -787,7 +787,7 @@ describe("TruthController - Challenge Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -797,7 +797,7 @@ describe("TruthController - Challenge Flow", () => {
         "claim",
         "Challenge reason",
         ["counter-evidence-1"],
-        50n * 10n ** 18n, // Below minimum
+        20n * 10n ** 15n, // Below minimum
       ),
     ).rejects.toThrow("Minimum challenge stake");
   });
@@ -809,7 +809,7 @@ describe("TruthController - Challenge Flow", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -824,7 +824,7 @@ describe("TruthController - Challenge Flow", () => {
       "claim",
       "Challenge reason",
       ["counter-evidence-1"],
-      200n * 10n ** 18n,
+      200n * 10n ** 15n,
     );
 
     expect(challengeHandler).toHaveBeenCalled();
@@ -844,7 +844,7 @@ describe("TruthController - Full Lifecycle", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.999,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -945,7 +945,7 @@ describe("TruthController - Full Lifecycle", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.8,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -955,7 +955,7 @@ describe("TruthController - Full Lifecycle", () => {
       "claim",
       "This contradicts peer-reviewed research",
       ["counter-evidence-1"],
-      200n * 10n ** 18n,
+      200n * 10n ** 15n,
     );
 
     expect(ctx.controller.getClaim(claimMessage.messageId)?.state).toBe(
@@ -1016,7 +1016,7 @@ describe("TruthController - Query Methods", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -1026,7 +1026,7 @@ describe("TruthController - Query Methods", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.8,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 
@@ -1047,7 +1047,7 @@ describe("TruthController - Query Methods", () => {
       claimType: "empirical" as const,
       epistemicCategory: "empirical" as const,
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       evidenceIds: [],
     });
 

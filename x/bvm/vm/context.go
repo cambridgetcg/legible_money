@@ -12,6 +12,15 @@ const (
 	ModeCreate                             // Contract creation
 )
 
+// SessionCapabilities restricts what a session key can do within BVM execution.
+// nil means full permissions (no session restriction).
+type SessionCapabilities struct {
+	CanTransfer    bool
+	CanStake       bool
+	CanSubmitClaims bool
+	CanVote        bool
+}
+
 // ExecutionContext provides runtime parameters to the interpreter.
 type ExecutionContext struct {
 	Caller          []byte // 20-byte address
@@ -31,6 +40,7 @@ type ExecutionContext struct {
 	Coinbase        []byte // Block proposer
 	PrevRandao      *big.Int
 	BaseFee         *big.Int
+	Capabilities    *SessionCapabilities // nil = full permissions (no session restriction)
 }
 
 // ExecutionResult is returned after bytecode execution completes.
@@ -173,6 +183,21 @@ type HostFunctions interface {
 	SelfStake(callerDID string) *big.Int
 	SelfReputation(callerDID string) uint64
 	SelfAccuracy(callerDID string) uint64
+}
+
+// ScheduleKeeper allows the VM to create, cancel, and modify contract schedules.
+// Implemented by the keeper package; consumed by AgentHost.
+type ScheduleKeeper interface {
+	// CreateSchedule persists a new schedule and returns the schedule ID.
+	CreateSchedule(contractAddr, caller, method, payload string, executeAtBlock, maxGas uint64) (string, error)
+	// CancelScheduleByID marks a schedule as cancelled. Caller must be the owner.
+	CancelScheduleByID(scheduleId, caller string) error
+	// ModifyScheduleBlock updates the target block of a pending schedule.
+	ModifyScheduleBlock(scheduleId, caller string, newBlock uint64) error
+	// CountActiveSchedules returns the number of non-executed, non-cancelled schedules for a contract.
+	CountActiveSchedules(contractAddr string) uint64
+	// MaxSchedulesAllowed returns the per-contract schedule limit from params.
+	MaxSchedulesAllowed() uint64
 }
 
 const MaxCallDepth = 1024

@@ -58,7 +58,7 @@ async function main() {
     consensusParams: {
       blockReward: 11n * ONE_LGM,
       verificationReward: 1n * ONE_LGM,
-      minClaimStake: 111n * ONE_LGM,
+      minClaimStake: 11n * 10n ** 15n, // 0.011 LGM
       targetBlockTimeMs: 2521,
       verificationRoundBlocks: 6,
       commitPhaseBlocks: 2,
@@ -97,7 +97,7 @@ async function main() {
   console.log(`\n  Genesis axioms: ${axiomFact ? "1 loaded" : "MISSING"}`);
   if (axiomFact) {
     console.log(
-      `    "${axiomFact.claim}" (confidence: ${axiomFact.confidence})`,
+      `    "${axiomFact.claimText}" (confidence: ${axiomFact.confidence})`,
     );
   }
 
@@ -212,7 +212,7 @@ async function main() {
       const fact = state.getFact(pattern);
       if (fact) {
         console.log(`  FACT FOUND (id: ${pattern})`);
-        console.log(`    Claim: "${fact.claim}"`);
+        console.log(`    Claim: "${fact.claimText}"`);
         console.log(`    Domain: ${fact.domain}`);
         console.log(`    Confidence: ${fact.confidence}`);
         console.log(`    Status: ${fact.status}`);
@@ -236,7 +236,7 @@ async function main() {
       if (genesisCheck) {
         allFacts.push({
           id: "test:axiom:1",
-          claim: genesisCheck.claim,
+          claim: genesisCheck.claimText,
           confidence: genesisCheck.confidence,
         });
       }

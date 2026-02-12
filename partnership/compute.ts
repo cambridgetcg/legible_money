@@ -334,7 +334,7 @@ export function projectInvestmentReturns(
     investment.verificationContribution > 0
       ? investment.periods.reduce((s, p) => s + p.rewardsGenerated, 0n) /
         BigInt(investment.verificationContribution)
-      : 1n * 10n ** 18n; // Default 1 LGM per verification
+      : 1n * 10n ** 15n; // Default 0.001 LGM per verification
 
   const projectedRewards =
     avgRewardPerVerification * BigInt(projectedVerifications);

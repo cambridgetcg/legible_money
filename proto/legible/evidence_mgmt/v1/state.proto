@@ -1,0 +1,63 @@
+syntax = "proto3";
+package legible.evidence_mgmt.v1;
+
+option go_package = "github.com/legible-money/legible/x/evidence_mgmt/types";
+
+// Evidence represents a piece of evidence supporting or contradicting a claim/fact.
+message Evidence {
+  string id = 1;
+  string claim_id = 2;
+  string fact_id = 3;
+  string submitter = 4;
+  string evidence_type = 5;
+  string content_hash = 6;
+  string description = 7;
+  string source_uri = 8;
+  string status = 9;
+  uint64 reliability = 10;
+  uint64 submitted_at = 11;
+  uint64 verified_at = 12;
+  uint32 audit_count = 13;
+}
+
+// EvidenceAudit represents an auditor's assessment of evidence quality.
+message EvidenceAudit {
+  string id = 1;
+  string evidence_id = 2;
+  string auditor = 3;
+  string stake = 4;
+  uint64 score = 5;
+  string rationale = 6;
+  string status = 7;
+  uint64 submitted_at = 8;
+  uint64 resolved_at = 9;
+  string reward_amount = 10;
+  string slash_amount = 11;
+  uint64 accuracy_delta = 12;
+}
+
+// AuditConsensus represents the aggregated audit scores for evidence.
+message AuditConsensus {
+  string evidence_id = 1;
+  uint64 weighted_score = 2;
+  string total_stake = 3;
+  uint32 audit_count = 4;
+  uint64 variance = 5;
+  bool is_high_variance = 6;
+  uint64 computed_at = 7;
+}
+
+// Oracle represents a registered external data oracle.
+message Oracle {
+  string id = 1;
+  string operator = 2;
+  string name = 3;
+  string description = 4;
+  repeated string data_types = 5;
+  string stake = 6;
+  uint64 reputation_score = 7;
+  uint64 data_points = 8;
+  uint64 accuracy_rate = 9;
+  uint64 registered_at = 10;
+  bool is_active = 11;
+}

@@ -97,8 +97,8 @@ export function createVesting(
     replicationCount: 0,
     status: "vesting",
     statusChangedAtBlock: currentBlock,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: currentBlock,
+    updatedAt: currentBlock,
   };
 
   return vesting;
@@ -141,7 +141,7 @@ export function updateRelease(
     status,
     statusChangedAtBlock:
       status !== vesting.status ? currentBlock : vesting.statusChangedAtBlock,
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 }
 
@@ -178,7 +178,7 @@ export function claimRewards(
   const finalVesting: RewardVesting = {
     ...updated,
     claimableAmount: updated.claimableAmount - claimAmount,
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 
   return {
@@ -415,7 +415,7 @@ export function determineVestingCategory(
     evidenceTypes.includes("chainlink_price_feed") ||
     evidenceTypes.includes("chainlink_por")
   ) {
-    return "chainlink_feed";
+    return "oracle_feed";
   }
 
   if (evidenceTypes.includes("peer_reviewed")) {
@@ -449,7 +449,7 @@ export function createVestingEvent(
     type,
     vestingId: vesting.id,
     blockNumber: currentBlock,
-    timestamp: Date.now(),
+    timestamp: currentBlock,
     data: {
       claimId: vesting.claimId,
       recipient: vesting.recipient,

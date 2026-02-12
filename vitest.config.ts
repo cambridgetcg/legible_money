@@ -41,6 +41,7 @@ export default defineConfig({
       "tests/**/*.spec.ts",
       "tests/**/*.prop.ts",
       "genesis/tests/**/*.test.ts",
+      "daemon/tests/**/*.test.ts",
     ],
     exclude: ["node_modules", "dist"],
 

@@ -3,6 +3,7 @@ package keeper_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"cosmossdk.io/log"
@@ -13,6 +14,8 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -36,8 +39,15 @@ func init() {
 
 // ---------- Mock StakingKeeper ----------
 
+type mockSlashRecord struct {
+	Addr   string
+	Amount string
+	Reason string
+}
+
 type mockStakingKeeper struct {
 	validators map[string]types.ValidatorInfo
+	slashes    []mockSlashRecord
 }
 
 func newMockStakingKeeper() *mockStakingKeeper {
@@ -84,11 +94,8 @@ func (m *mockStakingKeeper) GetTotalStake(_ context.Context) uint64 {
 	return total
 }
 
-func (m *mockStakingKeeper) RecordVerification(_ context.Context, _ string, _ bool) error {
-	return nil
-}
-
-func (m *mockStakingKeeper) SlashValidator(_ context.Context, _ string, _ string, _ string) error {
+func (m *mockStakingKeeper) SlashValidator(_ context.Context, addr string, amount string, reason string) error {
+	m.slashes = append(m.slashes, mockSlashRecord{Addr: addr, Amount: amount, Reason: reason})
 	return nil
 }
 
@@ -167,7 +174,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		memKey,
 		mockAccountKeeper{},
 		mockBankKeeper{},
@@ -185,7 +192,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 	// Initialize params and default domains
 	k.SetParams(ctx, types.DefaultParams())
 	for _, domain := range types.DefaultDomains() {
-		k.SetDomainInState(ctx, domain)
+		k.SetDomainInState(ctx, *domain)
 	}
 
 	return k, ctx, mockSK
@@ -397,8 +404,8 @@ func TestConfidenceAggregation(t *testing.T) {
 	// Add commitments and reveals (all accept with high confidence)
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
-		round.Reveals[v] = types.VerificationReveal{
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
 			Validator:  v,
 			Verdict:    "accept",
 			Confidence: 900000, // 90%
@@ -434,8 +441,8 @@ func TestRejectedOutcome(t *testing.T) {
 	// All validators reject
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
-		round.Reveals[v] = types.VerificationReveal{
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
 			Validator:  v,
 			Verdict:    "reject",
 			Confidence: 850000,
@@ -464,15 +471,15 @@ func TestContestedOutcome(t *testing.T) {
 	round, _ := k.CreateVerificationRound(ctx, claim)
 
 	// Split verdict: 2 accept, 2 reject (below 77% threshold)
-	round.Commitments["lgmvaloper1abc"] = types.VerificationCommitment{Validator: "lgmvaloper1abc"}
-	round.Commitments["lgmvaloper1def"] = types.VerificationCommitment{Validator: "lgmvaloper1def"}
-	round.Commitments["lgmvaloper1ghi"] = types.VerificationCommitment{Validator: "lgmvaloper1ghi"}
-	round.Commitments["lgmvaloper1jkl"] = types.VerificationCommitment{Validator: "lgmvaloper1jkl"}
+	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
+	round.Commitments["lgmvaloper1def"] = &types.VerificationCommitment{Validator: "lgmvaloper1def"}
+	round.Commitments["lgmvaloper1ghi"] = &types.VerificationCommitment{Validator: "lgmvaloper1ghi"}
+	round.Commitments["lgmvaloper1jkl"] = &types.VerificationCommitment{Validator: "lgmvaloper1jkl"}
 
-	round.Reveals["lgmvaloper1abc"] = types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 800000}
-	round.Reveals["lgmvaloper1def"] = types.VerificationReveal{Validator: "lgmvaloper1def", Verdict: "accept", Confidence: 800000}
-	round.Reveals["lgmvaloper1ghi"] = types.VerificationReveal{Validator: "lgmvaloper1ghi", Verdict: "reject", Confidence: 800000}
-	round.Reveals["lgmvaloper1jkl"] = types.VerificationReveal{Validator: "lgmvaloper1jkl", Verdict: "reject", Confidence: 800000}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 800000}
+	round.Reveals["lgmvaloper1def"] = &types.VerificationReveal{Validator: "lgmvaloper1def", Verdict: "accept", Confidence: 800000}
+	round.Reveals["lgmvaloper1ghi"] = &types.VerificationReveal{Validator: "lgmvaloper1ghi", Verdict: "reject", Confidence: 800000}
+	round.Reveals["lgmvaloper1jkl"] = &types.VerificationReveal{Validator: "lgmvaloper1jkl", Verdict: "reject", Confidence: 800000}
 
 	round.SelectedValidators = []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi", "lgmvaloper1jkl"}
 	k.SetVerificationRound(ctx, round)
@@ -512,8 +519,8 @@ func TestFactCreationOnAcceptance(t *testing.T) {
 	// All validators accept
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -573,8 +580,8 @@ func TestInsufficientParticipation(t *testing.T) {
 
 	// Only 1 reveal out of 3 selected validators (below 66% quorum)
 	round.SelectedValidators = []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
-	round.Commitments["lgmvaloper1abc"] = types.VerificationCommitment{Validator: "lgmvaloper1abc"}
-	round.Reveals["lgmvaloper1abc"] = types.VerificationReveal{
+	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{
 		Validator:  "lgmvaloper1abc",
 		Verdict:    "accept",
 		Confidence: 900000,
@@ -655,9 +662,13 @@ func TestQueryFact(t *testing.T) {
 	}
 	k.SetFact(ctx, fact)
 
-	// Query via query server
+	// Query via query server (use concrete type since Fact/ActiveRounds are non-proto methods)
 	qs := keeper.NewQueryServerImpl(k)
-	resp, err := qs.Fact(ctx, &types.QueryFactRequest{FactId: "query-fact-1"})
+	type factQuerier interface {
+		Fact(context.Context, *types.QueryFactRequest) (*types.QueryFactResponse, error)
+	}
+	fq := qs.(factQuerier)
+	resp, err := fq.Fact(ctx, &types.QueryFactRequest{FactId: "query-fact-1"})
 	if err != nil {
 		t.Fatalf("query Fact failed: %v", err)
 	}
@@ -669,7 +680,7 @@ func TestQueryFact(t *testing.T) {
 	}
 
 	// Query non-existent fact
-	_, err = qs.Fact(ctx, &types.QueryFactRequest{FactId: "nonexistent"})
+	_, err = fq.Fact(ctx, &types.QueryFactRequest{FactId: "nonexistent"})
 	if err == nil {
 		t.Error("expected error for nonexistent fact")
 	}
@@ -693,7 +704,11 @@ func TestQueryActiveRounds(t *testing.T) {
 	}
 
 	qs := keeper.NewQueryServerImpl(k)
-	resp, err := qs.ActiveRounds(ctx, &types.QueryActiveRoundsRequest{})
+	type activeRoundsQuerier interface {
+		ActiveRounds(context.Context, *types.QueryActiveRoundsRequest) (*types.QueryActiveRoundsResponse, error)
+	}
+	arq := qs.(activeRoundsQuerier)
+	resp, err := arq.ActiveRounds(ctx, &types.QueryActiveRoundsRequest{})
 	if err != nil {
 		t.Fatalf("query ActiveRounds failed: %v", err)
 	}
@@ -713,11 +728,11 @@ func TestSlashOnMissedReveal(t *testing.T) {
 	// 3 validators commit, but only 2 reveal
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
 	}
 	// Only first two reveal
-	round.Reveals["lgmvaloper1abc"] = types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 900000}
-	round.Reveals["lgmvaloper1def"] = types.VerificationReveal{Validator: "lgmvaloper1def", Verdict: "accept", Confidence: 900000}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 900000}
+	round.Reveals["lgmvaloper1def"] = &types.VerificationReveal{Validator: "lgmvaloper1def", Verdict: "accept", Confidence: 900000}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
 
@@ -765,16 +780,16 @@ func TestCleanupExpiredRounds(t *testing.T) {
 func TestClaimWithEvidence(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	evidence := []types.ClaimEvidence{
+	evidence := []*types.ClaimEvidence{
 		{
 			EvidenceType: "citation",
-			URI:          "https://example.com/paper.pdf",
+			Uri:          "https://example.com/paper.pdf",
 			ContentHash:  "sha256:abc123",
 			Metadata:     map[string]string{"author": "Einstein", "year": "1905"},
 		},
 		{
 			EvidenceType: "dataset",
-			URI:          "ipfs://Qm...",
+			Uri:          "ipfs://Qm...",
 			ContentHash:  "sha256:def456",
 		},
 	}
@@ -807,8 +822,8 @@ func TestClaimWithEvidence(t *testing.T) {
 	if stored.Evidence[0].Metadata["author"] != "Einstein" {
 		t.Errorf("expected metadata author=Einstein, got %s", stored.Evidence[0].Metadata["author"])
 	}
-	if stored.Evidence[1].URI != "ipfs://Qm..." {
-		t.Errorf("expected evidence URI=ipfs://Qm..., got %s", stored.Evidence[1].URI)
+	if stored.Evidence[1].Uri != "ipfs://Qm..." {
+		t.Errorf("expected evidence Uri=ipfs://Qm..., got %s", stored.Evidence[1].Uri)
 	}
 }
 
@@ -911,8 +926,8 @@ func TestFactCreationSetsDecayFields(t *testing.T) {
 	// All validators accept
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -1009,8 +1024,8 @@ func TestAggregationSetsCompletedAtHeightAndQuorum(t *testing.T) {
 	// All validators accept with high confidence
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
-		round.Reveals[v] = types.VerificationReveal{
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
 			Validator:  v,
 			Verdict:    "accept",
 			Confidence: 900000,
@@ -1041,8 +1056,8 @@ func TestInsufficientQuorumNoQuorumFlag(t *testing.T) {
 
 	// Only 1 of 3 selected validators reveals
 	round.SelectedValidators = []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
-	round.Commitments["lgmvaloper1abc"] = types.VerificationCommitment{Validator: "lgmvaloper1abc"}
-	round.Reveals["lgmvaloper1abc"] = types.VerificationReveal{
+	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{
 		Validator:  "lgmvaloper1abc",
 		Verdict:    "accept",
 		Confidence: 900000,
@@ -1241,6 +1256,292 @@ func TestApplyReverificationBonus(t *testing.T) {
 	result = keeper.ApplyReverificationBonus(fact)
 	if result.BaseConfidence != 990_000 { // empirical max
 		t.Errorf("expected capped at 990000, got %d", result.BaseConfidence)
+	}
+}
+
+// ==================== AH-5: Auto Re-verification Tests ====================
+
+func TestTriggerReverificationScan_CreatesRounds(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Create an empirical fact with low confidence that needs reverification
+	fact := types.Fact{
+		Id:                   "reverify-scan-1",
+		ClaimText:            "Empirical claim for scan test",
+		Domain:               "physics",
+		EpistemicCategory:    "empirical",
+		Confidence:           400_000, // below ReverificationThreshold (600,000)
+		Status:               types.FactStatusVerified,
+		SubmitterDid:         "did:lgm:submitter1",
+		VerifiedAtHeight:     10,
+		LastVerifiedHeight:   10,
+		LastConfidenceUpdate: 10,
+		BaseConfidence:       400_000,
+	}
+	k.SetFact(ctx, fact)
+
+	// Trigger scan
+	triggered := k.TriggerReverificationScan(ctx, 10)
+
+	if triggered != 1 {
+		t.Errorf("expected 1 reverification triggered, got %d", triggered)
+	}
+
+	// Verify a round was created
+	rounds := k.GetActiveRounds(ctx)
+	var found bool
+	for _, r := range rounds {
+		if r.Type == types.RoundTypeReverification {
+			found = true
+			// Verify the claim links back to the fact
+			claim, claimFound := k.GetClaim(ctx, r.ClaimId)
+			if !claimFound {
+				t.Error("reverification claim not found")
+			}
+			if claim.ReverificationFactId != "reverify-scan-1" {
+				t.Errorf("expected ReverificationFactId=reverify-scan-1, got %s", claim.ReverificationFactId)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("expected reverification round to be created")
+	}
+}
+
+func TestTriggerReverificationScan_SkipsDuplicates(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	fact := types.Fact{
+		Id:                   "reverify-dup-1",
+		ClaimText:            "Fact for duplicate test",
+		Domain:               "physics",
+		EpistemicCategory:    "empirical",
+		Confidence:           400_000,
+		Status:               types.FactStatusVerified,
+		SubmitterDid:         "did:lgm:submitter1",
+		VerifiedAtHeight:     10,
+		LastVerifiedHeight:   10,
+		LastConfidenceUpdate: 10,
+		BaseConfidence:       400_000,
+	}
+	k.SetFact(ctx, fact)
+
+	// First scan creates a round
+	triggered1 := k.TriggerReverificationScan(ctx, 10)
+	if triggered1 != 1 {
+		t.Fatalf("expected 1 triggered, got %d", triggered1)
+	}
+
+	// Second scan should skip (active round exists)
+	triggered2 := k.TriggerReverificationScan(ctx, 10)
+	if triggered2 != 0 {
+		t.Errorf("expected 0 triggered (duplicate guard), got %d", triggered2)
+	}
+}
+
+func TestTriggerReverificationScan_SkipsEternalCategories(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Formal fact: eternal, RequiresReverification=false
+	fact := types.Fact{
+		Id:                   "formal-fact-1",
+		ClaimText:            "Mathematical proof",
+		Domain:               "mathematics",
+		EpistemicCategory:    "formal",
+		Confidence:           400_000,
+		Status:               types.FactStatusVerified,
+		SubmitterDid:         "did:lgm:submitter1",
+		VerifiedAtHeight:     10,
+		LastVerifiedHeight:   10,
+		LastConfidenceUpdate: 10,
+		BaseConfidence:       400_000,
+	}
+	k.SetFact(ctx, fact)
+
+	triggered := k.TriggerReverificationScan(ctx, 10)
+	if triggered != 0 {
+		t.Errorf("expected 0 triggered for eternal category, got %d", triggered)
+	}
+}
+
+func TestHasActiveRoundForClaim(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "active-round-claim", ClaimText: "Test", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+
+	// No rounds yet
+	if k.HasActiveRoundForClaim(ctx, "active-round-claim") {
+		t.Error("expected no active round initially")
+	}
+
+	// Create a round
+	round, _ := k.CreateVerificationRound(ctx, claim)
+	_ = round
+
+	// Now should find it
+	if !k.HasActiveRoundForClaim(ctx, "active-round-claim") {
+		t.Error("expected active round after creation")
+	}
+}
+
+func TestReverificationRound_AcceptedUpdatesFact(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Create a decayed fact
+	fact := types.Fact{
+		Id:                   "reverify-accept-1",
+		ClaimText:            "Empirical fact to reverify",
+		Domain:               "physics",
+		EpistemicCategory:    "empirical",
+		Confidence:           400_000,
+		Status:               types.FactStatusVerified,
+		SubmitterDid:         "did:lgm:submitter1",
+		VerifiedAtHeight:     10,
+		LastVerifiedHeight:   10,
+		LastConfidenceUpdate: 10,
+		BaseConfidence:       700_000,
+	}
+	k.SetFact(ctx, fact)
+
+	// Create a reverification claim
+	claim := types.Claim{
+		Id:                   "reverify-claim-accept",
+		ClaimText:            fact.ClaimText,
+		Domain:               fact.Domain,
+		EpistemicCategory:    fact.EpistemicCategory,
+		Submitter:            "lgm1submitter",
+		Status:               "pending",
+		ReverificationFactId: "reverify-accept-1",
+	}
+	k.SetClaim(ctx, claim)
+
+	// Create reverification round
+	round, _ := k.CreateVerificationRound(ctx, claim)
+	round.Type = types.RoundTypeReverification
+	k.SetVerificationRound(ctx, round)
+
+	// Simulate successful verification
+	result := types.VerificationResult{
+		Verdict:          "accepted",
+		Confidence:       850_000,
+		ParticipantCount: 3,
+		Rewards:          make(map[string]uint64),
+		Slashes:          make(map[string]uint64),
+	}
+
+	err := k.CompleteRound(ctx, round, result)
+	if err != nil {
+		t.Fatalf("CompleteRound failed: %v", err)
+	}
+
+	// Check fact was updated (not a new fact created)
+	updatedFact, found := k.GetFact(ctx, "reverify-accept-1")
+	if !found {
+		t.Fatal("expected original fact to still exist")
+	}
+
+	// Confidence should be updated (850,000 from result)
+	if updatedFact.Confidence != 850_000 {
+		t.Errorf("expected confidence 850000 after reverification, got %d", updatedFact.Confidence)
+	}
+
+	// BaseConfidence should include reverification bonus (700,000 + 50,000 = 750,000)
+	// Then overridden by result confidence (850,000 > 750,000 → 850,000)
+	if updatedFact.BaseConfidence != 850_000 {
+		t.Errorf("expected base confidence 850000, got %d", updatedFact.BaseConfidence)
+	}
+
+	// VerifierCount should have incremented
+	if updatedFact.VerifierCount == 0 {
+		t.Error("expected verifier count to increment")
+	}
+}
+
+func TestReverificationRound_RejectedLeavesFactUnchanged(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	fact := types.Fact{
+		Id:                   "reverify-reject-1",
+		ClaimText:            "Fact that fails reverification",
+		Domain:               "physics",
+		EpistemicCategory:    "empirical",
+		Confidence:           400_000,
+		Status:               types.FactStatusVerified,
+		SubmitterDid:         "did:lgm:submitter1",
+		VerifiedAtHeight:     10,
+		LastVerifiedHeight:   10,
+		LastConfidenceUpdate: 10,
+		BaseConfidence:       700_000,
+	}
+	k.SetFact(ctx, fact)
+
+	claim := types.Claim{
+		Id:                   "reverify-claim-reject",
+		ClaimText:            fact.ClaimText,
+		Domain:               fact.Domain,
+		EpistemicCategory:    fact.EpistemicCategory,
+		Submitter:            "lgm1submitter",
+		Status:               "pending",
+		ReverificationFactId: "reverify-reject-1",
+	}
+	k.SetClaim(ctx, claim)
+
+	round, _ := k.CreateVerificationRound(ctx, claim)
+	round.Type = types.RoundTypeReverification
+	k.SetVerificationRound(ctx, round)
+
+	result := types.VerificationResult{
+		Verdict:          "rejected",
+		Confidence:       200_000,
+		ParticipantCount: 3,
+		Rewards:          make(map[string]uint64),
+		Slashes:          make(map[string]uint64),
+	}
+
+	err := k.CompleteRound(ctx, round, result)
+	if err != nil {
+		t.Fatalf("CompleteRound failed: %v", err)
+	}
+
+	// Fact should be unchanged
+	unchanged, found := k.GetFact(ctx, "reverify-reject-1")
+	if !found {
+		t.Fatal("expected fact to still exist")
+	}
+	if unchanged.Confidence != 400_000 {
+		t.Errorf("expected confidence 400000 unchanged, got %d", unchanged.Confidence)
+	}
+	if unchanged.BaseConfidence != 700_000 {
+		t.Errorf("expected base confidence 700000 unchanged, got %d", unchanged.BaseConfidence)
+	}
+}
+
+func TestReverificationRound_MaxPerBlock(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Create more facts than MaxReverificationsPerBlock (5)
+	for i := 0; i < 8; i++ {
+		fact := types.Fact{
+			Id:                   fmt.Sprintf("reverify-max-%d", i),
+			ClaimText:            fmt.Sprintf("Fact %d for max test", i),
+			Domain:               "physics",
+			EpistemicCategory:    "empirical",
+			Confidence:           400_000,
+			Status:               types.FactStatusVerified,
+			SubmitterDid:         "did:lgm:submitter1",
+			VerifiedAtHeight:     10,
+			LastVerifiedHeight:   10,
+			LastConfidenceUpdate: 10,
+			BaseConfidence:       400_000,
+		}
+		k.SetFact(ctx, fact)
+	}
+
+	triggered := k.TriggerReverificationScan(ctx, 10)
+	if triggered > types.MaxReverificationsPerBlock {
+		t.Errorf("expected at most %d, got %d", types.MaxReverificationsPerBlock, triggered)
 	}
 }
 
@@ -1822,8 +2123,8 @@ func TestStratumCeilingInAggregation(t *testing.T) {
 	// All validators accept with very high confidence
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{
 			Validator: v, Verdict: "accept", Confidence: 990_000,
 		}
 	}
@@ -1903,8 +2204,8 @@ func TestFactLifecycle_SubmitVerifyDecayExpire(t *testing.T) {
 	round, _ := k.CreateVerificationRound(ctx, claim)
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{
 			Validator: v, Verdict: "accept", Confidence: 900_000,
 		}
 	}
@@ -1959,6 +2260,7 @@ func TestFactLifecycle_SubmitVerifyDecayExpire(t *testing.T) {
 type trackingBankKeeper struct {
 	sentToAccount map[string]sdk.Coins // addr → coins sent
 	sentToModule  map[string]sdk.Coins // module → coins sent
+	burned        sdk.Coins            // total burned
 }
 
 func newTrackingBankKeeper() *trackingBankKeeper {
@@ -1986,7 +2288,8 @@ func (m *trackingBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _, _
 	return nil
 }
 
-func (m *trackingBankKeeper) BurnCoins(_ context.Context, _ string, _ sdk.Coins) error {
+func (m *trackingBankKeeper) BurnCoins(_ context.Context, _ string, amt sdk.Coins) error {
+	m.burned = m.burned.Add(amt...)
 	return nil
 }
 
@@ -2003,6 +2306,16 @@ type vestingCreation struct {
 func (m *mockVestingRewardsKeeper) CreateVestingScheduleFromKnowledge(_ sdk.Context, claimId, factId, recipient, totalAmount, epistemicCategory string) error {
 	m.created = append(m.created, vestingCreation{claimId, factId, recipient, totalAmount, epistemicCategory})
 	return nil
+}
+
+func (m *mockVestingRewardsKeeper) DistributeFalsificationReward(_ sdk.Context, counterFactId, targetFactId, recipient, amount string) error {
+	m.created = append(m.created, vestingCreation{counterFactId, targetFactId, recipient, amount, "falsification"})
+	return nil
+}
+
+func (m *mockVestingRewardsKeeper) GetEpochBlockRewardPool(_ sdk.Context, epoch uint64) uint64 {
+	// Return a reasonable epoch pool for tests: 100,000 LGM = 100_000_000_000 ulgm
+	return 100_000_000_000
 }
 
 // ---------- Setup with tracking keepers ----------
@@ -2035,7 +2348,7 @@ func setupKeeperWithTracking(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		memKey,
 		mockAccountKeeper{},
 		tbk,
@@ -2051,7 +2364,7 @@ func setupKeeperWithTracking(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 	k.SetParams(ctx, types.DefaultParams())
 	for _, domain := range types.DefaultDomains() {
-		k.SetDomainInState(ctx, domain)
+		k.SetDomainInState(ctx, *domain)
 	}
 
 	return k, ctx, mockSK, tbk, mvk
@@ -2075,8 +2388,8 @@ func TestStakeReturnOnAcceptance(t *testing.T) {
 	// All validators accept
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2115,8 +2428,8 @@ func TestStakeSlashOnRejection(t *testing.T) {
 	// All validators reject
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "reject", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "reject", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2156,8 +2469,8 @@ func TestStakeReturnOnInsufficient(t *testing.T) {
 
 	// Only 1 of 3 validators participates (below quorum)
 	round.SelectedValidators = []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
-	round.Commitments["lgmvaloper1abc"] = types.VerificationCommitment{Validator: "lgmvaloper1abc"}
-	round.Reveals["lgmvaloper1abc"] = types.VerificationReveal{
+	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{
 		Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 900000,
 	}
 	k.SetVerificationRound(ctx, round)
@@ -2195,8 +2508,8 @@ func TestVestingCreatedOnAcceptance(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2240,8 +2553,8 @@ func TestNoVestingOnRejection(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "reject", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "reject", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2277,13 +2590,13 @@ func TestContestedFactCreation(t *testing.T) {
 	// = 8/10 = 80% but this is > 77%. Need to make it 55-77%.
 	// abc (5M) accept, ghi (2M) reject, jkl (5M) reject = 5/12 = 41% for accept
 	// reject = 7/12 = 58% → contested (between 55% and 77%)
-	round.Commitments["lgmvaloper1abc"] = types.VerificationCommitment{Validator: "lgmvaloper1abc"}
-	round.Commitments["lgmvaloper1ghi"] = types.VerificationCommitment{Validator: "lgmvaloper1ghi"}
-	round.Commitments["lgmvaloper1jkl"] = types.VerificationCommitment{Validator: "lgmvaloper1jkl"}
+	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
+	round.Commitments["lgmvaloper1ghi"] = &types.VerificationCommitment{Validator: "lgmvaloper1ghi"}
+	round.Commitments["lgmvaloper1jkl"] = &types.VerificationCommitment{Validator: "lgmvaloper1jkl"}
 
-	round.Reveals["lgmvaloper1abc"] = types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 800000}
-	round.Reveals["lgmvaloper1ghi"] = types.VerificationReveal{Validator: "lgmvaloper1ghi", Verdict: "reject", Confidence: 800000}
-	round.Reveals["lgmvaloper1jkl"] = types.VerificationReveal{Validator: "lgmvaloper1jkl", Verdict: "reject", Confidence: 800000}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 800000}
+	round.Reveals["lgmvaloper1ghi"] = &types.VerificationReveal{Validator: "lgmvaloper1ghi", Verdict: "reject", Confidence: 800000}
+	round.Reveals["lgmvaloper1jkl"] = &types.VerificationReveal{Validator: "lgmvaloper1jkl", Verdict: "reject", Confidence: 800000}
 
 	round.SelectedValidators = []string{"lgmvaloper1abc", "lgmvaloper1ghi", "lgmvaloper1jkl"}
 	k.SetVerificationRound(ctx, round)
@@ -2329,8 +2642,8 @@ func TestParameterizedVerificationReward(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2371,8 +2684,8 @@ func TestStakeSettlementWithZeroStake(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2461,7 +2774,7 @@ func setupKeeperWithEvidence(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		memKey,
 		mockAccountKeeper{},
 		mockBankKeeper{},
@@ -2477,7 +2790,7 @@ func setupKeeperWithEvidence(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 	k.SetParams(ctx, types.DefaultParams())
 	for _, domain := range types.DefaultDomains() {
-		k.SetDomainInState(ctx, domain)
+		k.SetDomainInState(ctx, *domain)
 	}
 
 	return k, ctx, mockSK, mockEM
@@ -2501,8 +2814,8 @@ func TestEvidenceBonus_SingleOnChainEvidence(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2546,8 +2859,8 @@ func TestEvidenceBonus_MixedEvidenceTypes(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2580,8 +2893,8 @@ func TestEvidenceBonus_LowReliability(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2618,8 +2931,8 @@ func TestEvidenceBonus_RejectedEvidenceExcluded(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2647,8 +2960,8 @@ func TestEvidenceBonus_NoEvidence(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2680,8 +2993,8 @@ func TestEvidenceBonus_UnknownEvidenceType(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 800_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2716,8 +3029,8 @@ func TestEvidenceBonus_ConfidenceCappedAt100Percent(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 950_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 950_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2762,8 +3075,8 @@ func TestEvidenceSummaryTransferOnFactCreation(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2829,8 +3142,8 @@ func TestNilEvidenceKeeper_NoPanic(t *testing.T) {
 
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
-		round.Commitments[v] = types.VerificationCommitment{Validator: v}
-		round.Reveals[v] = types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 850_000}
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 850_000}
 	}
 	round.SelectedValidators = validators
 	k.SetVerificationRound(ctx, round)
@@ -2866,3 +3179,1351 @@ func TestNilEvidenceKeeper_NoPanic(t *testing.T) {
 		t.Errorf("expected 0 evidence summaries with nil keeper, got %d", len(createdFact.EvidenceSummaries))
 	}
 }
+
+// ---------- AH-4: Verifier Method Diversity Tests ----------
+
+func TestMethodDiversity_NoMethodsDeclared_NoPenalty(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-1", ClaimText: "Test no methods declared", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	// 3 validators, all identical confidence, no methods declared (legacy mode)
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:  v,
+			Verdict:    "accept",
+			Confidence: 900000,
+			// VerificationMethod intentionally omitted
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Legacy mode: no methods declared → no diversity penalty
+	if result.MethodDiversityPenalty != 0 {
+		t.Errorf("expected 0 diversity penalty for undeclared methods, got %d", result.MethodDiversityPenalty)
+	}
+}
+
+func TestMethodDiversity_AllSameMethod_IdenticalConfidence_FullPenalty(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-2", ClaimText: "Test same method identical confidence", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:          v,
+			Verdict:            "accept",
+			Confidence:         900000,
+			VerificationMethod: "ai_inference",
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Full penalty: -100,000 (uniformity) + -50,000 (single method) = -150,000
+	expectedPenalty := -int64(types.UniformityPenaltyBps) - int64(types.SingleMethodPenaltyBps)
+	if result.MethodDiversityPenalty != expectedPenalty {
+		t.Errorf("expected %d penalty, got %d", expectedPenalty, result.MethodDiversityPenalty)
+	}
+	if result.UniqueMethodCount != 1 {
+		t.Errorf("expected 1 unique method, got %d", result.UniqueMethodCount)
+	}
+}
+
+func TestMethodDiversity_AllSameMethod_VariedConfidence_PartialPenalty(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-3", ClaimText: "Test same method varied confidence", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	confidences := []uint64{900000, 850000, 880000}
+	for i, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:          v,
+			Verdict:            "accept",
+			Confidence:         confidences[i],
+			VerificationMethod: "deterministic",
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Partial penalty: -50,000 (single method only, no uniformity)
+	expectedPenalty := -int64(types.SingleMethodPenaltyBps)
+	if result.MethodDiversityPenalty != expectedPenalty {
+		t.Errorf("expected %d penalty, got %d", expectedPenalty, result.MethodDiversityPenalty)
+	}
+}
+
+func TestMethodDiversity_TwoMethods_Neutral(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-4", ClaimText: "Test two methods", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	methods := []string{"ai_inference", "ai_inference", "manual"}
+	for i, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:          v,
+			Verdict:            "accept",
+			Confidence:         900000,
+			VerificationMethod: methods[i],
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Two methods → neutral
+	if result.MethodDiversityPenalty != 0 {
+		t.Errorf("expected 0 penalty for two methods, got %d", result.MethodDiversityPenalty)
+	}
+	if result.UniqueMethodCount != 2 {
+		t.Errorf("expected 2 unique methods, got %d", result.UniqueMethodCount)
+	}
+}
+
+func TestMethodDiversity_ThreeMethods_Bonus(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-5", ClaimText: "Test three methods bonus", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	methods := []string{"ai_inference", "manual", "oracle"}
+	for i, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:          v,
+			Verdict:            "accept",
+			Confidence:         900000,
+			VerificationMethod: methods[i],
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// 3+ distinct methods → diversity bonus
+	expectedBonus := int64(types.DiversityBonusBps)
+	if result.MethodDiversityPenalty != expectedBonus {
+		t.Errorf("expected %d bonus, got %d", expectedBonus, result.MethodDiversityPenalty)
+	}
+	if result.UniqueMethodCount != 3 {
+		t.Errorf("expected 3 unique methods, got %d", result.UniqueMethodCount)
+	}
+}
+
+func TestMethodDiversity_BelowMinParticipants_NoPenalty(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-6", ClaimText: "Test below min participants", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	// Only 2 validators (below MinDiversityParticipants=3)
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:          v,
+			Verdict:            "accept",
+			Confidence:         900000,
+			VerificationMethod: "ai_inference",
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Below minimum → no diversity check
+	if result.MethodDiversityPenalty != 0 {
+		t.Errorf("expected 0 penalty below min participants, got %d", result.MethodDiversityPenalty)
+	}
+	if result.UniqueMethodCount != 0 {
+		t.Errorf("expected 0 unique methods (below min), got %d", result.UniqueMethodCount)
+	}
+}
+
+func TestMethodDiversity_MixedDeclaredUndeclared(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-7", ClaimText: "Test mixed declared/undeclared", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	// Two declare same method, one undeclared
+	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc", CommitmentHash: "hash"}
+	round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{
+		Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 900000, VerificationMethod: "ai_inference",
+	}
+	round.Commitments["lgmvaloper1def"] = &types.VerificationCommitment{Validator: "lgmvaloper1def", CommitmentHash: "hash"}
+	round.Reveals["lgmvaloper1def"] = &types.VerificationReveal{
+		Validator: "lgmvaloper1def", Verdict: "accept", Confidence: 900000, VerificationMethod: "ai_inference",
+	}
+	round.Commitments["lgmvaloper1ghi"] = &types.VerificationCommitment{Validator: "lgmvaloper1ghi", CommitmentHash: "hash"}
+	round.Reveals["lgmvaloper1ghi"] = &types.VerificationReveal{
+		Validator: "lgmvaloper1ghi", Verdict: "accept", Confidence: 900000,
+		// VerificationMethod intentionally omitted
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// 2 declared methods are the same ("ai_inference"), but not all declared → counts as 1 unique declared
+	// Single declared method + identical confidence → full penalty
+	expectedPenalty := -int64(types.UniformityPenaltyBps) - int64(types.SingleMethodPenaltyBps)
+	if result.MethodDiversityPenalty != expectedPenalty {
+		t.Errorf("expected %d penalty, got %d", expectedPenalty, result.MethodDiversityPenalty)
+	}
+}
+
+func TestMethodDiversity_PenaltyDoesNotGoNegative(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	claim := types.Claim{Id: "div-claim-8", ClaimText: "Test penalty floor", Domain: "general", Status: "pending"}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	// Low confidence that would go negative with full penalty
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v, CommitmentHash: "hash"}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator:          v,
+			Verdict:            "accept",
+			Confidence:         100000, // 10% — less than the 15% penalty
+			VerificationMethod: "ai_inference",
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Confidence should floor at 0, not go negative
+	// (The intermediate agreement ratio may be low enough for contested/inconclusive,
+	// but the key test is that confidence doesn't underflow)
+	if result.MethodDiversityPenalty != -150_000 {
+		t.Errorf("expected -150000 penalty, got %d", result.MethodDiversityPenalty)
+	}
+	// Confidence should be 0 (floored)
+	if result.Confidence > 0 {
+		// Confidence may be 0 after penalty, or some small value depending on aggregation
+		// The point is it shouldn't be a huge number from uint64 underflow
+		if result.Confidence > 1_000_000 {
+			t.Errorf("confidence underflowed: %d", result.Confidence)
+		}
+	}
+}
+
+// ---------- Equivocation Detection Tests ----------
+
+func TestCommitmentEquivocation_DifferentHash(t *testing.T) {
+	k, ctx, mockSK := setupKeeper(t)
+
+	// Create a round
+	claim := types.Claim{
+		Id:                "equivoc-claim-1",
+		ClaimText:         "Test claim for equivocation detection",
+		Domain:            "mathematics",
+		EpistemicCategory: "formal",
+		Submitter:         testSubmitterAddr,
+		StakeAmount:       "1000000",
+		Status:            "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round, err := k.CreateVerificationRound(ctx, claim)
+	if err != nil {
+		t.Fatalf("CreateVerificationRound failed: %v", err)
+	}
+
+	// First commitment succeeds
+	c1 := &types.VerificationCommitment{
+		Validator:      "lgmvaloper1abc",
+		CommitmentHash: "hash_AAAA",
+	}
+	err = k.StoreCommitmentInRound(ctx, round.Id, *c1)
+	if err != nil {
+		t.Fatalf("first commitment should succeed: %v", err)
+	}
+
+	// Second commitment from same validator with DIFFERENT hash → equivocation
+	c2 := &types.VerificationCommitment{
+		Validator:      "lgmvaloper1abc",
+		CommitmentHash: "hash_BBBB",
+	}
+	err = k.StoreCommitmentInRound(ctx, round.Id, *c2)
+	if err == nil {
+		t.Fatal("expected error for equivocating commitment")
+	}
+
+	// Verify it's an equivocation error (not just duplicate)
+	if !strings.Contains(err.Error(), "equivocation") {
+		t.Errorf("expected equivocation error, got: %v", err)
+	}
+
+	// Verify validator was slashed
+	if len(mockSK.slashes) != 1 {
+		t.Fatalf("expected 1 slash, got %d", len(mockSK.slashes))
+	}
+	if mockSK.slashes[0].Addr != "lgmvaloper1abc" {
+		t.Errorf("expected slash on lgmvaloper1abc, got %s", mockSK.slashes[0].Addr)
+	}
+	if mockSK.slashes[0].Amount != "5000000" { // full stake
+		t.Errorf("expected 100%% slash (5000000), got %s", mockSK.slashes[0].Amount)
+	}
+
+	// Verify equivocation evidence was stored
+	evidence, found := k.GetEquivocationEvidence(ctx, round.Id, "lgmvaloper1abc")
+	if !found {
+		t.Fatal("expected equivocation evidence to be stored")
+	}
+	if evidence.Type != "commitment" {
+		t.Errorf("expected type=commitment, got %s", evidence.Type)
+	}
+	if evidence.OriginalValue != "hash_AAAA" {
+		t.Errorf("expected original=hash_AAAA, got %s", evidence.OriginalValue)
+	}
+	if evidence.ConflictingValue != "hash_BBBB" {
+		t.Errorf("expected conflicting=hash_BBBB, got %s", evidence.ConflictingValue)
+	}
+}
+
+func TestCommitmentDuplicate_SameHash_NoEquivocation(t *testing.T) {
+	k, ctx, mockSK := setupKeeper(t)
+
+	claim := types.Claim{
+		Id:                "dup-claim-1",
+		ClaimText:         "Test claim for duplicate detection",
+		Domain:            "mathematics",
+		EpistemicCategory: "formal",
+		Submitter:         testSubmitterAddr,
+		StakeAmount:       "1000000",
+		Status:            "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	c := &types.VerificationCommitment{
+		Validator:      "lgmvaloper1abc",
+		CommitmentHash: "hash_SAME",
+	}
+	_ = k.StoreCommitmentInRound(ctx, round.Id, *c)
+
+	// Same hash again → duplicate, NOT equivocation
+	err := k.StoreCommitmentInRound(ctx, round.Id, *c)
+	if err == nil {
+		t.Fatal("expected error for duplicate commitment")
+	}
+	if strings.Contains(err.Error(), "equivocation") {
+		t.Errorf("same-hash duplicate should NOT be equivocation: %v", err)
+	}
+
+	// No slashing for same-hash duplicate
+	if len(mockSK.slashes) != 0 {
+		t.Errorf("expected 0 slashes for idempotent duplicate, got %d", len(mockSK.slashes))
+	}
+}
+
+func TestRevealEquivocation_DifferentVerdict(t *testing.T) {
+	k, ctx, mockSK := setupKeeper(t)
+
+	claim := types.Claim{
+		Id:                "reveal-equivoc-1",
+		ClaimText:         "Test claim for reveal equivocation",
+		Domain:            "mathematics",
+		EpistemicCategory: "formal",
+		Submitter:         testSubmitterAddr,
+		StakeAmount:       "1000000",
+		Status:            "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	// Add commitment first
+	c := &types.VerificationCommitment{
+		Validator:      "lgmvaloper1def",
+		CommitmentHash: "hash_commit",
+	}
+	_ = k.StoreCommitmentInRound(ctx, round.Id, *c)
+
+	// Advance to reveal phase
+	round, _ = k.GetVerificationRound(ctx, round.Id)
+	round.Phase = "reveal"
+	k.SetVerificationRound(ctx, round)
+
+	// First reveal
+	r1 := &types.VerificationReveal{
+		Validator:  "lgmvaloper1def",
+		Verdict:    "accept",
+		Confidence: 900000,
+	}
+	err := k.StoreRevealInRound(ctx, round.Id, *r1)
+	if err != nil {
+		t.Fatalf("first reveal should succeed: %v", err)
+	}
+
+	// Second reveal with different verdict → equivocation
+	r2 := &types.VerificationReveal{
+		Validator:  "lgmvaloper1def",
+		Verdict:    "reject",
+		Confidence: 200000,
+	}
+	err = k.StoreRevealInRound(ctx, round.Id, *r2)
+	if err == nil {
+		t.Fatal("expected error for equivocating reveal")
+	}
+	if !strings.Contains(err.Error(), "equivocation") {
+		t.Errorf("expected equivocation error, got: %v", err)
+	}
+
+	// Verify validator was slashed
+	if len(mockSK.slashes) != 1 {
+		t.Fatalf("expected 1 slash, got %d", len(mockSK.slashes))
+	}
+	if mockSK.slashes[0].Amount != "3000000" { // full stake for lgmvaloper1def
+		t.Errorf("expected 100%% slash (3000000), got %s", mockSK.slashes[0].Amount)
+	}
+
+	// Verify evidence
+	evidence, found := k.GetEquivocationEvidence(ctx, round.Id, "lgmvaloper1def")
+	if !found {
+		t.Fatal("expected equivocation evidence to be stored")
+	}
+	if evidence.Type != "reveal" {
+		t.Errorf("expected type=reveal, got %s", evidence.Type)
+	}
+}
+
+func TestRevealDuplicate_SameVerdict_NoEquivocation(t *testing.T) {
+	k, ctx, mockSK := setupKeeper(t)
+
+	claim := types.Claim{
+		Id:                "reveal-dup-1",
+		ClaimText:         "Test claim for reveal duplicate",
+		Domain:            "mathematics",
+		EpistemicCategory: "formal",
+		Submitter:         testSubmitterAddr,
+		StakeAmount:       "1000000",
+		Status:            "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	c := &types.VerificationCommitment{
+		Validator:      "lgmvaloper1ghi",
+		CommitmentHash: "hash_c",
+	}
+	_ = k.StoreCommitmentInRound(ctx, round.Id, *c)
+
+	round, _ = k.GetVerificationRound(ctx, round.Id)
+	round.Phase = "reveal"
+	k.SetVerificationRound(ctx, round)
+
+	r := &types.VerificationReveal{
+		Validator:  "lgmvaloper1ghi",
+		Verdict:    "accept",
+		Confidence: 800000,
+	}
+	_ = k.StoreRevealInRound(ctx, round.Id, *r)
+
+	// Same reveal again → duplicate, NOT equivocation
+	err := k.StoreRevealInRound(ctx, round.Id, *r)
+	if err == nil {
+		t.Fatal("expected error for duplicate reveal")
+	}
+	if strings.Contains(err.Error(), "equivocation") {
+		t.Errorf("same-verdict duplicate should NOT be equivocation: %v", err)
+	}
+	if len(mockSK.slashes) != 0 {
+		t.Errorf("expected 0 slashes for idempotent duplicate, got %d", len(mockSK.slashes))
+	}
+}
+
+// =====================================================================
+// Negative Knowledge Reward Economics Tests (PP Review Remediations)
+// =====================================================================
+
+func TestCounterFact_StakeAmount_Stored(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	cf := types.CounterFact{
+		Id:           "cfact-test",
+		TargetFactId: "f1",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1sub",
+		StakeAmount:  "5000000", // 5 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	got, found := k.GetCounterFact(ctx, "cfact-test")
+	if !found {
+		t.Fatal("counter-fact not found")
+	}
+	if got.StakeAmount != "5000000" {
+		t.Errorf("expected StakeAmount=5000000, got %s", got.StakeAmount)
+	}
+}
+
+func TestFact_OriginalStake_Stored(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	fact := types.Fact{
+		Id:            "f-test",
+		ClaimText:     "Test fact",
+		Domain:        "general",
+		Status:        types.FactStatusVerified,
+		Submitter:     "lgm1sub",
+		OriginalStake: "10000000", // 10 LGM
+	}
+	k.SetFact(ctx, fact)
+
+	got, found := k.GetFact(ctx, "f-test")
+	if !found {
+		t.Fatal("fact not found")
+	}
+	if got.OriginalStake != "10000000" {
+		t.Errorf("expected OriginalStake=10000000, got %s", got.OriginalStake)
+	}
+}
+
+func TestSubmitContradiction_MinStakeRatio_Enforced(t *testing.T) {
+	k, ctx, _, tbk, _ := setupKeeperWithTracking(t)
+
+	// Create target fact with 10 LGM original stake
+	k.SetFact(ctx, types.Fact{
+		Id: "f1", ClaimText: "Target fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "10000000", // 10 LGM
+	})
+
+	// Suppress unused variable
+	_ = tbk
+
+	msg := &types.MsgSubmitContradiction{
+		TargetFactId: "f1",
+		CounterClaim: "This fact is false",
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		Stake:        "1000000", // 1 LGM — less than 50% of 10 LGM
+		EvidenceIds:  []string{"ev1"},
+	}
+
+	srv := keeper.NewMsgServerImpl(k)
+	type contradictionSubmitter interface {
+		SubmitContradiction(context.Context, *types.MsgSubmitContradiction) (*types.MsgSubmitContradictionResponse, error)
+	}
+	cs := srv.(contradictionSubmitter)
+	_, err := cs.SubmitContradiction(sdk.WrapSDKContext(ctx), msg)
+	if err == nil {
+		t.Fatal("expected error for insufficient stake (below 50% ratio)")
+	}
+	if !strings.Contains(err.Error(), "stake") {
+		t.Errorf("error should mention stake, got: %v", err)
+	}
+}
+
+func TestSubmitContradiction_MinStakeRatio_Passes(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	// Create target fact with 10 LGM original stake
+	k.SetFact(ctx, types.Fact{
+		Id: "f1", ClaimText: "Target fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "10000000", // 10 LGM
+	})
+
+	msg := &types.MsgSubmitContradiction{
+		TargetFactId: "f1",
+		CounterClaim: "This fact is false",
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		Stake:        "5000000", // 5 LGM — exactly 50% of 10 LGM
+		EvidenceIds:  []string{"ev1"},
+	}
+
+	srv := keeper.NewMsgServerImpl(k)
+	type contradictionSubmitter interface {
+		SubmitContradiction(context.Context, *types.MsgSubmitContradiction) (*types.MsgSubmitContradictionResponse, error)
+	}
+	cs := srv.(contradictionSubmitter)
+	resp, err := cs.SubmitContradiction(sdk.WrapSDKContext(ctx), msg)
+	if err != nil {
+		t.Fatalf("expected success for exact 50%% ratio: %v", err)
+	}
+	if resp.CounterFactId == "" {
+		t.Error("expected non-empty counter-fact ID")
+	}
+
+	// Verify StakeAmount stored on counter-fact
+	cf, found := k.GetCounterFact(ctx, resp.CounterFactId)
+	if !found {
+		t.Fatal("counter-fact not stored")
+	}
+	if cf.StakeAmount != "5000000" {
+		t.Errorf("expected StakeAmount=5000000, got %s", cf.StakeAmount)
+	}
+}
+
+func TestContradictionRejected_StakeSlashedAndBurned(t *testing.T) {
+	k, ctx, _, tbk, _ := setupKeeperWithTracking(t)
+
+	// Set up counter-fact with stake
+	cf := types.CounterFact{
+		Id:           "cfact-1",
+		TargetFactId: "f1",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	// Set up round pointing to this counter-fact
+	round := types.VerificationRound{
+		Id:      "r1",
+		ClaimId: "cfact-1",
+		Type:    types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{
+			"val1": {Verdict: "rejected", Confidence: 200000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	// Complete the round with rejection
+	result := types.VerificationResult{
+		Verdict:          "rejected",
+		Confidence:       200000,
+		ParticipantCount: 1,
+	}
+
+	// Complete the contradiction round via public API
+	_ = k.CompleteRound(ctx, round, result)
+
+	// Check: counter-fact should be overturned
+	updatedCf, _ := k.GetCounterFact(ctx, "cfact-1")
+	if updatedCf.Status != types.CounterFactStatusOverturned {
+		t.Errorf("expected status=overturned, got %s", updatedCf.Status)
+	}
+
+	// Check: 33% burned (R-1: 10M * 330000/1M = 3,300,000 ulgm)
+	burnedAmount := tbk.burned.AmountOf("ulgm")
+	if !burnedAmount.Equal(sdkmath.NewInt(3300000)) {
+		t.Errorf("expected 3300000 ulgm burned (33%%), got %s", burnedAmount.String())
+	}
+
+	// Check: 67% returned to submitter (6,700,000 ulgm)
+	submitterReturned := tbk.sentToAccount["lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw"]
+	returnedAmount := submitterReturned.AmountOf("ulgm")
+	if !returnedAmount.Equal(sdkmath.NewInt(6700000)) {
+		t.Errorf("expected 6700000 ulgm returned (67%%), got %s", returnedAmount.String())
+	}
+}
+
+func TestContradictionAccepted_StakeReturnedAndRewarded(t *testing.T) {
+	k, ctx, _, tbk, mvk := setupKeeperWithTracking(t)
+
+	// Create target fact with 20 LGM original stake
+	k.SetFact(ctx, types.Fact{
+		Id: "f1", ClaimText: "Target fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "20000000", // 20 LGM
+		Confidence: 800000,
+	})
+
+	// Set up counter-fact with 10 LGM stake
+	cf := types.CounterFact{
+		Id:           "cfact-1",
+		TargetFactId: "f1",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	round := types.VerificationRound{
+		Id:      "r1",
+		ClaimId: "cfact-1",
+		Type:    types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{
+			"val1": {Verdict: "accepted", Confidence: 800000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	result := types.VerificationResult{
+		Verdict:          "accepted",
+		Confidence:       800000, // 80%
+		ParticipantCount: 1,
+	}
+
+	_ = k.CompleteRound(ctx, round, result)
+
+	// R-2: counter-fact enters provisional status first
+	updatedCf, _ := k.GetCounterFact(ctx, "cfact-1")
+	if updatedCf.Status != types.CounterFactStatusProvisional {
+		t.Errorf("expected status=provisional after round, got %s", updatedCf.Status)
+	}
+
+	// Simulate challenge window expiry to finalize
+	windowEnd := uint64(10) + types.CounterFactChallengeWindowBlocks + 1
+	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
+
+	// Now should be verified
+	finalCf, _ := k.GetCounterFact(ctx, "cfact-1")
+	if finalCf.Status != types.CounterFactStatusVerified {
+		t.Errorf("expected status=verified after window, got %s", finalCf.Status)
+	}
+
+	// Check: locked stake returned (10 LGM to submitter)
+	submitterCoins := tbk.sentToAccount["lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw"]
+	returnedAmount := submitterCoins.AmountOf("ulgm")
+	if !returnedAmount.Equal(sdkmath.NewInt(10000000)) {
+		t.Errorf("expected 10000000 ulgm stake returned, got %s", returnedAmount.String())
+	}
+
+	// Check: falsification reward routed through vesting
+	if len(mvk.created) == 0 {
+		t.Fatal("expected falsification reward via vesting")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	if lastVesting.category != "falsification" {
+		t.Errorf("expected vesting category=falsification, got %s", lastVesting.category)
+	}
+	// Reward = targetStake(20M) * confidence(800k) / 1M = 16M ulgm = 16 LGM
+	// Cap = cfStake(10M) * 3M / 1M = 30M (not binding)
+	if lastVesting.totalAmount != "16000000" {
+		t.Errorf("expected reward=16000000, got %s", lastVesting.totalAmount)
+	}
+}
+
+func TestFalsificationReward_CappedAt3x(t *testing.T) {
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+
+	// Target fact with huge original stake (1000 LGM)
+	k.SetFact(ctx, types.Fact{
+		Id: "f1", ClaimText: "High stake fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "1000000000", // 1000 LGM
+		Confidence: 900000,
+	})
+
+	// Counter-fact with small stake (5 LGM) → cap should be 15 LGM (3x)
+	cf := types.CounterFact{
+		Id:           "cfact-cap",
+		TargetFactId: "f1",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "5000000", // 5 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	round := types.VerificationRound{
+		Id:      "r-cap",
+		ClaimId: "cfact-cap",
+		Type:    types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{
+			"val1": {Verdict: "accepted", Confidence: 900000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	result := types.VerificationResult{
+		Verdict:    "accepted",
+		Confidence: 900000, // 90%
+	}
+
+	_ = k.CompleteRound(ctx, round, result)
+
+	// R-2: Counter-fact now provisional, finalize via window expiry
+	windowEnd := uint64(10) + types.CounterFactChallengeWindowBlocks + 1
+	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
+
+	// Without cap: reward = 1000M * 900k / 1M = 900M ulgm = 900 LGM
+	// With 3x cap: reward = 5M * 3M / 1M = 15M ulgm = 15 LGM
+	if len(mvk.created) == 0 {
+		t.Fatal("expected falsification reward")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	if lastVesting.totalAmount != "15000000" {
+		t.Errorf("expected capped reward=15000000, got %s", lastVesting.totalAmount)
+	}
+}
+
+func TestFalsificationReward_FallbackForPreMigrationFacts(t *testing.T) {
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+
+	// Pre-migration fact without OriginalStake
+	k.SetFact(ctx, types.Fact{
+		Id: "f-old", ClaimText: "Old fact", Domain: "general",
+		EpistemicCategory: "formal", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", // No OriginalStake
+		Confidence: 700000,
+	})
+
+	cf := types.CounterFact{
+		Id:           "cfact-old",
+		TargetFactId: "f-old",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	round := types.VerificationRound{
+		Id: "r-old", ClaimId: "cfact-old", Type: types.RoundTypeContradiction,
+		Phase: "reveal",
+		Reveals: map[string]*types.VerificationReveal{
+			"val1": {Verdict: "accepted", Confidence: 700000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	_ = k.CompleteRound(ctx, round, types.VerificationResult{
+		Verdict: "accepted", Confidence: 700000,
+	})
+
+	// R-2: Counter-fact is now provisional (not verified), reward is deferred.
+	// Simulate challenge window expiry to trigger FinalizeCounterFact and reward.
+	windowEnd := uint64(10) + types.CounterFactChallengeWindowBlocks + 1
+	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
+
+	// Fallback: reward = confidence ulgm = 700,000 ulgm = 0.7 LGM
+	// 3x cap = 30M, so cap doesn't bind
+	if len(mvk.created) == 0 {
+		t.Fatal("expected fallback reward")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	if lastVesting.totalAmount != "700000" {
+		t.Errorf("expected fallback reward=700000, got %s", lastVesting.totalAmount)
+	}
+}
+
+func TestFalsificationEpochPaid_Tracking(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Initially zero
+	paid := k.GetFalsificationEpochPaid(ctx, 0)
+	if paid != 0 {
+		t.Errorf("expected 0, got %d", paid)
+	}
+
+	// Set and get
+	k.SetFalsificationEpochPaid(ctx, 0, 5000000)
+	paid = k.GetFalsificationEpochPaid(ctx, 0)
+	if paid != 5000000 {
+		t.Errorf("expected 5000000, got %d", paid)
+	}
+
+	// Different epochs are independent
+	paid1 := k.GetFalsificationEpochPaid(ctx, 1)
+	if paid1 != 0 {
+		t.Errorf("expected 0 for epoch 1, got %d", paid1)
+	}
+}
+
+func TestFactCreation_CarriesOriginalStake(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	// Create claim with stake
+	claim := types.Claim{
+		Id:                "c-stake",
+		ClaimText:         "Staked claim",
+		Domain:            "physics",
+		EpistemicCategory: "empirical",
+		LogicZone:         "empirical",
+		Submitter:         "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:       "15000000", // 15 LGM
+		Status:            "pending_evaluation",
+	}
+	k.SetClaim(ctx, claim)
+
+	// Set up round
+	round := types.VerificationRound{
+		Id:      "r-stake",
+		ClaimId: "c-stake",
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{
+			"val1": {Verdict: "accepted", Confidence: 800000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	// Complete round → should create fact with OriginalStake
+	_ = k.CompleteRound(ctx, round, types.VerificationResult{
+		Verdict: "accepted", Confidence: 800000, ParticipantCount: 1,
+	})
+
+	// Find the fact created from this claim
+	// Facts are stored by generated ID, scan for our claim text
+	var factFound bool
+	k.IterateFacts(ctx, func(f types.Fact) bool {
+		if f.ClaimText == "Staked claim" {
+			if f.OriginalStake != "15000000" {
+				t.Errorf("expected OriginalStake=15000000, got %s", f.OriginalStake)
+			}
+			factFound = true
+			return true
+		}
+		return false
+	})
+	if !factFound {
+		t.Error("fact not created from accepted claim")
+	}
+}
+
+// ===== R-1 through R-5 Balance Remediation Tests =====
+
+// TestR1_ReducedContradictionSlash verifies FailedContradictionSlashBps is 33% (not 50%).
+func TestR1_ReducedContradictionSlash(t *testing.T) {
+	if types.FailedContradictionSlashBps != 330_000 {
+		t.Errorf("expected FailedContradictionSlashBps=330000 (33%%), got %d", types.FailedContradictionSlashBps)
+	}
+
+	// Functional test: rejected contradiction should slash 33%
+	k, ctx, _, tbk, _ := setupKeeperWithTracking(t)
+
+	fact := types.Fact{
+		Id: "r1-target-fact", ClaimText: "Target fact",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Confidence: 700000, Status: types.FactStatusVerified,
+		OriginalStake: "1000000",
+	}
+	k.SetFact(ctx, fact)
+
+	cf := types.CounterFact{
+		Id: "r1-cf", TargetFactId: "r1-target-fact",
+		NegationType: types.NegationTypeContradiction,
+		Submitter: testSubmitterAddr, StakeAmount: "600000",
+		Status: types.CounterFactStatusPending, Confidence: 0,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	claim := types.Claim{
+		Id: "r1-claim", ClaimText: "Contradiction claim",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "600000",
+		Status: "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round := types.VerificationRound{
+		Id: "r1-round", ClaimId: cf.Id, Phase: "aggregation",
+		Type: types.RoundTypeContradiction,
+		StartHeight: 10, CommitDeadlineHeight: 20, RevealDeadlineHeight: 30,
+		SelectedValidators: []string{"lgmvaloper1abc"},
+		Commitments: map[string]*types.VerificationCommitment{
+			"lgmvaloper1abc": {Validator: "lgmvaloper1abc"},
+		},
+		Reveals: map[string]*types.VerificationReveal{
+			"lgmvaloper1abc": {Validator: "lgmvaloper1abc", Verdict: "reject", Confidence: 200000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	_ = k.CompleteRound(ctx, round, types.VerificationResult{
+		Verdict: "rejected", Confidence: 200000, ParticipantCount: 1,
+	})
+
+	// 33% of 600000 = 198000 burned
+	expectedBurn := sdkmath.NewInt(198000)
+	if tbk.burned.AmountOf("ulgm").LT(expectedBurn) || tbk.burned.AmountOf("ulgm").GT(expectedBurn) {
+		t.Errorf("expected burn=%s, got=%s", expectedBurn.String(), tbk.burned.AmountOf("ulgm").String())
+	}
+
+	// 67% = 402000 returned
+	expectedReturn := sdkmath.NewInt(402000)
+	returned := tbk.sentToAccount[testSubmitterAddr].AmountOf("ulgm")
+	if !returned.Equal(expectedReturn) {
+		t.Errorf("expected return=%s, got=%s", expectedReturn.String(), returned.String())
+	}
+}
+
+// TestR2_CounterFactChallengeWindow verifies provisional→verified lifecycle.
+func TestR2_CounterFactChallengeWindow(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	fact := types.Fact{
+		Id: "r2-target", ClaimText: "Target",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Confidence: 600000, Status: types.FactStatusVerified,
+		OriginalStake: "1000000",
+	}
+	k.SetFact(ctx, fact)
+
+	cf := types.CounterFact{
+		Id: "r2-cf", TargetFactId: "r2-target",
+		NegationType: types.NegationTypeContradiction,
+		Submitter: testSubmitterAddr, StakeAmount: "500000",
+		Status: types.CounterFactStatusPending, Confidence: 0,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	claim := types.Claim{
+		Id: "r2-claim", ClaimText: "Contradiction",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "500000", Status: "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round := types.VerificationRound{
+		Id: "r2-round", ClaimId: cf.Id, Phase: "aggregation",
+		Type: types.RoundTypeContradiction,
+		StartHeight: 10, CommitDeadlineHeight: 20, RevealDeadlineHeight: 30,
+		SelectedValidators: []string{"lgmvaloper1abc"},
+		Commitments: map[string]*types.VerificationCommitment{
+			"lgmvaloper1abc": {Validator: "lgmvaloper1abc"},
+		},
+		Reveals: map[string]*types.VerificationReveal{
+			"lgmvaloper1abc": {Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 800000},
+		},
+	}
+	k.SetVerificationRound(ctx, round)
+
+	_ = k.CompleteRound(ctx, round, types.VerificationResult{
+		Verdict: "accepted", Confidence: 800000, ParticipantCount: 1,
+	})
+
+	// Counter-fact should be provisional (not verified) due to R-2 challenge window
+	updatedCf, found := k.GetCounterFact(ctx, "r2-cf")
+	if !found {
+		t.Fatal("counter-fact not found after round completion")
+	}
+	if updatedCf.Status != types.CounterFactStatusProvisional {
+		t.Errorf("expected status=provisional, got %s", updatedCf.Status)
+	}
+
+	// Challenge window should be set
+	windowEnd, hasWindow := k.GetCounterFactChallengeWindow(ctx, "r2-cf")
+	if !hasWindow {
+		t.Fatal("challenge window not set")
+	}
+	expectedEnd := uint64(10) + types.CounterFactChallengeWindowBlocks
+	if windowEnd != expectedEnd {
+		t.Errorf("expected window end=%d, got=%d", expectedEnd, windowEnd)
+	}
+
+	// Process expiry at a height beyond the window
+	expiryCtx := ctx.WithBlockHeight(int64(windowEnd + 1))
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd+1)
+
+	// Now should be finalized as verified
+	finalCf, _ := k.GetCounterFact(ctx, "r2-cf")
+	if finalCf.Status != types.CounterFactStatusVerified {
+		t.Errorf("expected status=verified after window expiry, got %s", finalCf.Status)
+	}
+}
+
+// TestR2_CounterFactChallengeOpened verifies challenges can be opened against provisional counter-facts.
+func TestR2_CounterFactChallengeOpened(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	// Set up a provisional counter-fact with a challenge window
+	cf := types.CounterFact{
+		Id: "r2c-cf", TargetFactId: "some-fact",
+		NegationType: types.NegationTypeContradiction,
+		Submitter: testSubmitterAddr, StakeAmount: "500000",
+		Status: types.CounterFactStatusProvisional, Confidence: 700000,
+	}
+	k.SetCounterFact(ctx, cf)
+	k.SetCounterFactChallengeWindow(ctx, "r2c-cf", 50000)
+
+	// Generate a different challenger address
+	challengerAddr := sdk.AccAddress([]byte("test_challenger_addr")).String()
+
+	challenge, err := k.OpenCounterFactChallenge(
+		ctx, challengerAddr, "r2c-cf", "100000", "counter-fact is wrong", []string{"ev1"},
+	)
+	if err != nil {
+		t.Fatalf("OpenCounterFactChallenge failed: %v", err)
+	}
+	if challenge.Status != types.CounterFactChallengeStatusOpen {
+		t.Errorf("expected open challenge, got %s", challenge.Status)
+	}
+	if challenge.CounterFactId != "r2c-cf" {
+		t.Errorf("expected counter_fact_id=r2c-cf, got %s", challenge.CounterFactId)
+	}
+}
+
+// TestR2_CounterFactChallengeResolution verifies upheld and reverted outcomes.
+func TestR2_CounterFactChallengeResolution(t *testing.T) {
+	k, ctx, _, tbk, _ := setupKeeperWithTracking(t)
+
+	challengerAddr := sdk.AccAddress([]byte("test_challenger_addr")).String()
+
+	// Upheld case: counter-fact survives, challenger slashed
+	cf := types.CounterFact{
+		Id: "r2r-cf", TargetFactId: "r2r-fact",
+		NegationType: types.NegationTypeContradiction,
+		Submitter: testSubmitterAddr, StakeAmount: "500000",
+		Status: types.CounterFactStatusProvisional, Confidence: 700000,
+	}
+	k.SetCounterFact(ctx, cf)
+
+	challenge := types.CounterFactChallenge{
+		Id: "r2r-challenge", CounterFactId: "r2r-cf",
+		Challenger: challengerAddr, Stake: "100000",
+		Status: types.CounterFactChallengeStatusOpen, CreatedAtHeight: 10,
+	}
+	k.SetCounterFactChallenge(ctx, challenge)
+
+	err := k.ResolveCounterFactChallenge(ctx, "r2r-challenge", types.CounterFactChallengeStatusUpheld)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+
+	// Counter-fact confidence should be boosted by 11%
+	updatedCf, _ := k.GetCounterFact(ctx, "r2r-cf")
+	if updatedCf.Confidence != 810000 { // 700000 + 110000
+		t.Errorf("expected boosted confidence=810000, got %d", updatedCf.Confidence)
+	}
+
+	// Challenger should be slashed 22% of 100000 = 22000 burned
+	expectedBurn := sdkmath.NewInt(22000)
+	burned := tbk.burned.AmountOf("ulgm")
+	if !burned.Equal(expectedBurn) {
+		t.Errorf("expected burn=%s, got=%s", expectedBurn.String(), burned.String())
+	}
+}
+
+// TestR3_CarryForwardReward verifies carry-forward when epoch cap is reached.
+func TestR3_CarryForwardReward(t *testing.T) {
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+	_ = mvk // vesting keeper provides epoch pool
+
+	// Set epoch 0 as nearly exhausted
+	epoch := uint64(0)
+	epochCap := k.GetFalsificationEpochPaid(ctx, epoch)
+	_ = epochCap
+
+	// The epoch pool is 100B ulgm, cap = 15% = 15B ulgm
+	// Set paid to cap - 1000 (almost full)
+	k.SetFalsificationEpochPaid(ctx, epoch, 14_999_999_000)
+
+	// Set up a counter-fact that earns more than remaining cap
+	fact := types.Fact{
+		Id: "r3-fact", ClaimText: "Target",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Confidence: 600000, Status: types.FactStatusVerified,
+		OriginalStake: "10000000000", // 10k LGM
+	}
+	k.SetFact(ctx, fact)
+
+	cf := types.CounterFact{
+		Id: "r3-cf", TargetFactId: "r3-fact",
+		NegationType: types.NegationTypeContradiction,
+		Submitter: testSubmitterAddr, StakeAmount: "5000000000",
+		Status: types.CounterFactStatusVerified, Confidence: 800000,
+	}
+
+	// Call FinalizeCounterFact (simulates window expiry) which calls distributeFalsificationReward
+	k.SetCounterFact(ctx, cf)
+	k.FinalizeCounterFact(ctx, cf, 100)
+
+	// Check that carry-forward was set for next epoch
+	carryForward := k.GetFalsificationCarryForward(ctx, epoch+1)
+	if carryForward == 0 {
+		t.Error("expected non-zero carry-forward to next epoch")
+	}
+}
+
+// TestR3_CarryForwardAccumulates verifies carry-forward rolls into epoch cap.
+func TestR3_CarryForwardAccumulates(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	// Set carry-forward for epoch 1
+	k.SetFalsificationCarryForward(ctx, 1, 5000)
+	k.AddFalsificationCarryForward(ctx, 1, 3000)
+
+	result := k.GetFalsificationCarryForward(ctx, 1)
+	if result != 8000 {
+		t.Errorf("expected carry-forward=8000, got %d", result)
+	}
+}
+
+// TestR4_SystemCounterFactHasStake verifies Path A counter-facts get nominal stake.
+func TestR4_SystemCounterFactHasStake(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	claim := types.Claim{
+		Id: "r4-claim", ClaimText: "Will be rejected",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "1000000", // 1 LGM
+		Status: "pending",
+	}
+	k.SetClaim(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "reject", Confidence: 100000}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	_ = k.CompleteRound(ctx, round, types.VerificationResult{
+		Verdict: "rejected", Confidence: 100000, ParticipantCount: 2,
+	})
+
+	// Find the auto-generated counter-fact
+	var cfFound bool
+	k.IterateCounterFacts(ctx, func(cf types.CounterFact) bool {
+		if cf.TargetClaimId == "r4-claim" && cf.Submitter == "system" {
+			// Stake should be 10% of 22% of 1000000 = 10% of 220000 = 22000
+			if cf.StakeAmount != "22000" {
+				t.Errorf("expected system counter-fact stake=22000, got %s", cf.StakeAmount)
+			}
+			cfFound = true
+			return true
+		}
+		return false
+	})
+	if !cfFound {
+		t.Error("system-generated counter-fact not found")
+	}
+}
+
+// TestR5_StaleContestedDecay verifies contested facts decay after inactivity.
+func TestR5_StaleContestedDecay(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	// Create a contested fact with old LastConfidenceUpdate
+	staleHeight := uint64(100)
+	fact := types.Fact{
+		Id: "r5-fact", ClaimText: "Contested and stale",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Confidence: 500000, Status: types.FactStatusContested,
+		CreatedAtHeight: staleHeight, LastConfidenceUpdate: staleHeight,
+		LastVerifiedHeight: staleHeight,
+	}
+	k.SetFact(ctx, fact)
+
+	// Advance to well past the stale threshold (10 epochs × 1111 blocks = 11,110 blocks)
+	futureHeight := staleHeight + types.StaleContestedDecayEpochs*uint64(types.ConfidenceGrowthEpoch) + 100
+	futureCtx := ctx.WithBlockHeight(int64(futureHeight))
+
+	k.DecayStaleContestedFacts(futureCtx, futureHeight)
+
+	updatedFact, found := k.GetFact(futureCtx, "r5-fact")
+	if !found {
+		t.Fatal("fact not found after decay")
+	}
+	// 5% of 500000 = 25000 decay
+	expectedConf := uint64(500000 - 25000)
+	if updatedFact.Confidence != expectedConf {
+		t.Errorf("expected confidence=%d after stale decay, got %d", expectedConf, updatedFact.Confidence)
+	}
+	if updatedFact.Status != types.FactStatusContested {
+		t.Errorf("expected status still contested, got %s", updatedFact.Status)
+	}
+}
+
+// TestR5_StaleContestedRevocation_BelowThreshold verifies revocation.
+func TestR5_StaleContestedRevocation_BelowThreshold(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	staleHeight := uint64(100)
+	fact := types.Fact{
+		Id: "r5-low-fact", ClaimText: "Very low contested",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Confidence: 105000, Status: types.FactStatusContested, // 10.5% — decay of 5% = 5250, result 99750 < 100000
+		CreatedAtHeight: staleHeight, LastConfidenceUpdate: staleHeight,
+		LastVerifiedHeight: staleHeight,
+	}
+	k.SetFact(ctx, fact)
+
+	futureHeight := staleHeight + types.StaleContestedDecayEpochs*uint64(types.ConfidenceGrowthEpoch) + 100
+	futureCtx := ctx.WithBlockHeight(int64(futureHeight))
+
+	k.DecayStaleContestedFacts(futureCtx, futureHeight)
+
+	updatedFact, _ := k.GetFact(futureCtx, "r5-low-fact")
+	if updatedFact.Status != types.FactStatusRevoked {
+		t.Errorf("expected status=revoked, got %s (confidence=%d)", updatedFact.Status, updatedFact.Confidence)
+	}
+	if updatedFact.Confidence != 0 {
+		t.Errorf("expected confidence=0 on revocation, got %d", updatedFact.Confidence)
+	}
+}
+
+// TestR5_NonStaleContestedNotDecayed verifies recent contested facts don't decay.
+func TestR5_NonStaleContestedNotDecayed(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeperWithTracking(t)
+
+	fact := types.Fact{
+		Id: "r5-fresh-fact", ClaimText: "Recently contested",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Confidence: 400000, Status: types.FactStatusContested,
+		CreatedAtHeight: 10, LastConfidenceUpdate: 10,
+		LastVerifiedHeight: 10,
+	}
+	k.SetFact(ctx, fact)
+
+	// Only advance a small amount (well within stale threshold)
+	k.DecayStaleContestedFacts(ctx, 100)
+
+	updatedFact, _ := k.GetFact(ctx, "r5-fresh-fact")
+	if updatedFact.Confidence != 400000 {
+		t.Errorf("expected no decay (confidence=400000), got %d", updatedFact.Confidence)
+	}
+}
+

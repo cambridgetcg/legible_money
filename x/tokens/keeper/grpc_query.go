@@ -29,7 +29,13 @@ func (k queryServer) Account(goCtx context.Context, req *types.QueryAccountReque
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrAccountNotFound, req.Address)
 	}
-	return &types.QueryAccountResponse{Account: acct}, nil
+	// Recompute ExpiresAt from current params (stored values become stale
+	// if PeriodsUntilExpiry or PeriodBlocks change via governance).
+	params := k.GetParams(ctx)
+	k.refreshExpiresAt(&acct, params)
+	// Compute active balance (excludes expired-but-unswept periods).
+	activeBalance := k.GetBalance(ctx, req.Address)
+	return &types.QueryAccountResponse{Account: acct, ActiveBalance: activeBalance}, nil
 }
 
 func (k queryServer) Balance(goCtx context.Context, req *types.QueryBalanceRequest) (*types.QueryBalanceResponse, error) {
@@ -38,9 +44,16 @@ func (k queryServer) Balance(goCtx context.Context, req *types.QueryBalanceReque
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	activeBalance := k.GetBalance(ctx, req.Address)
-	periodBalances := k.GetPeriodBalances(ctx, req.Address)
-	if periodBalances == nil {
-		periodBalances = []types.PeriodBalance{}
+	periodBalancePtrs := k.GetPeriodBalances(ctx, req.Address)
+	if periodBalancePtrs == nil {
+		periodBalancePtrs = []*types.PeriodBalance{}
+	}
+	// Recompute ExpiresAt from current params so clients see accurate values.
+	params := k.GetParams(ctx)
+	periodBalances := make([]types.PeriodBalance, len(periodBalancePtrs))
+	for i, pb := range periodBalancePtrs {
+		pb.ExpiresAt = k.PeriodToExpirationBlock(pb.Period, params)
+		periodBalances[i] = *pb
 	}
 	return &types.QueryBalanceResponse{
 		ActiveBalance:  activeBalance,

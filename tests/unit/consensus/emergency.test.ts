@@ -41,7 +41,7 @@ import { bytesToHex } from "../../../core/crypto/keys.js";
 
 function createGuardianValidator(
   publicKey: string,
-  stake: bigint = 25000n * 10n ** 18n,
+  stake: bigint = 25000n * 10n ** 15n,
   isActive: boolean = true,
 ): Validator {
   return {
@@ -62,7 +62,7 @@ function createGuardianValidator(
 
 function createTier2Validator(
   publicKey: string,
-  stake: bigint = 5000n * 10n ** 18n,
+  stake: bigint = 5000n * 10n ** 15n,
 ): Validator {
   return {
     publicKey,
@@ -228,7 +228,7 @@ describe("Emergency Kill Switch", () => {
   describe("Guardian helpers", () => {
     it("should compute total guardian stake", () => {
       const stake = getGuardianStake(validatorSet);
-      expect(stake).toBe(125000n * 10n ** 18n); // 5 guardians × 25000
+      expect(stake).toBe(125000n * 10n ** 15n); // 5 guardians × 25000
     });
 
     it("should identify guardians", () => {
@@ -251,7 +251,7 @@ describe("Emergency Kill Switch", () => {
         false,
       );
       const vs = createValidatorSet([...guardians, inactiveGuardian]);
-      expect(getGuardianStake(vs)).toBe(125000n * 10n ** 18n); // inactive excluded
+      expect(getGuardianStake(vs)).toBe(125000n * 10n ** 15n); // inactive excluded
     });
   });
 

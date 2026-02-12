@@ -18,7 +18,7 @@ type QueryVestingScheduleRequest struct {
 }
 
 type QueryVestingScheduleResponse struct {
-	Schedule VestingSchedule `json:"schedule"`
+	Schedule *VestingSchedule `json:"schedule"`
 }
 
 type QueryVestingSchedulesByRecipientRequest struct {
@@ -26,7 +26,7 @@ type QueryVestingSchedulesByRecipientRequest struct {
 }
 
 type QueryVestingSchedulesByRecipientResponse struct {
-	Schedules []VestingSchedule `json:"schedules"`
+	Schedules []*VestingSchedule `json:"schedules"`
 }
 
 type QueryActiveVestingSchedulesRequest struct {
@@ -35,8 +35,8 @@ type QueryActiveVestingSchedulesRequest struct {
 }
 
 type QueryActiveVestingSchedulesResponse struct {
-	Schedules []VestingSchedule `json:"schedules"`
-	Total     uint32            `json:"total"`
+	Schedules []*VestingSchedule `json:"schedules"`
+	Total     uint32             `json:"total"`
 }
 
 type QueryBlockRewardDistributionRequest struct {
@@ -44,13 +44,13 @@ type QueryBlockRewardDistributionRequest struct {
 }
 
 type QueryBlockRewardDistributionResponse struct {
-	Distribution BlockRewardDistribution `json:"distribution"`
-	Found        bool                    `json:"found"`
+	Distribution *BlockRewardDistribution `json:"distribution"`
+	Found        bool                     `json:"found"`
 }
 
 type QueryParamsRequest struct{}
 
 type QueryParamsResponse struct {
-	Params          Params           `json:"params"`
-	CategoryConfigs []CategoryConfig `json:"category_configs"`
+	Params          *Params            `json:"params"`
+	CategoryConfigs []*CategoryConfig  `json:"category_configs"`
 }

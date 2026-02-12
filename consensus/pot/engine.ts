@@ -965,7 +965,7 @@ export class ProofOfTruthEngine extends EventEmitter {
       {
         validator: commitment.validator,
         commitment: commitment.commitment,
-        submittedAt: Date.now(),
+        submittedAtHeight: Date.now(),
         signature: commitment.signature,
         vrfOutput: commitment.vrfOutput,
         vrfProof: commitment.vrfProof,
@@ -1053,7 +1053,7 @@ export class ProofOfTruthEngine extends EventEmitter {
     newCommitments.set(commitment.validator, {
       validator: commitment.validator,
       commitment: commitment.commitment,
-      submittedAt: Date.now(),
+      submittedAtHeight: Date.now(),
       signature: commitment.signature,
     });
 
@@ -1072,7 +1072,7 @@ export class ProofOfTruthEngine extends EventEmitter {
       validator: PublicKey;
       verdict: "confirmed" | "rejected" | "uncertain";
       confidence: number;
-      nonce: string;
+      salt: string;
       referencesChecked: string[];
       signature: string;
     },
@@ -1091,9 +1091,9 @@ export class ProofOfTruthEngine extends EventEmitter {
         validator: reveal.validator,
         verdict: reveal.verdict,
         confidence: reveal.confidence,
-        nonce: reveal.nonce,
+        salt: reveal.salt,
         referencesChecked: reveal.referencesChecked,
-        submittedAt: Date.now(),
+        submittedAtHeight: Date.now(),
         signature: reveal.signature,
       },
       Number(this.state.currentBlock),
@@ -1191,22 +1191,34 @@ export class ProofOfTruthEngine extends EventEmitter {
 
     // Fallback: update local validator set only (for tests)
     // VULN-010 FIX: Use slashValidatorByAmount to avoid float precision loss
+    // R2/R4: Pass anti-grief options for per-epoch cap and slash floor
     for (const [validatorKey, slashAmount] of result.slashes) {
       const validator = this.state.validatorSet.validators.get(validatorKey);
       if (validator) {
-        const { validator: slashed, slashedAmount } = slashValidatorByAmount(
+        const {
+          validator: slashed,
+          slashedAmount,
+          capped,
+        } = slashValidatorByAmount(
           validator,
           slashAmount, // Use bigint directly - no float conversion
           "verification_failure",
+          {
+            maxSlashesPerEpoch: this.config.params.maxSlashesPerEpoch ?? 2,
+            maxSlashCount: this.config.params.maxSlashCountForDeactivation ?? 3,
+            currentBlock: Number(this.state.currentBlock),
+          },
         );
         this.state.validatorSet.validators.set(validatorKey, slashed);
 
-        this.emitEvent({
-          type: "validator_slashed",
-          validator: validatorKey as PublicKey,
-          amount: slashedAmount,
-          reason: "verification_failure",
-        });
+        if (!capped) {
+          this.emitEvent({
+            type: "validator_slashed",
+            validator: validatorKey as PublicKey,
+            amount: slashedAmount,
+            reason: "verification_failure",
+          });
+        }
       }
     }
   }

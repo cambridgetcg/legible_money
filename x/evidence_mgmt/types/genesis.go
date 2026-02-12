@@ -1,20 +1,12 @@
 package types
 
-// GenesisState represents the evidence_mgmt module genesis state.
-type GenesisState struct {
-	Params     Params     `json:"params"`
-	Evidences  []Evidence `json:"evidences"`
-	Oracles    []Oracle   `json:"oracles"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return "GenesisState" }
-func (gs *GenesisState) ProtoMessage()  {}
+import "fmt"
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params: DefaultParams(),
+		Params: &p,
 	}
 }
 
@@ -35,5 +27,8 @@ func DefaultParams() Params {
 
 // Validate performs basic genesis state validation.
 func (gs GenesisState) Validate() error {
+	if gs.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return gs.Params.Validate()
 }

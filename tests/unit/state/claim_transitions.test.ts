@@ -36,13 +36,13 @@ const TEST_CONSENSUS_PARAMS: ConsensusParams = {
   acceptanceThreshold: 0.77,
   rejectionThreshold: 0.77,
   contestedThreshold: 0.55,
-  minValidatorStake: 1111n * ONE_LGM,
+  minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
   minClaimStake: 11n * ONE_LGM,
   blockReward: 11n * ONE_LGM,
   verificationReward: 1n * ONE_LGM,
   citationRewardPerFact: 1n * ONE_LGM,
-  wrongVerificationSlash: 0.11,
-  missedVerificationSlash: 0.05,
+  wrongVerificationSlash: 0.06,
+  missedVerificationSlash: 0.0001,
   invalidClaimSlash: 0.22,
   researchShareRate: 0.22,
   maxTransactionsPerBlock: 111,
@@ -124,7 +124,7 @@ describe.sequential("Claim Submission Workflow", () => {
     // Create a verified fact for reference testing
     state.addFact({
       id: "fact:reference-001",
-      claim: "Referenced fact for testing",
+      claimText: "Referenced fact for testing",
       domain: "test.domain",
       confidence: 0.9,
       verifiedAt: 50n,
@@ -427,7 +427,7 @@ describe.sequential("Claim Submission Workflow", () => {
       expect(result.success).toBe(true);
 
       const claim = state.getClaim(claimId);
-      expect(claim?.status).toBe("verifying");
+      expect(claim?.status).toBe("in_verification");
       expect(claim?.verificationRoundId).toBe("round-001");
     });
 
@@ -552,7 +552,7 @@ describe.sequential("Claim Submission Workflow", () => {
 
         const fact = state.getFact(claim!.resultFactId!);
         expect(fact).not.toBeNull();
-        expect(fact?.claim).toBe("Test claim for completion");
+        expect(fact?.claimText).toBe("Test claim for completion");
         expect(fact?.confidence).toBe(0.85);
         expect(fact?.domain).toBe("test.completion");
         expect(fact?.status).toBe("active");
@@ -694,7 +694,7 @@ describe.sequential("Claim Submission Workflow", () => {
         expect(fact).not.toBeNull();
         expect(fact?.confidence).toBe(0.5);
         expect(fact?.status).toBe("contested");
-        expect(fact?.claim).toBe("Test claim for completion");
+        expect(fact?.claimText).toBe("Test claim for completion");
         expect(fact?.domain).toBe("test.completion");
       });
 
@@ -1156,7 +1156,7 @@ describe.sequential("Claim Submission Workflow", () => {
       );
 
       const pendingClaims = state.getClaimsByStatus("pending");
-      const verifyingClaims = state.getClaimsByStatus("verifying");
+      const verifyingClaims = state.getClaimsByStatus("in_verification");
 
       expect(pendingClaims.length).toBe(0);
       expect(verifyingClaims.length).toBe(1);
@@ -1225,7 +1225,7 @@ describe.sequential("Claim Submission Workflow", () => {
 
       const fact = state.getFact(claim!.resultFactId!);
       expect(fact).not.toBeNull();
-      expect(fact?.claim).toBe(claimText);
+      expect(fact?.claimText).toBe(claimText);
       expect(fact?.confidence).toBe(0.95);
       expect(fact?.domain).toBe("physics.relativity");
 
@@ -1474,7 +1474,7 @@ describe.sequential("Claim Submission Workflow", () => {
       // Create a peano-zone fact first
       state.addFact({
         id: "fact:peano-parent",
-        claim: "Multiplication is commutative",
+        claimText: "Multiplication is commutative",
         domain: "math.arithmetic",
         confidence: 0.9,
         verifiedAt: 50n,
@@ -1521,7 +1521,7 @@ describe.sequential("Claim Submission Workflow", () => {
       // Create a propositional-zone fact
       state.addFact({
         id: "fact:prop-parent",
-        claim: "If P then Q",
+        claimText: "If P then Q",
         domain: "logic",
         confidence: 0.95,
         verifiedAt: 50n,
@@ -1899,7 +1899,7 @@ describe.sequential("Claim Submission Workflow", () => {
       // Create an active fact directly
       state.addFact({
         id: "fact:active-001",
-        claim: "An active fact",
+        claimText: "An active fact",
         domain: "test.undecidable",
         confidence: 0.9,
         verifiedAt: 50n,

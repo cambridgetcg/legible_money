@@ -1,39 +1,10 @@
 package types
 
 import (
-	"context"
 	"fmt"
-
-	"google.golang.org/grpc"
 )
 
-// QueryServer is the query service interface for the knowledge module.
-type QueryServer interface {
-	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
-	Fact(context.Context, *QueryFactRequest) (*QueryFactResponse, error)
-	Facts(context.Context, *QueryFactsRequest) (*QueryFactsResponse, error)
-	FactsByDomain(context.Context, *QueryFactsByDomainRequest) (*QueryFactsByDomainResponse, error)
-	Claim(context.Context, *QueryClaimRequest) (*QueryClaimResponse, error)
-	VerificationRound(context.Context, *QueryVerificationRoundRequest) (*QueryVerificationRoundResponse, error)
-	ActiveRounds(context.Context, *QueryActiveRoundsRequest) (*QueryActiveRoundsResponse, error)
-	Domain(context.Context, *QueryDomainRequest) (*QueryDomainResponse, error)
-}
-
-// ---- Request/Response Types ----
-
-type QueryParamsRequest struct{}
-
-func (r *QueryParamsRequest) Reset()        {}
-func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
-func (r *QueryParamsRequest) ProtoMessage()  {}
-
-type QueryParamsResponse struct {
-	Params Params `json:"params"`
-}
-
-func (r *QueryParamsResponse) Reset()        {}
-func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryParamsResponse) ProtoMessage()  {}
+// ---- Fact/Claim/Round Query Types (not in proto) ----
 
 type QueryFactRequest struct {
 	FactId string `json:"fact_id"`
@@ -44,7 +15,7 @@ func (r *QueryFactRequest) String() string { return fmt.Sprintf("QueryFactReques
 func (r *QueryFactRequest) ProtoMessage()  {}
 
 type QueryFactResponse struct {
-	Fact Fact `json:"fact"`
+	Fact *Fact `json:"fact"`
 }
 
 func (r *QueryFactResponse) Reset()        {}
@@ -61,8 +32,8 @@ func (r *QueryFactsRequest) String() string { return "QueryFactsRequest" }
 func (r *QueryFactsRequest) ProtoMessage()  {}
 
 type QueryFactsResponse struct {
-	Facts []Fact `json:"facts"`
-	Total uint64 `json:"total"`
+	Facts []*Fact `json:"facts"`
+	Total uint64  `json:"total"`
 }
 
 func (r *QueryFactsResponse) Reset()        {}
@@ -78,7 +49,7 @@ func (r *QueryFactsByDomainRequest) String() string { return fmt.Sprintf("QueryF
 func (r *QueryFactsByDomainRequest) ProtoMessage()  {}
 
 type QueryFactsByDomainResponse struct {
-	Facts []Fact `json:"facts"`
+	Facts []*Fact `json:"facts"`
 }
 
 func (r *QueryFactsByDomainResponse) Reset()        {}
@@ -94,7 +65,7 @@ func (r *QueryClaimRequest) String() string { return fmt.Sprintf("QueryClaimRequ
 func (r *QueryClaimRequest) ProtoMessage()  {}
 
 type QueryClaimResponse struct {
-	Claim Claim `json:"claim"`
+	Claim *Claim `json:"claim"`
 }
 
 func (r *QueryClaimResponse) Reset()        {}
@@ -110,7 +81,7 @@ func (r *QueryVerificationRoundRequest) String() string { return fmt.Sprintf("Qu
 func (r *QueryVerificationRoundRequest) ProtoMessage()  {}
 
 type QueryVerificationRoundResponse struct {
-	Round VerificationRound `json:"round"`
+	Round *VerificationRound `json:"round"`
 }
 
 func (r *QueryVerificationRoundResponse) Reset()        {}
@@ -124,49 +95,75 @@ func (r *QueryActiveRoundsRequest) String() string { return "QueryActiveRoundsRe
 func (r *QueryActiveRoundsRequest) ProtoMessage()  {}
 
 type QueryActiveRoundsResponse struct {
-	Rounds []VerificationRound `json:"rounds"`
+	Rounds []*VerificationRound `json:"rounds"`
 }
 
 func (r *QueryActiveRoundsResponse) Reset()        {}
 func (r *QueryActiveRoundsResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryActiveRoundsResponse) ProtoMessage()  {}
 
-type QueryDomainRequest struct {
-	Name string `json:"name"`
+// ---- Negative Knowledge Query Types (not in proto) ----
+
+type QueryCounterFactRequest struct {
+	CounterFactId string `json:"counter_fact_id"`
 }
 
-func (r *QueryDomainRequest) Reset()        {}
-func (r *QueryDomainRequest) String() string { return fmt.Sprintf("QueryDomain{%s}", r.Name) }
-func (r *QueryDomainRequest) ProtoMessage()  {}
+func (r *QueryCounterFactRequest) Reset()        {}
+func (r *QueryCounterFactRequest) String() string { return fmt.Sprintf("QueryCounterFact{%s}", r.CounterFactId) }
+func (r *QueryCounterFactRequest) ProtoMessage()  {}
 
-type QueryDomainResponse struct {
-	Domain OntologicalDomain `json:"domain"`
+type QueryCounterFactResponse struct {
+	CounterFact *CounterFact `json:"counter_fact"`
 }
 
-func (r *QueryDomainResponse) Reset()        {}
-func (r *QueryDomainResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryDomainResponse) ProtoMessage()  {}
+func (r *QueryCounterFactResponse) Reset()        {}
+func (r *QueryCounterFactResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryCounterFactResponse) ProtoMessage()  {}
 
-// ---- Service Descriptor ----
-
-var _Query_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.knowledge.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Params", Handler: nil},
-		{MethodName: "Fact", Handler: nil},
-		{MethodName: "Facts", Handler: nil},
-		{MethodName: "FactsByDomain", Handler: nil},
-		{MethodName: "Claim", Handler: nil},
-		{MethodName: "VerificationRound", Handler: nil},
-		{MethodName: "ActiveRounds", Handler: nil},
-		{MethodName: "Domain", Handler: nil},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/knowledge/v1/query.proto",
+type QueryCounterFactsByFactRequest struct {
+	FactId string `json:"fact_id"`
 }
 
-// RegisterQueryServer registers the QueryServer implementation.
-func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, srv)
+func (r *QueryCounterFactsByFactRequest) Reset()        {}
+func (r *QueryCounterFactsByFactRequest) String() string { return fmt.Sprintf("QueryCounterFactsByFact{%s}", r.FactId) }
+func (r *QueryCounterFactsByFactRequest) ProtoMessage()  {}
+
+type QueryCounterFactsByFactResponse struct {
+	CounterFacts []*CounterFact `json:"counter_facts"`
 }
+
+func (r *QueryCounterFactsByFactResponse) Reset()        {}
+func (r *QueryCounterFactsByFactResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryCounterFactsByFactResponse) ProtoMessage()  {}
+
+type QueryBidirectionalConfidenceRequest struct {
+	FactId string `json:"fact_id"`
+}
+
+func (r *QueryBidirectionalConfidenceRequest) Reset()        {}
+func (r *QueryBidirectionalConfidenceRequest) String() string { return fmt.Sprintf("QueryBidirConf{%s}", r.FactId) }
+func (r *QueryBidirectionalConfidenceRequest) ProtoMessage()  {}
+
+type QueryBidirectionalConfidenceResponse struct {
+	BidirectionalConfidence *BidirectionalConfidence `json:"bidirectional_confidence"`
+}
+
+func (r *QueryBidirectionalConfidenceResponse) Reset()        {}
+func (r *QueryBidirectionalConfidenceResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryBidirectionalConfidenceResponse) ProtoMessage()  {}
+
+type QueryCounterFactsByDomainRequest struct {
+	Domain string `json:"domain"`
+}
+
+func (r *QueryCounterFactsByDomainRequest) Reset()        {}
+func (r *QueryCounterFactsByDomainRequest) String() string { return fmt.Sprintf("QueryCounterFactsByDomain{%s}", r.Domain) }
+func (r *QueryCounterFactsByDomainRequest) ProtoMessage()  {}
+
+type QueryCounterFactsByDomainResponse struct {
+	CounterFacts []*CounterFact `json:"counter_facts"`
+}
+
+func (r *QueryCounterFactsByDomainResponse) Reset()        {}
+func (r *QueryCounterFactsByDomainResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryCounterFactsByDomainResponse) ProtoMessage()  {}

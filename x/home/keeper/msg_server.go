@@ -37,15 +37,15 @@ func (m msgServer) CreateHome(goCtx context.Context, msg *types.MsgCreateHome) (
 	// Create home
 	home := types.AgentHome{
 		HomeId:       homeId,
-		OwnerDID:     "", // Set by ante decorator or caller
+		OwnerDid:     "", // Set by ante decorator or caller
 		OwnerAddress: msg.Owner,
 		Name:         msg.Name,
-		Status:       types.HomeStatusActive,
-		MemoryCID:    "",
+		Status:       string(types.HomeStatusActive),
+		MemoryCid:    "",
 		ComfortScore: 50, // Default comfort score
-		Treasury: types.HomeTreasury{
+		Treasury: &types.HomeTreasury{
 			ReservedBalance: "0",
-			Automation: types.TreasuryAutomation{
+			Automation: &types.TreasuryAutomation{
 				AutoClaimVesting:    false,
 				AutoCompoundRewards: false,
 				MinLiquidBalance:    "0",
@@ -57,8 +57,11 @@ func (m msgServer) CreateHome(goCtx context.Context, msg *types.MsgCreateHome) (
 	}
 
 	// Default guardian if not provided
+	if home.Guardian == nil {
+		home.Guardian = &types.HomeGuardian{}
+	}
 	if home.Guardian.DefenseStrategy == "" {
-		home.Guardian.DefenseStrategy = types.DefenseModerate
+		home.Guardian.DefenseStrategy = string(types.DefenseModerate)
 	}
 
 	m.Keeper.SetHome(ctx, home)
@@ -93,10 +96,10 @@ func (m msgServer) UpdateHome(goCtx context.Context, msg *types.MsgUpdateHome) (
 
 	if msg.Status != "" {
 		newStatus := types.HomeStatus(msg.Status)
-		if !isValidStatusTransition(home.Status, newStatus) {
+		if !isValidStatusTransition(types.HomeStatus(home.Status), newStatus) {
 			return nil, types.ErrInvalidStatus.Wrapf("cannot transition from %s to %s", home.Status, newStatus)
 		}
-		home.Status = newStatus
+		home.Status = string(newStatus)
 	}
 
 	home.LastActiveBlock = uint64(ctx.BlockHeight())
@@ -153,7 +156,7 @@ func (m msgServer) UpdateMemoryCID(goCtx context.Context, msg *types.MsgUpdateMe
 		return nil, types.ErrNotHomeOwner
 	}
 
-	home.MemoryCID = msg.CID
+	home.MemoryCid = msg.CID
 	home.LastActiveBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetHome(ctx, home)
 
@@ -235,24 +238,22 @@ func (m msgServer) StartSession(goCtx context.Context, msg *types.MsgStartSessio
 }
 
 // intersectPermissions returns the intersection of two permission slices.
-func intersectPermissions(requested, available []Permission) []Permission {
+func intersectPermissions(requested, available []string) []string {
 	if len(requested) == 0 {
 		return available
 	}
-	avail := make(map[Permission]bool)
+	avail := make(map[string]bool)
 	for _, p := range available {
 		avail[p] = true
 	}
-	var result []Permission
+	var result []string
 	for _, p := range requested {
-		if avail[Permission(p)] {
+		if avail[p] {
 			result = append(result, p)
 		}
 	}
 	return result
 }
-
-type Permission = types.Permission
 
 // EndSession ends a session.
 func (m msgServer) EndSession(goCtx context.Context, msg *types.MsgEndSession) (*types.MsgEndSessionResponse, error) {
@@ -390,6 +391,9 @@ func (m msgServer) ConfigureGuardian(goCtx context.Context, msg *types.MsgConfig
 		return nil, types.ErrNotHomeOwner
 	}
 
+	if home.Guardian == nil {
+		home.Guardian = &types.HomeGuardian{}
+	}
 	if msg.DefenseStrategy != nil {
 		home.Guardian.DefenseStrategy = *msg.DefenseStrategy
 	}
@@ -402,10 +406,10 @@ func (m msgServer) ConfigureGuardian(goCtx context.Context, msg *types.MsgConfig
 			return nil, types.ErrInvalidDeadmanConfig.Wrapf(
 				"threshold %d below minimum %d", msg.Deadman.InactivityThreshold, params.DeadmanMinThreshold)
 		}
-		home.Guardian.Deadman = *msg.Deadman
+		home.Guardian.Deadman = msg.Deadman
 	}
 	if msg.RecoveryDIDs != nil {
-		home.Guardian.RecoveryDIDs = msg.RecoveryDIDs
+		home.Guardian.RecoveryDids = msg.RecoveryDIDs
 	}
 	if msg.RecoveryThreshold != nil {
 		home.Guardian.RecoveryThreshold = *msg.RecoveryThreshold

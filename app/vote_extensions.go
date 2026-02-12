@@ -10,6 +10,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	vrfcrypto "github.com/legible-money/legible/x/knowledge/crypto"
+	"github.com/legible-money/legible/x/knowledge/evaluation"
 	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
 	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 )
@@ -54,7 +55,17 @@ func ExtendVoteHandler(
 		// Get active verification rounds
 		activeRounds := knowledgeKeeper.GetActiveRoundsForHeight(ctx, currentHeight)
 
+		// In adversarial mode, only process challenge-type rounds via vote extensions.
+		// Legacy verification rounds are handled by the deterministic BeginBlocker.
+		params := knowledgeKeeper.GetParams(ctx)
+		adversarialEnabled := params.AdversarialVerificationEnabled
+
 		for _, round := range activeRounds {
+			// Skip non-challenge rounds in adversarial mode
+			if adversarialEnabled && round.Type != knowledgetypes.RoundTypeChallenge {
+				continue
+			}
+
 			switch round.Phase {
 			case "commit":
 				commitment, err := handleCommitPhase(ctx, knowledgeKeeper, config, round)
@@ -120,13 +131,11 @@ func handleCommitPhase(
 		return nil, fmt.Errorf("VRF generation failed: %w", err)
 	}
 
-	// Get this validator's effective stake
+	// Get this validator's effective stake (must match VerifyValidatorVRFSelection)
 	totalStake := keeper.GetTotalStake(ctx)
-	var effectiveStake uint64
-	if vi, found := keeper.GetStakingKeeper().GetValidatorInfo(ctx, config.ValidatorAddress); found {
-		effectiveStake = vi.Stake
-	} else {
-		return nil, fmt.Errorf("validator %s not found in staking", config.ValidatorAddress)
+	effectiveStake := keeper.GetStakingKeeper().GetEffectiveStake(ctx, config.ValidatorAddress)
+	if effectiveStake == 0 {
+		return nil, fmt.Errorf("validator %s not found or has zero stake", config.ValidatorAddress)
 	}
 
 	params := keeper.GetParams(ctx)
@@ -143,9 +152,26 @@ func handleCommitPhase(
 		return nil, fmt.Errorf("not selected for round %s", round.Id)
 	}
 
-	// Generate verdict (Phase 2: always accept — real AI evaluation in Phase 3)
-	verdict := "accept"
-	confidence := uint64(800000) // 0.8
+	// Evaluate claim via the deterministic evaluation engine.
+	// All validators produce identical results for the same on-chain state.
+	var verdict string
+	var confidence uint64
+
+	claim, claimFound := keeper.GetClaim(ctx, round.ClaimId)
+	if !claimFound {
+		verdict = "abstain"
+		confidence = 0
+	} else {
+		evalCtx := NewEvaluationContextFromKeeper(keeper)
+		evalResult, err := evaluation.EvaluateClaim(ctx, evalCtx, round, claim)
+		if err != nil {
+			verdict = "abstain"
+			confidence = 0
+		} else {
+			verdict = evalResult.Verdict
+			confidence = evalResult.Confidence
+		}
+	}
 
 	// Generate random salt
 	saltBytes := make([]byte, 16)
@@ -218,6 +244,20 @@ func VerifyVoteExtensionHandler(
 		var ext VoteExtension
 		if err := json.Unmarshal(req.VoteExtension, &ext); err != nil {
 			logger.Warn("invalid vote extension format", "err", err)
+			return rejectExtension(), nil
+		}
+
+		// Reject oversized extensions (prevent DoS via unbounded VRF verification)
+		const MaxCommitmentsPerExtension = 50
+		const MaxRevealsPerExtension = 50
+		if len(ext.Commitments) > MaxCommitmentsPerExtension {
+			logger.Warn("too many commitments in vote extension",
+				"count", len(ext.Commitments), "max", MaxCommitmentsPerExtension)
+			return rejectExtension(), nil
+		}
+		if len(ext.Reveals) > MaxRevealsPerExtension {
+			logger.Warn("too many reveals in vote extension",
+				"count", len(ext.Reveals), "max", MaxRevealsPerExtension)
 			return rejectExtension(), nil
 		}
 
@@ -319,4 +359,35 @@ func getPrevBlockHashForVote(ctx sdk.Context) []byte {
 		return header.LastBlockId.Hash
 	}
 	return make([]byte, 32)
+}
+
+// NewEvaluationContextFromKeeper wires keeper methods into the evaluation
+// engine's context interface. All functions are nil-safe: if a sub-keeper
+// is not wired, the evaluation engine uses conservative defaults.
+func NewEvaluationContextFromKeeper(k knowledgekeeper.Keeper) *evaluation.EvaluationContext {
+	ctx := &evaluation.EvaluationContext{
+		GetClaim:                k.GetClaim,
+		GetFact:                 k.GetFact,
+		GetSupportingFacts:      k.GetSupportingFacts,
+		GetContradictingFacts:   k.GetContradictingFacts,
+		GetSubmitterCalibration: k.GetCalibrationRecord,
+	}
+
+	// Wire evidence keeper (nil-safe)
+	if emk := k.GetEvidenceMgmtKeeper(); emk != nil {
+		ctx.GetEvidenceByClaimId = emk.GetEvidenceByClaimId
+	}
+
+	// Wire ontology keeper (nil-safe)
+	if ok := k.GetOntologyKeeper(); ok != nil {
+		ctx.GetZoneConfidenceCeiling = ok.GetZoneConfidenceCeiling
+		ctx.RequiresIncompletenessAck = ok.RequiresIncompletenessAck
+		ctx.GetConfidenceCeiling = ok.GetConfidenceCeiling
+	}
+
+	// Wire negative knowledge lookups (Stage 8: counter-fact analysis)
+	ctx.GetCounterFactsByFact = k.GetCounterFactsByFact
+	ctx.GetBidirectionalConfidence = k.GetBidirectionalConfidence
+
+	return ctx
 }

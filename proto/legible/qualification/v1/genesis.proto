@@ -1,0 +1,34 @@
+syntax = "proto3";
+package legible.qualification.v1;
+
+option go_package = "github.com/legible-money/legible/x/qualification/types";
+
+import "legible/qualification/v1/state.proto";
+
+// GenesisState defines the qualification module's genesis state.
+message GenesisState {
+  Params params                                    = 1;
+  repeated DomainQualification qualifications      = 2;
+  repeated QualificationEndorsement endorsements   = 3;
+}
+
+// Params defines the qualification module parameters.
+message Params {
+  string stake_leaf                = 1;  // bigint as string (ulgm)
+  string stake_mid                 = 2;  // bigint as string (ulgm)
+  string stake_top                 = 3;  // bigint as string (ulgm)
+  uint64 stake_lock_period         = 4;  // blocks
+  uint32 min_verifications         = 5;
+  uint32 min_accuracy_bps          = 6;  // 7700 = 77%
+  uint32 min_endorsers             = 7;
+  string endorser_stake            = 8;  // bigint as string (ulgm)
+  uint64 endorsement_decay_blocks  = 9;
+  uint32 stratum_discount_bps      = 10; // 7000 = 70%
+  uint64 inactivity_expiration     = 11; // blocks
+  uint64 probationary_period       = 12; // blocks
+  uint32 probationary_weight_bps   = 13; // 5000 = 50%
+  uint32 suspension_accuracy_bps   = 14; // 5000 = 50%
+  uint32 suspension_consecutive    = 15;
+  uint32 revocation_challenges     = 16;
+  uint32 max_qualification_depth   = 17;
+}

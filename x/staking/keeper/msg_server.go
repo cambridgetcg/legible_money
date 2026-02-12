@@ -13,72 +13,77 @@ import (
 // RegisterValidator handles the registration of a new validator
 func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidator) (*types.MsgRegisterValidatorResponse, error) {
 	// Validate sender
-	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	senderAddr, err := sdk.AccAddressFromBech32(msg.ValidatorAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if validator already exists
-	if _, found := k.GetValidator(ctx, msg.Sender); found {
+	if _, found := k.GetValidator(ctx, msg.ValidatorAddress); found {
 		return nil, types.ErrValidatorAlreadyExists
 	}
 
-	// Check if DID already registered
-	if _, found := k.GetValidatorByDID(ctx, msg.Did); found {
-		return nil, types.ErrDuplicateDID
+	// Extract DID from description identity field
+	did := ""
+	if msg.Description != nil {
+		did = msg.Description.GetIdentity()
+	}
+
+	// Check if DID already registered (only if DID is provided)
+	if did != "" {
+		if _, found := k.GetValidatorByDID(ctx, did); found {
+			return nil, types.ErrDuplicateDID
+		}
 	}
 
 	// Parse initial stake
 	initialStake := new(big.Int)
-	if msg.InitialStake != "" && msg.InitialStake != "0" {
-		if _, ok := initialStake.SetString(msg.InitialStake, 10); !ok {
-			return nil, fmt.Errorf("invalid initial stake: %s", msg.InitialStake)
+	if msg.SelfDelegation != "" && msg.SelfDelegation != "0" {
+		if _, ok := initialStake.SetString(msg.SelfDelegation, 10); !ok {
+			return nil, fmt.Errorf("invalid initial stake: %s", msg.SelfDelegation)
 		}
 	} else {
 		initialStake.SetInt64(0)
 	}
 
-	// Determine initial tier based on stake
-	initialTier := k.ComputeValidatorTier(ctx, initialStake.String(), 0, 0, 0)
-
-	// Check apprentice cap if tier 0
-	if initialTier == types.TierApprentice {
-		params := k.GetParams(ctx)
-		apprenticeCount := k.CountApprenticeValidators(ctx)
-		if apprenticeCount >= params.MaxApprenticeValidators {
-			return nil, types.ErrMaxApprenticesReached
-		}
+	// Enforce minimum registration deposit (Sybil defense — uses MinSelfDelegation)
+	params := k.GetParams(ctx)
+	minDeposit := new(big.Int)
+	minDepositStr := params.GetMinSelfDelegation()
+	minDeposit.SetString(minDepositStr, 10)
+	if initialStake.Cmp(minDeposit) < 0 {
+		return nil, types.ErrInsufficientRegistrationDeposit
 	}
 
-	// Check max validators
-	params := k.GetParams(ctx)
-	totalValidators := uint32(0)
-	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
-		totalValidators++
-		return false
-	})
-	if totalValidators >= params.MaxValidators {
-		return nil, types.ErrMaxValidatorsReached
+	// Determine initial tier based on stake
+	initialTier := k.ComputeValidatorTierSimple(ctx, initialStake.String(), 0, 0, 0)
+
+	// Check block producer cap: MaxValidators applies only to tier 2+ (bonded/guardian)
+	if initialTier >= types.TierBonded {
+		blockProducerCount := k.CountBlockProducers(ctx)
+		if blockProducerCount >= params.MaxValidators {
+			return nil, types.ErrMaxBlockProducersReached
+		}
 	}
 
 	// Create validator
 	validator := types.LegibleValidator{
-		OperatorAddress:       msg.Sender,
-		Did:                   msg.Did,
-		ConsensusPubkey:       msg.ConsensusPubkey,
-		Stake:                 initialStake.String(),
-		DelegatedStake:        "0",
-		TotalStake:            initialStake.String(),
-		Commission:            msg.Commission,
-		Tier:                  initialTier,
-		IsActive:              true,
-		ActiveSinceHeight:     uint64(ctx.BlockHeight()),
-		LastProposedHeight:    0,
-		BlocksProposed:        0,
+		OperatorAddress:        msg.ValidatorAddress,
+		Did:                    did,
+		ConsensusPubkey:        string(msg.PubKey),
+		Stake:                  initialStake.String(),
+		DelegatedStake:         "0",
+		TotalStake:             initialStake.String(),
+		Commission:             uint64(msg.CommissionRate),
+		Tier:                   types.ValidatorTierString(initialTier),
+		IsActive:               true,
+		ActiveSinceHeight:      uint64(ctx.BlockHeight()),
+		LastProposedHeight:     0,
+		BlocksProposed:         0,
 		VerificationsCompleted: 0,
-		VerificationsCorrect:  0,
-		SlashCount:            0,
-		Reputation:            500000, // 0.5 default
+		VerificationsCorrect:   0,
+		SlashCount:             0,
+		Reputation:             500000, // 0.5 default
 	}
 
 	// Transfer initial stake if non-zero
@@ -90,16 +95,16 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 
 		// Debit from period overlay (FIFO from oldest periods)
 		if k.tokensKeeper != nil {
-			if err := k.tokensKeeper.DebitBalance(ctx, msg.Sender, initialStake.String()); err != nil {
+			if err := k.tokensKeeper.DebitBalance(ctx, msg.ValidatorAddress, initialStake.String()); err != nil {
 				k.Logger(ctx).Error("failed to debit period balance for initial stake",
-					"validator", msg.Sender, "error", err)
+					"validator", msg.ValidatorAddress, "error", err)
 			}
 		}
 
 		// Create self-delegation
 		delegation := types.Delegation{
-			DelegatorAddress:  msg.Sender,
-			ValidatorAddress:  msg.Sender,
+			DelegatorAddress:  msg.ValidatorAddress,
+			ValidatorAddress:  msg.ValidatorAddress,
 			Amount:            initialStake.String(),
 			DelegatedAtHeight: uint64(ctx.BlockHeight()),
 		}
@@ -116,16 +121,15 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"validator_registered",
-			sdk.NewAttribute("validator", msg.Sender),
-			sdk.NewAttribute("did", msg.Did),
-			sdk.NewAttribute("tier", initialTier.String()),
+			sdk.NewAttribute("validator", msg.ValidatorAddress),
+			sdk.NewAttribute("did", did),
+			sdk.NewAttribute("tier", types.ValidatorTierString(initialTier)),
 			sdk.NewAttribute("stake", initialStake.String()),
 		),
 	)
 
 	return &types.MsgRegisterValidatorResponse{
-		ValidatorAddress: msg.Sender,
-		InitialTier:      initialTier,
+		InitialTier: initialTier,
 	}, nil
 }
 
@@ -198,12 +202,12 @@ func (k Keeper) Delegate(ctx sdk.Context, msg *types.MsgDelegate) (*types.MsgDel
 	// Check for tier transition
 	if newTier, changed := k.CheckTierTransition(ctx, validator); changed {
 		oldTier := validator.Tier
-		validator.Tier = newTier
+		validator.Tier = types.ValidatorTierString(newTier)
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent("validator_tier_changed",
 				sdk.NewAttribute("validator", msg.Validator),
-				sdk.NewAttribute("old_tier", oldTier.String()),
-				sdk.NewAttribute("new_tier", newTier.String()),
+				sdk.NewAttribute("old_tier", oldTier),
+				sdk.NewAttribute("new_tier", types.ValidatorTierString(newTier)),
 			),
 		)
 	}
@@ -266,7 +270,8 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 	// Create unbonding entry
 	params := k.GetParams(ctx)
 	currentHeight := uint64(ctx.BlockHeight())
-	unbondingId := fmt.Sprintf("%s_%s_%d", msg.Delegator, msg.Validator, currentHeight)
+	seq := k.NextUnbondingSeq(ctx)
+	unbondingId := fmt.Sprintf("%s_%s_%d_%d", msg.Delegator, msg.Validator, currentHeight, seq)
 
 	var originPeriod uint64
 	if k.tokensKeeper != nil {
@@ -304,12 +309,12 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 	// Check for tier transition
 	if newTier, changed := k.CheckTierTransition(ctx, validator); changed {
 		oldTier := validator.Tier
-		validator.Tier = newTier
+		validator.Tier = types.ValidatorTierString(newTier)
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent("validator_tier_changed",
 				sdk.NewAttribute("validator", msg.Validator),
-				sdk.NewAttribute("old_tier", oldTier.String()),
-				sdk.NewAttribute("new_tier", newTier.String()),
+				sdk.NewAttribute("old_tier", oldTier),
+				sdk.NewAttribute("new_tier", types.ValidatorTierString(newTier)),
 			),
 		)
 	}
@@ -413,7 +418,7 @@ func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.Ms
 	srcValidator.TotalStake = new(big.Int).Add(srcStakeInt, srcDelegatedInt).String()
 
 	if newTier, changed := k.CheckTierTransition(ctx, srcValidator); changed {
-		srcValidator.Tier = newTier
+		srcValidator.Tier = types.ValidatorTierString(newTier)
 	}
 	if err := k.SetValidator(ctx, srcValidator); err != nil {
 		return nil, err
@@ -429,7 +434,7 @@ func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.Ms
 	dstValidator.TotalStake = new(big.Int).Add(dstStakeInt, dstDelegatedInt).String()
 
 	if newTier, changed := k.CheckTierTransition(ctx, dstValidator); changed {
-		dstValidator.Tier = newTier
+		dstValidator.Tier = types.ValidatorTierString(newTier)
 	}
 	if err := k.SetValidator(ctx, dstValidator); err != nil {
 		return nil, err
@@ -520,7 +525,8 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 
 		// Create unbonding entry with period preservation
 		params := k.GetParams(ctx)
-		unbondingId := fmt.Sprintf("%s_%d", msg.Validator, ctx.BlockHeight())
+		seq := k.NextUnbondingSeq(ctx)
+		unbondingId := fmt.Sprintf("%s_%d_%d", msg.Validator, ctx.BlockHeight(), seq)
 
 		var originPeriod uint64
 		if k.tokensKeeper != nil {
@@ -567,14 +573,14 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 	newTier, changed := k.CheckTierTransition(ctx, validator)
 	if changed {
 		oldTier := validator.Tier
-		validator.Tier = newTier
+		validator.Tier = types.ValidatorTierString(newTier)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
 				"validator_tier_changed",
 				sdk.NewAttribute("validator", msg.Validator),
-				sdk.NewAttribute("old_tier", oldTier.String()),
-				sdk.NewAttribute("new_tier", newTier.String()),
+				sdk.NewAttribute("old_tier", oldTier),
+				sdk.NewAttribute("new_tier", types.ValidatorTierString(newTier)),
 			),
 		)
 	}
@@ -600,6 +606,6 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 
 	return &types.MsgUpdateValidatorStakeResponse{
 		NewStake: newStake.String(),
-		NewTier:  validator.Tier,
+		NewTier:  types.ValidatorTierFromString(validator.Tier),
 	}, nil
 }

@@ -45,7 +45,7 @@ func (q queryServer) Validators(goCtx context.Context, req *types.QueryValidator
 		if req.ActiveOnly && !v.IsActive {
 			return false
 		}
-		if req.Tier >= 0 && types.ValidatorTier(req.Tier) != v.Tier {
+		if req.Tier >= 0 && types.ValidatorTierString(types.ValidatorTier(req.Tier)) != v.Tier {
 			return false
 		}
 		all = append(all, v)

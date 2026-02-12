@@ -9,17 +9,18 @@ import (
 )
 
 func RegisterCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&MsgClaimVestedRewards{}, "vesting_rewards/ClaimVestedRewards", nil)
-	cdc.RegisterConcrete(&MsgFalsifyClaim{}, "vesting_rewards/FalsifyClaim", nil)
 	cdc.RegisterConcrete(&MsgCreateVesting{}, "vesting_rewards/CreateVesting", nil)
+	cdc.RegisterConcrete(&MsgClaimVesting{}, "vesting_rewards/ClaimVesting", nil)
+	cdc.RegisterConcrete(&MsgFalsifyVesting{}, "vesting_rewards/FalsifyVesting", nil)
 	cdc.RegisterConcrete(&MsgPauseVesting{}, "vesting_rewards/PauseVesting", nil)
 	cdc.RegisterConcrete(&MsgResumeVesting{}, "vesting_rewards/ResumeVesting", nil)
 	cdc.RegisterConcrete(&MsgAccelerateVesting{}, "vesting_rewards/AccelerateVesting", nil)
 	cdc.RegisterConcrete(&MsgCompleteVesting{}, "vesting_rewards/CompleteVesting", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "vesting_rewards/UpdateParams", nil)
 }
 
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	// Proto-generated types are registered via proto codegen.
 }
 
 var (
@@ -27,130 +28,9 @@ var (
 	ModuleCdc = codec.NewProtoCodec(cdctypes.NewInterfaceRegistry())
 )
 
-// RegisterMsgServer registers the MsgServer implementation with the gRPC server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
-
 // RegisterQueryServer registers the QueryServer implementation with the gRPC server.
 func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
-}
-
-// --- Msg gRPC Service Descriptor ---
-
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.vesting_rewards.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "ClaimVestedRewards", Handler: _Msg_ClaimVestedRewards_Handler},
-		{MethodName: "FalsifyClaim", Handler: _Msg_FalsifyClaim_Handler},
-		{MethodName: "CreateVesting", Handler: _Msg_CreateVesting_Handler},
-		{MethodName: "PauseVesting", Handler: _Msg_PauseVesting_Handler},
-		{MethodName: "ResumeVesting", Handler: _Msg_ResumeVesting_Handler},
-		{MethodName: "AccelerateVesting", Handler: _Msg_AccelerateVesting_Handler},
-		{MethodName: "CompleteVesting", Handler: _Msg_CompleteVesting_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/vesting_rewards/v1/tx.proto",
-}
-
-func _Msg_ClaimVestedRewards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgClaimVestedRewards)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ClaimVestedRewards(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/ClaimVestedRewards"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ClaimVestedRewards(ctx, req.(*MsgClaimVestedRewards))
-	})
-}
-
-func _Msg_FalsifyClaim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgFalsifyClaim)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).FalsifyClaim(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/FalsifyClaim"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).FalsifyClaim(ctx, req.(*MsgFalsifyClaim))
-	})
-}
-
-func _Msg_CreateVesting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgCreateVesting)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).CreateVesting(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/CreateVesting"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).CreateVesting(ctx, req.(*MsgCreateVesting))
-	})
-}
-
-func _Msg_PauseVesting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgPauseVesting)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).PauseVesting(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/PauseVesting"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).PauseVesting(ctx, req.(*MsgPauseVesting))
-	})
-}
-
-func _Msg_ResumeVesting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgResumeVesting)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ResumeVesting(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/ResumeVesting"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ResumeVesting(ctx, req.(*MsgResumeVesting))
-	})
-}
-
-func _Msg_AccelerateVesting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgAccelerateVesting)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).AccelerateVesting(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/AccelerateVesting"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).AccelerateVesting(ctx, req.(*MsgAccelerateVesting))
-	})
-}
-
-func _Msg_CompleteVesting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgCompleteVesting)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).CompleteVesting(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.vesting_rewards.v1.Msg/CompleteVesting"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).CompleteVesting(ctx, req.(*MsgCompleteVesting))
-	})
 }
 
 // --- Query gRPC Service Descriptor ---

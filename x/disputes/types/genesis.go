@@ -1,21 +1,12 @@
 package types
 
-// GenesisState represents the disputes module genesis state.
-type GenesisState struct {
-	Params    Params           `json:"params"`
-	Disputes  []Dispute        `json:"disputes"`
-	Evidence  []DisputeEvidence `json:"evidence"`
-	Votes     []DisputeVote    `json:"votes"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return "GenesisState{}" }
-func (gs *GenesisState) ProtoMessage()  {}
+import "fmt"
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params: DefaultParams(),
+		Params: &p,
 	}
 }
 
@@ -23,10 +14,10 @@ func DefaultGenesis() *GenesisState {
 // Tier 1: 3 arbiters, 111 LGM bond, 1-day evidence, 2-day voting
 // Tier 2: 7 arbiters, 555 LGM bond, 2-day evidence, 4-day voting
 // Tier 3: 15 arbiters, 1111 LGM bond, 3-day evidence, 7-day voting
-func DefaultTierConfigs() []TierConfig {
-	return []TierConfig{
+func DefaultTierConfigs() []*TierConfig {
+	return []*TierConfig{
 		{
-			Tier:              TierBasic,
+			Tier:              uint32(TierBasic),
 			ArbiterCount:      3,
 			MinBond:           "111000000",  // 111 LGM in ulgm
 			EvidencePeriod:    34272,         // ~1 day (BLOCKS_PER_DAY)
@@ -35,7 +26,7 @@ func DefaultTierConfigs() []TierConfig {
 			MajorityThreshold: 770000,        // 77%
 		},
 		{
-			Tier:              TierEscalated,
+			Tier:              uint32(TierEscalated),
 			ArbiterCount:      7,
 			MinBond:           "555000000",  // 555 LGM in ulgm
 			EvidencePeriod:    68544,         // ~2 days
@@ -44,7 +35,7 @@ func DefaultTierConfigs() []TierConfig {
 			MajorityThreshold: 770000,        // 77%
 		},
 		{
-			Tier:              TierFinal,
+			Tier:              uint32(TierFinal),
 			ArbiterCount:      15,
 			MinBond:           "1111000000", // 1111 LGM in ulgm
 			EvidencePeriod:    102816,        // ~3 days
@@ -69,5 +60,8 @@ func DefaultParams() Params {
 
 // Validate performs basic genesis state validation.
 func (gs GenesisState) Validate() error {
+	if gs.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return gs.Params.Validate()
 }

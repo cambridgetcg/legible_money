@@ -302,7 +302,7 @@ describe.sequential("Tier 2: Economics Checkpoints", () => {
     const state = network.getState();
     const accounts = network.getAccounts();
     const staker = accounts[0];
-    const stakeAmount = 10_000n * 10n ** 18n;
+    const stakeAmount = 10_000n * 10n ** 15n;
 
     const tx: Transaction = {
       type: "stake",

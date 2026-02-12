@@ -1,0 +1,30 @@
+syntax = "proto3";
+package legible.vesting_rewards.v1;
+
+option go_package = "github.com/legible-money/legible/x/vesting_rewards/types";
+
+import "legible/vesting_rewards/v1/state.proto";
+
+// GenesisState defines the vesting_rewards module's genesis state.
+message GenesisState {
+  Params                       params            = 1;
+  repeated CategoryConfig      category_configs   = 2;
+  repeated VestingSchedule     vesting_schedules  = 3;
+}
+
+// Params defines the vesting_rewards module parameters.
+message Params {
+  uint64 research_share_bps              = 1; // basis points (2200 = 22%)
+  string research_treasury_address       = 2; // bech32 address for research fund
+  string block_reward_amount             = 3; // base block reward in ulgm (bigint as string)
+  uint64 empty_block_reward_rate         = 4; // basis points of reward for empty blocks (0 = none)
+  uint32 min_validators_for_full_reward  = 5; // target validator count for full block reward
+  bool   vesting_enabled                 = 6; // whether truth-linked vesting is active
+  uint64 released_clawback_rate          = 7; // basis points of released clawed back on falsification
+  string initial_fund_balance            = 8; // ulgm total fund at genesis (bigint as string, "0" = legacy mint mode)
+  uint64 blocks_per_epoch                = 9; // blocks per decay epoch (default 240000)
+  uint64 decay_factor_bps               = 10; // per-epoch decay in basis points (900000 = 0.9 on 1,000,000 scale)
+  string floor_reward                   = 11; // minimum reward per block in ulgm (bigint as string)
+  uint64 fund_health_threshold_bps      = 12; // fund health taper threshold in bps (100000 = 10% on 1,000,000 scale)
+  uint64 api_suppression_exponent       = 13; // API suppression power (deferred, stored for future use)
+}

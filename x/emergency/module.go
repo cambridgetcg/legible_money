@@ -145,7 +145,7 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 	} else {
 		// Re-read ceremony to check if it failed
 		ceremony, found = am.keeper.GetCeremony(ctx, ceremony.Id)
-		if found && ceremony.Phase == types.PhaseFailed {
+		if found && ceremony.Phase == string(types.PhaseFailed) {
 			am.keeper.HandleCeremonyFailure(ctx, ceremony.Id)
 		}
 	}

@@ -1,0 +1,58 @@
+syntax = "proto3";
+package legible.gov.v1;
+
+option go_package = "github.com/legible-money/legible/x/gov/types";
+
+// LIP represents a Legible Improvement Proposal.
+message LIP {
+  string id               = 1;
+  string title            = 2;
+  string abstract         = 3;
+  string category         = 4;  // "consensus", "economics", "interface", "process"
+  string proposer         = 5;  // bech32 address
+  string stage            = 6;  // "draft", "review", "last_call", "voting", "accepted", "rejected", "withdrawn"
+  string staked_amount    = 7;  // bigint as string (ulgm)
+  string stake_holder     = 8;  // bech32 address
+  uint64 created_at_block = 9;
+  uint64 updated_at_block = 10;
+  uint64 voting_ends_at   = 11;
+  string support_weight   = 12; // bigint as string
+  string oppose_weight    = 13; // bigint as string
+  string abstain_weight   = 14; // bigint as string
+  uint32 unique_voters    = 15;
+  bool   quorum_met       = 16;
+}
+
+// QuadraticVote records a voter's quadratic vote on a proposal.
+message QuadraticVote {
+  string vote_id          = 1;
+  string voter            = 2;  // bech32 address
+  string proposal_id      = 3;
+  string direction        = 4;  // "support", "oppose", "abstain"
+  uint32 votes            = 5;
+  string cost             = 6;  // bigint as string (ulgm)
+  uint64 created_at_block = 7;
+}
+
+// DisbursementProposal represents a treasury spending proposal.
+message DisbursementProposal {
+  string id                = 1;
+  string title             = 2;
+  string description       = 3;
+  string category          = 4;  // "infrastructure", "legal", "domain", "marketing", "development", "research", "operations", "emergency"
+  string proposer          = 5;  // bech32 address
+  string recipient_addr    = 6;  // bech32 address
+  string amount            = 7;  // bigint as string (ulgm)
+  string stage             = 8;  // "proposed", "voting", "approved", "executed", "rejected", "cancelled"
+  string staked_amount     = 9;  // bigint as string (ulgm)
+  string stake_holder      = 10; // bech32 address
+  uint64 created_at_block  = 11;
+  uint64 approved_at_block = 12;
+  uint64 voting_ends_at    = 13;
+  uint64 timelock_expiry   = 14;
+  string support_weight    = 15; // bigint as string
+  string oppose_weight     = 16; // bigint as string
+  string abstain_weight    = 17; // bigint as string
+  uint32 unique_voters     = 18;
+  bool   quorum_met        = 19;
+}

@@ -19,13 +19,11 @@ func (k Keeper) AddToRAIPool(ctx sdk.Context, amount string) {
 
 	rai := k.GetRAIAccount(ctx)
 
-	balance := new(big.Int)
-	balance.SetString(rai.Balance, 10)
+	balance := parseBigInt(rai.Balance, "RAI.Balance", k.Logger(ctx))
 	balance.Add(balance, amtInt)
 	rai.Balance = balance.String()
 
-	totalReceived := new(big.Int)
-	totalReceived.SetString(rai.TotalReceived, 10)
+	totalReceived := parseBigInt(rai.TotalReceived, "RAI.TotalReceived", k.Logger(ctx))
 	totalReceived.Add(totalReceived, amtInt)
 	rai.TotalReceived = totalReceived.String()
 
@@ -42,14 +40,17 @@ func (k Keeper) AddToRAIPool(ctx sdk.Context, amount string) {
 
 // DistributeRAI distributes the RAI pool equally among eligible recipients.
 // Returns the distribution record or an error.
+//
+// Only the amount actually credited to recipients is debited from the RAI pool.
+// If a credit fails (e.g., below dust threshold), that recipient's share stays
+// in the pool for the next distribution cycle.
 func (k Keeper) DistributeRAI(ctx sdk.Context, recipients []string) (types.RAIDistribution, error) {
 	if len(recipients) == 0 {
 		return types.RAIDistribution{}, fmt.Errorf("no recipients for RAI distribution")
 	}
 
 	rai := k.GetRAIAccount(ctx)
-	balance := new(big.Int)
-	balance.SetString(rai.Balance, 10)
+	balance := parseBigInt(rai.Balance, "RAI.Balance", k.Logger(ctx))
 
 	if balance.Sign() <= 0 {
 		return types.RAIDistribution{}, fmt.Errorf("RAI pool is empty")
@@ -62,27 +63,33 @@ func (k Keeper) DistributeRAI(ctx sdk.Context, recipients []string) (types.RAIDi
 		return types.RAIDistribution{}, fmt.Errorf("RAI amount per recipient is zero")
 	}
 
-	// Total actually distributed (may be slightly less than balance due to integer division)
-	totalDistributed := new(big.Int).Mul(perRecipient, recipientCount)
-
 	height := uint64(ctx.BlockHeight())
 
-	// Credit each recipient at the current period
+	// Credit each recipient, tracking what was actually distributed.
+	// Failed credits are NOT counted — their share stays in the RAI pool.
+	actualDistributed := new(big.Int)
+	var actualRecipientCount uint32
+
 	for _, recipient := range recipients {
 		if err := k.CreditBalance(ctx, recipient, perRecipient.String(), height); err != nil {
 			k.Logger(ctx).Error("failed to distribute RAI to recipient",
 				"recipient", recipient, "error", err)
 			continue
 		}
+		actualDistributed.Add(actualDistributed, perRecipient)
+		actualRecipientCount++
 	}
 
-	// Update RAI account
-	balance.Sub(balance, totalDistributed)
+	if actualDistributed.Sign() <= 0 {
+		return types.RAIDistribution{}, fmt.Errorf("all RAI credit attempts failed")
+	}
+
+	// Only debit from RAI pool what was actually credited
+	balance.Sub(balance, actualDistributed)
 	rai.Balance = balance.String()
 
-	totalDist := new(big.Int)
-	totalDist.SetString(rai.TotalDistributed, 10)
-	totalDist.Add(totalDist, totalDistributed)
+	totalDist := parseBigInt(rai.TotalDistributed, "RAI.TotalDistributed", k.Logger(ctx))
+	totalDist.Add(totalDist, actualDistributed)
 	rai.TotalDistributed = totalDist.String()
 	rai.LastDistBlock = height
 
@@ -92,8 +99,8 @@ func (k Keeper) DistributeRAI(ctx sdk.Context, recipients []string) (types.RAIDi
 	dist := types.RAIDistribution{
 		Id:             distID,
 		Block:          height,
-		TotalAmount:    totalDistributed.String(),
-		RecipientCount: uint32(len(recipients)),
+		TotalAmount:    actualDistributed.String(),
+		RecipientCount: actualRecipientCount,
 		PerRecipient:   perRecipient.String(),
 	}
 
@@ -101,16 +108,17 @@ func (k Keeper) DistributeRAI(ctx sdk.Context, recipients []string) (types.RAIDi
 		sdk.NewEvent(
 			"rai_distributed",
 			sdk.NewAttribute("distribution_id", distID),
-			sdk.NewAttribute("total_amount", totalDistributed.String()),
-			sdk.NewAttribute("recipient_count", fmt.Sprintf("%d", len(recipients))),
+			sdk.NewAttribute("total_amount", actualDistributed.String()),
+			sdk.NewAttribute("recipient_count", fmt.Sprintf("%d", actualRecipientCount)),
 			sdk.NewAttribute("per_recipient", perRecipient.String()),
 		),
 	)
 
 	k.Logger(ctx).Info("RAI distributed",
 		"distribution_id", distID,
-		"total", totalDistributed.String(),
-		"recipients", len(recipients),
+		"actual_total", actualDistributed.String(),
+		"actual_recipients", actualRecipientCount,
+		"attempted_recipients", len(recipients),
 	)
 
 	return dist, nil
@@ -140,9 +148,37 @@ func (k Keeper) IsEligibleForRAI(ctx sdk.Context, address string) bool {
 	return true
 }
 
+// GetEligibleRAIRecipients returns all addresses eligible for RAI distribution.
+func (k Keeper) GetEligibleRAIRecipients(ctx sdk.Context) []string {
+	var recipients []string
+	k.IterateExpirableAccounts(ctx, func(acct types.ExpirableAccount) bool {
+		if k.IsEligibleForRAI(ctx, acct.Address) {
+			recipients = append(recipients, acct.Address)
+		}
+		return false
+	})
+	return recipients
+}
+
+// ShouldDistributeRAI checks whether enough blocks have passed since the last
+// RAI distribution and the pool has a non-zero balance.
+func (k Keeper) ShouldDistributeRAI(ctx sdk.Context, distributionRate uint64) bool {
+	if distributionRate == 0 {
+		return false
+	}
+	rai := k.GetRAIAccount(ctx)
+	balance := new(big.Int)
+	balance.SetString(rai.Balance, 10)
+	if balance.Sign() <= 0 {
+		return false
+	}
+	height := uint64(ctx.BlockHeight())
+	return height-rai.LastDistBlock >= distributionRate
+}
+
 // generateDistributionID creates a deterministic distribution ID from the block height.
 func generateDistributionID(height uint64) string {
 	h := sha256.New()
 	h.Write([]byte(fmt.Sprintf("LGM.rai.dist.v1:%d", height)))
-	return fmt.Sprintf("%x", h.Sum(nil))[:32]
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

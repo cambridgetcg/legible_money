@@ -4,6 +4,7 @@ package legible.vesting_rewards.v1;
 option go_package = "github.com/legible-money/legible/x/vesting_rewards/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/vesting_rewards/v1/genesis.proto";
 
 // Msg defines the vesting rewards module's transaction service.
 service Msg {
@@ -105,23 +106,8 @@ message MsgUpdateParams {
 message MsgUpdateParamsResponse {}
 
 // ============================================================================
-// State Types
+// Transaction-Only Types
 // ============================================================================
-
-message VestingSchedule {
-  string id = 1;
-  string beneficiary = 2;
-  string total_amount = 3;
-  string claimed_amount = 4;
-  VestingCategory category = 5;
-  VestingStatus status = 6;
-  string linked_fact_id = 7;
-  uint64 start_height = 8;
-  uint64 last_claim_height = 9;
-  uint64 pause_height = 10;
-  string pause_reason = 11;
-  uint32 acceleration_factor = 12;
-}
 
 enum VestingCategory {
   VESTING_CATEGORY_UNSPECIFIED = 0;
@@ -131,31 +117,4 @@ enum VestingCategory {
   VESTING_CATEGORY_DISPUTE_REWARD = 4;
   VESTING_CATEGORY_RESEARCH_GRANT = 5;
   VESTING_CATEGORY_BOOTSTRAP = 6;
-}
-
-enum VestingStatus {
-  VESTING_STATUS_UNSPECIFIED = 0;
-  VESTING_STATUS_ACTIVE = 1;
-  VESTING_STATUS_PAUSED = 2;
-  VESTING_STATUS_COMPLETED = 3;
-  VESTING_STATUS_FALSIFIED = 4;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-  repeated VestingSchedule schedules = 2;
-  string pool_balance = 3;
-}
-
-message Params {
-  // Half-lives by category (in blocks)
-  map<string, uint64> half_lives = 1;
-  // Cliff periods by category (in blocks)
-  map<string, uint64> cliff_periods = 2;
-  // Max release rates by category (0-1000000)
-  map<string, uint32> max_release_rates = 3;
 }

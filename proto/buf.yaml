@@ -11,6 +11,8 @@ lint:
     - DEFAULT
   except:
     - PACKAGE_VERSION_SUFFIX
-    - FIELD_NOT_REQUIRED
+    - SERVICE_SUFFIX
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
   ignore:
     - google

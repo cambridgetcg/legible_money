@@ -51,7 +51,8 @@
     "tokens/**/*.ts",
     "contracts/**/*.ts",
     "vm/**/*.ts",
-    "home/**/*.ts"
+    "home/**/*.ts",
+    "daemon/**/*.ts"
   ],
   "exclude": [
     "node_modules",

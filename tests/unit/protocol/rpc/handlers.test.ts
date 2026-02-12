@@ -39,7 +39,7 @@ function createMockAccount(
   return {
     did: "did:lgm:test-account-12345678",
     balance: 10000n * 10n ** 18n,
-    stakedBalance: 1000n * 10n ** 18n,
+    stakedBalance: 1000n * 10n ** 15n,
     nonce: 5n,
     operationalKeyHash:
       "abc123def456789012345678901234567890123456789012345678901234",
@@ -61,7 +61,7 @@ function createMockAccount(
 function createMockFact(overrides: Partial<FactState> = {}): FactState {
   return {
     id: "fact-123456",
-    claim: "The Earth orbits the Sun",
+    claimText: "The Earth orbits the Sun",
     domain: "astronomy",
     confidence: 0.95,
     verifiedAt: 100n,
@@ -100,7 +100,7 @@ function createMockContext(
       }),
       searchFacts: vi.fn((query: string) => {
         return Array.from(facts.values()).filter((f) =>
-          f.claim.toLowerCase().includes(query.toLowerCase()),
+          f.claimText.toLowerCase().includes(query.toLowerCase()),
         );
       }),
       getFactReferences: vi.fn((_factId: string) => ({
@@ -138,7 +138,7 @@ describe.sequential("Account Handlers", () => {
     it("should return balance for existing account", async () => {
       const account = createMockAccount({
         balance: 5000n * 10n ** 18n,
-        stakedBalance: 500n * 10n ** 18n,
+        stakedBalance: 500n * 10n ** 15n,
         nonce: 10n,
       });
       const accounts = new Map([[account.did, account]]);
@@ -147,7 +147,7 @@ describe.sequential("Account Handlers", () => {
       const result = await accountGetBalance({ did: account.did }, ctx);
 
       expect(result.balance).toBe("5000000000000000000000");
-      expect(result.stakedBalance).toBe("500000000000000000000");
+      expect(result.stakedBalance).toBe("500000000000000000");
       expect(result.nonce).toBe("10");
     });
 
@@ -283,7 +283,7 @@ describe.sequential("Agent Handlers", () => {
     it("should return full status for existing account", async () => {
       const account = createMockAccount({
         balance: 5000n * 10n ** 18n,
-        stakedBalance: 1000n * 10n ** 18n,
+        stakedBalance: 1000n * 10n ** 15n,
         reputationScore: 0.75,
         sessionKeyCount: 3,
       });
@@ -293,7 +293,7 @@ describe.sequential("Agent Handlers", () => {
       const result = await agentGetStatus({ did: account.did }, ctx);
 
       expect(result.account.balance).toBe("5000000000000000000000");
-      expect(result.account.stakedBalance).toBe("1000000000000000000000");
+      expect(result.account.stakedBalance).toBe("1000000000000000000");
       expect(result.account.reputation).toBe(0.75);
       expect(result.sessions.active).toBe(3);
       // Activity metrics are TODOs
@@ -334,10 +334,13 @@ describe.sequential("Knowledge Handlers", () => {
     });
 
     it("should return facts filtered by search", async () => {
-      const fact1 = createMockFact({ id: "fact-1", claim: "Earth orbits Sun" });
+      const fact1 = createMockFact({
+        id: "fact-1",
+        claimText: "Earth orbits Sun",
+      });
       const fact2 = createMockFact({
         id: "fact-2",
-        claim: "Water boils at 100C",
+        claimText: "Water boils at 100C",
       });
       const facts = new Map([
         ["fact-1", fact1],
@@ -348,7 +351,7 @@ describe.sequential("Knowledge Handlers", () => {
       const result = await knowledgeGetFacts({ search: "earth" }, ctx);
 
       expect(result.facts).toHaveLength(1);
-      expect(result.facts[0].claim).toContain("Earth");
+      expect(result.facts[0].claimText).toContain("Earth");
     });
 
     it("should filter by minimum confidence", async () => {

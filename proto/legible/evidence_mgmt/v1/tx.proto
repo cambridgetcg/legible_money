@@ -4,17 +4,16 @@ package legible.evidence_mgmt.v1;
 option go_package = "github.com/legible-money/legible/x/evidence_mgmt/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/evidence_mgmt/v1/genesis.proto";
 
 // Msg defines the evidence management module's transaction service.
-// Named evidence_mgmt to avoid collision with standard Cosmos x/evidence module.
 service Msg {
   option (cosmos.msg.v1.service) = true;
 
   rpc SubmitEvidence(MsgSubmitEvidence) returns (MsgSubmitEvidenceResponse);
-  rpc ArchiveEvidence(MsgArchiveEvidence) returns (MsgArchiveEvidenceResponse);
-  rpc AuditSubmit(MsgAuditSubmit) returns (MsgAuditSubmitResponse);
-  rpc AuditResolve(MsgAuditResolve) returns (MsgAuditResolveResponse);
+  rpc AuditEvidence(MsgAuditEvidence) returns (MsgAuditEvidenceResponse);
   rpc RegisterOracle(MsgRegisterOracle) returns (MsgRegisterOracleResponse);
+  rpc SubmitOracleData(MsgSubmitOracleData) returns (MsgSubmitOracleDataResponse);
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
@@ -25,59 +24,54 @@ service Msg {
 message MsgSubmitEvidence {
   option (cosmos.msg.v1.signer) = "submitter";
   string submitter = 1;
-  string evidence_type = 2;
-  string content_hash = 3;
-  string uri = 4;
-  map<string, string> metadata = 5;
+  string claim_id = 2;
+  string evidence_type = 3;
+  string content_hash = 4;
+  string description = 5;
+  string source_uri = 6;
 }
 
 message MsgSubmitEvidenceResponse {
   string evidence_id = 1;
 }
 
-message MsgArchiveEvidence {
-  option (cosmos.msg.v1.signer) = "archiver";
-  string archiver = 1;
-  string evidence_id = 2;
-  string archive_uri = 3;
-  ArchiveType archive_type = 4;
-}
-
-message MsgArchiveEvidenceResponse {}
-
-message MsgAuditSubmit {
+message MsgAuditEvidence {
   option (cosmos.msg.v1.signer) = "auditor";
   string auditor = 1;
   string evidence_id = 2;
-  AuditVerdict verdict = 3;
-  string reasoning = 4;
-  uint32 quality_score = 5;  // 0-1000000
+  uint64 score = 3;
+  string rationale = 4;
+  string stake = 5;
 }
 
-message MsgAuditSubmitResponse {
+message MsgAuditEvidenceResponse {
   string audit_id = 1;
 }
 
-message MsgAuditResolve {
-  option (cosmos.msg.v1.signer) = "authority";
-  string authority = 1;
-  string evidence_id = 2;
-}
-
-message MsgAuditResolveResponse {
-  AuditOutcome outcome = 1;
-}
-
 message MsgRegisterOracle {
-  option (cosmos.msg.v1.signer) = "oracle";
-  string oracle = 1;
-  string oracle_type = 2;
-  repeated string supported_evidence_types = 3;
-  string stake = 4;
+  option (cosmos.msg.v1.signer) = "operator";
+  string operator = 1;
+  string name = 2;
+  string description = 3;
+  repeated string data_types = 4;
+  string stake = 5;
 }
 
 message MsgRegisterOracleResponse {
   string oracle_id = 1;
+}
+
+message MsgSubmitOracleData {
+  option (cosmos.msg.v1.signer) = "operator";
+  string operator = 1;
+  string oracle_id = 2;
+  string claim_id = 3;
+  string content_hash = 4;
+  string data_type = 5;
+}
+
+message MsgSubmitOracleDataResponse {
+  string evidence_id = 1;
 }
 
 message MsgUpdateParams {
@@ -87,87 +81,3 @@ message MsgUpdateParams {
 }
 
 message MsgUpdateParamsResponse {}
-
-// ============================================================================
-// State Types
-// ============================================================================
-
-message Evidence {
-  string id = 1;
-  string submitter = 2;
-  string evidence_type = 3;
-  string content_hash = 4;
-  string uri = 5;
-  map<string, string> metadata = 6;
-  EvidenceStatus status = 7;
-  uint64 submitted_at = 8;
-  string archive_uri = 9;
-  ArchiveType archive_type = 10;
-  // Audit results
-  repeated EvidenceAudit audits = 11;
-  uint32 aggregate_quality_score = 12;
-}
-
-message EvidenceAudit {
-  string audit_id = 1;
-  string auditor = 2;
-  AuditVerdict verdict = 3;
-  string reasoning = 4;
-  uint32 quality_score = 5;
-  uint64 audited_at = 6;
-}
-
-message EvidenceOracle {
-  string id = 1;
-  string operator = 2;
-  string oracle_type = 3;
-  repeated string supported_types = 4;
-  string stake = 5;
-  bool active = 6;
-  uint64 registered_at = 7;
-}
-
-enum EvidenceStatus {
-  EVIDENCE_STATUS_UNSPECIFIED = 0;
-  EVIDENCE_STATUS_SUBMITTED = 1;
-  EVIDENCE_STATUS_ARCHIVED = 2;
-  EVIDENCE_STATUS_AUDITED = 3;
-  EVIDENCE_STATUS_REJECTED = 4;
-}
-
-enum ArchiveType {
-  ARCHIVE_TYPE_UNSPECIFIED = 0;
-  ARCHIVE_TYPE_IPFS = 1;
-  ARCHIVE_TYPE_ARWEAVE = 2;
-  ARCHIVE_TYPE_WAYBACK = 3;
-}
-
-enum AuditVerdict {
-  AUDIT_VERDICT_UNSPECIFIED = 0;
-  AUDIT_VERDICT_AUTHENTIC = 1;
-  AUDIT_VERDICT_SUSPICIOUS = 2;
-  AUDIT_VERDICT_FRAUDULENT = 3;
-}
-
-enum AuditOutcome {
-  AUDIT_OUTCOME_UNSPECIFIED = 0;
-  AUDIT_OUTCOME_VERIFIED = 1;
-  AUDIT_OUTCOME_REJECTED = 2;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-  repeated Evidence evidence_items = 2;
-  repeated EvidenceOracle oracles = 3;
-}
-
-message Params {
-  uint32 min_audit_count = 1;
-  string oracle_min_stake = 2;
-  uint64 audit_period = 3;
-  uint32 quality_threshold = 4;  // 0-1000000
-}

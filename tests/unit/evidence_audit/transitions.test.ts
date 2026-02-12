@@ -31,8 +31,8 @@ const BLOCK = 10000n;
 function createTestParams(): ConsensusParams {
   return {
     targetBlockTimeMs: 2521,
-    minValidatorStake: 1000n * 10n ** 18n,
-    minClaimStake: 10n * 10n ** 18n,
+    minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+    minClaimStake: 10n * 10n ** 15n,
     validatorQuorum: 0.66,
     verificationRoundBlocks: 20,
     commitPhaseBlocks: 6,
@@ -198,7 +198,7 @@ describe.sequential("evidence_audit_submit", () => {
   });
 
   it("should reject stake below minimum", () => {
-    const tx = makeAuditSubmitTx({ stake: 1n * 10n ** 18n }); // 1 LGM < 22 LGM
+    const tx = makeAuditSubmitTx({ stake: 1n * 10n ** 15n }); // 0.001 LGM < min audit stake
     const result = executeTransaction(state, tx, BLOCK, params);
 
     expect(result.success).toBe(false);

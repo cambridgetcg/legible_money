@@ -16,6 +16,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/disputes/keeper"
@@ -142,17 +143,56 @@ func (m *mockKnowledgeKeeper) GetFact(ctx sdk.Context, factID string) (types.Fac
 	return f, ok
 }
 
-func (m *mockKnowledgeKeeper) SetFact(ctx sdk.Context, fact types.Fact) {
-	m.facts[fact.Id] = fact
-}
-
 func (m *mockKnowledgeKeeper) GetClaim(ctx sdk.Context, claimID string) (types.Claim, bool) {
 	c, ok := m.claims[claimID]
 	return c, ok
 }
 
-func (m *mockKnowledgeKeeper) GetReferringFacts(_ sdk.Context, _ string) []string {
-	return nil // No cascade in tests by default
+func (m *mockKnowledgeKeeper) MarkFactChallenged(_ sdk.Context, factId string) error {
+	f, ok := m.facts[factId]
+	if !ok {
+		return fmt.Errorf("fact not found: %s", factId)
+	}
+	if f.Status == "verified" || f.Status == "active" {
+		f.Status = "challenged"
+		m.facts[factId] = f
+	}
+	return nil
+}
+
+func (m *mockKnowledgeKeeper) ResolveFactDispute(_ sdk.Context, factId, outcome string, reductionBps uint64) (uint64, error) {
+	f, ok := m.facts[factId]
+	if !ok {
+		return 0, fmt.Errorf("fact not found: %s", factId)
+	}
+	f.ChallengeCount++
+	switch outcome {
+	case "overturned":
+		f.Confidence = f.Confidence * (1_000_000 - reductionBps) / 1_000_000
+		if f.Confidence < 100_000 {
+			f.Status = "revoked"
+		} else {
+			f.Status = "contested"
+		}
+	case "upheld":
+		f.Confidence = f.Confidence * (1_000_000 + 110_000) / 1_000_000
+		if f.Confidence > 1_000_000 {
+			f.Confidence = 1_000_000
+		}
+		if f.Status == "contested" || f.Status == "challenged" {
+			f.Status = "active"
+		}
+	case "inconclusive":
+		if f.Status == "challenged" {
+			f.Status = "contested"
+		}
+	}
+	m.facts[factId] = f
+	return f.Confidence, nil
+}
+
+func (m *mockKnowledgeKeeper) CascadeFactConfidence(_ sdk.Context, _ string, _ uint64) ([]string, error) {
+	return nil, nil // No cascade in tests by default
 }
 
 type mockStakingKeeper struct {
@@ -210,7 +250,8 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper, *mo
 	kk := newMockKnowledgeKeeper()
 	sk := newMockStakingKeeper()
 
-	k := keeper.NewKeeper(cdc, storeKey, bk, kk, sk, testAddr(999))
+	storeService := runtime.NewKVStoreService(storeKey)
+	k := keeper.NewKeeper(cdc, storeService, bk, kk, sk, testAddr(999))
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
@@ -275,8 +316,8 @@ func TestSetGetDispute(t *testing.T) {
 		FactId:     "fact-001",
 		Challenger: testAddr(1),
 		Defender:   testAddr(2),
-		Status:     types.DisputeStatusEvidence,
-		Tier:       types.TierBasic,
+		Status:     string(types.DisputeStatusEvidence),
+		Tier:       uint32(types.TierBasic),
 		Bond:       "111000000",
 	}
 	k.SetDispute(ctx, dispute)
@@ -305,7 +346,7 @@ func TestDeleteDispute(t *testing.T) {
 	dispute := types.Dispute{
 		Id:     "dispute-del",
 		FactId: "fact-del",
-		Status: types.DisputeStatusEvidence,
+		Status: string(types.DisputeStatusEvidence),
 	}
 	k.SetDispute(ctx, dispute)
 	k.DeleteDispute(ctx, "dispute-del")
@@ -323,7 +364,7 @@ func TestIterateDisputes(t *testing.T) {
 		k.SetDispute(ctx, types.Dispute{
 			Id:     fmt.Sprintf("dispute-%03d", i),
 			FactId: "fact-001",
-			Status: types.DisputeStatusEvidence,
+			Status: string(types.DisputeStatusEvidence),
 		})
 	}
 
@@ -340,9 +381,9 @@ func TestIterateDisputes(t *testing.T) {
 func TestGetDisputesByFact(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	k.SetDispute(ctx, types.Dispute{Id: "d1", FactId: "fact-A", Status: types.DisputeStatusEvidence})
-	k.SetDispute(ctx, types.Dispute{Id: "d2", FactId: "fact-A", Status: types.DisputeStatusVoting})
-	k.SetDispute(ctx, types.Dispute{Id: "d3", FactId: "fact-B", Status: types.DisputeStatusEvidence})
+	k.SetDispute(ctx, types.Dispute{Id: "d1", FactId: "fact-A", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, types.Dispute{Id: "d2", FactId: "fact-A", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, types.Dispute{Id: "d3", FactId: "fact-B", Status: string(types.DisputeStatusEvidence)})
 
 	disputes := k.GetDisputesByFact(ctx, "fact-A")
 	if len(disputes) != 2 {
@@ -353,10 +394,10 @@ func TestGetDisputesByFact(t *testing.T) {
 func TestGetActiveDisputes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	k.SetDispute(ctx, types.Dispute{Id: "active-1", FactId: "f1", Status: types.DisputeStatusEvidence})
-	k.SetDispute(ctx, types.Dispute{Id: "active-2", FactId: "f2", Status: types.DisputeStatusVoting})
-	k.SetDispute(ctx, types.Dispute{Id: "resolved", FactId: "f3", Status: types.DisputeStatusResolved})
-	k.SetDispute(ctx, types.Dispute{Id: "expired", FactId: "f4", Status: types.DisputeStatusExpired})
+	k.SetDispute(ctx, types.Dispute{Id: "active-1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, types.Dispute{Id: "active-2", FactId: "f2", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, types.Dispute{Id: "resolved", FactId: "f3", Status: string(types.DisputeStatusResolved)})
+	k.SetDispute(ctx, types.Dispute{Id: "expired", FactId: "f4", Status: string(types.DisputeStatusExpired)})
 
 	active := k.GetActiveDisputes(ctx)
 	if len(active) != 2 {
@@ -367,9 +408,9 @@ func TestGetActiveDisputes(t *testing.T) {
 func TestGetActiveDisputeCountForFact(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	k.SetDispute(ctx, types.Dispute{Id: "d1", FactId: "f1", Status: types.DisputeStatusEvidence})
-	k.SetDispute(ctx, types.Dispute{Id: "d2", FactId: "f1", Status: types.DisputeStatusResolved})
-	k.SetDispute(ctx, types.Dispute{Id: "d3", FactId: "f1", Status: types.DisputeStatusVoting})
+	k.SetDispute(ctx, types.Dispute{Id: "d1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, types.Dispute{Id: "d2", FactId: "f1", Status: string(types.DisputeStatusResolved)})
+	k.SetDispute(ctx, types.Dispute{Id: "d3", FactId: "f1", Status: string(types.DisputeStatusVoting)})
 
 	count := k.GetActiveDisputeCountForFact(ctx, "f1")
 	if count != 2 {
@@ -481,10 +522,10 @@ func TestOpenDispute(t *testing.T) {
 	if dispute.FactId != factId {
 		t.Fatalf("expected fact_id %s, got %s", factId, dispute.FactId)
 	}
-	if dispute.Status != types.DisputeStatusEvidence {
+	if dispute.Status != string(types.DisputeStatusEvidence) {
 		t.Fatalf("expected evidence status, got %s", dispute.Status)
 	}
-	if dispute.Tier != types.TierBasic {
+	if dispute.Tier != uint32(types.TierBasic) {
 		t.Fatalf("expected tier basic, got %d", dispute.Tier)
 	}
 	if len(dispute.Arbiters) == 0 {
@@ -579,8 +620,8 @@ func TestCastVote(t *testing.T) {
 	dispute := types.Dispute{
 		Id:              "dispute-vote",
 		FactId:          "fact-001",
-		Status:          types.DisputeStatusVoting,
-		Tier:            types.TierBasic,
+		Status:          string(types.DisputeStatusVoting),
+		Tier:            uint32(types.TierBasic),
 		VotingDeadline:  200,
 		Arbiters:        []string{arbiter1, arbiter2},
 	}
@@ -605,7 +646,7 @@ func TestCastVoteNotArbiter(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:             "dispute-v2",
-		Status:         types.DisputeStatusVoting,
+		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 200,
 		Arbiters:       []string{testAddr(10)},
 	}
@@ -625,7 +666,7 @@ func TestCastVoteAlreadyVoted(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:             "dispute-dup",
-		Status:         types.DisputeStatusVoting,
+		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 200,
 		Arbiters:       []string{arbiter},
 	}
@@ -643,7 +684,7 @@ func TestCastVoteNotInVotingPhase(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:       "dispute-phase",
-		Status:   types.DisputeStatusEvidence,
+		Status:   string(types.DisputeStatusEvidence),
 		Arbiters: []string{testAddr(10)},
 	}
 	k.SetDispute(ctx, dispute)
@@ -660,7 +701,7 @@ func TestCastVoteDeadlinePassed(t *testing.T) {
 	arbiter := testAddr(10)
 	dispute := types.Dispute{
 		Id:             "dispute-late",
-		Status:         types.DisputeStatusVoting,
+		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 50, // already passed (block height = 100)
 		Arbiters:       []string{arbiter},
 	}
@@ -679,7 +720,7 @@ func TestTallyVotesUpheld(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:       "dispute-tally",
-		Tier:     types.TierBasic,
+		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
 	}
 	k.SetDispute(ctx, dispute)
@@ -708,7 +749,7 @@ func TestTallyVotesOverturned(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:       "dispute-overturn",
-		Tier:     types.TierBasic,
+		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
 	}
 	k.SetDispute(ctx, dispute)
@@ -737,7 +778,7 @@ func TestTallyVotesInconclusive(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:       "dispute-split",
-		Tier:     types.TierBasic,
+		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
 	}
 	k.SetDispute(ctx, dispute)
@@ -761,7 +802,7 @@ func TestTallyVotesQuorumNotMet(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:       "dispute-quorum",
-		Tier:     types.TierBasic,
+		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
 	}
 	k.SetDispute(ctx, dispute)
@@ -783,7 +824,7 @@ func TestTallyVotesStakeWeighted(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:       "dispute-weighted",
-		Tier:     types.TierBasic,
+		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
 	}
 	k.SetDispute(ctx, dispute)
@@ -819,8 +860,8 @@ func TestResolveDisputeOverturned(t *testing.T) {
 		FactId:     "fact-res",
 		Challenger: challenger,
 		Defender:   defender,
-		Status:     types.DisputeStatusVoting,
-		Tier:       types.TierBasic,
+		Status:     string(types.DisputeStatusVoting),
+		Tier:       uint32(types.TierBasic),
 		Bond:       "111000000",
 		Arbiters:   []string{testAddr(10), testAddr(11)},
 	}
@@ -832,11 +873,12 @@ func TestResolveDisputeOverturned(t *testing.T) {
 	}
 
 	resolved, _ := k.GetDispute(ctx, "dispute-resolve-ot")
-	if resolved.Status != types.DisputeStatusResolved {
+	if resolved.Status != string(types.DisputeStatusResolved) {
 		t.Fatalf("expected resolved status, got %s", resolved.Status)
 	}
-	if resolved.Outcome != types.OutcomeOverturned {
+	if resolved.Outcome != string(types.OutcomeOverturned) {
 		t.Fatalf("expected overturned outcome, got %s", resolved.Outcome)
+
 	}
 
 	// Fact status should be updated to contested (confidence drops but above retraction threshold)
@@ -864,7 +906,7 @@ func TestResolveDisputeUpheld(t *testing.T) {
 		FactId:     "fact-up",
 		Challenger: testAddr(1),
 		Defender:   testAddr(2),
-		Status:     types.DisputeStatusVoting,
+		Status:     string(types.DisputeStatusVoting),
 		Bond:       "111000000",
 		Arbiters:   []string{testAddr(10)},
 	}
@@ -876,7 +918,7 @@ func TestResolveDisputeUpheld(t *testing.T) {
 	}
 
 	resolved, _ := k.GetDispute(ctx, "dispute-resolve-up")
-	if resolved.Outcome != types.OutcomeUpheld {
+	if resolved.Outcome != string(types.OutcomeUpheld) {
 		t.Fatalf("expected upheld, got %s", resolved.Outcome)
 	}
 }
@@ -890,7 +932,7 @@ func TestResolveDisputeInconclusive(t *testing.T) {
 		Id:         "dispute-resolve-inc",
 		FactId:     "fact-inc",
 		Challenger: testAddr(1),
-		Status:     types.DisputeStatusVoting,
+		Status:     string(types.DisputeStatusVoting),
 		Bond:       "111000000",
 		Arbiters:   []string{testAddr(10)},
 	}
@@ -902,7 +944,7 @@ func TestResolveDisputeInconclusive(t *testing.T) {
 	}
 
 	resolved, _ := k.GetDispute(ctx, "dispute-resolve-inc")
-	if resolved.Outcome != types.OutcomeInconclusive {
+	if resolved.Outcome != string(types.OutcomeInconclusive) {
 		t.Fatalf("expected inconclusive, got %s", resolved.Outcome)
 	}
 }
@@ -912,7 +954,7 @@ func TestResolveDisputeAlreadyResolved(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:     "dispute-done",
-		Status: types.DisputeStatusResolved,
+		Status: string(types.DisputeStatusResolved),
 	}
 	k.SetDispute(ctx, dispute)
 
@@ -936,8 +978,8 @@ func TestEscalateDispute(t *testing.T) {
 		FactId:     "fact-esc",
 		Challenger: testAddr(1),
 		Defender:   testAddr(2),
-		Status:     types.DisputeStatusEvidence,
-		Tier:       types.TierBasic,
+		Status:     string(types.DisputeStatusEvidence),
+		Tier:       uint32(types.TierBasic),
 		Bond:       "111000000",
 		CreatedAt:  50, // old enough for escalation (delay = 17136, but we'll lower it)
 	}
@@ -954,10 +996,10 @@ func TestEscalateDispute(t *testing.T) {
 	}
 
 	escalated, _ := k.GetDispute(ctx, "dispute-esc")
-	if escalated.Tier != types.TierEscalated {
+	if escalated.Tier != uint32(types.TierEscalated) {
 		t.Fatalf("expected tier 2, got %d", escalated.Tier)
 	}
-	if escalated.Status != types.DisputeStatusEvidence {
+	if escalated.Status != string(types.DisputeStatusEvidence) {
 		t.Fatalf("expected evidence status after escalation, got %s", escalated.Status)
 	}
 	// Bond should be increased
@@ -976,8 +1018,8 @@ func TestEscalateDisputeMaxTier(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:     "dispute-max",
-		Status: types.DisputeStatusVoting,
-		Tier:   types.TierFinal,
+		Status: string(types.DisputeStatusVoting),
+		Tier:   uint32(types.TierFinal),
 	}
 	k.SetDispute(ctx, dispute)
 
@@ -992,8 +1034,8 @@ func TestEscalateDisputeTooEarly(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:        "dispute-early",
-		Status:    types.DisputeStatusEvidence,
-		Tier:      types.TierBasic,
+		Status:    string(types.DisputeStatusEvidence),
+		Tier:      uint32(types.TierBasic),
 		CreatedAt: 99, // created 1 block ago, delay = 17136 blocks
 	}
 	k.SetDispute(ctx, dispute)
@@ -1011,7 +1053,7 @@ func TestTransitionToVoting(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:     "dispute-transition",
-		Status: types.DisputeStatusEvidence,
+		Status: string(types.DisputeStatusEvidence),
 	}
 	k.SetDispute(ctx, dispute)
 
@@ -1021,7 +1063,7 @@ func TestTransitionToVoting(t *testing.T) {
 	}
 
 	got, _ := k.GetDispute(ctx, "dispute-transition")
-	if got.Status != types.DisputeStatusVoting {
+	if got.Status != string(types.DisputeStatusVoting) {
 		t.Fatalf("expected voting, got %s", got.Status)
 	}
 }
@@ -1031,7 +1073,7 @@ func TestTransitionToVotingWrongPhase(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:     "dispute-wrong",
-		Status: types.DisputeStatusVoting,
+		Status: string(types.DisputeStatusVoting),
 	}
 	k.SetDispute(ctx, dispute)
 
@@ -1049,8 +1091,8 @@ func TestProcessExpiredDisputesEvidenceToVoting(t *testing.T) {
 	dispute := types.Dispute{
 		Id:               "dispute-exp-ev",
 		FactId:           "f1",
-		Status:           types.DisputeStatusEvidence,
-		Tier:             types.TierBasic,
+		Status:           string(types.DisputeStatusEvidence),
+		Tier:             uint32(types.TierBasic),
 		EvidenceDeadline: 80, // already passed (height = 100)
 		VotingDeadline:   200,
 	}
@@ -1059,7 +1101,7 @@ func TestProcessExpiredDisputesEvidenceToVoting(t *testing.T) {
 	k.ProcessExpiredDisputes(ctx)
 
 	got, _ := k.GetDispute(ctx, "dispute-exp-ev")
-	if got.Status != types.DisputeStatusVoting {
+	if got.Status != string(types.DisputeStatusVoting) {
 		t.Fatalf("expected voting after evidence expiry, got %s", got.Status)
 	}
 }
@@ -1073,8 +1115,8 @@ func TestProcessExpiredDisputesVotingToResolved(t *testing.T) {
 		Id:             "dispute-exp-vote",
 		FactId:         "f2",
 		Challenger:     testAddr(1),
-		Status:         types.DisputeStatusVoting,
-		Tier:           types.TierBasic,
+		Status:         string(types.DisputeStatusVoting),
+		Tier:           uint32(types.TierBasic),
 		VotingDeadline: 80, // already passed
 		Bond:           "111000000",
 		Arbiters:       []string{testAddr(10), testAddr(11), testAddr(12)},
@@ -1094,10 +1136,10 @@ func TestProcessExpiredDisputesVotingToResolved(t *testing.T) {
 	k.ProcessExpiredDisputes(ctx)
 
 	got, _ := k.GetDispute(ctx, "dispute-exp-vote")
-	if got.Status != types.DisputeStatusResolved {
+	if got.Status != string(types.DisputeStatusResolved) {
 		t.Fatalf("expected resolved after voting expiry, got %s", got.Status)
 	}
-	if got.Outcome != types.OutcomeUpheld {
+	if got.Outcome != string(types.OutcomeUpheld) {
 		t.Fatalf("expected upheld, got %s", got.Outcome)
 	}
 }
@@ -1255,7 +1297,7 @@ func TestMsgSubmitEvidence(t *testing.T) {
 		FactId:           "fact-001",
 		Challenger:       challenger,
 		Defender:         testAddr(2),
-		Status:           types.DisputeStatusEvidence,
+		Status:           string(types.DisputeStatusEvidence),
 		EvidenceDeadline: 200,
 	}
 	k.SetDispute(ctx, dispute)
@@ -1288,7 +1330,7 @@ func TestMsgSubmitEvidenceWrongSide(t *testing.T) {
 		Id:               "dispute-ev-wrong",
 		Challenger:       testAddr(1),
 		Defender:         testAddr(2),
-		Status:           types.DisputeStatusEvidence,
+		Status:           string(types.DisputeStatusEvidence),
 		EvidenceDeadline: 200,
 	}
 	k.SetDispute(ctx, dispute)
@@ -1313,7 +1355,7 @@ func TestMsgVoteDispute(t *testing.T) {
 
 	dispute := types.Dispute{
 		Id:             "dispute-vote-msg",
-		Status:         types.DisputeStatusVoting,
+		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 200,
 		Arbiters:       []string{arbiter},
 	}
@@ -1342,8 +1384,8 @@ func TestMsgEscalateDispute(t *testing.T) {
 		Id:         "dispute-esc-msg",
 		Challenger: testAddr(1),
 		Defender:   testAddr(2),
-		Status:     types.DisputeStatusEvidence,
-		Tier:       types.TierBasic,
+		Status:     string(types.DisputeStatusEvidence),
+		Tier:       uint32(types.TierBasic),
 		Bond:       "111000000",
 		CreatedAt:  50,
 	}
@@ -1357,7 +1399,7 @@ func TestMsgEscalateDispute(t *testing.T) {
 	_, err := srv.EscalateDispute(ctx, &types.MsgEscalateDispute{
 		Requester:      requester,
 		DisputeId:      "dispute-esc-msg",
-		AdditionalBond: "555000000",
+		AdditionalStake: "555000000",
 	})
 	if err != nil {
 		t.Fatalf("msg escalate failed: %v", err)
@@ -1370,7 +1412,7 @@ func TestQueryDispute(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	dispute := types.Dispute{Id: "q-dispute-1", FactId: "f1", Status: types.DisputeStatusEvidence}
+	dispute := types.Dispute{Id: "q-dispute-1", FactId: "f1", Status: string(types.DisputeStatusEvidence)}
 	k.SetDispute(ctx, dispute)
 
 	resp, err := qs.Dispute(ctx, &types.QueryDisputeRequest{DisputeId: "q-dispute-1"})
@@ -1396,9 +1438,9 @@ func TestQueryDisputesByFact(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetDispute(ctx, types.Dispute{Id: "qd1", FactId: "qf1", Status: types.DisputeStatusEvidence})
-	k.SetDispute(ctx, types.Dispute{Id: "qd2", FactId: "qf1", Status: types.DisputeStatusVoting})
-	k.SetDispute(ctx, types.Dispute{Id: "qd3", FactId: "qf2", Status: types.DisputeStatusEvidence})
+	k.SetDispute(ctx, types.Dispute{Id: "qd1", FactId: "qf1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, types.Dispute{Id: "qd2", FactId: "qf1", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, types.Dispute{Id: "qd3", FactId: "qf2", Status: string(types.DisputeStatusEvidence)})
 
 	resp, err := qs.DisputesByFact(ctx, &types.QueryDisputesByFactRequest{FactId: "qf1"})
 	if err != nil {
@@ -1413,8 +1455,8 @@ func TestQueryActiveDisputes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetDispute(ctx, types.Dispute{Id: "qa1", FactId: "f1", Status: types.DisputeStatusEvidence})
-	k.SetDispute(ctx, types.Dispute{Id: "qa2", FactId: "f2", Status: types.DisputeStatusResolved})
+	k.SetDispute(ctx, types.Dispute{Id: "qa1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, types.Dispute{Id: "qa2", FactId: "f2", Status: string(types.DisputeStatusResolved)})
 
 	resp, err := qs.ActiveDisputes(ctx, &types.QueryActiveDisputesRequest{})
 	if err != nil {
@@ -1479,7 +1521,7 @@ func TestGenesisExportImport(t *testing.T) {
 	k.SetDispute(ctx, types.Dispute{
 		Id:     "gen-d1",
 		FactId: "gen-f1",
-		Status: types.DisputeStatusEvidence,
+		Status: string(types.DisputeStatusEvidence),
 		Bond:   "111000000",
 	})
 	k.SetEvidence(ctx, types.DisputeEvidence{
@@ -1576,7 +1618,7 @@ func TestFullDisputeLifecycle(t *testing.T) {
 	k.ProcessExpiredDisputes(ctx)
 
 	d, _ = k.GetDispute(ctx, disputeId)
-	if d.Status != types.DisputeStatusVoting {
+	if d.Status != string(types.DisputeStatusVoting) {
 		t.Fatalf("expected voting status, got %s", d.Status)
 	}
 
@@ -1600,10 +1642,10 @@ func TestFullDisputeLifecycle(t *testing.T) {
 
 	// 6. Verify final state
 	final, _ := k.GetDispute(ctx, disputeId)
-	if final.Status != types.DisputeStatusResolved {
+	if final.Status != string(types.DisputeStatusResolved) {
 		t.Fatalf("expected resolved, got %s", final.Status)
 	}
-	if final.Outcome != types.OutcomeUpheld {
+	if final.Outcome != string(types.OutcomeUpheld) {
 		t.Fatalf("expected upheld, got %s", final.Outcome)
 	}
 

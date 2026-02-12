@@ -87,11 +87,11 @@ func (k Keeper) GetEffectiveReputation(ctx sdk.Context, validatorAddr, domain st
 	rep := k.GetOrCreateReputation(ctx, validatorAddr, currentBlock)
 
 	// Try domain-specific reputation first
-	if domainRep, ok := rep.DomainReputations[domain]; ok {
+	if domainRep := findDomainReputation(rep.DomainReputations, domain); domainRep != nil {
 		if domainRep.TotalVerifications >= types.MinVerificationsForDomainRep {
 			return types.EffectiveReputationResult{
 				Score:      domainRep.DecayedScore,
-				Source:     types.SourceDomain,
+				Source:     string(types.SourceDomain),
 				Discount:   1_000_000, // 100% = no discount
 				Confidence: domainRep.ScoreConfidence,
 			}
@@ -100,13 +100,13 @@ func (k Keeper) GetEffectiveReputation(ctx sdk.Context, validatorAddr, domain st
 
 	// Try stratum reputation
 	stratum := k.getDomainStratum(ctx, domain)
-	if stratumRep, ok := rep.StratumReputations[stratum]; ok {
+	if stratumRep := findStratumReputation(rep.StratumReputations, stratum); stratumRep != nil {
 		if stratumRep.TotalVerifications >= types.MinVerificationsForDomainRep {
 			decayed := applyDecay(stratumRep.Score, currentBlock, stratumRep.LastActivityBlock)
 			conf := min64(1_000_000, stratumRep.TotalVerifications*1_000_000/100)
 			return types.EffectiveReputationResult{
 				Score:      decayed,
-				Source:     types.SourceStratum,
+				Source:     string(types.SourceStratum),
 				Discount:   types.StratumReputationDiscount,
 				Confidence: conf,
 			}
@@ -114,11 +114,15 @@ func (k Keeper) GetEffectiveReputation(ctx sdk.Context, validatorAddr, domain st
 	}
 
 	// Fall back to global reputation
-	globalDecayed := applyDecay(rep.GlobalReputation.Score, currentBlock, rep.LastUpdatedBlock)
-	conf := min64(1_000_000, rep.GlobalReputation.TotalVerifications*1_000_000/100)
+	globalRep := rep.GlobalReputation
+	if globalRep == nil {
+		globalRep = &types.GlobalReputation{Score: types.BaseScore}
+	}
+	globalDecayed := applyDecay(globalRep.Score, currentBlock, rep.LastUpdatedBlock)
+	conf := min64(1_000_000, globalRep.TotalVerifications*1_000_000/100)
 	return types.EffectiveReputationResult{
 		Score:      globalDecayed,
-		Source:     types.SourceGlobal,
+		Source:     string(types.SourceGlobal),
 		Discount:   types.GlobalReputationDiscount,
 		Confidence: conf,
 	}
@@ -144,6 +148,9 @@ func (k Keeper) UpdateDomainReputation(
 	rep := k.GetOrCreateReputation(ctx, validatorAddr, currentBlock)
 
 	// Update global reputation
+	if rep.GlobalReputation == nil {
+		rep.GlobalReputation = &types.GlobalReputation{Score: types.BaseScore}
+	}
 	rep.GlobalReputation.TotalVerifications++
 	if wasCorrect {
 		rep.GlobalReputation.CorrectVerifications++
@@ -154,14 +161,15 @@ func (k Keeper) UpdateDomainReputation(
 	rep.GlobalReputation.Score = computeGlobalScore(rep.GlobalReputation)
 
 	// Update stratum reputation
-	sr, ok := rep.StratumReputations[stratum]
-	if !ok {
-		sr = types.StratumReputation{
+	sr := findStratumReputation(rep.StratumReputations, stratum)
+	if sr == nil {
+		sr = &types.StratumReputation{
 			Stratum:                stratum,
 			Score:                  types.BaseScore,
 			FirstVerificationBlock: currentBlock,
 			LastDecayBlock:         currentBlock,
 		}
+		rep.StratumReputations = append(rep.StratumReputations, &types.StratumReputationEntry{Key: stratum, Value: sr})
 	}
 	sr.TotalVerifications++
 	if wasCorrect {
@@ -172,12 +180,11 @@ func (k Keeper) UpdateDomainReputation(
 	}
 	sr.Score = (sr.Accuracy * types.MaxScore) / 1_000_000
 	sr.LastActivityBlock = currentBlock
-	rep.StratumReputations[stratum] = sr
 
 	// Update domain reputation
-	dr, ok := rep.DomainReputations[domain]
-	if !ok {
-		dr = types.DomainReputation{
+	dr := findDomainReputation(rep.DomainReputations, domain)
+	if dr == nil {
+		dr = &types.DomainReputation{
 			Domain:                 domain,
 			Stratum:                stratum,
 			Score:                  types.BaseScore,
@@ -186,6 +193,7 @@ func (k Keeper) UpdateDomainReputation(
 			VerdictConsistency:     700_000, // Start at 70%
 			ConfidenceCalibration:  500_000, // Start at 50%
 		}
+		rep.DomainReputations = append(rep.DomainReputations, &types.DomainReputationEntry{Key: domain, Value: dr})
 	}
 	dr.TotalVerifications++
 	if wasCorrect {
@@ -215,7 +223,6 @@ func (k Keeper) UpdateDomainReputation(
 		currentBlock, dr.LastVerificationBlock,
 	)
 	dr.LastVerificationBlock = currentBlock
-	rep.DomainReputations[domain] = dr
 
 	rep.LastUpdatedBlock = currentBlock
 	k.SetIsolatedReputation(ctx, rep)
@@ -227,30 +234,38 @@ func (k Keeper) ApplyPeriodicDecay(ctx sdk.Context, currentBlock uint64) {
 		changed := false
 
 		// Decay global
-		decayed := applyDecay(rep.GlobalReputation.Score, currentBlock, rep.LastUpdatedBlock)
-		if decayed != rep.GlobalReputation.Score {
-			rep.GlobalReputation.Score = decayed
-			changed = true
+		if rep.GlobalReputation != nil {
+			decayed := applyDecay(rep.GlobalReputation.Score, currentBlock, rep.LastUpdatedBlock)
+			if decayed != rep.GlobalReputation.Score {
+				rep.GlobalReputation.Score = decayed
+				changed = true
+			}
 		}
 
 		// Decay stratum reputations
-		for s, sr := range rep.StratumReputations {
+		for _, entry := range rep.StratumReputations {
+			if entry == nil || entry.Value == nil {
+				continue
+			}
+			sr := entry.Value
 			d := applyDecay(sr.Score, currentBlock, sr.LastActivityBlock)
 			if d != sr.Score {
 				sr.Score = d
 				sr.LastDecayBlock = currentBlock
-				rep.StratumReputations[s] = sr
 				changed = true
 			}
 		}
 
 		// Decay domain reputations
-		for dom, dr := range rep.DomainReputations {
+		for _, entry := range rep.DomainReputations {
+			if entry == nil || entry.Value == nil {
+				continue
+			}
+			dr := entry.Value
 			d := applyDecay(dr.Score, currentBlock, dr.LastVerificationBlock)
 			if d != dr.DecayedScore {
 				dr.DecayedScore = d
 				dr.LastDecayBlock = currentBlock
-				rep.DomainReputations[dom] = dr
 				changed = true
 			}
 		}
@@ -361,7 +376,7 @@ func getCrossStratumRequirement(stratum uint32) *types.CrossStratumRequirement {
 }
 
 // computeGlobalScore computes a simple global reputation score from accuracy.
-func computeGlobalScore(g types.GlobalReputation) uint64 {
+func computeGlobalScore(g *types.GlobalReputation) uint64 {
 	if g.TotalVerifications == 0 {
 		return types.BaseScore
 	}

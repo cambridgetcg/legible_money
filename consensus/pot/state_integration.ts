@@ -482,7 +482,7 @@ export class StateIntegrationImpl implements StateIntegration {
         stake: 0n,
         submittedAt: blockNumber,
         references: [],
-        status: "verifying",
+        status: "in_verification",
         statusChangedAt: blockNumber,
       });
     }

@@ -143,16 +143,6 @@ func ShouldValidatorParticipate(
 	return vrfcrypto.IsValidatorSelected(vrfOutput, effectiveStake, totalStake, targetValidators)
 }
 
-// RecordVerificationOutcome records whether a validator's verification
-// was correct and applies rewards or slashes accordingly.
-func (k Keeper) RecordVerificationOutcome(
-	ctx sdk.Context,
-	validatorAddr string,
-	correct bool,
-) error {
-	return k.stakingKeeper.RecordVerification(ctx, validatorAddr, correct)
-}
-
 // SlashMissedVerification slashes a validator who committed but failed to reveal.
 func (k Keeper) SlashMissedVerification(
 	ctx sdk.Context,

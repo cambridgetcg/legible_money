@@ -165,9 +165,9 @@ export interface SessionKeyAuthorization {
 // ============ Default Limits ============
 
 export const DEFAULT_SESSION_LIMITS: SessionLimits = {
-  maxPerTransaction: 100n * 10n ** 18n, // 100 LGM
-  maxPerDay: 1000n * 10n ** 18n, // 1000 LGM
-  maxTotal: 5000n * 10n ** 18n, // 5000 LGM lifetime
+  maxPerTransaction: 100n * 10n ** 15n, // 0.1 LGM
+  maxPerDay: 1000n * 10n ** 15n, // 1 LGM
+  maxTotal: 5000n * 10n ** 15n, // 5 LGM lifetime
 
   maxTransactions: 100,
   maxDurationMs: 3600000, // 1 hour
@@ -179,9 +179,9 @@ export const DEFAULT_SESSION_LIMITS: SessionLimits = {
 };
 
 export const CONSERVATIVE_SESSION_LIMITS: SessionLimits = {
-  maxPerTransaction: 10n * 10n ** 18n, // 10 LGM
-  maxPerDay: 50n * 10n ** 18n, // 50 LGM
-  maxTotal: 100n * 10n ** 18n, // 100 LGM
+  maxPerTransaction: 10n * 10n ** 15n, // 0.01 LGM
+  maxPerDay: 50n * 10n ** 15n, // 0.05 LGM
+  maxTotal: 100n * 10n ** 15n, // 0.1 LGM
 
   maxTransactions: 20,
   maxDurationMs: 900000, // 15 minutes

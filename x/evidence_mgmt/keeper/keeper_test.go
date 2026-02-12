@@ -15,6 +15,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/evidence_mgmt/keeper"
@@ -104,6 +105,10 @@ func (m *mockBankKeeper) fundAccount(addr string, amount sdkmath.Int) {
 	m.balances[addr] = amount
 }
 
+func (m *mockBankKeeper) BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error {
+	return nil
+}
+
 func (m *mockBankKeeper) fundModule(moduleName string, amount sdkmath.Int) {
 	m.modules[moduleName] = amount
 }
@@ -127,7 +132,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		bk,
 		"lgm1authority",
 	)
@@ -180,10 +185,10 @@ func TestSetGetEvidence(t *testing.T) {
 		Id:           "ev-1",
 		ClaimId:      "claim-1",
 		Submitter:    testAddr(1),
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "hash1",
 		Description:  "test evidence",
-		Status:       types.EvidenceStatusSubmitted,
+		Status:       string(types.EvidenceStatusSubmitted),
 		SubmittedAt:  100,
 	}
 
@@ -276,7 +281,7 @@ func TestSetGetAudit(t *testing.T) {
 		Stake:      "50000000",
 		Score:      700000,
 		Rationale:  "looks good",
-		Status:     types.AuditStatusPending,
+		Status:     string(types.AuditStatusPending),
 	}
 
 	k.SetAudit(ctx, a)
@@ -455,7 +460,7 @@ func TestSubmitEvidence_Success(t *testing.T) {
 		Id:           "ev-1",
 		ClaimId:      "claim-1",
 		Submitter:    testAddr(1),
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "hash1",
 		Description:  "test doc",
 		SubmittedAt:  100,
@@ -469,7 +474,7 @@ func TestSubmitEvidence_Success(t *testing.T) {
 	if !found {
 		t.Fatal("evidence not found after submission")
 	}
-	if got.Status != types.EvidenceStatusSubmitted {
+	if got.Status != string(types.EvidenceStatusSubmitted) {
 		t.Fatalf("expected submitted status, got %s", got.Status)
 	}
 	if got.AuditCount != 0 {
@@ -490,7 +495,7 @@ func TestSubmitEvidence_MaxReached(t *testing.T) {
 			Id:           fmt.Sprintf("ev-%d", i),
 			ClaimId:      "claim-1",
 			Submitter:    testAddr(1),
-			EvidenceType: types.EvidenceTypeDocument,
+			EvidenceType: string(types.EvidenceTypeDocument),
 			ContentHash:  fmt.Sprintf("hash%d", i),
 			Description:  "test",
 			SubmittedAt:  100,
@@ -504,7 +509,7 @@ func TestSubmitEvidence_MaxReached(t *testing.T) {
 	e := types.Evidence{
 		Id:           "ev-2",
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "hash2",
 		Description:  "test",
 	}
@@ -519,7 +524,7 @@ func TestSubmitEvidence_DuplicateHash(t *testing.T) {
 	e := types.Evidence{
 		Id:           "ev-1",
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "samehash",
 		Description:  "first",
 		SubmittedAt:  100,
@@ -531,7 +536,7 @@ func TestSubmitEvidence_DuplicateHash(t *testing.T) {
 	e2 := types.Evidence{
 		Id:           "ev-2",
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeAttestation,
+		EvidenceType: string(types.EvidenceTypeAttestation),
 		ContentHash:  "samehash",
 		Description:  "second",
 	}
@@ -564,7 +569,7 @@ func TestSubmitAudit_Success(t *testing.T) {
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
 		ClaimId:     "claim-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50, // Within audit window (50 + 34272 > 100)
 	})
 
@@ -589,7 +594,7 @@ func TestSubmitAudit_Success(t *testing.T) {
 	if !found {
 		t.Fatal("audit not found")
 	}
-	if got.Status != types.AuditStatusPending {
+	if got.Status != string(types.AuditStatusPending) {
 		t.Fatalf("expected pending, got %s", got.Status)
 	}
 }
@@ -617,7 +622,7 @@ func TestSubmitAudit_WindowClosed(t *testing.T) {
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
 		ClaimId:     "claim-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 1, // 1 + 34272 < 100... wait, that's > 100. Need to make sure ctx height > submitted + window.
 	})
 
@@ -648,7 +653,7 @@ func TestSubmitAudit_InsufficientStake(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
 	})
 
@@ -673,7 +678,7 @@ func TestSubmitAudit_DuplicateAuditor(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
 	})
 
@@ -710,7 +715,7 @@ func TestSubmitAudit_InvalidScore(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
 	})
 
@@ -737,9 +742,9 @@ func TestComputeConsensus(t *testing.T) {
 
 	// Set up 3 audits with different stakes and scores
 	audits := []types.EvidenceAudit{
-		{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: types.AuditStatusPending},
-		{Id: "a2", EvidenceId: "ev-1", Stake: "200000000", Score: 600000, Status: types.AuditStatusPending},
-		{Id: "a3", EvidenceId: "ev-1", Stake: "100000000", Score: 900000, Status: types.AuditStatusPending},
+		{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: string(types.AuditStatusPending)},
+		{Id: "a2", EvidenceId: "ev-1", Stake: "200000000", Score: 600000, Status: string(types.AuditStatusPending)},
+		{Id: "a3", EvidenceId: "ev-1", Stake: "100000000", Score: 900000, Status: string(types.AuditStatusPending)},
 	}
 	for _, a := range audits {
 		k.SetAudit(ctx, a)
@@ -763,8 +768,8 @@ func TestComputeConsensus(t *testing.T) {
 func TestComputeConsensus_SkipsExpired(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetAudit(ctx, types.EvidenceAudit{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: types.AuditStatusPending})
-	k.SetAudit(ctx, types.EvidenceAudit{Id: "a2", EvidenceId: "ev-1", Stake: "100000000", Score: 200000, Status: types.AuditStatusExpired})
+	k.SetAudit(ctx, types.EvidenceAudit{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: string(types.AuditStatusPending)})
+	k.SetAudit(ctx, types.EvidenceAudit{Id: "a2", EvidenceId: "ev-1", Stake: "100000000", Score: 200000, Status: string(types.AuditStatusExpired)})
 
 	consensus, err := k.ComputeConsensus(ctx, "ev-1")
 	if err != nil {
@@ -815,7 +820,7 @@ func TestResolveAudits(t *testing.T) {
 		Auditor:    auditor1,
 		Stake:      "100000000",
 		Score:      720000,
-		Status:     types.AuditStatusPending,
+		Status:     string(types.AuditStatusPending),
 	})
 
 	// Inaccurate audit (far from ground truth)
@@ -825,7 +830,7 @@ func TestResolveAudits(t *testing.T) {
 		Auditor:    auditor2,
 		Stake:      "100000000",
 		Score:      200000,
-		Status:     types.AuditStatusPending,
+		Status:     string(types.AuditStatusPending),
 	})
 
 	groundTruth := uint64(750000)
@@ -836,13 +841,13 @@ func TestResolveAudits(t *testing.T) {
 
 	// Check auditor 1 was rewarded (delta=30000, threshold=100000 → accurate)
 	a1, _ := k.GetAudit(ctx, "a1")
-	if a1.Status != types.AuditStatusRewarded {
+	if a1.Status != string(types.AuditStatusRewarded) {
 		t.Fatalf("expected rewarded, got %s", a1.Status)
 	}
 
 	// Check auditor 2 was slashed (delta=550000, threshold=100000 → inaccurate)
 	a2, _ := k.GetAudit(ctx, "a2")
-	if a2.Status != types.AuditStatusSlashed {
+	if a2.Status != string(types.AuditStatusSlashed) {
 		t.Fatalf("expected slashed, got %s", a2.Status)
 	}
 }
@@ -862,7 +867,7 @@ func TestResolveEvidence_Verified(t *testing.T) {
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
 		ClaimId:     "claim-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80, // 80 + 10 = 90 < 100 (current height) → window closed
 	})
 
@@ -874,7 +879,7 @@ func TestResolveEvidence_Verified(t *testing.T) {
 			Auditor:    testAddr(i + 10),
 			Stake:      "50000000",
 			Score:      800000,
-			Status:     types.AuditStatusPending,
+			Status:     string(types.AuditStatusPending),
 		})
 	}
 
@@ -883,7 +888,7 @@ func TestResolveEvidence_Verified(t *testing.T) {
 	}
 
 	got, _ := k.GetEvidence(ctx, "ev-1")
-	if got.Status != types.EvidenceStatusVerified {
+	if got.Status != string(types.EvidenceStatusVerified) {
 		t.Fatalf("expected verified, got %s", got.Status)
 	}
 	if got.VerifiedAt != 100 {
@@ -902,7 +907,7 @@ func TestResolveEvidence_Rejected(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
 	})
 
@@ -914,7 +919,7 @@ func TestResolveEvidence_Rejected(t *testing.T) {
 			Auditor:    testAddr(i + 10),
 			Stake:      "50000000",
 			Score:      200000, // Below 50% threshold
-			Status:     types.AuditStatusPending,
+			Status:     string(types.AuditStatusPending),
 		})
 	}
 
@@ -923,7 +928,7 @@ func TestResolveEvidence_Rejected(t *testing.T) {
 	}
 
 	got, _ := k.GetEvidence(ctx, "ev-1")
-	if got.Status != types.EvidenceStatusRejected {
+	if got.Status != string(types.EvidenceStatusRejected) {
 		t.Fatalf("expected rejected, got %s", got.Status)
 	}
 }
@@ -937,7 +942,7 @@ func TestResolveEvidence_Expired_InsufficientAudits(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
 	})
 
@@ -947,7 +952,7 @@ func TestResolveEvidence_Expired_InsufficientAudits(t *testing.T) {
 		EvidenceId: "ev-1",
 		Stake:      "50000000",
 		Score:      800000,
-		Status:     types.AuditStatusPending,
+		Status:     string(types.AuditStatusPending),
 	})
 
 	if err := k.ResolveEvidence(ctx, "ev-1"); err != nil {
@@ -955,7 +960,7 @@ func TestResolveEvidence_Expired_InsufficientAudits(t *testing.T) {
 	}
 
 	got, _ := k.GetEvidence(ctx, "ev-1")
-	if got.Status != types.EvidenceStatusExpired {
+	if got.Status != string(types.EvidenceStatusExpired) {
 		t.Fatalf("expected expired, got %s", got.Status)
 	}
 }
@@ -966,7 +971,7 @@ func TestResolveEvidence_WindowStillOpen(t *testing.T) {
 	// Evidence submitted recently — window still open (default 34272 blocks)
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 95, // 95 + 34272 >> 100
 	})
 
@@ -976,7 +981,7 @@ func TestResolveEvidence_WindowStillOpen(t *testing.T) {
 
 	// Should remain submitted (window not closed yet)
 	got, _ := k.GetEvidence(ctx, "ev-1")
-	if got.Status != types.EvidenceStatusSubmitted {
+	if got.Status != string(types.EvidenceStatusSubmitted) {
 		t.Fatalf("expected still submitted, got %s", got.Status)
 	}
 }
@@ -988,7 +993,7 @@ func TestComputeReliability(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:     "ev-1",
-		Status: types.EvidenceStatusSubmitted,
+		Status: string(types.EvidenceStatusSubmitted),
 	})
 
 	// Add 2 audits
@@ -997,14 +1002,14 @@ func TestComputeReliability(t *testing.T) {
 		EvidenceId: "ev-1",
 		Stake:      "100000000",
 		Score:      800000,
-		Status:     types.AuditStatusPending,
+		Status:     string(types.AuditStatusPending),
 	})
 	k.SetAudit(ctx, types.EvidenceAudit{
 		Id:         "a2",
 		EvidenceId: "ev-1",
 		Stake:      "100000000",
 		Score:      600000,
-		Status:     types.AuditStatusPending,
+		Status:     string(types.AuditStatusPending),
 	})
 
 	reliability, err := k.ComputeReliability(ctx, "ev-1")
@@ -1029,7 +1034,7 @@ func TestRegisterOracle_Success(t *testing.T) {
 		Id:        "oracle-1",
 		Operator:  operator,
 		Name:      "TestOracle",
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:     "100000000",
 	}
 
@@ -1059,7 +1064,7 @@ func TestRegisterOracle_DuplicateOperator(t *testing.T) {
 		Id:        "oracle-1",
 		Operator:  operator,
 		Name:      "First",
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:     "100000000",
 	}
 	if err := k.RegisterOracle(ctx, oracle1); err != nil {
@@ -1070,7 +1075,7 @@ func TestRegisterOracle_DuplicateOperator(t *testing.T) {
 		Id:        "oracle-2",
 		Operator:  operator,
 		Name:      "Second",
-		DataTypes: []types.EvidenceType{types.EvidenceTypeComputation},
+		DataTypes: []string{string(types.EvidenceTypeComputation)},
 		Stake:     "100000000",
 	}
 	if err := k.RegisterOracle(ctx, oracle2); err == nil {
@@ -1088,7 +1093,7 @@ func TestRegisterOracle_InsufficientStake(t *testing.T) {
 		Id:        "oracle-1",
 		Operator:  operator,
 		Name:      "Cheap",
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:     "50000000", // Below 100000000 minimum
 	}
 	if err := k.RegisterOracle(ctx, oracle); err == nil {
@@ -1199,26 +1204,26 @@ func TestExpireStaleEvidence(t *testing.T) {
 	// Evidence 1: stale (past window), no audits → expired
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
 	})
 
 	// Evidence 2: fresh (within window) → stays submitted
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-2",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 95,
 	})
 
 	k.ExpireStaleEvidence(ctx)
 
 	e1, _ := k.GetEvidence(ctx, "ev-1")
-	if e1.Status != types.EvidenceStatusExpired {
+	if e1.Status != string(types.EvidenceStatusExpired) {
 		t.Fatalf("expected ev-1 expired, got %s", e1.Status)
 	}
 
 	e2, _ := k.GetEvidence(ctx, "ev-2")
-	if e2.Status != types.EvidenceStatusSubmitted {
+	if e2.Status != string(types.EvidenceStatusSubmitted) {
 		t.Fatalf("expected ev-2 still submitted, got %s", e2.Status)
 	}
 }
@@ -1268,7 +1273,7 @@ func TestUpdateEvidenceStatus(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:     "ev-1",
-		Status: types.EvidenceStatusSubmitted,
+		Status: string(types.EvidenceStatusSubmitted),
 	})
 
 	if err := k.UpdateEvidenceStatus(ctx, "ev-1", types.EvidenceStatusVerified); err != nil {
@@ -1276,7 +1281,7 @@ func TestUpdateEvidenceStatus(t *testing.T) {
 	}
 
 	got, _ := k.GetEvidence(ctx, "ev-1")
-	if got.Status != types.EvidenceStatusVerified {
+	if got.Status != string(types.EvidenceStatusVerified) {
 		t.Fatalf("expected verified, got %s", got.Status)
 	}
 	if got.VerifiedAt != 100 {
@@ -1301,7 +1306,7 @@ func TestMsgServer_SubmitEvidence(t *testing.T) {
 	resp, err := srv.SubmitEvidence(ctx, &types.MsgSubmitEvidence{
 		Submitter:    testAddr(1),
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "hash1",
 		Description:  "test evidence",
 	})
@@ -1318,7 +1323,7 @@ func TestMsgServer_AuditEvidence(t *testing.T) {
 
 	k.SetEvidence(ctx, types.Evidence{
 		Id:          "ev-1",
-		Status:      types.EvidenceStatusSubmitted,
+		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
 	})
 
@@ -1352,7 +1357,7 @@ func TestMsgServer_RegisterOracle(t *testing.T) {
 		Operator:    operator,
 		Name:        "TestOracle",
 		Description: "A test oracle",
-		DataTypes:   []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes:   []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:       "100000000",
 	})
 	if err != nil {
@@ -1370,16 +1375,17 @@ func TestMsgServer_SubmitOracleData(t *testing.T) {
 		Id:        "oracle-1",
 		Operator:  testAddr(1),
 		Name:      "TestOracle",
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		IsActive:  true,
 	})
 
 	srv := keeper.NewMsgServerImpl(k)
 	resp, err := srv.SubmitOracleData(ctx, &types.MsgSubmitOracleData{
+		Operator:    testAddr(1),
 		OracleId:    "oracle-1",
 		ClaimId:     "claim-1",
 		ContentHash: "oraclehash1",
-		DataType:    types.EvidenceTypeOracleFeed,
+		DataType:    string(types.EvidenceTypeOracleFeed),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1399,7 +1405,7 @@ func TestMsgServer_UpdateParams(t *testing.T) {
 	newParams.MinAuditsForConsensus = 5
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "lgm1authority",
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1411,9 +1417,10 @@ func TestMsgServer_UpdateParams(t *testing.T) {
 	}
 
 	// Unauthorized
+	badParams := types.DefaultParams()
 	_, err = srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "lgm1badactor",
-		Params:    types.DefaultParams(),
+		Params:    &badParams,
 	})
 	if err == nil {
 		t.Fatal("expected unauthorized error")
@@ -1561,7 +1568,7 @@ func TestInitExportGenesis(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	genState := types.GenesisState{
-		Params: types.Params{
+		Params: &types.Params{
 			MinAuditStake:         "50000000",
 			AuditWindow:           50000,
 			MinAuditsForConsensus: 5,
@@ -1572,10 +1579,10 @@ func TestInitExportGenesis(t *testing.T) {
 			OracleSlashRate:       250000,
 			MaxEvidencePerClaim:   20,
 		},
-		Evidences: []types.Evidence{
-			{Id: "ev-1", ClaimId: "claim-1", Status: types.EvidenceStatusSubmitted},
+		EvidenceItems: []*types.Evidence{
+			{Id: "ev-1", ClaimId: "claim-1", Status: string(types.EvidenceStatusSubmitted)},
 		},
-		Oracles: []types.Oracle{
+		Oracles: []*types.Oracle{
 			{Id: "oracle-1", Operator: testAddr(1), IsActive: true},
 		},
 	}
@@ -1611,8 +1618,8 @@ func TestInitExportGenesis(t *testing.T) {
 	if exported.Params.MinAuditsForConsensus != 5 {
 		t.Fatalf("exported params mismatch")
 	}
-	if len(exported.Evidences) != 1 {
-		t.Fatalf("expected 1 evidence in export, got %d", len(exported.Evidences))
+	if len(exported.EvidenceItems) != 1 {
+		t.Fatalf("expected 1 evidence in export, got %d", len(exported.EvidenceItems))
 	}
 	if len(exported.Oracles) != 1 {
 		t.Fatalf("expected 1 oracle in export, got %d", len(exported.Oracles))
@@ -1639,7 +1646,7 @@ func TestFullEvidenceLifecycle(t *testing.T) {
 	resp, err := srv.SubmitEvidence(ctx, &types.MsgSubmitEvidence{
 		Submitter:    submitter,
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeExperiment,
+		EvidenceType: string(types.EvidenceTypeExperiment),
 		ContentHash:  "experiment_hash_1",
 		Description:  "Experiment results for claim",
 	})
@@ -1677,7 +1684,7 @@ func TestFullEvidenceLifecycle(t *testing.T) {
 	if !found {
 		t.Fatal("evidence not found")
 	}
-	if evidence.Status != types.EvidenceStatusVerified {
+	if evidence.Status != string(types.EvidenceStatusVerified) {
 		t.Fatalf("expected verified, got %s", evidence.Status)
 	}
 	if evidence.AuditCount < 3 {
@@ -1707,7 +1714,7 @@ func TestOracleDataSubmission_InactiveOracle(t *testing.T) {
 	k.SetOracle(ctx, types.Oracle{
 		Id:        "oracle-1",
 		Operator:  testAddr(1),
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		IsActive:  false,
 	})
 
@@ -1716,7 +1723,7 @@ func TestOracleDataSubmission_InactiveOracle(t *testing.T) {
 		OracleId:    "oracle-1",
 		ClaimId:     "claim-1",
 		ContentHash: "hash",
-		DataType:    types.EvidenceTypeOracleFeed,
+		DataType:    string(types.EvidenceTypeOracleFeed),
 	})
 	if err == nil {
 		t.Fatal("expected inactive oracle error")
@@ -1729,7 +1736,7 @@ func TestOracleDataSubmission_UnsupportedType(t *testing.T) {
 	k.SetOracle(ctx, types.Oracle{
 		Id:        "oracle-1",
 		Operator:  testAddr(1),
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		IsActive:  true,
 	})
 
@@ -1738,7 +1745,7 @@ func TestOracleDataSubmission_UnsupportedType(t *testing.T) {
 		OracleId:    "oracle-1",
 		ClaimId:     "claim-1",
 		ContentHash: "hash",
-		DataType:    types.EvidenceTypeDocument, // Oracle doesn't support this
+		DataType:    string(types.EvidenceTypeDocument), // Oracle doesn't support this
 	})
 	if err == nil {
 		t.Fatal("expected unsupported data type error")
@@ -1754,7 +1761,7 @@ func TestMsgSubmitEvidence_ValidateBasic(t *testing.T) {
 	msg := &types.MsgSubmitEvidence{
 		Submitter:    addr,
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "hash1",
 		Description:  "test",
 	}
@@ -1763,7 +1770,7 @@ func TestMsgSubmitEvidence_ValidateBasic(t *testing.T) {
 	}
 
 	// Empty submitter
-	bad := &types.MsgSubmitEvidence{ClaimId: "claim-1", EvidenceType: types.EvidenceTypeDocument, ContentHash: "hash1", Description: "test"}
+	bad := &types.MsgSubmitEvidence{ClaimId: "claim-1", EvidenceType: string(types.EvidenceTypeDocument), ContentHash: "hash1", Description: "test"}
 	if err := bad.ValidateBasic(); err == nil {
 		t.Fatal("expected error for empty submitter")
 	}
@@ -1802,7 +1809,7 @@ func TestMsgRegisterOracle_ValidateBasic(t *testing.T) {
 	msg := &types.MsgRegisterOracle{
 		Operator:  addr,
 		Name:      "Oracle",
-		DataTypes: []types.EvidenceType{types.EvidenceTypeOracleFeed},
+		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:     "100000000",
 	}
 	if err := msg.ValidateBasic(); err != nil {

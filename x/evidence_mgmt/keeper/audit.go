@@ -19,9 +19,15 @@ func (k Keeper) SubmitAudit(ctx sdk.Context, audit types.EvidenceAudit) error {
 	if !found {
 		return fmt.Errorf("%w: %s", types.ErrEvidenceNotFound, audit.EvidenceId)
 	}
-	if evidence.Status != types.EvidenceStatusSubmitted {
+	if evidence.Status != string(types.EvidenceStatusSubmitted) {
 		return fmt.Errorf("%w: evidence %s is %s, not submitted",
 			types.ErrInvalidEvidence, audit.EvidenceId, evidence.Status)
+	}
+
+	// Prevent self-auditing: submitter cannot audit their own evidence
+	if audit.Auditor == evidence.Submitter {
+		return fmt.Errorf("%w: auditor %s is the evidence submitter",
+			types.ErrSelfAudit, audit.Auditor)
 	}
 
 	// Check audit window is still open
@@ -72,7 +78,7 @@ func (k Keeper) SubmitAudit(ctx sdk.Context, audit types.EvidenceAudit) error {
 	}
 
 	// Set initial state
-	audit.Status = types.AuditStatusPending
+	audit.Status = string(types.AuditStatusPending)
 	audit.RewardAmount = "0"
 	audit.SlashAmount = "0"
 	audit.AccuracyDelta = 0
@@ -107,7 +113,7 @@ func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (types.Audi
 
 	// First pass: compute stake-weighted average
 	for _, audit := range audits {
-		if audit.Status == types.AuditStatusExpired {
+		if audit.Status == string(types.AuditStatusExpired) {
 			continue
 		}
 		stake := new(big.Int)
@@ -131,7 +137,7 @@ func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (types.Audi
 	// variance = sum(stake_i * (score_i - mean)^2) / totalStake
 	varianceSum := new(big.Int)
 	for _, audit := range audits {
-		if audit.Status == types.AuditStatusExpired {
+		if audit.Status == string(types.AuditStatusExpired) {
 			continue
 		}
 		stake := new(big.Int)
@@ -172,30 +178,46 @@ func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (types.Audi
 
 // ResolveAudits resolves all audits for an evidence, rewarding accurate ones
 // and slashing inaccurate ones based on their deviation from the ground truth score.
+//
+// Economics: Rewards are funded from slashed stakes within the same resolution batch.
+// The module account holds escrowed stakes. Inaccurate auditors lose a portion (slash),
+// which funds rewards for accurate auditors. If total rewards exceed total slashed,
+// rewards are proportionally scaled down to available funds. Any remaining slashed
+// funds after paying rewards are burned.
 func (k Keeper) ResolveAudits(ctx sdk.Context, evidenceId string, groundTruth uint64) error {
 	params := k.GetParams(ctx)
 	audits := k.GetAuditsForEvidence(ctx, evidenceId)
 
+	// Two-pass resolution:
+	// Pass 1: Classify audits, compute slashes and theoretical rewards
+	// Pass 2: Scale rewards to available funds, execute transfers
+
+	type auditResolution struct {
+		audit       types.EvidenceAudit
+		accurate    bool
+		stakeAmount *big.Int
+		delta       uint64
+		auditorAddr sdk.AccAddress
+		// For accurate: theoretical reward (before scaling)
+		reward *big.Int
+		// For inaccurate: slash amount
+		slashAmount *big.Int
+	}
+
+	var resolutions []auditResolution
+	totalSlashed := new(big.Int)
+	totalRewards := new(big.Int)
+
+	// Pass 1: Classify and compute
 	for _, audit := range audits {
-		if audit.Status != types.AuditStatusPending {
+		if audit.Status != string(types.AuditStatusPending) {
 			continue
 		}
-
-		accurate := IsAccurate(audit.Score, groundTruth, params.AccuracyThreshold)
 
 		stakeAmount := new(big.Int)
 		if _, ok := stakeAmount.SetString(audit.Stake, 10); !ok {
 			continue
 		}
-
-		// Compute accuracy delta (basis points of distance from ground truth)
-		var delta uint64
-		if audit.Score > groundTruth {
-			delta = audit.Score - groundTruth
-		} else {
-			delta = groundTruth - audit.Score
-		}
-		audit.AccuracyDelta = delta
 
 		auditorAddr, err := sdk.AccAddressFromBech32(audit.Auditor)
 		if err != nil {
@@ -204,61 +226,130 @@ func (k Keeper) ResolveAudits(ctx sdk.Context, evidenceId string, groundTruth ui
 			continue
 		}
 
+		var delta uint64
+		if audit.Score > groundTruth {
+			delta = audit.Score - groundTruth
+		} else {
+			delta = groundTruth - audit.Score
+		}
+
+		accurate := IsAccurate(audit.Score, groundTruth, params.AccuracyThreshold)
+
+		res := auditResolution{
+			audit:       audit,
+			accurate:    accurate,
+			stakeAmount: stakeAmount,
+			delta:       delta,
+			auditorAddr: auditorAddr,
+		}
+
 		if accurate {
-			// Reward: return stake + reward percentage
+			// Theoretical reward: RewardRate basis points of stake
 			rewardBps := new(big.Int).SetUint64(params.RewardRate)
 			reward := new(big.Int).Mul(stakeAmount, rewardBps)
 			reward.Div(reward, new(big.Int).SetUint64(1000000))
+			res.reward = reward
+			totalRewards.Add(totalRewards, reward)
+		} else {
+			// Slash: SlashRate basis points of stake
+			slashBps := new(big.Int).SetUint64(params.SlashRate)
+			slashAmt := new(big.Int).Mul(stakeAmount, slashBps)
+			slashAmt.Div(slashAmt, new(big.Int).SetUint64(1000000))
+			res.slashAmount = slashAmt
+			totalSlashed.Add(totalSlashed, slashAmt)
+		}
 
-			// Return stake + reward to auditor
-			totalReturn := new(big.Int).Add(stakeAmount, reward)
+		resolutions = append(resolutions, res)
+	}
+
+	// Compute reward scaling factor: if total rewards > total slashed,
+	// scale rewards down proportionally so they don't exceed available funds.
+	// rewardScale = min(1, totalSlashed / totalRewards) as basis points (0-1000000)
+	rewardScaleBps := uint64(1000000) // 100% by default
+	if totalRewards.Sign() > 0 && totalSlashed.Cmp(totalRewards) < 0 {
+		// Scale down: rewardScaleBps = totalSlashed * 1000000 / totalRewards
+		scaled := new(big.Int).Mul(totalSlashed, new(big.Int).SetUint64(1000000))
+		scaled.Div(scaled, totalRewards)
+		rewardScaleBps = scaled.Uint64()
+	}
+
+	// Track actual rewards paid for burn calculation
+	actualRewardsPaid := new(big.Int)
+
+	// Pass 2: Execute transfers
+	for _, res := range resolutions {
+		res.audit.AccuracyDelta = res.delta
+
+		if res.accurate {
+			// Scale reward by available slash funds
+			scaledReward := new(big.Int).Mul(res.reward, new(big.Int).SetUint64(rewardScaleBps))
+			scaledReward.Div(scaledReward, new(big.Int).SetUint64(1000000))
+
+			// Return stake + scaled reward to auditor
+			totalReturn := new(big.Int).Add(res.stakeAmount, scaledReward)
 			returnCoin := sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(totalReturn))
 			if err := k.bankKeeper.SendCoinsFromModuleToAccount(
-				ctx, types.ModuleName, auditorAddr, sdk.NewCoins(returnCoin),
+				ctx, types.ModuleName, res.auditorAddr, sdk.NewCoins(returnCoin),
 			); err != nil {
 				k.Logger(ctx).Error("failed to reward auditor",
-					"auditor", audit.Auditor, "error", err)
+					"auditor", res.audit.Auditor, "error", err)
 				continue
 			}
 
-			audit.Status = types.AuditStatusRewarded
-			audit.RewardAmount = reward.String()
-			audit.ResolvedAt = uint64(ctx.BlockHeight())
-		} else {
-			// Slash: deduct slash percentage from stake, return remainder
-			slashBps := new(big.Int).SetUint64(params.SlashRate)
-			slashAmount := new(big.Int).Mul(stakeAmount, slashBps)
-			slashAmount.Div(slashAmount, new(big.Int).SetUint64(1000000))
+			actualRewardsPaid.Add(actualRewardsPaid, scaledReward)
 
-			remainder := new(big.Int).Sub(stakeAmount, slashAmount)
+			res.audit.Status = string(types.AuditStatusRewarded)
+			res.audit.RewardAmount = scaledReward.String()
+			res.audit.ResolvedAt = uint64(ctx.BlockHeight())
+		} else {
+			// Return remainder (stake - slash) to auditor
+			remainder := new(big.Int).Sub(res.stakeAmount, res.slashAmount)
 			if remainder.Sign() > 0 {
 				returnCoin := sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(remainder))
 				if err := k.bankKeeper.SendCoinsFromModuleToAccount(
-					ctx, types.ModuleName, auditorAddr, sdk.NewCoins(returnCoin),
+					ctx, types.ModuleName, res.auditorAddr, sdk.NewCoins(returnCoin),
 				); err != nil {
 					k.Logger(ctx).Error("failed to return remainder to auditor",
-						"auditor", audit.Auditor, "error", err)
+						"auditor", res.audit.Auditor, "error", err)
 					continue
 				}
 			}
 
-			audit.Status = types.AuditStatusSlashed
-			audit.SlashAmount = slashAmount.String()
-			audit.ResolvedAt = uint64(ctx.BlockHeight())
+			res.audit.Status = string(types.AuditStatusSlashed)
+			res.audit.SlashAmount = res.slashAmount.String()
+			res.audit.ResolvedAt = uint64(ctx.BlockHeight())
 		}
 
-		k.SetAudit(ctx, audit)
+		k.SetAudit(ctx, res.audit)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
 				"audit_resolved",
-				sdk.NewAttribute("audit_id", audit.Id),
-				sdk.NewAttribute("evidence_id", audit.EvidenceId),
-				sdk.NewAttribute("auditor", audit.Auditor),
-				sdk.NewAttribute("status", string(audit.Status)),
-				sdk.NewAttribute("accuracy_delta", fmt.Sprintf("%d", audit.AccuracyDelta)),
+				sdk.NewAttribute("audit_id", res.audit.Id),
+				sdk.NewAttribute("evidence_id", res.audit.EvidenceId),
+				sdk.NewAttribute("auditor", res.audit.Auditor),
+				sdk.NewAttribute("status", string(res.audit.Status)),
+				sdk.NewAttribute("accuracy_delta", fmt.Sprintf("%d", res.audit.AccuracyDelta)),
 			),
 		)
+	}
+
+	// Burn excess slashed funds that weren't used for rewards
+	excessSlash := new(big.Int).Sub(totalSlashed, actualRewardsPaid)
+	if excessSlash.Sign() > 0 {
+		burnCoin := sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(excessSlash))
+		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, sdk.NewCoins(burnCoin)); err != nil {
+			k.Logger(ctx).Error("failed to burn excess slashed funds",
+				"amount", excessSlash.String(), "error", err)
+		} else {
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					"audit_slash_burned",
+					sdk.NewAttribute("evidence_id", evidenceId),
+					sdk.NewAttribute("burned_amount", excessSlash.String()),
+				),
+			)
+		}
 	}
 
 	return nil

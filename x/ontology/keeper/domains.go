@@ -55,7 +55,7 @@ func (k Keeper) GetConfidenceCeiling(ctx sdk.Context, domainName string) (maxCon
 		return 0, 0, fmt.Errorf("%w: %s", types.ErrDomainNotFound, domainName)
 	}
 
-	stratum, found := k.GetStratum(ctx, domain.Stratum)
+	stratum, found := k.GetStratum(ctx, types.Stratum(domain.Stratum))
 	if !found {
 		return 0, 0, fmt.Errorf("%w: stratum %d for domain %s",
 			types.ErrInvalidStratum, domain.Stratum, domainName)
@@ -71,7 +71,7 @@ func (k Keeper) GetStratumForDomain(ctx sdk.Context, domainName string) (types.S
 		return types.StratumProperties{}, fmt.Errorf("%w: %s", types.ErrDomainNotFound, domainName)
 	}
 
-	stratum, found := k.GetStratum(ctx, domain.Stratum)
+	stratum, found := k.GetStratum(ctx, types.Stratum(domain.Stratum))
 	if !found {
 		return types.StratumProperties{}, fmt.Errorf("%w: stratum %d for domain %s",
 			types.ErrInvalidStratum, domain.Stratum, domainName)

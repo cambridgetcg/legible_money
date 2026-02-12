@@ -111,14 +111,14 @@ function generateCommitment(
   roundId: string,
   verdict: string,
   confidence: number,
-  nonce: string,
+  salt: string,
 ): string {
   const commitData = JSON.stringify({
     roundId,
     verdict,
     confidence,
     referencesChecked: [],
-    nonce,
+    salt,
   });
   const hash = domainHash(HASH_DOMAINS.COMMITMENT, commitData);
   return sha512_256Hex(hash.toString());
@@ -212,7 +212,7 @@ describe.sequential(
         initialValidators: validators.map((v) => ({
           publicKey: v.publicKey as PublicKey,
           did: v.did,
-          stake: 10_000n * ONE_LGM,
+          stake: 10_000n * 10n ** 15n,
         })),
         stateManager: state,
         params: SIM_PARAMS,
@@ -256,7 +256,7 @@ describe.sequential(
         claimType: "empirical",
         domain: "physics.optics",
         stratum: "physical",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: [],
       };
 
@@ -312,7 +312,7 @@ describe.sequential(
       expect(factAData.confidence).toBe(0.95);
       expect(factAData.domain).toBe("physics.optics");
       console.log(`  [FACT] Created: ${factAId} (confidence: 0.95)`);
-      console.log(`         "${factAData.claim.substring(0, 60)}..."`);
+      console.log(`         "${factAData.claimText.substring(0, 60)}..."`);
 
       // --- Claim B: References Claim A ---
       const claimB: ClaimSubmitPayload = {
@@ -322,7 +322,7 @@ describe.sequential(
         claimType: "empirical",
         domain: "physics.astrophysics",
         stratum: "physical",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: [factAId],
       };
 
@@ -380,7 +380,7 @@ describe.sequential(
         claimType: "empirical",
         domain: "physics.astrophysics",
         stratum: "physical",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: [factAId],
         derivedFrom: {
           factIds: [factAId, factBId],
@@ -477,7 +477,8 @@ describe.sequential(
 
       state.addFact({
         id: factAId,
-        claim: "The speed of light in vacuum is approximately 299,792,458 m/s",
+        claimText:
+          "The speed of light in vacuum is approximately 299,792,458 m/s",
         domain: "physics.optics",
         confidence: 0.95,
         verifiedAt: 115n,
@@ -489,7 +490,7 @@ describe.sequential(
 
       state.addFact({
         id: factBId,
-        claim:
+        claimText:
           "Light takes approximately 8.3 minutes to travel from Sun to Earth",
         domain: "physics.astrophysics",
         confidence: 0.91,
@@ -502,7 +503,7 @@ describe.sequential(
 
       state.addFact({
         id: factCId,
-        claim: "The Sun is approximately 149.6 million km from Earth",
+        claimText: "The Sun is approximately 149.6 million km from Earth",
         domain: "physics.astrophysics",
         confidence: 0.89,
         verifiedAt: 155n,
@@ -556,10 +557,10 @@ describe.sequential(
 
       expect(queryResult1.facts.length).toBeGreaterThanOrEqual(1);
       const lightSpeedFact = queryResult1.facts[0];
-      expect(lightSpeedFact.fact.claim).toContain("speed of light");
+      expect(lightSpeedFact.fact.claimText).toContain("speed of light");
 
       console.log(
-        `  │ Found: "${lightSpeedFact.fact.claim.substring(0, 55)}..."`,
+        `  │ Found: "${lightSpeedFact.fact.claimText.substring(0, 55)}..."`,
       );
       console.log(`  │ Confidence: ${lightSpeedFact.fact.confidence}`);
       console.log(`  │ Cost: ${queryResult1.metadata.actualCost} wei`);
@@ -594,7 +595,7 @@ describe.sequential(
       );
       for (const f of queryResult2.facts) {
         console.log(
-          `  │   - "${f.fact.claim.substring(0, 50)}..." (conf: ${f.fact.confidence})`,
+          `  │   - "${f.fact.claimText.substring(0, 50)}..." (conf: ${f.fact.confidence})`,
         );
       }
       console.log(`  │ Cost: ${queryResult2.metadata.actualCost} wei`);
@@ -616,7 +617,9 @@ describe.sequential(
       );
 
       expect(factDetail.fact).not.toBeNull();
-      console.log(`  │ Fact: "${factDetail.fact!.claim.substring(0, 55)}..."`);
+      console.log(
+        `  │ Fact: "${factDetail.fact!.claimText.substring(0, 55)}..."`,
+      );
       console.log(`  │ Confidence: ${factDetail.fact!.confidence}`);
       console.log(
         `  │ Research status: ${JSON.stringify(factDetail.researchStatus)}`,
@@ -707,7 +710,7 @@ describe.sequential(
         claimType: "empirical",
         domain: "chemistry.thermodynamics",
         stratum: "chemical",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: [],
       };
 
@@ -783,11 +786,11 @@ describe.sequential(
       );
 
       expect(queryResult.facts.length).toBe(1);
-      expect(queryResult.facts[0].fact.claim).toContain(
+      expect(queryResult.facts[0].fact.claimText).toContain(
         "specific heat capacity",
       );
       console.log(
-        `    Found: "${queryResult.facts[0].fact.claim.substring(0, 50)}..."`,
+        `    Found: "${queryResult.facts[0].fact.claimText.substring(0, 50)}..."`,
       );
 
       const queryCost = thinkerBefore - state.getBalance(thinker.did);
@@ -803,7 +806,7 @@ describe.sequential(
         claimType: "empirical",
         domain: "chemistry.thermodynamics",
         stratum: "chemical",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: [factId],
         derivedFrom: {
           factIds: [factId],
@@ -885,7 +888,7 @@ describe.sequential(
 
       // Verify the derived fact exists and is active
       expect(derivedFact.status).toBe("active");
-      expect(derivedFact.claim).toContain("334,880");
+      expect(derivedFact.claimText).toContain("334,880");
 
       // Original fact citation count incremented (from query)
       const factAfter = state.getFact(factId)!;
@@ -941,7 +944,7 @@ describe.sequential(
           claim: "Hydrogen is the lightest element",
           domain: "chemistry.elements",
           type: "empirical" as any,
-          stake: 100n * ONE_LGM,
+          stake: 100n * 10n ** 15n,
           proposedConfidence: 0.5,
           references: [
             {
@@ -1026,7 +1029,7 @@ describe.sequential(
           roundId: round.id,
           verdict,
           confidence,
-          nonce,
+          salt: nonce,
           referencesChecked: [],
           reasoning: undefined,
         });
@@ -1040,7 +1043,7 @@ describe.sequential(
           validator: v.publicKey as PublicKey,
           verdict: verdict as any,
           confidence,
-          nonce,
+          salt: nonce,
           referencesChecked: [],
           signature: revealSig,
         });
@@ -1115,19 +1118,19 @@ describe.sequential(
       const facts = [
         {
           id: "fact:chem-001",
-          claim: "CO2 absorbs infrared radiation",
+          claimText: "CO2 absorbs infrared radiation",
           domain: "chemistry.spectroscopy",
           confidence: 0.94,
         },
         {
           id: "fact:atm-001",
-          claim: "Earth's atmosphere contains CO2",
+          claimText: "Earth's atmosphere contains CO2",
           domain: "environmental.atmosphere",
           confidence: 0.97,
         },
         {
           id: "fact:phys-001",
-          claim: "Absorbed radiation increases thermal energy",
+          claimText: "Absorbed radiation increases thermal energy",
           domain: "physics.thermodynamics",
           confidence: 0.96,
         },
@@ -1236,7 +1239,7 @@ describe.sequential(
         claimType: "empirical",
         domain: "environmental.climate",
         stratum: "environmental",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: ["fact:chem-001", "fact:atm-001"],
         derivedFrom: {
           factIds: ["fact:chem-001", "fact:atm-001", "fact:phys-001"],

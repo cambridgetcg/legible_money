@@ -42,7 +42,7 @@ export interface ReviewerEligibility {
 
 export const DEFAULT_REVIEWER_ELIGIBILITY: ReviewerEligibility = {
   minReputation: 0.65,
-  minStake: 200n * 10n ** 18n, // 200 LGM
+  minStake: 200n * 10n ** 15n, // 0.2 LGM
   minDomainExpertise: 0.6,
   excludeProposer: true,
   excludeSameOperator: true,

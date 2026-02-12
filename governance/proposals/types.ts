@@ -45,7 +45,7 @@ export type ProposerAbility =
 export const PROPOSER_TIERS: readonly ProposerTier[] = [
   {
     tier: 1, // Full Proposers
-    minStake: 500n * 10n ** 18n, // 500 LGM
+    minStake: 500n * 10n ** 15n, // 0.5 LGM
     minReputation: 0.7,
     minCapabilityLevel: 2,
     minContributions: 10,
@@ -54,7 +54,7 @@ export const PROPOSER_TIERS: readonly ProposerTier[] = [
   },
   {
     tier: 2, // Amendment Proposers
-    minStake: 200n * 10n ** 18n, // 200 LGM
+    minStake: 200n * 10n ** 15n, // 0.2 LGM
     minReputation: 0.6,
     minCapabilityLevel: 1,
     minContributions: 5,
@@ -63,7 +63,7 @@ export const PROPOSER_TIERS: readonly ProposerTier[] = [
   },
   {
     tier: 3, // Comment Only
-    minStake: 50n * 10n ** 18n, // 50 LGM
+    minStake: 50n * 10n ** 15n, // 0.05 LGM
     minReputation: 0.5,
     minCapabilityLevel: 0,
     minContributions: 0,
@@ -98,7 +98,7 @@ export interface LIPStakeRequirement {
 export const LIP_STAKE_REQUIREMENTS: readonly LIPStakeRequirement[] = [
   {
     category: "consensus",
-    requiredStake: 1000n * 10n ** 18n, // 1000 LGM
+    requiredStake: 1000n * 10n ** 15n, // 1 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
     maliciousSlashBps: 10000n,
@@ -106,7 +106,7 @@ export const LIP_STAKE_REQUIREMENTS: readonly LIPStakeRequirement[] = [
   },
   {
     category: "economics",
-    requiredStake: 800n * 10n ** 18n, // 800 LGM
+    requiredStake: 800n * 10n ** 15n, // 0.8 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
     maliciousSlashBps: 10000n,
@@ -114,7 +114,7 @@ export const LIP_STAKE_REQUIREMENTS: readonly LIPStakeRequirement[] = [
   },
   {
     category: "interface",
-    requiredStake: 400n * 10n ** 18n, // 400 LGM
+    requiredStake: 400n * 10n ** 15n, // 0.4 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
     maliciousSlashBps: 10000n,
@@ -122,7 +122,7 @@ export const LIP_STAKE_REQUIREMENTS: readonly LIPStakeRequirement[] = [
   },
   {
     category: "process",
-    requiredStake: 200n * 10n ** 18n, // 200 LGM
+    requiredStake: 200n * 10n ** 15n, // 0.2 LGM
     maliciousSlash: 1.0,
     frivolousSlash: 0.5,
     maliciousSlashBps: 10000n,

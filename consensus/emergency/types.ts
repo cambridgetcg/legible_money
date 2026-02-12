@@ -39,6 +39,11 @@ export interface EmergencyHaltProposal {
 /**
  * Revert proposal — only valid while halted.
  * Proposes reverting state to a specific block height.
+ *
+ * NOTE: This is a GOVERNANCE SIGNAL, not an automated state rollback.
+ * The target fields record the guardians' consensus on what to revert to,
+ * but actual state reversion requires out-of-band validator coordination
+ * (stop nodes → rollback → restart with new genesis).
  */
 export interface EmergencyRevertProposal {
   id: string;
@@ -80,12 +85,10 @@ export type EmergencyCeremonyPhase =
 export interface EmergencyVote {
   voter: string; // Guardian public key
   vote: "yes" | "no";
-  signature: string;
 }
 
 export interface EmergencyPrecommit {
   voter: string;
-  signature: string;
 }
 
 /**

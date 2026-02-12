@@ -332,18 +332,3 @@ message MsgSetAvailability {
 }
 
 message MsgSetAvailabilityResponse {}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-}
-
-message Params {
-  string min_project_budget = 1;
-  string min_task_bounty = 2;
-  uint64 application_review_period = 3;
-  uint32 max_project_depth = 4;
-}

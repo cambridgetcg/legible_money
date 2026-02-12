@@ -1,0 +1,21 @@
+syntax = "proto3";
+package legible.claiming_pot.v1;
+
+option go_package = "github.com/legible-money/legible/x/claiming_pot/types";
+
+import "legible/claiming_pot/v1/state.proto";
+
+// GenesisState defines the claiming_pot module's genesis state.
+message GenesisState {
+  Params params                  = 1;
+  repeated ClaimingPot pots      = 2;
+  repeated ClaimRecord claims    = 3;
+}
+
+// Params defines the claiming_pot module parameters.
+message Params {
+  uint64 max_pots_per_creator  = 1;
+  string min_initial_deposit   = 2;  // bigint as string (ulgm)
+  uint32 max_allowlist_size    = 3;
+  string min_amount_per_claim  = 4;  // bigint as string (ulgm)
+}

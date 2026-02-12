@@ -118,7 +118,7 @@ export function falsifyVesting(
     claimableAmount: 0n,
     reserveAmount: 0n,
     // Keep released amount for record (even though some is clawed back)
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 
   return {
@@ -146,19 +146,14 @@ export function calculatePartialClawback(
   // Calculate full clawback
   const fullClawback = calculateClawback(vesting, currentBlock);
 
-  // Scale by impact ratio
+  // M4 FIX: Scale by impact ratio using 10000 basis points (was 100, losing precision)
+  const impactBps = BigInt(Math.floor(impactRatio * 10000));
   const scaledUnvested =
-    (fullClawback.breakdown.fromUnvested *
-      BigInt(Math.floor(impactRatio * 100))) /
-    100n;
+    (fullClawback.breakdown.fromUnvested * impactBps) / 10000n;
   const scaledClawback =
-    (fullClawback.breakdown.fromClawback *
-      BigInt(Math.floor(impactRatio * 100))) /
-    100n;
+    (fullClawback.breakdown.fromClawback * impactBps) / 10000n;
   const scaledReserve =
-    (fullClawback.breakdown.fromReserve *
-      BigInt(Math.floor(impactRatio * 100))) /
-    100n;
+    (fullClawback.breakdown.fromReserve * impactBps) / 10000n;
 
   const challengerReward = scaledUnvested + scaledClawback + scaledReserve;
 
@@ -227,7 +222,7 @@ export function calculateReserveClaim(
   );
 
   const claimableReserve =
-    (maxReserveClaim * BigInt(Math.floor(releaseRatio * 100))) / 100n;
+    (maxReserveClaim * BigInt(Math.floor(releaseRatio * 10000))) / 10000n;
   const remainingReserve = vesting.reserveAmount - claimableReserve;
 
   return {
@@ -353,11 +348,11 @@ export function handleLateFalsification(
   const unvested =
     vesting.totalAmount - vesting.reserveAmount - release.totalReleased;
 
-  // Standard clawback from released
+  // L1 FIX: Standard clawback from released using 10000 basis points (was 100, inconsistent with main calculateClawback)
   const clawbackFromReleased =
     (release.totalReleased *
-      BigInt(Math.floor(CLAWBACK_RATES.releasedClawback * 100))) /
-    100n;
+      BigInt(Math.floor(CLAWBACK_RATES.releasedClawback * 10000))) /
+    10000n;
 
   // Reserve is the main value for late challengers
   const fromReserve = vesting.reserveAmount;

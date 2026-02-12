@@ -98,8 +98,8 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Hand-written types lack proto typeURLs required by the SDK MsgServiceRouter.
-	// Service registration deferred to proto codegen phase.
+	types.RegisterMsgServer(cfg.MsgServer(), am.keeper)
+	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 }
 
 // InitGenesis initializes the module from genesis.
@@ -137,8 +137,8 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 			return true
 		}
 		if qual.ExpiresAtBlock > 0 && currentBlock > qual.ExpiresAtBlock {
-			if qual.Status == types.StatusActive || qual.Status == types.StatusProbationary {
-				qual.Status = types.StatusExpired
+			if qual.Status == string(types.StatusActive) || qual.Status == string(types.StatusProbationary) {
+				qual.Status = string(types.StatusExpired)
 				qual.Metrics.EffectiveWeight = 0
 				am.keeper.SetQualification(ctx, qual)
 				expired++

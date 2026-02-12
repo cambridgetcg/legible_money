@@ -86,12 +86,13 @@ const (
 	CalibrationWeight      uint64 = 100_000 // 10%
 
 	// Capture detection thresholds
-	HerfindahlTriggerThreshold uint64 = 400_000 // 0.4
-	HerfindahlPauseThreshold   uint64 = 600_000 // 0.6
-	MinVerificationsForAnalysis uint64 = 19
-	DetectionIntervalBlocks     uint64 = 777
-	DecayIntervalBlocks         uint64 = 7_777
-	MaxExpirationsPerBlock      uint64 = 100
+	HerfindahlTriggerThreshold      uint64 = 400_000 // 0.4
+	HerfindahlPauseThreshold        uint64 = 600_000 // 0.6
+	MinVerificationsForAnalysis     uint64 = 19
+	DetectionIntervalBlocks         uint64 = 777
+	DecayIntervalBlocks             uint64 = 7_777
+	MaxExpirationsPerBlock          uint64 = 100
+	DefaultDomainPauseDurationBlocks uint64 = 777 // ~32 min auto-pause on critical HHI
 
 	// Cross-stratum
 	CrossStratumAgreementThreshold uint64 = 700_000 // 70%
@@ -100,186 +101,10 @@ const (
 	MaxStratumDistance              uint64 = 2
 )
 
-// --- Core Types ---
-
-// QualificationMetrics tracks verification performance per domain.
-type QualificationMetrics struct {
-	TotalVerifications     uint64 `json:"total_verifications"`
-	CorrectVerifications   uint64 `json:"correct_verifications"`
-	Accuracy               uint64 `json:"accuracy"`                // basis points
-	LastVerificationBlock  uint64 `json:"last_verification_block"`
-	ConsecutiveCorrect     uint64 `json:"consecutive_correct"`
-	ConsecutiveIncorrect   uint64 `json:"consecutive_incorrect"`
-	ChallengesReceived     uint64 `json:"challenges_received"`
-	ChallengesLost         uint64 `json:"challenges_lost"`
-	EffectiveWeight        uint64 `json:"effective_weight"` // basis points
-}
-
-// DomainQualification represents a validator's qualification for a specific domain.
-type DomainQualification struct {
-	ValidatorAddr       string               `json:"validator_addr"`
-	Domain              string               `json:"domain"`
-	Stratum             uint32               `json:"stratum"`
-	Pathway             QualificationPathway `json:"pathway"`
-	Status              QualificationStatus  `json:"status"`
-	EarnedAtBlock       uint64               `json:"earned_at_block"`
-	ExpiresAtBlock      uint64               `json:"expires_at_block"` // 0 = no expiry
-	Metrics             QualificationMetrics `json:"metrics"`
-	LockedStake         string               `json:"locked_stake,omitempty"`
-	StakeUnlocksAtBlock uint64               `json:"stake_unlocks_at_block,omitempty"`
-	Endorsers           []string             `json:"endorsers,omitempty"`
-	InheritedFrom       string               `json:"inherited_from,omitempty"`
-	InheritanceDiscount uint64               `json:"inheritance_discount"` // basis points
-}
-
-func (q *DomainQualification) Reset()         { *q = DomainQualification{} }
-func (q *DomainQualification) String() string { return proto.CompactTextString(q) }
-func (q *DomainQualification) ProtoMessage()  {}
-
-// GlobalReputation tracks a validator's overall reputation.
-type GlobalReputation struct {
-	Score              uint64 `json:"score"` // 0-1000
-	TotalVerifications uint64 `json:"total_verifications"`
-	CorrectVerifications uint64 `json:"correct_verifications"`
-	Accuracy           uint64 `json:"accuracy"` // basis points
-}
-
-// StratumReputation tracks a validator's reputation within a stratum.
-type StratumReputation struct {
-	Stratum            uint32 `json:"stratum"`
-	Score              uint64 `json:"score"` // 0-1000
-	TotalVerifications uint64 `json:"total_verifications"`
-	CorrectVerifications uint64 `json:"correct_verifications"`
-	Accuracy           uint64 `json:"accuracy"` // basis points
-	DomainsVerified    uint64 `json:"domains_verified"`
-	FirstVerificationBlock uint64 `json:"first_verification_block"`
-	LastActivityBlock  uint64 `json:"last_activity_block"`
-	LastDecayBlock     uint64 `json:"last_decay_block"`
-}
-
-// DomainReputation tracks a validator's reputation within a specific domain.
-type DomainReputation struct {
-	Domain             string `json:"domain"`
-	Stratum            uint32 `json:"stratum"`
-	Score              uint64 `json:"score"` // 0-1000
-	TotalVerifications uint64 `json:"total_verifications"`
-	CorrectVerifications uint64 `json:"correct_verifications"`
-	Accuracy           uint64 `json:"accuracy"` // basis points
-	VerdictConsistency uint64 `json:"verdict_consistency"` // basis points
-	ConfidenceCalibration uint64 `json:"confidence_calibration"` // basis points
-	ChallengesReceived uint64 `json:"challenges_received"`
-	ChallengesLost     uint64 `json:"challenges_lost"`
-	ChallengeDefenseRate uint64 `json:"challenge_defense_rate"` // basis points
-	ScoreConfidence    uint64 `json:"score_confidence"` // basis points, increases with verifications
-	FirstVerificationBlock uint64 `json:"first_verification_block"`
-	LastVerificationBlock  uint64 `json:"last_verification_block"`
-	DecayedScore       uint64 `json:"decayed_score"`
-	LastDecayBlock     uint64 `json:"last_decay_block"`
-}
-
-// IsolatedReputation holds all reputation data for a single validator.
-type IsolatedReputation struct {
-	ValidatorAddr     string                       `json:"validator_addr"`
-	GlobalReputation  GlobalReputation             `json:"global_reputation"`
-	StratumReputations map[uint32]StratumReputation `json:"stratum_reputations"`
-	DomainReputations map[string]DomainReputation  `json:"domain_reputations"`
-	CreatedAtBlock    uint64                       `json:"created_at_block"`
-	LastUpdatedBlock  uint64                       `json:"last_updated_block"`
-}
-
-func (r *IsolatedReputation) Reset()         { *r = IsolatedReputation{} }
-func (r *IsolatedReputation) String() string { return proto.CompactTextString(r) }
-func (r *IsolatedReputation) ProtoMessage()  {}
-
-// CaptureMetrics holds domain-level capture risk metrics.
-type CaptureMetrics struct {
-	Domain             string `json:"domain"`
-	HerfindahlIndex    uint64 `json:"herfindahl_index"` // basis points
-	TimingCorrelation  uint64 `json:"timing_correlation"` // basis points
-	VerdictCorrelation uint64 `json:"verdict_correlation"` // basis points
-	UniqueValidators   uint64 `json:"unique_validators"`
-	TotalVerifications uint64 `json:"total_verifications"`
-	Top3ValidatorShare uint64 `json:"top3_validator_share"` // basis points
-	AnalyzedAtBlock    uint64 `json:"analyzed_at_block"`
-	RiskScore          uint64 `json:"risk_score"` // basis points (0-1,000,000)
-}
-
-func (m *CaptureMetrics) Reset()         { *m = CaptureMetrics{} }
-func (m *CaptureMetrics) String() string { return proto.CompactTextString(m) }
-func (m *CaptureMetrics) ProtoMessage()  {}
-
-// VerificationHistoryEntry records a single verification round for capture analysis.
-type VerificationHistoryEntry struct {
-	ClaimId              string   `json:"claim_id"`
-	BlockNumber          uint64   `json:"block_number"`
-	Validators           []string `json:"validators"`
-	Verdicts             []string `json:"verdicts"` // "confirmed", "rejected", "uncertain"
-	FinalOutcome         string   `json:"final_outcome"` // "accepted", "rejected", "contested"
-	SubmissionTimestamps []uint64 `json:"submission_timestamps"`
-}
-
-// VerificationHistory holds the recent verification history for a domain.
-type VerificationHistory struct {
-	Domain  string                     `json:"domain"`
-	Entries []VerificationHistoryEntry `json:"entries"`
-}
-
-// CrossStratumRequirement defines what strata must be covered for a claim stratum.
-type CrossStratumRequirement struct {
-	ClaimStratum              uint32            `json:"claim_stratum"`
-	RequiredStrata            []uint32          `json:"required_strata"`
-	MinValidatorsPerStratum   map[uint32]uint32 `json:"min_validators_per_stratum"`
-	LowerStratumWeightBonus   uint64            `json:"lower_stratum_weight_bonus"` // basis points (1,000,000 = 1.0x)
-}
-
-// EffectiveReputationResult is returned by GetEffectiveReputation.
-type EffectiveReputationResult struct {
-	Score      uint64           `json:"score"`
-	Source     ReputationSource `json:"source"`
-	Discount   uint64           `json:"discount"` // basis points
-	Confidence uint64           `json:"confidence"` // basis points
-}
-
-// --- Params ---
-
-// Params defines the capture defense module parameters.
-type Params struct {
-	StakeLockPeriod            uint64 `json:"stake_lock_period"`
-	MinVerificationsForQual    uint64 `json:"min_verifications_for_qual"`
-	MinAccuracyForQual         uint64 `json:"min_accuracy_for_qual"`
-	MinEndorsersForQual        uint64 `json:"min_endorsers_for_qual"`
-	InactivityExpirationBlocks uint64 `json:"inactivity_expiration_blocks"`
-	ProbationaryPeriodBlocks   uint64 `json:"probationary_period_blocks"`
-	ReputationHalfLifeBlocks   uint64 `json:"reputation_half_life_blocks"`
-	DetectionIntervalBlocks    uint64 `json:"detection_interval_blocks"`
-	DecayIntervalBlocks        uint64 `json:"decay_interval_blocks"`
-	HerfindahlTriggerThreshold uint64 `json:"herfindahl_trigger_threshold"`
-	MaxExpirationsPerBlock     uint64 `json:"max_expirations_per_block"`
-}
-
-func (p *Params) Reset()         { *p = Params{} }
-func (p *Params) String() string { return proto.CompactTextString(p) }
-func (p *Params) ProtoMessage()  {}
-
-// DefaultParams returns the default capture defense parameters.
-func DefaultParams() Params {
-	return Params{
-		StakeLockPeriod:            StakeLockPeriod,
-		MinVerificationsForQual:    MinVerificationsForQual,
-		MinAccuracyForQual:         MinAccuracyForQual,
-		MinEndorsersForQual:        MinEndorsersForQual,
-		InactivityExpirationBlocks: InactivityExpirationBlocks,
-		ProbationaryPeriodBlocks:   ProbationaryPeriodBlocks,
-		ReputationHalfLifeBlocks:   ReputationHalfLifeBlocks,
-		DetectionIntervalBlocks:    DetectionIntervalBlocks,
-		DecayIntervalBlocks:        DecayIntervalBlocks,
-		HerfindahlTriggerThreshold: HerfindahlTriggerThreshold,
-		MaxExpirationsPerBlock:     MaxExpirationsPerBlock,
-	}
-}
+// --- Params Validation ---
 
 // Validate performs basic param validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.StakeLockPeriod == 0 {
 		return fmt.Errorf("stake lock period must be positive")
 	}
@@ -290,35 +115,6 @@ func (p Params) Validate() error {
 		return fmt.Errorf("herfindahl trigger must be <= 1,000,000")
 	}
 	return nil
-}
-
-// --- Genesis ---
-
-// GenesisState defines the capture defense module's genesis state.
-type GenesisState struct {
-	Params         Params                `json:"params"`
-	Qualifications []DomainQualification `json:"qualifications"`
-	Reputations    []IsolatedReputation  `json:"reputations"`
-	Metrics        []CaptureMetrics      `json:"metrics"`
-}
-
-func (gs *GenesisState) Reset()         { *gs = GenesisState{} }
-func (gs *GenesisState) String() string { return proto.CompactTextString(gs) }
-func (gs *GenesisState) ProtoMessage()  {}
-
-// DefaultGenesisState returns the default genesis state.
-func DefaultGenesisState() *GenesisState {
-	return &GenesisState{
-		Params:         DefaultParams(),
-		Qualifications: []DomainQualification{},
-		Reputations:    []IsolatedReputation{},
-		Metrics:        []CaptureMetrics{},
-	}
-}
-
-// Validate validates the genesis state.
-func (gs GenesisState) Validate() error {
-	return gs.Params.Validate()
 }
 
 // --- Message Types ---
@@ -442,7 +238,7 @@ type QueryValidatorQualificationsRequest struct {
 }
 
 type QueryValidatorQualificationsResponse struct {
-	Qualifications []DomainQualification `json:"qualifications"`
+	Qualifications []*DomainQualification `json:"qualifications"`
 }
 
 type QueryDomainReputationRequest struct {
@@ -451,7 +247,7 @@ type QueryDomainReputationRequest struct {
 }
 
 type QueryDomainReputationResponse struct {
-	Reputation EffectiveReputationResult `json:"reputation"`
+	Reputation *EffectiveReputationResult `json:"reputation"`
 }
 
 type QueryCaptureRiskRequest struct {

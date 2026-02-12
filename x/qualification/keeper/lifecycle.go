@@ -14,14 +14,17 @@ import (
 // PromoteProbationary promotes a probationary qualification to active if the
 // probationary period has elapsed.
 func (k Keeper) PromoteProbationary(ctx sdk.Context, q types.DomainQualification) bool {
-	if q.Status != types.StatusProbationary {
+	if q.Status != string(types.StatusProbationary) {
 		return false
 	}
 	params := k.GetParams(ctx)
 	currentBlock := uint64(ctx.BlockHeight())
 
 	if currentBlock >= q.EarnedAtBlock+params.ProbationaryPeriod {
-		q.Status = types.StatusActive
+		q.Status = string(types.StatusActive)
+		if q.Metrics == nil {
+			q.Metrics = &types.QualificationMetrics{}
+		}
 		q.Metrics.EffectiveWeightBps = k.calculateWeight(q)
 		k.SetQualification(ctx, q)
 		return true
@@ -36,10 +39,10 @@ func (k Keeper) RenewQualification(ctx sdk.Context, validatorAddr, domain string
 		return types.ErrNotQualified
 	}
 
-	if q.Status == types.StatusRevoked {
+	if q.Status == string(types.StatusRevoked) {
 		return fmt.Errorf("%w: cannot renew revoked qualification", types.ErrQualificationSuspended)
 	}
-	if q.Status == types.StatusSuspended {
+	if q.Status == string(types.StatusSuspended) {
 		return fmt.Errorf("%w: must resolve suspension first", types.ErrQualificationSuspended)
 	}
 
@@ -52,8 +55,8 @@ func (k Keeper) RenewQualification(ctx sdk.Context, validatorAddr, domain string
 	}
 
 	// If expired, reactivate as probationary
-	if q.Status == types.StatusExpired {
-		q.Status = types.StatusProbationary
+	if q.Status == string(types.StatusExpired) {
+		q.Status = string(types.StatusProbationary)
 		q.EarnedAtBlock = currentBlock
 	}
 
@@ -95,12 +98,15 @@ func (k Keeper) RecordChallenge(ctx sdk.Context, validatorAddr, domain string) e
 		return types.ErrNotQualified
 	}
 
+	if q.Metrics == nil {
+		q.Metrics = &types.QualificationMetrics{}
+	}
 	q.Metrics.ChallengesReceived++
 	q.Metrics.ChallengesLost++
 
 	params := k.GetParams(ctx)
 	if q.Metrics.ChallengesLost >= params.RevocationChallenges {
-		q.Status = types.StatusRevoked
+		q.Status = string(types.StatusRevoked)
 	}
 
 	k.SetQualification(ctx, q)
@@ -118,16 +124,19 @@ func (k Keeper) CheckAndExpireQualifications(ctx sdk.Context) {
 
 		// Expire if past expiration
 		if q.ExpiresAtBlock > 0 && currentBlock > q.ExpiresAtBlock &&
-			(q.Status == types.StatusActive || q.Status == types.StatusProbationary) {
-			q.Status = types.StatusExpired
+			(q.Status == string(types.StatusActive) || q.Status == string(types.StatusProbationary)) {
+			q.Status = string(types.StatusExpired)
 			changed = true
 		}
 
 		// Promote probationary if period elapsed
-		if q.Status == types.StatusProbationary {
+		if q.Status == string(types.StatusProbationary) {
 			params := k.GetParams(ctx)
 			if currentBlock >= q.EarnedAtBlock+params.ProbationaryPeriod {
-				q.Status = types.StatusActive
+				q.Status = string(types.StatusActive)
+				if q.Metrics == nil {
+					q.Metrics = &types.QualificationMetrics{}
+				}
 				q.Metrics.EffectiveWeightBps = k.calculateWeight(q)
 				changed = true
 			}

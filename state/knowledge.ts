@@ -43,7 +43,7 @@ import {
 function serializeFactState(fact: FactState): Uint8Array {
   const json = JSON.stringify({
     id: fact.id,
-    claim: fact.claim,
+    claimText: fact.claimText,
     domain: fact.domain,
     confidence: fact.confidence,
     verifiedAt: fact.verifiedAt.toString(),
@@ -84,7 +84,7 @@ function deserializeFactState(bytes: Uint8Array): FactState {
   const obj = JSON.parse(json);
   return {
     id: obj.id,
-    claim: obj.claim,
+    claimText: obj.claimText ?? obj.claim,
     domain: obj.domain,
     confidence: obj.confidence as Confidence,
     verifiedAt: BigInt(obj.verifiedAt),
@@ -626,7 +626,7 @@ export class KnowledgeStateTree {
 
     for (const fact of this.factCache.values()) {
       if (
-        fact.claim.toLowerCase().includes(lowerQuery) &&
+        fact.claimText.toLowerCase().includes(lowerQuery) &&
         fact.status === "active"
       ) {
         results.push(fact);
@@ -693,7 +693,7 @@ export class KnowledgeStateTree {
       const fact = deserializeFactState(proof.proof.value);
       return (
         fact.id === proof.fact.id &&
-        fact.claim === proof.fact.claim &&
+        fact.claimText === proof.fact.claimText &&
         fact.status === proof.fact.status
       );
     }
@@ -1351,7 +1351,7 @@ export function createKnowledgeTreeWithAxioms(
   for (const axiom of axioms) {
     tree.addFact({
       id: axiom.id,
-      claim: axiom.claim,
+      claimText: axiom.claim,
       domain: axiom.domain,
       confidence: 1.0 as Confidence, // Axioms have full confidence
       verifiedAt: 0n,

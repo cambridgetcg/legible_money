@@ -193,7 +193,7 @@ export interface BillingParameters {
 
   // Pricing
   basePricePerCall: bigint; // Minimum fee
-  confidencePremiumRate: number; // Multiplier for high confidence
+  confidencePremiumRate: number; // Confidence pricing rate: high conf = discount, low = surcharge
   fundamentalityPremiumRate: number;
   freshnessDiscountRate: number;
 
@@ -214,12 +214,12 @@ export const DEFAULT_BILLING_PARAMETERS: BillingParameters = {
   researchShareRate: 0.22,
 
   basePricePerCall: 1000000000000000n, // 0.001 LGM (18 decimals)
-  confidencePremiumRate: 2.0,
+  confidencePremiumRate: 1.0, // inverted: high confidence = discount, low = surcharge
   fundamentalityPremiumRate: 0.5,
   freshnessDiscountRate: 0.1,
 
   maxPricePerCall: 1000000000000000000n, // 1 LGM
-  minProviderStake: 1000n * 10n ** 18n, // 1000 LGM
+  minProviderStake: 1000n * 10n ** 15n, // 1 LGM
 };
 
 /**

@@ -137,7 +137,7 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 
 	// Check disbursements in voting stage for expired voting periods
 	am.keeper.IterateDisbursements(ctx, func(disb types.DisbursementProposal) bool {
-		if disb.Stage == types.DisbStageVoting && disb.VotingEndsAt > 0 && currentHeight >= disb.VotingEndsAt {
+		if disb.Stage == string(types.DisbStageVoting) && disb.VotingEndsAt > 0 && currentHeight >= disb.VotingEndsAt {
 			am.tallyAndResolveDisbursement(ctx, disb, params)
 		}
 		return false
@@ -152,16 +152,18 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 }
 
 // tallyAndResolveLIP tallies votes and moves a LIP to accepted/rejected.
+// If a consensus-category LIP is accepted and has an attached upgrade plan,
+// ScheduleUpgrade is called on the upgrade keeper to halt the chain at the target height.
 func (am AppModule) tallyAndResolveLIP(ctx sdk.Context, lip types.LIP, params types.Params) {
 	totalWeight := addBigIntStrings(lip.SupportWeight, lip.OpposeWeight, lip.AbstainWeight)
 	if totalWeight == "0" {
-		lip.Stage = types.StageRejected
+		lip.Stage = string(types.StageRejected)
 	} else {
 		supportBps := bpsFraction(lip.SupportWeight, totalWeight)
 		if supportBps >= params.SupportThresholdBps {
-			lip.Stage = types.StageAccepted
+			lip.Stage = string(types.StageAccepted)
 		} else {
-			lip.Stage = types.StageRejected
+			lip.Stage = string(types.StageRejected)
 		}
 	}
 	lip.UpdatedAtBlock = uint64(ctx.BlockHeight())
@@ -171,24 +173,54 @@ func (am AppModule) tallyAndResolveLIP(ctx sdk.Context, lip types.LIP, params ty
 		sdk.NewEvent(
 			"lip_resolved",
 			sdk.NewAttribute("lip_id", lip.Id),
-			sdk.NewAttribute("stage", string(lip.Stage)),
+			sdk.NewAttribute("stage", lip.Stage),
 		),
 	)
+
+	// Bridge to x/upgrade: if an accepted consensus LIP has an upgrade plan, schedule it
+	if lip.Stage == string(types.StageAccepted) {
+		if plan, found := am.keeper.GetUpgradePlan(ctx, lip.Id); found {
+			uk := am.keeper.GetUpgradeKeeper()
+			if uk != nil {
+				if err := uk.ScheduleUpgrade(ctx, plan); err != nil {
+					am.keeper.Logger(ctx).Error("failed to schedule upgrade from LIP",
+						"lip_id", lip.Id,
+						"upgrade_name", plan.Name,
+						"error", err,
+					)
+				} else {
+					ctx.EventManager().EmitEvent(
+						sdk.NewEvent(
+							"upgrade_scheduled",
+							sdk.NewAttribute("lip_id", lip.Id),
+							sdk.NewAttribute("upgrade_name", plan.Name),
+							sdk.NewAttribute("height", fmt.Sprintf("%d", plan.Height)),
+						),
+					)
+					am.keeper.Logger(ctx).Info("software upgrade scheduled via LIP governance",
+						"lip_id", lip.Id,
+						"upgrade_name", plan.Name,
+						"height", plan.Height,
+					)
+				}
+			}
+		}
+	}
 }
 
 // tallyAndResolveDisbursement tallies votes and moves a disbursement to approved/rejected.
 func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.DisbursementProposal, params types.Params) {
 	totalWeight := addBigIntStrings(disb.SupportWeight, disb.OpposeWeight, disb.AbstainWeight)
 	if totalWeight == "0" {
-		disb.Stage = types.DisbStageRejected
+		disb.Stage = string(types.DisbStageRejected)
 	} else {
 		supportBps := bpsFraction(disb.SupportWeight, totalWeight)
 		if supportBps >= params.DisbursementSupportBps {
-			disb.Stage = types.DisbStageApproved
+			disb.Stage = string(types.DisbStageApproved)
 			disb.ApprovedAtBlock = uint64(ctx.BlockHeight())
 			disb.TimelockExpiry = disb.ApprovedAtBlock + params.DisbursementTimelockBlocks
 		} else {
-			disb.Stage = types.DisbStageRejected
+			disb.Stage = string(types.DisbStageRejected)
 		}
 	}
 	am.keeper.SetDisbursement(ctx, disb)

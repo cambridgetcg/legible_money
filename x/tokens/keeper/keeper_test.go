@@ -16,6 +16,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/tokens/keeper"
@@ -142,7 +143,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 	bk := newMockBankKeeper()
 
 	authority := sdk.AccAddress([]byte("authority-addr------")).String()
-	k := keeper.NewKeeper(cdc, storeKey, bk, authority)
+	k := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), bk, authority)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
@@ -179,7 +180,7 @@ func TestParamsSetGet(t *testing.T) {
 		PeriodsUntilExpiry:        10,
 		DustThreshold:             "500",
 		SweepBatchSize:            50,
-		RAIDistributionRate:       2000,
+		RaiDistributionRate:       2000,
 		FreshExpirationOnTransfer: true,
 	}
 	k.SetParams(ctx, custom)
@@ -199,12 +200,12 @@ func TestParamsValidation(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid", types.DefaultParams(), false},
-		{"zero period blocks", types.Params{PeriodBlocks: 0, PeriodsUntilExpiry: 365, DustThreshold: "1000", SweepBatchSize: 100, RAIDistributionRate: 34272}, true},
-		{"zero periods until expiry", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 0, DustThreshold: "1000", SweepBatchSize: 100, RAIDistributionRate: 34272}, true},
-		{"zero sweep batch", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "1000", SweepBatchSize: 0, RAIDistributionRate: 34272}, true},
-		{"zero rai rate", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "1000", SweepBatchSize: 100, RAIDistributionRate: 0}, true},
-		{"negative dust", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "-1", SweepBatchSize: 100, RAIDistributionRate: 34272}, true},
-		{"invalid dust", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "abc", SweepBatchSize: 100, RAIDistributionRate: 34272}, true},
+		{"zero period blocks", types.Params{PeriodBlocks: 0, PeriodsUntilExpiry: 365, DustThreshold: "1000", SweepBatchSize: 100, RaiDistributionRate: 34272}, true},
+		{"zero periods until expiry", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 0, DustThreshold: "1000", SweepBatchSize: 100, RaiDistributionRate: 34272}, true},
+		{"zero sweep batch", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "1000", SweepBatchSize: 0, RaiDistributionRate: 34272}, true},
+		{"zero rai rate", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "1000", SweepBatchSize: 100, RaiDistributionRate: 0}, true},
+		{"negative dust", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "-1", SweepBatchSize: 100, RaiDistributionRate: 34272}, true},
+		{"invalid dust", types.Params{PeriodBlocks: 34272, PeriodsUntilExpiry: 365, DustThreshold: "abc", SweepBatchSize: 100, RaiDistributionRate: 34272}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -230,7 +231,7 @@ func TestGetCurrentPeriod(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "1000",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 	// Height is 100, period = 100/10 = 10
 	period := k.GetCurrentPeriod(ctx)
@@ -283,8 +284,8 @@ func TestExpirableAccountCRUD(t *testing.T) {
 	acct := types.ExpirableAccount{
 		Address:      addr,
 		TotalBalance: "1000000",
-		PeriodBalances: []types.PeriodBalance{
-			{Period: 0, Balance: "1000000", ExpiresAt: 100000, Swept: false},
+		PeriodBalances: []*types.PeriodBalance{
+			&types.PeriodBalance{Period: 0, Balance: "1000000", ExpiresAt: 100000, Swept: false},
 		},
 		EarliestPeriod: 0,
 		LatestPeriod:   0,
@@ -337,7 +338,7 @@ func TestCreditBalance(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -368,7 +369,7 @@ func TestCreditBalanceMultiplePeriods(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -405,7 +406,7 @@ func TestCreditBalanceBelowDust(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "1000",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	err := k.CreditBalance(ctx, testAddr(1), "999", 100)
@@ -441,7 +442,7 @@ func TestCreditBalanceToSpecificPeriod(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -470,7 +471,7 @@ func TestDebitBalance(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -493,7 +494,7 @@ func TestDebitBalanceFIFO(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -527,7 +528,7 @@ func TestDebitBalanceInsufficientFunds(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -552,19 +553,33 @@ func TestDebitBalanceAccountNotFound(t *testing.T) {
 
 func TestGetBalanceExcludesExpired(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetParams(ctx, types.Params{
+	params := types.Params{
 		PeriodBlocks:        10,
 		PeriodsUntilExpiry:  5,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
-	})
+		RaiDistributionRate: 100,
+	}
+	k.SetParams(ctx, params)
 
 	addr := testAddr(1)
+	// Directly set up account with a pre-expired period balance.
+	// CreditBalanceToSpecificPeriod would redirect expired periods to current,
+	// so we use SetExpirableAccount to place balances at already-expired periods.
 	// Period 0 — expired at current period 10 (10-0 > 5)
-	k.CreditBalanceToSpecificPeriod(ctx, addr, "5000", 0)
 	// Period 8 — active at current period 10 (10-8 <= 5)
-	k.CreditBalanceToSpecificPeriod(ctx, addr, "3000", 8)
+	k.SetExpirableAccount(ctx, types.ExpirableAccount{
+		Address:      addr,
+		TotalBalance: "8000",
+		PeriodBalances: []*types.PeriodBalance{
+			{Period: 0, Balance: "5000", ExpiresAt: 60, Swept: false},
+			{Period: 8, Balance: "3000", ExpiresAt: 140, Swept: false},
+		},
+		EarliestPeriod: 0,
+		LatestPeriod:   8,
+		TotalExpired:   "0",
+		AccountType:    "standard",
+	})
 
 	bal := k.GetBalance(ctx, addr)
 	if bal != "3000" {
@@ -591,7 +606,7 @@ func TestTransferPreservingPeriods(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	from := testAddr(1)
@@ -633,7 +648,7 @@ func TestTransferPreservingPeriodsInsufficientBalance(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	from := testAddr(1)
@@ -711,7 +726,7 @@ func TestDistributeRAI(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	k.AddToRAIPool(ctx, "9000")
@@ -769,7 +784,7 @@ func TestIsEligibleForRAI(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -790,8 +805,8 @@ func TestIsEligibleForRAI(t *testing.T) {
 	k.SetExpirableAccount(ctx, types.ExpirableAccount{
 		Address:      foundAddr,
 		TotalBalance: "5000",
-		PeriodBalances: []types.PeriodBalance{
-			{Period: 10, Balance: "5000", ExpiresAt: 100000},
+		PeriodBalances: []*types.PeriodBalance{
+			&types.PeriodBalance{Period: 10, Balance: "5000", ExpiresAt: 100000},
 		},
 		AccountType:  "foundation",
 		TotalExpired: "0",
@@ -807,19 +822,36 @@ func TestIsEligibleForRAI(t *testing.T) {
 
 func TestSweepExpiredTokens(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetParams(ctx, types.Params{
+	params := types.Params{
 		PeriodBlocks:        10,
 		PeriodsUntilExpiry:  5,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
-	})
+		RaiDistributionRate: 100,
+	}
+	k.SetParams(ctx, params)
 
 	addr := testAddr(1)
-	// Period 0 — will be expired at height 100 (period 10, expiry 5: 10-0 > 5)
-	k.CreditBalanceToSpecificPeriod(ctx, addr, "5000", 0)
+	// Directly set up account with a pre-expired period balance.
+	// CreditBalanceToSpecificPeriod would redirect expired periods to current,
+	// so we use SetExpirableAccount + AddToSweepIndex to place balances at
+	// already-expired periods with the correct sweep index entries.
+	// Period 0 — expired at height 100 (period 10, expiry 5: 10-0 > 5)
 	// Period 8 — still active at period 10 (10-8 <= 5)
-	k.CreditBalanceToSpecificPeriod(ctx, addr, "3000", 8)
+	k.SetExpirableAccount(ctx, types.ExpirableAccount{
+		Address:      addr,
+		TotalBalance: "8000",
+		PeriodBalances: []*types.PeriodBalance{
+			{Period: 0, Balance: "5000", ExpiresAt: 60, Swept: false},
+			{Period: 8, Balance: "3000", ExpiresAt: 140, Swept: false},
+		},
+		EarliestPeriod: 0,
+		LatestPeriod:   8,
+		TotalExpired:   "0",
+		AccountType:    "standard",
+	})
+	k.AddToSweepIndex(ctx, 0, addr)
+	k.AddToSweepIndex(ctx, 8, addr)
 
 	totalSwept, accountsProcessed := k.SweepExpiredTokens(ctx, 100)
 	sweptInt := new(big.Int)
@@ -854,7 +886,7 @@ func TestSweepNoExpiredTokens(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	k.CreditBalanceToSpecificPeriod(ctx, testAddr(1), "5000", 8)
@@ -906,7 +938,7 @@ func TestMsgTransfer(t *testing.T) {
 		PeriodsUntilExpiry:        365,
 		DustThreshold:             "100",
 		SweepBatchSize:            100,
-		RAIDistributionRate:       100,
+		RaiDistributionRate:       100,
 		FreshExpirationOnTransfer: false,
 	})
 
@@ -946,7 +978,7 @@ func TestMsgTransferFreshExpiration(t *testing.T) {
 		PeriodsUntilExpiry:        365,
 		DustThreshold:             "100",
 		SweepBatchSize:            100,
-		RAIDistributionRate:       100,
+		RaiDistributionRate:       100,
 		FreshExpirationOnTransfer: true,
 	})
 
@@ -1025,7 +1057,7 @@ func TestMsgBurn(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -1058,7 +1090,7 @@ func TestMsgUpdateParams(t *testing.T) {
 		PeriodsUntilExpiry:        100,
 		DustThreshold:             "500",
 		SweepBatchSize:            200,
-		RAIDistributionRate:       10000,
+		RaiDistributionRate:       10000,
 		FreshExpirationOnTransfer: true,
 	}
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
@@ -1098,7 +1130,7 @@ func TestQueryAccount(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -1130,7 +1162,7 @@ func TestQueryBalance(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr := testAddr(1)
@@ -1326,7 +1358,7 @@ func TestGenesis(t *testing.T) {
 		PeriodsUntilExpiry:  365,
 		DustThreshold:       "100",
 		SweepBatchSize:      100,
-		RAIDistributionRate: 100,
+		RaiDistributionRate: 100,
 	})
 
 	addr1 := testAddr(1)
@@ -1340,8 +1372,8 @@ func TestGenesis(t *testing.T) {
 	if len(genState.Accounts) != 2 {
 		t.Errorf("expected 2 accounts, got %d", len(genState.Accounts))
 	}
-	if genState.RAI.Balance != "1000" {
-		t.Errorf("expected RAI balance 1000, got %s", genState.RAI.Balance)
+	if genState.Rai.Balance != "1000" {
+		t.Errorf("expected RAI balance 1000, got %s", genState.Rai.Balance)
 	}
 
 	// New keeper, import
@@ -1352,8 +1384,8 @@ func TestGenesis(t *testing.T) {
 	if len(got.Accounts) != 2 {
 		t.Errorf("expected 2 accounts after import, got %d", len(got.Accounts))
 	}
-	if got.RAI.Balance != "1000" {
-		t.Errorf("expected RAI 1000 after import, got %s", got.RAI.Balance)
+	if got.Rai.Balance != "1000" {
+		t.Errorf("expected RAI 1000 after import, got %s", got.Rai.Balance)
 	}
 }
 
@@ -1365,7 +1397,7 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Duplicate address
 	dup := types.DefaultGenesis()
-	dup.Accounts = []types.ExpirableAccount{
+	dup.Accounts = []*types.ExpirableAccount{
 		{Address: "lgm1abc", AccountType: "standard"},
 		{Address: "lgm1abc", AccountType: "standard"},
 	}
@@ -1375,7 +1407,7 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Invalid account type
 	badType := types.DefaultGenesis()
-	badType.Accounts = []types.ExpirableAccount{
+	badType.Accounts = []*types.ExpirableAccount{
 		{Address: "lgm1xyz", AccountType: "invalid"},
 	}
 	if err := badType.Validate(); err == nil {
@@ -1394,7 +1426,7 @@ func TestFullLifecycle(t *testing.T) {
 		PeriodsUntilExpiry:        5,
 		DustThreshold:             "100",
 		SweepBatchSize:            100,
-		RAIDistributionRate:       100,
+		RaiDistributionRate:       100,
 		FreshExpirationOnTransfer: false,
 	})
 

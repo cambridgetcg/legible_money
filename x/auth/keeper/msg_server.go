@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+
+	sdkmath "cosmossdk.io/math"
 
 	cosmosed25519 "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -11,14 +14,15 @@ import (
 	"github.com/legible-money/legible/x/auth/types"
 )
 
-var _ types.MsgServer = msgServer{}
+var _ types.ExtendedMsgServer = msgServer{}
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
-// NewMsgServerImpl returns an implementation of the MsgServer interface
-func NewMsgServerImpl(keeper Keeper) types.MsgServer {
+// NewMsgServerImpl returns an implementation of the ExtendedMsgServer interface
+func NewMsgServerImpl(keeper Keeper) types.ExtendedMsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
@@ -38,7 +42,24 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 
 	currentHeight := uint64(ctx.BlockHeight())
 
-	// Create Legible account
+	// Create Legible account with type-specific defaults
+	flags := &types.AccountFlags{
+		CanSubmitClaims: true,
+		CanChallenge:    true,
+	}
+
+	switch msg.AccountType {
+	case "contract":
+		// Contract accounts are controlled by BVM execution, not direct user action
+		flags.CanSubmitClaims = false
+		flags.CanChallenge = false
+	case "system":
+		// System accounts (treasury, pools) cannot be used for user transactions
+		flags.Frozen = true
+		flags.CanSubmitClaims = false
+		flags.CanChallenge = false
+	}
+
 	account := types.LegibleAccount{
 		Address:               msg.Sender,
 		Did:                   msg.Did,
@@ -51,10 +72,7 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 		ReputationScore:       500000, // 0.5 default
 		CreatedAtBlock:        currentHeight,
 		LastActiveBlock:       currentHeight,
-		Flags: types.AccountFlags{
-			CanSubmitClaims: true,
-			CanChallenge:    true,
-		},
+		Flags:                 flags,
 	}
 	ms.SetAccount(ctx, account)
 
@@ -84,19 +102,40 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 		}
 	}
 
+	// Bootstrap fund: auto-claim for new human/agent accounts
+	params := ms.GetParams(ctx)
+	bootstrapClaimed := false
+	if params.BootstrapEnabled && (msg.AccountType == "human" || msg.AccountType == "agent") {
+		if !ms.HasBootstrapClaim(ctx, msg.Sender) {
+			amount, ok := new(big.Int).SetString(params.BootstrapAmount, 10)
+			if ok && amount.Sign() > 0 {
+				coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(amount)))
+				if err := ms.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, senderAddr, coins); err != nil {
+					// Log but don't fail registration if module account has insufficient funds
+					ms.Logger(ctx).Debug("bootstrap fund disbursement failed", "address", msg.Sender, "error", err)
+				} else {
+					ms.SetBootstrapClaim(ctx, msg.Sender)
+					bootstrapClaimed = true
+				}
+			}
+		}
+	}
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"account_registered",
 			sdk.NewAttribute("address", msg.Sender),
 			sdk.NewAttribute("did", msg.Did),
 			sdk.NewAttribute("account_type", msg.AccountType),
+			sdk.NewAttribute("bootstrap_claimed", fmt.Sprintf("%t", bootstrapClaimed)),
 		),
 	)
 
 	return &types.MsgRegisterAccountResponse{}, nil
 }
 
-// RotateKey handles key rotation for operational keys
+// RotateKey handles operational key rotation.
+// The proto MsgRotateKey carries NewOperationalKey ([]byte) and AuthorizationSignature.
 func (ms msgServer) RotateKey(goCtx context.Context, msg *types.MsgRotateKey) (*types.MsgRotateKeyResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -107,8 +146,13 @@ func (ms msgServer) RotateKey(goCtx context.Context, msg *types.MsgRotateKey) (*
 	}
 
 	// Check if account is frozen
-	if account.Flags.Frozen {
+	if account.Flags != nil && account.Flags.Frozen {
 		return nil, types.ErrAccountFrozen
+	}
+
+	// Validate new operational key is provided
+	if len(msg.NewOperationalKey) == 0 {
+		return nil, types.ErrInvalidKeyType
 	}
 
 	// Check cooldown period
@@ -120,38 +164,21 @@ func (ms msgServer) RotateKey(goCtx context.Context, msg *types.MsgRotateKey) (*
 		return nil, types.ErrKeyRotationCooldown
 	}
 
-	// Update key based on type
-	switch msg.KeyType {
-	case "operational":
-		account.OperationalKeyHash = msg.NewKeyHash
-		account.OperationalKeyVersion++
-		ms.SetLastRotation(ctx, msg.Sender, currentHeight)
+	// Rotate operational key
+	newPubKeyHex := hex.EncodeToString(msg.NewOperationalKey)
+	account.OperationalPublicKey = newPubKeyHex
+	account.OperationalKeyVersion++
+	ms.SetLastRotation(ctx, msg.Sender, currentHeight)
 
-		// Store the new operational public key if provided
-		if msg.NewPublicKey != "" {
-			account.OperationalPublicKey = msg.NewPublicKey
-
-			// Sync Ed25519 pubkey to Cosmos BaseAccount for future sig verification
-			if ms.accountKeeper != nil {
-				senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
-				if cosmosAcc := ms.accountKeeper.GetAccount(ctx, senderAddr); cosmosAcc != nil {
-					keyBytes, decErr := hex.DecodeString(msg.NewPublicKey)
-					if decErr == nil && len(keyBytes) == 32 {
-						pubKey := &cosmosed25519.PubKey{Key: keyBytes}
-						if setErr := cosmosAcc.SetPubKey(pubKey); setErr == nil {
-							ms.accountKeeper.SetAccount(ctx, cosmosAcc)
-						}
-					}
-				}
+	// Sync Ed25519 pubkey to Cosmos BaseAccount for future sig verification
+	if ms.accountKeeper != nil && len(msg.NewOperationalKey) == 32 {
+		senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
+		if cosmosAcc := ms.accountKeeper.GetAccount(ctx, senderAddr); cosmosAcc != nil {
+			pubKey := &cosmosed25519.PubKey{Key: msg.NewOperationalKey}
+			if setErr := cosmosAcc.SetPubKey(pubKey); setErr == nil {
+				ms.accountKeeper.SetAccount(ctx, cosmosAcc)
 			}
 		}
-
-	case "session":
-		// Session keys are managed separately via CreateSession/RevokeSession
-		return nil, types.ErrInvalidKeyType
-
-	default:
-		return nil, types.ErrInvalidKeyType
 	}
 
 	// Update account
@@ -162,15 +189,18 @@ func (ms msgServer) RotateKey(goCtx context.Context, msg *types.MsgRotateKey) (*
 		sdk.NewEvent(
 			"key_rotated",
 			sdk.NewAttribute("sender", msg.Sender),
-			sdk.NewAttribute("key_type", msg.KeyType),
+			sdk.NewAttribute("key_type", "operational"),
 			sdk.NewAttribute("version", fmt.Sprintf("%d", account.OperationalKeyVersion)),
 		),
 	)
 
-	return &types.MsgRotateKeyResponse{}, nil
+	return &types.MsgRotateKeyResponse{
+		NewKeyVersion: account.OperationalKeyVersion,
+	}, nil
 }
 
-// CreateSession creates a new session key with limited capabilities
+// CreateSession creates a new session key with limited capabilities.
+// The proto MsgCreateSession carries SessionPubKey ([]byte), Capabilities, ExpiresAtHeight.
 func (ms msgServer) CreateSession(goCtx context.Context, msg *types.MsgCreateSession) (*types.MsgCreateSessionResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -181,15 +211,21 @@ func (ms msgServer) CreateSession(goCtx context.Context, msg *types.MsgCreateSes
 	}
 
 	// Check if account is frozen
-	if account.Flags.Frozen {
+	if account.Flags != nil && account.Flags.Frozen {
 		return nil, types.ErrAccountFrozen
 	}
 
 	// Get params
 	params := ms.GetParams(ctx)
 
-	// Check max session duration
-	if msg.Duration > params.MaxSessionDuration {
+	// Compute duration and expiration
+	currentHeight := uint64(ctx.BlockHeight())
+	expiresAt := msg.ExpiresAtHeight
+	if expiresAt == 0 {
+		expiresAt = currentHeight + params.MaxSessionDuration
+	}
+	duration := expiresAt - currentHeight
+	if duration > params.MaxSessionDuration {
 		return nil, types.ErrSessionDurationExceeded
 	}
 
@@ -199,14 +235,14 @@ func (ms msgServer) CreateSession(goCtx context.Context, msg *types.MsgCreateSes
 		return nil, types.ErrMaxSessionKeys
 	}
 
-	// Calculate expiration
-	currentHeight := uint64(ctx.BlockHeight())
-	expiresAt := currentHeight + msg.Duration
+	// Derive key hash and hex public key from raw bytes
+	keyHash := hex.EncodeToString(msg.SessionPubKey)
+	pubKeyHex := hex.EncodeToString(msg.SessionPubKey)
 
 	// Create session key
 	session := types.SessionKey{
-		KeyHash:        msg.SessionKeyHash,
-		PublicKey:      msg.SessionPublicKey,
+		KeyHash:        keyHash,
+		PublicKey:      pubKeyHex,
 		Owner:          msg.Owner,
 		Capabilities:   msg.Capabilities,
 		ExpiresAtBlock: expiresAt,
@@ -225,17 +261,18 @@ func (ms msgServer) CreateSession(goCtx context.Context, msg *types.MsgCreateSes
 		sdk.NewEvent(
 			"session_created",
 			sdk.NewAttribute("owner", msg.Owner),
-			sdk.NewAttribute("key_hash", msg.SessionKeyHash),
+			sdk.NewAttribute("key_hash", keyHash),
 			sdk.NewAttribute("expires_at", fmt.Sprintf("%d", expiresAt)),
 		),
 	)
 
 	return &types.MsgCreateSessionResponse{
-		ExpiresAtBlock: expiresAt,
+		SessionId: keyHash,
 	}, nil
 }
 
-// RevokeSession revokes an existing session key
+// RevokeSession revokes an existing session key.
+// The proto MsgRevokeSession uses SessionId (the key hash) instead of SessionKeyHash.
 func (ms msgServer) RevokeSession(goCtx context.Context, msg *types.MsgRevokeSession) (*types.MsgRevokeSessionResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -245,14 +282,14 @@ func (ms msgServer) RevokeSession(goCtx context.Context, msg *types.MsgRevokeSes
 		return nil, types.ErrAccountNotFound
 	}
 
-	// Check if session exists
-	_, found = ms.GetSessionKey(ctx, msg.Owner, msg.SessionKeyHash)
+	// Check if session exists (SessionId is the key hash)
+	_, found = ms.GetSessionKey(ctx, msg.Owner, msg.SessionId)
 	if !found {
 		return nil, types.ErrSessionNotFound
 	}
 
 	// Delete session key
-	ms.DeleteSessionKey(ctx, msg.Owner, msg.SessionKeyHash)
+	ms.DeleteSessionKey(ctx, msg.Owner, msg.SessionId)
 
 	// Update account
 	if account.SessionKeyCount > 0 {
@@ -265,7 +302,7 @@ func (ms msgServer) RevokeSession(goCtx context.Context, msg *types.MsgRevokeSes
 		sdk.NewEvent(
 			"session_revoked",
 			sdk.NewAttribute("owner", msg.Owner),
-			sdk.NewAttribute("key_hash", msg.SessionKeyHash),
+			sdk.NewAttribute("key_hash", msg.SessionId),
 		),
 	)
 
@@ -281,6 +318,9 @@ func (ms msgServer) FreezeAccount(goCtx context.Context, msg *types.MsgFreezeAcc
 		return nil, types.ErrAccountNotFound
 	}
 
+	if account.Flags == nil {
+		account.Flags = &types.AccountFlags{}
+	}
 	if account.Flags.Frozen {
 		return nil, types.ErrAccountFrozen
 	}
@@ -318,7 +358,7 @@ func (ms msgServer) UnfreezeAccount(goCtx context.Context, msg *types.MsgUnfreez
 		return nil, types.ErrAccountNotFound
 	}
 
-	if !account.Flags.Frozen {
+	if account.Flags == nil || !account.Flags.Frozen {
 		return nil, types.ErrAccountNotFrozen
 	}
 
@@ -416,6 +456,9 @@ func (ms msgServer) InitiateRecovery(goCtx context.Context, msg *types.MsgInitia
 	ms.Keeper.SetRecoveryRequest(ctx, req)
 
 	// Set account InRecovery flag
+	if account.Flags == nil {
+		account.Flags = &types.AccountFlags{}
+	}
 	account.Flags.InRecovery = true
 	ms.SetAccount(ctx, account)
 
@@ -516,7 +559,9 @@ func (ms msgServer) ChallengeRecovery(goCtx context.Context, msg *types.MsgChall
 
 	// Clear InRecovery flag
 	if account, accFound := ms.GetAccount(ctx, msg.AccountAddress); accFound {
-		account.Flags.InRecovery = false
+		if account.Flags != nil {
+			account.Flags.InRecovery = false
+		}
 		ms.SetAccount(ctx, account)
 	}
 
@@ -553,6 +598,9 @@ func (ms msgServer) ExecuteRecovery(goCtx context.Context, msg *types.MsgExecute
 
 	account.OperationalPublicKey = req.NewOperationalKey
 	account.OperationalKeyVersion++
+	if account.Flags == nil {
+		account.Flags = &types.AccountFlags{}
+	}
 	account.Flags.InRecovery = false
 	account.LastActiveBlock = uint64(ctx.BlockHeight())
 	ms.SetAccount(ctx, account)
@@ -593,4 +641,29 @@ func (ms msgServer) ExecuteRecovery(goCtx context.Context, msg *types.MsgExecute
 	)
 
 	return &types.MsgExecuteRecoveryResponse{}, nil
+}
+
+// UpdateParams updates auth module parameters. Authority-only.
+func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if ms.GetAuthority() != msg.Authority {
+		return nil, types.ErrUnauthorized
+	}
+
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
+	if err := ms.Keeper.SetParams(ctx, *msg.Params); err != nil {
+		return nil, fmt.Errorf("failed to set params: %w", err)
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+
+	return &types.MsgUpdateParamsResponse{}, nil
 }

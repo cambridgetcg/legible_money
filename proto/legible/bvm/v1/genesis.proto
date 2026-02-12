@@ -1,0 +1,26 @@
+syntax = "proto3";
+package legible.bvm.v1;
+
+option go_package = "github.com/legible-money/legible/x/bvm/types";
+
+import "legible/bvm/v1/state.proto";
+
+// GenesisState defines the bvm module's genesis state.
+message GenesisState {
+  Params                       params    = 1;
+  repeated DeployedContract    contracts = 2;
+  repeated ContractCode        code      = 3;
+  repeated ContractSchedule    schedules = 4;
+  repeated ContractStateEntry  state     = 5;
+}
+
+// Params defines the bvm module parameters.
+message Params {
+  uint64 max_bytecode_size           = 1; // maximum bytecode size in bytes
+  uint64 max_state_entries           = 2; // maximum state entries per contract
+  uint64 max_schedules_per_contract  = 3; // maximum scheduled executions per contract
+  uint64 deploy_gas_cost             = 4; // gas cost to deploy a contract
+  uint64 call_base_gas_cost          = 5; // base gas cost per call
+  uint64 storage_write_gas_cost      = 6; // gas cost per storage write
+  uint64 storage_read_gas_cost       = 7; // gas cost per storage read
+}

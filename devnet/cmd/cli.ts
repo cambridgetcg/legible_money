@@ -133,7 +133,7 @@ const commands: Record<string, Command> = {
 
       const domain = args[0];
       const claim = args[1];
-      const stake = args[2] ? parseLGM(args[2]) : 100n * 10n ** 18n;
+      const stake = args[2] ? parseLGM(args[2]) : 100n * 10n ** 15n;
 
       console.log(`\nSubmitting claim to domain: ${domain}`);
       console.log(`Claim: "${claim}"`);
@@ -183,7 +183,7 @@ const commands: Record<string, Command> = {
 
       for (const fact of facts) {
         const confidence = (fact.confidence * 100).toFixed(0);
-        console.log(`[${confidence}%] ${fact.claim}`);
+        console.log(`[${confidence}%] ${fact.claimText}`);
         console.log(
           `       Domain: ${fact.domain} | ID: ${fact.id.slice(0, 16)}...`,
         );
@@ -214,7 +214,7 @@ const commands: Record<string, Command> = {
 
       console.log(`\nFact Details\n`);
       console.log(`ID:         ${fact.id}`);
-      console.log(`Claim:      ${fact.claim}`);
+      console.log(`Claim:      ${fact.claimText}`);
       console.log(`Domain:     ${fact.domain}`);
       console.log(`Status:     ${fact.status}`);
       console.log(`Confidence: ${(fact.confidence * 100).toFixed(1)}%`);
@@ -347,7 +347,7 @@ const commands: Record<string, Command> = {
     description: "Request testnet tokens",
     usage: "lgm faucet [AMOUNT]",
     action: async (args, client) => {
-      const amount = args[0] ? parseLGM(args[0]) : 1000n * 10n ** 18n;
+      const amount = args[0] ? parseLGM(args[0]) : 1000n * 10n ** 15n;
 
       console.log(`Requesting ${formatLGM(amount)} LGM from faucet...`);
 

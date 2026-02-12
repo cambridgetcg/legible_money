@@ -4,6 +4,7 @@ package legible.disputes.v1;
 option go_package = "github.com/legible-money/legible/x/disputes/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/disputes/v1/state.proto";
 
 // Msg defines the disputes module's transaction service.
 service Msg {
@@ -97,37 +98,8 @@ message MsgTimeoutDispute {
 message MsgTimeoutDisputeResponse {}
 
 // ============================================================================
-// State Types
+// Enums (used by Msg types, not duplicated in state.proto or genesis.proto)
 // ============================================================================
-
-message Dispute {
-  string id = 1;
-  string challenger = 2;
-  string defender = 3;
-  DisputeTargetType target_type = 4;
-  string target_id = 5;
-  string reason = 6;
-  string challenger_stake = 7;
-  string defender_stake = 8;
-  DisputePhase phase = 9;
-  uint64 initiated_at = 10;
-  uint64 deadline = 11;
-  repeated DisputeVote votes = 12;
-  DisputeOutcome outcome = 13;
-}
-
-message DisputeEvidence {
-  string evidence_type = 1;
-  string uri = 2;
-  string content_hash = 3;
-}
-
-message DisputeVote {
-  string arbiter = 1;
-  ArbiterDecision decision = 2;
-  string reasoning = 3;
-  uint64 voted_at = 4;
-}
 
 enum DisputeTargetType {
   DISPUTE_TARGET_TYPE_UNSPECIFIED = 0;
@@ -159,22 +131,4 @@ enum DisputeOutcome {
   DISPUTE_OUTCOME_DEFENDER_WINS = 2;
   DISPUTE_OUTCOME_DRAW = 3;
   DISPUTE_OUTCOME_TIMED_OUT = 4;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-  repeated Dispute disputes = 2;
-}
-
-message Params {
-  string min_dispute_stake = 1;
-  uint64 evidence_commit_period = 2;
-  uint64 evidence_reveal_period = 3;
-  uint64 arbitration_period = 4;
-  uint32 min_arbiter_count = 5;
-  string escalation_stake_multiplier = 6;  // e.g., "2" for 2x
 }

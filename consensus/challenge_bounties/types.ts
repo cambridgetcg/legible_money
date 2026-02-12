@@ -24,9 +24,9 @@ import type { OntologicalStratum } from "../../core/knowledge/ontology/types.js"
  */
 export const CHALLENGE_BOUNTY_CONFIG = {
   // Stakes
-  minChallengeStake: 77n * 10n ** 18n, // 77 LGM
+  minChallengeStake: 77n * 10n ** 15n, // 0.077 LGM (affordable with 0.222 LGM genesis balance)
   challengeStakeMultiplierOnSuccess: 7.7, // 7.7x return
-  captureExposureBonus: 777n * 10n ** 18n, // 777 LGM bonus
+  captureExposureBonus: 777n * 10n ** 15n, // 0.777 LGM bonus
 
   // Evidence
   minEvidencePieces: 3,
@@ -36,7 +36,7 @@ export const CHALLENGE_BOUNTY_CONFIG = {
   reviewPeriodBlocks: 7777n, // ~5.4 hours
 
   // Bounty pools
-  baseBountyPool: 2222n * 10n ** 18n, // 2222 LGM
+  baseBountyPool: 2222n * 10n ** 15n, // 2.222 LGM
   bountyReplenishmentRate: 0.01, // 1% of verification rewards
 
   // Recovery

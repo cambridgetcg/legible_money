@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -21,8 +21,8 @@ type BankKeeper interface {
 
 // Keeper manages the ontology module's state.
 type Keeper struct {
-	cdc      codec.Codec
-	storeKey storetypes.StoreKey
+	cdc          codec.Codec
+	storeService store.KVStoreService
 
 	bankKeeper BankKeeper
 
@@ -33,16 +33,32 @@ type Keeper struct {
 // NewKeeper creates a new ontology module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bankKeeper BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		storeKey:   storeKey,
-		bankKeeper: bankKeeper,
-		authority:  authority,
+		cdc:          cdc,
+		storeService: storeService,
+		bankKeeper:   bankKeeper,
+		authority:    authority,
 	}
+}
+
+// prefixEndBytes returns the end key for prefix iteration.
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -57,37 +73,53 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	} else {
+		k.SetParams(ctx, types.DefaultParams())
+	}
 
 	// Initialize strata
 	for _, stratum := range genState.Strata {
-		k.SetStratum(ctx, stratum)
+		if stratum != nil {
+			k.SetStratum(ctx, *stratum)
+		}
 	}
 
 	// Initialize domains
 	for _, domain := range genState.Domains {
-		k.SetDomain(ctx, domain)
+		if domain != nil {
+			k.SetDomain(ctx, *domain)
+		}
 	}
 
 	// Initialize proposals (if any from export)
 	for _, proposal := range genState.Proposals {
-		k.SetProposal(ctx, proposal)
+		if proposal != nil {
+			k.SetProposal(ctx, *proposal)
+		}
 	}
 
 	// Initialize cross-stratum links
-	for _, link := range genState.Links {
-		k.SetLink(ctx, link)
+	for _, link := range genState.CrossLinks {
+		if link != nil {
+			k.SetLink(ctx, *link)
+		}
 	}
+
+	// Pre-populate default logic zones (won't overwrite genesis-provided ones)
+	k.InitializeDefaultZones(ctx)
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:    k.GetParams(ctx),
-		Strata:    k.GetAllStrata(ctx),
-		Domains:   k.GetAllDomains(ctx),
-		Proposals: k.getAllProposals(ctx),
-		Links:     k.GetAllLinks(ctx),
+		Params:     &params,
+		Strata:     toStratumPointers(k.GetAllStrata(ctx)),
+		Domains:    toDomainPointers(k.GetAllDomains(ctx)),
+		Proposals:  toProposalPointers(k.getAllProposals(ctx)),
+		CrossLinks: toLinkPointers(k.GetAllLinks(ctx)),
 	}
 }
 
@@ -99,4 +131,37 @@ func (k Keeper) getAllProposals(ctx sdk.Context) []types.DomainProposal {
 		return false
 	})
 	return proposals
+}
+
+// Helper functions to convert value slices to pointer slices for proto compatibility.
+func toStratumPointers(strata []types.StratumProperties) []*types.StratumProperties {
+	result := make([]*types.StratumProperties, len(strata))
+	for i := range strata {
+		result[i] = &strata[i]
+	}
+	return result
+}
+
+func toDomainPointers(domains []types.Domain) []*types.Domain {
+	result := make([]*types.Domain, len(domains))
+	for i := range domains {
+		result[i] = &domains[i]
+	}
+	return result
+}
+
+func toProposalPointers(proposals []types.DomainProposal) []*types.DomainProposal {
+	result := make([]*types.DomainProposal, len(proposals))
+	for i := range proposals {
+		result[i] = &proposals[i]
+	}
+	return result
+}
+
+func toLinkPointers(links []types.CrossStratumLink) []*types.CrossStratumLink {
+	result := make([]*types.CrossStratumLink, len(links))
+	for i := range links {
+		result[i] = &links[i]
+	}
+	return result
 }

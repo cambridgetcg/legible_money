@@ -11,6 +11,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -26,11 +27,6 @@ func (ms msgServer) SubmitLIP(goCtx context.Context, msg *types.MsgSubmitLIP) (*
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	currentHeight := uint64(ctx.BlockHeight())
 
-	// Validate category
-	if !types.ValidLIPCategories[msg.Category] {
-		return nil, types.ErrInvalidLIPCategory
-	}
-
 	// Generate LIP ID
 	number := ms.GetNextLIPNumber(ctx)
 	lipId := fmt.Sprintf("LIP-%d", number)
@@ -39,11 +35,11 @@ func (ms msgServer) SubmitLIP(goCtx context.Context, msg *types.MsgSubmitLIP) (*
 	lip := types.LIP{
 		Id:             lipId,
 		Title:          msg.Title,
-		Abstract:       msg.Abstract,
-		Category:       msg.Category,
+		Abstract:       msg.Description,
+		Category:       fmt.Sprintf("%d", msg.LipType),
 		Proposer:       msg.Proposer,
-		Stage:          types.StageDraft,
-		StakedAmount:   "0",
+		Stage:          string(types.StageDraft),
+		StakedAmount:   msg.InitialStake,
 		StakeHolder:    "",
 		CreatedAtBlock: currentHeight,
 		UpdatedAtBlock: currentHeight,
@@ -55,6 +51,10 @@ func (ms msgServer) SubmitLIP(goCtx context.Context, msg *types.MsgSubmitLIP) (*
 		QuorumMet:      false,
 	}
 
+	if lip.StakedAmount == "" {
+		lip.StakedAmount = "0"
+	}
+
 	ms.SetLIP(ctx, lip)
 
 	ctx.EventManager().EmitEvent(
@@ -62,7 +62,6 @@ func (ms msgServer) SubmitLIP(goCtx context.Context, msg *types.MsgSubmitLIP) (*
 			"lip_submitted",
 			sdk.NewAttribute("lip_id", lipId),
 			sdk.NewAttribute("proposer", msg.Proposer),
-			sdk.NewAttribute("category", string(msg.Category)),
 		),
 	)
 
@@ -78,17 +77,17 @@ func (ms msgServer) StakeLIP(goCtx context.Context, msg *types.MsgStakeLIP) (*ty
 		return nil, types.ErrLIPNotFound
 	}
 
-	if lip.Stage != types.StageDraft {
+	if lip.Stage != string(types.StageDraft) {
 		return nil, types.ErrInvalidLIPStage
 	}
 
-	if types.IsTerminalLIPStage(lip.Stage) {
+	if types.IsTerminalLIPStage(types.HandwrittenLIPStage(lip.Stage)) {
 		return nil, types.ErrTerminalStage
 	}
 
 	// Check required stake for this category
 	params := ms.GetParams(ctx)
-	requiredStake := params.GetLIPStake(lip.Category)
+	requiredStake := params.GetLIPStake(types.LIPCategory(lip.Category))
 
 	// Add staked amount
 	currentStake := new(big.Int)
@@ -98,14 +97,14 @@ func (ms msgServer) StakeLIP(goCtx context.Context, msg *types.MsgStakeLIP) (*ty
 	newStake := new(big.Int).Add(currentStake, addedStake)
 
 	lip.StakedAmount = newStake.String()
-	lip.StakeHolder = msg.Sender
+	lip.StakeHolder = msg.Staker
 	lip.UpdatedAtBlock = uint64(ctx.BlockHeight())
 
-	// Check if stake threshold met — advance to review
+	// Check if stake threshold met - advance to review
 	required := new(big.Int)
 	required.SetString(requiredStake, 10)
 	if newStake.Cmp(required) >= 0 {
-		lip.Stage = types.StageReview
+		lip.Stage = string(types.StageReview)
 	}
 
 	ms.SetLIP(ctx, lip)
@@ -114,7 +113,7 @@ func (ms msgServer) StakeLIP(goCtx context.Context, msg *types.MsgStakeLIP) (*ty
 		sdk.NewEvent(
 			"lip_staked",
 			sdk.NewAttribute("lip_id", msg.LipId),
-			sdk.NewAttribute("sender", msg.Sender),
+			sdk.NewAttribute("staker", msg.Staker),
 			sdk.NewAttribute("amount", msg.Amount),
 			sdk.NewAttribute("stage", string(lip.Stage)),
 		),
@@ -127,27 +126,29 @@ func (ms msgServer) StakeLIP(goCtx context.Context, msg *types.MsgStakeLIP) (*ty
 func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*types.MsgCastVoteResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	currentHeight := uint64(ctx.BlockHeight())
-	params := ms.GetParams(ctx)
-
-	// Validate direction
-	if !types.ValidVoteDirections[msg.Direction] {
-		return nil, types.ErrInvalidVoteDirection
-	}
-
-	// Check max votes per voter
-	if msg.Votes > params.MaxVotesPerVoter {
-		return nil, types.ErrMaxVotesExceeded
-	}
 
 	// Check if voter already voted
 	if ms.HasVoted(ctx, msg.ProposalId, msg.Voter) {
 		return nil, types.ErrAlreadyVoted
 	}
 
+	// Map proto VoteOption to string direction
+	var direction types.VoteDirection
+	switch msg.Option {
+	case types.VoteOption_VOTE_OPTION_YES:
+		direction = types.VoteSupport
+	case types.VoteOption_VOTE_OPTION_NO, types.VoteOption_VOTE_OPTION_NO_WITH_VETO:
+		direction = types.VoteOppose
+	case types.VoteOption_VOTE_OPTION_ABSTAIN:
+		direction = types.VoteAbstain
+	default:
+		return nil, types.ErrInvalidVoteDirection
+	}
+
 	// Determine if this is a LIP or disbursement vote
 	isLIP := false
 	if lip, found := ms.GetLIP(ctx, msg.ProposalId); found {
-		if lip.Stage != types.StageVoting {
+		if lip.Stage != string(types.StageVoting) {
 			return nil, types.ErrVotingNotActive
 		}
 		if lip.VotingEndsAt > 0 && currentHeight >= lip.VotingEndsAt {
@@ -155,7 +156,7 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 		}
 		isLIP = true
 	} else if disb, found := ms.GetDisbursement(ctx, msg.ProposalId); found {
-		if disb.Stage != types.DisbStageVoting {
+		if disb.Stage != string(types.DisbStageVoting) {
 			return nil, types.ErrVotingNotActive
 		}
 		if disb.VotingEndsAt > 0 && currentHeight >= disb.VotingEndsAt {
@@ -165,15 +166,11 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 		return nil, types.ErrProposalNotFound
 	}
 
-	// Calculate quadratic vote cost: cost = votes^2 * baseCostPerVote
-	baseCost := new(big.Int)
-	baseCost.SetString(params.BaseCostPerVote, 10)
-	votesBI := big.NewInt(int64(msg.Votes))
-	cost := new(big.Int).Mul(votesBI, votesBI) // votes^2
-	cost.Mul(cost, baseCost)                    // * baseCost
-
-	// Calculate vote weight (sqrt-like: just the number of votes, since cost is quadratic)
-	voteWeight := fmt.Sprintf("%d", msg.Votes)
+	// Stake is the amount staked for quadratic voting; vote weight = stake
+	voteWeight := msg.Stake
+	if voteWeight == "" {
+		voteWeight = "1"
+	}
 
 	// Create vote record
 	voteId := fmt.Sprintf("%s/%s", msg.ProposalId, msg.Voter)
@@ -181,9 +178,8 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 		VoteId:         voteId,
 		Voter:          msg.Voter,
 		ProposalId:     msg.ProposalId,
-		Direction:      msg.Direction,
-		Votes:          msg.Votes,
-		Cost:           cost.String(),
+		Direction:      string(direction),
+		Cost:           msg.Stake,
 		CreatedAtBlock: currentHeight,
 	}
 	ms.SetVote(ctx, vote)
@@ -192,13 +188,13 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 	// Update proposal tallies
 	if isLIP {
 		lip, _ := ms.GetLIP(ctx, msg.ProposalId)
-		lip = addVoteWeight(lip, msg.Direction, voteWeight)
+		lip = addVoteWeight(lip, direction, voteWeight)
 		lip.UniqueVoters++
 		lip.UpdatedAtBlock = currentHeight
 		ms.SetLIP(ctx, lip)
 	} else {
 		disb, _ := ms.GetDisbursement(ctx, msg.ProposalId)
-		disb = addDisbVoteWeight(disb, msg.Direction, voteWeight)
+		disb = addDisbVoteWeight(disb, direction, voteWeight)
 		disb.UniqueVoters++
 		ms.SetDisbursement(ctx, disb)
 	}
@@ -208,13 +204,12 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 			"vote_cast",
 			sdk.NewAttribute("proposal_id", msg.ProposalId),
 			sdk.NewAttribute("voter", msg.Voter),
-			sdk.NewAttribute("direction", string(msg.Direction)),
-			sdk.NewAttribute("votes", fmt.Sprintf("%d", msg.Votes)),
-			sdk.NewAttribute("cost", cost.String()),
+			sdk.NewAttribute("direction", string(direction)),
+			sdk.NewAttribute("stake", msg.Stake),
 		),
 	)
 
-	return &types.MsgCastVoteResponse{Cost: cost.String()}, nil
+	return &types.MsgCastVoteResponse{EffectiveVotingPower: voteWeight}, nil
 }
 
 // AdvanceLIPStage advances a LIP to its next stage.
@@ -228,21 +223,24 @@ func (ms msgServer) AdvanceLIPStage(goCtx context.Context, msg *types.MsgAdvance
 		return nil, types.ErrLIPNotFound
 	}
 
-	if types.IsTerminalLIPStage(lip.Stage) {
+	if types.IsTerminalLIPStage(types.HandwrittenLIPStage(lip.Stage)) {
 		return nil, types.ErrTerminalStage
 	}
 
-	var newStage types.LIPStage
-	switch lip.Stage {
+	var newStage types.HandwrittenLIPStage
+	var protoStage types.LIPStage
+	switch types.HandwrittenLIPStage(lip.Stage) {
 	case types.StageReview:
 		newStage = types.StageLastCall
+		protoStage = types.LIPStage_LIP_STAGE_VOTING // closest mapping
 	case types.StageLastCall:
 		newStage = types.StageVoting
+		protoStage = types.LIPStage_LIP_STAGE_VOTING
 	default:
 		return nil, fmt.Errorf("%w: cannot advance from stage %s", types.ErrInvalidLIPStage, lip.Stage)
 	}
 
-	lip.Stage = newStage
+	lip.Stage = string(newStage)
 	lip.UpdatedAtBlock = currentHeight
 
 	// Set voting deadline when entering voting stage
@@ -260,7 +258,7 @@ func (ms msgServer) AdvanceLIPStage(goCtx context.Context, msg *types.MsgAdvance
 		),
 	)
 
-	return &types.MsgAdvanceLIPStageResponse{NewStage: newStage}, nil
+	return &types.MsgAdvanceLIPStageResponse{NewStage: protoStage}, nil
 }
 
 // WithdrawLIP withdraws a LIP (only by proposer, only if not terminal).
@@ -276,11 +274,11 @@ func (ms msgServer) WithdrawLIP(goCtx context.Context, msg *types.MsgWithdrawLIP
 		return nil, types.ErrNotProposer
 	}
 
-	if types.IsTerminalLIPStage(lip.Stage) {
+	if types.IsTerminalLIPStage(types.HandwrittenLIPStage(lip.Stage)) {
 		return nil, types.ErrTerminalStage
 	}
 
-	lip.Stage = types.StageWithdrawn
+	lip.Stage = string(types.StageWithdrawn)
 	lip.UpdatedAtBlock = uint64(ctx.BlockHeight())
 	ms.SetLIP(ctx, lip)
 
@@ -301,10 +299,6 @@ func (ms msgServer) SubmitDisbursement(goCtx context.Context, msg *types.MsgSubm
 	currentHeight := uint64(ctx.BlockHeight())
 	params := ms.GetParams(ctx)
 
-	if !types.ValidDisbursementCategories[msg.Category] {
-		return nil, fmt.Errorf("invalid disbursement category: %s", msg.Category)
-	}
-
 	// Generate disbursement ID
 	number := ms.GetNextDisbNumber(ctx)
 	disbId := fmt.Sprintf("DISB-%d", number)
@@ -314,11 +308,10 @@ func (ms msgServer) SubmitDisbursement(goCtx context.Context, msg *types.MsgSubm
 		Id:             disbId,
 		Title:          msg.Title,
 		Description:    msg.Description,
-		Category:       msg.Category,
-		Proposer:       msg.Proposer,
-		RecipientAddr:  msg.RecipientAddr,
+		Proposer:       msg.Submitter,
+		RecipientAddr:  msg.Recipient,
 		Amount:         msg.Amount,
-		Stage:          types.DisbStageVoting,
+		Stage:          string(types.DisbStageVoting),
 		StakedAmount:   "0",
 		StakeHolder:    "",
 		CreatedAtBlock: currentHeight,
@@ -336,9 +329,8 @@ func (ms msgServer) SubmitDisbursement(goCtx context.Context, msg *types.MsgSubm
 		sdk.NewEvent(
 			"disbursement_submitted",
 			sdk.NewAttribute("disbursement_id", disbId),
-			sdk.NewAttribute("proposer", msg.Proposer),
+			sdk.NewAttribute("submitter", msg.Submitter),
 			sdk.NewAttribute("amount", msg.Amount),
-			sdk.NewAttribute("category", string(msg.Category)),
 		),
 	)
 
@@ -355,7 +347,7 @@ func (ms msgServer) ExecuteDisbursement(goCtx context.Context, msg *types.MsgExe
 		return nil, types.ErrDisbursementNotFound
 	}
 
-	if disb.Stage != types.DisbStageApproved {
+	if disb.Stage != string(types.DisbStageApproved) {
 		return nil, types.ErrInvalidDisbStage
 	}
 
@@ -365,7 +357,7 @@ func (ms msgServer) ExecuteDisbursement(goCtx context.Context, msg *types.MsgExe
 	}
 
 	// Mark as executed
-	disb.Stage = types.DisbStageExecuted
+	disb.Stage = string(types.DisbStageExecuted)
 	ms.SetDisbursement(ctx, disb)
 
 	ctx.EventManager().EmitEvent(
@@ -380,7 +372,7 @@ func (ms msgServer) ExecuteDisbursement(goCtx context.Context, msg *types.MsgExe
 	return &types.MsgExecuteDisbursementResponse{}, nil
 }
 
-// CancelDisbursement cancels a disbursement (only by proposer, only if not terminal).
+// CancelDisbursement cancels a disbursement (only by authority, only if not terminal).
 func (ms msgServer) CancelDisbursement(goCtx context.Context, msg *types.MsgCancelDisbursement) (*types.MsgCancelDisbursementResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -389,22 +381,23 @@ func (ms msgServer) CancelDisbursement(goCtx context.Context, msg *types.MsgCanc
 		return nil, types.ErrDisbursementNotFound
 	}
 
-	if disb.Proposer != msg.Proposer {
+	// Authority can cancel (was previously proposer-only)
+	if disb.Proposer != msg.Authority && ms.GetAuthority() != msg.Authority {
 		return nil, types.ErrNotProposer
 	}
 
-	if types.IsTerminalDisbStage(disb.Stage) {
+	if types.IsTerminalDisbStage(types.DisbursementStage(disb.Stage)) {
 		return nil, types.ErrTerminalStage
 	}
 
-	disb.Stage = types.DisbStageCancelled
+	disb.Stage = string(types.DisbStageCancelled)
 	ms.SetDisbursement(ctx, disb)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"disbursement_cancelled",
 			sdk.NewAttribute("disbursement_id", msg.DisbursementId),
-			sdk.NewAttribute("proposer", msg.Proposer),
+			sdk.NewAttribute("authority", msg.Authority),
 		),
 	)
 
@@ -433,6 +426,54 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 	)
 
 	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+// AttachUpgradePlan attaches a software upgrade plan to a consensus-category LIP.
+func (ms msgServer) AttachUpgradePlan(goCtx context.Context, msg *types.MsgAttachUpgradePlan) (*types.MsgAttachUpgradePlanResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	lip, found := ms.GetLIP(ctx, msg.LipId)
+	if !found {
+		return nil, types.ErrLIPNotFound
+	}
+
+	// Only the proposer can attach an upgrade plan
+	if lip.Proposer != msg.Proposer {
+		return nil, types.ErrNotProposer
+	}
+
+	// Only consensus-category LIPs can carry upgrade plans
+	if lip.Category != string(types.CategoryConsensus) {
+		return nil, types.ErrNotConsensusCategory
+	}
+
+	// Cannot attach to terminal LIPs
+	if types.IsTerminalLIPStage(types.HandwrittenLIPStage(lip.Stage)) {
+		return nil, types.ErrTerminalStage
+	}
+
+	// Check if an upgrade plan already exists
+	if _, exists := ms.GetUpgradePlan(ctx, msg.LipId); exists {
+		return nil, types.ErrUpgradePlanExists
+	}
+
+	plan := types.UpgradePlan{
+		Name:   msg.UpgradeName,
+		Height: msg.Height,
+		Info:   msg.Info,
+	}
+	ms.SetUpgradePlan(ctx, msg.LipId, plan)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"upgrade_plan_attached",
+			sdk.NewAttribute("lip_id", msg.LipId),
+			sdk.NewAttribute("upgrade_name", msg.UpgradeName),
+			sdk.NewAttribute("height", fmt.Sprintf("%d", msg.Height)),
+		),
+	)
+
+	return &types.MsgAttachUpgradePlanResponse{}, nil
 }
 
 // --- Helpers ---

@@ -20,7 +20,7 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 	if !found {
 		return types.Dispute{}, fmt.Errorf("%w: %s", types.ErrFactNotFound, factId)
 	}
-	if fact.Status != "verified" && fact.Status != "contested" && fact.Status != "active" && fact.Status != "challenged" {
+	if fact.Status != "verified" && fact.Status != "contested" && fact.Status != "active" && fact.Status != "challenged" && fact.Status != "provisional" {
 		return types.Dispute{}, fmt.Errorf("%w: fact status is %s", types.ErrFactNotDisputable, fact.Status)
 	}
 
@@ -74,8 +74,8 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 		Defender:         fact.Submitter,
 		Reason:           reason,
 		Bond:             bond,
-		Tier:             types.TierBasic,
-		Status:           types.DisputeStatusEvidence,
+		Tier:             uint32(types.TierBasic),
+		Status:           string(types.DisputeStatusEvidence),
 		Outcome:          "",
 		CreatedAt:        height,
 		EvidenceDeadline: evidenceDeadline,
@@ -94,8 +94,11 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 		}
 	}
 
-	// Mark fact as challenged
-	k.markFactChallenged(ctx, factId)
+	// Mark fact as challenged via knowledge module's invariant-enforcing method
+	if err := k.knowledgeKeeper.MarkFactChallenged(ctx, factId); err != nil {
+		k.Logger(ctx).Error("failed to mark fact as challenged",
+			"fact_id", factId, "error", err)
+	}
 
 	k.Logger(ctx).Info("dispute opened",
 		"dispute_id", disputeId,
@@ -108,25 +111,14 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 	return dispute, nil
 }
 
-// markFactChallenged marks a fact's status as "challenged" when a dispute is opened.
-func (k Keeper) markFactChallenged(ctx sdk.Context, factId string) {
-	fact, found := k.knowledgeKeeper.GetFact(ctx, factId)
-	if !found {
-		return
-	}
-	if fact.Status == "verified" || fact.Status == "active" {
-		fact.Status = "challenged"
-		k.knowledgeKeeper.SetFact(ctx, fact)
-	}
-}
 
 // TransitionToVoting moves a dispute from evidence phase to voting phase.
 func (k Keeper) TransitionToVoting(ctx sdk.Context, dispute types.Dispute) error {
-	if dispute.Status != types.DisputeStatusEvidence {
+	if dispute.Status != string(types.DisputeStatusEvidence) {
 		return fmt.Errorf("%w: dispute is in %s phase", types.ErrNotInEvidencePhase, dispute.Status)
 	}
 
-	dispute.Status = types.DisputeStatusVoting
+	dispute.Status = string(types.DisputeStatusVoting)
 	k.SetDispute(ctx, dispute)
 
 	ctx.EventManager().EmitEvent(
@@ -269,13 +261,13 @@ func arbiterPriority(seed []byte, address string, stake uint64) [32]byte {
 }
 
 // GetTierConfig returns the config for the specified tier from params.
-func (k Keeper) GetTierConfig(params types.Params, tier types.EscalationTier) (types.TierConfig, error) {
+func (k Keeper) GetTierConfig(params types.Params, tier types.EscalationTier) (*types.TierConfig, error) {
 	for _, tc := range params.TierConfigs {
-		if tc.Tier == tier {
+		if tc.Tier == uint32(tier) {
 			return tc, nil
 		}
 	}
-	return types.TierConfig{}, fmt.Errorf("%w: tier %d", types.ErrTierConfigNotFound, tier)
+	return nil, fmt.Errorf("%w: tier %d", types.ErrTierConfigNotFound, tier)
 }
 
 // ProcessExpiredDisputes checks for disputes that have passed their deadlines
@@ -286,7 +278,7 @@ func (k Keeper) ProcessExpiredDisputes(ctx sdk.Context) {
 
 	for _, dispute := range activeDisputes {
 		switch dispute.Status {
-		case types.DisputeStatusEvidence:
+		case string(types.DisputeStatusEvidence):
 			// Evidence deadline passed — transition to voting
 			if currentHeight > dispute.EvidenceDeadline {
 				if err := k.TransitionToVoting(ctx, dispute); err != nil {
@@ -295,7 +287,7 @@ func (k Keeper) ProcessExpiredDisputes(ctx sdk.Context) {
 				}
 			}
 
-		case types.DisputeStatusVoting:
+		case string(types.DisputeStatusVoting):
 			// Voting deadline passed — tally and resolve
 			if currentHeight > dispute.VotingDeadline {
 				outcome, err := k.TallyVotes(ctx, dispute)
@@ -303,7 +295,7 @@ func (k Keeper) ProcessExpiredDisputes(ctx sdk.Context) {
 					k.Logger(ctx).Error("failed to tally votes",
 						"dispute_id", dispute.Id, "error", err)
 					// Mark as expired if tally fails
-					dispute.Status = types.DisputeStatusExpired
+					dispute.Status = string(types.DisputeStatusExpired)
 					k.SetDispute(ctx, dispute)
 					continue
 				}
@@ -313,10 +305,10 @@ func (k Keeper) ProcessExpiredDisputes(ctx sdk.Context) {
 				}
 			}
 
-		case types.DisputeStatusOpen:
+		case string(types.DisputeStatusOpen):
 			// Open disputes that haven't progressed — expire after evidence deadline
 			if currentHeight > dispute.EvidenceDeadline {
-				dispute.Status = types.DisputeStatusExpired
+				dispute.Status = string(types.DisputeStatusExpired)
 				k.SetDispute(ctx, dispute)
 				k.Logger(ctx).Info("dispute expired", "dispute_id", dispute.Id)
 			}

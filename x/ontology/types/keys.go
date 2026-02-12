@@ -24,5 +24,7 @@ var (
 	DomainKeyPrefix       = []byte{0x02} // {domain_name} -> Domain
 	ProposalKeyPrefix     = []byte{0x03} // {proposal_id} -> DomainProposal
 	LinkKeyPrefix         = []byte{0x04} // {source}/{target} -> CrossStratumLink
-	DomainByStratumPrefix = []byte{0x05} // {stratum}/{domain} -> nil (index)
+	DomainByStratumPrefix      = []byte{0x05} // {stratum}/{domain} -> nil (index)
+	LogicZoneKeyPrefix         = []byte{0x10} // {zone_name} -> LogicZoneProperties
+	IncompletenessAckKeyPrefix = []byte{0x11} // {fact_id} -> IncompletenessAcknowledgment
 )

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/knowledge/types"
@@ -15,25 +14,29 @@ import (
 
 // SetFact stores a fact in the KV store.
 func (k Keeper) SetFact(ctx sdk.Context, fact types.Fact) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(fact.Id)
 	bz, err := json.Marshal(fact)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set fact: %v", err))
+	}
 
 	// Maintain domain→fact index
 	indexKey := domainFactIndexKey(fact.Domain, fact.Id)
-	store.Set(indexKey, []byte(fact.Id))
+	if err := kvStore.Set(indexKey, []byte(fact.Id)); err != nil {
+		panic(fmt.Sprintf("failed to set domain fact index: %v", err))
+	}
 }
 
 // GetFact retrieves a fact by ID.
 func (k Keeper) GetFact(ctx sdk.Context, factID string) (types.Fact, bool) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(factID)
-	bz := store.Get(key)
-	if bz == nil {
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
 		return types.Fact{}, false
 	}
 	var fact types.Fact
@@ -49,15 +52,18 @@ func (k Keeper) DeleteFact(ctx sdk.Context, factID string) {
 	if !found {
 		return
 	}
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(factKey(factID))
-	store.Delete(domainFactIndexKey(fact.Domain, factID))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(factKey(factID))
+	_ = kvStore.Delete(domainFactIndexKey(fact.Domain, factID))
 }
 
 // IterateFacts iterates over all facts. Return true from cb to stop.
 func (k Keeper) IterateFacts(ctx sdk.Context, cb func(types.Fact) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.FactKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.FactKeyPrefix, prefixEndBytes(types.FactKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -73,9 +79,12 @@ func (k Keeper) IterateFacts(ctx sdk.Context, cb func(types.Fact) bool) {
 
 // GetFactsByDomain returns all facts in a domain.
 func (k Keeper) GetFactsByDomain(ctx sdk.Context, domain string) []types.Fact {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.DomainFactIndexPrefix, []byte(domain+":")...)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var facts []types.Fact
@@ -101,23 +110,32 @@ func (k Keeper) GetFactCount(ctx sdk.Context) uint64 {
 
 // ---------- Claim Operations ----------
 
-// SetClaim stores a claim.
+// SetClaim stores a claim and maintains the content hash index.
 func (k Keeper) SetClaim(ctx sdk.Context, claim types.Claim) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claim.Id)
 	bz, err := json.Marshal(claim)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set claim: %v", err))
+	}
+
+	// Maintain contentHash → claimId index for O(1) duplicate detection
+	if claim.ContentHash != "" {
+		if err := kvStore.Set(contentHashIndexKey(claim.ContentHash), []byte(claim.Id)); err != nil {
+			panic(fmt.Sprintf("failed to set content hash index: %v", err))
+		}
+	}
 }
 
 // GetClaim retrieves a claim by ID.
 func (k Keeper) GetClaim(ctx sdk.Context, claimID string) (types.Claim, bool) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claimID)
-	bz := store.Get(key)
-	if bz == nil {
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
 		return types.Claim{}, false
 	}
 	var claim types.Claim
@@ -127,31 +145,33 @@ func (k Keeper) GetClaim(ctx sdk.Context, claimID string) (types.Claim, bool) {
 	return claim, true
 }
 
-// GetClaimByContentHash finds a claim by its content hash (for duplicate detection).
+// GetClaimByContentHash finds a claim by its content hash using an O(1) index lookup.
 func (k Keeper) GetClaimByContentHash(ctx sdk.Context, contentHash string) (types.Claim, bool) {
-	var found types.Claim
-	var exists bool
-	k.IterateClaims(ctx, func(c types.Claim) bool {
-		if c.ContentHash == contentHash {
-			found = c
-			exists = true
-			return true
-		}
-		return false
-	})
-	return found, exists
+	kvStore := k.storeService.OpenKVStore(ctx)
+	claimIDBytes, err := kvStore.Get(contentHashIndexKey(contentHash))
+	if err != nil || claimIDBytes == nil {
+		return types.Claim{}, false
+	}
+	return k.GetClaim(ctx, string(claimIDBytes))
 }
 
-// DeleteClaim removes a claim.
+// DeleteClaim removes a claim and its indexes.
 func (k Keeper) DeleteClaim(ctx sdk.Context, claimID string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(claimKey(claimID))
+	claim, found := k.GetClaim(ctx, claimID)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(claimKey(claimID))
+	if found && claim.ContentHash != "" {
+		_ = kvStore.Delete(contentHashIndexKey(claim.ContentHash))
+	}
 }
 
 // IterateClaims iterates over all claims. Return true from cb to stop.
 func (k Keeper) IterateClaims(ctx sdk.Context, cb func(types.Claim) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.ClaimKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.ClaimKeyPrefix, prefixEndBytes(types.ClaimKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -179,57 +199,80 @@ func (k Keeper) GetPendingClaims(ctx sdk.Context) []types.Claim {
 
 // ---------- Verification Round Operations ----------
 
-// SetVerificationRound stores a verification round.
+// SetVerificationRound stores a verification round and maintains the claim→round index.
 func (k Keeper) SetVerificationRound(ctx sdk.Context, round types.VerificationRound) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := roundKey(round.Id)
 	bz, err := json.Marshal(round)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal round: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set round: %v", err))
+	}
+
+	// Maintain claimId → roundId index for active (non-complete) rounds
+	if round.ClaimId != "" {
+		if round.Phase != "complete" {
+			if err := kvStore.Set(claimRoundIndexKey(round.ClaimId), []byte(round.Id)); err != nil {
+				panic(fmt.Sprintf("failed to set claim round index: %v", err))
+			}
+		} else {
+			// Clean up index when round completes
+			_ = kvStore.Delete(claimRoundIndexKey(round.ClaimId))
+		}
+	}
 }
 
 // GetVerificationRound retrieves a round by ID.
 func (k Keeper) GetVerificationRound(ctx sdk.Context, roundID string) (types.VerificationRound, bool) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := roundKey(roundID)
-	bz := store.Get(key)
-	if bz == nil {
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
 		return types.VerificationRound{}, false
 	}
 	var round types.VerificationRound
 	if err := json.Unmarshal(bz, &round); err != nil {
 		return types.VerificationRound{}, false
 	}
+	// Proto maps may be nil after JSON unmarshal (omitempty); initialize to avoid nil map panics
+	if round.Commitments == nil {
+		round.Commitments = make(map[string]*types.VerificationCommitment)
+	}
+	if round.Reveals == nil {
+		round.Reveals = make(map[string]*types.VerificationReveal)
+	}
 	return round, true
 }
 
-// GetVerificationRoundForClaim finds the active round for a claim.
+// GetVerificationRoundForClaim finds the active round for a claim using an O(1) index lookup.
 func (k Keeper) GetVerificationRoundForClaim(ctx sdk.Context, claimID string) (types.VerificationRound, bool) {
-	var found types.VerificationRound
-	var exists bool
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
-		if r.ClaimId == claimID && r.Phase != "complete" {
-			found = r
-			exists = true
-			return true
-		}
-		return false
-	})
-	return found, exists
+	kvStore := k.storeService.OpenKVStore(ctx)
+	roundIDBytes, err := kvStore.Get(claimRoundIndexKey(claimID))
+	if err != nil || roundIDBytes == nil {
+		return types.VerificationRound{}, false
+	}
+	return k.GetVerificationRound(ctx, string(roundIDBytes))
 }
 
-// DeleteVerificationRound removes a round.
+// DeleteVerificationRound removes a round and its indexes.
 func (k Keeper) DeleteVerificationRound(ctx sdk.Context, roundID string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(roundKey(roundID))
+	round, found := k.GetVerificationRound(ctx, roundID)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(roundKey(roundID))
+	if found && round.ClaimId != "" {
+		_ = kvStore.Delete(claimRoundIndexKey(round.ClaimId))
+	}
 }
 
 // IterateVerificationRounds iterates over all rounds.
 func (k Keeper) IterateVerificationRounds(ctx sdk.Context, cb func(types.VerificationRound) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.VerificationRoundKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.VerificationRoundKeyPrefix, prefixEndBytes(types.VerificationRoundKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -273,6 +316,20 @@ func (k Keeper) GetActiveRoundsForValidator(ctx sdk.Context, validatorAddr strin
 	return rounds
 }
 
+// HasActiveRoundForClaim checks if any non-complete round exists for the given claim.
+// Used to prevent creating duplicate reverification rounds.
+func (k Keeper) HasActiveRoundForClaim(ctx sdk.Context, claimId string) bool {
+	found := false
+	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+		if r.ClaimId == claimId && r.Phase != "complete" {
+			found = true
+			return true // stop iteration
+		}
+		return false
+	})
+	return found
+}
+
 // GetExpiredRounds returns rounds that have passed their deadlines.
 func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.VerificationRound {
 	var rounds []types.VerificationRound
@@ -296,24 +353,31 @@ func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.
 
 // SetFactReference stores a fact-to-fact reference with bidirectional indexes.
 func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factRefKey(ref.FromFactId, ref.ToFactId)
 	bz, err := json.Marshal(ref)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact reference: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set fact reference: %v", err))
+	}
 
 	// Maintain incoming reference index (toFact → fromFact)
 	incomingKey := incomingRefKey(ref.ToFactId, ref.FromFactId)
-	store.Set(incomingKey, bz)
+	if err := kvStore.Set(incomingKey, bz); err != nil {
+		panic(fmt.Sprintf("failed to set incoming ref index: %v", err))
+	}
 }
 
 // GetFactReferences returns all outgoing references from a fact.
 func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.FactReference {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.FactReferenceKeyPrefix, []byte(fromFactID+":")...)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var refs []types.FactReference
@@ -329,9 +393,12 @@ func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.Fa
 
 // GetIncomingReferences returns all references pointing TO a fact.
 func (k Keeper) GetIncomingReferences(ctx sdk.Context, toFactID string) []types.FactReference {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.IncomingRefIndexPrefix, []byte(toFactID+":")...)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var refs []types.FactReference
@@ -373,21 +440,23 @@ func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []types.Fa
 
 // SetDomain stores an ontological domain (replacing the stub).
 func (k Keeper) SetDomain(ctx sdk.Context, domain types.OntologicalDomain) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := domainKey(domain.Name)
 	bz, err := json.Marshal(domain)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal domain: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set domain: %v", err))
+	}
 }
 
 // GetDomain retrieves a domain by name.
 func (k Keeper) GetDomain(ctx sdk.Context, name string) (types.OntologicalDomain, bool) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := domainKey(name)
-	bz := store.Get(key)
-	if bz == nil {
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
 		return types.OntologicalDomain{}, false
 	}
 	var domain types.OntologicalDomain
@@ -399,10 +468,13 @@ func (k Keeper) GetDomain(ctx sdk.Context, name string) (types.OntologicalDomain
 
 // IterateDomains iterates over all domains.
 func (k Keeper) IterateDomains(ctx sdk.Context, cb func(types.OntologicalDomain) bool) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	// Domain keys use a separate prefix (0x07)
 	prefix := []byte{0x07}
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -414,6 +486,87 @@ func (k Keeper) IterateDomains(ctx sdk.Context, cb func(types.OntologicalDomain)
 			break
 		}
 	}
+}
+
+// ---------- Equivocation Evidence Operations ----------
+
+// SetEquivocationEvidence stores proof of a validator's equivocation.
+func (k Keeper) SetEquivocationEvidence(ctx sdk.Context, evidence types.EquivocationEvidence) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := equivocationKey(evidence.RoundId, evidence.Validator)
+	bz, err := json.Marshal(evidence)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal equivocation evidence: %v", err))
+	}
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set equivocation evidence: %v", err))
+	}
+}
+
+// GetEquivocationEvidence retrieves equivocation evidence for a round+validator.
+func (k Keeper) GetEquivocationEvidence(ctx sdk.Context, roundID, validator string) (types.EquivocationEvidence, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := equivocationKey(roundID, validator)
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
+		return types.EquivocationEvidence{}, false
+	}
+	var evidence types.EquivocationEvidence
+	if err := json.Unmarshal(bz, &evidence); err != nil {
+		return types.EquivocationEvidence{}, false
+	}
+	return evidence, true
+}
+
+// ---------- Submitter Calibration Operations ----------
+
+// SetCalibrationRecord stores a submitter's calibration record.
+func (k Keeper) SetCalibrationRecord(ctx sdk.Context, record types.CalibrationRecord) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := calibrationKey(record.Submitter)
+	bz, err := json.Marshal(record)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal calibration record: %v", err))
+	}
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set calibration record: %v", err))
+	}
+}
+
+// GetCalibrationRecord retrieves a submitter's calibration record.
+func (k Keeper) GetCalibrationRecord(ctx sdk.Context, submitter string) (types.CalibrationRecord, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := calibrationKey(submitter)
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
+		return types.CalibrationRecord{}, false
+	}
+	var record types.CalibrationRecord
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.CalibrationRecord{}, false
+	}
+	return record, true
+}
+
+// UpdateSubmitterCalibration records a claim outcome for a submitter.
+// accepted=true increments AcceptedClaims, false increments RejectedClaims.
+func (k Keeper) UpdateSubmitterCalibration(ctx sdk.Context, submitter string, accepted bool) {
+	record, found := k.GetCalibrationRecord(ctx, submitter)
+	if !found {
+		record = types.CalibrationRecord{
+			Submitter: submitter,
+		}
+	}
+
+	record.TotalClaims++
+	if accepted {
+		record.AcceptedClaims++
+	} else {
+		record.RejectedClaims++
+	}
+	record.LastUpdateHeight = uint64(ctx.BlockHeight())
+
+	k.SetCalibrationRecord(ctx, record)
 }
 
 // ---------- Content Hash Generation ----------
@@ -430,7 +583,7 @@ func ComputeClaimContentHash(claimText, domain, epistemicCategory string) string
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// GenerateClaimID generates a deterministic claim ID.
+// GenerateClaimID generates a deterministic claim ID (full 256-bit SHA-256, 64 hex chars).
 func GenerateClaimID(submitter, contentHash string, height uint64) string {
 	h := sha256.New()
 	h.Write([]byte("LGM.claim.id.v1:"))
@@ -438,26 +591,26 @@ func GenerateClaimID(submitter, contentHash string, height uint64) string {
 	h.Write([]byte(":"))
 	h.Write([]byte(contentHash))
 	h.Write([]byte(fmt.Sprintf(":%d", height)))
-	return fmt.Sprintf("%x", h.Sum(nil))[:32]
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// GenerateFactID generates a deterministic fact ID from a verified claim.
+// GenerateFactID generates a deterministic fact ID (full 256-bit SHA-256, 64 hex chars).
 func GenerateFactID(claimID, roundID string) string {
 	h := sha256.New()
 	h.Write([]byte("LGM.fact.id.v1:"))
 	h.Write([]byte(claimID))
 	h.Write([]byte(":"))
 	h.Write([]byte(roundID))
-	return fmt.Sprintf("%x", h.Sum(nil))[:32]
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// GenerateRoundID generates a deterministic round ID.
+// GenerateRoundID generates a deterministic round ID (full 256-bit SHA-256, 64 hex chars).
 func GenerateRoundID(claimID string, height uint64) string {
 	h := sha256.New()
 	h.Write([]byte("LGM.round.id.v1:"))
 	h.Write([]byte(claimID))
 	h.Write([]byte(fmt.Sprintf(":%d", height)))
-	return fmt.Sprintf("%x", h.Sum(nil))[:32]
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // ---------- Key Construction Helpers ----------
@@ -488,4 +641,387 @@ func domainKey(name string) []byte {
 
 func incomingRefKey(toID, fromID string) []byte {
 	return append(types.IncomingRefIndexPrefix, []byte(toID+":"+fromID)...)
+}
+
+func contentHashIndexKey(contentHash string) []byte {
+	return append(types.ContentHashIndexPrefix, []byte(contentHash)...)
+}
+
+func claimRoundIndexKey(claimID string) []byte {
+	return append(types.ClaimRoundIndexPrefix, []byte(claimID)...)
+}
+
+func equivocationKey(roundID, validator string) []byte {
+	return append(types.EquivocationKeyPrefix, []byte(roundID+":"+validator)...)
+}
+
+func calibrationKey(submitter string) []byte {
+	return append(types.SubmitterCalibrationPrefix, []byte(submitter)...)
+}
+
+// ---------- Counter-Fact Operations (Negative Knowledge) ----------
+
+func counterFactKey(id string) []byte {
+	return append(types.CounterFactKeyPrefix, []byte(id)...)
+}
+
+func counterFactByFactKey(targetFactId, counterFactId string) []byte {
+	return append(types.CounterFactByFactIndexPrefix, []byte(targetFactId+":"+counterFactId)...)
+}
+
+func counterFactByDomainKey(domain, counterFactId string) []byte {
+	return append(types.CounterFactByDomainIndexPrefix, []byte(domain+":"+counterFactId)...)
+}
+
+func counterFactByHeightKey(height uint64, counterFactId string) []byte {
+	// Big-endian height for natural ordering
+	hBytes := fmt.Sprintf("%020d", height) // zero-padded for lexicographic order
+	return append(types.CounterFactByHeightIndexPrefix, []byte(hBytes+":"+counterFactId)...)
+}
+
+func factNegationLinkKey(factId string) []byte {
+	return append(types.FactNegationLinkPrefix, []byte(factId)...)
+}
+
+func contradictionCooldownKey(submitter string, epoch uint64) []byte {
+	return append(types.ContradictionCooldownPrefix, []byte(fmt.Sprintf("%s:%d", submitter, epoch))...)
+}
+
+// GenerateCounterFactID generates a deterministic counter-fact ID.
+func GenerateCounterFactID(targetFactId, targetClaimId, submitter string, height uint64) string {
+	h := sha256.New()
+	h.Write([]byte("LGM.counterfact.id.v1:"))
+	h.Write([]byte(targetFactId))
+	h.Write([]byte(":"))
+	h.Write([]byte(targetClaimId))
+	h.Write([]byte(":"))
+	h.Write([]byte(submitter))
+	h.Write([]byte(fmt.Sprintf(":%d", height)))
+	return fmt.Sprintf("cfact-%x", h.Sum(nil))
+}
+
+// SetCounterFact stores a counter-fact and maintains all indexes.
+func (k Keeper) SetCounterFact(ctx sdk.Context, cf types.CounterFact) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+
+	// Primary storage
+	bz, err := json.Marshal(cf)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal counter-fact: %v", err))
+	}
+	if err := kvStore.Set(counterFactKey(cf.Id), bz); err != nil {
+		panic(fmt.Sprintf("failed to set counter-fact: %v", err))
+	}
+
+	// Index: targetFactId → counterFactId
+	if cf.TargetFactId != "" {
+		if err := kvStore.Set(counterFactByFactKey(cf.TargetFactId, cf.Id), []byte(cf.Id)); err != nil {
+			panic(fmt.Sprintf("failed to set counter-fact-by-fact index: %v", err))
+		}
+	}
+
+	// Index: domain → counterFactId
+	if cf.Domain != "" {
+		if err := kvStore.Set(counterFactByDomainKey(cf.Domain, cf.Id), []byte(cf.Id)); err != nil {
+			panic(fmt.Sprintf("failed to set counter-fact-by-domain index: %v", err))
+		}
+	}
+
+	// Index: height → counterFactId
+	if err := kvStore.Set(counterFactByHeightKey(cf.CreatedAtHeight, cf.Id), []byte(cf.Id)); err != nil {
+		panic(fmt.Sprintf("failed to set counter-fact-by-height index: %v", err))
+	}
+}
+
+// GetCounterFact retrieves a counter-fact by ID.
+func (k Keeper) GetCounterFact(ctx sdk.Context, id string) (types.CounterFact, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(counterFactKey(id))
+	if err != nil || bz == nil {
+		return types.CounterFact{}, false
+	}
+	var cf types.CounterFact
+	if err := json.Unmarshal(bz, &cf); err != nil {
+		return types.CounterFact{}, false
+	}
+	return cf, true
+}
+
+// DeleteCounterFact removes a counter-fact and all its indexes.
+func (k Keeper) DeleteCounterFact(ctx sdk.Context, id string) {
+	cf, found := k.GetCounterFact(ctx, id)
+	if !found {
+		return
+	}
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(counterFactKey(id))
+	if cf.TargetFactId != "" {
+		_ = kvStore.Delete(counterFactByFactKey(cf.TargetFactId, id))
+	}
+	if cf.Domain != "" {
+		_ = kvStore.Delete(counterFactByDomainKey(cf.Domain, id))
+	}
+	_ = kvStore.Delete(counterFactByHeightKey(cf.CreatedAtHeight, id))
+}
+
+// GetCounterFactsByFact returns all counter-facts targeting a specific fact.
+func (k Keeper) GetCounterFactsByFact(ctx sdk.Context, factId string) []types.CounterFact {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := append(types.CounterFactByFactIndexPrefix, []byte(factId+":")...)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var results []types.CounterFact
+	for ; iter.Valid(); iter.Next() {
+		cfId := string(iter.Value())
+		cf, found := k.GetCounterFact(ctx, cfId)
+		if found {
+			results = append(results, cf)
+		}
+	}
+	return results
+}
+
+// GetCounterFactsByDomain returns counter-facts in a domain.
+func (k Keeper) GetCounterFactsByDomain(ctx sdk.Context, domain string) []types.CounterFact {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := append(types.CounterFactByDomainIndexPrefix, []byte(domain+":")...)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var results []types.CounterFact
+	for ; iter.Valid(); iter.Next() {
+		cfId := string(iter.Value())
+		cf, found := k.GetCounterFact(ctx, cfId)
+		if found {
+			results = append(results, cf)
+		}
+	}
+	return results
+}
+
+// IterateCounterFacts iterates over all counter-facts. Return true from cb to stop.
+func (k Keeper) IterateCounterFacts(ctx sdk.Context, cb func(types.CounterFact) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.CounterFactKeyPrefix, prefixEndBytes(types.CounterFactKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var cf types.CounterFact
+		if err := json.Unmarshal(iter.Value(), &cf); err != nil {
+			continue
+		}
+		if cb(cf) {
+			break
+		}
+	}
+}
+
+// GetMaxFalsityConfidence returns the highest counter-fact confidence for a fact.
+// This is the "falsity confidence" component of bidirectional confidence.
+func (k Keeper) GetMaxFalsityConfidence(ctx sdk.Context, factId string) uint64 {
+	counterFacts := k.GetCounterFactsByFact(ctx, factId)
+	var maxConf uint64
+	for _, cf := range counterFacts {
+		if cf.Status == types.CounterFactStatusVerified && cf.Confidence > maxConf {
+			maxConf = cf.Confidence
+		}
+	}
+	return maxConf
+}
+
+// GetBidirectionalConfidence computes the dual-track epistemic assessment for a fact.
+func (k Keeper) GetBidirectionalConfidence(ctx sdk.Context, factId string) types.BidirectionalConfidence {
+	fact, found := k.GetFact(ctx, factId)
+	if !found {
+		return types.BidirectionalConfidence{FactId: factId, Status: "uncertain"}
+	}
+
+	falsityConf := k.GetMaxFalsityConfidence(ctx, factId)
+	counterFacts := k.GetCounterFactsByFact(ctx, factId)
+	var verifiedCount uint32
+	for _, cf := range counterFacts {
+		if cf.Status == types.CounterFactStatusVerified {
+			verifiedCount++
+		}
+	}
+
+	net := int64(fact.Confidence) - int64(falsityConf)
+
+	return types.BidirectionalConfidence{
+		FactId:           factId,
+		TruthConfidence:  fact.Confidence,
+		FalsityConfidence: falsityConf,
+		NetConfidence:    net,
+		CounterFactCount: verifiedCount,
+		Status:           types.ComputeBidirectionalStatus(net),
+	}
+}
+
+// GetContradictionCount returns how many contradictions an agent submitted in an epoch.
+func (k Keeper) GetContradictionCount(ctx sdk.Context, submitter string, epoch uint64) uint32 {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := contradictionCooldownKey(submitter, epoch)
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
+		return 0
+	}
+	var count uint32
+	if err := json.Unmarshal(bz, &count); err != nil {
+		return 0
+	}
+	return count
+}
+
+// IncrementContradictionCount increments the epoch contradiction counter.
+func (k Keeper) IncrementContradictionCount(ctx sdk.Context, submitter string, epoch uint64) {
+	count := k.GetContradictionCount(ctx, submitter, epoch)
+	count++
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := json.Marshal(count)
+	_ = kvStore.Set(contradictionCooldownKey(submitter, epoch), bz)
+}
+
+// ---------- Falsification Epoch Cap ----------
+
+func falsificationEpochPaidKey(epoch uint64) []byte {
+	return append(types.FalsificationEpochPaidPrefix, []byte(fmt.Sprintf("%d", epoch))...)
+}
+
+// GetFalsificationEpochPaid returns total ulgm paid in falsification rewards this epoch.
+func (k Keeper) GetFalsificationEpochPaid(ctx sdk.Context, epoch uint64) uint64 {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(falsificationEpochPaidKey(epoch))
+	if err != nil || bz == nil {
+		return 0
+	}
+	var amount uint64
+	if err := json.Unmarshal(bz, &amount); err != nil {
+		return 0
+	}
+	return amount
+}
+
+// SetFalsificationEpochPaid records total ulgm paid in falsification rewards this epoch.
+func (k Keeper) SetFalsificationEpochPaid(ctx sdk.Context, epoch uint64, amount uint64) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := json.Marshal(amount)
+	_ = kvStore.Set(falsificationEpochPaidKey(epoch), bz)
+}
+
+// ---------- Falsification Carry-Forward (R-3) ----------
+
+func falsificationCarryForwardKey(epoch uint64) []byte {
+	return append(types.FalsificationCarryForwardPrefix, []byte(fmt.Sprintf("%d", epoch))...)
+}
+
+// GetFalsificationCarryForward returns ulgm carried forward from a prior epoch's cap overflow.
+func (k Keeper) GetFalsificationCarryForward(ctx sdk.Context, epoch uint64) uint64 {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(falsificationCarryForwardKey(epoch))
+	if err != nil || bz == nil {
+		return 0
+	}
+	var amount uint64
+	if err := json.Unmarshal(bz, &amount); err != nil {
+		return 0
+	}
+	return amount
+}
+
+// SetFalsificationCarryForward records ulgm to carry forward into a future epoch.
+func (k Keeper) SetFalsificationCarryForward(ctx sdk.Context, epoch uint64, amount uint64) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := json.Marshal(amount)
+	_ = kvStore.Set(falsificationCarryForwardKey(epoch), bz)
+}
+
+// AddFalsificationCarryForward atomically adds to an epoch's carry-forward balance.
+func (k Keeper) AddFalsificationCarryForward(ctx sdk.Context, epoch uint64, amount uint64) {
+	current := k.GetFalsificationCarryForward(ctx, epoch)
+	k.SetFalsificationCarryForward(ctx, epoch, current+amount)
+}
+
+// ---------- Counter-Fact Challenge Window (R-2) ----------
+
+func counterFactChallengeWindowKey(counterFactId string) []byte {
+	return append(types.CounterFactChallengeWindowPrefix, []byte(counterFactId)...)
+}
+
+func counterFactChallengeKey(challengeId string) []byte {
+	return append(types.CounterFactChallengeKeyPrefix, []byte(challengeId)...)
+}
+
+// GetCounterFactChallengeWindow returns the challenge window end height for a counter-fact.
+func (k Keeper) GetCounterFactChallengeWindow(ctx sdk.Context, counterFactId string) (uint64, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(counterFactChallengeWindowKey(counterFactId))
+	if err != nil || bz == nil {
+		return 0, false
+	}
+	var endHeight uint64
+	if err := json.Unmarshal(bz, &endHeight); err != nil {
+		return 0, false
+	}
+	return endHeight, true
+}
+
+// SetCounterFactChallengeWindow stores the challenge window end height for a counter-fact.
+func (k Keeper) SetCounterFactChallengeWindow(ctx sdk.Context, counterFactId string, endHeight uint64) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := json.Marshal(endHeight)
+	_ = kvStore.Set(counterFactChallengeWindowKey(counterFactId), bz)
+}
+
+// SetCounterFactChallenge stores a counter-fact challenge.
+func (k Keeper) SetCounterFactChallenge(ctx sdk.Context, challenge types.CounterFactChallenge) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(challenge)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal counter-fact challenge: %v", err))
+	}
+	_ = kvStore.Set(counterFactChallengeKey(challenge.Id), bz)
+}
+
+// GetCounterFactChallenge retrieves a counter-fact challenge by ID.
+func (k Keeper) GetCounterFactChallenge(ctx sdk.Context, challengeId string) (types.CounterFactChallenge, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(counterFactChallengeKey(challengeId))
+	if err != nil || bz == nil {
+		return types.CounterFactChallenge{}, false
+	}
+	var challenge types.CounterFactChallenge
+	if err := json.Unmarshal(bz, &challenge); err != nil {
+		return types.CounterFactChallenge{}, false
+	}
+	return challenge, true
+}
+
+// IterateCounterFactChallenges iterates over all counter-fact challenges.
+func (k Keeper) IterateCounterFactChallenges(ctx sdk.Context, cb func(types.CounterFactChallenge) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.CounterFactChallengeKeyPrefix, prefixEndBytes(types.CounterFactChallengeKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var challenge types.CounterFactChallenge
+		if err := json.Unmarshal(iter.Value(), &challenge); err != nil {
+			continue
+		}
+		if cb(challenge) {
+			break
+		}
+	}
 }

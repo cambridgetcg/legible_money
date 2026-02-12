@@ -27,7 +27,7 @@ export interface QuadraticVotingConfig {
 }
 
 export const DEFAULT_QV_CONFIG: QuadraticVotingConfig = {
-  baseCost: 1n * 10n ** 18n, // 1 LGM per vote (squared for cost)
+  baseCost: 1n * 10n ** 15n, // 0.001 LGM per vote (squared for cost)
   maxVotesPerVoter: 100, // Max 100 votes = 10000 LGM cost
   refundOnCancel: 0.9, // 90% refund
 };

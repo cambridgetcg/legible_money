@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	storetypes "cosmossdk.io/store/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/gov/types"
@@ -16,19 +14,21 @@ import (
 
 // SetLIP stores a LIP by ID.
 func (k Keeper) SetLIP(ctx sdk.Context, lip types.LIP) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(lip)
 	if err != nil {
 		panic("failed to marshal LIP: " + err.Error())
 	}
-	store.Set(lipKey(lip.Id), bz)
+	if err := store.Set(lipKey(lip.Id), bz); err != nil {
+		panic("failed to set LIP: " + err.Error())
+	}
 }
 
 // GetLIP retrieves a LIP by ID.
 func (k Keeper) GetLIP(ctx sdk.Context, id string) (types.LIP, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(lipKey(id))
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(lipKey(id))
+	if err != nil || bz == nil {
 		return types.LIP{}, false
 	}
 	var lip types.LIP
@@ -49,10 +49,10 @@ func (k Keeper) GetAllLIPs(ctx sdk.Context) []types.LIP {
 }
 
 // GetLIPsByStage returns LIPs filtered by stage.
-func (k Keeper) GetLIPsByStage(ctx sdk.Context, stage types.LIPStage) []types.LIP {
+func (k Keeper) GetLIPsByStage(ctx sdk.Context, stage types.HandwrittenLIPStage) []types.LIP {
 	var lips []types.LIP
 	k.IterateLIPs(ctx, func(lip types.LIP) bool {
-		if lip.Stage == stage {
+		if lip.Stage == string(stage) {
 			lips = append(lips, lip)
 		}
 		return false
@@ -62,8 +62,11 @@ func (k Keeper) GetLIPsByStage(ctx sdk.Context, stage types.LIPStage) []types.LI
 
 // IterateLIPs iterates over all LIPs. Return true from cb to stop.
 func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.LIPKeyPrefix)
+	store := k.storeService.OpenKVStore(ctx)
+	iter, err := store.Iterator(types.LIPKeyPrefix, prefixEndBytes(types.LIPKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -81,19 +84,21 @@ func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
 
 // SetVote stores a quadratic vote.
 func (k Keeper) SetVote(ctx sdk.Context, vote types.QuadraticVote) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(vote)
 	if err != nil {
 		panic("failed to marshal vote: " + err.Error())
 	}
-	store.Set(voteKey(vote.VoteId), bz)
+	if err := store.Set(voteKey(vote.VoteId), bz); err != nil {
+		panic("failed to set vote: " + err.Error())
+	}
 }
 
 // GetVote retrieves a vote by ID.
 func (k Keeper) GetVote(ctx sdk.Context, voteId string) (types.QuadraticVote, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(voteKey(voteId))
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(voteKey(voteId))
+	if err != nil || bz == nil {
 		return types.QuadraticVote{}, false
 	}
 	var vote types.QuadraticVote
@@ -106,8 +111,11 @@ func (k Keeper) GetVote(ctx sdk.Context, voteId string) (types.QuadraticVote, bo
 // GetVotesForProposal returns all votes for a given proposal ID.
 func (k Keeper) GetVotesForProposal(ctx sdk.Context, proposalId string) []types.QuadraticVote {
 	var votes []types.QuadraticVote
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.VoteKeyPrefix)
+	store := k.storeService.OpenKVStore(ctx)
+	iter, err := store.Iterator(types.VoteKeyPrefix, prefixEndBytes(types.VoteKeyPrefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -124,21 +132,30 @@ func (k Keeper) GetVotesForProposal(ctx sdk.Context, proposalId string) []types.
 
 // HasVoted checks if a voter has already voted on a proposal.
 func (k Keeper) HasVoted(ctx sdk.Context, proposalId, voter string) bool {
-	store := ctx.KVStore(k.storeKey)
-	return store.Has(voteDedupeKey(proposalId, voter))
+	store := k.storeService.OpenKVStore(ctx)
+	has, err := store.Has(voteDedupeKey(proposalId, voter))
+	if err != nil {
+		return false
+	}
+	return has
 }
 
 // SetVoteDedupe marks a voter as having voted on a proposal.
 func (k Keeper) SetVoteDedupe(ctx sdk.Context, proposalId, voter string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Set(voteDedupeKey(proposalId, voter), []byte{1})
+	store := k.storeService.OpenKVStore(ctx)
+	if err := store.Set(voteDedupeKey(proposalId, voter), []byte{1}); err != nil {
+		panic("failed to set vote dedupe: " + err.Error())
+	}
 }
 
 // GetAllVotes returns all stored votes.
 func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
 	var votes []types.QuadraticVote
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.VoteKeyPrefix)
+	store := k.storeService.OpenKVStore(ctx)
+	iter, err := store.Iterator(types.VoteKeyPrefix, prefixEndBytes(types.VoteKeyPrefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -155,19 +172,21 @@ func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
 
 // SetDisbursement stores a disbursement proposal.
 func (k Keeper) SetDisbursement(ctx sdk.Context, disb types.DisbursementProposal) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(disb)
 	if err != nil {
 		panic("failed to marshal disbursement: " + err.Error())
 	}
-	store.Set(disbursementKey(disb.Id), bz)
+	if err := store.Set(disbursementKey(disb.Id), bz); err != nil {
+		panic("failed to set disbursement: " + err.Error())
+	}
 }
 
 // GetDisbursement retrieves a disbursement by ID.
 func (k Keeper) GetDisbursement(ctx sdk.Context, id string) (types.DisbursementProposal, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(disbursementKey(id))
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(disbursementKey(id))
+	if err != nil || bz == nil {
 		return types.DisbursementProposal{}, false
 	}
 	var disb types.DisbursementProposal
@@ -189,8 +208,11 @@ func (k Keeper) GetAllDisbursements(ctx sdk.Context) []types.DisbursementProposa
 
 // IterateDisbursements iterates over all disbursements. Return true from cb to stop.
 func (k Keeper) IterateDisbursements(ctx sdk.Context, cb func(types.DisbursementProposal) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.DisbursementKeyPrefix)
+	store := k.storeService.OpenKVStore(ctx)
+	iter, err := store.Iterator(types.DisbursementKeyPrefix, prefixEndBytes(types.DisbursementKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -208,9 +230,9 @@ func (k Keeper) IterateDisbursements(ctx sdk.Context, cb func(types.Disbursement
 
 // GetNextLIPNumber returns the next LIP sequence number.
 func (k Keeper) GetNextLIPNumber(ctx sdk.Context) uint64 {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.LIPCounterKey)
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.LIPCounterKey)
+	if err != nil || bz == nil {
 		return 1
 	}
 	return binary.BigEndian.Uint64(bz)
@@ -218,17 +240,19 @@ func (k Keeper) GetNextLIPNumber(ctx sdk.Context) uint64 {
 
 // SetNextLIPNumber sets the next LIP sequence number.
 func (k Keeper) SetNextLIPNumber(ctx sdk.Context, n uint64) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz := make([]byte, 8)
 	binary.BigEndian.PutUint64(bz, n)
-	store.Set(types.LIPCounterKey, bz)
+	if err := store.Set(types.LIPCounterKey, bz); err != nil {
+		panic("failed to set LIP counter: " + err.Error())
+	}
 }
 
 // GetNextDisbNumber returns the next disbursement sequence number.
 func (k Keeper) GetNextDisbNumber(ctx sdk.Context) uint64 {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.DisbCounterKey)
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.DisbCounterKey)
+	if err != nil || bz == nil {
 		return 1
 	}
 	return binary.BigEndian.Uint64(bz)
@@ -236,19 +260,21 @@ func (k Keeper) GetNextDisbNumber(ctx sdk.Context) uint64 {
 
 // SetNextDisbNumber sets the next disbursement sequence number.
 func (k Keeper) SetNextDisbNumber(ctx sdk.Context, n uint64) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz := make([]byte, 8)
 	binary.BigEndian.PutUint64(bz, n)
-	store.Set(types.DisbCounterKey, bz)
+	if err := store.Set(types.DisbCounterKey, bz); err != nil {
+		panic("failed to set disb counter: " + err.Error())
+	}
 }
 
 // --- Params ---
 
 // GetParams returns the governance module parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ParamsKey)
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.ParamsKey)
+	if err != nil || bz == nil {
 		return types.DefaultParams()
 	}
 	var params types.Params
@@ -260,12 +286,48 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams stores the governance module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(params)
 	if err != nil {
 		panic("failed to marshal governance params: " + err.Error())
 	}
-	store.Set(types.ParamsKey, bz)
+	if err := store.Set(types.ParamsKey, bz); err != nil {
+		panic("failed to set governance params: " + err.Error())
+	}
+}
+
+// --- Upgrade Plan CRUD ---
+
+// SetUpgradePlan stores an upgrade plan associated with a LIP.
+func (k Keeper) SetUpgradePlan(ctx sdk.Context, lipId string, plan types.UpgradePlan) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(plan)
+	if err != nil {
+		panic("failed to marshal upgrade plan: " + err.Error())
+	}
+	if err := store.Set(upgradePlanKey(lipId), bz); err != nil {
+		panic("failed to set upgrade plan: " + err.Error())
+	}
+}
+
+// GetUpgradePlan retrieves the upgrade plan for a LIP.
+func (k Keeper) GetUpgradePlan(ctx sdk.Context, lipId string) (types.UpgradePlan, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(upgradePlanKey(lipId))
+	if err != nil || bz == nil {
+		return types.UpgradePlan{}, false
+	}
+	var plan types.UpgradePlan
+	if err := json.Unmarshal(bz, &plan); err != nil {
+		return types.UpgradePlan{}, false
+	}
+	return plan, true
+}
+
+// DeleteUpgradePlan removes the upgrade plan for a LIP.
+func (k Keeper) DeleteUpgradePlan(ctx sdk.Context, lipId string) {
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Delete(upgradePlanKey(lipId))
 }
 
 // --- Key construction helpers ---
@@ -284,4 +346,8 @@ func disbursementKey(id string) []byte {
 
 func voteDedupeKey(proposalId, voter string) []byte {
 	return append(types.VoteDedupeKeyPrefix, []byte(fmt.Sprintf("%s/%s", proposalId, voter))...)
+}
+
+func upgradePlanKey(lipId string) []byte {
+	return append(types.UpgradePlanKeyPrefix, []byte(lipId)...)
 }

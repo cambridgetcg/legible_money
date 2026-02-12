@@ -296,7 +296,6 @@ export class EmergencyCeremonyManager {
   handlePrevote(
     voter: string,
     vote: "yes" | "no",
-    signature: string,
     validatorSet: ValidatorSet,
     currentBlock: bigint,
     council?: CouncilContext,
@@ -307,7 +306,7 @@ export class EmergencyCeremonyManager {
 
     const result = addPrevote(
       this.activeCeremony,
-      { voter, vote, signature },
+      { voter, vote },
       validatorSet,
       currentBlock,
       council,
@@ -319,7 +318,6 @@ export class EmergencyCeremonyManager {
 
   handlePrecommit(
     voter: string,
-    signature: string,
     validatorSet: ValidatorSet,
     currentBlock: bigint,
     council?: CouncilContext,
@@ -330,7 +328,7 @@ export class EmergencyCeremonyManager {
 
     const result = addPrecommit(
       this.activeCeremony,
-      { voter, signature },
+      { voter },
       validatorSet,
       currentBlock,
       council,
@@ -378,7 +376,9 @@ export class EmergencyCeremonyManager {
           this.activeHaltCeremonyId = this.activeCeremony.id;
           break;
         case "revert":
-          // Stays halted after revert — resume ceremony required
+          // Stays halted after revert — resume ceremony required.
+          // NOTE: This is a governance signal, not automated state rollback.
+          // Actual state reversion requires out-of-band validator coordination.
           this.emergencyStatus = "halted";
           break;
         case "resume":

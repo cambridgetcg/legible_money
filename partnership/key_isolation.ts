@@ -418,7 +418,7 @@ export function generateIsolatedVault(
     accessPolicy: {
       signingRequires: hardwareBinding?.required ? "hardware" : "local_key",
       maxSignaturesPerBlock: 11,
-      maxValuePerBlock: 11111n * 10n ** 18n,
+      maxValuePerBlock: 11111n * 10n ** 15n,
     },
   };
 }

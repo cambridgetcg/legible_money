@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -17,7 +17,7 @@ import (
 // Keeper manages the emergency module's state.
 type Keeper struct {
 	cdc           codec.Codec
-	storeKey      storetypes.StoreKey
+	storeService  store.KVStoreService
 	stakingKeeper types.StakingKeeper
 	authority     string
 }
@@ -25,16 +25,33 @@ type Keeper struct {
 // NewKeeper creates a new emergency module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	stakingKeeper types.StakingKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
 		cdc:           cdc,
-		storeKey:      storeKey,
+		storeService:  storeService,
 		stakingKeeper: stakingKeeper,
 		authority:     authority,
 	}
+}
+
+// prefixEndBytes returns the end key for prefix iteration.
+// It increments the last byte of the prefix. If overflow, returns nil (iterate to end).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -50,7 +67,7 @@ func (k Keeper) GetAuthority() string {
 // IsGuardian checks if a validator is a Guardian (tier 3) or a genesis council member.
 func (k Keeper) IsGuardian(ctx sdk.Context, operatorAddr string) bool {
 	validator, found := k.stakingKeeper.GetValidator(ctx, operatorAddr)
-	if found && validator.Tier == stakingtypes.TierGuardian && validator.IsActive {
+	if found && validator.Tier == stakingtypes.TierGuardian.String() && validator.IsActive {
 		return true
 	}
 	// H-5: Check genesis emergency council
@@ -66,7 +83,7 @@ func (k Keeper) GetGuardianStake(ctx sdk.Context) *big.Int {
 	total := new(big.Int)
 	validators := k.stakingKeeper.GetActiveValidatorSet(ctx)
 	for _, v := range validators {
-		if v.Tier == stakingtypes.TierGuardian && v.IsActive {
+		if v.Tier == stakingtypes.TierGuardian.String() && v.IsActive {
 			stake, ok := new(big.Int).SetString(v.TotalStake, 10)
 			if ok {
 				total.Add(total, stake)
@@ -88,7 +105,7 @@ func (k Keeper) GetGuardianStake(ctx sdk.Context) *big.Int {
 // GetGuardianEffectiveStake returns a single guardian's effective stake.
 func (k Keeper) GetGuardianEffectiveStake(ctx sdk.Context, operatorAddr string) *big.Int {
 	validator, found := k.stakingKeeper.GetValidator(ctx, operatorAddr)
-	if found && validator.Tier == stakingtypes.TierGuardian && validator.IsActive {
+	if found && validator.Tier == stakingtypes.TierGuardian.String() && validator.IsActive {
 		stake, ok := new(big.Int).SetString(validator.TotalStake, 10)
 		if ok {
 			return stake
@@ -125,13 +142,23 @@ func (k Keeper) isCouncilActive(ctx sdk.Context, params types.Params) bool {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
-	k.SetEmergencyStatus(ctx, genState.Status)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	}
+	k.SetEmergencyStatus(ctx, types.EmergencyStatus(genState.Status))
 	for _, ceremony := range genState.Ceremonies {
-		k.SetCeremony(ctx, ceremony)
+		if ceremony == nil {
+			continue
+		}
+		if err := k.SetCeremony(ctx, *ceremony); err != nil {
+			panic("failed to init genesis ceremony: " + err.Error())
+		}
 	}
 	for _, entry := range genState.AuditLog {
-		k.AddAuditEntry(ctx, entry)
+		if entry == nil {
+			continue
+		}
+		k.AddAuditEntry(ctx, *entry)
 	}
 }
 
@@ -139,10 +166,22 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	ceremonies := k.GetAllCeremonies(ctx)
 	auditLog := k.GetAuditLog(ctx)
+
+	// Convert value slices to pointer slices for proto compatibility
+	ceremonyPtrs := make([]*types.EmergencyCeremony, len(ceremonies))
+	for i := range ceremonies {
+		ceremonyPtrs[i] = &ceremonies[i]
+	}
+	auditPtrs := make([]*types.EmergencyAuditEntry, len(auditLog))
+	for i := range auditLog {
+		auditPtrs[i] = &auditLog[i]
+	}
+
+	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:     k.GetParams(ctx),
-		Status:     k.GetEmergencyStatus(ctx),
-		Ceremonies: ceremonies,
-		AuditLog:   auditLog,
+		Params:     &params,
+		Status:     string(k.GetEmergencyStatus(ctx)),
+		Ceremonies: ceremonyPtrs,
+		AuditLog:   auditPtrs,
 	}
 }

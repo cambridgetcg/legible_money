@@ -6,22 +6,23 @@
  */
 
 export const EMERGENCY_PARAMS = {
-  // ============ Quorum Thresholds ============
+  // ============ Quorum Thresholds (basis points, 1_000_000 = 100%) ============
   // Stricter than normal BFT 0.67 threshold — guardian-stake-weighted
+  // Matches Go x/emergency Params: HaltQuorum/RevertQuorum/ResumeQuorum
 
-  /** 75% of Guardian stake required to halt */
-  GUARDIAN_HALT_QUORUM: 0.75,
-  /** 80% of Guardian stake required to revert (more destructive = stricter) */
-  GUARDIAN_REVERT_QUORUM: 0.8,
-  /** 80% of Guardian stake required to resume (prevents premature restart) */
-  GUARDIAN_RESUME_QUORUM: 0.8,
+  /** 75% of Guardian stake required to halt (750,000 basis points) */
+  GUARDIAN_HALT_QUORUM_BP: 750_000n,
+  /** 80% of Guardian stake required to revert (800,000 basis points) */
+  GUARDIAN_REVERT_QUORUM_BP: 800_000n,
+  /** 80% of Guardian stake required to resume (800,000 basis points) */
+  GUARDIAN_RESUME_QUORUM_BP: 800_000n,
 
   /**
    * Minimum absolute Guardian stake for emergency ceremonies to function.
    * Prevents early-network attacks where few Guardians could collude.
    * 111,111 LGM = at minimum ~10 Guardians at minimum stake (11,111 each).
    */
-  MIN_GUARDIAN_STAKE_FOR_EMERGENCY: 111111n * 10n ** 18n,
+  MIN_GUARDIAN_STAKE_FOR_EMERGENCY: 111111n * 10n ** 15n,
 
   /**
    * Minimum number of distinct Guardian validators required to finalize.

@@ -716,8 +716,8 @@ describe.sequential("StateManager Period Integration", () => {
 
     const params = {
       targetBlockTimeMs: 2521,
-      minValidatorStake: 1000n * 10n ** 18n,
-      minClaimStake: 10n * 10n ** 18n,
+      minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+      minClaimStake: 10n * 10n ** 15n,
       validatorQuorum: 0.66,
       verificationRoundBlocks: 20,
       commitPhaseBlocks: 6,
@@ -799,8 +799,8 @@ describe.sequential("StateManager Period Integration", () => {
 
     const params = {
       targetBlockTimeMs: 2521,
-      minValidatorStake: 1000n * 10n ** 18n,
-      minClaimStake: 10n * 10n ** 18n,
+      minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+      minClaimStake: 10n * 10n ** 15n,
       validatorQuorum: 0.66,
       verificationRoundBlocks: 20,
       commitPhaseBlocks: 6,

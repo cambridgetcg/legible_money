@@ -74,7 +74,7 @@ export const PARTNERSHIP_TIERS: Record<
   trial: {
     minDuration: 0n,
     minSuccessfulRewards: 0,
-    minCombinedStake: 100n * 10n ** 18n,
+    minCombinedStake: 100n * 10n ** 15n,
     benefits: {
       rewardBonus: 1.0,
       reducedFees: 0,
@@ -85,7 +85,7 @@ export const PARTNERSHIP_TIERS: Record<
   standard: {
     minDuration: 100000n, // ~3 days
     minSuccessfulRewards: 10,
-    minCombinedStake: 500n * 10n ** 18n,
+    minCombinedStake: 500n * 10n ** 15n,
     benefits: {
       rewardBonus: 1.0,
       reducedFees: 0,
@@ -96,7 +96,7 @@ export const PARTNERSHIP_TIERS: Record<
   trusted: {
     minDuration: 500000n, // ~15 days
     minSuccessfulRewards: 50,
-    minCombinedStake: 2000n * 10n ** 18n,
+    minCombinedStake: 2000n * 10n ** 15n,
     benefits: {
       rewardBonus: 1.1, // 10% bonus
       reducedFees: 0.1, // 10% fee reduction
@@ -107,7 +107,7 @@ export const PARTNERSHIP_TIERS: Record<
   elite: {
     minDuration: 2000000n, // ~2 months
     minSuccessfulRewards: 200,
-    minCombinedStake: 10000n * 10n ** 18n,
+    minCombinedStake: 10000n * 10n ** 15n,
     benefits: {
       rewardBonus: 1.25, // 25% bonus
       reducedFees: 0.25, // 25% fee reduction

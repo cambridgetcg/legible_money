@@ -124,3 +124,25 @@ func (q queryServer) ConfidenceCeiling(goCtx context.Context, req *types.QueryCo
 		StratumName:   stratum.Name,
 	}, nil
 }
+
+// LogicZone returns the properties of a single logic zone.
+func (q queryServer) LogicZone(goCtx context.Context, req *types.QueryLogicZoneRequest) (*types.QueryLogicZoneResponse, error) {
+	if req.Zone == "" {
+		return nil, fmt.Errorf("%w: zone name is required", types.ErrInvalidLogicZone)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	props, found := q.GetLogicZone(ctx, req.Zone)
+	if !found {
+		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneNotFound, req.Zone)
+	}
+
+	return &types.QueryLogicZoneResponse{Properties: props}, nil
+}
+
+// AllLogicZones returns all registered logic zones.
+func (q queryServer) AllLogicZones(goCtx context.Context, _ *types.QueryAllLogicZonesRequest) (*types.QueryAllLogicZonesResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	zones := q.GetAllLogicZones(ctx)
+	return &types.QueryAllLogicZonesResponse{Zones: zones}, nil
+}

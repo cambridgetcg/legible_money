@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/capture_challenge/types"
@@ -28,6 +29,16 @@ func (k Keeper) SubmitChallenge(goCtx context.Context, msg *types.MsgSubmitChall
 		return nil, types.ErrInsufficientChallengeStake
 	}
 
+	// Lock challenger's stake in the module account
+	challengerAddr, err := sdk.AccAddressFromBech32(msg.Challenger)
+	if err != nil {
+		return nil, fmt.Errorf("invalid challenger address: %w", err)
+	}
+	stakeCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(stakeInt)))
+	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, challengerAddr, types.ModuleName, stakeCoins); err != nil {
+		return nil, fmt.Errorf("failed to lock challenge stake: %w", err)
+	}
+
 	// Validate evidence count
 	if len(msg.Evidence) < types.MinEvidencePieces {
 		return nil, types.ErrInsufficientEvidence
@@ -48,7 +59,7 @@ func (k Keeper) SubmitChallenge(goCtx context.Context, msg *types.MsgSubmitChall
 		SubmittedAtBlock:  currentBlock,
 		EvidenceDeadline:  currentBlock + params.EvidencePeriodBlocks,
 		ReviewDeadline:    currentBlock + params.EvidencePeriodBlocks + params.ReviewPeriodBlocks,
-		Status:            types.ChallengeEvidencePeriod,
+		Status:            string(types.ChallengeEvidencePeriod),
 	}
 
 	k.SetChallenge(ctx, challenge)
@@ -86,12 +97,16 @@ func (k Keeper) AddEvidence(goCtx context.Context, msg *types.MsgAddEvidence) (*
 		return nil, fmt.Errorf("only the challenger can add evidence")
 	}
 
-	if challenge.Status != types.ChallengeEvidencePeriod {
+	if challenge.Status != string(types.ChallengeEvidencePeriod) {
 		return nil, types.ErrInvalidChallengeStatus
 	}
 
 	if currentBlock > challenge.EvidenceDeadline {
 		return nil, types.ErrDeadlinePassed
+	}
+
+	if len(challenge.Evidence) >= types.MaxEvidencePieces {
+		return nil, types.ErrMaxEvidenceExceeded
 	}
 
 	challenge.Evidence = append(challenge.Evidence, msg.Evidence)
@@ -115,7 +130,7 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 		return nil, types.ErrChallengeNotFound
 	}
 
-	if challenge.Status != types.ChallengeUnderReview && challenge.Status != types.ChallengeEvidencePeriod {
+	if challenge.Status != string(types.ChallengeUnderReview) && challenge.Status != string(types.ChallengeEvidencePeriod) {
 		return nil, types.ErrInvalidChallengeStatus
 	}
 
@@ -129,19 +144,28 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 		Justification:   msg.Justification,
 	}
 
+	challengerAddr, _ := sdk.AccAddressFromBech32(challenge.Challenger)
+
 	switch msg.Outcome {
 	case "upheld":
 		// Challenger gets 7.7x stake + 777 LGM bonus
 		stakeInt := new(big.Int)
 		stakeInt.SetString(challenge.ChallengeStake, 10)
-		// 7.7x = stake * 77 / 10
-		reward := new(big.Int).Mul(stakeInt, big.NewInt(77))
-		reward.Div(reward, big.NewInt(10))
+		// 7.7x = stake * ChallengeStakeMultiplierBPS / 1_000_000
+		reward := new(big.Int).Mul(stakeInt, big.NewInt(int64(types.ChallengeStakeMultiplierBPS)))
+		reward.Div(reward, big.NewInt(1_000_000))
 		bonus := new(big.Int)
 		bonus.SetString(types.CaptureExposureBonus, 10)
 		reward.Add(reward, bonus)
 		challengerReward = reward.String()
 		resolution.ChallengerReward = challengerReward
+
+		// Pay challenger: original stake + reward
+		totalPayout := new(big.Int).Add(stakeInt, reward)
+		payoutCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(totalPayout)))
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, challengerAddr, payoutCoins); err != nil {
+			return nil, fmt.Errorf("failed to pay challenger reward: %w", err)
+		}
 
 		// Slash accused validators
 		slashes := make(map[string]string)
@@ -158,10 +182,10 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 		resolution.ValidatorSlashes = slashes
 
 		// Pause domain
-		challenge.DomainPausedUntil = currentBlock + types.DomainPauseDurationBlocks
+		challenge.DomainPausedUntil = currentBlock + types.DefaultDomainPauseDurationBlocks
 
 		pool.ChallengesUpheld++
-		challenge.Status = types.ChallengeUpheld
+		challenge.Status = string(types.ChallengeUpheld)
 
 	case "rejected":
 		// Challenger loses 77% of stake to bounty pool
@@ -170,25 +194,43 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 		penalty := new(big.Int).Mul(stakeInt, big.NewInt(int64(types.FailedChallengePenaltyBPS)))
 		penalty.Div(penalty, big.NewInt(1_000_000))
 
+		// Penalty stays in module (tracked by pool balance)
 		poolBal := new(big.Int)
 		poolBal.SetString(pool.Balance, 10)
 		poolBal.Add(poolBal, penalty)
 		pool.Balance = poolBal.String()
 
+		// Return remainder (23%) to challenger
+		remainder := new(big.Int).Sub(stakeInt, penalty)
+		if remainder.Sign() > 0 {
+			returnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(remainder)))
+			if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, challengerAddr, returnCoins); err != nil {
+				return nil, fmt.Errorf("failed to return stake remainder: %w", err)
+			}
+		}
+
 		pool.ChallengesRejected++
-		challenge.Status = types.ChallengeRejected
+		challenge.Status = string(types.ChallengeRejected)
 
 	case "partial":
-		// Partial: reduced reward, no domain pause
+		// Partial: reduced reward (half of full multiplier), no domain pause
 		stakeInt := new(big.Int)
 		stakeInt.SetString(challenge.ChallengeStake, 10)
-		// 3.85x (half of 7.7x)
-		reward := new(big.Int).Mul(stakeInt, big.NewInt(385))
-		reward.Div(reward, big.NewInt(100))
+		// Half of ChallengeStakeMultiplierBPS
+		halfMultiplierBPS := int64(types.ChallengeStakeMultiplierBPS / 2)
+		reward := new(big.Int).Mul(stakeInt, big.NewInt(halfMultiplierBPS))
+		reward.Div(reward, big.NewInt(1_000_000))
 		challengerReward = reward.String()
 		resolution.ChallengerReward = challengerReward
 
-		challenge.Status = types.ChallengePartial
+		// Pay challenger: original stake + partial reward
+		totalPayout := new(big.Int).Add(stakeInt, reward)
+		payoutCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(totalPayout)))
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, challengerAddr, payoutCoins); err != nil {
+			return nil, fmt.Errorf("failed to pay partial challenger reward: %w", err)
+		}
+
+		challenge.Status = string(types.ChallengePartial)
 	}
 
 	challenge.Resolution = &resolution

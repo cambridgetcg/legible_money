@@ -694,7 +694,7 @@ class LegibleMoneyNode extends EventEmitter {
     for (const axiom of genesisConfig.axioms) {
       state.addFact({
         id: axiom.id,
-        claim: axiom.claim,
+        claimText: axiom.claim,
         domain: axiom.domain,
         confidence: 1.0,
         verifiedAt: 0n,
@@ -829,16 +829,16 @@ class LegibleMoneyNode extends EventEmitter {
         maxValidators: this.genesis.consensus.maxValidators ?? 21,
         validatorQuorum: this.genesis.consensus.validatorQuorum ?? 0.66,
         minValidatorStake: BigInt(
-          this.genesis.consensus.minValidatorStake ?? "1000000000000000000000",
+          this.genesis.consensus.minValidatorStake ?? "111000000000000000",
         ),
         minClaimStake: BigInt(
-          this.genesis.consensus.minClaimStake ?? "100000000000000000000",
+          this.genesis.consensus.minClaimStake ?? "11000000000000000",
         ),
         acceptanceThreshold: this.genesis.consensus.acceptanceThreshold ?? 0.8,
         rejectionThreshold: this.genesis.consensus.rejectionThreshold ?? 0.8,
         contestedThreshold: 0.5,
-        wrongVerificationSlash: 0.1,
-        missedVerificationSlash: 0.05,
+        wrongVerificationSlash: 0.06,
+        missedVerificationSlash: 0.0001,
         invalidClaimSlash: 0.5,
         researchShareRate: 0.22,
         apiProviderShare: 0.6,

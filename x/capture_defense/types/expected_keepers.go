@@ -27,3 +27,9 @@ type BankKeeper interface {
 	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
 	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
 }
+
+// EmergencyKeeper defines the expected interface for the emergency module.
+// Used to check halt status — capture detection skips analysis while halted.
+type EmergencyKeeper interface {
+	IsHalted(ctx sdk.Context) bool
+}

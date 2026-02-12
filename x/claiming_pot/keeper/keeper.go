@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,9 +15,9 @@ import (
 
 // Keeper manages the claiming_pot module's state.
 type Keeper struct {
-	cdc        codec.Codec
-	storeKey   storetypes.StoreKey
-	bankKeeper types.BankKeeper
+	cdc          codec.Codec
+	storeService store.KVStoreService
+	bankKeeper   types.BankKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -26,16 +26,32 @@ type Keeper struct {
 // NewKeeper creates a new claiming_pot module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bankKeeper types.BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		storeKey:   storeKey,
-		bankKeeper: bankKeeper,
-		authority:  authority,
+		cdc:          cdc,
+		storeService: storeService,
+		bankKeeper:   bankKeeper,
+		authority:    authority,
 	}
+}
+
+// prefixEndBytes returns the end key for a prefix scan (exclusive upper bound).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -50,40 +66,44 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
-	k.SetParams(ctx, gs.Params)
+	k.SetParams(ctx, *gs.Params)
 
 	for _, pot := range gs.Pots {
-		k.SetPot(ctx, pot)
+		k.SetPot(ctx, *pot)
 	}
 
 	for _, claim := range gs.Claims {
-		k.SetClaimRecord(ctx, claim)
+		k.SetClaimRecord(ctx, *claim)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	var pots []types.ClaimingPot
+	var pots []*types.ClaimingPot
 	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
-		pots = append(pots, pot)
+		p := pot
+		pots = append(pots, &p)
 		return false
 	})
 
-	var claims []types.ClaimRecord
+	var claims []*types.ClaimRecord
 	// Iterate all claim records across all pots
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.ContributionKeyPrefix)
-	defer iter.Close()
-	for ; iter.Valid(); iter.Next() {
-		var record types.ClaimRecord
-		if err := json.Unmarshal(iter.Value(), &record); err != nil {
-			continue
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.ContributionKeyPrefix, prefixEndBytes(types.ContributionKeyPrefix))
+	if err == nil {
+		defer iter.Close()
+		for ; iter.Valid(); iter.Next() {
+			var record types.ClaimRecord
+			if err := json.Unmarshal(iter.Value(), &record); err != nil {
+				continue
+			}
+			claims = append(claims, &record)
 		}
-		claims = append(claims, record)
 	}
 
+	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params: k.GetParams(ctx),
+		Params: &params,
 		Pots:   pots,
 		Claims: claims,
 	}

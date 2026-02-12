@@ -3,7 +3,6 @@ package keeper
 import (
 	"crypto/sha256"
 	"fmt"
-	"math"
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
@@ -12,6 +11,15 @@ import (
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
 )
+
+// Fixed-point precision for release curve calculations (10^18).
+var fixedPointPrecision = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+
+// ln2Scaled is ln(2) * 10^6 = 693147, used for fractional halving approximation.
+var ln2Scaled = big.NewInt(693147)
+
+// fractionalScale is 10^6, the denominator for ln2Scaled.
+var fractionalScale = big.NewInt(1000000)
 
 // CreateVestingSchedule creates a new truth-linked vesting schedule for a reward.
 //
@@ -23,12 +31,12 @@ func (k Keeper) CreateVestingSchedule(
 	factId string,
 	recipient string,
 	totalAmount string,
-	category types.VestingCategory,
+	category types.VestingCategoryStr,
 	source types.RewardSource,
-) (types.VestingSchedule, error) {
+) (*types.VestingSchedule, error) {
 	cfg, found := k.GetCategoryConfig(ctx, category)
 	if !found {
-		return types.VestingSchedule{}, types.ErrInvalidCategory
+		return nil, types.ErrInvalidCategory
 	}
 
 	height := uint64(ctx.BlockHeight())
@@ -36,7 +44,7 @@ func (k Keeper) CreateVestingSchedule(
 	// Compute reserve from max release
 	totalBig := new(big.Int)
 	if _, ok := totalBig.SetString(totalAmount, 10); !ok {
-		return types.VestingSchedule{}, types.ErrInvalidRewardAmount
+		return nil, types.ErrInvalidRewardAmount
 	}
 
 	reserveRate := 1000000 - cfg.MaxRelease // basis points
@@ -48,7 +56,7 @@ func (k Keeper) CreateVestingSchedule(
 	hash := sha256.Sum256([]byte(idInput))
 	vestingId := fmt.Sprintf("%x", hash[:16])
 
-	schedule := types.VestingSchedule{
+	schedule := &types.VestingSchedule{
 		Id:               vestingId,
 		ClaimId:          claimId,
 		FactId:           factId,
@@ -57,9 +65,9 @@ func (k Keeper) CreateVestingSchedule(
 		ReleasedAmount:   "0",
 		ClaimableAmount:  "0",
 		ReserveAmount:    reserveBig.String(),
-		Category:         category,
-		Source:            source,
-		Status:           types.VestingStatusActive,
+		Category:         string(category),
+		Source:            string(source),
+		Status:           string(types.VestingStatusActive),
 		AcceptedAtBlock:  height,
 		CliffEndsAtBlock: height + cfg.CliffBlocks,
 		LastClaimBlock:   height,
@@ -95,8 +103,27 @@ func (k Keeper) CreateVestingScheduleFromKnowledge(
 	return err
 }
 
+// DistributeFalsificationReward creates a vesting schedule for a falsification reward.
+// Uses SourceFalsification with CategoryComputational (short vesting, subject to clawback).
+// The reward is clawable if the counter-fact is later overturned.
+func (k Keeper) DistributeFalsificationReward(
+	ctx sdk.Context,
+	counterFactId, targetFactId, recipient, amount string,
+) error {
+	_, err := k.CreateVestingSchedule(
+		ctx,
+		counterFactId,    // claimId parameter = counter-fact ID
+		targetFactId,     // factId parameter = disproven fact ID
+		recipient,
+		amount,
+		types.CategoryComputational, // Short vesting period, appropriate for falsification
+		types.SourceFalsification,
+	)
+	return err
+}
+
 // mapEpistemicToVestingCategory maps knowledge epistemic categories to vesting categories.
-func mapEpistemicToVestingCategory(epistemic string) types.VestingCategory {
+func mapEpistemicToVestingCategory(epistemic string) types.VestingCategoryStr {
 	switch epistemic {
 	case "protocol", "analytic":
 		return types.CategoryAxiomatic
@@ -119,15 +146,17 @@ func mapEpistemicToVestingCategory(epistemic string) types.VestingCategory {
 
 // CalculateReleasedAmount computes how much reward has been released at a given block.
 //
-// Uses exponential release curve: released = maxRelease * (1 - 2^(-elapsed/halfLife))
-// This models the intuition that older, unchallenged facts are more likely true.
+// H3 FIX: Uses deterministic fixed-point arithmetic instead of float64.
+// Formula: released = maxRelease * (1 - 2^(-elapsed/halfLife))
+// Decomposition: 2^(-e/H) = 2^(-q) * 2^(-r/H) where q=e/H, r=e%H
+// Fractional part uses 4th-order Taylor: e^(-x) ≈ 1 - x + x²/2 - x³/6 + x⁴/24
 func (k Keeper) CalculateReleasedAmount(
 	ctx sdk.Context,
-	schedule types.VestingSchedule,
+	schedule *types.VestingSchedule,
 ) string {
 	height := uint64(ctx.BlockHeight())
 
-	cfg, found := k.GetCategoryConfig(ctx, schedule.Category)
+	cfg, found := k.GetCategoryConfig(ctx, types.VestingCategoryStr(schedule.Category))
 	if !found {
 		return "0"
 	}
@@ -139,8 +168,7 @@ func (k Keeper) CalculateReleasedAmount(
 
 	// Calculate effective elapsed blocks (excluding paused time)
 	elapsed := height - schedule.AcceptedAtBlock - schedule.TotalPausedBlocks
-	if schedule.Status == types.VestingStatusPaused && schedule.PausedAtBlock > 0 {
-		// Currently paused: also subtract current pause duration
+	if schedule.Status == string(types.VestingStatusPaused) && schedule.PausedAtBlock > 0 {
 		currentPause := height - schedule.PausedAtBlock
 		if currentPause > elapsed {
 			elapsed = 0
@@ -155,61 +183,159 @@ func (k Keeper) CalculateReleasedAmount(
 	}
 	elapsed -= cfg.CliffBlocks
 
-	// Exponential release: released = maxRelease * (1 - 2^(-elapsed/halfLife))
 	if cfg.HalfLifeBlocks == 0 {
 		return "0"
 	}
 
-	// Use float64 for the exponential calculation
-	exponent := -float64(elapsed) / float64(cfg.HalfLifeBlocks)
-	releaseFraction := float64(cfg.MaxRelease) / 1000000.0 * (1.0 - math.Pow(2.0, exponent))
-
-	// Apply acceleration bonus (from defenses, replications)
-	accelerationBonus := k.calculateAccelerationBonus(schedule)
-	releaseFraction *= (1.0 + accelerationBonus)
-
-	// Cap at max release
-	maxReleaseFraction := float64(cfg.MaxRelease) / 1000000.0
-	if releaseFraction > maxReleaseFraction {
-		releaseFraction = maxReleaseFraction
+	// Apply acceleration: effective half-life = halfLife * 10000 / (10000 + bonusBps)
+	bonusBps := k.calculateAccelerationBonusBps(schedule)
+	effectiveHalfLife := cfg.HalfLifeBlocks
+	if bonusBps > 0 {
+		effectiveHalfLife = cfg.HalfLifeBlocks * 10000 / (10000 + bonusBps)
+		if effectiveHalfLife == 0 {
+			effectiveHalfLife = 1
+		}
 	}
 
-	// Apply to total amount
+	// Compute remaining factor: 2^(-elapsed/effectiveHalfLife) using fixed-point
+	remainingFactor := calculateHalvingFactor(elapsed, effectiveHalfLife)
+
+	// releaseFraction = PRECISION - remainingFactor (in 10^18 scale)
+	releaseFraction := new(big.Int).Sub(fixedPointPrecision, remainingFactor)
+	if releaseFraction.Sign() < 0 {
+		releaseFraction.SetInt64(0)
+	}
+
+	// Apply maxRelease cap: releaseFraction = min(releaseFraction, maxRelease * PRECISION / 1000000)
+	maxReleaseFP := new(big.Int).Mul(big.NewInt(int64(cfg.MaxRelease)), fixedPointPrecision)
+	maxReleaseFP.Div(maxReleaseFP, big.NewInt(1000000))
+	if releaseFraction.Cmp(maxReleaseFP) > 0 {
+		releaseFraction.Set(maxReleaseFP)
+	}
+
+	// Apply to total amount: released = total * releaseFraction / PRECISION
 	totalBig := new(big.Int)
 	if _, ok := totalBig.SetString(schedule.TotalAmount, 10); !ok {
 		return "0"
 	}
 
-	// released = total * releaseFraction
-	// Use basis points for precision: releaseFraction * 1000000
-	releaseBps := int64(releaseFraction * 1000000)
-	releasedBig := new(big.Int).Mul(totalBig, big.NewInt(releaseBps))
-	releasedBig.Div(releasedBig, big.NewInt(1000000))
+	releasedBig := new(big.Int).Mul(totalBig, releaseFraction)
+	releasedBig.Div(releasedBig, fixedPointPrecision)
 
 	return releasedBig.String()
 }
 
-// calculateAccelerationBonus computes the acceleration bonus from defenses and replications.
-func (k Keeper) calculateAccelerationBonus(schedule types.VestingSchedule) float64 {
-	bonus := 0.0
+// calculateHalvingFactor computes 2^(-elapsed/halfLife) using deterministic integer arithmetic.
+// Returns result scaled by fixedPointPrecision (10^18).
+//
+// Decomposition: 2^(-e/H) = 2^(-q) * 2^(-r/H)
+// where q = e/H (integer quotient), r = e%H (remainder)
+// Full halvings: right-shift by q
+// Fractional part: 4th-order Taylor of e^(-x) where x = r*ln(2)/H
+func calculateHalvingFactor(elapsed, halfLife uint64) *big.Int {
+	if elapsed == 0 {
+		return new(big.Int).Set(fixedPointPrecision)
+	}
 
-	// +11% per successful defense, max +55%
-	defenseBonus := float64(schedule.DefenseCount) * 0.11
-	if defenseBonus > 0.55 {
-		defenseBonus = 0.55
+	fullHalvings := elapsed / halfLife
+	remainder := elapsed % halfLife
+
+	// After 60+ halvings, factor is effectively 0
+	if fullHalvings >= 60 {
+		return new(big.Int)
+	}
+
+	// Start with precision, apply full halvings via right-shift
+	remaining := new(big.Int).Rsh(fixedPointPrecision, uint(fullHalvings))
+
+	// Apply fractional halving using 4th-order Taylor of e^(-x)
+	// where x = remainder * ln(2) / halfLife
+	if remainder > 0 {
+		// x = remainder * ln2Scaled / halfLife (in fractionalScale = 10^6)
+		x := new(big.Int).Mul(big.NewInt(int64(remainder)), ln2Scaled)
+		x.Div(x, big.NewInt(int64(halfLife)))
+		// x is now in 10^6 scale
+
+		// Convert x to 10^18 scale for Taylor computation
+		xFP := new(big.Int).Mul(x, new(big.Int).Div(fixedPointPrecision, fractionalScale))
+
+		// Taylor: e^(-x) ≈ 1 - x + x²/2 - x³/6 + x⁴/24
+		// All in 10^18 scale
+		result := new(big.Int).Set(fixedPointPrecision) // 1.0
+
+		// term1 = -x
+		result.Sub(result, xFP)
+
+		// term2 = +x²/2
+		x2 := new(big.Int).Mul(xFP, xFP)
+		x2.Div(x2, fixedPointPrecision)
+		term2 := new(big.Int).Div(x2, big.NewInt(2))
+		result.Add(result, term2)
+
+		// term3 = -x³/6
+		x3 := new(big.Int).Mul(x2, xFP)
+		x3.Div(x3, fixedPointPrecision)
+		term3 := new(big.Int).Div(x3, big.NewInt(6))
+		result.Sub(result, term3)
+
+		// term4 = +x⁴/24
+		x4 := new(big.Int).Mul(x3, xFP)
+		x4.Div(x4, fixedPointPrecision)
+		term4 := new(big.Int).Div(x4, big.NewInt(24))
+		result.Add(result, term4)
+
+		// Clamp to [0, PRECISION]
+		if result.Sign() < 0 {
+			result.SetInt64(0)
+		}
+		if result.Cmp(fixedPointPrecision) > 0 {
+			result.Set(fixedPointPrecision)
+		}
+
+		// remaining *= fractional part / PRECISION
+		remaining.Mul(remaining, result)
+		remaining.Div(remaining, fixedPointPrecision)
+	}
+
+	return remaining
+}
+
+// calculateAccelerationBonusBps computes the acceleration bonus in basis points (0-7700).
+// M2 FIX: Now includes corroboration and citation types (was defense+replication only).
+func (k Keeper) calculateAccelerationBonusBps(schedule *types.VestingSchedule) uint64 {
+	var bonus uint64
+
+	// +1100 bps (11%) per successful defense, max 5500 bps (55%)
+	defenseBonus := uint64(schedule.DefenseCount) * 1100
+	if defenseBonus > 5500 {
+		defenseBonus = 5500
 	}
 	bonus += defenseBonus
 
-	// +11% per independent replication, max +33%
-	replicationBonus := float64(schedule.ReplicationCount) * 0.11
-	if replicationBonus > 0.33 {
-		replicationBonus = 0.33
+	// +1100 bps (11%) per independent replication, max 3300 bps (33%)
+	replicationBonus := uint64(schedule.ReplicationCount) * 1100
+	if replicationBonus > 3300 {
+		replicationBonus = 3300
 	}
 	bonus += replicationBonus
 
-	// Overall cap: 77%
-	if bonus > 0.77 {
-		bonus = 0.77
+	// +500 bps (5%) per cross-domain corroboration, max 2200 bps (22%)
+	corroborationBonus := uint64(schedule.CorroborationCount) * 500
+	if corroborationBonus > 2200 {
+		corroborationBonus = 2200
+	}
+	bonus += corroborationBonus
+
+	// +200 bps (2%) per citation, max 2200 bps (22%)
+	citationBonus := uint64(schedule.CitationCount) * 200
+	if citationBonus > 2200 {
+		citationBonus = 2200
+	}
+	bonus += citationBonus
+
+	// Overall cap: 7700 bps (77%)
+	if bonus > 7700 {
+		bonus = 7700
 	}
 
 	return bonus
@@ -222,9 +348,9 @@ func (k Keeper) UpdateClaimableAmount(ctx sdk.Context, vestingId string) error {
 		return types.ErrScheduleNotFound
 	}
 
-	if schedule.Status == types.VestingStatusFalsified ||
-		schedule.Status == types.VestingStatusCompleted ||
-		schedule.Status == types.VestingStatusAbandoned {
+	if schedule.Status == string(types.VestingStatusFalsified) ||
+		schedule.Status == string(types.VestingStatusCompleted) ||
+		schedule.Status == string(types.VestingStatusAbandoned) {
 		return nil
 	}
 
@@ -248,9 +374,10 @@ func (k Keeper) UpdateClaimableAmount(ctx sdk.Context, vestingId string) error {
 	return nil
 }
 
+
 // ClaimRewards claims available vested rewards for a recipient.
 func (k Keeper) ClaimRewards(ctx sdk.Context, recipient string, vestingId string) (string, error) {
-	var schedules []types.VestingSchedule
+	var schedules []*types.VestingSchedule
 
 	if vestingId != "" {
 		schedule, found := k.GetVestingSchedule(ctx, vestingId)
@@ -260,7 +387,7 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, recipient string, vestingId string
 		if schedule.Recipient != recipient {
 			return "0", types.ErrUnauthorized
 		}
-		schedules = []types.VestingSchedule{schedule}
+		schedules = []*types.VestingSchedule{schedule}
 	} else {
 		schedules = k.GetVestingSchedulesByRecipient(ctx, recipient)
 	}
@@ -269,7 +396,7 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, recipient string, vestingId string
 	height := uint64(ctx.BlockHeight())
 
 	for _, schedule := range schedules {
-		if schedule.Status != types.VestingStatusActive {
+		if schedule.Status != string(types.VestingStatusActive) {
 			continue
 		}
 
@@ -299,14 +426,14 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, recipient string, vestingId string
 		schedule.UpdatedAt = height
 
 		// Check if max release reached
-		cfg, _ := k.GetCategoryConfig(ctx, schedule.Category)
+		cfg, _ := k.GetCategoryConfig(ctx, types.VestingCategoryStr(schedule.Category))
 		totalBig := new(big.Int)
 		totalBig.SetString(schedule.TotalAmount, 10)
 		maxReleaseBig := new(big.Int).Mul(totalBig, big.NewInt(int64(cfg.MaxRelease)))
 		maxReleaseBig.Div(maxReleaseBig, big.NewInt(1000000))
 
 		if released.Cmp(maxReleaseBig) >= 0 {
-			schedule.Status = types.VestingStatusCompleted
+			schedule.Status = string(types.VestingStatusCompleted)
 		}
 
 		k.SetVestingSchedule(ctx, schedule)
@@ -340,12 +467,12 @@ func (k Keeper) PauseVesting(ctx sdk.Context, vestingId string) error {
 		return types.ErrScheduleNotFound
 	}
 
-	if schedule.Status != types.VestingStatusActive {
+	if schedule.Status != string(types.VestingStatusActive) {
 		return nil // Already paused or terminated
 	}
 
 	height := uint64(ctx.BlockHeight())
-	schedule.Status = types.VestingStatusPaused
+	schedule.Status = string(types.VestingStatusPaused)
 	schedule.PausedAtBlock = height
 	schedule.UpdatedAt = height
 
@@ -362,7 +489,7 @@ func (k Keeper) ResumeVesting(ctx sdk.Context, vestingId string) error {
 		return types.ErrScheduleNotFound
 	}
 
-	if schedule.Status != types.VestingStatusPaused {
+	if schedule.Status != string(types.VestingStatusPaused) {
 		return nil
 	}
 
@@ -370,7 +497,7 @@ func (k Keeper) ResumeVesting(ctx sdk.Context, vestingId string) error {
 	pausedDuration := height - schedule.PausedAtBlock
 	schedule.TotalPausedBlocks += pausedDuration
 	schedule.PausedAtBlock = 0
-	schedule.Status = types.VestingStatusActive
+	schedule.Status = string(types.VestingStatusActive)
 	schedule.UpdatedAt = height
 
 	k.SetVestingSchedule(ctx, schedule)
@@ -420,6 +547,34 @@ func (k Keeper) RecordReplication(ctx sdk.Context, vestingId string) error {
 	}
 
 	schedule.ReplicationCount++
+	schedule.UpdatedAt = uint64(ctx.BlockHeight())
+	k.SetVestingSchedule(ctx, schedule)
+	return nil
+}
+
+// RecordCorroboration records a cross-domain corroboration, accelerating vesting.
+// M2 FIX: New acceleration type — aligns Go with TS prototype's 4 acceleration types.
+func (k Keeper) RecordCorroboration(ctx sdk.Context, vestingId string) error {
+	schedule, found := k.GetVestingSchedule(ctx, vestingId)
+	if !found {
+		return types.ErrScheduleNotFound
+	}
+
+	schedule.CorroborationCount++
+	schedule.UpdatedAt = uint64(ctx.BlockHeight())
+	k.SetVestingSchedule(ctx, schedule)
+	return nil
+}
+
+// RecordCitation records a citation by another accepted fact, accelerating vesting.
+// M2 FIX: New acceleration type — aligns Go with TS prototype's 4 acceleration types.
+func (k Keeper) RecordCitation(ctx sdk.Context, vestingId string) error {
+	schedule, found := k.GetVestingSchedule(ctx, vestingId)
+	if !found {
+		return types.ErrScheduleNotFound
+	}
+
+	schedule.CitationCount++
 	schedule.UpdatedAt = uint64(ctx.BlockHeight())
 	k.SetVestingSchedule(ctx, schedule)
 	return nil

@@ -35,15 +35,15 @@ import { sha512_256Hex } from "../../crypto/hashing.js";
  */
 export const DOMAIN_PROPOSAL_CONFIG = {
   // Stake requirements (22/222/2222 pattern)
-  leafDomainStake: 22n * 10n ** 18n, // 22 LGM for leaf domains (depth > 2)
-  midDomainStake: 222n * 10n ** 18n, // 222 LGM for mid-level (depth 2)
-  topLevelDomainStake: 2222n * 10n ** 18n, // 2222 LGM for top-level (depth 1)
+  leafDomainStake: 22n * 10n ** 15n, // 0.022 LGM for leaf domains (depth > 2)
+  midDomainStake: 222n * 10n ** 15n, // 0.222 LGM for mid-level (depth 2)
+  topLevelDomainStake: 2222n * 10n ** 15n, // 2.222 LGM for top-level (depth 1)
 
   // Validator endorsement stake lock (proportional to domain level)
   // Validators lock this amount when endorsing, returned on finalization
-  leafEndorsementStake: 2n * 10n ** 18n, // 2 LGM for leaf domains
-  midEndorsementStake: 22n * 10n ** 18n, // 22 LGM for mid-level
-  topLevelEndorsementStake: 222n * 10n ** 18n, // 222 LGM for top-level
+  leafEndorsementStake: 2n * 10n ** 15n, // 0.002 LGM for leaf domains
+  midEndorsementStake: 22n * 10n ** 15n, // 0.022 LGM for mid-level
+  topLevelEndorsementStake: 222n * 10n ** 15n, // 0.222 LGM for top-level
 
   // Stake return on rejection (77%)
   stakeReturnOnRejection: 0.77,

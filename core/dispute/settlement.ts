@@ -4,16 +4,16 @@
  * Calculates rewards and punishments based on dispute outcome:
  *
  * PUNISHMENT (Harsh - Results Matter):
- * - False claim: 50% slash (you polluted the knowledge base)
- * - Failed challenge: 30% slash (you wasted everyone's time)
- * - Wrong arbitration: 15% slash (you failed your duty)
+ * - False claim: 55% slash (you polluted the knowledge base)
+ * - Failed challenge: 33% slash (you wasted everyone's time)
+ * - Wrong arbitration: 11% slash (you failed your duty)
  * - Refusal to reveal: 100% slash (bad faith actor)
  *
  * REWARDS (Generous - Truth Discovery):
- * - Winner: 60% of loser's stake
- * - Truth bonus: +50% for exposing falsehood
- * - Early detection: +20% for catching within 1000 blocks
- * - Correct arbitration: 10% bonus on stake
+ * - Winner: 66% of loser's penalty
+ * - Truth bonus: +55% for exposing falsehood
+ * - Early detection: +22% for catching within 1000 blocks
+ * - Correct arbitration: 11% bonus on stake
  *
  * PP HIERARCHY:
  *   TRUTH: Settlement must be deterministic and verifiable

@@ -2,7 +2,7 @@
  * Hashing Functions
  *
  * Cryptographic hash functions for Legible Money.
- * Primary: SHA-512 (aligned with Ed25519)
+ * Primary: SHA-256 (aligned with Cosmos SDK)
  * Secondary: BLAKE3 (for performance-critical paths)
  */
 
@@ -40,7 +40,7 @@ export function sha512Hex(data: Uint8Array | string): Hash {
  * Used for: addresses, short identifiers
  */
 export function sha512_256(data: Uint8Array | string): HashBytes {
-  return sha512Hash(data).slice(0, 32);
+  return sha256Hash(data);
 }
 
 export function sha512_256Hex(data: Uint8Array | string): Hash {
@@ -61,6 +61,10 @@ export function sha256Hash(data: Uint8Array | string): HashBytes {
 export function sha256Hex(data: Uint8Array | string): Hash {
   return bytesToHex(sha256Hash(data));
 }
+
+// Canonical names (aligned with Go crypto/sha256)
+export const lgmHash = sha256Hash;
+export const lgmHashHex = sha256Hex;
 
 // ============ BLAKE3 (Performance) ============
 
@@ -94,7 +98,7 @@ export function blake3Variable(
 
 /**
  * Domain-separated hash to prevent cross-protocol attacks
- * Format: SHA-512(domain || length || data)
+ * Format: SHA-256(domain || length || data)
  */
 export function domainHash(
   domain: string,
@@ -113,7 +117,7 @@ export function domainHash(
   combined.set(lengthBytes, domainBytes.length);
   combined.set(dataBytes, domainBytes.length + 4);
 
-  return sha512Hash(combined);
+  return sha256Hash(combined);
 }
 
 /**

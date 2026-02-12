@@ -50,7 +50,7 @@ import { TOOL_DESCRIPTORS, METHOD_DESCRIPTIONS } from "./tools.js";
 const MIN_OPERATIONAL_BALANCE = 1_000_000_000_000_000n; // 0.001 LGM
 
 /** Minimum stake for validator registration */
-const MIN_VALIDATOR_STAKE = 100_000_000_000_000_000_000n; // 100 LGM
+const MIN_VALIDATOR_STAKE = 111_000_000_000_000_000n; // 0.111 LGM (tier 0 entry)
 
 /** Default stake for claims */
 const DEFAULT_CLAIM_STAKE = 1_000_000_000_000_000_000n; // 1 LGM
@@ -347,7 +347,7 @@ export class AgentSDK {
       if (effectiveConfidence >= 0.6) {
         beliefs.push({
           factId: fact.id,
-          statement: fact.claim,
+          statement: fact.claimText,
           confidence: fact.confidence,
           source,
           domain: fact.domain,
@@ -374,7 +374,7 @@ export class AgentSDK {
 
         uncertainties.push({
           factId: fact.id,
-          statement: fact.claim,
+          statement: fact.claimText,
           currentConfidence: fact.confidence,
           effectiveConfidence,
           reason,

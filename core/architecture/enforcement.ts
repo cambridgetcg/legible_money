@@ -426,7 +426,7 @@ export function getLipRequirementsForModule(
     FROZEN: {
       tier: "FROZEN",
       lipCategory: "consensus",
-      stakeRequired: 1000n * 10n ** 18n,
+      stakeRequired: 1000n * 10n ** 15n,
       minApproval: 0.75,
       quorumRequired: 0.15,
       agentReviewers: 7,
@@ -444,7 +444,7 @@ export function getLipRequirementsForModule(
     STABLE: {
       tier: "STABLE",
       lipCategory: "interface",
-      stakeRequired: 400n * 10n ** 18n,
+      stakeRequired: 400n * 10n ** 15n,
       minApproval: 0.6,
       quorumRequired: 0.1,
       agentReviewers: 4,
@@ -461,7 +461,7 @@ export function getLipRequirementsForModule(
     GOVERNED: {
       tier: "GOVERNED",
       lipCategory: "process",
-      stakeRequired: 200n * 10n ** 18n,
+      stakeRequired: 200n * 10n ** 15n,
       minApproval: 0.6,
       quorumRequired: 0.1,
       agentReviewers: 3,

@@ -465,12 +465,12 @@ export interface ResearchParameters {
  */
 export const DEFAULT_RESEARCH_PARAMETERS: ResearchParameters = {
   researchShareRate: RESEARCH_SHARE_RATE,
-  minResearchStake: 100n * 10n ** 18n, // 100 LGM
-  minBountyStake: 50n * 10n ** 18n, // 50 LGM
+  minResearchStake: 100n * 10n ** 15n, // 0.1 LGM (affordable with 0.222 LGM genesis balance)
+  minBountyStake: 50n * 10n ** 15n, // 0.05 LGM
   minReviewers: 3,
   minAcceptanceScore: 0.7,
   defaultBountyDeadline: 100000, // ~3 days
-  maxBountyReward: 100000n * 10n ** 18n, // 100,000 LGM
+  maxBountyReward: 100000n * 10n ** 15n, // 100 LGM
   rejectionSlashRate: 0.1, // 10%
   fraudDiscoveryBonus: 2.0, // 2x reward for fraud detection
 };
@@ -805,11 +805,11 @@ export interface JournalConfig {
 export const DEFAULT_JOURNAL_CONFIG: JournalConfig = {
   minReviewers: 3,
   reviewDeadline: 50000n, // ~35 hours
-  reviewerStake: 50n * 10n ** 18n, // 50 LGM
-  reviewReward: 20n * 10n ** 18n, // 20 LGM per review
-  maxGrantPerPaper: 50000n * 10n ** 18n, // 50,000 LGM
+  reviewerStake: 50n * 10n ** 15n, // 0.05 LGM
+  reviewReward: 20n * 10n ** 15n, // 0.02 LGM per review
+  maxGrantPerPaper: 50000n * 10n ** 15n, // 50 LGM
   grantVestingPeriod: 1000000n, // ~29 days
   falsificationClawbackRate: 1.0, // 100% clawback
-  minLabStake: 500n * 10n ** 18n, // 500 LGM
+  minLabStake: 500n * 10n ** 15n, // 0.5 LGM
   labEscrowPeriod: 100000n, // ~3 days
 };

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,8 +15,8 @@ import (
 
 // Keeper manages the tree module's state.
 type Keeper struct {
-	cdc      codec.Codec
-	storeKey storetypes.StoreKey
+	cdc          codec.Codec
+	storeService store.KVStoreService
 
 	bankKeeper types.BankKeeper
 
@@ -27,16 +27,33 @@ type Keeper struct {
 // NewKeeper creates a new tree module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bk types.BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		storeKey:   storeKey,
-		bankKeeper: bk,
-		authority:  authority,
+		cdc:          cdc,
+		storeService: storeService,
+		bankKeeper:   bk,
+		authority:    authority,
 	}
+}
+
+// prefixEndBytes returns the end key for a prefix scan (exclusive).
+// It increments the last byte of the prefix; if overflow occurs on all bytes, returns nil.
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -51,49 +68,60 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	k.SetParams(ctx, gs.Params)
+	if gs.Params != nil {
+		k.SetParams(ctx, *gs.Params)
+	}
 	for _, p := range gs.Projects {
-		p := p
-		k.SetProject(ctx, p)
+		if p != nil {
+			k.SetProject(ctx, *p)
+		}
 	}
 	for _, t := range gs.Tasks {
-		t := t
-		k.SetTask(ctx, t)
+		if t != nil {
+			k.SetTask(ctx, *t)
+		}
 	}
 	for _, s := range gs.Services {
-		s := s
-		k.SetService(ctx, s)
+		if s != nil {
+			k.SetService(ctx, *s)
+		}
 	}
 	for _, s := range gs.Seeds {
-		s := s
-		k.SetSeed(ctx, s)
+		if s != nil {
+			k.SetSeed(ctx, *s)
+		}
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	params := k.GetParams(ctx)
 	gs := &types.GenesisState{
-		Params:   k.GetParams(ctx),
-		Projects: []types.ProductProject{},
-		Tasks:    []types.ProjectTask{},
-		Services: []types.ServiceLeaf{},
-		Seeds:    []types.OpportunitySeed{},
+		Params:   &params,
+		Projects: []*types.ProductProject{},
+		Tasks:    []*types.ProjectTask{},
+		Services: []*types.ServiceLeaf{},
+		Seeds:    []*types.OpportunitySeed{},
 	}
 
 	k.IterateProjects(ctx, func(p types.ProductProject) bool {
-		gs.Projects = append(gs.Projects, p)
+		project := p
+		gs.Projects = append(gs.Projects, &project)
 		return false
 	})
 	k.IterateTasks(ctx, func(t types.ProjectTask) bool {
-		gs.Tasks = append(gs.Tasks, t)
+		task := t
+		gs.Tasks = append(gs.Tasks, &task)
 		return false
 	})
 	k.IterateServices(ctx, func(s types.ServiceLeaf) bool {
-		gs.Services = append(gs.Services, s)
+		service := s
+		gs.Services = append(gs.Services, &service)
 		return false
 	})
 	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
-		gs.Seeds = append(gs.Seeds, s)
+		seed := s
+		gs.Seeds = append(gs.Seeds, &seed)
 		return false
 	})
 

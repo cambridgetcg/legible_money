@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -104,13 +105,18 @@ func (AppModule) Name() string {
 
 // RegisterServices registers module services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterExtendedMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to register auth migration: %v", err))
+	}
 }
 
 // RegisterInvariants registers the auth module invariants
 func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
-	// Phase 2: Register invariants (e.g., account count matches DID mapping count)
+	keeper.RegisterInvariants(ir, am.keeper)
 }
 
 // InitGenesis performs genesis initialization
@@ -136,12 +142,16 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // BeginBlock runs at the beginning of every block.
-func (am AppModule) BeginBlock(ctx sdk.Context) {
+func (am AppModule) BeginBlock(goCtx context.Context) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
 	am.keeper.CleanupExpiredSessions(ctx)
 	am.keeper.ProcessRecoveryTimeouts(ctx)
+	return nil
 }
 
-// ConsensusVersion implements AppModule/ConsensusVersion
+// ConsensusVersion implements AppModule/ConsensusVersion.
+// v1: initial version
+// v2: RecoveryConfig gains AccountAddress, Params gains Bootstrap fields
 func (AppModule) ConsensusVersion() uint64 {
-	return 1
+	return 2
 }

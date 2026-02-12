@@ -20,8 +20,8 @@ import type {
 // ============ Constants ============
 
 export const PAYMENT_CHANNEL_CONSTANTS = {
-  // Minimum deposit (100 LGM)
-  MIN_DEPOSIT: 100n * 10n ** 18n,
+  // Minimum deposit (0.1 LGM - affordable with 0.222 LGM genesis balance)
+  MIN_DEPOSIT: 100n * 10n ** 15n,
 
   // Maximum channel duration (30 days at 2.5s blocks = ~1,036,800 blocks)
   MAX_DURATION_BLOCKS: 1036800n,

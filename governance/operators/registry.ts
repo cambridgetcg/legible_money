@@ -34,7 +34,7 @@ export const DEFAULT_OPERATOR_LIMITS: OperatorLimits = {
   maxSignalWeight: 0.2, // 20%
   maxVoteWeight: 0.15, // 15%
   maxReviewersPerLIP: 2,
-  minDisclosureStake: 1000n * 10n ** 18n, // 1000 LGM
+  minDisclosureStake: 1000n * 10n ** 15n, // 1 LGM
   updateCooldown: 10000n, // ~7 hours
 };
 

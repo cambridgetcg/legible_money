@@ -188,7 +188,7 @@ function verifyAndAccept(
 function toFactResult(fact: FactState, submitter: DID): FactResult {
   return {
     id: fact.id,
-    claim: fact.claim,
+    claim: fact.claimText,
     domain: fact.domain,
     confidence: fact.confidence,
     fundamentalityScore: 0,
@@ -255,7 +255,7 @@ describe.sequential(
 
         const fact = state.getFact(claim!.resultFactId!);
         expect(fact).not.toBeNull();
-        expect(fact!.claim).toBe(
+        expect(fact!.claimText).toBe(
           "The speed of light in vacuum is 299,792,458 m/s",
         );
         expect(fact!.domain).toBe("physics.constants");
@@ -374,8 +374,8 @@ describe.sequential(
         expect(pricing.totalCost).toBeGreaterThan(0n);
         expect(pricing.baseCost).toBeGreaterThan(0n);
 
-        // High confidence (0.92) should add a premium
-        expect(pricing.confidencePremium).toBeGreaterThan(0n);
+        // High confidence (0.92) gets a discount (negative premium)
+        expect(pricing.confidencePremium).toBeLessThan(0n);
       });
 
       it("should apply freshness discount for recently verified facts", () => {
@@ -393,19 +393,19 @@ describe.sequential(
           blockNumber + 2000n,
         );
 
-        // Fresh queries should be cheaper (discount applied)
-        expect(freshPricing.freshnessDiscount).toBeGreaterThan(0n);
+        // Fresh facts are MORE expensive (novel information premium)
+        expect(freshPricing.freshnessDiscount).toBeLessThan(0n); // negative = premium
         expect(stalePricing.freshnessDiscount).toBe(0n);
-        expect(freshPricing.totalCost).toBeLessThan(stalePricing.totalCost);
+        expect(freshPricing.totalCost).toBeGreaterThan(stalePricing.totalCost);
       });
 
-      it("should increase price for highly-cited facts", () => {
+      it("should decrease price for highly-cited facts (well-known = less marginal value)", () => {
         const factResult1 = toFactResult(fact, SCIENTIST_DID as DID);
 
         // Simulate citations
         const citedFactResult: FactResult = {
           ...factResult1,
-          citationCount: 100, // Many citations
+          citationCount: 100, // Many citations = well-known
         };
 
         const uncitedPricing = calculateQueryPrice(
@@ -417,9 +417,8 @@ describe.sequential(
           blockNumber + 2000n,
         );
 
-        expect(citedPricing.totalCost).toBeGreaterThan(
-          uncitedPricing.totalCost,
-        );
+        // Highly cited = well-known = cheaper (less marginal information value)
+        expect(citedPricing.totalCost).toBeLessThan(uncitedPricing.totalCost);
       });
 
       it("should scale cost with number of facts queried", () => {
@@ -664,7 +663,7 @@ describe.sequential(
 
         // Step 1: Query biology domain
         const bioFact = state.getFact(bioFactId)!;
-        expect(bioFact.claim).toContain("Cellular respiration");
+        expect(bioFact.claimText).toContain("Cellular respiration");
 
         const bioFactResult = toFactResult(bioFact, SCIENTIST_DID as DID);
         const bioPricing = calculateQueryPrice(
@@ -692,7 +691,7 @@ describe.sequential(
         // Step 2: Follow reference chain to chemistry
         // The bio fact references the chem fact — follow the link
         const chemFact = state.getFact(chemFactId)!;
-        expect(chemFact.claim).toContain("Exothermic reactions");
+        expect(chemFact.claimText).toContain("Exothermic reactions");
 
         const chemFactResult = toFactResult(chemFact, SCIENTIST_DID as DID);
         const chemPricing = calculateQueryPrice(
@@ -718,7 +717,7 @@ describe.sequential(
 
         // Step 3: Follow reference chain to physics (root cause)
         const physicsFact = state.getFact(physicsFactId)!;
-        expect(physicsFact.claim).toContain("Energy is conserved");
+        expect(physicsFact.claimText).toContain("Energy is conserved");
 
         const physicsFactResult = toFactResult(
           physicsFact,
@@ -758,8 +757,8 @@ describe.sequential(
         // Scientist should have earned MORE than their starting balance
         // (minus what they staked for claims, plus stake returns and citation rewards)
 
-        // Physics fact (highest confidence) should be most expensive to query
-        expect(physicsPricing.totalCost).toBeGreaterThanOrEqual(
+        // Physics fact (highest confidence) should be cheapest to query
+        expect(physicsPricing.totalCost).toBeLessThanOrEqual(
           chemPricing.totalCost,
         );
       });
@@ -801,11 +800,11 @@ describe.sequential(
           blockNumber + 2000n,
         );
 
-        // More citations → higher fundamentality premium → higher cost
-        expect(priceAfter.fundamentalityPremium).toBeGreaterThan(
+        // More citations → novelty discount → lower cost (well-known facts are cheaper)
+        expect(priceAfter.fundamentalityPremium).toBeLessThan(
           priceBefore.fundamentalityPremium,
         );
-        expect(priceAfter.totalCost).toBeGreaterThan(priceBefore.totalCost);
+        expect(priceAfter.totalCost).toBeLessThan(priceBefore.totalCost);
       });
 
       it("should demonstrate the think-query-pay loop", () => {
@@ -836,18 +835,19 @@ describe.sequential(
         const bioResult = toFactResult(bioFact, SCIENTIST_DID as DID);
         const bioCost = calculateQueryPrice([bioResult], queryBlock);
 
-        // Physics (0.97 confidence) costs more than biology (0.89 confidence)
-        expect(physicsCost.confidencePremium).toBeGreaterThan(
+        // Inverted pricing: Physics (0.97 confidence) costs LESS than biology (0.89)
+        // Higher confidence = bigger discount → more negative confidencePremium
+        expect(physicsCost.confidencePremium).toBeLessThan(
           bioCost.confidencePremium,
         );
 
-        // Agent decision: accept bio fact as "probably true" (0.89)
-        // or pay more for the physics fact as "very likely true" (0.97)
+        // Agent decision: high-confidence facts are cheaper, incentivizing
+        // agents to ground their output in well-verified knowledge.
         //
         // This models real-world agent reasoning:
-        // - Low-stakes decisions use cheap, lower-confidence facts
-        // - High-stakes decisions pay premium for high-confidence facts
-        // - The protocol creates an economic market for truth
+        // - Verified truth is cheap → agents prefer it → less hallucination
+        // - Uncertain facts carry a risk surcharge → agents verify first
+        // - The protocol creates an economic incentive for truth usage
 
         // For a high-stakes calculation, agent queries BOTH
         const bothCost = calculateQueryPrice(

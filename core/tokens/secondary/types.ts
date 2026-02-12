@@ -387,8 +387,8 @@ export const SECONDARY_TOKEN_GAS_COSTS = {
 
 // ============ Constants ============
 
-/** LGM fee for creating a new token (22 LGM) */
-export const TOKEN_CREATION_FEE = 22n * 10n ** 18n;
+/** LGM fee for creating a new token (0.022 LGM) */
+export const TOKEN_CREATION_FEE = 22n * 10n ** 15n;
 
 /** Minimum swap fee in basis points */
 export const MIN_SWAP_FEE_BPS = 10; // 0.1%

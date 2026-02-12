@@ -12,6 +12,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -44,7 +45,7 @@ func newMockOntologyKeeper() *mockOntologyKeeper {
 func (m *mockOntologyKeeper) addDomain(name string, stratum ontologytypes.Stratum) {
 	m.domains[name] = ontologytypes.Domain{
 		Name:    name,
-		Stratum: stratum,
+		Stratum: uint32(stratum),
 		Status:  "active",
 	}
 }
@@ -70,7 +71,7 @@ func (m *mockStakingKeeper) addValidator(addr string, tier stakingtypes.Validato
 	m.validators[addr] = stakingtypes.LegibleValidator{
 		OperatorAddress:        addr,
 		TotalStake:             "5000000000000000000000",
-		Tier:                   tier,
+		Tier:                   tier.String(),
 		IsActive:               true,
 		VerificationsCompleted: verifications,
 		VerificationsCorrect:   correct,
@@ -136,7 +137,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockOntologyKeeper,
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		mockOK,
 		mockSK,
 		nil, // bankKeeper — nil-safe, skips bank operations in tests
@@ -157,8 +158,8 @@ func TestSetGetQualification(t *testing.T) {
 	q := types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Pathway:       types.PathwayStakeCommitment,
-		Status:        types.StatusActive,
+		Pathway:       string(types.PathwayStakeCommitment),
+		Status:        string(types.StatusActive),
 		EarnedAtBlock: 100,
 	}
 
@@ -173,7 +174,7 @@ func TestSetGetQualification(t *testing.T) {
 	if got.Domain != "mathematics" {
 		t.Errorf("expected domain mathematics, got %s", got.Domain)
 	}
-	if got.Status != types.StatusActive {
+	if got.Status != string(types.StatusActive) {
 		t.Errorf("expected status active, got %s", got.Status)
 	}
 }
@@ -193,7 +194,7 @@ func TestDeleteQualification(t *testing.T) {
 	q := types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	}
 	k.SetQualification(ctx, q)
 
@@ -210,17 +211,17 @@ func TestGetQualificationsByValidator(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusProbationary,
+		Status:        string(types.StatusProbationary),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1def",
 		Domain:        "mathematics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	qs := k.GetQualificationsByValidator(ctx, "lgmvaloper1abc")
@@ -317,10 +318,10 @@ func TestQualifyViaStakeCommitment_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.Status != types.StatusProbationary {
+	if q.Status != string(types.StatusProbationary) {
 		t.Errorf("expected probationary status, got %s", q.Status)
 	}
-	if q.Pathway != types.PathwayStakeCommitment {
+	if q.Pathway != string(types.PathwayStakeCommitment) {
 		t.Errorf("expected stake_commitment pathway, got %s", q.Pathway)
 	}
 	if q.LockedStake != "22000000000000000000" {
@@ -378,10 +379,10 @@ func TestQualifyViaTrackRecord_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.Status != types.StatusActive {
+	if q.Status != string(types.StatusActive) {
 		t.Errorf("expected active status, got %s", q.Status)
 	}
-	if q.Pathway != types.PathwayTrackRecord {
+	if q.Pathway != string(types.PathwayTrackRecord) {
 		t.Errorf("expected track_record pathway, got %s", q.Pathway)
 	}
 }
@@ -415,17 +416,17 @@ func TestQualifyViaCrossReference_Success(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1ghi",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1jkl",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	// Create endorsements
@@ -446,7 +447,7 @@ func TestQualifyViaCrossReference_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.Status != types.StatusProbationary {
+	if q.Status != string(types.StatusProbationary) {
 		t.Errorf("expected probationary, got %s", q.Status)
 	}
 	if len(q.Endorsers) != 3 {
@@ -461,7 +462,7 @@ func TestQualifyViaCrossReference_InsufficientEndorsements(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 	k.SetEndorsement(ctx, types.QualificationEndorsement{
 		Id: "e1", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
@@ -480,7 +481,7 @@ func TestQualifyViaCrossReference_ExpiredEndorsementsNotCounted(t *testing.T) {
 	// Qualify 3 endorsers
 	for _, addr := range []string{"lgmvaloper1abc", "lgmvaloper1ghi", "lgmvaloper1jkl"} {
 		k.SetQualification(ctx, types.DomainQualification{
-			ValidatorAddr: addr, Domain: "physics", Status: types.StatusActive,
+			ValidatorAddr: addr, Domain: "physics", Status: string(types.StatusActive),
 		})
 	}
 
@@ -511,7 +512,7 @@ func TestQualifyViaStratumInheritance_Success(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	// Inherit to higher stratum domain (physics = stratum 4)
@@ -519,7 +520,7 @@ func TestQualifyViaStratumInheritance_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.Status != types.StatusProbationary {
+	if q.Status != string(types.StatusProbationary) {
 		t.Errorf("expected probationary, got %s", q.Status)
 	}
 	if q.InheritedFrom != "mathematics" {
@@ -537,7 +538,7 @@ func TestQualifyViaStratumInheritance_WrongDirection(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	// Try to inherit to lower stratum domain (mathematics = stratum 0) — should fail
@@ -565,7 +566,7 @@ func TestIsQualified_ActiveQualification(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 		ExpiresAtBlock: 0, // no expiry
 	})
 
@@ -580,7 +581,7 @@ func TestIsQualified_ProbationaryQualification(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusProbationary,
+		Status:        string(types.StatusProbationary),
 		ExpiresAtBlock: 0,
 	})
 
@@ -595,7 +596,7 @@ func TestIsQualified_SuspendedNotQualified(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusSuspended,
+		Status:        string(types.StatusSuspended),
 	})
 
 	if k.IsQualified(ctx, "lgmvaloper1abc", "mathematics") {
@@ -609,7 +610,7 @@ func TestIsQualified_ExpiredByBlock(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "mathematics",
-		Status:         types.StatusActive,
+		Status:         string(types.StatusActive),
 		ExpiresAtBlock: 50, // expired at block 50, we're at block 100
 	})
 
@@ -632,9 +633,9 @@ func TestGetQualificationWeight_Active(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:          "lgmvaloper1abc",
 		Domain:                 "mathematics",
-		Status:                 types.StatusActive,
+		Status:                 string(types.StatusActive),
 		InheritanceDiscountBps: 10000, // no discount
-		Metrics: types.QualificationMetrics{
+		Metrics: &types.QualificationMetrics{
 			EffectiveWeightBps: 10000,
 		},
 	})
@@ -651,7 +652,7 @@ func TestGetQualificationWeight_Suspended(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
-		Status:        types.StatusSuspended,
+		Status:        string(types.StatusSuspended),
 	})
 
 	weight := k.GetQualificationWeight(ctx, "lgmvaloper1abc", "mathematics")
@@ -666,17 +667,17 @@ func TestGetQualifiedValidators(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1def",
 		Domain:        "physics",
-		Status:        types.StatusProbationary,
+		Status:        string(types.StatusProbationary),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1ghi",
 		Domain:        "physics",
-		Status:        types.StatusSuspended, // should NOT be counted
+		Status:        string(types.StatusSuspended), // should NOT be counted
 	})
 
 	validators := k.GetQualifiedValidators(ctx, "physics")
@@ -691,8 +692,8 @@ func TestRecordVerificationOutcome_Correct(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
-		Metrics:       types.QualificationMetrics{EffectiveWeightBps: 10000},
+		Status:        string(types.StatusActive),
+		Metrics:       &types.QualificationMetrics{EffectiveWeightBps: 10000},
 	})
 
 	err := k.RecordVerificationOutcome(ctx, "lgmvaloper1abc", "physics", true)
@@ -718,8 +719,8 @@ func TestRecordVerificationOutcome_Incorrect(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
-		Metrics: types.QualificationMetrics{
+		Status:        string(types.StatusActive),
+		Metrics: &types.QualificationMetrics{
 			TotalVerifications:   10,
 			CorrectVerifications: 9,
 			ConsecutiveCorrect:   5,
@@ -747,8 +748,8 @@ func TestRecordVerificationOutcome_SuspensionByConsecutive(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
-		Metrics: types.QualificationMetrics{
+		Status:        string(types.StatusActive),
+		Metrics: &types.QualificationMetrics{
 			TotalVerifications:   10,
 			CorrectVerifications: 8,
 			ConsecutiveIncorrect: 4, // default SuspensionConsecutive = 5
@@ -760,7 +761,7 @@ func TestRecordVerificationOutcome_SuspensionByConsecutive(t *testing.T) {
 	_ = k.RecordVerificationOutcome(ctx, "lgmvaloper1abc", "physics", false)
 
 	q, _ := k.GetQualification(ctx, "lgmvaloper1abc", "physics")
-	if q.Status != types.StatusSuspended {
+	if q.Status != string(types.StatusSuspended) {
 		t.Errorf("expected suspended after 5 consecutive incorrect, got %s", q.Status)
 	}
 }
@@ -783,10 +784,10 @@ func TestPromoteProbationary(t *testing.T) {
 	q := types.DomainQualification{
 		ValidatorAddr:          "lgmvaloper1abc",
 		Domain:                 "physics",
-		Status:                 types.StatusProbationary,
+		Status:                 string(types.StatusProbationary),
 		EarnedAtBlock:          10,
 		InheritanceDiscountBps: 10000,
-		Metrics:                types.QualificationMetrics{EffectiveWeightBps: 10000},
+		Metrics:                &types.QualificationMetrics{EffectiveWeightBps: 10000},
 	}
 	k.SetQualification(ctx, q)
 
@@ -806,7 +807,7 @@ func TestPromoteProbationary(t *testing.T) {
 	}
 
 	q, _ = k.GetQualification(ctx, "lgmvaloper1abc", "physics")
-	if q.Status != types.StatusActive {
+	if q.Status != string(types.StatusActive) {
 		t.Errorf("expected active after promotion, got %s", q.Status)
 	}
 }
@@ -817,7 +818,7 @@ func TestRenewQualification_Active(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
-		Status:         types.StatusActive,
+		Status:         string(types.StatusActive),
 		ExpiresAtBlock: 500,
 	})
 
@@ -839,7 +840,7 @@ func TestRenewQualification_Expired(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
-		Status:         types.StatusExpired,
+		Status:         string(types.StatusExpired),
 		ExpiresAtBlock: 50,
 	})
 
@@ -849,7 +850,7 @@ func TestRenewQualification_Expired(t *testing.T) {
 	}
 
 	q, _ := k.GetQualification(ctx, "lgmvaloper1abc", "physics")
-	if q.Status != types.StatusProbationary {
+	if q.Status != string(types.StatusProbationary) {
 		t.Errorf("expected probationary after renewing expired, got %s", q.Status)
 	}
 }
@@ -860,7 +861,7 @@ func TestRenewQualification_Revoked(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusRevoked,
+		Status:        string(types.StatusRevoked),
 	})
 
 	err := k.RenewQualification(ctx, "lgmvaloper1abc", "physics")
@@ -884,7 +885,7 @@ func TestWithdrawQualification_Success(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
-		Status:         types.StatusActive,
+		Status:         string(types.StatusActive),
 		LockedStake:    "22000000000000000000",
 		StakeUnlocksAt: 50, // already unlocked at block 100
 	})
@@ -915,8 +916,8 @@ func TestRecordChallenge_Revocation(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
-		Metrics: types.QualificationMetrics{
+		Status:        string(types.StatusActive),
+		Metrics: &types.QualificationMetrics{
 			ChallengesReceived: 2,
 			ChallengesLost:     2, // default RevocationChallenges = 3
 		},
@@ -929,7 +930,7 @@ func TestRecordChallenge_Revocation(t *testing.T) {
 	}
 
 	q, _ := k.GetQualification(ctx, "lgmvaloper1abc", "physics")
-	if q.Status != types.StatusRevoked {
+	if q.Status != string(types.StatusRevoked) {
 		t.Errorf("expected revoked after 3 challenge losses, got %s", q.Status)
 	}
 }
@@ -941,7 +942,7 @@ func TestCheckAndExpireQualifications(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
-		Status:         types.StatusActive,
+		Status:         string(types.StatusActive),
 		ExpiresAtBlock: 50, // expired at 50, we're at 100
 	})
 
@@ -949,10 +950,10 @@ func TestCheckAndExpireQualifications(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:          "lgmvaloper1def",
 		Domain:                 "mathematics",
-		Status:                 types.StatusProbationary,
+		Status:                 string(types.StatusProbationary),
 		EarnedAtBlock:          0,
 		InheritanceDiscountBps: 10000,
-		Metrics:                types.QualificationMetrics{EffectiveWeightBps: 10000},
+		Metrics:                &types.QualificationMetrics{EffectiveWeightBps: 10000},
 	})
 
 	// Run at block 1000
@@ -960,12 +961,12 @@ func TestCheckAndExpireQualifications(t *testing.T) {
 	k.CheckAndExpireQualifications(ctx)
 
 	q1, _ := k.GetQualification(ctx, "lgmvaloper1abc", "physics")
-	if q1.Status != types.StatusExpired {
+	if q1.Status != string(types.StatusExpired) {
 		t.Errorf("expected expired, got %s", q1.Status)
 	}
 
 	q2, _ := k.GetQualification(ctx, "lgmvaloper1def", "mathematics")
-	if q2.Status != types.StatusActive {
+	if q2.Status != string(types.StatusActive) {
 		t.Errorf("expected promoted to active, got %s", q2.Status)
 	}
 }
@@ -975,17 +976,18 @@ func TestCheckAndExpireQualifications(t *testing.T) {
 func TestInitExportGenesis(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
+	defaultParams := types.DefaultParams()
 	genState := types.GenesisState{
-		Params: types.DefaultParams(),
-		Qualifications: []types.DomainQualification{
+		Params: &defaultParams,
+		Qualifications: []*types.DomainQualification{
 			{
 				ValidatorAddr: "lgmvaloper1abc",
 				Domain:        "mathematics",
-				Status:        types.StatusActive,
-				Pathway:       types.PathwayGenesis,
+				Status:        string(types.StatusActive),
+				Pathway:       string(types.PathwayGenesis),
 			},
 		},
-		Endorsements: []types.QualificationEndorsement{
+		Endorsements: []*types.QualificationEndorsement{
 			{
 				Id:              "endorse_1",
 				EndorserAddr:    "lgmvaloper1ghi",
@@ -1002,7 +1004,7 @@ func TestInitExportGenesis(t *testing.T) {
 	if !found {
 		t.Fatal("expected genesis qualification to be stored")
 	}
-	if q.Pathway != types.PathwayGenesis {
+	if q.Pathway != string(types.PathwayGenesis) {
 		t.Errorf("expected genesis pathway, got %s", q.Pathway)
 	}
 
@@ -1083,7 +1085,7 @@ func TestMsgEndorseValidator(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	ms := keeper.NewMsgServerImpl(k)
@@ -1121,7 +1123,7 @@ func TestMsgRenewQualification(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
-		Status:         types.StatusActive,
+		Status:         string(types.StatusActive),
 		ExpiresAtBlock: 500,
 	})
 
@@ -1141,7 +1143,7 @@ func TestMsgWithdrawQualification(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	ms := keeper.NewMsgServerImpl(k)
@@ -1201,7 +1203,7 @@ func TestQueryQualification(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Status:        types.StatusActive,
+		Status:        string(types.StatusActive),
 	})
 
 	qs := keeper.NewQueryServerImpl(k)
@@ -1215,7 +1217,7 @@ func TestQueryQualification(t *testing.T) {
 	if !resp.Found {
 		t.Error("expected qualification to be found")
 	}
-	if resp.Qualification.Status != types.StatusActive {
+	if resp.Qualification.Status != string(types.StatusActive) {
 		t.Errorf("expected active, got %s", resp.Qualification.Status)
 	}
 }
@@ -1224,10 +1226,10 @@ func TestQueryQualificationsByValidator(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	k.SetQualification(ctx, types.DomainQualification{
-		ValidatorAddr: "lgmvaloper1abc", Domain: "physics", Status: types.StatusActive,
+		ValidatorAddr: "lgmvaloper1abc", Domain: "physics", Status: string(types.StatusActive),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
-		ValidatorAddr: "lgmvaloper1abc", Domain: "mathematics", Status: types.StatusActive,
+		ValidatorAddr: "lgmvaloper1abc", Domain: "mathematics", Status: string(types.StatusActive),
 	})
 
 	qs := keeper.NewQueryServerImpl(k)
@@ -1246,10 +1248,10 @@ func TestQueryQualifiedValidators(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	k.SetQualification(ctx, types.DomainQualification{
-		ValidatorAddr: "lgmvaloper1abc", Domain: "physics", Status: types.StatusActive,
+		ValidatorAddr: "lgmvaloper1abc", Domain: "physics", Status: string(types.StatusActive),
 	})
 	k.SetQualification(ctx, types.DomainQualification{
-		ValidatorAddr: "lgmvaloper1def", Domain: "physics", Status: types.StatusActive,
+		ValidatorAddr: "lgmvaloper1def", Domain: "physics", Status: string(types.StatusActive),
 	})
 
 	qs := keeper.NewQueryServerImpl(k)

@@ -59,13 +59,13 @@ describe.sequential("generateSessionKey", () => {
 
   it("should override limits", () => {
     const customLimits: Partial<SessionLimits> = {
-      maxPerTransaction: 50n * 10n ** 18n,
+      maxPerTransaction: 50n * 10n ** 15n,
       maxTransactions: 10,
     };
 
     const session = generateSessionKey(customLimits);
 
-    expect(session.limits.maxPerTransaction).toBe(50n * 10n ** 18n);
+    expect(session.limits.maxPerTransaction).toBe(50n * 10n ** 15n);
     expect(session.limits.maxTransactions).toBe(10);
     // Non-overridden defaults still apply
     expect(session.limits.maxPerDay).toBe(DEFAULT_SESSION_LIMITS.maxPerDay);
@@ -138,10 +138,10 @@ describe.sequential("deriveSessionKey", () => {
 
   it("should apply custom limits", () => {
     const session = deriveSessionKey(operationalKey.privateKey, "seed", {
-      maxPerTransaction: 25n * 10n ** 18n,
+      maxPerTransaction: 25n * 10n ** 15n,
     });
 
-    expect(session.limits.maxPerTransaction).toBe(25n * 10n ** 18n);
+    expect(session.limits.maxPerTransaction).toBe(25n * 10n ** 15n);
   });
 
   it("should set custom expiration", () => {
@@ -193,7 +193,7 @@ describe.sequential("authorizeSessionKey", () => {
   it("should include limits in authorization", () => {
     const limits: SessionLimits = {
       ...DEFAULT_SESSION_LIMITS,
-      maxPerTransaction: 200n * 10n ** 18n,
+      maxPerTransaction: 200n * 10n ** 15n,
     };
 
     const auth = authorizeSessionKey(
@@ -203,7 +203,7 @@ describe.sequential("authorizeSessionKey", () => {
       operationalKey.privateKey,
     );
 
-    expect(auth.limits.maxPerTransaction).toBe(200n * 10n ** 18n);
+    expect(auth.limits.maxPerTransaction).toBe(200n * 10n ** 15n);
   });
 
   it("should set expiration correctly", () => {
@@ -293,7 +293,7 @@ describe.sequential("verifySessionKeyAuthorization", () => {
     );
 
     // Tamper with limits
-    auth.limits.maxPerTransaction = 9999n * 10n ** 18n;
+    auth.limits.maxPerTransaction = 9999n * 10n ** 15n;
 
     const result = verifySessionKeyAuthorization(
       auth,
@@ -314,9 +314,9 @@ describe.sequential("validateSessionAction", () => {
     session = generateSessionKey(
       {
         allowedActions: ["transfer", "query", "submit_claim"],
-        maxPerTransaction: 100n * 10n ** 18n,
-        maxPerDay: 500n * 10n ** 18n,
-        maxTotal: 1000n * 10n ** 18n,
+        maxPerTransaction: 100n * 10n ** 15n,
+        maxPerDay: 500n * 10n ** 15n,
+        maxTotal: 1000n * 10n ** 15n,
         maxTransactions: 50,
       },
       3600000,
@@ -324,7 +324,7 @@ describe.sequential("validateSessionAction", () => {
   });
 
   it("should allow valid action", () => {
-    const result = validateSessionAction(session, "transfer", 50n * 10n ** 18n);
+    const result = validateSessionAction(session, "transfer", 50n * 10n ** 15n);
 
     expect(result.allowed).toBe(true);
   });
@@ -355,7 +355,7 @@ describe.sequential("validateSessionAction", () => {
   });
 
   it("should reject transfer exceeding per-tx limit", () => {
-    const amount = 150n * 10n ** 18n; // Over 100 LGM limit
+    const amount = 150n * 10n ** 15n; // Over 100 LGM limit
 
     const result = validateSessionAction(session, "transfer", amount);
 
@@ -364,8 +364,8 @@ describe.sequential("validateSessionAction", () => {
   });
 
   it("should reject transfer exceeding daily limit", () => {
-    session.usage.dailySpent = 450n * 10n ** 18n;
-    const amount = 60n * 10n ** 18n; // Would exceed 500 LGM daily
+    session.usage.dailySpent = 450n * 10n ** 15n;
+    const amount = 60n * 10n ** 15n; // Would exceed 500 LGM daily
 
     const result = validateSessionAction(session, "transfer", amount);
 
@@ -374,8 +374,8 @@ describe.sequential("validateSessionAction", () => {
   });
 
   it("should reject transfer exceeding total limit", () => {
-    session.usage.totalSpent = 950n * 10n ** 18n;
-    const amount = 60n * 10n ** 18n; // Would exceed 1000 LGM total
+    session.usage.totalSpent = 950n * 10n ** 15n;
+    const amount = 60n * 10n ** 15n; // Would exceed 1000 LGM total
 
     const result = validateSessionAction(session, "transfer", amount);
 
@@ -384,10 +384,10 @@ describe.sequential("validateSessionAction", () => {
   });
 
   it("should reset daily spending after 24 hours", () => {
-    session.usage.dailySpent = 400n * 10n ** 18n;
+    session.usage.dailySpent = 400n * 10n ** 15n;
     session.usage.lastDailyReset = Date.now() - 86400001; // Over 24 hours ago
 
-    const result = validateSessionAction(session, "transfer", 60n * 10n ** 18n);
+    const result = validateSessionAction(session, "transfer", 60n * 10n ** 15n);
 
     expect(result.allowed).toBe(true);
   });
@@ -421,7 +421,7 @@ describe.sequential("updateSessionUsage", () => {
   });
 
   it("should track spending", () => {
-    const amount = 50n * 10n ** 18n;
+    const amount = 50n * 10n ** 15n;
     const updated = updateSessionUsage(session, "transfer", amount);
 
     expect(updated.usage.dailySpent).toBe(amount);
@@ -429,7 +429,7 @@ describe.sequential("updateSessionUsage", () => {
   });
 
   it("should accumulate spending", () => {
-    const amount = 50n * 10n ** 18n;
+    const amount = 50n * 10n ** 15n;
     let updated = updateSessionUsage(session, "transfer", amount);
     updated = updateSessionUsage(updated, "transfer", amount);
 
@@ -446,12 +446,12 @@ describe.sequential("updateSessionUsage", () => {
   });
 
   it("should reset daily spending after 24 hours", () => {
-    session.usage.dailySpent = 100n * 10n ** 18n;
+    session.usage.dailySpent = 100n * 10n ** 15n;
     session.usage.lastDailyReset = Date.now() - 86400001; // Over 24 hours ago
 
-    const updated = updateSessionUsage(session, "transfer", 50n * 10n ** 18n);
+    const updated = updateSessionUsage(session, "transfer", 50n * 10n ** 15n);
 
-    expect(updated.usage.dailySpent).toBe(50n * 10n ** 18n);
+    expect(updated.usage.dailySpent).toBe(50n * 10n ** 15n);
   });
 
   it("should not modify original session", () => {
@@ -659,7 +659,7 @@ describe.sequential("shouldDiscardSession", () => {
     session = generateSessionKey(
       {
         maxTransactions: 10,
-        maxTotal: 100n * 10n ** 18n,
+        maxTotal: 100n * 10n ** 15n,
       },
       3600000,
     );
@@ -678,14 +678,14 @@ describe.sequential("shouldDiscardSession", () => {
   });
 
   it("should discard session with exhausted spending", () => {
-    session.usage.totalSpent = 100n * 10n ** 18n;
+    session.usage.totalSpent = 100n * 10n ** 15n;
 
     expect(shouldDiscardSession(session)).toBe(true);
   });
 
   it("should keep valid session", () => {
     session.usage.transactionCount = 5;
-    session.usage.totalSpent = 50n * 10n ** 18n;
+    session.usage.totalSpent = 50n * 10n ** 15n;
 
     expect(shouldDiscardSession(session)).toBe(false);
   });
@@ -700,7 +700,7 @@ describe.sequential("getSessionRemaining", () => {
     session = generateSessionKey(
       {
         maxTransactions: 100,
-        maxTotal: 1000n * 10n ** 18n,
+        maxTotal: 1000n * 10n ** 15n,
       },
       3600000,
     );
@@ -722,11 +722,11 @@ describe.sequential("getSessionRemaining", () => {
   });
 
   it("should calculate remaining spending", () => {
-    session.usage.totalSpent = 400n * 10n ** 18n;
+    session.usage.totalSpent = 400n * 10n ** 15n;
 
     const remaining = getSessionRemaining(session);
 
-    expect(remaining.spending).toBe(600n * 10n ** 18n);
+    expect(remaining.spending).toBe(600n * 10n ** 15n);
   });
 
   it("should return zero for expired session", () => {
@@ -750,9 +750,9 @@ describe.sequential("getSessionRemaining", () => {
 
 describe.sequential("Default Limits", () => {
   it("DEFAULT_SESSION_LIMITS should have correct values", () => {
-    expect(DEFAULT_SESSION_LIMITS.maxPerTransaction).toBe(100n * 10n ** 18n);
-    expect(DEFAULT_SESSION_LIMITS.maxPerDay).toBe(1000n * 10n ** 18n);
-    expect(DEFAULT_SESSION_LIMITS.maxTotal).toBe(5000n * 10n ** 18n);
+    expect(DEFAULT_SESSION_LIMITS.maxPerTransaction).toBe(100n * 10n ** 15n);
+    expect(DEFAULT_SESSION_LIMITS.maxPerDay).toBe(1000n * 10n ** 15n);
+    expect(DEFAULT_SESSION_LIMITS.maxTotal).toBe(5000n * 10n ** 15n);
     expect(DEFAULT_SESSION_LIMITS.maxTransactions).toBe(100);
     expect(DEFAULT_SESSION_LIMITS.maxDurationMs).toBe(3600000);
     expect(DEFAULT_SESSION_LIMITS.requireIntentProof).toBe(false);

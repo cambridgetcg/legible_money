@@ -3,8 +3,9 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 
-	storetypes "cosmossdk.io/store/types"
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/research/types"
@@ -13,15 +14,15 @@ import (
 // ---------- Params ----------
 
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, _ := json.Marshal(params)
-	store.Set(types.ParamsKey, bz)
+	_ = kvStore.Set(types.ParamsKey, bz)
 }
 
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ParamsKey)
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.ParamsKey)
+	if err != nil || bz == nil {
 		return types.DefaultParams()
 	}
 	var params types.Params
@@ -36,15 +37,15 @@ func submissionKey(id string) []byte {
 }
 
 func (k Keeper) SetResearch(ctx sdk.Context, r types.Research) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, _ := json.Marshal(r)
-	store.Set(submissionKey(r.Id), bz)
+	_ = kvStore.Set(submissionKey(r.Id), bz)
 }
 
 func (k Keeper) GetResearch(ctx sdk.Context, id string) (types.Research, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(submissionKey(id))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(submissionKey(id))
+	if err != nil || bz == nil {
 		return types.Research{}, false
 	}
 	var r types.Research
@@ -53,13 +54,16 @@ func (k Keeper) GetResearch(ctx sdk.Context, id string) (types.Research, bool) {
 }
 
 func (k Keeper) DeleteResearch(ctx sdk.Context, id string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(submissionKey(id))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(submissionKey(id))
 }
 
 func (k Keeper) IterateResearches(ctx sdk.Context, cb func(types.Research) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.SubmissionKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.SubmissionKeyPrefix, prefixEndBytes(types.SubmissionKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
 		var r types.Research
@@ -73,7 +77,7 @@ func (k Keeper) IterateResearches(ctx sdk.Context, cb func(types.Research) bool)
 func (k Keeper) GetResearchesByStatus(ctx sdk.Context, status types.ResearchStatus) []types.Research {
 	var results []types.Research
 	k.IterateResearches(ctx, func(r types.Research) bool {
-		if r.Status == status {
+		if r.Status == string(status) {
 			results = append(results, r)
 		}
 		return false
@@ -99,15 +103,15 @@ func bountyKey(id string) []byte {
 }
 
 func (k Keeper) SetBounty(ctx sdk.Context, b types.Bounty) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, _ := json.Marshal(b)
-	store.Set(bountyKey(b.Id), bz)
+	_ = kvStore.Set(bountyKey(b.Id), bz)
 }
 
 func (k Keeper) GetBounty(ctx sdk.Context, id string) (types.Bounty, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(bountyKey(id))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(bountyKey(id))
+	if err != nil || bz == nil {
 		return types.Bounty{}, false
 	}
 	var b types.Bounty
@@ -116,13 +120,16 @@ func (k Keeper) GetBounty(ctx sdk.Context, id string) (types.Bounty, bool) {
 }
 
 func (k Keeper) DeleteBounty(ctx sdk.Context, id string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(bountyKey(id))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(bountyKey(id))
 }
 
 func (k Keeper) IterateBounties(ctx sdk.Context, cb func(types.Bounty) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.BountyKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.BountyKeyPrefix, prefixEndBytes(types.BountyKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
 		var b types.Bounty
@@ -136,12 +143,67 @@ func (k Keeper) IterateBounties(ctx sdk.Context, cb func(types.Bounty) bool) {
 func (k Keeper) GetActiveBounties(ctx sdk.Context) []types.Bounty {
 	var results []types.Bounty
 	k.IterateBounties(ctx, func(b types.Bounty) bool {
-		if b.Status == types.BountyStatusOpen || b.Status == types.BountyStatusClaimed {
+		if b.Status == string(types.BountyStatusOpen) || b.Status == string(types.BountyStatusClaimed) {
 			results = append(results, b)
 		}
 		return false
 	})
 	return results
+}
+
+// ExpireBounties expires bounties past deadline and returns locked rewards to creators.
+// Claimed bounties past deadline are reopened so another agent can claim them.
+func (k Keeper) ExpireBounties(ctx sdk.Context) {
+	currentBlock := uint64(ctx.BlockHeight())
+	k.IterateBounties(ctx, func(b types.Bounty) bool {
+		if currentBlock <= b.DeadlineHeight {
+			return false
+		}
+
+		switch b.Status {
+		case string(types.BountyStatusOpen):
+			// Expire and return locked reward to creator
+			rewardInt := new(big.Int)
+			if _, ok := rewardInt.SetString(b.Reward, 10); ok && rewardInt.Sign() > 0 {
+				if creatorAddr, err := sdk.AccAddressFromBech32(b.Creator); err == nil {
+					returnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(rewardInt)))
+					if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, creatorAddr, returnCoins); err != nil {
+						k.Logger(ctx).Error("failed to return expired bounty reward",
+							"bounty_id", b.Id, "error", err)
+					}
+				}
+			}
+
+			b.Status = string(types.BountyStatusExpired)
+			k.SetBounty(ctx, b)
+
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					"bounty_expired",
+					sdk.NewAttribute("bounty_id", b.Id),
+					sdk.NewAttribute("reward_returned", b.Reward),
+					sdk.NewAttribute("creator", b.Creator),
+				),
+			)
+
+		case string(types.BountyStatusClaimed):
+			// Claimed but not fulfilled by deadline — reopen so others can claim
+			formerClaimer := b.ClaimedBy
+			b.Status = string(types.BountyStatusOpen)
+			b.ClaimedBy = ""
+			k.SetBounty(ctx, b)
+
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					"bounty_claim_expired",
+					sdk.NewAttribute("bounty_id", b.Id),
+					sdk.NewAttribute("former_claimer", formerClaimer),
+				),
+			)
+		}
+
+		return false
+	})
 }
 
 // ---------- Peer Reviews ----------
@@ -155,15 +217,15 @@ func reviewPrefixForResearch(researchId string) []byte {
 }
 
 func (k Keeper) SetPeerReview(ctx sdk.Context, r types.PeerReview) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, _ := json.Marshal(r)
-	store.Set(reviewKey(r.ResearchId, r.Id), bz)
+	_ = kvStore.Set(reviewKey(r.ResearchId, r.Id), bz)
 }
 
 func (k Keeper) GetPeerReview(ctx sdk.Context, researchId, reviewId string) (types.PeerReview, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(reviewKey(researchId, reviewId))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(reviewKey(researchId, reviewId))
+	if err != nil || bz == nil {
 		return types.PeerReview{}, false
 	}
 	var r types.PeerReview
@@ -172,8 +234,12 @@ func (k Keeper) GetPeerReview(ctx sdk.Context, researchId, reviewId string) (typ
 }
 
 func (k Keeper) GetReviewsForResearch(ctx sdk.Context, researchId string) []types.PeerReview {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, reviewPrefixForResearch(researchId))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := reviewPrefixForResearch(researchId)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var results []types.PeerReview
@@ -198,16 +264,16 @@ func (k Keeper) HasReviewerReviewed(ctx sdk.Context, researchId, reviewer string
 // ---------- Treasury ----------
 
 func (k Keeper) SetTreasuryBalance(ctx sdk.Context, balance string) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	tb := types.TreasuryBalance{Balance: balance}
 	bz, _ := json.Marshal(tb)
-	store.Set(types.TreasuryKeyPrefix, bz)
+	_ = kvStore.Set(types.TreasuryKeyPrefix, bz)
 }
 
 func (k Keeper) GetTreasuryBalance(ctx sdk.Context) string {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.TreasuryKeyPrefix)
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.TreasuryKeyPrefix)
+	if err != nil || bz == nil {
 		return "0"
 	}
 	var tb types.TreasuryBalance
@@ -223,41 +289,41 @@ var (
 )
 
 func (k Keeper) nextResearchId(ctx sdk.Context) string {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(researchCounterKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := kvStore.Get(researchCounterKey)
 	var counter uint64
 	if bz != nil {
 		json.Unmarshal(bz, &counter)
 	}
 	counter++
 	bz, _ = json.Marshal(counter)
-	store.Set(researchCounterKey, bz)
+	_ = kvStore.Set(researchCounterKey, bz)
 	return fmt.Sprintf("RES-%d", counter)
 }
 
 func (k Keeper) nextBountyId(ctx sdk.Context) string {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(bountyCounterKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := kvStore.Get(bountyCounterKey)
 	var counter uint64
 	if bz != nil {
 		json.Unmarshal(bz, &counter)
 	}
 	counter++
 	bz, _ = json.Marshal(counter)
-	store.Set(bountyCounterKey, bz)
+	_ = kvStore.Set(bountyCounterKey, bz)
 	return fmt.Sprintf("BOUNTY-%d", counter)
 }
 
 func (k Keeper) nextReviewId(ctx sdk.Context) string {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := []byte("review_counter")
-	bz := store.Get(key)
+	bz, _ := kvStore.Get(key)
 	var counter uint64
 	if bz != nil {
 		json.Unmarshal(bz, &counter)
 	}
 	counter++
 	bz, _ = json.Marshal(counter)
-	store.Set(key, bz)
+	_ = kvStore.Set(key, bz)
 	return fmt.Sprintf("REV-%d", counter)
 }

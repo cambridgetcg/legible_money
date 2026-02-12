@@ -10,6 +10,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -31,10 +32,10 @@ func (k msgServer) SubmitEvidence(goCtx context.Context, msg *types.MsgSubmitEvi
 		Id:           evidenceId,
 		ClaimId:      msg.ClaimId,
 		Submitter:    msg.Submitter,
-		EvidenceType: msg.EvidenceType,
+		EvidenceType: string(msg.EvidenceType),
 		ContentHash:  msg.ContentHash,
 		Description:  msg.Description,
-		SourceURI:    msg.SourceURI,
+		SourceUri:    msg.SourceUri,
 		SubmittedAt:  height,
 	}
 
@@ -135,10 +136,16 @@ func (k msgServer) SubmitOracleData(goCtx context.Context, msg *types.MsgSubmitO
 		return nil, fmt.Errorf("%w: oracle %s is not active", types.ErrOracleInactive, msg.OracleId)
 	}
 
+	// Verify sender is the oracle's registered operator
+	if msg.Operator != oracle.Operator {
+		return nil, fmt.Errorf("%w: sender %s is not operator of oracle %s",
+			types.ErrUnauthorizedOracle, msg.Operator, msg.OracleId)
+	}
+
 	// Verify the oracle supports the claimed data type
 	typeSupported := false
 	for _, dt := range oracle.DataTypes {
-		if dt == msg.DataType {
+		if dt == string(msg.DataType) {
 			typeSupported = true
 			break
 		}
@@ -155,10 +162,10 @@ func (k msgServer) SubmitOracleData(goCtx context.Context, msg *types.MsgSubmitO
 		Id:           evidenceId,
 		ClaimId:      msg.ClaimId,
 		Submitter:    oracle.Operator,
-		EvidenceType: msg.DataType,
+		EvidenceType: string(msg.DataType),
 		ContentHash:  msg.ContentHash,
 		Description:  fmt.Sprintf("Oracle data from %s (%s)", oracle.Name, msg.OracleId),
-		SourceURI:    fmt.Sprintf("oracle://%s/%s", msg.OracleId, msg.ContentHash),
+		SourceUri:    fmt.Sprintf("oracle://%s/%s", msg.OracleId, msg.ContentHash),
 		SubmittedAt:  height,
 	}
 
@@ -187,6 +194,9 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, msg.Params)
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
+	k.SetParams(ctx, *msg.Params)
 	return &types.MsgUpdateParamsResponse{}, nil
 }

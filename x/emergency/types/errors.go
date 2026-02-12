@@ -19,4 +19,5 @@ var (
 	ErrStatusConflict         = errors.Register(ModuleName, 15, "operation conflicts with current emergency status")
 	ErrCeremonyActive         = errors.Register(ModuleName, 16, "another ceremony is already active")
 	ErrInvalidHaltReference   = errors.Register(ModuleName, 17, "halt ceremony ID does not match active halt")
+	ErrChainHalted            = errors.Register(ModuleName, 18, "chain is halted: only emergency transactions are accepted")
 )

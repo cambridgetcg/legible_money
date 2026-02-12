@@ -27,4 +27,5 @@ var (
 	LIPCounterKey         = []byte{0x06}
 	DisbCounterKey        = []byte{0x07}
 	VoteDedupeKeyPrefix   = []byte{0x08}
+	UpgradePlanKeyPrefix  = []byte{0x09}
 )

@@ -13,10 +13,10 @@ import (
 func (k Keeper) CheckDeadmanSwitches(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
 	k.IterateHomes(ctx, func(home types.AgentHome) bool {
-		if !home.Guardian.Deadman.Enabled {
+		if home.Guardian == nil || home.Guardian.Deadman == nil || !home.Guardian.Deadman.Enabled {
 			return false
 		}
-		if home.Status == types.HomeStatusArchived {
+		if home.Status == string(types.HomeStatusArchived) {
 			return false
 		}
 		threshold := home.Guardian.Deadman.InactivityThreshold
@@ -29,20 +29,27 @@ func (k Keeper) CheckDeadmanSwitches(ctx sdk.Context) {
 
 // triggerDeadman executes the configured deadman action.
 func (k Keeper) triggerDeadman(ctx sdk.Context, home types.AgentHome) {
+	threshold := uint64(0)
+	action := ""
+	if home.Guardian != nil && home.Guardian.Deadman != nil {
+		threshold = home.Guardian.Deadman.InactivityThreshold
+		action = home.Guardian.Deadman.Action
+	}
+
 	// Create critical alert
 	k.CreateAlert(ctx, home.HomeId, types.AlertDeadmanTriggered, types.AlertPriorityCritical,
-		fmt.Sprintf("Deadman switch triggered: inactive for %d blocks", home.Guardian.Deadman.InactivityThreshold),
+		fmt.Sprintf("Deadman switch triggered: inactive for %d blocks", threshold),
 		"")
 
 	// Set home to guarded status
-	home.Status = types.HomeStatusGuarded
+	home.Status = string(types.HomeStatusGuarded)
 	k.SetHome(ctx, home)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"deadman_triggered",
 		sdk.NewAttribute("home_id", home.HomeId),
-		sdk.NewAttribute("owner_did", home.OwnerDID),
-		sdk.NewAttribute("action", string(home.Guardian.Deadman.Action)),
+		sdk.NewAttribute("owner_did", home.OwnerDid),
+		sdk.NewAttribute("action", action),
 	))
 
 	// Phase 2: transfer_to_beneficiary and donate_to_research actions
@@ -99,8 +106,8 @@ func (k Keeper) CreateAlert(ctx sdk.Context, homeId string, alertType types.Aler
 	alert := types.Alert{
 		AlertId:      alertId,
 		HomeId:       homeId,
-		Type:         alertType,
-		Priority:     priority,
+		Type:         string(alertType),
+		Priority:     string(priority),
 		Message:      message,
 		Data:         data,
 		CreatedAt:    uint64(ctx.BlockHeight()),

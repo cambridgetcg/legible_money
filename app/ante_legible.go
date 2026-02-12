@@ -8,11 +8,49 @@ import (
 
 	legibleauthkeeper "github.com/legible-money/legible/x/auth/keeper"
 	legibleauthtypes "github.com/legible-money/legible/x/auth/types"
+	emergencykeeper "github.com/legible-money/legible/x/emergency/keeper"
+	emergencytypes "github.com/legible-money/legible/x/emergency/types"
 )
 
 // msgWithSigners is implemented by hand-written Legible message types.
 type msgWithSigners interface {
 	GetSigners() []sdk.AccAddress
+}
+
+// ---------- EmergencyHaltDecorator ----------
+
+// EmergencyHaltDecorator blocks all non-emergency transactions when the chain
+// is in a halted state. Emergency module messages (propose/vote halt/revert/resume)
+// are always allowed so guardians can coordinate recovery.
+//
+// Placed early in the ante chain (after SetUpContext, before gas/fee processing)
+// so halted transactions don't consume gas or fees.
+type EmergencyHaltDecorator struct {
+	ek emergencykeeper.Keeper
+}
+
+// NewEmergencyHaltDecorator creates a new EmergencyHaltDecorator.
+func NewEmergencyHaltDecorator(ek emergencykeeper.Keeper) EmergencyHaltDecorator {
+	return EmergencyHaltDecorator{ek: ek}
+}
+
+func (ehd EmergencyHaltDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
+	if simulate {
+		return next(ctx, tx, simulate)
+	}
+
+	if !ehd.ek.IsHalted(ctx) {
+		return next(ctx, tx, simulate)
+	}
+
+	// Chain is halted — only allow emergency module messages
+	for _, msg := range tx.GetMsgs() {
+		if !emergencytypes.IsEmergencyMsg(msg) {
+			return ctx, emergencytypes.ErrChainHalted
+		}
+	}
+
+	return next(ctx, tx, simulate)
 }
 
 // ---------- LegibleAccountDecorator ----------
@@ -59,7 +97,12 @@ func (lad LegibleAccountDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 				return ctx, legibleauthtypes.ErrAccountFrozen
 			}
 
-			// Update last active block
+			// Update last active block.
+			// NOTE: This runs in the ante handler, so it persists even if the
+			// message handler fails (DeliverTx mode). This is intentional:
+			// submitting a signed transaction demonstrates account activity
+			// regardless of execution outcome. The account holder proved key
+			// possession and paid gas fees.
 			if account.LastActiveBlock < currentHeight {
 				account.LastActiveBlock = currentHeight
 				lad.lak.SetAccount(ctx, account)
@@ -153,30 +196,47 @@ func (lcd LegibleCapabilityDecorator) findSessionByPubKey(ctx sdk.Context, owner
 }
 
 // checkCapability verifies the session key has capability for the given message type.
+// Default-deny: unrecognized message types are rejected for session keys.
 func (lcd LegibleCapabilityDecorator) checkCapability(session *legibleauthtypes.SessionKey, msg sdk.Msg) error {
 	msgType := sdk.MsgTypeURL(msg)
 
-	// Map message types to required capabilities
+	// Map message types to required capabilities.
+	// Any message type not covered here is denied by default.
 	switch {
 	case isTransferMsg(msgType):
 		if !session.Capabilities.CanTransfer {
 			return legibleauthtypes.ErrSessionCapabilityDenied
 		}
+		return nil
 	case isStakeMsg(msgType):
 		if !session.Capabilities.CanStake {
 			return legibleauthtypes.ErrSessionCapabilityDenied
 		}
+		return nil
 	case isClaimMsg(msgType):
 		if !session.Capabilities.CanSubmitClaims {
 			return legibleauthtypes.ErrSessionCapabilityDenied
 		}
+		return nil
 	case isVoteMsg(msgType):
 		if !session.Capabilities.CanVote {
 			return legibleauthtypes.ErrSessionCapabilityDenied
 		}
+		return nil
+	case isICAMsg(msgType):
+		if !session.Capabilities.CanIca {
+			return legibleauthtypes.ErrSessionCapabilityDenied
+		}
+		// ICA registration requires operational key — session keys can only
+		// send transactions to already-registered ICAs.
+		if msgType == "/legible.icaauth.v1.Msg/RegisterInterchainAccount" {
+			return legibleauthtypes.ErrSessionCapabilityDenied
+		}
+		return nil
+	default:
+		// Default deny: session keys cannot perform unrecognized message types
+		return legibleauthtypes.ErrSessionCapabilityDenied
 	}
-
-	return nil
 }
 
 func isTransferMsg(msgType string) bool {
@@ -199,6 +259,11 @@ func isClaimMsg(msgType string) bool {
 		msgType == "/legible.knowledge.v1.MsgChallengeFact"
 }
 
+func isICAMsg(msgType string) bool {
+	return msgType == "/legible.icaauth.v1.Msg/RegisterInterchainAccount" ||
+		msgType == "/legible.icaauth.v1.Msg/SendICATransaction"
+}
+
 func isVoteMsg(msgType string) bool {
 	return msgType == "/cosmos.gov.v1.MsgVote" ||
 		msgType == "/legible.gov.v1.MsgCastVote" ||
@@ -213,7 +278,8 @@ func isVoteMsg(msgType string) bool {
 // If a tx memo contains "did:lgm:", it validates the DID resolves to the sender
 // and emits indexing events.
 //
-// Runs early in the chain (before sig verification) for DID validation.
+// Runs AFTER signature verification (post-auth) to prevent unauthenticated
+// state reads. DID validation is an additional constraint, not a prerequisite.
 type LegibleDIDDecorator struct {
 	lak legibleauthkeeper.Keeper
 }

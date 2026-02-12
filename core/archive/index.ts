@@ -115,22 +115,3 @@ export {
   type QueryStratumIntent,
   type SearchIntent,
 } from "./archive_api.js";
-
-// RPC handlers
-export {
-  ArchiveRPCHandler,
-  ARCHIVE_RPC_METHODS,
-  RPC_ERRORS,
-  type RPCRequest,
-  type RPCResponse,
-  type RPCError,
-  type CreateSessionParams,
-  type EvaluateTruthParams,
-  type GetRelatedParams,
-  type FindSimilarParams,
-  type QueryDomainParams,
-  type QueryStratumParams,
-  type SearchParams,
-  type BatchQueryParams,
-  type GetFactParams,
-} from "./rpc_handlers.js";

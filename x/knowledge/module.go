@@ -127,14 +127,14 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 // BeginBlock executes begin-block logic.
-// Advances verification round phases based on the current block height.
+// In adversarial mode: structural eval → challenge resolution → window expiry → growth.
+// In legacy mode: advances verification round phases.
 func (am AppModule) BeginBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	currentHeight := uint64(sdkCtx.BlockHeight())
 
-	if err := am.keeper.AdvanceRoundPhases(sdkCtx, currentHeight); err != nil {
-		am.keeper.Logger(sdkCtx).Error("failed to advance round phases",
-			"height", currentHeight, "error", err)
+	if err := am.keeper.BeginBlockerAdversarial(sdkCtx); err != nil {
+		am.keeper.Logger(sdkCtx).Error("failed to run BeginBlocker",
+			"height", sdkCtx.BlockHeight(), "error", err)
 	}
 
 	return nil

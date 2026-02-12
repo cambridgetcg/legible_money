@@ -1,0 +1,91 @@
+syntax = "proto3";
+package legible.emergency.v1;
+
+option go_package = "github.com/legible-money/legible/x/emergency/types";
+
+// EmergencyHaltProposal is a proposal to halt the chain.
+message EmergencyHaltProposal {
+  string id = 1;
+  string proposer = 2;
+  string reason = 3;
+  string evidence_hash = 4;
+  uint64 proposed_at_block = 5;
+  uint64 suggested_revert_block = 6;
+}
+
+// EmergencyRevertProposal is a proposal to revert chain state.
+message EmergencyRevertProposal {
+  string id = 1;
+  string proposer = 2;
+  uint64 target_block_number = 3;
+  string target_block_hash = 4;
+  string target_state_root = 5;
+  string justification = 6;
+  string halt_ceremony_id = 7;
+}
+
+// EmergencyResumeProposal is a proposal to resume chain operations.
+message EmergencyResumeProposal {
+  string id = 1;
+  string proposer = 2;
+  uint64 resume_from_block = 3;
+  string resume_from_hash = 4;
+  string resume_state_root = 5;
+  string halt_ceremony_id = 6;
+  string revert_ceremony_id = 7;
+}
+
+// EmergencyVote represents a Guardian's prevote on a ceremony.
+// Authentication is provided by the Cosmos SDK tx signature — no inner signature needed.
+message EmergencyVote {
+  string voter = 1;
+  bool approve = 2;
+  reserved 3; // removed: signature (redundant with tx signature)
+}
+
+// EmergencyPrecommit represents a Guardian's precommit on a ceremony.
+// Authentication is provided by the Cosmos SDK tx signature — no inner signature needed.
+message EmergencyPrecommit {
+  string voter = 1;
+  reserved 2; // removed: signature (redundant with tx signature)
+}
+
+// PrevoteEntry is a map entry for prevotes keyed by voter address.
+message PrevoteEntry {
+  string key = 1;
+  EmergencyVote value = 2;
+}
+
+// PrecommitEntry is a map entry for precommits keyed by voter address.
+message PrecommitEntry {
+  string key = 1;
+  EmergencyPrecommit value = 2;
+}
+
+// EmergencyCeremony represents an active or completed emergency ceremony.
+message EmergencyCeremony {
+  string id = 1;
+  string type = 2;
+  string phase = 3;
+  bytes proposal_data = 4;
+  uint64 start_block = 5;
+  uint64 prevote_deadline = 6;
+  uint64 precommit_deadline = 7;
+  uint64 timeout_deadline = 8;
+  repeated PrevoteEntry prevotes = 9;
+  repeated PrecommitEntry precommits = 10;
+  string yes_prevote_stake = 11;
+  string no_prevote_stake = 12;
+  string precommit_stake = 13;
+  string failure_reason = 14;
+}
+
+// EmergencyAuditEntry records an emergency action for transparency.
+message EmergencyAuditEntry {
+  int64 timestamp = 1;
+  uint64 block_number = 2;
+  string action = 3;
+  string actor = 4;
+  string ceremony_id = 5;
+  string details = 6;
+}

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	storetypes "cosmossdk.io/store/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/claiming_pot/types"
@@ -16,19 +14,21 @@ import (
 
 // SetPot stores a claiming pot.
 func (k Keeper) SetPot(ctx sdk.Context, pot types.ClaimingPot) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(pot)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claiming pot: %v", err))
 	}
-	store.Set(types.PotKey(pot.PotId), bz)
+	if err := kvStore.Set(types.PotKey(pot.PotId), bz); err != nil {
+		panic(fmt.Sprintf("failed to store claiming pot: %v", err))
+	}
 }
 
 // GetPot retrieves a claiming pot by ID.
 func (k Keeper) GetPot(ctx sdk.Context, potId string) (types.ClaimingPot, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.PotKey(potId))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.PotKey(potId))
+	if err != nil || bz == nil {
 		return types.ClaimingPot{}, false
 	}
 	var pot types.ClaimingPot
@@ -40,14 +40,17 @@ func (k Keeper) GetPot(ctx sdk.Context, potId string) (types.ClaimingPot, bool) 
 
 // DeletePot removes a claiming pot.
 func (k Keeper) DeletePot(ctx sdk.Context, potId string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(types.PotKey(potId))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(types.PotKey(potId))
 }
 
 // IteratePots iterates over all pots. Return true from cb to stop.
 func (k Keeper) IteratePots(ctx sdk.Context, cb func(types.ClaimingPot) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.PotKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.PotKeyPrefix, prefixEndBytes(types.PotKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -65,7 +68,7 @@ func (k Keeper) IteratePots(ctx sdk.Context, cb func(types.ClaimingPot) bool) {
 func (k Keeper) GetPotsByStatus(ctx sdk.Context, status types.PotStatus) []types.ClaimingPot {
 	var pots []types.ClaimingPot
 	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
-		if pot.Status == status {
+		if pot.Status == string(status) {
 			pots = append(pots, pot)
 		}
 		return false
@@ -89,19 +92,21 @@ func (k Keeper) GetPotsByCreator(ctx sdk.Context, creator string) []types.Claimi
 
 // SetClaimRecord stores a claim record.
 func (k Keeper) SetClaimRecord(ctx sdk.Context, record types.ClaimRecord) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim record: %v", err))
 	}
-	store.Set(types.ClaimRecordKey(record.PotId, record.Claimer), bz)
+	if err := kvStore.Set(types.ClaimRecordKey(record.PotId, record.Claimer), bz); err != nil {
+		panic(fmt.Sprintf("failed to store claim record: %v", err))
+	}
 }
 
 // GetClaimRecord retrieves a claim record.
 func (k Keeper) GetClaimRecord(ctx sdk.Context, potId, claimer string) (types.ClaimRecord, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ClaimRecordKey(potId, claimer))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.ClaimRecordKey(potId, claimer))
+	if err != nil || bz == nil {
 		return types.ClaimRecord{}, false
 	}
 	var record types.ClaimRecord
@@ -113,8 +118,12 @@ func (k Keeper) GetClaimRecord(ctx sdk.Context, potId, claimer string) (types.Cl
 
 // IterateClaimRecords iterates over all claim records for a pot. Return true from cb to stop.
 func (k Keeper) IterateClaimRecords(ctx sdk.Context, potId string, cb func(types.ClaimRecord) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.ClaimRecordPrefixKey(potId))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.ClaimRecordPrefixKey(potId)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -142,9 +151,9 @@ func (k Keeper) GetAllClaimRecords(ctx sdk.Context, potId string) []types.ClaimR
 
 // GetCreatorPotCount returns the number of pots a creator has made.
 func (k Keeper) GetCreatorPotCount(ctx sdk.Context, creator string) uint64 {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.CreatorPotCountKey(creator))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.CreatorPotCountKey(creator))
+	if err != nil || bz == nil {
 		return 0
 	}
 	return binary.BigEndian.Uint64(bz)
@@ -153,36 +162,40 @@ func (k Keeper) GetCreatorPotCount(ctx sdk.Context, creator string) uint64 {
 // IncrementCreatorPotCount increments a creator's pot count.
 func (k Keeper) IncrementCreatorPotCount(ctx sdk.Context, creator string) {
 	count := k.GetCreatorPotCount(ctx, creator) + 1
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz := make([]byte, 8)
 	binary.BigEndian.PutUint64(bz, count)
-	store.Set(types.CreatorPotCountKey(creator), bz)
+	if err := kvStore.Set(types.CreatorPotCountKey(creator), bz); err != nil {
+		panic(fmt.Sprintf("failed to store creator pot count: %v", err))
+	}
 }
 
 // --- Params ---
 
 // GetParams returns the module parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ParamsKey)
-	if bz == nil {
-		return types.DefaultParams()
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.ParamsKey)
+	if err != nil || bz == nil {
+		return *types.DefaultParams()
 	}
 	var params types.Params
 	if err := json.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		return *types.DefaultParams()
 	}
 	return params
 }
 
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
-	store.Set(types.ParamsKey, bz)
+	if err := kvStore.Set(types.ParamsKey, bz); err != nil {
+		panic(fmt.Sprintf("failed to store params: %v", err))
+	}
 }
 
 // --- Pot Counter ---
@@ -192,15 +205,17 @@ var potCounterKey = []byte{0x10}
 
 // GetNextPotId returns a unique pot ID and increments the counter.
 func (k Keeper) GetNextPotId(ctx sdk.Context) string {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(potCounterKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(potCounterKey)
 	var counter uint64
-	if bz != nil {
+	if err == nil && bz != nil {
 		counter = binary.BigEndian.Uint64(bz)
 	}
 	counter++
 	newBz := make([]byte, 8)
 	binary.BigEndian.PutUint64(newBz, counter)
-	store.Set(potCounterKey, newBz)
+	if err := kvStore.Set(potCounterKey, newBz); err != nil {
+		panic(fmt.Sprintf("failed to store pot counter: %v", err))
+	}
 	return fmt.Sprintf("pot-%d", counter)
 }

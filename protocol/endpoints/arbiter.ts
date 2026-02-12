@@ -131,7 +131,7 @@ export class Arbiter extends BaseEndpoint implements ArbiterEndpoint {
       ],
     });
 
-    this.minArbiterStake = config.minArbiterStake ?? 1000n * 10n ** 18n; // 1000 LGM default
+    this.minArbiterStake = config.minArbiterStake ?? 1000n * 10n ** 15n; // 1 LGM default
 
     // Subscribe to dispute resolutions
     this.eventBus.on("dispute_resolved" as never, (event) => {

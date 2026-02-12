@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/gogoproto/proto"
 )
 
 // --- Enums ---
@@ -38,101 +37,7 @@ const (
 	StatusExpired      QualificationStatus = "expired"
 )
 
-// --- Core Types ---
-
-type QualificationMetrics struct {
-	TotalVerifications    uint32 `json:"total_verifications"`
-	CorrectVerifications  uint32 `json:"correct_verifications"`
-	AccuracyBps          uint32 `json:"accuracy_bps"`             // basis points (10000 = 100%)
-	LastVerificationBlock uint64 `json:"last_verification_block"`
-	ConsecutiveCorrect    uint32 `json:"consecutive_correct"`
-	ConsecutiveIncorrect  uint32 `json:"consecutive_incorrect"`
-	ChallengesReceived    uint32 `json:"challenges_received"`
-	ChallengesLost        uint32 `json:"challenges_lost"`
-	EffectiveWeightBps    uint32 `json:"effective_weight_bps"`     // basis points (10000 = 100%)
-}
-
-type DomainQualification struct {
-	ValidatorAddr          string               `json:"validator_addr"`
-	Domain                 string               `json:"domain"`
-	Stratum                uint32               `json:"stratum"`
-	Pathway                QualificationPathway `json:"pathway"`
-	Status                 QualificationStatus  `json:"status"`
-	EarnedAtBlock          uint64               `json:"earned_at_block"`
-	ExpiresAtBlock         uint64               `json:"expires_at_block"`           // 0 = no expiry
-	Metrics                QualificationMetrics `json:"metrics"`
-	LockedStake            string               `json:"locked_stake,omitempty"`
-	StakeUnlocksAt         uint64               `json:"stake_unlocks_at,omitempty"`
-	Endorsers              []string             `json:"endorsers,omitempty"`
-	InheritedFrom          string               `json:"inherited_from,omitempty"`
-	InheritanceDiscountBps uint32               `json:"inheritance_discount_bps"`   // 10000 = 1.0 (no discount)
-}
-
-func (q *DomainQualification) Reset()         { *q = DomainQualification{} }
-func (q *DomainQualification) String() string { return proto.CompactTextString(q) }
-func (q *DomainQualification) ProtoMessage()  {}
-
-type QualificationEndorsement struct {
-	Id              string `json:"id"`
-	EndorserAddr    string `json:"endorser_addr"`
-	TargetValidator string `json:"target_validator"`
-	Domain          string `json:"domain"`
-	Stake           string `json:"stake"`
-	EndorsedAtBlock uint64 `json:"endorsed_at_block"`
-	ExpiresAtBlock  uint64 `json:"expires_at_block"`
-}
-
-func (e *QualificationEndorsement) Reset()         { *e = QualificationEndorsement{} }
-func (e *QualificationEndorsement) String() string { return proto.CompactTextString(e) }
-func (e *QualificationEndorsement) ProtoMessage()  {}
-
-// --- Params ---
-
-type Params struct {
-	StakeLeaf              string `json:"stake_leaf"`                // 22 LGM in ulgm
-	StakeMid               string `json:"stake_mid"`                 // 222 LGM in ulgm
-	StakeTop               string `json:"stake_top"`                 // 2222 LGM in ulgm
-	StakeLockPeriod        uint64 `json:"stake_lock_period"`         // blocks
-	MinVerifications       uint32 `json:"min_verifications"`         // for track_record
-	MinAccuracyBps         uint32 `json:"min_accuracy_bps"`          // 7700 = 77%
-	MinEndorsers           uint32 `json:"min_endorsers"`             // for cross_reference
-	EndorserStake          string `json:"endorser_stake"`            // per endorser
-	EndorsementDecayBlocks uint64 `json:"endorsement_decay_blocks"`
-	StratumDiscountBps     uint32 `json:"stratum_discount_bps"`      // 7000 = 70%
-	InactivityExpiration   uint64 `json:"inactivity_expiration"`     // blocks
-	ProbationaryPeriod     uint64 `json:"probationary_period"`       // blocks
-	ProbationaryWeightBps  uint32 `json:"probationary_weight_bps"`   // 5000 = 50%
-	SuspensionAccuracyBps  uint32 `json:"suspension_accuracy_bps"`   // 5000 = 50%
-	SuspensionConsecutive  uint32 `json:"suspension_consecutive"`
-	RevocationChallenges   uint32 `json:"revocation_challenges"`
-	MaxQualificationDepth  uint32 `json:"max_qualification_depth"`
-}
-
-func (p *Params) Reset()         { *p = Params{} }
-func (p *Params) String() string { return proto.CompactTextString(p) }
-func (p *Params) ProtoMessage()  {}
-
-func DefaultParams() Params {
-	return Params{
-		StakeLeaf:              "22000000000000000000",    // 22 LGM
-		StakeMid:               "222000000000000000000",   // 222 LGM
-		StakeTop:               "2222000000000000000000",  // 2222 LGM
-		StakeLockPeriod:        7777,
-		MinVerifications:       19,
-		MinAccuracyBps:         7700,
-		MinEndorsers:           3,
-		EndorserStake:          "22000000000000000000",    // 22 LGM
-		EndorsementDecayBlocks: 77777,
-		StratumDiscountBps:     7000,                      // 70%
-		InactivityExpiration:   777777,
-		ProbationaryPeriod:     777,
-		ProbationaryWeightBps:  5000,                      // 50%
-		SuspensionAccuracyBps:  5000,                      // 50%
-		SuspensionConsecutive:  5,
-		RevocationChallenges:   3,
-		MaxQualificationDepth:  7,
-	}
-}
+// --- Params Validation ---
 
 func (p Params) Validate() error {
 	if p.MinVerifications == 0 {
@@ -153,30 +58,6 @@ func (p Params) Validate() error {
 	return nil
 }
 
-// --- Genesis ---
-
-type GenesisState struct {
-	Params         Params                `json:"params"`
-	Qualifications []DomainQualification `json:"qualifications"`
-	Endorsements   []QualificationEndorsement `json:"endorsements"`
-}
-
-func (gs *GenesisState) Reset()         { *gs = GenesisState{} }
-func (gs *GenesisState) String() string { return proto.CompactTextString(gs) }
-func (gs *GenesisState) ProtoMessage()  {}
-
-func DefaultGenesisState() *GenesisState {
-	return &GenesisState{
-		Params:         DefaultParams(),
-		Qualifications: []DomainQualification{},
-		Endorsements:   []QualificationEndorsement{},
-	}
-}
-
-func (gs GenesisState) Validate() error {
-	return gs.Params.Validate()
-}
-
 // --- Message Types ---
 
 // MsgRequestQualification requests qualification in a domain via a specific pathway.
@@ -189,7 +70,7 @@ type MsgRequestQualification struct {
 }
 
 func (m *MsgRequestQualification) Reset()         { *m = MsgRequestQualification{} }
-func (m *MsgRequestQualification) String() string { return proto.CompactTextString(m) }
+func (m *MsgRequestQualification) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgRequestQualification) ProtoMessage()  {}
 
 func (m *MsgRequestQualification) ValidateBasic() error {
@@ -218,7 +99,7 @@ type MsgRequestQualificationResponse struct {
 }
 
 func (m *MsgRequestQualificationResponse) Reset()         { *m = MsgRequestQualificationResponse{} }
-func (m *MsgRequestQualificationResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgRequestQualificationResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgRequestQualificationResponse) ProtoMessage()  {}
 
 // MsgEndorseValidator endorses another validator for a domain (cross_reference pathway).
@@ -230,7 +111,7 @@ type MsgEndorseValidator struct {
 }
 
 func (m *MsgEndorseValidator) Reset()         { *m = MsgEndorseValidator{} }
-func (m *MsgEndorseValidator) String() string { return proto.CompactTextString(m) }
+func (m *MsgEndorseValidator) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgEndorseValidator) ProtoMessage()  {}
 
 func (m *MsgEndorseValidator) ValidateBasic() error {
@@ -259,7 +140,7 @@ type MsgEndorseValidatorResponse struct {
 }
 
 func (m *MsgEndorseValidatorResponse) Reset()         { *m = MsgEndorseValidatorResponse{} }
-func (m *MsgEndorseValidatorResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgEndorseValidatorResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgEndorseValidatorResponse) ProtoMessage()  {}
 
 // MsgRenewQualification renews an expiring qualification.
@@ -269,7 +150,7 @@ type MsgRenewQualification struct {
 }
 
 func (m *MsgRenewQualification) Reset()         { *m = MsgRenewQualification{} }
-func (m *MsgRenewQualification) String() string { return proto.CompactTextString(m) }
+func (m *MsgRenewQualification) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgRenewQualification) ProtoMessage()  {}
 
 func (m *MsgRenewQualification) ValidateBasic() error {
@@ -290,7 +171,7 @@ func (m *MsgRenewQualification) GetSigners() []sdk.AccAddress {
 type MsgRenewQualificationResponse struct{}
 
 func (m *MsgRenewQualificationResponse) Reset()         { *m = MsgRenewQualificationResponse{} }
-func (m *MsgRenewQualificationResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgRenewQualificationResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgRenewQualificationResponse) ProtoMessage()  {}
 
 // MsgWithdrawQualification voluntarily withdraws qualification and unlocks stake.
@@ -300,7 +181,7 @@ type MsgWithdrawQualification struct {
 }
 
 func (m *MsgWithdrawQualification) Reset()         { *m = MsgWithdrawQualification{} }
-func (m *MsgWithdrawQualification) String() string { return proto.CompactTextString(m) }
+func (m *MsgWithdrawQualification) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgWithdrawQualification) ProtoMessage()  {}
 
 func (m *MsgWithdrawQualification) ValidateBasic() error {
@@ -321,7 +202,7 @@ func (m *MsgWithdrawQualification) GetSigners() []sdk.AccAddress {
 type MsgWithdrawQualificationResponse struct{}
 
 func (m *MsgWithdrawQualificationResponse) Reset()         { *m = MsgWithdrawQualificationResponse{} }
-func (m *MsgWithdrawQualificationResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgWithdrawQualificationResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgWithdrawQualificationResponse) ProtoMessage()  {}
 
 // MsgUpdateParams updates module parameters (authority only).
@@ -331,7 +212,7 @@ type MsgUpdateParams struct {
 }
 
 func (m *MsgUpdateParams) Reset()         { *m = MsgUpdateParams{} }
-func (m *MsgUpdateParams) String() string { return proto.CompactTextString(m) }
+func (m *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgUpdateParams) ProtoMessage()  {}
 
 func (m *MsgUpdateParams) ValidateBasic() error {
@@ -349,7 +230,7 @@ func (m *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 type MsgUpdateParamsResponse struct{}
 
 func (m *MsgUpdateParamsResponse) Reset()         { *m = MsgUpdateParamsResponse{} }
-func (m *MsgUpdateParamsResponse) String() string { return proto.CompactTextString(m) }
+func (m *MsgUpdateParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *MsgUpdateParamsResponse) ProtoMessage()  {}
 
 // --- Service Interfaces ---

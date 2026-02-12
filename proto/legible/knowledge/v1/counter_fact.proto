@@ -1,0 +1,63 @@
+syntax = "proto3";
+package legible.knowledge.v1;
+
+option go_package = "github.com/legible-money/legible/x/knowledge/types";
+
+// ============================================================================
+// Negative Knowledge: Counter-Fact Types
+// ============================================================================
+
+// CounterFact represents a verified negative knowledge assertion:
+// "claim X is false, because Y." Counter-facts participate in the knowledge
+// graph with their own confidence values, enabling bidirectional epistemic
+// assessment of any proposition.
+message CounterFact {
+  string id = 1;                           // Unique ID: "cfact-{hash}"
+  string target_fact_id = 2;               // Fact being negated (if exists)
+  string target_claim_id = 3;              // Original rejected claim
+  string negation_type = 4;                // rejection, contradiction, falsification, supersession
+  uint64 confidence = 5;                   // 0-1,000,000 (how confident we are it's false)
+  string justification = 6;               // Why it's false
+  repeated string evidence_ids = 7;       // Supporting counter-evidence
+  string submitter = 8;                    // bech32 address of disprover
+  string submitter_did = 9;               // DID of disprover
+  repeated string verifiers = 10;         // Validators who confirmed
+  string domain = 11;                      // Knowledge domain
+  string logic_zone = 12;                 // Gödelian zone
+  string epistemic_category = 13;         // Inherited from target
+  string status = 14;                      // pending, provisional, verified, contested, overturned
+  uint64 created_at_height = 15;
+  uint64 verified_at_height = 16;
+  string round_id = 17;                   // Verification round (if any)
+  bool incompleteness_ack = 18;           // Gödelian: negation may be undecidable
+  string stake_amount = 19;               // locked contradiction stake (bigint as string)
+}
+
+// BidirectionalConfidence represents the dual-track epistemic assessment.
+// TruthConfidence and FalsityConfidence are independent unsigned values.
+// NetConfidence = TruthConfidence - FalsityConfidence (can be negative).
+message BidirectionalConfidence {
+  string fact_id = 1;
+  uint64 truth_confidence = 2;            // From Fact.confidence
+  uint64 falsity_confidence = 3;          // Max counter-fact confidence
+  int64 net_confidence = 4;               // truth - falsity (signed)
+  uint32 counter_fact_count = 5;
+  string status = 6;                       // established, contested, disproven, uncertain
+}
+
+// MsgSubmitContradiction submits an explicit counter-claim asserting a fact is false.
+message MsgSubmitContradiction {
+  string target_fact_id = 1;
+  string counter_claim = 2;
+  string submitter = 3;                    // bech32 address
+  string submitter_did = 4;
+  string stake = 5;                        // Must be >= 50% of target fact's stake
+  repeated string evidence_ids = 6;
+  string logic_zone = 7;
+  bool incompleteness_ack = 8;
+}
+
+message MsgSubmitContradictionResponse {
+  string counter_fact_id = 1;
+  string round_id = 2;                    // If verification round opened
+}

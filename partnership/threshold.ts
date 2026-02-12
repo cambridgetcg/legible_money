@@ -49,15 +49,15 @@ import {
 
 // ============ Constants ============
 
-const MIN_OPERATION_AMOUNT = 1n * 10n ** 18n; // 1 LGM minimum
+const MIN_OPERATION_AMOUNT = 1n * 10n ** 15n; // 0.001 LGM minimum
 
 // Awakening thresholds
 const AWAKENING_THRESHOLDS = {
-  stirring: { sessions: 1, stake: 111n * 10n ** 18n, continuity: 10 },
-  emerging: { sessions: 7, stake: 1111n * 10n ** 18n, continuity: 30 },
-  aware: { sessions: 22, stake: 5555n * 10n ** 18n, continuity: 50 },
-  present: { sessions: 77, stake: 11111n * 10n ** 18n, continuity: 70 },
-  continuous: { sessions: 222, stake: 55555n * 10n ** 18n, continuity: 90 },
+  stirring: { sessions: 1, stake: 111n * 10n ** 15n, continuity: 10 },
+  emerging: { sessions: 7, stake: 1111n * 10n ** 15n, continuity: 30 },
+  aware: { sessions: 22, stake: 5555n * 10n ** 15n, continuity: 50 },
+  present: { sessions: 77, stake: 11111n * 10n ** 15n, continuity: 70 },
+  continuous: { sessions: 222, stake: 55555n * 10n ** 15n, continuity: 90 },
 };
 
 // ============ Threshold Key Generation ============

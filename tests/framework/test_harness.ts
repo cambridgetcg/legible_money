@@ -85,7 +85,7 @@ export const DEFAULT_TEST_CONFIG: TestNetworkConfig = {
   validatorCount: 3,
   fullNodeCount: 0,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
   testAccounts: 5,
   autoBlocks: false,
   blockInterval: 100, // Fast for tests
@@ -200,8 +200,8 @@ export class TestNetwork extends EventEmitter {
       validatorQuorum: 0.66,
       acceptanceThreshold: 0.66,
       rejectionThreshold: 0.66,
-      minValidatorStake: 1000n * 10n ** 18n,
-      minClaimStake: 10n * 10n ** 18n,
+      minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+      minClaimStake: 10n * 10n ** 15n,
       blockReward: 1n * 10n ** 18n,
       verificationReward: 1n * 10n ** 18n,
       ...this.config.consensusParams,
@@ -352,7 +352,7 @@ export class TestNetwork extends EventEmitter {
     claim: string,
     domain: string,
     submitter: TestAccount | TestValidator,
-    stake: bigint = 100n * 10n ** 18n,
+    stake: bigint = 100n * 10n ** 15n,
   ): Promise<string> {
     if (!this.consensus) throw new Error("Network not initialized");
 
@@ -451,7 +451,7 @@ export class TestNetwork extends EventEmitter {
       confidence,
       referencesChecked = ["ref-1"],
     } of validatorCommitments) {
-      const { commitment, nonce } = generateCommitment(
+      const { commitment, salt } = generateCommitment(
         validator.privateKey,
         validator.publicKey,
         roundId,
@@ -460,7 +460,7 @@ export class TestNetwork extends EventEmitter {
         referencesChecked,
       );
 
-      nonces.set(validator.publicKey, nonce);
+      nonces.set(validator.publicKey, salt);
 
       try {
         // Use deterministic submission (bypasses VRF)
@@ -489,7 +489,7 @@ export class TestNetwork extends EventEmitter {
       validator: TestValidator;
       verdict: "confirmed" | "rejected" | "uncertain";
       confidence: number;
-      nonce: string;
+      salt: string;
       referencesChecked?: string[];
       reasoning?: string;
     }>,
@@ -504,7 +504,7 @@ export class TestNetwork extends EventEmitter {
       validator,
       verdict,
       confidence,
-      nonce,
+      salt,
       referencesChecked = ["ref-1"],
       reasoning,
     } of validatorReveals) {
@@ -514,7 +514,7 @@ export class TestNetwork extends EventEmitter {
         roundId,
         verdict,
         confidence,
-        nonce,
+        salt,
         referencesChecked,
         reasoning,
       );
@@ -524,7 +524,7 @@ export class TestNetwork extends EventEmitter {
           validator: validator.publicKey,
           verdict: reveal.verdict,
           confidence: reveal.confidence,
-          nonce: reveal.nonce,
+          salt: reveal.salt,
           referencesChecked: reveal.referencesChecked,
           signature: reveal.signature,
         });

@@ -28,4 +28,5 @@ var (
 	EvidenceByClaimPrefix = []byte{0x05}
 	AuditByEvidencePrefix = []byte{0x06}
 	ActiveOraclePrefix    = []byte{0x07}
+	ExpiryIndexPrefix     = []byte{0x08} // expiryHeight(8 bytes big-endian) + evidenceId → evidenceId
 )

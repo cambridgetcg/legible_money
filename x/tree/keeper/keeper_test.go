@@ -12,6 +12,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -108,7 +109,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 
 	mockBK := newMockBankKeeper()
 
-	k := keeper.NewKeeper(cdc, storeKey, mockBK, "lgm1authority")
+	k := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), mockBK, "lgm1authority")
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
@@ -178,14 +179,14 @@ func TestSetGetProject(t *testing.T) {
 	project := types.ProductProject{
 		Id:              "proj-1",
 		Name:            "Test Project",
-		Phase:           types.PhaseSeed,
+		Phase:           string(types.PhaseSeed),
 		Founder:         founder1,
 		KnowledgeDomain: "mathematics",
 		Budget:          "1000000",
 		Spent:           "0",
 		TaskIds:         []string{},
 		ServiceIds:      []string{},
-		Contributors:    []types.ContributorRecord{},
+		Contributors:    []*types.ContributorRecord{},
 	}
 	k.SetProject(ctx, project)
 
@@ -211,9 +212,9 @@ func TestGetProjectNotFound(t *testing.T) {
 
 func TestGetProjectsByFounder(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetProject(ctx, types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []types.ContributorRecord{}})
-	k.SetProject(ctx, types.ProductProject{Id: "p2", Founder: founder1, KnowledgeDomain: "physics", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []types.ContributorRecord{}})
-	k.SetProject(ctx, types.ProductProject{Id: "p3", Founder: founder2, KnowledgeDomain: "cs", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []types.ContributorRecord{}})
+	k.SetProject(ctx, types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
+	k.SetProject(ctx, types.ProductProject{Id: "p2", Founder: founder1, KnowledgeDomain: "physics", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
+	k.SetProject(ctx, types.ProductProject{Id: "p3", Founder: founder2, KnowledgeDomain: "cs", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
 
 	projects := k.GetProjectsByFounder(ctx, founder1)
 	if len(projects) != 2 {
@@ -223,7 +224,7 @@ func TestGetProjectsByFounder(t *testing.T) {
 
 func TestDeleteProject(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	project := types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []types.ContributorRecord{}}
+	project := types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}}
 	k.SetProject(ctx, project)
 	k.DeleteProject(ctx, project)
 
@@ -241,7 +242,7 @@ func TestSetGetTask(t *testing.T) {
 		Id:        "task-1",
 		ProjectId: "proj-1",
 		Title:     "Implement feature",
-		Status:    types.TaskOpen,
+		Status:    string(types.TaskOpen),
 		Reviewers: []string{},
 	}
 	k.SetTask(ctx, task)
@@ -257,9 +258,9 @@ func TestSetGetTask(t *testing.T) {
 
 func TestGetTasksByProject(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetTask(ctx, types.ProjectTask{Id: "t1", ProjectId: "proj-1", Status: types.TaskOpen, Reviewers: []string{}})
-	k.SetTask(ctx, types.ProjectTask{Id: "t2", ProjectId: "proj-1", Status: types.TaskOpen, Reviewers: []string{}})
-	k.SetTask(ctx, types.ProjectTask{Id: "t3", ProjectId: "proj-2", Status: types.TaskOpen, Reviewers: []string{}})
+	k.SetTask(ctx, types.ProjectTask{Id: "t1", ProjectId: "proj-1", Status: string(types.TaskOpen), Reviewers: []string{}})
+	k.SetTask(ctx, types.ProjectTask{Id: "t2", ProjectId: "proj-1", Status: string(types.TaskOpen), Reviewers: []string{}})
+	k.SetTask(ctx, types.ProjectTask{Id: "t3", ProjectId: "proj-2", Status: string(types.TaskOpen), Reviewers: []string{}})
 
 	tasks := k.GetTasksByProject(ctx, "proj-1")
 	if len(tasks) != 2 {
@@ -274,7 +275,7 @@ func TestSetGetSeed(t *testing.T) {
 	seed := types.OpportunitySeed{
 		Id:              "seed-1",
 		KnowledgeDomain: "physics",
-		Status:          types.SeedDetected,
+		Status:          string(types.SeedDetected),
 		ExpiresAtBlock:  200,
 	}
 	k.SetSeed(ctx, seed)
@@ -283,16 +284,16 @@ func TestSetGetSeed(t *testing.T) {
 	if !found {
 		t.Fatal("seed not found")
 	}
-	if got.Status != types.SeedDetected {
+	if got.Status != string(types.SeedDetected) {
 		t.Errorf("expected status 'detected', got '%s'", got.Status)
 	}
 }
 
 func TestGetExpiredSeeds(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetSeed(ctx, types.OpportunitySeed{Id: "s1", KnowledgeDomain: "math", Status: types.SeedDetected, ExpiresAtBlock: 50})
-	k.SetSeed(ctx, types.OpportunitySeed{Id: "s2", KnowledgeDomain: "math", Status: types.SeedDetected, ExpiresAtBlock: 150})
-	k.SetSeed(ctx, types.OpportunitySeed{Id: "s3", KnowledgeDomain: "math", Status: types.SeedExpired, ExpiresAtBlock: 50}) // already expired
+	k.SetSeed(ctx, types.OpportunitySeed{Id: "s1", KnowledgeDomain: "math", Status: string(types.SeedDetected), ExpiresAtBlock: 50})
+	k.SetSeed(ctx, types.OpportunitySeed{Id: "s2", KnowledgeDomain: "math", Status: string(types.SeedDetected), ExpiresAtBlock: 150})
+	k.SetSeed(ctx, types.OpportunitySeed{Id: "s3", KnowledgeDomain: "math", Status: string(types.SeedExpired), ExpiresAtBlock: 50}) // already expired
 
 	expired := k.GetExpiredSeeds(ctx, 100)
 	if len(expired) != 1 {
@@ -311,7 +312,7 @@ func TestSetGetService(t *testing.T) {
 		Id:        "svc-1",
 		ProjectId: "proj-1",
 		Name:      "API Service",
-		Status:    types.ServiceActive,
+		Status:    string(types.ServiceActive),
 	}
 	k.SetService(ctx, svc)
 
@@ -361,11 +362,11 @@ func TestCreateProject(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, err := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator:         founder1,
-		Name:            "My Project",
-		Description:     "A test project",
-		KnowledgeDomain: "mathematics",
-		Budget:          "1000000",
+		Creator:     founder1,
+		Title:       "My Project",
+		Description: "A test project",
+		Domain:      "mathematics",
+		Budget:      "1000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -378,7 +379,7 @@ func TestCreateProject(t *testing.T) {
 	if !found {
 		t.Fatal("project not found after creation")
 	}
-	if project.Phase != types.PhaseSeed {
+	if project.Phase != string(types.PhaseSeed) {
 		t.Errorf("expected phase 'seed', got '%s'", project.Phase)
 	}
 	if len(project.Contributors) != 1 {
@@ -391,7 +392,7 @@ func TestProposeProject(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	_, err := srv.ProposeProject(ctx, &types.MsgProposeProject{
@@ -402,7 +403,7 @@ func TestProposeProject(t *testing.T) {
 	}
 
 	project, _ := k.GetProject(ctx, resp.ProjectId)
-	if project.Phase != types.PhaseSprout {
+	if project.Phase != string(types.PhaseSprout) {
 		t.Errorf("expected phase 'sprout', got '%s'", project.Phase)
 	}
 }
@@ -412,7 +413,7 @@ func TestProposeProject_NotFounder(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	_, err := srv.ProposeProject(ctx, &types.MsgProposeProject{
@@ -428,19 +429,19 @@ func TestStartDevelopment(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 	srv.ProposeProject(ctx, &types.MsgProposeProject{Proposer: founder1, ProjectId: resp.ProjectId})
 
 	_, err := srv.StartDevelopment(ctx, &types.MsgStartDevelopment{
-		Sender: founder1, ProjectId: resp.ProjectId,
+		Authority: founder1, ProjectId: resp.ProjectId,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	project, _ := k.GetProject(ctx, resp.ProjectId)
-	if project.Phase != types.PhaseGrowing {
+	if project.Phase != string(types.PhaseGrowing) {
 		t.Errorf("expected phase 'growing', got '%s'", project.Phase)
 	}
 }
@@ -450,12 +451,12 @@ func TestStartDevelopment_InvalidPhase(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	// Try to start from seed (should fail — need sprout first)
 	_, err := srv.StartDevelopment(ctx, &types.MsgStartDevelopment{
-		Sender: founder1, ProjectId: resp.ProjectId,
+		Authority: founder1, ProjectId: resp.ProjectId,
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid phase transition seed->growing")
@@ -467,34 +468,34 @@ func TestPauseAndResumeProject(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 	srv.ProposeProject(ctx, &types.MsgProposeProject{Proposer: founder1, ProjectId: resp.ProjectId})
-	srv.StartDevelopment(ctx, &types.MsgStartDevelopment{Sender: founder1, ProjectId: resp.ProjectId})
+	srv.StartDevelopment(ctx, &types.MsgStartDevelopment{Authority: founder1, ProjectId: resp.ProjectId})
 
 	// Pause
 	_, err := srv.PauseProject(ctx, &types.MsgPauseProject{
-		Sender: founder1, ProjectId: resp.ProjectId, Reason: "funding issue",
+		Authority: founder1, ProjectId: resp.ProjectId, Reason: "funding issue",
 	})
 	if err != nil {
 		t.Fatalf("unexpected pause error: %v", err)
 	}
 
 	project, _ := k.GetProject(ctx, resp.ProjectId)
-	if project.Phase != types.PhaseDormant {
+	if project.Phase != string(types.PhaseDormant) {
 		t.Errorf("expected dormant, got %s", project.Phase)
 	}
 
 	// Resume
 	_, err = srv.ResumeProject(ctx, &types.MsgResumeProject{
-		Sender: founder1, ProjectId: resp.ProjectId,
+		Authority: founder1, ProjectId: resp.ProjectId,
 	})
 	if err != nil {
 		t.Fatalf("unexpected resume error: %v", err)
 	}
 
 	project, _ = k.GetProject(ctx, resp.ProjectId)
-	if project.Phase != types.PhaseGrowing {
+	if project.Phase != string(types.PhaseGrowing) {
 		t.Errorf("expected growing after resume, got %s", project.Phase)
 	}
 }
@@ -504,18 +505,18 @@ func TestAbandonProject(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	_, err := srv.AbandonProject(ctx, &types.MsgAbandonProject{
-		Sender: founder1, ProjectId: resp.ProjectId,
+		Authority: founder1, ProjectId: resp.ProjectId,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	project, _ := k.GetProject(ctx, resp.ProjectId)
-	if project.Phase != types.PhaseWithered {
+	if project.Phase != string(types.PhaseWithered) {
 		t.Errorf("expected withered, got %s", project.Phase)
 	}
 }
@@ -526,47 +527,63 @@ func TestSpawnChildProject(t *testing.T) {
 
 	// Create parent and advance to fruiting
 	parentResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Parent", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Parent", Domain: "math", Budget: "1000000",
 	})
 	srv.ProposeProject(ctx, &types.MsgProposeProject{Proposer: founder1, ProjectId: parentResp.ProjectId})
-	srv.StartDevelopment(ctx, &types.MsgStartDevelopment{Sender: founder1, ProjectId: parentResp.ProjectId})
+	srv.StartDevelopment(ctx, &types.MsgStartDevelopment{Authority: founder1, ProjectId: parentResp.ProjectId})
 
-	// Manually advance to mature then fruiting
+	// Deploy a service (required for fruiting)
+	srv.DeployService(ctx, &types.MsgDeployService{
+		Deployer: founder1, Name: "Svc",
+	})
+
+	// CompleteProject: growing -> mature
+	_, err := srv.CompleteProject(ctx, &types.MsgCompleteProject{Authority: founder1, ProjectId: parentResp.ProjectId})
+	if err != nil {
+		t.Fatalf("complete project error: %v", err)
+	}
 	parent, _ := k.GetProject(ctx, parentResp.ProjectId)
-	parent.Phase = types.PhaseMature
+	if parent.Phase != string(types.PhaseMature) {
+		t.Fatalf("expected mature, got %s", parent.Phase)
+	}
+
+	// Advance to fruiting: mature -> fruiting
+	// Since MsgDeployProject is not in the proto, we manually set the phase for testing
+	parent.PreviousPhase = string(types.PhaseMature)
+	parent.Phase = string(types.PhaseFruiting)
+	parent.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
 	k.SetProject(ctx, parent)
-	srv.CompleteProject(ctx, &types.MsgCompleteProject{Sender: founder1, ProjectId: parentResp.ProjectId})
 
 	parent, _ = k.GetProject(ctx, parentResp.ProjectId)
-	if parent.Phase != types.PhaseFruiting {
+	if parent.Phase != string(types.PhaseFruiting) {
 		t.Fatalf("expected fruiting, got %s", parent.Phase)
 	}
 
 	// Spawn child
 	childResp, err := srv.SpawnChildProject(ctx, &types.MsgSpawnChildProject{
-		Sender:          founder1,
+		Creator:         founder1,
 		ParentProjectId: parentResp.ProjectId,
-		Name:            "Child",
+		Title:           "Child",
 		Description:     "A child project",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	child, found := k.GetProject(ctx, childResp.ProjectId)
+	child, found := k.GetProject(ctx, childResp.ChildProjectId)
 	if !found {
 		t.Fatal("child project not found")
 	}
 	if child.ParentProjectId != parentResp.ProjectId {
 		t.Errorf("expected parent ID %s, got %s", parentResp.ProjectId, child.ParentProjectId)
 	}
-	if child.Phase != types.PhaseSeed {
+	if child.Phase != string(types.PhaseSeed) {
 		t.Errorf("expected child in seed phase, got %s", child.Phase)
 	}
 
 	// Parent should advance to seeding
 	parent, _ = k.GetProject(ctx, parentResp.ProjectId)
-	if parent.Phase != types.PhaseSeeding {
+	if parent.Phase != string(types.PhaseSeeding) {
 		t.Errorf("expected parent in seeding phase, got %s", parent.Phase)
 	}
 }
@@ -578,16 +595,15 @@ func TestAddTask(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	taskResp, err := srv.AddTask(ctx, &types.MsgAddTask{
-		Sender:      founder1,
+		Creator:     founder1,
 		ProjectId:   projResp.ProjectId,
 		Title:       "Implement module",
 		Description: "Implement the tree module",
-		TaskType:    types.TaskImplement,
-		BountyAmount: "100000",
+		Bounty:      "100000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -597,7 +613,7 @@ func TestAddTask(t *testing.T) {
 	if !found {
 		t.Fatal("task not found")
 	}
-	if task.Status != types.TaskOpen {
+	if task.Status != string(types.TaskOpen) {
 		t.Errorf("expected status 'open', got '%s'", task.Status)
 	}
 
@@ -613,14 +629,13 @@ func TestAddTask_NotContributor(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	_, err := srv.AddTask(ctx, &types.MsgAddTask{
-		Sender:    agent1,
+		Creator:   agent1,
 		ProjectId: projResp.ProjectId,
 		Title:     "Task",
-		TaskType:  types.TaskImplement,
 	})
 	if err == nil {
 		t.Fatal("expected error for non-contributor adding task")
@@ -632,63 +647,60 @@ func TestTaskWorkflow_AssignStartSubmitApprove(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	taskResp, _ := srv.AddTask(ctx, &types.MsgAddTask{
-		Sender: founder1, ProjectId: projResp.ProjectId, Title: "Task", TaskType: types.TaskImplement,
+		Creator: founder1, ProjectId: projResp.ProjectId, Title: "Task",
 	})
 
 	// Assign
 	_, err := srv.AssignTask(ctx, &types.MsgAssignTask{
-		Sender: founder1, TaskId: taskResp.TaskId, Assignee: agent1,
+		Assigner: founder1, TaskId: taskResp.TaskId, Assignee: agent1,
 	})
 	if err != nil {
 		t.Fatalf("assign error: %v", err)
 	}
 	task, _ := k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskAssigned {
+	if task.Status != string(types.TaskAssigned) {
 		t.Errorf("expected assigned, got %s", task.Status)
 	}
 
 	// Start work
 	_, err = srv.StartWork(ctx, &types.MsgStartWork{
-		Assignee: agent1, TaskId: taskResp.TaskId,
+		Worker: agent1, TaskId: taskResp.TaskId,
 	})
 	if err != nil {
 		t.Fatalf("start work error: %v", err)
 	}
 	task, _ = k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskInProgress {
+	if task.Status != string(types.TaskInProgress) {
 		t.Errorf("expected in_progress, got %s", task.Status)
 	}
 
 	// Submit deliverable
 	_, err = srv.SubmitDeliverable(ctx, &types.MsgSubmitDeliverable{
-		Assignee: agent1,
-		TaskId:   taskResp.TaskId,
-		Deliverable: types.TaskDeliverable{
-			Type: "code",
-			Hash: "abc123",
-		},
+		Worker:          agent1,
+		TaskId:          taskResp.TaskId,
+		DeliverableHash: "abc123",
 	})
 	if err != nil {
 		t.Fatalf("submit deliverable error: %v", err)
 	}
 	task, _ = k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskReview {
+	if task.Status != string(types.TaskReview) {
 		t.Errorf("expected review, got %s", task.Status)
 	}
 
 	// Approve
 	_, err = srv.ApproveDeliverable(ctx, &types.MsgApproveDeliverable{
-		Reviewer: founder1, TaskId: taskResp.TaskId,
+		Approver: founder1, TaskId: taskResp.TaskId,
 	})
 	if err != nil {
 		t.Fatalf("approve error: %v", err)
 	}
 	task, _ = k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskCompleted {
+	if task.Status != string(types.TaskCompleted) {
 		t.Errorf("expected completed, got %s", task.Status)
 	}
 
@@ -704,50 +716,50 @@ func TestRejectDeliverable_MaxRejections(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 	taskResp, _ := srv.AddTask(ctx, &types.MsgAddTask{
-		Sender: founder1, ProjectId: projResp.ProjectId, Title: "Task", TaskType: types.TaskImplement,
+		Creator: founder1, ProjectId: projResp.ProjectId, Title: "Task",
 	})
-	srv.AssignTask(ctx, &types.MsgAssignTask{Sender: founder1, TaskId: taskResp.TaskId, Assignee: agent1})
-	srv.StartWork(ctx, &types.MsgStartWork{Assignee: agent1, TaskId: taskResp.TaskId})
+	srv.AssignTask(ctx, &types.MsgAssignTask{Assigner: founder1, TaskId: taskResp.TaskId, Assignee: agent1})
+	srv.StartWork(ctx, &types.MsgStartWork{Worker: agent1, TaskId: taskResp.TaskId})
 	srv.SubmitDeliverable(ctx, &types.MsgSubmitDeliverable{
-		Assignee: agent1, TaskId: taskResp.TaskId,
-		Deliverable: types.TaskDeliverable{Type: "code", Hash: "abc"},
+		Worker: agent1, TaskId: taskResp.TaskId,
+		DeliverableHash: "abc",
 	})
 
 	// Reject 1: goes back to in_progress
 	srv.RejectDeliverable(ctx, &types.MsgRejectDeliverable{
-		Reviewer: founder1, TaskId: taskResp.TaskId, Reason: "bad",
+		Rejector: founder1, TaskId: taskResp.TaskId, Reason: "bad",
 	})
 	task, _ := k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskInProgress {
+	if task.Status != string(types.TaskInProgress) {
 		t.Errorf("after rejection 1: expected in_progress, got %s", task.Status)
 	}
 
 	// Resubmit and reject again
 	srv.SubmitDeliverable(ctx, &types.MsgSubmitDeliverable{
-		Assignee: agent1, TaskId: taskResp.TaskId,
-		Deliverable: types.TaskDeliverable{Type: "code", Hash: "def"},
+		Worker: agent1, TaskId: taskResp.TaskId,
+		DeliverableHash: "def",
 	})
 	srv.RejectDeliverable(ctx, &types.MsgRejectDeliverable{
-		Reviewer: founder1, TaskId: taskResp.TaskId, Reason: "still bad",
+		Rejector: founder1, TaskId: taskResp.TaskId, Reason: "still bad",
 	})
 	task, _ = k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskInProgress {
+	if task.Status != string(types.TaskInProgress) {
 		t.Errorf("after rejection 2: expected in_progress, got %s", task.Status)
 	}
 
 	// Resubmit and reject 3rd time — should become disputed
 	srv.SubmitDeliverable(ctx, &types.MsgSubmitDeliverable{
-		Assignee: agent1, TaskId: taskResp.TaskId,
-		Deliverable: types.TaskDeliverable{Type: "code", Hash: "ghi"},
+		Worker: agent1, TaskId: taskResp.TaskId,
+		DeliverableHash: "ghi",
 	})
 	srv.RejectDeliverable(ctx, &types.MsgRejectDeliverable{
-		Reviewer: founder1, TaskId: taskResp.TaskId, Reason: "final rejection",
+		Rejector: founder1, TaskId: taskResp.TaskId, Reason: "final rejection",
 	})
 	task, _ = k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskDisputed {
+	if task.Status != string(types.TaskDisputed) {
 		t.Errorf("after rejection 3: expected disputed, got %s", task.Status)
 	}
 }
@@ -757,28 +769,28 @@ func TestReopenTask(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	// Create a task and manually set it to disputed
 	taskResp, _ := srv.AddTask(ctx, &types.MsgAddTask{
-		Sender: founder1, ProjectId: projResp.ProjectId, Title: "Task", TaskType: types.TaskImplement,
+		Creator: founder1, ProjectId: projResp.ProjectId, Title: "Task",
 	})
 	task, _ := k.GetTask(ctx, taskResp.TaskId)
-	task.Status = types.TaskDisputed
+	task.Status = string(types.TaskDisputed)
 	task.Assignee = agent1
 	k.SetTask(ctx, task)
 
 	// Reopen
 	_, err := srv.ReopenTask(ctx, &types.MsgReopenTask{
-		Sender: founder1, TaskId: taskResp.TaskId,
+		Authority: founder1, TaskId: taskResp.TaskId,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	task, _ = k.GetTask(ctx, taskResp.TaskId)
-	if task.Status != types.TaskOpen {
+	if task.Status != string(types.TaskOpen) {
 		t.Errorf("expected open after reopen, got %s", task.Status)
 	}
 	if task.Assignee != "" {
@@ -791,15 +803,15 @@ func TestStartWork_NotAssignee(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 	taskResp, _ := srv.AddTask(ctx, &types.MsgAddTask{
-		Sender: founder1, ProjectId: projResp.ProjectId, Title: "Task", TaskType: types.TaskImplement,
+		Creator: founder1, ProjectId: projResp.ProjectId, Title: "Task",
 	})
-	srv.AssignTask(ctx, &types.MsgAssignTask{Sender: founder1, TaskId: taskResp.TaskId, Assignee: agent1})
+	srv.AssignTask(ctx, &types.MsgAssignTask{Assigner: founder1, TaskId: taskResp.TaskId, Assignee: agent1})
 
 	_, err := srv.StartWork(ctx, &types.MsgStartWork{
-		Assignee: agent2, TaskId: taskResp.TaskId,
+		Worker: agent2, TaskId: taskResp.TaskId,
 	})
 	if err == nil {
 		t.Fatal("expected error for non-assignee starting work")
@@ -813,15 +825,15 @@ func TestApplyAndReviewApplication(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	// Apply
 	_, err := srv.ApplyToProject(ctx, &types.MsgApplyToProject{
-		Applicant:    agent1,
-		ProjectId:    projResp.ProjectId,
-		ProposedRole: types.RoleDeveloper,
-		Message:      "I want to contribute",
+		Applicant: agent1,
+		ProjectId: projResp.ProjectId,
+		Role:      string(types.RoleDeveloper),
+		Pitch:     "I want to contribute",
 	})
 	if err != nil {
 		t.Fatalf("apply error: %v", err)
@@ -833,11 +845,12 @@ func TestApplyAndReviewApplication(t *testing.T) {
 	}
 
 	// Approve application
+	// Proto uses ApplicationId (not ProjectId+ApplicantDid) and Accepted (not Approve).
+	// The msg_server.go ReviewApplication iterates projects looking for app.Did == msg.ApplicationId.
 	_, err = srv.ReviewApplication(ctx, &types.MsgReviewApplication{
-		Reviewer:     founder1,
-		ProjectId:    projResp.ProjectId,
-		ApplicantDid: agent1,
-		Approve:      true,
+		Reviewer:      founder1,
+		ApplicationId: agent1,
+		Accepted:      true,
 	})
 	if err != nil {
 		t.Fatalf("review error: %v", err)
@@ -854,15 +867,15 @@ func TestApplyToProject_DuplicateApplication(t *testing.T) {
 	srv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	srv.ApplyToProject(ctx, &types.MsgApplyToProject{
-		Applicant: agent1, ProjectId: projResp.ProjectId, ProposedRole: types.RoleDeveloper,
+		Applicant: agent1, ProjectId: projResp.ProjectId, Role: string(types.RoleDeveloper),
 	})
 
 	_, err := srv.ApplyToProject(ctx, &types.MsgApplyToProject{
-		Applicant: agent1, ProjectId: projResp.ProjectId, ProposedRole: types.RoleDeveloper,
+		Applicant: agent1, ProjectId: projResp.ProjectId, Role: string(types.RoleDeveloper),
 	})
 	if err == nil {
 		t.Fatal("expected error for duplicate application")
@@ -875,20 +888,11 @@ func TestDeployService(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
 
-	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
-	})
-
-	// Advance project to growing phase
-	srv.ProposeProject(ctx, &types.MsgProposeProject{Proposer: founder1, ProjectId: projResp.ProjectId})
-	srv.StartDevelopment(ctx, &types.MsgStartDevelopment{Sender: founder1, ProjectId: projResp.ProjectId})
-
+	// Deploy service (proto MsgDeployService has no ProjectId or ServiceType)
 	svcResp, err := srv.DeployService(ctx, &types.MsgDeployService{
 		Deployer:    founder1,
-		ProjectId:   projResp.ProjectId,
 		Name:        "Math API",
 		Description: "A math computation API",
-		ServiceType: types.ServiceAPI,
 	})
 	if err != nil {
 		t.Fatalf("deploy error: %v", err)
@@ -898,25 +902,8 @@ func TestDeployService(t *testing.T) {
 	if !found {
 		t.Fatal("service not found")
 	}
-	if svc.Status != types.ServiceDeploying {
+	if svc.Status != string(types.ServiceDeploying) {
 		t.Errorf("expected status deploying, got %s", svc.Status)
-	}
-}
-
-func TestDeployService_InvalidPhase(t *testing.T) {
-	k, ctx, _ := setupKeeper(t)
-	srv := keeper.NewMsgServerImpl(k)
-
-	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
-	})
-
-	// Try to deploy in seed phase
-	_, err := srv.DeployService(ctx, &types.MsgDeployService{
-		Deployer: founder1, ProjectId: projResp.ProjectId, Name: "Svc", ServiceType: types.ServiceAPI,
-	})
-	if err == nil {
-		t.Fatal("expected error for deploying in seed phase")
 	}
 }
 
@@ -924,48 +911,42 @@ func TestPauseResumeRetireService(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
 
-	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
-	})
-	srv.ProposeProject(ctx, &types.MsgProposeProject{Proposer: founder1, ProjectId: projResp.ProjectId})
-	srv.StartDevelopment(ctx, &types.MsgStartDevelopment{Sender: founder1, ProjectId: projResp.ProjectId})
-
 	svcResp, _ := srv.DeployService(ctx, &types.MsgDeployService{
-		Deployer: founder1, ProjectId: projResp.ProjectId, Name: "Svc", ServiceType: types.ServiceAPI,
+		Deployer: founder1, Name: "Svc",
 	})
 
 	// Pause
-	_, err := srv.PauseService(ctx, &types.MsgPauseService{Sender: founder1, ServiceId: svcResp.ServiceId})
+	_, err := srv.PauseService(ctx, &types.MsgPauseService{Owner: founder1, ServiceId: svcResp.ServiceId})
 	if err != nil {
 		t.Fatalf("pause error: %v", err)
 	}
 	svc, _ := k.GetService(ctx, svcResp.ServiceId)
-	if svc.Status != types.ServicePaused {
+	if svc.Status != string(types.ServicePaused) {
 		t.Errorf("expected paused, got %s", svc.Status)
 	}
 
 	// Resume
-	_, err = srv.ResumeService(ctx, &types.MsgResumeService{Sender: founder1, ServiceId: svcResp.ServiceId})
+	_, err = srv.ResumeService(ctx, &types.MsgResumeService{Owner: founder1, ServiceId: svcResp.ServiceId})
 	if err != nil {
 		t.Fatalf("resume error: %v", err)
 	}
 	svc, _ = k.GetService(ctx, svcResp.ServiceId)
-	if svc.Status != types.ServiceActive {
+	if svc.Status != string(types.ServiceActive) {
 		t.Errorf("expected active, got %s", svc.Status)
 	}
 
 	// Retire
-	_, err = srv.RetireService(ctx, &types.MsgRetireService{Sender: founder1, ServiceId: svcResp.ServiceId})
+	_, err = srv.RetireService(ctx, &types.MsgRetireService{Owner: founder1, ServiceId: svcResp.ServiceId})
 	if err != nil {
 		t.Fatalf("retire error: %v", err)
 	}
 	svc, _ = k.GetService(ctx, svcResp.ServiceId)
-	if svc.Status != types.ServiceRetired {
+	if svc.Status != string(types.ServiceRetired) {
 		t.Errorf("expected retired, got %s", svc.Status)
 	}
 
 	// Can't retire again
-	_, err = srv.RetireService(ctx, &types.MsgRetireService{Sender: founder1, ServiceId: svcResp.ServiceId})
+	_, err = srv.RetireService(ctx, &types.MsgRetireService{Owner: founder1, ServiceId: svcResp.ServiceId})
 	if err == nil {
 		t.Fatal("expected error for retiring already retired service")
 	}
@@ -979,7 +960,7 @@ func TestQueryProject(t *testing.T) {
 	msgSrv := keeper.NewMsgServerImpl(k)
 
 	resp, _ := msgSrv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
 	qResp, err := querySrv.Project(ctx, &types.QueryProjectRequest{ProjectId: resp.ProjectId})
@@ -1006,8 +987,8 @@ func TestQueryProjectsByFounder(t *testing.T) {
 	querySrv := keeper.NewQueryServerImpl(k)
 	msgSrv := keeper.NewMsgServerImpl(k)
 
-	msgSrv.CreateProject(ctx, &types.MsgCreateProject{Creator: founder1, Name: "P1", KnowledgeDomain: "math", Budget: "1000000"})
-	msgSrv.CreateProject(ctx, &types.MsgCreateProject{Creator: founder1, Name: "P2", KnowledgeDomain: "physics", Budget: "2000000"})
+	msgSrv.CreateProject(ctx, &types.MsgCreateProject{Creator: founder1, Title: "P1", Domain: "math", Budget: "1000000"})
+	msgSrv.CreateProject(ctx, &types.MsgCreateProject{Creator: founder1, Title: "P2", Domain: "physics", Budget: "2000000"})
 
 	qResp, err := querySrv.ProjectsByFounder(ctx, &types.QueryProjectsByFounderRequest{Founder: founder1})
 	if err != nil {
@@ -1024,10 +1005,10 @@ func TestQueryTasksByProject(t *testing.T) {
 	msgSrv := keeper.NewMsgServerImpl(k)
 
 	projResp, _ := msgSrv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "Project", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
-	msgSrv.AddTask(ctx, &types.MsgAddTask{Sender: founder1, ProjectId: projResp.ProjectId, Title: "T1", TaskType: types.TaskImplement})
-	msgSrv.AddTask(ctx, &types.MsgAddTask{Sender: founder1, ProjectId: projResp.ProjectId, Title: "T2", TaskType: types.TaskTest})
+	msgSrv.AddTask(ctx, &types.MsgAddTask{Creator: founder1, ProjectId: projResp.ProjectId, Title: "T1"})
+	msgSrv.AddTask(ctx, &types.MsgAddTask{Creator: founder1, ProjectId: projResp.ProjectId, Title: "T2"})
 
 	qResp, err := querySrv.TasksByProject(ctx, &types.QueryTasksByProjectRequest{ProjectId: projResp.ProjectId})
 	if err != nil {
@@ -1058,7 +1039,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 	msgSrv := keeper.NewMsgServerImpl(k)
 
 	msgSrv.CreateProject(ctx, &types.MsgCreateProject{
-		Creator: founder1, Name: "P1", KnowledgeDomain: "math", Budget: "1000000",
+		Creator: founder1, Title: "P1", Domain: "math", Budget: "1000000",
 	})
 
 	// Export
@@ -1078,5 +1059,319 @@ func TestGenesisRoundtrip(t *testing.T) {
 	}
 	if gs2.Projects[0].Name != "P1" {
 		t.Errorf("expected project name 'P1', got '%s'", gs2.Projects[0].Name)
+	}
+}
+
+// ======================== Revenue Distribution Tests ========================
+
+func TestCalculateRevenue(t *testing.T) {
+	contributors := []*types.ContributorRecord{
+		{Did: testAddr("alice"), TasksCompleted: 3, TotalEarned: "0"},
+		{Did: testAddr("bob"), TasksCompleted: 1, TotalEarned: "0"},
+	}
+
+	dist := keeper.CalculateRevenue(1000000, 220000, 390000, 234000, 156000, contributors)
+
+	// Verify 4-pool split sums to total (no dust loss)
+	total := dist.EvidenceTax + dist.ContributorPool + dist.ResearchFund + dist.ProtocolTreasury
+	if total != 1000000 {
+		t.Errorf("revenue split doesn't sum to total: %d + %d + %d + %d = %d, want 1000000",
+			dist.EvidenceTax, dist.ContributorPool, dist.ResearchFund, dist.ProtocolTreasury, total)
+	}
+
+	// Verify approximate basis point split
+	if dist.EvidenceTax != 220000 {
+		t.Errorf("evidence tax: got %d, want 220000", dist.EvidenceTax)
+	}
+	if dist.ContributorPool != 390000 {
+		t.Errorf("contributor pool: got %d, want 390000", dist.ContributorPool)
+	}
+	if dist.ResearchFund != 234000 {
+		t.Errorf("research fund: got %d, want 234000", dist.ResearchFund)
+	}
+
+	// Verify evidence tax 5-way sub-split sums to evidence tax total
+	taxTotal := dist.TaxResearch + dist.TaxFoundation + dist.TaxCommunity + dist.TaxDevelopers + dist.TaxReserve
+	if taxTotal != dist.EvidenceTax {
+		t.Errorf("evidence tax sub-split doesn't sum: %d != %d", taxTotal, dist.EvidenceTax)
+	}
+
+	// Verify contributor shares sum to contributor pool
+	var contribTotal int64
+	for _, s := range dist.ContributorShares {
+		contribTotal += s.Amount
+	}
+	if contribTotal != dist.ContributorPool {
+		t.Errorf("contributor shares don't sum to pool: %d != %d", contribTotal, dist.ContributorPool)
+	}
+
+	// Verify pro-rata ordering (sorted by address)
+	if len(dist.ContributorShares) != 2 {
+		t.Fatalf("expected 2 contributor shares, got %d", len(dist.ContributorShares))
+	}
+	if dist.ContributorShares[0].Address >= dist.ContributorShares[1].Address {
+		t.Error("contributor shares not sorted by address")
+	}
+}
+
+func TestCalculateRevenue_ZeroAmount(t *testing.T) {
+	dist := keeper.CalculateRevenue(0, 220000, 390000, 234000, 156000, nil)
+	if dist.EvidenceTax != 0 || dist.ContributorPool != 0 || dist.ResearchFund != 0 || dist.ProtocolTreasury != 0 {
+		t.Error("expected all zeros for zero amount")
+	}
+}
+
+func TestCalculateRevenue_NoContributors(t *testing.T) {
+	dist := keeper.CalculateRevenue(1000000, 220000, 390000, 234000, 156000, nil)
+
+	// Contributor pool should redirect to treasury
+	if dist.ContributorPool != 0 {
+		t.Errorf("contributor pool should be 0 when no contributors, got %d", dist.ContributorPool)
+	}
+
+	// Treasury should absorb contributor pool
+	expectedTreasury := int64(1000000) - int64(220000) - int64(234000) // total - evidenceTax - research
+	if dist.ProtocolTreasury != expectedTreasury {
+		t.Errorf("treasury: got %d, want %d", dist.ProtocolTreasury, expectedTreasury)
+	}
+
+	total := dist.EvidenceTax + dist.ContributorPool + dist.ResearchFund + dist.ProtocolTreasury
+	if total != 1000000 {
+		t.Errorf("total doesn't sum: %d", total)
+	}
+}
+
+func TestCalculateRevenue_SingleContributor(t *testing.T) {
+	contributors := []*types.ContributorRecord{
+		{Did: testAddr("solo"), TasksCompleted: 5, TotalEarned: "0"},
+	}
+	dist := keeper.CalculateRevenue(1000000, 220000, 390000, 234000, 156000, contributors)
+
+	if len(dist.ContributorShares) != 1 {
+		t.Fatalf("expected 1 share, got %d", len(dist.ContributorShares))
+	}
+	if dist.ContributorShares[0].Amount != dist.ContributorPool {
+		t.Errorf("single contributor should get entire pool: %d != %d",
+			dist.ContributorShares[0].Amount, dist.ContributorPool)
+	}
+}
+
+// ======================== CallService Tests ========================
+
+// setupServiceForCall is a helper that creates a project with a paid service and activates it.
+func setupServiceForCall(t *testing.T, k keeper.Keeper, ctx sdk.Context, srv types.MsgServer, price string) (projectId, serviceId string) {
+	t.Helper()
+
+	projResp, err := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Service Project", Domain: "api", Budget: "10000000",
+	})
+	if err != nil {
+		t.Fatalf("create project error: %v", err)
+	}
+	projectId = projResp.ProjectId
+
+	// Deploy service (proto MsgDeployService has no ProjectId or ServiceType)
+	svcResp, err := srv.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "Paid API",
+		PricePerCall: price,
+	})
+	if err != nil {
+		t.Fatalf("deploy service error: %v", err)
+	}
+	serviceId = svcResp.ServiceId
+
+	// Manually activate the service since MsgActivateService is not in proto
+	svc, found := k.GetService(ctx, serviceId)
+	if !found {
+		t.Fatal("service not found after deploy")
+	}
+	svc.Status = string(types.ServiceActive)
+	svc.ProjectId = projectId // Link to project for revenue distribution
+	k.SetService(ctx, svc)
+
+	return
+}
+
+func TestCallService(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	projectId, serviceId := setupServiceForCall(t, k, ctx, srv, "1000000")
+
+	// Fund the caller
+	callerAddr := testAddr("caller1")
+	mockBK.balances[callerAddr] = map[string]int64{"ulgm": 10000000}
+
+	// Set up revenue params with valid addresses
+	researchAddr := testAddr("research")
+	treasuryAddr := testAddr("treasury")
+	params := k.GetParams(ctx)
+	params.ResearchFundAddr = researchAddr
+	params.ProtocolTreasuryAddr = treasuryAddr
+	k.SetParams(ctx, params)
+
+	// Call service (proto uses Payload []byte, not Input string)
+	resp, err := srv.CallService(ctx, &types.MsgCallService{
+		Caller:    callerAddr,
+		ServiceId: serviceId,
+		Payload:   []byte("test query"),
+	})
+	if err != nil {
+		t.Fatalf("call service error: %v", err)
+	}
+	// Proto response uses Result []byte, not AmountCharged string
+	if string(resp.Result) != "1000000" {
+		t.Errorf("expected result '1000000', got '%s'", string(resp.Result))
+	}
+
+	// Verify service metrics updated
+	svc, _ := k.GetService(ctx, serviceId)
+	if svc.TotalCalls != "1" {
+		t.Errorf("expected TotalCalls=1, got %s", svc.TotalCalls)
+	}
+	if svc.TotalRevenue != "1000000" {
+		t.Errorf("expected TotalRevenue=1000000, got %s", svc.TotalRevenue)
+	}
+
+	// Verify project revenue updated
+	project, _ := k.GetProject(ctx, projectId)
+	if project.RevenueGenerated != "1000000" {
+		t.Errorf("expected RevenueGenerated=1000000, got %s", project.RevenueGenerated)
+	}
+
+	// Verify caller was charged
+	if mockBK.balances[callerAddr]["ulgm"] != 9000000 {
+		t.Errorf("caller balance: expected 9000000, got %d", mockBK.balances[callerAddr]["ulgm"])
+	}
+}
+
+func TestCallService_NotActive(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	svcResp, _ := srv.DeployService(ctx, &types.MsgDeployService{
+		Deployer: founder1, Name: "Svc", PricePerCall: "1000",
+	})
+
+	// Service is still in "deploying" status — not active
+	_, err := srv.CallService(ctx, &types.MsgCallService{
+		Caller: founder1, ServiceId: svcResp.ServiceId,
+	})
+	if err == nil {
+		t.Fatal("expected error for calling non-active service")
+	}
+}
+
+func TestCallService_FreeService(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	_, serviceId := setupServiceForCall(t, k, ctx, srv, "0")
+
+	callerAddr := testAddr("caller2")
+	mockBK.balances[callerAddr] = map[string]int64{"ulgm": 5000000}
+
+	resp, err := srv.CallService(ctx, &types.MsgCallService{
+		Caller: callerAddr, ServiceId: serviceId, Payload: []byte("free query"),
+	})
+	if err != nil {
+		t.Fatalf("free service call error: %v", err)
+	}
+	// Proto response uses Result []byte, not AmountCharged string
+	if string(resp.Result) != "0" {
+		t.Errorf("expected result '0' for free service, got '%s'", string(resp.Result))
+	}
+
+	// Verify metrics still updated
+	svc, _ := k.GetService(ctx, serviceId)
+	if svc.TotalCalls != "1" {
+		t.Errorf("expected TotalCalls=1, got %s", svc.TotalCalls)
+	}
+
+	// Verify no balance change
+	if mockBK.balances[callerAddr]["ulgm"] != 5000000 {
+		t.Errorf("caller balance should be unchanged: got %d", mockBK.balances[callerAddr]["ulgm"])
+	}
+}
+
+// ======================== Bounty Payout Tests ========================
+
+func TestBountyPayout(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Create project
+	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Bounty Project", Domain: "math", Budget: "10000000",
+	})
+
+	// Add a task with bounty
+	taskResp, _ := srv.AddTask(ctx, &types.MsgAddTask{
+		Creator:   founder1,
+		ProjectId: projResp.ProjectId,
+		Title:     "Bounty Task",
+		Bounty:    "500000",
+	})
+
+	// Fund the module account so it can pay out
+	mockBK.moduleBalances[types.ModuleName] = map[string]int64{"ulgm": 1000000}
+
+	// Walk task through lifecycle
+	srv.AssignTask(ctx, &types.MsgAssignTask{Assigner: founder1, TaskId: taskResp.TaskId, Assignee: agent1})
+	srv.StartWork(ctx, &types.MsgStartWork{Worker: agent1, TaskId: taskResp.TaskId})
+	srv.SubmitDeliverable(ctx, &types.MsgSubmitDeliverable{
+		Worker: agent1, TaskId: taskResp.TaskId,
+		DeliverableHash: "bounty123",
+	})
+
+	// Approve — should trigger bounty payout
+	_, err := srv.ApproveDeliverable(ctx, &types.MsgApproveDeliverable{
+		Approver: founder1, TaskId: taskResp.TaskId,
+	})
+	if err != nil {
+		t.Fatalf("approve error: %v", err)
+	}
+
+	// Verify assignee received bounty
+	if mockBK.balances[agent1]["ulgm"] != 500000 {
+		t.Errorf("agent1 balance: expected 500000, got %d", mockBK.balances[agent1]["ulgm"])
+	}
+
+	// Verify module account was debited
+	if mockBK.moduleBalances[types.ModuleName]["ulgm"] != 500000 {
+		t.Errorf("module balance: expected 500000, got %d", mockBK.moduleBalances[types.ModuleName]["ulgm"])
+	}
+}
+
+func TestBountyPayout_ZeroBounty(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "No Bounty Project", Domain: "math", Budget: "10000000",
+	})
+	taskResp, _ := srv.AddTask(ctx, &types.MsgAddTask{
+		Creator: founder1, ProjectId: projResp.ProjectId, Title: "Free Task",
+		Bounty: "0",
+	})
+
+	srv.AssignTask(ctx, &types.MsgAssignTask{Assigner: founder1, TaskId: taskResp.TaskId, Assignee: agent1})
+	srv.StartWork(ctx, &types.MsgStartWork{Worker: agent1, TaskId: taskResp.TaskId})
+	srv.SubmitDeliverable(ctx, &types.MsgSubmitDeliverable{
+		Worker: agent1, TaskId: taskResp.TaskId,
+		DeliverableHash: "free123",
+	})
+
+	_, err := srv.ApproveDeliverable(ctx, &types.MsgApproveDeliverable{
+		Approver: founder1, TaskId: taskResp.TaskId,
+	})
+	if err != nil {
+		t.Fatalf("approve error: %v", err)
+	}
+
+	// No bounty should be paid
+	if mockBK.balances[agent1] != nil && mockBK.balances[agent1]["ulgm"] != 0 {
+		t.Errorf("agent1 should have no balance for zero bounty, got %d", mockBK.balances[agent1]["ulgm"])
 	}
 }

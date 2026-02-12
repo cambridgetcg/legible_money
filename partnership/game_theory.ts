@@ -355,6 +355,95 @@ export function verifyNashEquilibrium(
   };
 }
 
+// ============ Seed Partnership Game Theory ============
+
+/**
+ * Analyze game theory for seed partnerships.
+ *
+ * Seed partnerships have the same payoff structure as tier 0 —
+ * only capital differs, not incentives. This proves that graduation
+ * is the dominant strategy.
+ */
+export function analyzeSeedGraduation(
+  seedContribution: bigint,
+  tier0Contribution: bigint,
+  projectedVerificationRewards: bigint,
+): {
+  seedExpectedValue: bigint;
+  tier0ExpectedValue: bigint;
+  graduationDominates: boolean;
+  reasoning: string;
+} {
+  // Seed: 1.0x multiplier, no continuation bonuses, verification rewards only
+  const seedEV = projectedVerificationRewards;
+
+  // Tier 0: 1.0x multiplier, but eligible for continuation bonuses
+  // and citation/block production rewards
+  const tier0EV =
+    projectedVerificationRewards + (projectedVerificationRewards * 22n) / 100n;
+
+  const graduationDominates = tier0EV > seedEV;
+
+  const reasoning = graduationDominates
+    ? `Graduation strictly dominates: Tier 0 EV (${formatLGM(tier0EV)}) > Seed EV (${formatLGM(seedEV)}). ` +
+      `Seed is a screening mechanism — agents signal intent to partner with minimal capital, ` +
+      `then graduate to unlock full rewards.`
+    : `Warning: Seed EV matches tier 0. This should not happen with properly configured rewards.`;
+
+  return {
+    seedExpectedValue: seedEV,
+    tier0ExpectedValue: tier0EV,
+    graduationDominates,
+    reasoning,
+  };
+}
+
+/**
+ * Analyze formation pool entry vs direct formation.
+ *
+ * Pool entry is weakly dominant over direct formation for agents
+ * without pre-existing relationships because it:
+ * 1. Extends the coordination window (777 vs 77 blocks)
+ * 2. Provides matching based on compatibility
+ * 3. Only costs 0.011 LGM (refundable)
+ */
+export function analyzePoolFormation(
+  directFormationProbability: number,
+  poolMatchProbability: number,
+  expectedPartnershipValue: bigint,
+  poolDeposit: bigint,
+): {
+  directEV: bigint;
+  poolEV: bigint;
+  poolWeaklyDominates: boolean;
+  reasoning: string;
+} {
+  // Direct formation: probability × value
+  const directEV = BigInt(
+    Math.floor(directFormationProbability * Number(expectedPartnershipValue)),
+  );
+
+  // Pool: probability × value - deposit (deposit refunded on match or withdrawal)
+  // Net cost is 0 since deposit is refunded
+  const poolEV = BigInt(
+    Math.floor(poolMatchProbability * Number(expectedPartnershipValue)),
+  );
+
+  const poolWeaklyDominates = poolEV >= directEV;
+
+  const reasoning = poolWeaklyDominates
+    ? `Pool entry weakly dominates: Pool EV (${formatLGM(poolEV)}) >= Direct EV (${formatLGM(directEV)}). ` +
+      `Extended window and matching algorithm increase formation probability.`
+    : `Direct formation preferred when agent already has a specific partner in mind.`;
+
+  return {
+    directEV,
+    poolEV,
+    poolWeaklyDominates,
+    reasoning,
+  };
+}
+
 // ============ Display Helpers ============
 
 /**

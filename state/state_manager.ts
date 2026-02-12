@@ -102,6 +102,7 @@ import type {
 } from "../core/rewards/types.js";
 import { ScheduleProcessStateManager } from "../core/schedule/process_state.js";
 import type { ScheduleProcess } from "../core/schedule/types.js";
+import { DEFAULT_EXPIRATION_CONFIG } from "../core/tokens/types.js";
 
 // ============ State Manager ============
 
@@ -249,6 +250,7 @@ export class StateManager {
       taskRoot: this.tasks.getRoot(),
       seedRoot: this.seeds.getRoot(),
       scheduleRoot: this.schedules.getStateRoot(),
+      tokenExpirationRoot: this.accounts.getRoot(), // Period balances live in account SMT
       version: this.version,
     };
   }
@@ -281,6 +283,7 @@ export class StateManager {
       (components.taskRoot ?? EMPTY_ROOT) +
       (components.seedRoot ?? EMPTY_ROOT) +
       (components.scheduleRoot ?? EMPTY_ROOT) +
+      (components.tokenExpirationRoot ?? EMPTY_ROOT) +
       versionHex;
 
     return bytesToHex(domainHash(HASH_DOMAINS.STATE, data)).slice(0, 64);
@@ -325,14 +328,31 @@ export class StateManager {
   }
 
   /**
+   * Set block timestamp to compute the current expiration period.
+   * Activates period tracking on the account state tree.
+   */
+  setBlockTimestamp(timestamp: number): void {
+    const period = Math.floor(
+      timestamp / DEFAULT_EXPIRATION_CONFIG.periodDurationMs,
+    );
+    this.accounts.setCurrentPeriod(period);
+  }
+
+  /**
    * Create account
    */
   createAccount(
     did: string,
     operationalKeyHash: string,
     initialBalance: bigint = 0n,
+    createdAtBlock?: bigint,
   ): void {
-    this.accounts.createAccount(did, operationalKeyHash, initialBalance);
+    this.accounts.createAccount(
+      did,
+      operationalKeyHash,
+      initialBalance,
+      createdAtBlock ?? 0n,
+    );
   }
 
   /**
@@ -454,6 +474,15 @@ export class StateManager {
   }
 
   /**
+   * Get all pending unbonding entries for a delegator
+   */
+  getPendingUnbondingEntries(
+    delegator: string,
+  ): import("./types.js").UnbondingEntry[] {
+    return this.validators.getPendingUnbondingEntries(delegator);
+  }
+
+  /**
    * Get all unbonding entries that have matured (timelock expired)
    */
   getMaturedUnbondingEntries(
@@ -488,10 +517,16 @@ export class StateManager {
   }
 
   /**
-   * Slash validator
+   * Slash validator and burn slashed tokens from supply.
+   * Returns the actual amount burned (after escalation + caps).
    */
-  slashValidator(publicKey: PublicKey, amount: bigint, reason: string): void {
-    this.validators.slashValidator(publicKey, amount, reason);
+  slashValidator(publicKey: PublicKey, amount: bigint, reason: string): bigint {
+    const { burnedAmount } = this.validators.slashValidator(
+      publicKey,
+      amount,
+      reason,
+    );
+    return burnedAmount;
   }
 
   // ============ Knowledge Access ============
@@ -1207,6 +1242,18 @@ export class StateManager {
    */
   getVestingStats(): ReturnType<VestingStateTree["getStats"]> {
     return this.vesting.getStats();
+  }
+
+  /**
+   * Update vesting reserve amount (after reserve claim)
+   */
+  updateVestingReserve(vestingId: string, remainingReserve: bigint): void {
+    const vesting = this.vesting.getVesting(vestingId);
+    if (!vesting) {
+      throw new Error(`Vesting ${vestingId} not found`);
+    }
+    vesting.reserveAmount = remainingReserve;
+    this.vesting.updateVesting(vesting);
   }
 
   // ============ Payment Channel Operations (GAP-005) ============
@@ -3216,7 +3263,7 @@ export function createStateFromGenesis(genesis: GenesisConfig): StateManager {
   for (const axiom of genesis.axioms) {
     manager.addFact({
       id: axiom.id,
-      claim: axiom.claim,
+      claimText: axiom.claim,
       domain: axiom.domain,
       confidence: 1.0,
       verifiedAt: 0n,

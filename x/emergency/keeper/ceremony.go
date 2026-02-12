@@ -17,14 +17,14 @@ func (k Keeper) CreateHaltCeremony(ctx sdk.Context, proposal types.EmergencyHalt
 
 	ceremony := types.EmergencyCeremony{
 		Id:                proposal.Id,
-		Type:              types.CeremonyHalt,
-		Phase:             types.PhasePrevote,
+		Type:              string(types.CeremonyHalt),
+		Phase:             string(types.PhasePrevote),
 		StartBlock:        startBlock,
 		PrevoteDeadline:   startBlock + params.HaltPrevoteBlocks,
 		PrecommitDeadline: startBlock + params.HaltPrevoteBlocks + params.HaltPrecommitBlocks,
 		TimeoutDeadline:   startBlock + params.HaltTimeoutBlocks,
-		Prevotes:          make(map[string]types.EmergencyVote),
-		Precommits:        make(map[string]types.EmergencyPrecommit),
+		Prevotes:          nil,
+		Precommits:        nil,
 		YesPrevoteStake:   "0",
 		NoPrevoteStake:    "0",
 		PrecommitStake:    "0",
@@ -37,7 +37,9 @@ func (k Keeper) CreateHaltCeremony(ctx sdk.Context, proposal types.EmergencyHalt
 	}
 	ceremony.ProposalData = proposalData
 
-	k.SetCeremony(ctx, ceremony)
+	if err := k.SetCeremony(ctx, ceremony); err != nil {
+		return types.EmergencyCeremony{}, err
+	}
 	return ceremony, nil
 }
 
@@ -48,14 +50,14 @@ func (k Keeper) CreateRevertCeremony(ctx sdk.Context, proposal types.EmergencyRe
 
 	ceremony := types.EmergencyCeremony{
 		Id:                proposal.Id,
-		Type:              types.CeremonyRevert,
-		Phase:             types.PhasePrevote,
+		Type:              string(types.CeremonyRevert),
+		Phase:             string(types.PhasePrevote),
 		StartBlock:        startBlock,
 		PrevoteDeadline:   startBlock + params.RevertPrevoteBlocks,
 		PrecommitDeadline: startBlock + params.RevertPrevoteBlocks + params.RevertPrecommitBlocks,
 		TimeoutDeadline:   startBlock + params.RevertTimeoutBlocks,
-		Prevotes:          make(map[string]types.EmergencyVote),
-		Precommits:        make(map[string]types.EmergencyPrecommit),
+		Prevotes:          nil,
+		Precommits:        nil,
 		YesPrevoteStake:   "0",
 		NoPrevoteStake:    "0",
 		PrecommitStake:    "0",
@@ -67,7 +69,9 @@ func (k Keeper) CreateRevertCeremony(ctx sdk.Context, proposal types.EmergencyRe
 	}
 	ceremony.ProposalData = proposalData
 
-	k.SetCeremony(ctx, ceremony)
+	if err := k.SetCeremony(ctx, ceremony); err != nil {
+		return types.EmergencyCeremony{}, err
+	}
 	return ceremony, nil
 }
 
@@ -78,14 +82,14 @@ func (k Keeper) CreateResumeCeremony(ctx sdk.Context, proposal types.EmergencyRe
 
 	ceremony := types.EmergencyCeremony{
 		Id:                proposal.Id,
-		Type:              types.CeremonyResume,
-		Phase:             types.PhasePrevote,
+		Type:              string(types.CeremonyResume),
+		Phase:             string(types.PhasePrevote),
 		StartBlock:        startBlock,
 		PrevoteDeadline:   startBlock + params.ResumePrevoteBlocks,
 		PrecommitDeadline: startBlock + params.ResumePrevoteBlocks + params.ResumePrecommitBlocks,
 		TimeoutDeadline:   startBlock + params.ResumeTimeoutBlocks,
-		Prevotes:          make(map[string]types.EmergencyVote),
-		Precommits:        make(map[string]types.EmergencyPrecommit),
+		Prevotes:          nil,
+		Precommits:        nil,
 		YesPrevoteStake:   "0",
 		NoPrevoteStake:    "0",
 		PrecommitStake:    "0",
@@ -97,7 +101,9 @@ func (k Keeper) CreateResumeCeremony(ctx sdk.Context, proposal types.EmergencyRe
 	}
 	ceremony.ProposalData = proposalData
 
-	k.SetCeremony(ctx, ceremony)
+	if err := k.SetCeremony(ctx, ceremony); err != nil {
+		return types.EmergencyCeremony{}, err
+	}
 	return ceremony, nil
 }
 
@@ -108,7 +114,7 @@ func (k Keeper) AddPrevote(ctx sdk.Context, ceremonyId string, vote types.Emerge
 		return fmt.Errorf("%w: %s", types.ErrNoCeremony, ceremonyId)
 	}
 
-	if ceremony.Phase != types.PhasePrevote {
+	if ceremony.Phase != string(types.PhasePrevote) {
 		return fmt.Errorf("%w: expected prevote, got %s", types.ErrInvalidPhase, ceremony.Phase)
 	}
 
@@ -121,12 +127,12 @@ func (k Keeper) AddPrevote(ctx sdk.Context, ceremonyId string, vote types.Emerge
 		return fmt.Errorf("%w: %s", types.ErrNotGuardian, vote.Voter)
 	}
 
-	if _, exists := ceremony.Prevotes[vote.Voter]; exists {
+	if _, exists := ceremony.GetPrevote(vote.Voter); exists {
 		return fmt.Errorf("%w: %s", types.ErrDuplicateVote, vote.Voter)
 	}
 
 	// Record vote and update stake tallies
-	ceremony.Prevotes[vote.Voter] = vote
+	ceremony.SetPrevote(vote.Voter, vote)
 	voterStake := k.GetGuardianEffectiveStake(ctx, vote.Voter)
 
 	if vote.Approve {
@@ -145,8 +151,7 @@ func (k Keeper) AddPrevote(ctx sdk.Context, ceremonyId string, vote types.Emerge
 		ceremony.NoPrevoteStake = noStake.String()
 	}
 
-	k.SetCeremony(ctx, ceremony)
-	return nil
+	return k.SetCeremony(ctx, ceremony)
 }
 
 // AddPrecommit adds a precommit to a ceremony.
@@ -156,7 +161,7 @@ func (k Keeper) AddPrecommit(ctx sdk.Context, ceremonyId string, precommit types
 		return fmt.Errorf("%w: %s", types.ErrNoCeremony, ceremonyId)
 	}
 
-	if ceremony.Phase != types.PhasePrecommit {
+	if ceremony.Phase != string(types.PhasePrecommit) {
 		return fmt.Errorf("%w: expected precommit, got %s", types.ErrInvalidPhase, ceremony.Phase)
 	}
 
@@ -170,17 +175,17 @@ func (k Keeper) AddPrecommit(ctx sdk.Context, ceremonyId string, precommit types
 	}
 
 	// Must have prevoted "yes"
-	prevote, hasPrevoted := ceremony.Prevotes[precommit.Voter]
+	prevote, hasPrevoted := ceremony.GetPrevote(precommit.Voter)
 	if !hasPrevoted || !prevote.Approve {
 		return fmt.Errorf("%w: %s", types.ErrPrevoteRequired, precommit.Voter)
 	}
 
-	if _, exists := ceremony.Precommits[precommit.Voter]; exists {
+	if _, exists := ceremony.GetPrecommit(precommit.Voter); exists {
 		return fmt.Errorf("%w: %s", types.ErrDuplicateVote, precommit.Voter)
 	}
 
 	// Record precommit and update stake tally
-	ceremony.Precommits[precommit.Voter] = precommit
+	ceremony.SetPrecommit(precommit.Voter, precommit)
 	voterStake := k.GetGuardianEffectiveStake(ctx, precommit.Voter)
 
 	precommitStake, _ := new(big.Int).SetString(ceremony.PrecommitStake, 10)
@@ -190,8 +195,7 @@ func (k Keeper) AddPrecommit(ctx sdk.Context, ceremonyId string, precommit types
 	precommitStake.Add(precommitStake, voterStake)
 	ceremony.PrecommitStake = precommitStake.String()
 
-	k.SetCeremony(ctx, ceremony)
-	return nil
+	return k.SetCeremony(ctx, ceremony)
 }
 
 // CheckCeremonyProgress checks and advances ceremony phase. Returns true if finalized.
@@ -202,8 +206,8 @@ func (k Keeper) CheckCeremonyProgress(ctx sdk.Context, ceremonyId string) (bool,
 	}
 
 	// Terminal states — no further processing
-	if ceremony.Phase == types.PhaseFinalized || ceremony.Phase == types.PhaseFailed {
-		return ceremony.Phase == types.PhaseFinalized, nil
+	if ceremony.Phase == string(types.PhaseFinalized) || ceremony.Phase == string(types.PhaseFailed) {
+		return ceremony.Phase == string(types.PhaseFinalized), nil
 	}
 
 	currentBlock := uint64(ctx.BlockHeight())
@@ -211,18 +215,22 @@ func (k Keeper) CheckCeremonyProgress(ctx sdk.Context, ceremonyId string) (bool,
 
 	// Overall timeout
 	if currentBlock > ceremony.TimeoutDeadline {
-		ceremony.Phase = types.PhaseFailed
+		ceremony.Phase = string(types.PhaseFailed)
 		ceremony.FailureReason = "ceremony timed out"
-		k.SetCeremony(ctx, ceremony)
+		if err := k.SetCeremony(ctx, ceremony); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
 	// Guardian stake check
 	guardianStake := k.GetGuardianStake(ctx)
 	if guardianStake.Sign() == 0 {
-		ceremony.Phase = types.PhaseFailed
+		ceremony.Phase = string(types.PhaseFailed)
 		ceremony.FailureReason = "no active guardians"
-		k.SetCeremony(ctx, ceremony)
+		if err := k.SetCeremony(ctx, ceremony); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
@@ -230,19 +238,21 @@ func (k Keeper) CheckCeremonyProgress(ctx sdk.Context, ceremonyId string) (bool,
 	if !k.isCouncilActive(ctx, params) {
 		minStake, ok := new(big.Int).SetString(params.MinGuardianStake, 10)
 		if ok && guardianStake.Cmp(minStake) < 0 {
-			ceremony.Phase = types.PhaseFailed
+			ceremony.Phase = string(types.PhaseFailed)
 			ceremony.FailureReason = "insufficient total guardian stake"
-			k.SetCeremony(ctx, ceremony)
+			if err := k.SetCeremony(ctx, ceremony); err != nil {
+				return false, err
+			}
 			return false, nil
 		}
 	}
 
-	threshold := getQuorumThreshold(ceremony.Type, params)
+	threshold := getQuorumThreshold(types.CeremonyType(ceremony.Type), params)
 
 	switch ceremony.Phase {
-	case types.PhasePrevote:
+	case string(types.PhasePrevote):
 		return k.checkPrevotePhase(ctx, &ceremony, currentBlock, guardianStake, threshold)
-	case types.PhasePrecommit:
+	case string(types.PhasePrecommit):
 		return k.checkPrecommitPhase(ctx, &ceremony, currentBlock, guardianStake, threshold, params)
 	}
 
@@ -265,8 +275,10 @@ func (k Keeper) checkPrevotePhase(ctx sdk.Context, ceremony *types.EmergencyCere
 	yesRatio.Div(yesRatio, guardianStake)
 
 	if yesRatio.Uint64() >= threshold {
-		ceremony.Phase = types.PhasePrecommit
-		k.SetCeremony(ctx, *ceremony)
+		ceremony.Phase = string(types.PhasePrecommit)
+		if err := k.SetCeremony(ctx, *ceremony); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
@@ -275,17 +287,21 @@ func (k Keeper) checkPrevotePhase(ctx sdk.Context, ceremony *types.EmergencyCere
 	noRatio.Div(noRatio, guardianStake)
 
 	if noRatio.Uint64() > (1000000 - threshold) {
-		ceremony.Phase = types.PhaseFailed
+		ceremony.Phase = string(types.PhaseFailed)
 		ceremony.FailureReason = "quorum impossible: too many no votes"
-		k.SetCeremony(ctx, *ceremony)
+		if err := k.SetCeremony(ctx, *ceremony); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
 	// Check prevote deadline
 	if currentBlock > ceremony.PrevoteDeadline {
-		ceremony.Phase = types.PhaseFailed
+		ceremony.Phase = string(types.PhaseFailed)
 		ceremony.FailureReason = "prevote quorum not reached before deadline"
-		k.SetCeremony(ctx, *ceremony)
+		if err := k.SetCeremony(ctx, *ceremony); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
@@ -307,8 +323,10 @@ func (k Keeper) checkPrecommitPhase(ctx sdk.Context, ceremony *types.EmergencyCe
 	if precommitRatio.Uint64() >= threshold {
 		if distinctVoters >= params.MinDistinctVoters {
 			// Finalized!
-			ceremony.Phase = types.PhaseFinalized
-			k.SetCeremony(ctx, *ceremony)
+			ceremony.Phase = string(types.PhaseFinalized)
+			if err := k.SetCeremony(ctx, *ceremony); err != nil {
+				return false, err
+			}
 			return true, nil
 		}
 		// Stake met but not enough distinct voters — wait (don't fail yet)
@@ -317,13 +335,15 @@ func (k Keeper) checkPrecommitPhase(ctx sdk.Context, ceremony *types.EmergencyCe
 	// Check precommit deadline
 	if currentBlock > ceremony.PrecommitDeadline {
 		if precommitRatio.Uint64() >= threshold && distinctVoters < params.MinDistinctVoters {
-			ceremony.Phase = types.PhaseFailed
+			ceremony.Phase = string(types.PhaseFailed)
 			ceremony.FailureReason = fmt.Sprintf("insufficient distinct voters: %d < %d", distinctVoters, params.MinDistinctVoters)
 		} else {
-			ceremony.Phase = types.PhaseFailed
+			ceremony.Phase = string(types.PhaseFailed)
 			ceremony.FailureReason = "precommit quorum not reached before deadline"
 		}
-		k.SetCeremony(ctx, *ceremony)
+		if err := k.SetCeremony(ctx, *ceremony); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
@@ -333,33 +353,39 @@ func (k Keeper) checkPrecommitPhase(ctx sdk.Context, ceremony *types.EmergencyCe
 // HandleCeremonyFinalization processes a finalized ceremony's effects.
 func (k Keeper) HandleCeremonyFinalization(ctx sdk.Context, ceremonyId string) {
 	ceremony, found := k.GetCeremony(ctx, ceremonyId)
-	if !found || ceremony.Phase != types.PhaseFinalized {
+	if !found || ceremony.Phase != string(types.PhaseFinalized) {
 		return
 	}
 
-	switch ceremony.Type {
+	switch types.CeremonyType(ceremony.Type) {
 	case types.CeremonyHalt:
 		k.SetEmergencyStatus(ctx, types.StatusHalted)
 		k.SetActiveHaltCeremonyId(ctx, ceremony.Id)
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
-			Action:      types.AuditHaltExecuted,
+			Action:      string(types.AuditHaltExecuted),
 			Actor:       "system",
 			CeremonyId:  ceremony.Id,
 			Details:     "halt ceremony finalized and executed",
 		})
 
 	case types.CeremonyRevert:
-		// Revert returns to halted state — resume still required
+		// Revert returns to halted state — resume still required.
+		// NOTE: This is a GOVERNANCE SIGNAL, not an automated state rollback.
+		// The TargetBlockNumber/TargetBlockHash/TargetStateRoot fields from the
+		// proposal record the guardians' consensus on what block to revert to,
+		// but actual state reversion requires out-of-band validator coordination
+		// (stop nodes → rollback → restart). A module message handler cannot roll
+		// back committed IAVL/CometBFT state.
 		k.SetEmergencyStatus(ctx, types.StatusHalted)
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
-			Action:      types.AuditRevertExecuted,
+			Action:      string(types.AuditRevertExecuted),
 			Actor:       "system",
 			CeremonyId:  ceremony.Id,
-			Details:     "revert ceremony finalized and executed",
+			Details:     "revert ceremony finalized (governance signal — manual validator coordination required for state rollback)",
 		})
 
 	case types.CeremonyResume:
@@ -368,7 +394,7 @@ func (k Keeper) HandleCeremonyFinalization(ctx sdk.Context, ceremonyId string) {
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
-			Action:      types.AuditResumeExecuted,
+			Action:      string(types.AuditResumeExecuted),
 			Actor:       "system",
 			CeremonyId:  ceremony.Id,
 			Details:     "resume ceremony finalized and executed",
@@ -379,12 +405,12 @@ func (k Keeper) HandleCeremonyFinalization(ctx sdk.Context, ceremonyId string) {
 // HandleCeremonyFailure processes a failed ceremony's effects.
 func (k Keeper) HandleCeremonyFailure(ctx sdk.Context, ceremonyId string) {
 	ceremony, found := k.GetCeremony(ctx, ceremonyId)
-	if !found || ceremony.Phase != types.PhaseFailed {
+	if !found || ceremony.Phase != string(types.PhaseFailed) {
 		return
 	}
 
 	var auditAction types.AuditAction
-	switch ceremony.Type {
+	switch types.CeremonyType(ceremony.Type) {
 	case types.CeremonyHalt:
 		k.SetEmergencyStatus(ctx, types.StatusNormal)
 		auditAction = types.AuditHaltFailed
@@ -399,7 +425,7 @@ func (k Keeper) HandleCeremonyFailure(ctx sdk.Context, ceremonyId string) {
 	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: uint64(ctx.BlockHeight()),
-		Action:      auditAction,
+		Action:      string(auditAction),
 		Actor:       "system",
 		CeremonyId:  ceremony.Id,
 		Details:     fmt.Sprintf("ceremony failed: %s", ceremony.FailureReason),

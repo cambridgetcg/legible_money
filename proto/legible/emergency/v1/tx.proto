@@ -93,7 +93,7 @@ message MsgVoteResumeResponse {
 }
 
 // ============================================================================
-// Enums
+// Enums (used by Msg types, not duplicated in state.proto or genesis.proto)
 // ============================================================================
 
 enum EmergencyCategory {
@@ -102,63 +102,4 @@ enum EmergencyCategory {
   EMERGENCY_CATEGORY_CONSENSUS_FAILURE = 2;
   EMERGENCY_CATEGORY_ECONOMIC_EXPLOIT = 3;
   EMERGENCY_CATEGORY_STATE_CORRUPTION = 4;
-}
-
-enum EmergencyStatus {
-  EMERGENCY_STATUS_UNSPECIFIED = 0;
-  EMERGENCY_STATUS_NORMAL = 1;
-  EMERGENCY_STATUS_HALT_PROPOSED = 2;
-  EMERGENCY_STATUS_HALTED = 3;
-  EMERGENCY_STATUS_REVERT_PROPOSED = 4;
-  EMERGENCY_STATUS_REVERTED = 5;
-  EMERGENCY_STATUS_RESUME_PROPOSED = 6;
-}
-
-// ============================================================================
-// State Types
-// ============================================================================
-
-message EmergencyProposal {
-  string id = 1;
-  EmergencyPhase phase = 2;
-  string proposer = 3;
-  string reason = 4;
-  uint64 proposed_at = 5;
-  repeated EmergencyVote votes = 6;
-  bool executed = 7;
-  uint64 revert_to_height = 8;  // Only for revert proposals
-}
-
-message EmergencyVote {
-  string voter = 1;
-  bool approve = 2;
-  uint64 voted_at = 3;
-}
-
-enum EmergencyPhase {
-  EMERGENCY_PHASE_UNSPECIFIED = 0;
-  EMERGENCY_PHASE_HALT = 1;
-  EMERGENCY_PHASE_REVERT = 2;
-  EMERGENCY_PHASE_RESUME = 3;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-  EmergencyStatus status = 2;
-  repeated EmergencyProposal audit_log = 3;
-}
-
-message Params {
-  // Quorum thresholds (0-1000000)
-  uint32 halt_quorum = 1;     // Default: 750000 (75%)
-  uint32 revert_quorum = 2;   // Default: 800000 (80%)
-  uint32 resume_quorum = 3;   // Default: 800000 (80%)
-  // Anti-abuse limits
-  uint32 max_proposals_per_epoch = 4;       // Default: 3
-  uint32 max_proposals_per_guardian = 5;    // Default: 1
-  uint64 cooldown_blocks = 6;               // Default: 111
 }

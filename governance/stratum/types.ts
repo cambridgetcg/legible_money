@@ -144,9 +144,9 @@ export interface DomainGovernanceParams {
  * Symbolic: Uses protocol constants where meaningful.
  */
 export const DEFAULT_DOMAIN_GOVERNANCE_PARAMS: DomainGovernanceParams = {
-  minProposalStake: 100n * 10n ** 18n, // 100 LGM
-  minEndorsementStake: 25n * 10n ** 18n, // 25 LGM
-  minChallengeStake: 50n * 10n ** 18n, // 50 LGM
+  minProposalStake: 100n * 10n ** 15n, // 0.1 LGM (affordable with 0.222 LGM genesis balance)
+  minEndorsementStake: 25n * 10n ** 15n, // 0.025 LGM
+  minChallengeStake: 50n * 10n ** 15n, // 0.05 LGM
   votingPeriodBlocks: 100000n, // ~70 hours at 2521ms
   minEndorsements: 3, // Need 3 endorsers
   minEndorsementStakeRatio: 2.0, // Total endorsements must be 2x proposal stake

@@ -1,0 +1,23 @@
+syntax = "proto3";
+package legible.tokens.v1;
+
+option go_package = "github.com/legible-money/legible/x/tokens/types";
+
+import "legible/tokens/v1/state.proto";
+
+// GenesisState defines the tokens module's genesis state.
+message GenesisState {
+  Params                     params   = 1;
+  repeated ExpirableAccount  accounts = 2;
+  RAIHoldingAccount          rai      = 3;
+}
+
+// Params holds the tokens module parameters.
+message Params {
+  uint64 period_blocks                = 1; // blocks per period
+  uint64 periods_until_expiry         = 2; // periods until expiration
+  string dust_threshold               = 3; // minimum tracked balance (bigint as string)
+  uint32 sweep_batch_size             = 4; // accounts per sweep
+  uint64 rai_distribution_rate        = 5; // blocks between RAI distributions
+  bool   fresh_expiration_on_transfer = 6; // whether transfers get fresh expiration
+}

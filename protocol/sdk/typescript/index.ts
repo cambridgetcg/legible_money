@@ -22,12 +22,38 @@ import {
   type Capability,
   type AgentIdentity,
 } from "../../../core/agents/identity/did.js";
-import type {
-  Transaction,
-  SignedTransaction,
-  TransactionReceipt,
-  TransactionEvent,
-} from "../../transactions/types.js";
+/**
+ * Transaction types (locally defined — canonical types live in consensus/pot/types.ts)
+ */
+interface Transaction {
+  version: number;
+  type: string;
+  nonce: number;
+  timestamp: number;
+  sender: DID;
+  fee: bigint;
+  payload: Record<string, unknown>;
+}
+
+interface SignedTransaction {
+  transaction: Transaction;
+  signature: Signature;
+  hash: string;
+}
+
+interface TransactionReceipt {
+  transactionHash: string;
+  blockNumber: number;
+  status: "success" | "failure";
+  gasUsed?: bigint;
+  events?: TransactionEvent[];
+  error?: string;
+}
+
+interface TransactionEvent {
+  type: string;
+  data: Record<string, unknown>;
+}
 import type {
   Order,
   Trade,

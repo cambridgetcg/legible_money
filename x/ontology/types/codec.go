@@ -11,6 +11,8 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgVoteDomainProposal{}, "ontology/VoteDomainProposal", nil)
 	cdc.RegisterConcrete(&MsgUpdateDomain{}, "ontology/UpdateDomain", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "ontology/UpdateParams", nil)
+	cdc.RegisterConcrete(&MsgRegisterLogicZone{}, "ontology/RegisterLogicZone", nil)
+	cdc.RegisterConcrete(&MsgAcknowledgeIncompleteness{}, "ontology/AcknowledgeIncompleteness", nil)
 }
 
 // RegisterInterfaces registers the module's interface types.

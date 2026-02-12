@@ -356,7 +356,7 @@ export class AgentEndpoint extends BaseEndpoint implements AgentTruthEndpoint {
     }
 
     // Calculate stake
-    const stake = this.calculateAutoStake(100n * 10n ** 18n); // 100 LGM base
+    const stake = this.calculateAutoStake(100n * 10n ** 15n); // 0.1 LGM base
 
     // Check human approval
     if (this.needsHumanApproval(stake)) {

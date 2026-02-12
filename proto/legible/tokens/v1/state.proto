@@ -1,0 +1,54 @@
+syntax = "proto3";
+package legible.tokens.v1;
+
+option go_package = "github.com/legible-money/legible/x/tokens/types";
+
+// PeriodBalance represents tokens minted in a specific period.
+message PeriodBalance {
+  uint64 period     = 1; // period index (floor(blockHeight / periodBlocks))
+  string balance    = 2; // amount in ulgm (bigint as string)
+  uint64 expires_at = 3; // block height when this period expires
+  bool   swept      = 4; // whether expired tokens were retrieved
+}
+
+// ExpirableAccount tracks period-based balances for an account.
+message ExpirableAccount {
+  string                  address         = 1; // bech32 address
+  string                  total_balance   = 2; // sum of all active period balances (bigint as string)
+  repeated PeriodBalance  period_balances = 3; // ordered by period
+  uint64                  earliest_period = 4; // oldest non-zero period
+  uint64                  latest_period   = 5; // newest non-zero period
+  string                  total_expired   = 6; // cumulative expired amount (bigint as string)
+  string                  account_type    = 7; // "standard", "validator", "foundation", "research"
+}
+
+// ExpirationConfig configures the token expiration parameters.
+message ExpirationConfig {
+  uint64 period_blocks        = 1; // blocks per period (default: 34272 = ~1 day)
+  uint64 periods_until_expiry = 2; // periods until tokens expire (default: 365 = ~1 year)
+  string dust_threshold       = 3; // minimum balance to track (bigint as string)
+  uint32 sweep_batch_size     = 4; // max accounts per sweep
+}
+
+// RAIHoldingAccount tracks the Regenerative Agent Income pool.
+message RAIHoldingAccount {
+  string balance           = 1; // current pool balance (bigint as string)
+  string total_received    = 2; // cumulative from expiration (bigint as string)
+  string total_distributed = 3; // cumulative distributed (bigint as string)
+  uint64 last_dist_block   = 4; // last distribution block height
+}
+
+// RAIDistribution represents a distribution event.
+message RAIDistribution {
+  string id              = 1; // distribution ID
+  uint64 block           = 2; // block height
+  string total_amount    = 3; // total distributed (bigint as string)
+  uint32 recipient_count = 4; // number of recipients
+  string per_recipient   = 5; // amount per recipient (bigint as string)
+}
+
+// TransferPolicy configures transfer behavior.
+message TransferPolicy {
+  bool   fresh_expiration_on_receive = 1; // false = preserve sender's period
+  string max_transfer_per_block      = 2; // max per block (bigint as string, "0" = unlimited)
+}

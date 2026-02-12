@@ -1,0 +1,27 @@
+syntax = "proto3";
+package legible.auth.v1;
+
+option go_package = "github.com/legible-money/legible/x/auth/types";
+
+import "legible/auth/v1/state.proto";
+
+// GenesisState defines the auth module's genesis state.
+message GenesisState {
+  Params params = 1;
+  repeated LegibleAccount accounts = 2;
+  repeated DIDMapping did_mappings = 3;
+  repeated SessionKey session_keys = 4;
+  repeated RecoveryConfig recovery_configs = 5;
+}
+
+// Params defines the auth module parameters.
+message Params {
+  uint32 max_session_keys = 1;
+  uint64 max_session_duration = 2;
+  uint64 key_rotation_cooldown = 3;
+  uint64 recovery_delay_blocks = 4;
+  uint64 challenge_period_blocks = 5;
+  // Bootstrap fund settings for new account registration
+  bool bootstrap_enabled = 6;
+  string bootstrap_amount = 7; // ulgm amount as string (bigint)
+}

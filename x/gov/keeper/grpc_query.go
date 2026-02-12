@@ -47,7 +47,7 @@ func (q queryServer) LIPs(goCtx context.Context, req *types.QueryLIPsRequest) (*
 
 	var allLIPs []types.LIP
 	if req.Stage != "" {
-		allLIPs = q.GetLIPsByStage(ctx, types.LIPStage(req.Stage))
+		allLIPs = q.GetLIPsByStage(ctx, types.HandwrittenLIPStage(req.Stage))
 	} else {
 		allLIPs = q.GetAllLIPs(ctx)
 	}

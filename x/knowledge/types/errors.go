@@ -35,4 +35,25 @@ var (
 	ErrInvalidVRFProof        = errors.Register(ModuleName, 31, "invalid VRF proof")
 	ErrVRFSelectionFailed     = errors.Register(ModuleName, 32, "VRF output does not qualify for selection")
 	ErrValidatorNotEligible   = errors.Register(ModuleName, 33, "validator not eligible for verification")
+	ErrEquivocation           = errors.Register(ModuleName, 34, "equivocation detected: conflicting commitment or reveal")
+
+	// Adversarial verification errors
+	ErrNotProvisional         = errors.Register(ModuleName, 40, "fact or claim is not in provisional/evaluated state")
+	ErrChallengeWindowClosed  = errors.Register(ModuleName, 41, "challenge window has closed")
+	ErrSelfChallenge          = errors.Register(ModuleName, 42, "cannot challenge own claim")
+	ErrMaxChallengesReached   = errors.Register(ModuleName, 43, "max concurrent challenges reached")
+	ErrChallengeCooldown      = errors.Register(ModuleName, 44, "challenger must wait before re-challenging")
+	ErrChallengeNotFound      = errors.Register(ModuleName, 45, "provisional challenge not found")
+	ErrAdversarialDisabled    = errors.Register(ModuleName, 46, "adversarial verification not enabled")
+	ErrEvidenceRequired       = errors.Register(ModuleName, 47, "at least one evidence ID required")
+
+	// Negative knowledge errors
+	ErrCounterFactNotFound           = errors.Register(ModuleName, 50, "counter-fact not found")
+	ErrCannotContradictSelf          = errors.Register(ModuleName, 51, "cannot contradict own fact")
+	ErrContradictionStakeTooLow      = errors.Register(ModuleName, 52, "contradiction stake must be >= 50% of target fact stake")
+	ErrContradictionRateLimited      = errors.Register(ModuleName, 53, "max contradictions per epoch reached")
+	ErrGoedelIncompletenessRequired  = errors.Register(ModuleName, 54, "incompleteness acknowledgment required for Godelian zone")
+	ErrCannotContradictCounterFact   = errors.Register(ModuleName, 55, "cannot create counter-fact of a counter-fact")
+	ErrFactAlreadyDisproven          = errors.Register(ModuleName, 56, "fact is already disproven")
+	ErrCounterFactAlreadyExists      = errors.Register(ModuleName, 57, "counter-fact already exists for this target")
 )

@@ -74,18 +74,26 @@ export function calculateAPICost(
     avgAge < 1000 ? params.freshnessDiscountRate : 0,
   );
 
-  // Calculate multipliers as basis points (10000 = 1.0x)
-  const confidenceBps = BigInt(
-    Math.round(
-      (1 + (avgConfidence - 0.5) * params.confidencePremiumRate) * 10000,
-    ),
+  // Marginal Information Value pricing (basis points, 10000 = 1.0x)
+  // 1. Confidence: bell curve — peak value at 0.4–0.85
+  let confMult: number;
+  if (avgConfidence < 0.4) {
+    confMult = 1 + (0.4 - avgConfidence) * params.confidencePremiumRate;
+  } else if (avgConfidence > 0.85) {
+    confMult = 1 - (avgConfidence - 0.85) * params.confidencePremiumRate;
+  } else {
+    confMult = 1;
+  }
+  confMult = Math.max(0.5, Math.min(1.5, confMult));
+  const confidenceBps = BigInt(Math.round(confMult * 10000));
+  // 2. Novelty: highly cited = well-known = cheaper
+  const noveltyMult = Math.max(
+    0.5,
+    1 - avgFundamentality * params.fundamentalityPremiumRate,
   );
-  const fundamentalityBps = BigInt(
-    Math.round(
-      (1 + avgFundamentality * params.fundamentalityPremiumRate) * 10000,
-    ),
-  );
-  const freshnessBps = BigInt(Math.round((1 - freshnessDiscount) * 10000));
+  const fundamentalityBps = BigInt(Math.round(noveltyMult * 10000));
+  // 3. Freshness: recent = premium (NOT discount — novel information)
+  const freshnessBps = BigInt(Math.round((1 + freshnessDiscount) * 10000));
 
   // Final cost using pure bigint arithmetic
   const cost =
@@ -409,10 +417,18 @@ export function generateAPIQuote(
       ? estimatedFacts.reduce((sum, f) => sum + f.confidence, 0) /
         estimatedFacts.length
       : 0.75;
+  // Confidence: bell curve — peak at 0.4–0.85, discount above/surcharge below
+  let confQuoteMult: number;
+  if (avgConfidence < 0.4) {
+    confQuoteMult = 1 + (0.4 - avgConfidence) * params.confidencePremiumRate;
+  } else if (avgConfidence > 0.85) {
+    confQuoteMult = 1 - (avgConfidence - 0.85) * params.confidencePremiumRate;
+  } else {
+    confQuoteMult = 1;
+  }
+  confQuoteMult = Math.max(0.5, Math.min(1.5, confQuoteMult));
   const confidencePremium = BigInt(
-    Math.floor(
-      Number(baseCost) * (avgConfidence - 0.5) * params.confidencePremiumRate,
-    ),
+    Math.floor(Number(baseCost) * (confQuoteMult - 1)),
   );
 
   const avgFundamentality =
@@ -420,9 +436,10 @@ export function generateAPIQuote(
       ? estimatedFacts.reduce((sum, f) => sum + f.fundamentalityScore, 0) /
         estimatedFacts.length
       : 0.25;
+  // Novelty: highly cited = well-known = discount (negative premium)
   const fundamentalityPremium = BigInt(
     Math.floor(
-      Number(baseCost) * avgFundamentality * params.fundamentalityPremiumRate,
+      Number(baseCost) * -avgFundamentality * params.fundamentalityPremiumRate,
     ),
   );
 
@@ -431,9 +448,10 @@ export function generateAPIQuote(
       ? estimatedFacts.reduce((sum, f) => sum + f.ageBlocks, 0) /
         estimatedFacts.length
       : 10000;
+  // Freshness premium (inverted): recent = novel = more valuable
   const freshnessDiscount =
     avgAge < 1000
-      ? BigInt(Math.floor(Number(baseCost) * params.freshnessDiscountRate))
+      ? -BigInt(Math.floor(Number(baseCost) * params.freshnessDiscountRate))
       : 0n;
 
   const estimatedCost =

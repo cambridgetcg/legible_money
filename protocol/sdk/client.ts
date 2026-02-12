@@ -703,7 +703,7 @@ export class LegibleClient extends EventEmitter {
   /**
    * Request testnet faucet tokens
    */
-  async requestFaucet(amount: bigint = 1000n * 10n ** 18n): Promise<string> {
+  async requestFaucet(amount: bigint = 1000n * 10n ** 15n): Promise<string> {
     if (!this.isTestnet()) {
       throw new Error("Faucet only available on testnet");
     }

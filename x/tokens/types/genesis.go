@@ -9,17 +9,18 @@ func DefaultParams() Params {
 		PeriodsUntilExpiry:        365,    // ~1 year
 		DustThreshold:             "1000", // 1000 ulgm
 		SweepBatchSize:            100,
-		RAIDistributionRate:       34272,  // daily
+		RaiDistributionRate:       34272,  // daily
 		FreshExpirationOnTransfer: false,  // preserve sender's period-of-origin
 	}
 }
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:   DefaultParams(),
-		Accounts: []ExpirableAccount{},
-		RAI: RAIHoldingAccount{
+		Params:   &p,
+		Accounts: []*ExpirableAccount{},
+		Rai: &RAIHoldingAccount{
 			Balance:          "0",
 			TotalReceived:    "0",
 			TotalDistributed: "0",

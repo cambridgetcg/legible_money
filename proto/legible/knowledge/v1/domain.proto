@@ -4,58 +4,7 @@ package legible.knowledge.v1;
 option go_package = "github.com/legible-money/legible/x/knowledge/types";
 
 import "legible/knowledge/v1/stratum.proto";
-
-// ============================================================================
-// Ontological Domain
-// ============================================================================
-
-// OntologicalDomain represents a branch in the knowledge tree
-message OntologicalDomain {
-  // Unique identifier using dot notation: 'physics.mechanics.quantum'
-  string id = 1;
-
-  // Human-readable name: 'Quantum Mechanics'
-  string name = 2;
-
-  // Which ontological stratum this domain belongs to
-  string stratum = 3;
-
-  // Parent domain ID, empty for root domains
-  string parent_domain = 4;
-
-  // IDs of child domains
-  repeated string child_domains = 5;
-
-  // Which lower strata this domain's facts may depend on
-  repeated string depends_on_strata = 6;
-
-  // Default logic zone for claims in this domain
-  LogicZone logic_zone_default = 7;
-
-  // Default epistemic category for claims in this domain
-  EpistemicCategory epistemic_category_default = 8;
-
-  // Description of what this domain covers
-  string description = 9;
-
-  // Example claims that belong in this domain
-  repeated string examples = 10;
-
-  // Number of facts currently in this domain
-  uint64 fact_count = 11;
-
-  // Number of axioms (confidence 1.0 facts) in this domain
-  uint64 axiom_count = 12;
-
-  // Genesis fact ID that established this domain (if any)
-  string root_fact_id = 13;
-
-  // Block number when domain was created
-  uint64 created_at = 14;
-
-  // Governance proposal that created this domain (if not genesis)
-  string governance_proposal = 15;
-}
+import "legible/knowledge/v1/claim.proto";
 
 // ============================================================================
 // Domain Tree

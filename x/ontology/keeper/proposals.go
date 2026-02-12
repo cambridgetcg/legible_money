@@ -17,13 +17,13 @@ func (k Keeper) CreateProposal(ctx sdk.Context, proposal types.DomainProposal) e
 	}
 
 	// Validate stratum is valid
-	if !proposal.Domain.Stratum.IsValid() {
+	if !types.Stratum(proposal.Domain.Stratum).IsValid() {
 		return fmt.Errorf("%w: %d", types.ErrInvalidStratum, proposal.Domain.Stratum)
 	}
 
 	// Check max domains per stratum
 	params := k.GetParams(ctx)
-	domainCount := k.CountDomainsInStratum(ctx, proposal.Domain.Stratum)
+	domainCount := k.CountDomainsInStratum(ctx, types.Stratum(proposal.Domain.Stratum))
 	if domainCount >= params.MaxDomainsPerStratum {
 		return fmt.Errorf("%w: stratum %d has %d domains (max %d)",
 			types.ErrMaxDomainsReached, proposal.Domain.Stratum, domainCount, params.MaxDomainsPerStratum)
@@ -35,7 +35,7 @@ func (k Keeper) CreateProposal(ctx sdk.Context, proposal types.DomainProposal) e
 	// Also store the domain in "proposed" status
 	proposal.Domain.Status = "proposed"
 	proposal.Domain.CreatedAt = uint64(ctx.BlockHeight())
-	k.SetDomain(ctx, proposal.Domain)
+	k.SetDomain(ctx, *proposal.Domain)
 
 	k.Logger(ctx).Info("domain proposal created",
 		"proposal_id", proposal.Id,
@@ -168,10 +168,10 @@ func (k Keeper) ExecuteProposal(ctx sdk.Context, proposal types.DomainProposal) 
 			return fmt.Errorf("%w: %s", types.ErrDomainNotFound, proposal.Domain.Name)
 		}
 		// Apply modifications from the proposal domain
-		if proposal.Domain.DisplayName != "" {
+		if proposal.Domain != nil && proposal.Domain.DisplayName != "" {
 			domain.DisplayName = proposal.Domain.DisplayName
 		}
-		if proposal.Domain.Description != "" {
+		if proposal.Domain != nil && proposal.Domain.Description != "" {
 			domain.Description = proposal.Domain.Description
 		}
 		domain.UpdatedAt = uint64(ctx.BlockHeight())

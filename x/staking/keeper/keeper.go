@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"math/big"
 
@@ -140,6 +141,7 @@ func (k Keeper) IterateValidators(ctx sdk.Context, cb func(types.LegibleValidato
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.ValidatorKeyPrefix, prefixEndBytes(types.ValidatorKeyPrefix))
 	if err != nil {
+		k.Logger(ctx).Error("failed to create validator iterator", "error", err)
 		return
 	}
 	defer iterator.Close()
@@ -167,11 +169,13 @@ func (k Keeper) GetActiveValidatorSet(ctx sdk.Context) []types.LegibleValidator 
 	return validators
 }
 
-// CountApprenticeValidators counts tier 0 validators
-func (k Keeper) CountApprenticeValidators(ctx sdk.Context) uint32 {
+// CountBlockProducers counts tier 2+ (bonded/guardian) validators eligible
+// for CometBFT block production. MaxValidators cap applies only to these.
+func (k Keeper) CountBlockProducers(ctx sdk.Context) uint32 {
 	var count uint32
 	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
-		if v.Tier == types.TierApprentice {
+		tier := types.ValidatorTierFromString(v.Tier)
+		if tier >= types.TierBonded {
 			count++
 		}
 		return false
@@ -217,6 +221,7 @@ func (k Keeper) GetDelegationsForValidator(ctx sdk.Context, validatorAddr string
 	prefix := types.DelegationsByValidatorPrefix(validatorAddr)
 	iterator, err := store.Iterator(prefix, prefixEndBytes(prefix))
 	if err != nil {
+		k.Logger(ctx).Error("failed to create delegation iterator", "validator", validatorAddr, "error", err)
 		return nil
 	}
 	defer iterator.Close()
@@ -277,6 +282,7 @@ func (k Keeper) GetMatureUnbondings(ctx sdk.Context, currentHeight uint64) []typ
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.UnbondingKeyPrefix, prefixEndBytes(types.UnbondingKeyPrefix))
 	if err != nil {
+		k.Logger(ctx).Error("failed to create unbonding iterator", "error", err)
 		return nil
 	}
 	defer iterator.Close()
@@ -319,6 +325,7 @@ func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(types.UnbondingEntry)
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.UnbondingKeyPrefix, prefixEndBytes(types.UnbondingKeyPrefix))
 	if err != nil {
+		k.Logger(ctx).Error("failed to create unbonding iterator", "error", err)
 		return
 	}
 	defer iterator.Close()
@@ -334,11 +341,51 @@ func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(types.UnbondingEntry)
 	}
 }
 
+// --- Unbonding Sequence Counter ---
+
+// NextUnbondingSeq returns the next unbonding sequence number and increments the counter.
+func (k Keeper) NextUnbondingSeq(ctx sdk.Context) uint64 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.UnbondingSeqKey)
+	var seq uint64
+	if err == nil && bz != nil {
+		seq = binary.BigEndian.Uint64(bz)
+	}
+	seq++
+	newBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(newBz, seq)
+	if err := store.Set(types.UnbondingSeqKey, newBz); err != nil {
+		k.Logger(ctx).Error("failed to set unbonding sequence", "error", err)
+	}
+	return seq
+}
+
+// GetUnbondingSeq returns the current unbonding sequence number without incrementing.
+func (k Keeper) GetUnbondingSeq(ctx sdk.Context) uint64 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.UnbondingSeqKey)
+	if err != nil || bz == nil {
+		return 0
+	}
+	return binary.BigEndian.Uint64(bz)
+}
+
+// SetUnbondingSeq sets the unbonding sequence counter (used in genesis import).
+func (k Keeper) SetUnbondingSeq(ctx sdk.Context, seq uint64) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz := make([]byte, 8)
+	binary.BigEndian.PutUint64(bz, seq)
+	if err := store.Set(types.UnbondingSeqKey, bz); err != nil {
+		k.Logger(ctx).Error("failed to set unbonding sequence", "error", err)
+	}
+}
+
 // IterateDelegations iterates over all delegations
 func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.DelegationKeyPrefix, prefixEndBytes(types.DelegationKeyPrefix))
 	if err != nil {
+		k.Logger(ctx).Error("failed to create delegation iterator", "error", err)
 		return
 	}
 	defer iterator.Close()
@@ -364,7 +411,7 @@ func (k Keeper) SetTierConfig(ctx sdk.Context, config types.TierConfig) error {
 		return err
 	}
 
-	key := types.TierConfigKey(config.Tier)
+	key := types.TierConfigKey(types.ValidatorTierFromString(config.Tier))
 	return store.Set(key, bz)
 }
 
@@ -399,15 +446,15 @@ func (k Keeper) GetAllTierConfigs(ctx sdk.Context) []types.TierConfig {
 
 // --- Tier Computation (delegated to tiers.go) ---
 
-// ComputeValidatorTier calculates the tier based on stake and performance
-func (k Keeper) ComputeValidatorTier(ctx sdk.Context, stake string, verifications, correctVerifications, slashCount uint64) types.ValidatorTier {
-	return ComputeValidatorTier(ctx, k, stake, verifications, correctVerifications, slashCount)
+// ComputeValidatorTierSimple calculates the tier with basic params (backward-compat helper)
+func (k Keeper) ComputeValidatorTierSimple(ctx sdk.Context, stake string, verifications, correctVerifications, slashCount uint64) types.ValidatorTier {
+	return ComputeValidatorTier(ctx, k, stake, verifications, correctVerifications, slashCount, 0, 0)
 }
 
 // CheckTierTransition checks if validator should transition tiers
 func (k Keeper) CheckTierTransition(ctx sdk.Context, validator types.LegibleValidator) (types.ValidatorTier, bool) {
-	newTier := k.ComputeValidatorTier(ctx, validator.TotalStake, validator.VerificationsCompleted, validator.VerificationsCorrect, validator.SlashCount)
-	return newTier, newTier != validator.Tier
+	newTier := ComputeValidatorTier(ctx, k, validator.TotalStake, validator.VerificationsCompleted, validator.VerificationsCorrect, validator.SlashCount, validator.ContestedVerificationsCorrect, validator.LastSlashedHeight)
+	return newTier, types.ValidatorTierString(newTier) != validator.Tier
 }
 
 // IsTierEligibleForCategory checks if tier can verify a category
@@ -456,40 +503,102 @@ func (k Keeper) RecordVerification(ctx sdk.Context, validatorAddr string, correc
 
 	// Check for tier transition
 	if newTier, changed := k.CheckTierTransition(ctx, validator); changed {
-		validator.Tier = newTier
+		oldTier := validator.Tier
+		validator.Tier = types.ValidatorTierString(newTier)
 		k.Logger(ctx).Info("validator tier changed",
 			"validator", validatorAddr,
-			"old_tier", validator.Tier,
-			"new_tier", newTier,
+			"old_tier", oldTier,
+			"new_tier", types.ValidatorTierString(newTier),
 		)
 	}
 
 	return k.SetValidator(ctx, validator)
 }
 
-// SlashValidator reduces stake and potentially deactivates validator
+// SlashValidator reduces stake and potentially deactivates validator.
+// R2: Per-epoch slash cap — if maxSlashesPerEpoch reached, skip slash.
+// R4: Slash floor — 0-amount slashes don't increment slashCount.
 func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount string, reason string) error {
 	validator, found := k.GetValidator(ctx, validatorAddr)
 	if !found {
 		return types.ErrValidatorNotFound
 	}
 
-	validator.SlashCount++
+	params := k.GetParams(ctx)
+
+	// R2: Per-epoch slash cap — skip if cap reached
+	maxPerEpoch := params.GetMaxSlashesPerEpoch()
+	if validator.SlashesThisEpoch >= uint64(maxPerEpoch) {
+		k.Logger(ctx).Info("slash capped for epoch",
+			"validator", validatorAddr,
+			"slashes_this_epoch", validator.SlashesThisEpoch,
+			"max_per_epoch", maxPerEpoch,
+			"reason", reason,
+		)
+		return nil // skip slash but don't error
+	}
 
 	// Apply tier-adjusted slash
-	adjustedAmount := k.CalculateTierSlash(ctx, validator.Tier, amount)
+	adjustedAmount := k.CalculateTierSlash(ctx, types.ValidatorTierFromString(validator.Tier), amount)
 
-	// Reduce stake
-	stakeInt := new(big.Int)
-	stakeInt.SetString(validator.TotalStake, 10)
+	// Progressive escalation: adjustedAmount * (1M + slashCount * escalationBps) / 1M
+	if validator.SlashCount > 0 {
+		escalationBps := params.GetSlashEscalationBps()
+		adjInt := new(big.Int)
+		adjInt.SetString(adjustedAmount, 10)
+		multiplier := new(big.Int).SetUint64(1000000 + validator.SlashCount*escalationBps)
+		adjInt.Mul(adjInt, multiplier)
+		adjInt.Div(adjInt, big.NewInt(1000000))
+		adjustedAmount = adjInt.String()
+	}
+
+	// Parse stake fields
+	ownStake := new(big.Int)
+	ownStake.SetString(validator.Stake, 10)
+	delegatedStake := new(big.Int)
+	delegatedStake.SetString(validator.DelegatedStake, 10)
+	totalStake := new(big.Int).Add(new(big.Int).Set(ownStake), new(big.Int).Set(delegatedStake))
+
 	slashInt := new(big.Int)
 	slashInt.SetString(adjustedAmount, 10)
 
-	newStake := new(big.Int).Sub(stakeInt, slashInt)
-	if newStake.Sign() < 0 {
-		newStake.SetInt64(0)
+	// Cap slash at total available stake
+	if slashInt.Cmp(totalStake) > 0 {
+		slashInt.Set(totalStake)
 	}
+
+	// Slash own stake first, then delegated for remainder
+	slashFromOwn := new(big.Int).Set(slashInt)
+	if slashFromOwn.Cmp(ownStake) > 0 {
+		slashFromOwn.Set(ownStake)
+	}
+	remainingSlash := new(big.Int).Sub(slashInt, slashFromOwn)
+
+	// Cap delegated slash at available delegated stake
+	slashFromDelegated := new(big.Int).Set(remainingSlash)
+	if slashFromDelegated.Cmp(delegatedStake) > 0 {
+		slashFromDelegated.Set(delegatedStake)
+	}
+
+	validator.Stake = new(big.Int).Sub(ownStake, slashFromOwn).String()
+	validator.DelegatedStake = new(big.Int).Sub(delegatedStake, slashFromDelegated).String()
+	newStake := new(big.Int).Sub(totalStake, slashInt)
 	validator.TotalStake = newStake.String()
+
+	// Explicitly burn slashed tokens from the staking module account
+	if slashInt.Sign() > 0 {
+		burnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(slashInt)))
+		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, burnCoins); err != nil {
+			k.Logger(ctx).Error("failed to burn slashed tokens", "err", err, "amount", slashInt.String())
+		}
+	}
+
+	// R4: Slash floor — only increment slashCount if actual slashed amount > 0
+	if slashInt.Sign() > 0 {
+		validator.SlashCount++
+		validator.SlashesThisEpoch++
+		validator.LastSlashedHeight = uint64(ctx.BlockHeight())
+	}
 
 	// Decrease reputation significantly
 	if validator.Reputation > 10000 {
@@ -498,8 +607,9 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 		validator.Reputation = 0
 	}
 
-	// Check if validator should be deactivated (3+ slashes)
-	if validator.SlashCount >= 3 {
+	// Check if validator should be deactivated (configurable, default 3)
+	maxSlashCount := uint64(params.GetMaxSlashCountDeactivate())
+	if validator.SlashCount >= maxSlashCount {
 		validator.IsActive = false
 		k.Logger(ctx).Info("validator deactivated due to slashes",
 			"validator", validatorAddr,
@@ -510,10 +620,12 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 
 	// Check for tier demotion
 	if newTier, changed := k.CheckTierTransition(ctx, validator); changed {
-		validator.Tier = newTier
+		oldTier := validator.Tier
+		validator.Tier = types.ValidatorTierString(newTier)
 		k.Logger(ctx).Info("validator tier demoted after slash",
 			"validator", validatorAddr,
-			"new_tier", newTier,
+			"old_tier", oldTier,
+			"new_tier", types.ValidatorTierString(newTier),
 		)
 	}
 
@@ -552,36 +664,51 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // InitGenesis initializes the module from genesis state
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 	// Set params
-	if err := k.SetParams(ctx, gs.Params); err != nil {
-		return err
+	if gs.Params != nil {
+		if err := k.SetParams(ctx, *gs.Params); err != nil {
+			return err
+		}
 	}
 
 	// Set tier configs
 	for _, config := range gs.TierConfigs {
-		if err := k.SetTierConfig(ctx, config); err != nil {
-			return err
+		if config != nil {
+			if err := k.SetTierConfig(ctx, *config); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Set validators
 	for _, validator := range gs.Validators {
-		if err := k.SetValidator(ctx, validator); err != nil {
-			return err
+		if validator != nil {
+			if err := k.SetValidator(ctx, *validator); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Set delegations
 	for _, delegation := range gs.Delegations {
-		if err := k.SetDelegation(ctx, delegation); err != nil {
-			return err
+		if delegation != nil {
+			if err := k.SetDelegation(ctx, *delegation); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Set unbonding entries
 	for _, unbonding := range gs.UnbondingEntries {
-		if err := k.SetUnbonding(ctx, unbonding); err != nil {
-			return err
+		if unbonding != nil {
+			if err := k.SetUnbonding(ctx, *unbonding); err != nil {
+				return err
+			}
 		}
+	}
+
+	// Restore unbonding sequence counter
+	if gs.UnbondingSeq > 0 {
+		k.SetUnbondingSeq(ctx, gs.UnbondingSeq)
 	}
 
 	return nil
@@ -592,40 +719,50 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	tierConfigs := k.GetAllTierConfigs(ctx)
 
-	var validators []types.LegibleValidator
+	var validators []*types.LegibleValidator
 	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
-		validators = append(validators, v)
+		validators = append(validators, &v)
 		return false
 	})
 
-	var delegations []types.Delegation
+	var delegations []*types.Delegation
 	k.IterateDelegations(ctx, func(d types.Delegation) bool {
-		delegations = append(delegations, d)
+		delegations = append(delegations, &d)
 		return false
 	})
 
-	var unbondings []types.UnbondingEntry
+	var unbondings []*types.UnbondingEntry
 	k.IterateUnbondings(ctx, func(u types.UnbondingEntry) bool {
-		unbondings = append(unbondings, u)
+		unbondings = append(unbondings, &u)
 		return false
 	})
+
+	// Convert []TierConfig to []*TierConfig
+	tierConfigPtrs := make([]*types.TierConfig, len(tierConfigs))
+	for i := range tierConfigs {
+		tierConfigPtrs[i] = &tierConfigs[i]
+	}
 
 	return &types.GenesisState{
-		Params:           params,
+		Params:           &params,
 		Validators:       validators,
 		Delegations:      delegations,
 		UnbondingEntries: unbondings,
-		TierConfigs:      tierConfigs,
+		TierConfigs:      tierConfigPtrs,
+		UnbondingSeq:     k.GetUnbondingSeq(ctx),
 	}
 }
 
 // --- Msg Server Implementation ---
 
-var _ types.MsgServer = msgServer{}
-
+// msgServer implements both the proto-generated MsgServer (RegisterValidator)
+// and the extended FullMsgServer (Delegate, Undelegate, Redelegate, UpdateValidatorStake).
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
+
+var _ types.MsgServer = &msgServer{}
 
 // NewMsgServerImpl returns an implementation of the staking MsgServer interface
 func NewMsgServerImpl(keeper Keeper) types.MsgServer {
@@ -636,28 +773,69 @@ func (k msgServer) RegisterValidator(goCtx context.Context, msg *types.MsgRegist
 	return k.Keeper.RegisterValidator(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
-func (k msgServer) UpdateValidatorStake(goCtx context.Context, msg *types.MsgUpdateValidatorStake) (*types.MsgUpdateValidatorStakeResponse, error) {
-	return k.Keeper.UpdateValidatorStake(sdk.UnwrapSDKContext(goCtx), msg)
+func (k msgServer) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValidatorStake) (*types.MsgUpdateValidatorStakeResponse, error) {
+	return k.Keeper.UpdateValidatorStake(ctx, msg)
 }
 
-func (k msgServer) Delegate(goCtx context.Context, msg *types.MsgDelegate) (*types.MsgDelegateResponse, error) {
-	return k.Keeper.Delegate(sdk.UnwrapSDKContext(goCtx), msg)
+func (k msgServer) Delegate(ctx sdk.Context, msg *types.MsgDelegate) (*types.MsgDelegateResponse, error) {
+	return k.Keeper.Delegate(ctx, msg)
 }
 
-func (k msgServer) Undelegate(goCtx context.Context, msg *types.MsgUndelegate) (*types.MsgUndelegateResponse, error) {
-	return k.Keeper.Undelegate(sdk.UnwrapSDKContext(goCtx), msg)
+func (k msgServer) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.MsgUndelegateResponse, error) {
+	return k.Keeper.Undelegate(ctx, msg)
 }
 
-func (k msgServer) Redelegate(goCtx context.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
-	return k.Keeper.Redelegate(sdk.UnwrapSDKContext(goCtx), msg)
+func (k msgServer) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
+	return k.Keeper.Redelegate(ctx, msg)
 }
 
 // --- Block Processing ---
 
 // BeginBlocker is called at the beginning of every block
 func (k Keeper) BeginBlocker(ctx sdk.Context) error {
-	// Process mature unbondings
 	currentHeight := uint64(ctx.BlockHeight())
+	params := k.GetParams(ctx)
+
+	// R1: Slash count decay + R2: Epoch reset of per-epoch slash counter
+	// Check if we're at an epoch boundary (every SlashDecayPeriodBlocks blocks)
+	decayPeriod := params.GetSlashDecayPeriodBlocks()
+	if decayPeriod > 0 && currentHeight > 0 && currentHeight%decayPeriod == 0 {
+		var updatedValidators []types.LegibleValidator
+
+		k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+			changed := false
+
+			// R1: Decay slashCount by 1 if no slash occurred this epoch
+			if v.SlashCount > 0 && v.SlashesThisEpoch == 0 {
+				v.SlashCount--
+				changed = true
+				k.Logger(ctx).Info("slash count decayed",
+					"validator", v.OperatorAddress,
+					"new_slash_count", v.SlashCount,
+				)
+			}
+
+			// R2: Reset per-epoch slash counter
+			if v.SlashesThisEpoch > 0 {
+				v.SlashesThisEpoch = 0
+				changed = true
+			}
+
+			if changed {
+				updatedValidators = append(updatedValidators, v)
+			}
+			return false
+		})
+
+		for _, v := range updatedValidators {
+			if err := k.SetValidator(ctx, v); err != nil {
+				k.Logger(ctx).Error("failed to save validator after slash decay",
+					"validator", v.OperatorAddress, "error", err)
+			}
+		}
+	}
+
+	// Process mature unbondings
 	matureUnbondings := k.GetMatureUnbondings(ctx, currentHeight)
 
 	for _, unbonding := range matureUnbondings {
@@ -728,13 +906,13 @@ func (k Keeper) EndBlocker(ctx sdk.Context) error {
 	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
 		if newTier, changed := k.CheckTierTransition(ctx, v); changed {
 			oldTier := v.Tier
-			v.Tier = newTier
+			v.Tier = types.ValidatorTierString(newTier)
 			transitionedValidators = append(transitionedValidators, v)
 
 			k.Logger(ctx).Info("validator tier transition at end block",
 				"validator", v.OperatorAddress,
 				"old_tier", oldTier,
-				"new_tier", newTier,
+				"new_tier", types.ValidatorTierString(newTier),
 			)
 		}
 		return false

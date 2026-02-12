@@ -104,7 +104,7 @@ export class ClaimStateTree {
     // Initialize status indexes
     const statuses: ClaimStatus[] = [
       "pending",
-      "verifying",
+      "in_verification",
       "accepted",
       "rejected",
       "expired",
@@ -162,7 +162,7 @@ export class ClaimStateTree {
     // Update stats
     this.stats.totalClaims++;
     this.updateStatusStats(claim.status, 1);
-    if (claim.status === "pending" || claim.status === "verifying") {
+    if (claim.status === "pending" || claim.status === "in_verification") {
       this.stats.totalStakeLocked += claim.stake;
     }
   }
@@ -230,8 +230,9 @@ export class ClaimStateTree {
     this.updateStatusStats(newStatus, 1);
 
     // Handle stake tracking
-    const wasLocked = oldStatus === "pending" || oldStatus === "verifying";
-    const isLocked = newStatus === "pending" || newStatus === "verifying";
+    const wasLocked =
+      oldStatus === "pending" || oldStatus === "in_verification";
+    const isLocked = newStatus === "pending" || newStatus === "in_verification";
     if (wasLocked && !isLocked) {
       this.stats.totalStakeLocked -= claim.stake;
     } else if (!wasLocked && isLocked) {
@@ -364,7 +365,7 @@ export class ClaimStateTree {
       case "pending":
         this.stats.pendingClaims += delta;
         break;
-      case "verifying":
+      case "in_verification":
         this.stats.verifyingClaims += delta;
         break;
       case "accepted":
@@ -415,7 +416,7 @@ export class ClaimStateTree {
       // Update stats
       this.stats.totalClaims++;
       this.updateStatusStats(claim.status, 1);
-      if (claim.status === "pending" || claim.status === "verifying") {
+      if (claim.status === "pending" || claim.status === "in_verification") {
         this.stats.totalStakeLocked += claim.stake;
       }
     }
@@ -434,7 +435,7 @@ export class ClaimStateTree {
     // Reinitialize status indexes
     const statuses: ClaimStatus[] = [
       "pending",
-      "verifying",
+      "in_verification",
       "accepted",
       "rejected",
       "expired",

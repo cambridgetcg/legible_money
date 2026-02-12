@@ -45,13 +45,13 @@ const TEST_CONSENSUS_PARAMS: ConsensusParams = {
   acceptanceThreshold: 0.77,
   rejectionThreshold: 0.77,
   contestedThreshold: 0.55,
-  minValidatorStake: 1111n * ONE_LGM,
-  minClaimStake: 11n * ONE_LGM,
+  minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+  minClaimStake: 11n * 10n ** 15n,
   blockReward: 11n * ONE_LGM,
   verificationReward: 1n * ONE_LGM,
   citationRewardPerFact: 1n * ONE_LGM,
-  wrongVerificationSlash: 0.11,
-  missedVerificationSlash: 0.05,
+  wrongVerificationSlash: 0.06,
+  missedVerificationSlash: 0.0001,
   invalidClaimSlash: 0.22,
   researchShareRate: 0.22,
   maxTransactionsPerBlock: 111,
@@ -234,7 +234,7 @@ describe.sequential("Payment Channels (GAP-005)", () => {
       const payload: OpenPaymentChannelPayload = {
         type: "open_payment_channel",
         provider: PROVIDER_DID,
-        deposit: 50n * ONE_LGM, // Below 100 LGM minimum
+        deposit: 50n * 10n ** 15n, // Below 100 mLGM minimum
         durationBlocks: 10000n,
       };
 

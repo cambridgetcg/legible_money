@@ -10,4 +10,5 @@ var (
 	ErrInvalidChallengeStatus     = errors.Register(ModuleName, 6, "invalid challenge status for operation")
 	ErrUnauthorizedResolver       = errors.Register(ModuleName, 7, "unauthorized resolver")
 	ErrDomainNotFound             = errors.Register(ModuleName, 8, "domain not found")
+	ErrMaxEvidenceExceeded        = errors.Register(ModuleName, 9, "maximum evidence pieces exceeded")
 )

@@ -56,6 +56,22 @@ export interface ConsensusParams {
   missedVerificationSlash: number; // Fraction slashed for missing verification
   invalidClaimSlash: number; // Fraction slashed for rejected claim
 
+  // Anti-grief parameters (R1-R4 remediation)
+  slashDecayPeriodBlocks?: bigint; // Blocks after last slash before slashCount decays by 1 (default: epochLength)
+  maxSlashesPerEpoch?: number; // Max slashes per validator per epoch (default: 2)
+  maxSlashCountForDeactivation?: number; // Slashes to deactivate (default: 3)
+
+  // Adversarial Verification (Survive-to-Accept)
+  adversarialVerificationEnabled?: boolean; // false = legacy mode, true = survive-to-accept
+  provisionalThreshold?: number; // Score to create provisional fact (0.5 = 500k)
+  baseChallengeDurationBlocks?: number; // Base challenge window (~1 day, 34272 blocks)
+  minChallengeStake?: bigint; // Min stake to open challenge (11 LGM)
+  challengeEvidenceRequired?: boolean; // Require evidence with challenges
+  confidenceGrowthPerEpoch?: number; // Growth rate per epoch (0.011 = 1.1%)
+  maxSurvivalConfidence?: number; // Max confidence from survival alone (0.77)
+  failedChallengeSlashRate?: number; // Slash on failed challenge (0.22)
+  successfulChallengeRewardRate?: number; // Reward from submitter slash (0.30)
+
   // Research (Protocol Research Repository)
   researchShareRate: number; // Fraction of all rewards to research fund (0.22)
 
@@ -89,15 +105,15 @@ export const DEFAULT_CONSENSUS_PARAMS: ConsensusParams = {
   rejectionThreshold: 0.77,
   contestedThreshold: 0.55,
 
-  minValidatorStake: 1111n * 10n ** 18n, // 1111 LGM
-  minClaimStake: 11n * 10n ** 18n, // 11 LGM
+  minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM (tier 0 entry)
+  minClaimStake: 11n * 10n ** 15n, // 0.011 LGM (affordable with 0.222 LGM genesis balance)
 
   blockReward: 11n * 10n ** 18n, // 11 LGM
   verificationReward: 1n * 10n ** 18n, // 1 LGM
   citationRewardPerFact: 1n * 10n ** 18n, // 1 LGM per cited fact (from reward pool)
 
-  wrongVerificationSlash: 0.11, // 11%
-  missedVerificationSlash: 0.05, // 5%
+  wrongVerificationSlash: 0.06, // 6%
+  missedVerificationSlash: 0.0001, // 0.01% (Cosmos-aligned downtime penalty)
   invalidClaimSlash: 0.22, // 22%
 
   researchShareRate: 0.22, // 22% to research fund
@@ -123,6 +139,10 @@ export interface Validator {
   correctVerifications: number;
   missedVerifications: number;
   slashCount: number;
+
+  // Anti-grief tracking (R1/R2 remediation)
+  lastSlashedBlock?: number; // Block height of most recent slash
+  slashesThisEpoch?: number; // Slashes accumulated in current epoch (reset at boundary)
 
   // Emergency governance tier (1 = standard, 2 = experienced, 3 = guardian)
   tier?: number;
@@ -153,10 +173,16 @@ export type RoundPhase =
   | "aggregation"
   | "complete";
 
+/** Round type discriminator for adversarial verification */
+export type RoundType = "verification" | "challenge";
+
 export interface VerificationRound {
   id: string;
   claimId: string;
   claim: ClaimSubmission;
+
+  /** Round type: "verification" (legacy) or "challenge" (adversarial Path B) */
+  roundType?: RoundType;
 
   // Schema (for validator guidance and timing)
   schemaId?: string;
@@ -192,8 +218,8 @@ export interface VerificationRound {
 
 export interface ValidatorCommitment {
   validator: PublicKey;
-  commitment: Commitment; // Hash of (verdict, confidence, nonce)
-  submittedAt: number;
+  commitment: Commitment; // Hash of (verdict, confidence, salt)
+  submittedAtHeight: number;
   signature: Signature;
   // GAP-002 FIX: VRF fields for proving selection eligibility
   // Optional for backward compatibility with commitment generation
@@ -206,10 +232,11 @@ export interface ValidatorReveal {
   validator: PublicKey;
   verdict: "confirmed" | "rejected" | "uncertain";
   confidence: Confidence;
-  nonce: string;
+  salt: string;
   reasoning?: string;
   referencesChecked: string[];
-  submittedAt: number;
+  submittedAtHeight: number;
+  verificationMethod?: string;
   signature: Signature;
 }
 
@@ -303,9 +330,18 @@ export type TransactionPayload =
       roundId: string;
       verdict: string;
       confidence: number;
-      nonce: string;
+      salt: string;
     }
   | { type: "challenge"; factId: string; stake: bigint; evidence: string }
+  | {
+      type: "challenge_provisional_fact";
+      claimId: string;
+      factId?: string;
+      stake: bigint;
+      reason: string;
+      evidenceIds: string[];
+      counterClaim?: string;
+    }
   | { type: "governance_vote"; proposalId: string; vote: boolean }
   | {
       type: "governance_propose";
@@ -571,6 +607,13 @@ export interface ValidatorTierConfig {
   selectionWeight: number;
   rewardMultiplier: number;
   allowedEpistemicCategories: string[];
+  canParticipateInGovernance: boolean;
+  /** Epochs within which slashes count (0 = all-time). Only used when maxSlashCount < Infinity. */
+  slashWindowEpochs: number;
+  /** Minimum contested-category verifications required (0 = none) */
+  minContestedVerifications: number;
+  /** Multiplier for contested-category verifications toward minVerifications (1 = normal) */
+  contestedVerificationMultiplier: number;
 }
 
 /**
@@ -581,18 +624,22 @@ export const VALIDATOR_TIER_CONFIG: Record<ValidatorTier, ValidatorTierConfig> =
     0: {
       tier: 0,
       name: "Apprentice",
-      minStake: 0n,
+      minStake: 111n * 10n ** 15n, // 0.111 LGM
       minVerifications: 0,
       minAccuracy: 0,
       maxSlashCount: Infinity,
       selectionWeight: 0.1,
       rewardMultiplier: 0.1,
       allowedEpistemicCategories: ["protocol", "computational", "formal"],
+      canParticipateInGovernance: false,
+      slashWindowEpochs: 0,
+      minContestedVerifications: 0,
+      contestedVerificationMultiplier: 1,
     },
     1: {
       tier: 1,
       name: "Verified",
-      minStake: 0n,
+      minStake: 111n * 10n ** 16n, // 1.11 LGM
       minVerifications: 22,
       minAccuracy: 0.77,
       maxSlashCount: Infinity,
@@ -604,11 +651,15 @@ export const VALIDATOR_TIER_CONFIG: Record<ValidatorTier, ValidatorTierConfig> =
         "formal",
         "empirical",
       ],
+      canParticipateInGovernance: false,
+      slashWindowEpochs: 0,
+      minContestedVerifications: 0,
+      contestedVerificationMultiplier: 1,
     },
     2: {
       tier: 2,
       name: "Bonded",
-      minStake: 1111n * 10n ** 18n,
+      minStake: 111n * 10n ** 17n, // 11.1 LGM
       minVerifications: 0,
       minAccuracy: 0,
       maxSlashCount: Infinity,
@@ -622,12 +673,16 @@ export const VALIDATOR_TIER_CONFIG: Record<ValidatorTier, ValidatorTierConfig> =
         "oracle",
         "attestation",
       ],
+      canParticipateInGovernance: false,
+      slashWindowEpochs: 0,
+      minContestedVerifications: 0,
+      contestedVerificationMultiplier: 1,
     },
     3: {
       tier: 3,
       name: "Guardian",
-      minStake: 11111n * 10n ** 18n,
-      minVerifications: 1111,
+      minStake: 111n * 10n ** 18n, // 111 LGM (aligned with Go)
+      minVerifications: 333,
       minAccuracy: 0.77,
       maxSlashCount: 0,
       selectionWeight: 1.5,
@@ -643,8 +698,18 @@ export const VALIDATOR_TIER_CONFIG: Record<ValidatorTier, ValidatorTierConfig> =
         "social",
         "contested",
       ],
+      canParticipateInGovernance: true,
+      slashWindowEpochs: 10, // Only slashes within last 10 epochs count
+      minContestedVerifications: 33, // Must engage hard claims
+      contestedVerificationMultiplier: 3, // Contested claims count 3x
     },
   } as const;
+
+/** Virtual stake for unstaked validators in VRF selection (11 LGM) */
+export const TIER_VIRTUAL_STAKE = 11n * 10n ** 18n;
+
+/** Maximum Tier 0 (Apprentice) validators to limit Sybil surface */
+export const MAX_APPRENTICE_VALIDATORS = 111;
 
 export type TransactionType =
   | "transfer"
@@ -662,6 +727,7 @@ export type TransactionType =
   | "verification_commit"
   | "verification_reveal"
   | "challenge"
+  | "challenge_provisional_fact"
   | "governance_vote"
   | "governance_propose"
   // Research transactions (Protocol Research Repository)
@@ -686,6 +752,7 @@ export type TransactionType =
   | "vesting_accelerate" // Apply acceleration bonus
   | "vesting_falsify" // Handle falsification clawback
   | "vesting_complete" // Mark vesting as complete
+  | "vesting_claim_reserve" // Claim truth-endured reserve
   // Domain proposal transactions (Ontological Tree Growth)
   | "domain_propose" // Propose a new domain
   | "domain_endorse" // Endorse a domain proposal
@@ -766,6 +833,13 @@ export type TransactionType =
 
   // Undecidable fact resolution (U7)
   | "resolve_undecidable" // Resolve a contested/undecidable fact via oracle/consensus/axiom
+
+  // Expirable Token transactions (Dynamic Array Method)
+  | "token_mint_expirable" // Mint tokens with expiration tracking
+  | "token_transfer_expirable" // Transfer preserving period-of-origin
+  | "expired_token_retrieve" // Sweep expired tokens to RAI holding
+  | "rai_distribute" // Distribute RAI to eligible agents
+  | "token_extend_expiration" // Extend token expiration period
 
   // Disbursement lifecycle
   | "disbursement_submit" // Submit treasury disbursement proposal

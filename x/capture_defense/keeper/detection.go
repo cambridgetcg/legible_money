@@ -5,8 +5,6 @@ import (
 	"math"
 	"sort"
 
-	storetypes "cosmossdk.io/store/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/capture_defense/types"
@@ -107,7 +105,7 @@ func computeTop3Share(validatorCounts map[string]uint64, totalParticipations uin
 
 // computeTimingCorrelation detects suspiciously correlated submission timing.
 // Returns basis points (0-1,000,000). High value = suspicious coordination.
-func computeTimingCorrelation(entries []types.VerificationHistoryEntry) uint64 {
+func computeTimingCorrelation(entries []*types.VerificationHistoryEntry) uint64 {
 	if len(entries) < 2 {
 		return 0
 	}
@@ -149,7 +147,7 @@ func computeTimingCorrelation(entries []types.VerificationHistoryEntry) uint64 {
 
 // computeVerdictCorrelation detects suspiciously uniform verdicts.
 // Returns basis points (0-1,000,000). High value = suspicious agreement.
-func computeVerdictCorrelation(entries []types.VerificationHistoryEntry) uint64 {
+func computeVerdictCorrelation(entries []*types.VerificationHistoryEntry) uint64 {
 	if len(entries) == 0 {
 		return 0
 	}
@@ -178,9 +176,19 @@ func computeVerdictCorrelation(entries []types.VerificationHistoryEntry) uint64 
 }
 
 // RunCaptureDetection runs detection analysis on all domains with sufficient history.
+// When risk scores exceed the pause threshold, the domain is automatically paused
+// for DefaultDomainPauseDurationBlocks to prevent further verification damage.
 func (k Keeper) RunCaptureDetection(ctx sdk.Context, currentBlock uint64) {
-	store := ctx.KVStore(k.storeKey)
-	iter := store.Iterator(types.VerificationHistoryKeyPrefix, storetypes.PrefixEndBytes(types.VerificationHistoryKeyPrefix))
+	// Skip detection while chain is halted — guardians are handling the emergency
+	if k.emergencyKeeper != nil && k.emergencyKeeper.IsHalted(ctx) {
+		return
+	}
+
+	store := k.storeService.OpenKVStore(ctx)
+	iter, err := store.Iterator(types.VerificationHistoryKeyPrefix, prefixEndBytes(types.VerificationHistoryKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -205,6 +213,18 @@ func (k Keeper) RunCaptureDetection(ctx sdk.Context, currentBlock uint64) {
 					"capture_risk_critical",
 					sdk.NewAttribute("domain", domain),
 					sdk.NewAttribute("risk_score", fmt.Sprintf("%d", metrics.RiskScore)),
+				),
+			)
+
+			// Auto-pause domain to prevent further verification damage
+			k.PauseDomain(ctx, domain, currentBlock+types.DefaultDomainPauseDurationBlocks)
+
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					"domain_auto_paused",
+					sdk.NewAttribute("domain", domain),
+					sdk.NewAttribute("paused_until_block", fmt.Sprintf("%d", currentBlock+types.DefaultDomainPauseDurationBlocks)),
+					sdk.NewAttribute("reason", "capture_risk_critical"),
 				),
 			)
 		}

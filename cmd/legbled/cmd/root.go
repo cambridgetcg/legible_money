@@ -12,12 +12,16 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/config"
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	"github.com/cosmos/cosmos-sdk/client/keys"
+	"github.com/cosmos/cosmos-sdk/client/rpc"
 	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	bankcli "github.com/cosmos/cosmos-sdk/x/bank/client/cli"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	govcli "github.com/cosmos/cosmos-sdk/x/gov/client/cli"
+	stakingcli "github.com/cosmos/cosmos-sdk/x/staking/client/cli"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
@@ -86,11 +90,50 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 	)
 
 	// Query commands
-	rootCmd.AddCommand(
+	queryCmd := &cobra.Command{
+		Use:                        "query",
+		Aliases:                    []string{"q"},
+		Short:                      "Querying subcommands",
+		DisableFlagParsing:         false,
+		SuggestionsMinimumDistance: 2,
+		RunE:                       client.ValidateCmd,
+	}
+	valAddrCodec := addresscodec.NewBech32Codec("lgmvaloper")
+	addrCodec := addresscodec.NewBech32Codec("lgm")
+
+	queryCmd.AddCommand(
+		rpc.QueryEventForTxCmd(),
 		server.QueryBlockCmd(),
 		authcmd.QueryTxsByEventsCmd(),
 		authcmd.QueryTxCmd(),
+		server.QueryBlocksCmd(),
+		server.QueryBlockResultsCmd(),
 	)
+	rootCmd.AddCommand(queryCmd)
+
+	// Transaction commands
+	txCmd := &cobra.Command{
+		Use:                        "tx",
+		Short:                      "Transactions subcommands",
+		DisableFlagParsing:         false,
+		SuggestionsMinimumDistance: 2,
+		RunE:                       client.ValidateCmd,
+	}
+	txCmd.AddCommand(
+		authcmd.GetSignCommand(),
+		authcmd.GetSignBatchCommand(),
+		authcmd.GetMultiSignCommand(),
+		authcmd.GetMultiSignBatchCmd(),
+		authcmd.GetValidateSignaturesCommand(),
+		authcmd.GetBroadcastCommand(),
+		authcmd.GetEncodeCommand(),
+		authcmd.GetDecodeCommand(),
+		authcmd.GetSimulateCmd(),
+		bankcli.NewTxCmd(addrCodec),
+		stakingcli.NewTxCmd(valAddrCodec, addrCodec),
+		govcli.NewTxCmd(nil),
+	)
+	rootCmd.AddCommand(txCmd)
 
 	// Genesis commands
 	rootCmd.AddCommand(

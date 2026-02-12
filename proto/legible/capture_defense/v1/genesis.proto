@@ -1,0 +1,29 @@
+syntax = "proto3";
+package legible.capture_defense.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_defense/types";
+
+import "legible/capture_defense/v1/state.proto";
+
+// GenesisState defines the capture defense module's genesis state.
+message GenesisState {
+  Params params = 1;
+  repeated DomainQualification qualifications = 2;
+  repeated IsolatedReputation reputations = 3;
+  repeated CaptureMetrics metrics = 4;
+}
+
+// Params defines the capture defense module parameters.
+message Params {
+  uint64 stake_lock_period = 1;
+  uint64 min_verifications_for_qual = 2;
+  uint64 min_accuracy_for_qual = 3;
+  uint64 min_endorsers_for_qual = 4;
+  uint64 inactivity_expiration_blocks = 5;
+  uint64 probationary_period_blocks = 6;
+  uint64 reputation_half_life_blocks = 7;
+  uint64 detection_interval_blocks = 8;
+  uint64 decay_interval_blocks = 9;
+  uint64 herfindahl_trigger_threshold = 10;
+  uint64 max_expirations_per_block = 11;
+}

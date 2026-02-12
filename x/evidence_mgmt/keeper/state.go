@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
-	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/evidence_mgmt/types"
@@ -15,24 +15,28 @@ import (
 
 // SetEvidence stores an evidence record in the KV store.
 func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.Evidence) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := evidenceKey(evidence.Id)
 	bz, err := json.Marshal(evidence)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set evidence: %v", err))
+	}
 
 	// Maintain claim→evidence index
 	indexKey := evidenceByClaimKey(evidence.ClaimId, evidence.Id)
-	store.Set(indexKey, []byte(evidence.Id))
+	if err := kvStore.Set(indexKey, []byte(evidence.Id)); err != nil {
+		panic(fmt.Sprintf("failed to set evidence index: %v", err))
+	}
 }
 
 // GetEvidence retrieves an evidence record by ID.
 func (k Keeper) GetEvidence(ctx sdk.Context, id string) (types.Evidence, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(evidenceKey(id))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(evidenceKey(id))
+	if err != nil || bz == nil {
 		return types.Evidence{}, false
 	}
 	var evidence types.Evidence
@@ -48,15 +52,18 @@ func (k Keeper) DeleteEvidence(ctx sdk.Context, id string) {
 	if !found {
 		return
 	}
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(evidenceKey(id))
-	store.Delete(evidenceByClaimKey(evidence.ClaimId, id))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(evidenceKey(id))
+	_ = kvStore.Delete(evidenceByClaimKey(evidence.ClaimId, id))
 }
 
 // IterateEvidence iterates over all evidence. Return true from cb to stop.
 func (k Keeper) IterateEvidence(ctx sdk.Context, cb func(types.Evidence) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.EvidenceKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.EvidenceKeyPrefix, prefixEndBytes(types.EvidenceKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -72,9 +79,12 @@ func (k Keeper) IterateEvidence(ctx sdk.Context, cb func(types.Evidence) bool) {
 
 // GetEvidenceByClaimId returns all evidence for a given claim.
 func (k Keeper) GetEvidenceByClaimId(ctx sdk.Context, claimId string) []types.Evidence {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.EvidenceByClaimPrefix, []byte(claimId+":")...)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var evidences []types.Evidence
@@ -97,24 +107,28 @@ func (k Keeper) GetEvidenceCountForClaim(ctx sdk.Context, claimId string) uint32
 
 // SetAudit stores an audit record in the KV store.
 func (k Keeper) SetAudit(ctx sdk.Context, audit types.EvidenceAudit) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := auditKey(audit.Id)
 	bz, err := json.Marshal(audit)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal audit: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set audit: %v", err))
+	}
 
 	// Maintain evidence→audit index
 	indexKey := auditByEvidenceKey(audit.EvidenceId, audit.Id)
-	store.Set(indexKey, []byte(audit.Id))
+	if err := kvStore.Set(indexKey, []byte(audit.Id)); err != nil {
+		panic(fmt.Sprintf("failed to set audit index: %v", err))
+	}
 }
 
 // GetAudit retrieves an audit record by ID.
 func (k Keeper) GetAudit(ctx sdk.Context, id string) (types.EvidenceAudit, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(auditKey(id))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(auditKey(id))
+	if err != nil || bz == nil {
 		return types.EvidenceAudit{}, false
 	}
 	var audit types.EvidenceAudit
@@ -130,15 +144,18 @@ func (k Keeper) DeleteAudit(ctx sdk.Context, id string) {
 	if !found {
 		return
 	}
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(auditKey(id))
-	store.Delete(auditByEvidenceKey(audit.EvidenceId, id))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(auditKey(id))
+	_ = kvStore.Delete(auditByEvidenceKey(audit.EvidenceId, id))
 }
 
 // IterateAudits iterates over all audits. Return true from cb to stop.
 func (k Keeper) IterateAudits(ctx sdk.Context, cb func(types.EvidenceAudit) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.AuditKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.AuditKeyPrefix, prefixEndBytes(types.AuditKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -154,9 +171,12 @@ func (k Keeper) IterateAudits(ctx sdk.Context, cb func(types.EvidenceAudit) bool
 
 // GetAuditsForEvidence returns all audits for a given evidence ID.
 func (k Keeper) GetAuditsForEvidence(ctx sdk.Context, evidenceId string) []types.EvidenceAudit {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.AuditByEvidencePrefix, []byte(evidenceId+":")...)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var audits []types.EvidenceAudit
@@ -172,22 +192,44 @@ func (k Keeper) GetAuditsForEvidence(ctx sdk.Context, evidenceId string) []types
 
 // ---------- Consensus KV Operations ----------
 
+// IterateConsensus iterates over all audit consensus records. Return true from cb to stop.
+func (k Keeper) IterateConsensus(ctx sdk.Context, cb func(types.AuditConsensus) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.ConsensusKeyPrefix, prefixEndBytes(types.ConsensusKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var consensus types.AuditConsensus
+		if err := json.Unmarshal(iter.Value(), &consensus); err != nil {
+			continue
+		}
+		if cb(consensus) {
+			break
+		}
+	}
+}
+
 // SetConsensus stores an audit consensus record.
 func (k Keeper) SetConsensus(ctx sdk.Context, consensus types.AuditConsensus) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := consensusKey(consensus.EvidenceId)
 	bz, err := json.Marshal(consensus)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal consensus: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set consensus: %v", err))
+	}
 }
 
 // GetConsensus retrieves the audit consensus for an evidence ID.
 func (k Keeper) GetConsensus(ctx sdk.Context, evidenceId string) (types.AuditConsensus, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(consensusKey(evidenceId))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(consensusKey(evidenceId))
+	if err != nil || bz == nil {
 		return types.AuditConsensus{}, false
 	}
 	var consensus types.AuditConsensus
@@ -197,24 +239,67 @@ func (k Keeper) GetConsensus(ctx sdk.Context, evidenceId string) (types.AuditCon
 	return consensus, true
 }
 
+// ---------- Expiry Index Operations ----------
+
+// SetExpiryIndex writes a secondary index entry for time-based evidence expiry scanning.
+func (k Keeper) SetExpiryIndex(ctx sdk.Context, expiryHeight uint64, evidenceId string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := expiryIndexKey(expiryHeight, evidenceId)
+	if err := kvStore.Set(key, []byte(evidenceId)); err != nil {
+		panic(fmt.Sprintf("failed to set expiry index: %v", err))
+	}
+}
+
+// RemoveExpiryIndex removes the expiry index entry for an evidence record.
+func (k Keeper) RemoveExpiryIndex(ctx sdk.Context, expiryHeight uint64, evidenceId string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(expiryIndexKey(expiryHeight, evidenceId))
+}
+
+// IterateExpiredEvidence iterates over evidence IDs whose expiry height <= currentHeight.
+// Because keys are big-endian encoded, this scans in ascending height order and stops early.
+func (k Keeper) IterateExpiredEvidence(ctx sdk.Context, currentHeight uint64, cb func(evidenceId string) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	// Scan from prefix start up to (currentHeight+1) exclusive
+	endHeight := currentHeight + 1
+	endKey := make([]byte, 8)
+	binary.BigEndian.PutUint64(endKey, endHeight)
+	end := append(types.ExpiryIndexPrefix, endKey...)
+
+	iter, err := kvStore.Iterator(types.ExpiryIndexPrefix, end)
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		evidenceId := string(iter.Value())
+		if cb(evidenceId) {
+			break
+		}
+	}
+}
+
 // ---------- Oracle KV Operations ----------
 
 // SetOracle stores an oracle record in the KV store.
 func (k Keeper) SetOracle(ctx sdk.Context, oracle types.Oracle) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := oracleKey(oracle.Id)
 	bz, err := json.Marshal(oracle)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal oracle: %v", err))
 	}
-	store.Set(key, bz)
+	if err := kvStore.Set(key, bz); err != nil {
+		panic(fmt.Sprintf("failed to set oracle: %v", err))
+	}
 }
 
 // GetOracle retrieves an oracle by ID.
 func (k Keeper) GetOracle(ctx sdk.Context, id string) (types.Oracle, bool) {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(oracleKey(id))
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(oracleKey(id))
+	if err != nil || bz == nil {
 		return types.Oracle{}, false
 	}
 	var oracle types.Oracle
@@ -226,15 +311,18 @@ func (k Keeper) GetOracle(ctx sdk.Context, id string) (types.Oracle, bool) {
 
 // DeleteOracle removes an oracle from the store.
 func (k Keeper) DeleteOracle(ctx sdk.Context, id string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(oracleKey(id))
-	store.Delete(activeOracleKey(id))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(oracleKey(id))
+	_ = kvStore.Delete(activeOracleKey(id))
 }
 
 // IterateOracles iterates over all oracles. Return true from cb to stop.
 func (k Keeper) IterateOracles(ctx sdk.Context, cb func(types.Oracle) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.OracleKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.OracleKeyPrefix, prefixEndBytes(types.OracleKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -250,20 +338,25 @@ func (k Keeper) IterateOracles(ctx sdk.Context, cb func(types.Oracle) bool) {
 
 // SetActiveOracle marks an oracle as active in the active oracle index.
 func (k Keeper) SetActiveOracle(ctx sdk.Context, oracleId string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Set(activeOracleKey(oracleId), []byte(oracleId))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	if err := kvStore.Set(activeOracleKey(oracleId), []byte(oracleId)); err != nil {
+		panic(fmt.Sprintf("failed to set active oracle: %v", err))
+	}
 }
 
 // RemoveActiveOracle removes an oracle from the active index.
 func (k Keeper) RemoveActiveOracle(ctx sdk.Context, oracleId string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(activeOracleKey(oracleId))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(activeOracleKey(oracleId))
 }
 
 // GetActiveOracles returns all active oracles.
 func (k Keeper) GetActiveOracles(ctx sdk.Context) []types.Oracle {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.ActiveOraclePrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.ActiveOraclePrefix, prefixEndBytes(types.ActiveOraclePrefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var oracles []types.Oracle
@@ -357,4 +450,11 @@ func auditByEvidenceKey(evidenceId, auditId string) []byte {
 
 func activeOracleKey(oracleId string) []byte {
 	return append(types.ActiveOraclePrefix, []byte(oracleId)...)
+}
+
+func expiryIndexKey(expiryHeight uint64, evidenceId string) []byte {
+	heightBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(heightBytes, expiryHeight)
+	key := append(types.ExpiryIndexPrefix, heightBytes...)
+	return append(key, []byte(evidenceId)...)
 }

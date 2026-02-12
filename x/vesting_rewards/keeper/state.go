@@ -3,15 +3,14 @@ package keeper
 import (
 	"encoding/json"
 
-	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
 )
 
 // SetVestingSchedule stores a vesting schedule.
-func (k Keeper) SetVestingSchedule(ctx sdk.Context, schedule types.VestingSchedule) {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) SetVestingSchedule(ctx sdk.Context, schedule *types.VestingSchedule) {
+	store := k.storeService.OpenKVStore(ctx)
 
 	bz, err := json.Marshal(schedule)
 	if err != nil {
@@ -20,62 +19,81 @@ func (k Keeper) SetVestingSchedule(ctx sdk.Context, schedule types.VestingSchedu
 
 	// Primary key: vestingId -> schedule
 	key := append(types.VestingScheduleKeyPrefix, []byte(schedule.Id)...)
-	store.Set(key, bz)
+	if err := store.Set(key, bz); err != nil {
+		panic("failed to set vesting schedule: " + err.Error())
+	}
 
 	// Index: claimId -> vestingId
 	if schedule.ClaimId != "" {
 		claimKey := append(types.ClaimRecordKeyPrefix, []byte(schedule.ClaimId)...)
-		store.Set(claimKey, []byte(schedule.Id))
+		if err := store.Set(claimKey, []byte(schedule.Id)); err != nil {
+			panic("failed to set claim index: " + err.Error())
+		}
 	}
 
 	// Index: recipient/vestingId -> nil (for queries by recipient)
 	recipientKey := append(types.VestingByRecipientPrefix, []byte(schedule.Recipient+"/"+schedule.Id)...)
-	store.Set(recipientKey, []byte{1})
+	if err := store.Set(recipientKey, []byte{1}); err != nil {
+		panic("failed to set recipient index: " + err.Error())
+	}
 
 	// Index: active schedules
-	if schedule.Status == types.VestingStatusActive || schedule.Status == types.VestingStatusPaused {
+	if schedule.Status == string(types.VestingStatusActive) || schedule.Status == string(types.VestingStatusPaused) {
 		activeKey := append(types.ActiveVestingPrefix, []byte(schedule.Id)...)
-		store.Set(activeKey, []byte{1})
+		if err := store.Set(activeKey, []byte{1}); err != nil {
+			panic("failed to set active index: " + err.Error())
+		}
 	} else {
 		// Remove from active index if no longer active
 		activeKey := append(types.ActiveVestingPrefix, []byte(schedule.Id)...)
-		store.Delete(activeKey)
+		if err := store.Delete(activeKey); err != nil {
+			panic("failed to delete active index: " + err.Error())
+		}
 	}
 }
 
 // GetVestingSchedule retrieves a vesting schedule by ID.
-func (k Keeper) GetVestingSchedule(ctx sdk.Context, vestingId string) (types.VestingSchedule, bool) {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) GetVestingSchedule(ctx sdk.Context, vestingId string) (*types.VestingSchedule, bool) {
+	store := k.storeService.OpenKVStore(ctx)
 	key := append(types.VestingScheduleKeyPrefix, []byte(vestingId)...)
-	bz := store.Get(key)
+	bz, err := store.Get(key)
+	if err != nil {
+		return nil, false
+	}
 	if bz == nil {
-		return types.VestingSchedule{}, false
+		return nil, false
 	}
 	var schedule types.VestingSchedule
 	if err := json.Unmarshal(bz, &schedule); err != nil {
-		return types.VestingSchedule{}, false
+		return nil, false
 	}
-	return schedule, true
+	return &schedule, true
 }
 
 // GetVestingByClaimId retrieves the vesting schedule for a claim.
-func (k Keeper) GetVestingByClaimId(ctx sdk.Context, claimId string) (types.VestingSchedule, bool) {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) GetVestingByClaimId(ctx sdk.Context, claimId string) (*types.VestingSchedule, bool) {
+	store := k.storeService.OpenKVStore(ctx)
 	claimKey := append(types.ClaimRecordKeyPrefix, []byte(claimId)...)
-	vestingIdBz := store.Get(claimKey)
+	vestingIdBz, err := store.Get(claimKey)
+	if err != nil {
+		return nil, false
+	}
 	if vestingIdBz == nil {
-		return types.VestingSchedule{}, false
+		return nil, false
 	}
 	return k.GetVestingSchedule(ctx, string(vestingIdBz))
 }
 
 // GetVestingSchedulesByRecipient returns all vesting schedules for a recipient.
-func (k Keeper) GetVestingSchedulesByRecipient(ctx sdk.Context, recipient string) []types.VestingSchedule {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) GetVestingSchedulesByRecipient(ctx sdk.Context, recipient string) []*types.VestingSchedule {
+	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.VestingByRecipientPrefix, []byte(recipient+"/")...)
 
-	var schedules []types.VestingSchedule
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	var schedules []*types.VestingSchedule
+	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return schedules
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -91,11 +109,14 @@ func (k Keeper) GetVestingSchedulesByRecipient(ctx sdk.Context, recipient string
 }
 
 // GetAllActiveVestingSchedules returns all active/paused vesting schedules.
-func (k Keeper) GetAllActiveVestingSchedules(ctx sdk.Context) []types.VestingSchedule {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) GetAllActiveVestingSchedules(ctx sdk.Context) []*types.VestingSchedule {
+	store := k.storeService.OpenKVStore(ctx)
 
-	var schedules []types.VestingSchedule
-	iter := storetypes.KVStorePrefixIterator(store, types.ActiveVestingPrefix)
+	var schedules []*types.VestingSchedule
+	iter, err := store.Iterator(types.ActiveVestingPrefix, prefixEndBytes(types.ActiveVestingPrefix))
+	if err != nil {
+		return schedules
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -108,40 +129,52 @@ func (k Keeper) GetAllActiveVestingSchedules(ctx sdk.Context) []types.VestingSch
 	return schedules
 }
 
+// GetAllActiveVestingSchedulePtrs returns all active/paused vesting schedules as pointers for genesis export.
+func (k Keeper) GetAllActiveVestingSchedulePtrs(ctx sdk.Context) []*types.VestingSchedule {
+	return k.GetAllActiveVestingSchedules(ctx)
+}
+
 // SetClawbackRecord stores a clawback record.
-func (k Keeper) SetClawbackRecord(ctx sdk.Context, record types.ClawbackRecord) {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) SetClawbackRecord(ctx sdk.Context, record *types.ClawbackRecord) {
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(record)
 	if err != nil {
 		panic("failed to marshal clawback record: " + err.Error())
 	}
 	key := append(types.FalsificationKeyPrefix, []byte(record.Id)...)
-	store.Set(key, bz)
+	if err := store.Set(key, bz); err != nil {
+		panic("failed to set clawback record: " + err.Error())
+	}
 }
 
 // GetClawbackRecord retrieves a clawback record by ID.
-func (k Keeper) GetClawbackRecord(ctx sdk.Context, id string) (types.ClawbackRecord, bool) {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) GetClawbackRecord(ctx sdk.Context, id string) (*types.ClawbackRecord, bool) {
+	store := k.storeService.OpenKVStore(ctx)
 	key := append(types.FalsificationKeyPrefix, []byte(id)...)
-	bz := store.Get(key)
+	bz, err := store.Get(key)
+	if err != nil {
+		return nil, false
+	}
 	if bz == nil {
-		return types.ClawbackRecord{}, false
+		return nil, false
 	}
 	var record types.ClawbackRecord
 	if err := json.Unmarshal(bz, &record); err != nil {
-		return types.ClawbackRecord{}, false
+		return nil, false
 	}
-	return record, true
+	return &record, true
 }
 
 // SetBlockRewardDistribution stores a block reward distribution record.
-func (k Keeper) SetBlockRewardDistribution(ctx sdk.Context, dist types.BlockRewardDistribution) {
-	store := ctx.KVStore(k.storeKey)
+func (k Keeper) SetBlockRewardDistribution(ctx sdk.Context, dist *types.BlockRewardDistribution) {
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(dist)
 	if err != nil {
 		return
 	}
 	// Use big-endian block height as key for ordering
 	key := append(types.BlockRewardKeyPrefix, sdk.Uint64ToBigEndian(dist.BlockHeight)...)
-	store.Set(key, bz)
+	if err := store.Set(key, bz); err != nil {
+		return
+	}
 }

@@ -5,8 +5,8 @@
  * Handles capability enforcement and usage tracking.
  */
 
-import { SessionWallet, type SessionCapabilities } from './wallet.js';
-import type { LegibleClient } from './client.js';
+import { SessionWallet, type SessionCapabilities } from "./wallet.js";
+import type { LegibleClient } from "./client.js";
 
 // ============ Session Manager ============
 
@@ -26,7 +26,7 @@ export class SessionManager {
    */
   async createSession(
     name: string,
-    capabilities: SessionCapabilities
+    capabilities: SessionCapabilities,
   ): Promise<ManagedSession> {
     const wallet = await this.client.createSession(capabilities);
 
@@ -70,7 +70,7 @@ export class SessionManager {
     sessionName: string,
     action: string,
     operation: (wallet: SessionWallet) => Promise<T>,
-    amount?: bigint
+    amount?: bigint,
   ): Promise<T> {
     const session = this.sessions.get(sessionName);
     if (!session) {
@@ -99,7 +99,7 @@ export class SessionManager {
    * List all sessions
    */
   listSessions(): SessionInfo[] {
-    return Array.from(this.sessions.values()).map(session => ({
+    return Array.from(this.sessions.values()).map((session) => ({
       name: session.name,
       publicKey: session.wallet.publicKey,
       capabilities: session.capabilities,
@@ -147,7 +147,7 @@ export const SESSION_PRESETS = {
   readonly: {
     maxSpendPerTx: 0n,
     maxSpendPerDay: 0n,
-    allowedActions: ['account_*', 'knowledge_get*', 'block_*', 'network_*'],
+    allowedActions: ["account_*", "knowledge_get*", "block_*", "network_*"],
     maxUsage: 10000,
   } as SessionCapabilities,
 
@@ -155,9 +155,9 @@ export const SESSION_PRESETS = {
    * Session for submitting claims
    */
   claimSubmitter: {
-    maxSpendPerTx: 100n * 10n ** 18n,    // 100 LGM per claim
-    maxSpendPerDay: 1000n * 10n ** 18n,  // 1000 LGM per day
-    allowedActions: ['knowledge_submitClaim', 'account_*', 'knowledge_get*'],
+    maxSpendPerTx: 100n * 10n ** 15n, // 0.1 LGM per claim
+    maxSpendPerDay: 1000n * 10n ** 15n, // 1 LGM per day
+    allowedActions: ["knowledge_submitClaim", "account_*", "knowledge_get*"],
     maxUsage: 100,
   } as SessionCapabilities,
 
@@ -165,9 +165,9 @@ export const SESSION_PRESETS = {
    * Session for small transfers
    */
   micropayments: {
-    maxSpendPerTx: 10n * 10n ** 18n,     // 10 LGM per tx
-    maxSpendPerDay: 100n * 10n ** 18n,   // 100 LGM per day
-    allowedActions: ['transfer', 'account_*'],
+    maxSpendPerTx: 10n * 10n ** 15n, // 0.01 LGM per tx
+    maxSpendPerDay: 100n * 10n ** 15n, // 0.1 LGM per day
+    allowedActions: ["transfer", "account_*"],
     maxUsage: 1000,
   } as SessionCapabilities,
 
@@ -175,9 +175,14 @@ export const SESSION_PRESETS = {
    * Session for validators
    */
   validator: {
-    maxSpendPerTx: 0n,                   // Validators don't spend in verification
+    maxSpendPerTx: 0n, // Validators don't spend in verification
     maxSpendPerDay: 0n,
-    allowedActions: ['verification_*', 'account_*', 'knowledge_*', 'validator_*'],
+    allowedActions: [
+      "verification_*",
+      "account_*",
+      "knowledge_*",
+      "validator_*",
+    ],
     maxUsage: 100000,
   } as SessionCapabilities,
 
@@ -185,9 +190,9 @@ export const SESSION_PRESETS = {
    * General purpose session
    */
   general: {
-    maxSpendPerTx: 100n * 10n ** 18n,
-    maxSpendPerDay: 1000n * 10n ** 18n,
-    allowedActions: ['transfer', 'knowledge_*', 'account_*'],
+    maxSpendPerTx: 100n * 10n ** 15n,
+    maxSpendPerDay: 1000n * 10n ** 15n,
+    allowedActions: ["transfer", "knowledge_*", "account_*"],
     maxUsage: 1000,
   } as SessionCapabilities,
 };
@@ -231,7 +236,7 @@ export function createSessionManager(client: LegibleClient): SessionManager {
  */
 export async function quickSession(
   client: LegibleClient,
-  preset: keyof typeof SESSION_PRESETS
+  preset: keyof typeof SESSION_PRESETS,
 ): Promise<SessionWallet> {
   return client.createSession(SESSION_PRESETS[preset]);
 }

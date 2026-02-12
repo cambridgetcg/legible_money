@@ -1,0 +1,147 @@
+syntax = "proto3";
+package legible.tree.v1;
+
+option go_package = "github.com/legible-money/legible/x/tree/types";
+
+// ============================================================================
+// Supporting Types
+// ============================================================================
+
+// ContributorRecord tracks a project contributor.
+message ContributorRecord {
+  string did             = 1; // contributor DID
+  string role            = 2; // "founder", "architect", "developer", "reviewer", "tester", "maintainer"
+  uint64 joined_at_block = 3; // block height when joined
+  uint32 tasks_completed = 4; // number of completed tasks
+  string total_earned    = 5; // total earned in ulgm (bigint as string)
+}
+
+// ProductSpec defines the specification for a project's product.
+message ProductSpec {
+  string          service_type    = 1; // "api", "data_feed", "computation", "verification", "aggregation", "analytics"
+  repeated string requirements    = 2; // list of requirements
+  repeated string capabilities    = 3; // list of capabilities
+  uint32          estimated_tasks = 4; // estimated number of tasks
+  repeated string mvp_criteria    = 5; // minimum viable product criteria
+}
+
+// FundingSource describes how a project is funded.
+message FundingSource {
+  string type        = 1; // "research_fund", "bounty_pool", "agent_funded", "community"
+  string amount      = 2; // funding amount (bigint as string)
+  string bounty_id   = 3; // bounty ID (if bounty-funded)
+  string funder      = 4; // funder address
+  string proposal_id = 5; // governance proposal ID
+}
+
+// DemandSignal represents a detected demand signal.
+message DemandSignal {
+  string            type     = 1; // signal type
+  map<string, string> evidence = 2; // evidence key-value pairs
+  string            strength = 3; // signal strength "0.0"-"1.0"
+}
+
+// ProjectApplication represents an application to join a project.
+message ProjectApplication {
+  string          did              = 1; // applicant DID
+  string          proposed_role    = 2; // "founder", "architect", "developer", "reviewer", "tester", "maintainer"
+  string          message          = 3; // application message
+  repeated string capabilities     = 4; // applicant capabilities
+  uint64          applied_at_block = 5; // block height when applied
+  string          status           = 6; // "pending", "approved", "rejected"
+}
+
+// TaskDeliverable represents a submitted deliverable for a task.
+message TaskDeliverable {
+  string          type               = 1; // "code", "config", "data", "proof", "document"
+  string          hash               = 2; // deliverable content hash
+  uint64          submitted_at_block = 3; // block height when submitted
+  repeated string verified_by        = 4; // addresses that verified
+}
+
+// ============================================================================
+// Top-Level Entities
+// ============================================================================
+
+// ProductProject represents a project in the Tree of Life.
+message ProductProject {
+  string                       id                     = 1;  // unique project ID
+  string                       name                   = 2;  // project name
+  string                       description            = 3;  // project description
+  string                       phase                  = 4;  // "seed", "sprout", "growing", "mature", "fruiting", "seeding", "dormant", "withered"
+  string                       previous_phase         = 5;  // previous phase (for resume)
+  string                       pause_reason           = 6;  // reason for pause/dormancy
+  uint64                       created_at_block       = 7;  // block height when created
+  uint64                       phase_changed_at_block = 8;  // block height of last phase change
+  string                       knowledge_domain       = 9;  // knowledge domain
+  DemandSignal                 demand_signal          = 10; // originating demand signal
+  string                       parent_project_id      = 11; // parent project (if child)
+  string                       founder                = 12; // bech32 founder address
+  repeated ContributorRecord   contributors           = 13; // project contributors
+  string                       partnership_id         = 14; // linked partnership ID
+  ProductSpec                  product_spec           = 15; // product specification
+  repeated string              task_ids               = 16; // associated task IDs
+  uint32                       completed_tasks        = 17; // count of completed tasks
+  uint32                       total_tasks            = 18; // total task count
+  FundingSource                funding_source         = 19; // funding source
+  string                       budget                 = 20; // total budget in ulgm (bigint as string)
+  string                       spent                  = 21; // amount spent in ulgm (bigint as string)
+  string                       revenue_generated      = 22; // revenue generated in ulgm (bigint as string)
+  string                       contract_address       = 23; // deployed contract address
+  repeated string              service_ids            = 24; // deployed service IDs
+  repeated ProjectApplication  applications           = 25; // pending applications
+}
+
+// ProjectTask represents a task within a project.
+message ProjectTask {
+  string           id                      = 1;  // unique task ID
+  string           project_id              = 2;  // parent project ID
+  string           title                   = 3;  // task title
+  string           description             = 4;  // task description
+  string           task_type               = 5;  // "design", "implement", "test", "review", "deploy", "document", "verify", "research", "governance", "maintain"
+  repeated string  required_capabilities   = 6;  // required capabilities
+  string           assignee                = 7;  // bech32 assignee address
+  repeated string  reviewers               = 8;  // bech32 reviewer addresses
+  string           status                  = 9;  // "open", "assigned", "in_progress", "review", "completed", "rejected", "disputed"
+  uint64           created_at_block        = 10; // block height when created
+  uint64           deadline_block          = 11; // deadline block height
+  uint64           completed_at_block      = 12; // block height when completed
+  TaskDeliverable  deliverable             = 13; // submitted deliverable
+  string           bounty_amount           = 14; // bounty in ulgm (bigint as string)
+  string           bounty_id               = 15; // linked bounty ID
+  uint32           rejection_count         = 16; // number of rejections
+}
+
+// ServiceLeaf represents a deployed service from a project.
+message ServiceLeaf {
+  string id                = 1;  // unique service ID
+  string project_id        = 2;  // parent project ID
+  string name              = 3;  // service name
+  string description       = 4;  // service description
+  string service_type      = 5;  // "api", "data_feed", "computation", "verification", "aggregation", "analytics"
+  string contract_address  = 6;  // deployed contract address
+  string total_calls       = 7;  // total calls (bigint as string)
+  string total_revenue     = 8;  // total revenue in ulgm (bigint as string)
+  string uptime_blocks     = 9;  // uptime in blocks (bigint as string)
+  uint64 last_called_block = 10; // block height of last call
+  uint32 average_latency_ms = 11; // average latency in milliseconds
+  string status            = 12; // "deploying", "active", "degraded", "paused", "retired"
+  uint64 deployed_at_block = 13; // block height when deployed
+  string price_per_call    = 14; // price per call in ulgm (bigint as string, "0" = free)
+}
+
+// OpportunitySeed represents a detected opportunity.
+message OpportunitySeed {
+  string       id               = 1;  // unique seed ID
+  uint64       detected_at_block = 2;  // block height when detected
+  string       knowledge_domain = 3;  // knowledge domain
+  DemandSignal signal           = 4;  // originating demand signal
+  string       confidence       = 5;  // confidence score "0.0"-"1.0"
+  string       estimated_demand = 6;  // estimated demand (bigint as string)
+  uint32       estimated_effort = 7;  // estimated effort (task count)
+  string       estimated_roi    = 8;  // estimated ROI
+  string       status           = 9;  // "detected", "proposed", "claimed", "expired"
+  string       claimed_by       = 10; // bech32 claimer address
+  string       project_id       = 11; // linked project ID
+  uint64       expires_at_block = 12; // block height when seed expires
+}

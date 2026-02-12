@@ -32,6 +32,9 @@ var (
 
 	// ValidatorByDIDPrefix is the prefix for DID -> validator address index
 	ValidatorByDIDPrefix = []byte{0x06}
+
+	// UnbondingSeqKey stores the monotonic unbonding sequence counter
+	UnbondingSeqKey = []byte{0x07}
 )
 
 // ValidatorKey returns the store key for a validator by operator address

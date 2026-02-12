@@ -32,8 +32,8 @@ func TestIAVLVersionWithGoLevelDB(t *testing.T) {
 
 	// Use all the store keys the real app uses
 	allKeys := storetypes.NewKVStoreKeys(
-		"acc", "bank", "staking", "crisis", "mint", "distribution",
-		"slashing", "gov", "params", "upgrade", "feegrant", "evidence",
+		"acc", "bank", "staking", "distribution",
+		"slashing", "gov", "upgrade", "feegrant", "evidence",
 		"capability", "ibc", "transfer", "consensus",
 		"knowledge", "legible_auth", "legible_staking", "emergency",
 		"tokens", "lgm_gov", "research", "ontology", "disputes", "evid_mgmt",
@@ -41,7 +41,7 @@ func TestIAVLVersionWithGoLevelDB(t *testing.T) {
 	for _, key := range allKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}
-	tkeys := storetypes.NewTransientStoreKeys("params_tstore")
+	tkeys := storetypes.NewTransientStoreKeys()
 	for _, key := range tkeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeTransient, nil)
 	}
@@ -429,8 +429,8 @@ func TestIAVLVersionWithAllOptions(t *testing.T) {
 
 	// Use ALL the store keys the real app uses
 	allKeys := storetypes.NewKVStoreKeys(
-		"acc", "bank", "staking", "crisis", "mint", "distribution",
-		"slashing", "gov", "params", "upgrade", "feegrant", "evidence",
+		"acc", "bank", "staking", "distribution",
+		"slashing", "gov", "upgrade", "feegrant", "evidence",
 		"capability", "ibc", "transfer", "consensus",
 		// Custom modules
 		"knowledge", "legible_auth", "legible_staking", "emergency",
@@ -439,7 +439,7 @@ func TestIAVLVersionWithAllOptions(t *testing.T) {
 	for _, key := range allKeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, nil)
 	}
-	tkeys := storetypes.NewTransientStoreKeys("params_tstore")
+	tkeys := storetypes.NewTransientStoreKeys()
 	for _, key := range tkeys {
 		cms.MountStoreWithDB(key, storetypes.StoreTypeTransient, nil)
 	}

@@ -4,9 +4,9 @@ package legible.knowledge.v1;
 option go_package = "github.com/legible-money/legible/x/knowledge/types";
 
 import "google/api/annotations.proto";
+import "legible/knowledge/v1/claim.proto";
 import "legible/knowledge/v1/stratum.proto";
 import "legible/knowledge/v1/domain.proto";
-import "legible/knowledge/v1/genesis.proto";
 
 // Query defines the gRPC query service for the knowledge module
 service Query {

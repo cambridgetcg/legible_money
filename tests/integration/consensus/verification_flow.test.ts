@@ -51,7 +51,7 @@ const VERIFICATION_TEST_CONFIG: Partial<TestNetworkConfig> = {
   validatorCount: 5,
   fullNodeCount: 0,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
   testAccounts: 3,
   autoBlocks: false,
   blockInterval: 50, // Fast blocks for testing
@@ -64,10 +64,10 @@ const VERIFICATION_TEST_CONFIG: Partial<TestNetworkConfig> = {
     validatorQuorum: 0.66,
     acceptanceThreshold: 0.66,
     rejectionThreshold: 0.66,
-    minClaimStake: 10n * 10n ** 18n,
+    minClaimStake: 10n * 10n ** 15n,
     verificationReward: 1n * 10n ** 18n,
-    wrongVerificationSlash: 0.1,
-    missedVerificationSlash: 0.05,
+    wrongVerificationSlash: 0.06,
+    missedVerificationSlash: 0.0001,
   } as Partial<ConsensusParams>,
 };
 
@@ -85,7 +85,7 @@ function createTestClaim(
     claim,
     domain,
     submitter: "",
-    stake: 100n * 10n ** 18n,
+    stake: 100n * 10n ** 15n,
     submittedAt: Date.now(),
     references: [
       {
@@ -194,7 +194,7 @@ async function submitValidatorReveals(
           validator,
           verdict: verdicts[i] ?? "confirmed",
           confidence: confidences[i] ?? 0.9,
-          nonce: nonces.get(validator.publicKey)!,
+          salt: nonces.get(validator.publicKey)!,
         })),
     );
     return;
@@ -227,7 +227,7 @@ async function submitValidatorReveals(
         validator: validator.publicKey,
         verdict: reveal.verdict,
         confidence: reveal.confidence,
-        nonce: reveal.nonce,
+        salt: reveal.salt,
         referencesChecked: reveal.referencesChecked,
         signature: reveal.signature,
       });
@@ -596,7 +596,7 @@ describe.sequential("Proof of Truth - Reveal Phase", () => {
         validator: validator.publicKey,
         verdict: badReveal.verdict,
         confidence: badReveal.confidence,
-        nonce: badReveal.nonce,
+        salt: badReveal.salt,
         referencesChecked: badReveal.referencesChecked,
         signature: badReveal.signature,
       }),
@@ -631,7 +631,7 @@ describe.sequential("Proof of Truth - Reveal Phase", () => {
         validator: validator.publicKey,
         verdict: reveal.verdict,
         confidence: reveal.confidence,
-        nonce: reveal.nonce,
+        salt: reveal.salt,
         referencesChecked: reveal.referencesChecked,
         signature: reveal.signature,
       }),
@@ -1062,7 +1062,7 @@ describe.sequential("Proof of Truth - Edge Cases", () => {
 
   it("should handle claim with minimum stake", async () => {
     const account = network.getAccount(0);
-    const minStake = 10n * 10n ** 18n; // From test config
+    const minStake = 10n * 10n ** 15n; // From test config
 
     const claimId = await network.submitClaim(
       "Minimum stake claim",
@@ -1085,7 +1085,7 @@ describe.sequential("Proof of Truth - Edge Cases", () => {
       claim: "Test claim with reference",
       domain: "test",
       submitter: network.validators[0].publicKey,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       submittedAt: Date.now(),
       references: [
         {
@@ -1109,7 +1109,7 @@ describe.sequential("Proof of Truth - Edge Cases", () => {
       claim: "Test claim without references",
       domain: "test",
       submitter: network.validators[0].publicKey,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
       submittedAt: Date.now(),
       references: [], // No references
     };
@@ -1132,7 +1132,7 @@ describe.sequential("Proof of Truth - Full Integration", () => {
           "Integration test: Water boils at 100C at sea level",
           "science.chemistry",
           account,
-          100n * 10n ** 18n,
+          100n * 10n ** 15n,
         );
 
         expect(claimId).toBeTruthy();

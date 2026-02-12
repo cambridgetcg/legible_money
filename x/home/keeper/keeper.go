@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -16,7 +16,7 @@ import (
 // Keeper manages the home module's state.
 type Keeper struct {
 	cdc          codec.Codec
-	storeKey     storetypes.StoreKey
+	storeService store.KVStoreService
 	bankKeeper   types.BankKeeper
 	tokensKeeper types.TokensKeeper // nil-safe
 
@@ -27,18 +27,36 @@ type Keeper struct {
 // NewKeeper creates a new home module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bankKeeper types.BankKeeper,
 	tokensKeeper types.TokensKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
 		cdc:          cdc,
-		storeKey:     storeKey,
+		storeService: storeService,
 		bankKeeper:   bankKeeper,
 		tokensKeeper: tokensKeeper,
 		authority:    authority,
 	}
+}
+
+// prefixEndBytes returns the end key for a prefix scan (exclusive upper bound).
+// It increments the last byte of the prefix; if it overflows, it tries the
+// previous byte, and so on. Returns nil if all bytes overflow (prefix is all 0xff).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -53,32 +71,41 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
-	k.SetParams(ctx, gs.Params)
+	if gs.Params != nil {
+		k.SetParams(ctx, *gs.Params)
+	} else {
+		k.SetParams(ctx, types.DefaultParams())
+	}
 
 	for _, home := range gs.Homes {
-		k.SetHome(ctx, home)
+		if home != nil {
+			k.SetHome(ctx, *home)
+		}
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	var homes []types.AgentHome
+	var homes []*types.AgentHome
 	k.IterateHomes(ctx, func(home types.AgentHome) bool {
-		homes = append(homes, home)
+		homes = append(homes, &home)
 		return false
 	})
 
 	// Export all alerts across homes
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.AlertKeyPrefix)
-	defer iter.Close()
-	for ; iter.Valid(); iter.Next() {
-		// Alerts are not included in genesis for simplicity (ephemeral state).
-		// Include only homes and params.
+	store := k.storeService.OpenKVStore(ctx)
+	iter, err := store.Iterator(types.AlertKeyPrefix, prefixEndBytes(types.AlertKeyPrefix))
+	if err == nil {
+		defer iter.Close()
+		for ; iter.Valid(); iter.Next() {
+			// Alerts are not included in genesis for simplicity (ephemeral state).
+			// Include only homes and params.
+		}
 	}
 
+	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params: k.GetParams(ctx),
+		Params: &params,
 		Homes:  homes,
 	}
 }
@@ -87,9 +114,9 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 // GetParams returns the module parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.ParamsKey)
-	if bz == nil {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.ParamsKey)
+	if err != nil || bz == nil {
 		return types.DefaultParams()
 	}
 	var params types.Params
@@ -101,10 +128,12 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	store := ctx.KVStore(k.storeKey)
+	store := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
-	store.Set(types.ParamsKey, bz)
+	if err := store.Set(types.ParamsKey, bz); err != nil {
+		panic(fmt.Sprintf("failed to set params: %v", err))
+	}
 }

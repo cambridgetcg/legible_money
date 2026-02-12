@@ -36,7 +36,7 @@ export type VestingCategory =
   | "computational" // Computation results (reproducible)
   | "peer_reviewed" // Published research
   | "replicated" // IRL-replicated findings
-  | "chainlink_feed" // Oracle price feeds
+  | "oracle_feed" // Oracle price feeds
   | "attestation" // Human attestations
   | "contested"; // Claims with active disputes
 
@@ -66,7 +66,7 @@ export const RELEASE_HALF_LIVES: Record<VestingCategory, bigint> = {
   replicated: 111_111n, // ~5.4 weeks
 
   // Oracle/External - fastest (most volatile)
-  chainlink_feed: 55_555n, // ~2.7 weeks
+  oracle_feed: 55_555n, // ~2.7 weeks
   attestation: 77_777n, // ~3.8 weeks
 
   // Contested - very fast release but low ceiling
@@ -85,7 +85,7 @@ export const MAX_RELEASE_RATES: Record<VestingCategory, number> = {
   computational: 0.88, // 12% reserve
   peer_reviewed: 0.85, // 15% reserve
   replicated: 0.88, // 12% reserve (IRL verified = higher trust)
-  chainlink_feed: 0.8, // 20% reserve (oracles are volatile)
+  oracle_feed: 0.8, // 20% reserve (oracles are volatile)
   attestation: 0.8, // 20% reserve
   contested: 0.6, // 40% reserve (high uncertainty)
 } as const;
@@ -102,7 +102,7 @@ export const CLIFF_PERIODS: Record<VestingCategory, bigint> = {
   computational: 2222n, // ~1.6 hours
   peer_reviewed: 5555n, // ~3.9 hours - time to review
   replicated: 3333n, // ~2.3 hours - already has IRL verification
-  chainlink_feed: 555n, // ~23 minutes - oracle data is time-sensitive
+  oracle_feed: 555n, // ~23 minutes - oracle data is time-sensitive
   attestation: 2222n, // ~1.6 hours
   contested: 1111n, // ~46 minutes
 } as const;
@@ -265,11 +265,11 @@ export interface RewardVesting {
   /** Block when status last changed */
   statusChangedAtBlock: bigint;
 
-  /** Created timestamp */
-  createdAt: number;
+  /** Block when vesting was created */
+  createdAt: bigint;
 
-  /** Updated timestamp */
-  updatedAt: number;
+  /** Block when vesting was last updated */
+  updatedAt: bigint;
 }
 
 /**
@@ -445,6 +445,17 @@ export interface FalsifyVestingPayload {
   disputeId: string;
 }
 
+/**
+ * Claim reserve payload (for truth-endured reserve release)
+ */
+export interface ClaimReservePayload {
+  /** Vesting ID */
+  vestingId: string;
+
+  /** Claimer DID (must be recipient) */
+  claimer: DID;
+}
+
 // ============ Events ============
 
 /**
@@ -467,7 +478,8 @@ export interface VestingEvent {
   type: VestingEventType;
   vestingId: string;
   blockNumber: bigint;
-  timestamp: number;
+  /** Block number when event occurred (deterministic, no Date.now()) */
+  timestamp: bigint;
   data: Record<string, unknown>;
 }
 

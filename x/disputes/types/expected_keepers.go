@@ -17,17 +17,24 @@ type BankKeeper interface {
 
 // KnowledgeKeeper defines the expected knowledge keeper interface.
 // Used to look up facts and claims that are being disputed.
+// Fact mutations use domain-specific methods (MarkFactChallenged, ResolveFactDispute,
+// CascadeFactConfidence) instead of raw SetFact to enforce knowledge module invariants.
 type KnowledgeKeeper interface {
 	// GetFact retrieves a fact by ID from the knowledge module.
 	GetFact(ctx sdk.Context, factID string) (Fact, bool)
-	// SetFact stores a fact (used to update status during dispute resolution).
-	SetFact(ctx sdk.Context, fact Fact)
 	// GetClaim retrieves a claim by ID.
 	GetClaim(ctx sdk.Context, claimID string) (Claim, bool)
-	// GetReferringFacts returns fact IDs that reference the given fact.
-	// Used for confidence cascade when a fact is retracted.
-	// Returns nil if not implemented (nil-safe — hook skips cascade).
-	GetReferringFacts(ctx sdk.Context, factID string) []string
+	// MarkFactChallenged transitions a fact to "challenged" status when a dispute is opened.
+	MarkFactChallenged(ctx sdk.Context, factId string) error
+	// ResolveFactDispute adjusts confidence and status based on dispute outcome.
+	// outcome: "overturned", "upheld", or "inconclusive".
+	// reductionBps: confidence reduction for overturned outcomes (basis points).
+	// Returns the new confidence value.
+	ResolveFactDispute(ctx sdk.Context, factId, outcome string, reductionBps uint64) (uint64, error)
+	// CascadeFactConfidence reduces confidence of facts referencing a retracted fact.
+	// reductionBps: cascade reduction in basis points (e.g. 220_000 = 22%).
+	// Returns IDs of affected facts.
+	CascadeFactConfidence(ctx sdk.Context, retractedFactId string, reductionBps uint64) ([]string, error)
 }
 
 // StakingKeeper defines the expected staking keeper interface.

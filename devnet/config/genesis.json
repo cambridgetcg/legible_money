@@ -15,7 +15,7 @@
     "acceptanceThreshold": 0.8,
     "rejectionThreshold": 0.8,
     "minValidatorStake": "1000000000000000000000",
-    "minClaimStake": "100000000000000000000",
+    "minClaimStake": "11000000000000000",
     "blockReward": "10000000000000000000",
     "verificationReward": "1000000000000000000"
   },

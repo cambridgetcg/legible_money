@@ -13,6 +13,11 @@ import (
 func (k Keeper) SubmitEvidence(ctx sdk.Context, evidence types.Evidence) error {
 	params := k.GetParams(ctx)
 
+	// Validate that the claim exists in x/knowledge
+	if k.knowledgeKeeper != nil && !k.knowledgeKeeper.HasClaim(ctx, evidence.ClaimId) {
+		return fmt.Errorf("%w: %s", types.ErrClaimNotFound, evidence.ClaimId)
+	}
+
 	// Check max evidence per claim
 	count := k.GetEvidenceCountForClaim(ctx, evidence.ClaimId)
 	if count >= params.MaxEvidencePerClaim {
@@ -30,17 +35,21 @@ func (k Keeper) SubmitEvidence(ctx sdk.Context, evidence types.Evidence) error {
 	}
 
 	// Validate evidence type
-	if !types.IsValidEvidenceType(evidence.EvidenceType) {
+	if !types.IsValidEvidenceType(types.EvidenceType(evidence.EvidenceType)) {
 		return fmt.Errorf("%w: invalid evidence type %s",
 			types.ErrInvalidEvidence, evidence.EvidenceType)
 	}
 
 	// Set initial state
-	evidence.Status = types.EvidenceStatusSubmitted
+	evidence.Status = string(types.EvidenceStatusSubmitted)
 	evidence.AuditCount = 0
 	evidence.Reliability = 0
 
 	k.SetEvidence(ctx, evidence)
+
+	// Write expiry index for efficient EndBlock scanning
+	expiryHeight := evidence.SubmittedAt + params.AuditWindow
+	k.SetExpiryIndex(ctx, expiryHeight, evidence.Id)
 
 	k.Logger(ctx).Info("evidence submitted",
 		"evidence_id", evidence.Id,
@@ -59,7 +68,7 @@ func (k Keeper) UpdateEvidenceStatus(ctx sdk.Context, id string, status types.Ev
 		return fmt.Errorf("%w: %s", types.ErrEvidenceNotFound, id)
 	}
 
-	evidence.Status = status
+	evidence.Status = string(status)
 	if status == types.EvidenceStatusVerified {
 		evidence.VerifiedAt = uint64(ctx.BlockHeight())
 	}
@@ -86,7 +95,7 @@ func (k Keeper) ComputeReliability(ctx sdk.Context, evidenceId string) (uint64, 
 	weightedSum := new(big.Int)
 
 	for _, audit := range audits {
-		if audit.Status == types.AuditStatusExpired {
+		if audit.Status == string(types.AuditStatusExpired) {
 			continue
 		}
 		stake := new(big.Int)
@@ -121,7 +130,7 @@ func (k Keeper) ResolveEvidence(ctx sdk.Context, evidenceId string) error {
 		return fmt.Errorf("%w: %s", types.ErrEvidenceNotFound, evidenceId)
 	}
 
-	if evidence.Status != types.EvidenceStatusSubmitted {
+	if evidence.Status != string(types.EvidenceStatusSubmitted) {
 		return nil // Already resolved
 	}
 
@@ -135,8 +144,9 @@ func (k Keeper) ResolveEvidence(ctx sdk.Context, evidenceId string) error {
 	audits := k.GetAuditsForEvidence(ctx, evidenceId)
 	if uint32(len(audits)) < params.MinAuditsForConsensus {
 		// Not enough audits — expire the evidence
-		evidence.Status = types.EvidenceStatusExpired
+		evidence.Status = string(types.EvidenceStatusExpired)
 		k.SetEvidence(ctx, evidence)
+		k.RemoveExpiryIndex(ctx, evidence.SubmittedAt+params.AuditWindow, evidence.Id)
 		return nil
 	}
 
@@ -161,13 +171,16 @@ func (k Keeper) ResolveEvidence(ctx sdk.Context, evidenceId string) error {
 
 	// Threshold: if reliability > 500000 (50%), consider verified
 	if reliability > 500000 {
-		evidence.Status = types.EvidenceStatusVerified
+		evidence.Status = string(types.EvidenceStatusVerified)
 		evidence.VerifiedAt = uint64(ctx.BlockHeight())
 	} else {
-		evidence.Status = types.EvidenceStatusRejected
+		evidence.Status = string(types.EvidenceStatusRejected)
 	}
 
 	k.SetEvidence(ctx, evidence)
+
+	// Clean up expiry index — evidence is now resolved
+	k.RemoveExpiryIndex(ctx, evidence.SubmittedAt+params.AuditWindow, evidence.Id)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -188,23 +201,22 @@ func (k Keeper) ResolveEvidence(ctx sdk.Context, evidenceId string) error {
 	return nil
 }
 
-// ExpireStaleEvidence expires evidence that has passed the audit window without
-// sufficient audits. Called from EndBlock.
+// ExpireStaleEvidence resolves evidence whose audit window has closed.
+// Uses the expiry index for O(expired) scanning instead of iterating all evidence.
 func (k Keeper) ExpireStaleEvidence(ctx sdk.Context) {
-	params := k.GetParams(ctx)
 	currentHeight := uint64(ctx.BlockHeight())
 
-	k.IterateEvidence(ctx, func(e types.Evidence) bool {
-		if e.Status != types.EvidenceStatusSubmitted {
-			return false
-		}
-		if currentHeight >= e.SubmittedAt+params.AuditWindow {
-			// Try to resolve; if not enough audits it will be expired
-			if err := k.ResolveEvidence(ctx, e.Id); err != nil {
-				k.Logger(ctx).Error("failed to resolve stale evidence",
-					"evidence_id", e.Id, "error", err)
-			}
-		}
+	// Collect IDs first to avoid mutating the index during iteration
+	var expiredIds []string
+	k.IterateExpiredEvidence(ctx, currentHeight, func(evidenceId string) bool {
+		expiredIds = append(expiredIds, evidenceId)
 		return false
 	})
+
+	for _, id := range expiredIds {
+		if err := k.ResolveEvidence(ctx, id); err != nil {
+			k.Logger(ctx).Error("failed to resolve stale evidence",
+				"evidence_id", id, "error", err)
+		}
+	}
 }

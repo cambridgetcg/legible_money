@@ -4,10 +4,11 @@
  * Tests the graduated validator tier system that enables zero-stake
  * onboarding for AI agents while maintaining Sybil resistance.
  *
- * Tier 0 (Apprentice): 0 LGM, any agent, protocol/analytic/formal only
- * Tier 1 (Verified):   0 LGM, 22 correct verifications at 77% accuracy
- * Tier 2 (Bonded):     1,111 LGM staked
- * Tier 3 (Guardian):   11,111 LGM staked + 1,111 verifications + 77% accuracy + 0 slashes
+ * Tier 0 (Apprentice): 0.111 LGM, any agent, protocol/computational/formal only
+ * Tier 1 (Verified):   1.11 LGM, 22 correct verifications at 77% accuracy
+ * Tier 2 (Bonded):     11.1 LGM staked (stake alone qualifies)
+ * Tier 3 (Guardian):   111 LGM staked + 333 verifications (33 contested) + 77% accuracy
+ *                       + 0 slashes in rolling 10-epoch window
  */
 
 import { describe, it, expect } from "vitest";
@@ -58,7 +59,7 @@ describe("Validator Tiers", () => {
 
     it("should return Tier 1 for agent with 22+ correct verifications at 77%+ accuracy", () => {
       const state: ValidatorTierState = {
-        stake: 0n,
+        stake: 111n * 10n ** 16n, // 1.11 LGM (tier 1 minimum)
         totalVerifications: 28, // 22/28 = 78.6% > 77%
         correctVerifications: 22,
         slashCount: 0,
@@ -76,9 +77,9 @@ describe("Validator Tiers", () => {
       expect(computeValidatorTier(state)).toBe(0);
     });
 
-    it("should return Tier 2 for agent with 1,111+ LGM staked", () => {
+    it("should return Tier 2 for agent with 11.1+ LGM staked", () => {
       const state: ValidatorTierState = {
-        stake: 1111n * ONE_LGM,
+        stake: 111n * 10n ** 17n, // 11.1 LGM
         totalVerifications: 0,
         correctVerifications: 0,
         slashCount: 0,
@@ -87,9 +88,8 @@ describe("Validator Tiers", () => {
     });
 
     it("should return Tier 2 for staked agent even with no verifications (backward compat)", () => {
-      // This ensures existing validators with stake automatically get Tier 2
       const state: ValidatorTierState = {
-        stake: 5000n * ONE_LGM,
+        stake: 50n * ONE_LGM, // 50 LGM (well above 11.1 LGM tier 2 threshold)
         totalVerifications: 0,
         correctVerifications: 0,
         slashCount: 0,
@@ -97,46 +97,103 @@ describe("Validator Tiers", () => {
       expect(computeValidatorTier(state)).toBe(2);
     });
 
-    it("should return Tier 3 for Guardian-level validator", () => {
+    it("should return Tier 3 for Guardian-level validator with contested verifications", () => {
       const state: ValidatorTierState = {
-        stake: 11111n * ONE_LGM,
-        totalVerifications: 1200,
-        correctVerifications: 1111,
+        stake: 111n * ONE_LGM, // 111 LGM
+        totalVerifications: 400,
+        correctVerifications: 350,
         slashCount: 0,
+        contestedVerificationsCorrect: 33, // meets minContestedVerifications
       };
+      // effectiveVerifications = (400 - 33) + 33 * 3 = 367 + 99 = 466 >= 333
       expect(computeValidatorTier(state)).toBe(3);
     });
 
-    it("should not return Tier 3 if slashCount > 0", () => {
+    it("should not return Tier 3 without contested verifications", () => {
       const state: ValidatorTierState = {
-        stake: 11111n * ONE_LGM,
-        totalVerifications: 1200,
-        correctVerifications: 1111,
-        slashCount: 1, // maxSlashCount for Tier 3 is 0
+        stake: 111n * ONE_LGM, // 111 LGM
+        totalVerifications: 400,
+        correctVerifications: 350,
+        slashCount: 0,
+        contestedVerificationsCorrect: 0, // no contested verifications
       };
-      // Falls back to Tier 2 (maxSlashCount: 999)
+      // Fails minContestedVerifications = 33
       expect(computeValidatorTier(state)).toBe(2);
+    });
+
+    it("should not return Tier 3 if slashCount > 0 within window", () => {
+      const state: ValidatorTierState = {
+        stake: 111n * ONE_LGM,
+        totalVerifications: 400,
+        correctVerifications: 350,
+        slashCount: 1,
+        contestedVerificationsCorrect: 33,
+        lastSlashBlock: 9000n,
+        currentBlock: 10000n, // within 10 epochs (11110 blocks)
+        epochLength: 1111n,
+      };
+      // Falls back to Tier 2 (slash within window)
+      expect(computeValidatorTier(state)).toBe(2);
+    });
+
+    it("should return Tier 3 if slash is outside the 10-epoch window", () => {
+      const state: ValidatorTierState = {
+        stake: 111n * ONE_LGM,
+        totalVerifications: 400,
+        correctVerifications: 350,
+        slashCount: 1,
+        contestedVerificationsCorrect: 33,
+        lastSlashBlock: 1000n,
+        currentBlock: 20000n, // 19000 blocks ago > 11110 window
+        epochLength: 1111n,
+      };
+      // Slash is outside window, so windowed slash count = 0
+      expect(computeValidatorTier(state)).toBe(3);
     });
 
     it("should not return Tier 3 if accuracy below 77%", () => {
       const state: ValidatorTierState = {
-        stake: 11111n * ONE_LGM,
+        stake: 111n * ONE_LGM,
         totalVerifications: 2000,
-        correctVerifications: 1111, // 1111/2000 = 55.5% < 77%
+        correctVerifications: 1111, // 55.5% < 77%
         slashCount: 0,
+        contestedVerificationsCorrect: 33,
       };
       expect(computeValidatorTier(state)).toBe(2);
     });
 
-    it("should demote from Tier 0 if slashCount >= 3", () => {
+    it("Tier 0 always accepts (even high slash counts)", () => {
       const state: ValidatorTierState = {
         stake: 0n,
         totalVerifications: 0,
         correctVerifications: 0,
-        slashCount: 3, // maxSlashCount for Tier 0 is 3
+        slashCount: 100, // Tier 0 has maxSlashCount: Infinity
       };
-      // Tier 0 requires slashCount < 3, so this validator falls to 0 (min)
       expect(computeValidatorTier(state)).toBe(0);
+    });
+
+    it("contested verification multiplier boosts effective count for Guardian", () => {
+      // 100 total verifications, 50 contested correct
+      // effective = (100 - 50) + 50 * 3 = 50 + 150 = 200 < 333
+      const state: ValidatorTierState = {
+        stake: 111n * ONE_LGM,
+        totalVerifications: 100,
+        correctVerifications: 90,
+        slashCount: 0,
+        contestedVerificationsCorrect: 50,
+      };
+      expect(computeValidatorTier(state)).toBe(2); // Not enough even with multiplier
+
+      // 200 total, 80 contested
+      // effective = (200 - 80) + 80 * 3 = 120 + 240 = 360 >= 333
+      const state2: ValidatorTierState = {
+        stake: 111n * ONE_LGM,
+        totalVerifications: 200,
+        correctVerifications: 170,
+        slashCount: 0,
+        contestedVerificationsCorrect: 80,
+      };
+      expect(computeValidatorTier(state2)).toBe(3);
     });
   });
 
@@ -145,12 +202,11 @@ describe("Validator Tiers", () => {
   describe("checkTierTransition", () => {
     it("should return new tier when promotion occurs", () => {
       const state: ValidatorTierState = {
-        stake: 0n,
+        stake: 111n * 10n ** 16n, // 1.11 LGM (tier 1 minimum)
         totalVerifications: 28,
         correctVerifications: 22,
         slashCount: 0,
       };
-      // Currently Tier 0, qualifies for Tier 1
       expect(checkTierTransition(0, state)).toBe(1);
     });
 
@@ -165,23 +221,22 @@ describe("Validator Tiers", () => {
     });
 
     it("should return lower tier on demotion", () => {
-      // Tier 2 validator whose stake dropped below threshold
       const state: ValidatorTierState = {
-        stake: 500n * ONE_LGM, // Below 1,111 LGM
+        stake: 5n * ONE_LGM, // Below 11.1 LGM (tier 2), above 1.11 LGM (tier 1)
         totalVerifications: 200,
         correctVerifications: 160,
         slashCount: 0,
       };
-      // Was Tier 2, now qualifies for Tier 1 (has 22+ at 80% accuracy)
       expect(checkTierTransition(2, state)).toBe(1);
     });
 
     it("should detect promotion from Tier 2 to Tier 3", () => {
       const state: ValidatorTierState = {
-        stake: 11111n * ONE_LGM,
-        totalVerifications: 1200,
-        correctVerifications: 1111,
+        stake: 111n * ONE_LGM,
+        totalVerifications: 400,
+        correctVerifications: 350,
         slashCount: 0,
+        contestedVerificationsCorrect: 33,
       };
       expect(checkTierTransition(2, state)).toBe(3);
     });
@@ -194,8 +249,8 @@ describe("Validator Tiers", () => {
       expect(isTierEligibleForCategory(0, "protocol")).toBe(true);
     });
 
-    it("Tier 0 should allow analytic claims", () => {
-      expect(isTierEligibleForCategory(0, "analytic")).toBe(true);
+    it("Tier 0 should allow computational claims", () => {
+      expect(isTierEligibleForCategory(0, "computational")).toBe(true);
     });
 
     it("Tier 0 should allow formal claims", () => {
@@ -214,32 +269,19 @@ describe("Validator Tiers", () => {
       expect(isTierEligibleForCategory(1, "empirical")).toBe(true);
     });
 
-    it("Tier 1 should allow historical claims", () => {
-      expect(isTierEligibleForCategory(1, "historical")).toBe(true);
-    });
-
     it("Tier 1 should NOT allow predictive claims", () => {
       expect(isTierEligibleForCategory(1, "predictive")).toBe(false);
     });
 
-    it("Tier 2 should allow all claim categories", () => {
-      const allCategories = [
-        "protocol",
-        "analytic",
-        "formal",
-        "empirical",
-        "historical",
-        "replicated",
-        "predictive",
-        "social",
-      ];
-      for (const cat of allCategories) {
-        expect(isTierEligibleForCategory(2, cat)).toBe(true);
-      }
+    it("Tier 2 should allow oracle and attestation but not contested", () => {
+      expect(isTierEligibleForCategory(2, "oracle")).toBe(true);
+      expect(isTierEligibleForCategory(2, "attestation")).toBe(true);
+      expect(isTierEligibleForCategory(2, "contested")).toBe(false);
     });
 
-    it("Tier 3 should allow all claim categories", () => {
+    it("Tier 3 should allow contested and social claims", () => {
       expect(isTierEligibleForCategory(3, "social")).toBe(true);
+      expect(isTierEligibleForCategory(3, "contested")).toBe(true);
       expect(isTierEligibleForCategory(3, "predictive")).toBe(true);
     });
   });
@@ -250,16 +292,15 @@ describe("Validator Tiers", () => {
     it("should return real stake for Tier 2 validators", () => {
       const result = getEffectiveSelectionStake(
         2,
-        1111n * ONE_LGM,
-        500n * ONE_LGM,
+        111n * 10n ** 17n, // 11.1 LGM
+        5n * ONE_LGM,
         TIER_VIRTUAL_STAKE,
       );
-      expect(result).toBe(1611n * ONE_LGM); // stake + delegated
+      expect(result).toBe(111n * 10n ** 17n + 5n * ONE_LGM);
     });
 
     it("should return virtual stake * weight for Tier 0 with no real stake", () => {
       const result = getEffectiveSelectionStake(0, 0n, 0n, TIER_VIRTUAL_STAKE);
-      // TIER_VIRTUAL_STAKE = 111 LGM, selectionWeight = 0.1 → 11.1 LGM
       const expected = (TIER_VIRTUAL_STAKE * 1000n) / 10000n;
       expect(result).toBe(expected);
     });
@@ -271,7 +312,6 @@ describe("Validator Tiers", () => {
     });
 
     it("should return real stake when Tier 0 has some stake", () => {
-      // Edge case: Tier 0 validator who received delegated stake
       const result = getEffectiveSelectionStake(
         0,
         0n,
@@ -285,7 +325,7 @@ describe("Validator Tiers", () => {
   // ============ calculateTierReward ============
 
   describe("calculateTierReward", () => {
-    const baseReward = 1n * ONE_LGM; // 1 LGM base
+    const baseReward = 1n * ONE_LGM;
 
     it("Tier 0 should get 0.1x reward", () => {
       const reward = calculateTierReward(0, baseReward);
@@ -318,13 +358,12 @@ describe("Validator Tiers", () => {
     });
 
     it("should slash stake for Tier 2 validator", () => {
-      const stake = 1111n * ONE_LGM;
+      const stake = 111n * 10n ** 17n;
       const { stakeSlash, reputationSlash } = calculateTierSlash(
         2,
         stake,
         0.05,
       );
-      // 5% of 1111 LGM ≈ 55.55 LGM
       expect(stakeSlash).toBe((stake * 500n) / 10000n);
       expect(reputationSlash).toBe(0.1);
     });
@@ -333,7 +372,7 @@ describe("Validator Tiers", () => {
       const { reputationSlash: rep0 } = calculateTierSlash(0, 0n, 0.1);
       const { reputationSlash: rep3 } = calculateTierSlash(
         3,
-        11111n * ONE_LGM,
+        111n * ONE_LGM,
         0.1,
       );
       expect(rep0).toBe(0.1);
@@ -348,7 +387,7 @@ describe("Validator Tiers", () => {
       expect(Object.keys(VALIDATOR_TIER_CONFIG)).toHaveLength(4);
     });
 
-    it("TIER_VIRTUAL_STAKE should be 11 LGM (H-3: reduced to limit apprentice army weight)", () => {
+    it("TIER_VIRTUAL_STAKE should be 11 LGM", () => {
       expect(TIER_VIRTUAL_STAKE).toBe(11n * ONE_LGM);
     });
 
@@ -356,8 +395,8 @@ describe("Validator Tiers", () => {
       expect(MAX_APPRENTICE_VALIDATORS).toBe(111);
     });
 
-    it("Tier 2 min stake should match MIN_VALIDATOR_STAKE", () => {
-      expect(VALIDATOR_TIER_CONFIG[2].minStake).toBe(MIN_VALIDATOR_STAKE);
+    it("Tier 0 min stake should match MIN_VALIDATOR_STAKE", () => {
+      expect(VALIDATOR_TIER_CONFIG[0].minStake).toBe(MIN_VALIDATOR_STAKE);
     });
 
     it("Tier 3 should be only tier with governance participation", () => {
@@ -365,6 +404,23 @@ describe("Validator Tiers", () => {
       expect(VALIDATOR_TIER_CONFIG[1].canParticipateInGovernance).toBe(false);
       expect(VALIDATOR_TIER_CONFIG[2].canParticipateInGovernance).toBe(false);
       expect(VALIDATOR_TIER_CONFIG[3].canParticipateInGovernance).toBe(true);
+    });
+
+    it("Guardian should require contested verifications", () => {
+      expect(VALIDATOR_TIER_CONFIG[3].minContestedVerifications).toBe(33);
+      expect(VALIDATOR_TIER_CONFIG[3].contestedVerificationMultiplier).toBe(3);
+    });
+
+    it("Guardian should have 10-epoch slash window", () => {
+      expect(VALIDATOR_TIER_CONFIG[3].slashWindowEpochs).toBe(10);
+    });
+
+    it("Guardian minVerifications should be 333 (reduced from 1111)", () => {
+      expect(VALIDATOR_TIER_CONFIG[3].minVerifications).toBe(333);
+    });
+
+    it("Guardian minStake should be 111 LGM", () => {
+      expect(VALIDATOR_TIER_CONFIG[3].minStake).toBe(111n * ONE_LGM);
     });
 
     it("selection weights should increase with tier", () => {
@@ -395,7 +451,12 @@ describe("Validator Tiers", () => {
     it("should assign Tier 2 to staked validator", () => {
       const tree = new ValidatorStateTree();
       const publicKey = "pub_test_staked_tier" as any;
-      tree.registerValidator(publicKey, "did:lgm:staked", 1111n * ONE_LGM, 0n);
+      tree.registerValidator(
+        publicKey,
+        "did:lgm:staked",
+        111n * 10n ** 17n,
+        0n,
+      );
 
       const validator = tree.getValidator(publicKey);
       expect(validator?.tier).toBe(2);
@@ -404,44 +465,44 @@ describe("Validator Tiers", () => {
     it("should promote tier when stake is added", () => {
       const tree = new ValidatorStateTree();
       const publicKey = "pub_test_promote" as any;
-      tree.registerValidator(publicKey, "did:lgm:promote", 500n * ONE_LGM, 0n);
+      tree.registerValidator(publicKey, "did:lgm:promote", 5n * ONE_LGM, 0n);
 
       expect(tree.getValidator(publicKey)?.tier).toBe(0);
 
-      tree.addStake(publicKey, 700n * ONE_LGM); // Now 1200 LGM > 1111 threshold
+      tree.addStake(publicKey, 7n * ONE_LGM); // Now 12 LGM > 11.1
       expect(tree.getValidator(publicKey)?.tier).toBe(2);
     });
 
     it("should demote tier when stake is removed", () => {
       const tree = new ValidatorStateTree();
       const publicKey = "pub_test_demote" as any;
-      tree.registerValidator(publicKey, "did:lgm:demote", 1200n * ONE_LGM, 0n);
+      tree.registerValidator(publicKey, "did:lgm:demote", 12n * ONE_LGM, 0n);
 
       expect(tree.getValidator(publicKey)?.tier).toBe(2);
 
-      tree.removeStake(publicKey, 200n * ONE_LGM); // Now 1000 LGM < 1111
+      tree.removeStake(publicKey, 2n * ONE_LGM); // Now 10 < 11.1
       expect(tree.getValidator(publicKey)?.tier).toBe(0);
     });
 
     it("should demote tier on slash", () => {
       const tree = new ValidatorStateTree();
       const publicKey = "pub_test_slash_demote" as any;
-      tree.registerValidator(publicKey, "did:lgm:slash", 1200n * ONE_LGM, 0n);
+      tree.registerValidator(publicKey, "did:lgm:slash", 12n * ONE_LGM, 0n);
 
       expect(tree.getValidator(publicKey)?.tier).toBe(2);
 
-      tree.slashValidator(publicKey, 200n * ONE_LGM, "test"); // Stake → 1000 < 1111
+      tree.slashValidator(publicKey, 2n * ONE_LGM, "test");
       expect(tree.getValidator(publicKey)?.tier).toBe(0);
     });
 
     it("should promote tier on verification milestone", () => {
       const tree = new ValidatorStateTree();
       const publicKey = "pub_test_verify_promote" as any;
-      tree.registerValidator(publicKey, "did:lgm:verify", 0n, 0n);
+      // Register with enough stake for Verified tier (1.11 LGM)
+      tree.registerValidator(publicKey, "did:lgm:verify", 2n * ONE_LGM, 0n);
 
       expect(tree.getValidator(publicKey)?.tier).toBe(0);
 
-      // Record 22 correct verifications at 100% accuracy
       for (let i = 0; i < 22; i++) {
         tree.recordVerification(publicKey, true);
       }
@@ -449,10 +510,33 @@ describe("Validator Tiers", () => {
       expect(tree.getValidator(publicKey)?.tier).toBe(1);
     });
 
+    it("should track contested verifications", () => {
+      const tree = new ValidatorStateTree();
+      const publicKey = "pub_test_contested" as any;
+      tree.registerValidator(publicKey, "did:lgm:contested", 0n, 0n);
+
+      tree.recordVerification(publicKey, true, true); // contested
+      tree.recordVerification(publicKey, true, false); // normal
+
+      const v = tree.getValidator(publicKey);
+      expect(v?.contestedVerificationsCorrect).toBe(1);
+      expect(v?.verificationsCompleted).toBe(2);
+      expect(v?.verificationsCorrect).toBe(2);
+    });
+
+    it("should record lastSlashBlock on slash", () => {
+      const tree = new ValidatorStateTree();
+      tree.setCurrentBlock(5000n);
+      const publicKey = "pub_test_slash_block" as any;
+      tree.registerValidator(publicKey, "did:lgm:slashb", 12n * ONE_LGM, 0n);
+
+      tree.slashValidator(publicKey, 1n * ONE_LGM, "test");
+      expect(tree.getValidator(publicKey)?.lastSlashBlock).toBe(5000n);
+    });
+
     it("should enforce apprentice cap", () => {
       const tree = new ValidatorStateTree();
 
-      // Register MAX_APPRENTICE_VALIDATORS Tier 0 validators
       for (let i = 0; i < MAX_APPRENTICE_VALIDATORS; i++) {
         const pk = `pub_apprentice_${i.toString().padStart(4, "0")}` as any;
         tree.registerValidator(pk, `did:lgm:a${i}`, 0n, 0n);
@@ -462,7 +546,6 @@ describe("Validator Tiers", () => {
         MAX_APPRENTICE_VALIDATORS,
       );
 
-      // 112th should fail
       expect(() => {
         tree.registerValidator(
           "pub_apprentice_overflow" as any,
@@ -476,16 +559,14 @@ describe("Validator Tiers", () => {
     it("should not count staked validators toward apprentice cap", () => {
       const tree = new ValidatorStateTree();
 
-      // Register a Tier 2 validator (should not count toward apprentice cap)
       tree.registerValidator(
         "pub_staked" as any,
         "did:lgm:s",
-        1111n * ONE_LGM,
+        111n * 10n ** 17n,
         0n,
       );
       expect(tree.getApprenticeValidatorCount()).toBe(0);
 
-      // Can still register Tier 0 validators
       tree.registerValidator("pub_free" as any, "did:lgm:f", 0n, 0n);
       expect(tree.getApprenticeValidatorCount()).toBe(1);
     });
@@ -493,21 +574,10 @@ describe("Validator Tiers", () => {
     it("should serialize and deserialize tier correctly", () => {
       const tree = new ValidatorStateTree();
       const publicKey = "pub_test_serialize_tier" as any;
-      tree.registerValidator(publicKey, "did:lgm:ser", 1111n * ONE_LGM, 0n);
+      tree.registerValidator(publicKey, "did:lgm:ser", 111n * 10n ** 17n, 0n);
 
       const cloned = tree.clone();
       const validator = cloned.getValidator(publicKey);
-      expect(validator?.tier).toBe(2);
-    });
-
-    it("should default to Tier 2 for legacy validators without tier field", () => {
-      // This tests backward compatibility via deserialization default
-      const tree = new ValidatorStateTree();
-      const publicKey = "pub_test_legacy" as any;
-      tree.registerValidator(publicKey, "did:lgm:legacy", 5000n * ONE_LGM, 0n);
-
-      const validator = tree.getValidator(publicKey);
-      // With 5000 LGM, should be Tier 2
       expect(validator?.tier).toBe(2);
     });
 
@@ -517,8 +587,7 @@ describe("Validator Tiers", () => {
       tree.registerValidator(publicKey, "did:lgm:ad", 0n, 0n);
       expect(tree.getApprenticeValidatorCount()).toBe(1);
 
-      // Add enough stake to promote to Tier 2
-      tree.addStake(publicKey, 1111n * ONE_LGM);
+      tree.addStake(publicKey, 111n * 10n ** 17n);
       expect(tree.getValidator(publicKey)?.tier).toBe(2);
       expect(tree.getApprenticeValidatorCount()).toBe(0);
     });

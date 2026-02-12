@@ -119,25 +119,112 @@ func (k Keeper) GetLatestVersion(ctx sdk.Context, factID string) (types.Fact, bo
 	return chain[len(chain)-1], true
 }
 
-// TriggerReverificationScan scans for facts needing reverification and emits events.
+// TriggerReverificationScan scans for facts needing reverification and
+// automatically creates reverification rounds for them (AH-5).
 // Called periodically from EndBlocker (amortized, max per block).
+//
+// For each decayed fact that needs reverification:
+//  1. Skip if there's already an active round for this fact's claim
+//  2. Create a synthetic claim for the fact's original content
+//  3. Create a reverification round (Type = "reverification")
+//
+// Reverification rounds follow the same commit-reveal flow as verification,
+// but on completion apply the category-specific ReverificationBonus if accepted.
 func (k Keeper) TriggerReverificationScan(ctx sdk.Context, maxPerBlock int) int {
 	facts := k.GetFactsNeedingReverification(ctx, maxPerBlock)
 	triggered := 0
+	maxCreated := types.MaxReverificationsPerBlock
 
 	for _, fact := range facts {
+		if triggered >= maxCreated {
+			break
+		}
+
+		// Guard: skip if a round already exists for this fact's original claim
+		if fact.OriginalClaimId != "" && k.HasActiveRoundForClaim(ctx, fact.OriginalClaimId) {
+			continue
+		}
+
+		// Create or find the claim for reverification
+		claimId := k.ensureReverificationClaim(ctx, fact)
+		if claimId == "" {
+			continue
+		}
+
+		// Guard: skip if a round already exists for this reverification claim
+		if k.HasActiveRoundForClaim(ctx, claimId) {
+			continue
+		}
+
+		// Create the reverification round
+		claim, found := k.GetClaim(ctx, claimId)
+		if !found {
+			continue
+		}
+
+		round, err := k.CreateVerificationRound(ctx, claim)
+		if err != nil {
+			k.Logger(ctx).Error("failed to create reverification round",
+				"fact_id", fact.Id, "error", err)
+			continue
+		}
+
+		// Mark as reverification type
+		round.Type = types.RoundTypeReverification
+		k.SetVerificationRound(ctx, round)
+
 		ctx.EventManager().EmitEvent(
-			sdk.NewEvent("reverification_needed",
+			sdk.NewEvent("reverification_triggered",
 				sdk.NewAttribute("fact_id", fact.Id),
+				sdk.NewAttribute("round_id", round.Id),
 				sdk.NewAttribute("domain", fact.Domain),
 				sdk.NewAttribute("confidence", fmt.Sprintf("%d", fact.Confidence)),
 				sdk.NewAttribute("category", fact.EpistemicCategory),
 			),
 		)
+
+		k.Logger(ctx).Info("auto-reverification round created",
+			"fact_id", fact.Id,
+			"round_id", round.Id,
+			"decayed_confidence", fact.Confidence,
+		)
+
 		triggered++
 	}
 
 	return triggered
+}
+
+// ensureReverificationClaim creates or retrieves a claim for reverification of a fact.
+// If the fact's original claim still exists, reuse it. Otherwise, create a synthetic one.
+func (k Keeper) ensureReverificationClaim(ctx sdk.Context, fact types.Fact) string {
+	// Try original claim first
+	if fact.OriginalClaimId != "" {
+		if _, found := k.GetClaim(ctx, fact.OriginalClaimId); found {
+			return fact.OriginalClaimId
+		}
+	}
+
+	// Create synthetic reverification claim
+	height := uint64(ctx.BlockHeight())
+	claimId := fmt.Sprintf("reverify-%s-%d", fact.Id, height)
+
+	claim := types.Claim{
+		Id:                   claimId,
+		ClaimText:            fact.ClaimText,
+		Domain:               fact.Domain,
+		EpistemicCategory:    fact.EpistemicCategory,
+		Submitter:            fact.SubmitterDid,
+		SubmitterDid:         fact.SubmitterDid,
+		Status:               "pending",
+		LogicZone:            fact.LogicZone,
+		SubmittedAtHeight:    height,
+		References:           fact.References,
+		ReverificationFactId: fact.Id,
+	}
+	k.SetClaim(ctx, claim)
+
+	return claimId
 }
 
 // MasterConfidence computes the final confidence for a fact using the master formula:

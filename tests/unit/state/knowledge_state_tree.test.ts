@@ -63,7 +63,7 @@ function makeFact(
 ): Omit<FactState, "referenceRoot"> {
   return {
     id,
-    claim: opts.claim ?? `Test claim for ${id}`,
+    claimText: opts.claim ?? `Test claim for ${id}`,
     domain: opts.domain ?? "physics.mechanics",
     confidence: (opts.confidence ?? 0.85) as Confidence,
     verifiedAt: opts.verifiedAt ?? 100n,
@@ -1631,7 +1631,7 @@ describe.sequential("KnowledgeStateTree", () => {
       const id = uid();
       tree.addFact({
         id,
-        claim: "Minimal fact",
+        claimText: "Minimal fact",
         domain: "test",
         confidence: 0.5 as Confidence,
         verifiedAt: 0n,

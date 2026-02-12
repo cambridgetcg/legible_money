@@ -73,6 +73,9 @@ export interface StateRootComponents {
   captureChallengeRoot?: MerkleRoot; // Active capture challenges root
   isolatedReputationRoot?: MerkleRoot; // Isolated reputation state root
 
+  // Negative Knowledge state root
+  counterFactRoot?: MerkleRoot; // Counter-fact (negative knowledge) state root
+
   version: bigint; // State version (block number)
 }
 
@@ -93,6 +96,8 @@ export interface AccountState {
   createdAtBlock: bigint; // Block when account was created
   lastActiveBlock: bigint;
   flags: AccountFlags;
+  /** Per-period balance tracking for token expiration (Dynamic Array Method) */
+  periodBalances?: Map<number, bigint>;
   /** Agent availability for project work */
   availability?: AgentAvailability;
 }
@@ -159,6 +164,15 @@ export interface ValidatorState {
   verificationsCorrect: number;
   slashCount: number;
 
+  // Contested claim engagement (Strategy B: Bravery Bonus)
+  contestedVerificationsCorrect: number;
+
+  // Slash window tracking (Strategy A: Slash Decay)
+  lastSlashBlock: bigint;
+
+  // Computed tier (0-3), updated on state mutations
+  tier: number;
+
   // Commission for delegators
   commissionRate: number; // 0-1, fraction of rewards
 }
@@ -186,6 +200,7 @@ export interface UnbondingEntry {
   initiatedAt: bigint; // Block number when undelegation started
   completesAt: bigint; // Block number when unbonding completes
   status: "pending" | "completed" | "cancelled";
+  originPeriod?: number; // Period when tokens were originally staked (for period-aware release)
 }
 
 /**
@@ -206,7 +221,7 @@ export interface ValidatorSetState {
  */
 export interface FactState {
   id: string; // Fact ID (hash of claim)
-  claim: string; // The claim text
+  claimText: string; // The claim text (Go: claim_text)
   domain: string; // Knowledge domain
   confidence: Confidence;
   verifiedAt: bigint; // Block number
@@ -227,6 +242,16 @@ export interface FactState {
   lastCitedBlock?: bigint; // Block number of most recent citation
   totalCitationRewards?: bigint; // Cumulative LGM earned from citation rewards
 
+  // Adversarial verification fields (survive-to-accept)
+  /** True during challenge window — confidence frozen, can be overturned */
+  isProvisional?: boolean;
+  /** Block when challenge window closes */
+  challengeWindowEnd?: bigint;
+  /** Back-reference to the original claim */
+  originalClaimId?: string;
+  /** Number of challenges this fact has survived */
+  survivedChallenges?: number;
+
   // Ontological metadata
   epistemicCategory?: EpistemicCategory; // Epistemic category (from domain or stratum default)
   stratum?: OntologicalStratum; // Stratum of the resolved domain
@@ -242,6 +267,12 @@ export interface FactState {
   // Gödelian metadata (U1 fix: propagated from ClaimState)
   logicZone?: LogicZone; // Logic zone of the claim
   decidability?: Decidability; // Decidability assessment at submission
+
+  // Go alignment: confidence decay tracking
+  /** Block of last confidence decay calculation (Go: last_confidence_update) */
+  lastConfidenceUpdate?: bigint;
+  /** Confidence before decay applied (Go: base_confidence) */
+  baseConfidence?: number;
 
   // Undecidable resolution metadata (U7 fix)
   undecidableResolution?: {
@@ -341,6 +372,18 @@ export interface ClaimState {
   /** Reason for rejection (if rejected) */
   rejectionReason?: string;
 
+  // Adversarial verification fields (survive-to-accept)
+  /** Structural evaluation score (0-1_000_000) */
+  structuralScore?: number;
+  /** Block when challenge window opened */
+  challengeWindowStart?: bigint;
+  /** Block when challenge window closes */
+  challengeWindowEnd?: bigint;
+  /** Provisional fact ID (if created) */
+  provisionalFactId?: string;
+  /** Number of active challenges */
+  activeChallengeCount?: number;
+
   /** If derived from existing facts (inference chain) */
   derivedFrom?: {
     factIds: string[];
@@ -354,9 +397,15 @@ export interface ClaimState {
 
 export type ClaimStatus =
   | "pending" // Submitted, awaiting verification round
-  | "verifying" // In active verification round
+  | "pending_evaluation" // Adversarial: awaiting structural eval in next block
+  | "evaluated" // Adversarial: scored 300k-500k, in challenge window, no provisional fact
+  | "provisional" // Adversarial: scored ≥500k, provisional fact exists, in challenge window
+  | "in_verification" // In active verification round (was: "verifying")
   | "accepted" // Verification passed, fact created
   | "rejected" // Verification failed
+  | "challenged" // Under active challenge (Go alignment)
+  | "insufficient" // Insufficient validator participation (Go alignment)
+  | "contested" // Disputed, no clear consensus (Go alignment)
   | "expired" // Timed out without verification
   | "withdrawn"; // Submitter withdrew claim
 
@@ -614,6 +663,7 @@ export type TransitionType =
   // Knowledge transitions
   | "add_fact"
   | "challenge_fact"
+  | "challenge_provisional_fact"
   | "resolve_challenge"
   | "revoke_fact"
   | "add_reference"
@@ -658,6 +708,7 @@ export type TransitionType =
   | "vesting_accelerate"
   | "vesting_falsify"
   | "vesting_complete"
+  | "vesting_claim_reserve"
 
   // DMSS Schedule transitions (Decentralized Message Scheduling System)
   | "schedule_create"
@@ -1394,6 +1445,7 @@ export type StateErrorCode =
   | "CLIFF_NOT_ENDED"
   | "NOTHING_TO_CLAIM"
   | "NOT_RECIPIENT"
+  | "RESERVE_NOT_CLAIMABLE"
   // DMSS Schedule errors
   | "SCHEDULE_NOT_FOUND"
   | "SCHEDULE_PAUSED"
@@ -1493,4 +1545,7 @@ export type StateErrorCode =
   | "LIP_NOT_FOUND"
   | "LIP_INVALID_STAGE"
   | "GOVERNANCE_INELIGIBLE"
-  | "VOTE_ALREADY_CAST";
+  | "VOTE_ALREADY_CAST"
+
+  // Validator tier errors
+  | "APPRENTICE_CAP_EXCEEDED";

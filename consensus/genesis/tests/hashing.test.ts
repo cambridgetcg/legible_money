@@ -165,12 +165,12 @@ describe("SHA-512", () => {
       expect(hash.length).toBe(32);
     });
 
-    it("should be first 32 bytes of full SHA-512", () => {
+    it("should produce SHA-256 output (aligned with Go/Cosmos SDK)", () => {
       const input = "test input";
-      const full = sha512Hash(input);
-      const truncated = sha512_256(input);
+      const fromSha256 = sha256Hash(input);
+      const fromAlias = sha512_256(input);
 
-      expect(bytesToHex(truncated)).toBe(bytesToHex(full.slice(0, 32)));
+      expect(bytesToHex(fromAlias)).toBe(bytesToHex(fromSha256));
     });
   });
 });
@@ -252,9 +252,9 @@ describe("BLAKE3", () => {
 
 describe("Domain Separation", () => {
   describe("domainHash", () => {
-    it("should produce 64-byte hash", () => {
+    it("should produce 32-byte hash (SHA-256)", () => {
       const hash = domainHash("test.domain", "data");
-      expect(hash.length).toBe(64);
+      expect(hash.length).toBe(32);
     });
 
     it("should produce different hashes for different domains", () => {
@@ -284,13 +284,13 @@ describe("Domain Separation", () => {
       const data = new Uint8Array([1, 2, 3, 4, 5]);
       const hash = domainHash("domain", data);
 
-      expect(hash.length).toBe(64);
+      expect(hash.length).toBe(32);
     });
 
-    it("should produce different hashes than raw SHA-512", () => {
+    it("should produce different hashes than raw SHA-256", () => {
       const data = "test data";
       const domainHashed = bytesToHex(domainHash("domain", data));
-      const rawHashed = sha512Hex(data);
+      const rawHashed = sha256Hex(data);
 
       expect(domainHashed).not.toBe(rawHashed);
     });

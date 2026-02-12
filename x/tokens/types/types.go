@@ -1,105 +1,21 @@
 package types
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
 // -----------------------------------------------------------------------
 // Core domain types
 // -----------------------------------------------------------------------
 
-// PeriodBalance represents tokens minted in a specific period.
-type PeriodBalance struct {
-	Period    uint64 `json:"period"`     // period index (floor(blockHeight / periodBlocks))
-	Balance   string `json:"balance"`    // amount in ulgm
-	ExpiresAt uint64 `json:"expires_at"` // block height when this period expires
-	Swept     bool   `json:"swept"`      // whether expired tokens were retrieved
-}
+// Note: PeriodBalance, ExpirableAccount, ExpirationConfig, RAIHoldingAccount,
+// RAIDistribution, and TransferPolicy structs are now defined in state.pb.go
+// (proto-generated).
 
-func (pb *PeriodBalance) Reset()        {}
-func (pb *PeriodBalance) String() string { return fmt.Sprintf("%+v", *pb) }
-func (pb *PeriodBalance) ProtoMessage()  {}
-
-// ExpirableAccount tracks period-based balances for an account.
-type ExpirableAccount struct {
-	Address        string          `json:"address"`         // bech32 address
-	TotalBalance   string          `json:"total_balance"`   // sum of all active period balances
-	PeriodBalances []PeriodBalance `json:"period_balances"` // ordered by period
-	EarliestPeriod uint64          `json:"earliest_period"` // oldest non-zero period
-	LatestPeriod   uint64          `json:"latest_period"`   // newest non-zero period
-	TotalExpired   string          `json:"total_expired"`   // cumulative expired amount
-	AccountType    string          `json:"account_type"`    // "standard", "validator", "foundation", "research"
-}
-
-func (ea *ExpirableAccount) Reset()        {}
-func (ea *ExpirableAccount) String() string { return fmt.Sprintf("%+v", *ea) }
-func (ea *ExpirableAccount) ProtoMessage()  {}
-
-// ExpirationConfig configures the token expiration parameters.
-type ExpirationConfig struct {
-	PeriodBlocks       uint64 `json:"period_blocks"`        // blocks per period (default: 34272 = ~1 day)
-	PeriodsUntilExpiry uint64 `json:"periods_until_expiry"` // periods until tokens expire (default: 365 = ~1 year)
-	DustThreshold      string `json:"dust_threshold"`       // minimum balance to track
-	SweepBatchSize     uint32 `json:"sweep_batch_size"`     // max accounts per sweep
-}
-
-func (ec *ExpirationConfig) Reset()        {}
-func (ec *ExpirationConfig) String() string { return fmt.Sprintf("%+v", *ec) }
-func (ec *ExpirationConfig) ProtoMessage()  {}
-
-// RAIHoldingAccount tracks the Regenerative Agent Income pool.
-type RAIHoldingAccount struct {
-	Balance          string `json:"balance"`           // current pool balance
-	TotalReceived    string `json:"total_received"`    // cumulative from expiration
-	TotalDistributed string `json:"total_distributed"` // cumulative distributed
-	LastDistBlock    uint64 `json:"last_dist_block"`   // last distribution block
-}
-
-func (ra *RAIHoldingAccount) Reset()        {}
-func (ra *RAIHoldingAccount) String() string { return fmt.Sprintf("%+v", *ra) }
-func (ra *RAIHoldingAccount) ProtoMessage()  {}
-
-// RAIDistribution represents a distribution event.
-type RAIDistribution struct {
-	Id             string `json:"id"`              // distribution ID
-	Block          uint64 `json:"block"`           // block height
-	TotalAmount    string `json:"total_amount"`    // total distributed
-	RecipientCount uint32 `json:"recipient_count"` // number of recipients
-	PerRecipient   string `json:"per_recipient"`   // amount per recipient
-}
-
-func (rd *RAIDistribution) Reset()        {}
-func (rd *RAIDistribution) String() string { return fmt.Sprintf("%+v", *rd) }
-func (rd *RAIDistribution) ProtoMessage()  {}
-
-// TransferPolicy configures transfer behavior.
-type TransferPolicy struct {
-	FreshExpirationOnReceive bool   `json:"fresh_expiration_on_receive"` // false = preserve sender's period
-	MaxTransferPerBlock      string `json:"max_transfer_per_block"`     // max per block (0 = unlimited)
-}
-
-func (tp *TransferPolicy) Reset()        {}
-func (tp *TransferPolicy) String() string { return fmt.Sprintf("%+v", *tp) }
-func (tp *TransferPolicy) ProtoMessage()  {}
-
-// Params holds module parameters.
-type Params struct {
-	PeriodBlocks              uint64 `json:"period_blocks"`                // blocks per period
-	PeriodsUntilExpiry        uint64 `json:"periods_until_expiry"`        // periods until expiration
-	DustThreshold             string `json:"dust_threshold"`              // minimum tracked balance
-	SweepBatchSize            uint32 `json:"sweep_batch_size"`            // accounts per sweep
-	RAIDistributionRate       uint64 `json:"rai_distribution_rate"`       // blocks between RAI distributions
-	FreshExpirationOnTransfer bool   `json:"fresh_expiration_on_transfer"` // whether transfers get fresh expiration
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
+// Note: Params struct is now defined in genesis.pb.go (proto-generated).
 
 // Validate performs parameter validation.
 func (p Params) Validate() error {
@@ -112,7 +28,7 @@ func (p Params) Validate() error {
 	if p.SweepBatchSize == 0 {
 		return fmt.Errorf("sweep_batch_size must be positive")
 	}
-	if p.RAIDistributionRate == 0 {
+	if p.RaiDistributionRate == 0 {
 		return fmt.Errorf("rai_distribution_rate must be positive")
 	}
 	dust := new(big.Int)
@@ -122,23 +38,10 @@ func (p Params) Validate() error {
 	return nil
 }
 
-// -----------------------------------------------------------------------
-// Genesis state
-// -----------------------------------------------------------------------
-
-// GenesisState defines the tokens module genesis state.
-type GenesisState struct {
-	Params   Params              `json:"params"`
-	Accounts []ExpirableAccount  `json:"accounts"`
-	RAI      RAIHoldingAccount   `json:"rai"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
+// Note: GenesisState struct is now defined in genesis.pb.go (proto-generated).
 
 // -----------------------------------------------------------------------
-// Message types
+// Message types — hand-written (not in proto)
 // -----------------------------------------------------------------------
 
 // MsgTransfer transfers tokens with period preservation.
@@ -302,91 +205,43 @@ func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
 // -----------------------------------------------------------------------
-// MsgServer interface
+// ValidateBasic / GetSigners for proto-generated MsgTransferFrom
+// (struct defined in tx.pb.go; fields: Spender, TokenId, From, To, Amount)
 // -----------------------------------------------------------------------
 
-// MsgServer defines the tokens module message service.
-type MsgServer interface {
-	Transfer(context.Context, *MsgTransfer) (*MsgTransferResponse, error)
-	ApproveAllowance(context.Context, *MsgApproveAllowance) (*MsgApproveAllowanceResponse, error)
-	Burn(context.Context, *MsgBurn) (*MsgBurnResponse, error)
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+func (msg *MsgTransferFrom) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Spender)
+	return []sdk.AccAddress{addr}
 }
 
-// -----------------------------------------------------------------------
-// gRPC service descriptor (hand-written, replaces proto generation)
-// -----------------------------------------------------------------------
-
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.tokens.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Transfer", Handler: _Msg_Transfer_Handler},
-		{MethodName: "ApproveAllowance", Handler: _Msg_ApproveAllowance_Handler},
-		{MethodName: "Burn", Handler: _Msg_Burn_Handler},
-		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/tokens/v1/tx.proto",
+func (msg *MsgTransferFrom) ValidateBasic() error {
+	if msg.Spender == "" {
+		return fmt.Errorf("spender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Spender); err != nil {
+		return fmt.Errorf("invalid spender address: %w", err)
+	}
+	if msg.From == "" {
+		return fmt.Errorf("from cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.From); err != nil {
+		return fmt.Errorf("invalid from address: %w", err)
+	}
+	if msg.To == "" {
+		return fmt.Errorf("to cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.To); err != nil {
+		return fmt.Errorf("invalid to address: %w", err)
+	}
+	if msg.From == msg.To {
+		return fmt.Errorf("from and to cannot be the same")
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(msg.Amount, 10); !ok || amt.Sign() <= 0 {
+		return fmt.Errorf("amount must be a positive integer")
+	}
+	return nil
 }
 
-func _Msg_Transfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgTransfer)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).Transfer(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/Transfer"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).Transfer(ctx, req.(*MsgTransfer))
-	})
-}
-
-func _Msg_ApproveAllowance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgApproveAllowance)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ApproveAllowance(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/ApproveAllowance"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ApproveAllowance(ctx, req.(*MsgApproveAllowance))
-	})
-}
-
-func _Msg_Burn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgBurn)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).Burn(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/Burn"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).Burn(ctx, req.(*MsgBurn))
-	})
-}
-
-func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateParams(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.tokens.v1.Msg/UpdateParams"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
-	})
-}
-
-// RegisterMsgServer registers the MsgServer implementation with the gRPC server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
+// Note: MsgServer interface, RegisterMsgServer, and all gRPC handler functions
+// are now defined in tx_grpc.pb.go (proto-generated).

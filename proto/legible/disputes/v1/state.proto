@@ -1,0 +1,64 @@
+syntax = "proto3";
+package legible.disputes.v1;
+
+option go_package = "github.com/legible-money/legible/x/disputes/types";
+
+// Dispute represents a challenge to a verified fact.
+message Dispute {
+  string id = 1;
+  string fact_id = 2;
+  string claim_id = 3;
+  string challenger = 4;
+  string defender = 5;
+  string reason = 6;
+  string bond = 7;
+  uint32 tier = 8;
+  string status = 9;
+  string outcome = 10;
+  uint64 created_at = 11;
+  uint64 evidence_deadline = 12;
+  uint64 voting_deadline = 13;
+  repeated string arbiters = 14;
+  uint32 evidence_count = 15;
+}
+
+// DisputeEvidence represents evidence submitted for a dispute.
+message DisputeEvidence {
+  string id = 1;
+  string dispute_id = 2;
+  string submitter = 3;
+  string side = 4;
+  string content = 5;
+  uint64 submitted_at = 6;
+}
+
+// EvidenceCommitment represents a committed (but not yet revealed) evidence hash.
+message EvidenceCommitment {
+  string dispute_id = 1;
+  string submitter = 2;
+  string side = 3;
+  string content_hash = 4;
+  uint64 committed_at = 5;
+  bool revealed = 6;
+}
+
+// DisputeVote represents an arbiter's vote.
+message DisputeVote {
+  string dispute_id = 1;
+  string arbiter = 2;
+  string vote = 3;
+  string stake = 4;
+  string rationale = 5;
+  uint64 voted_at = 6;
+}
+
+// TierConfig defines requirements for each escalation tier.
+message TierConfig {
+  uint32 tier = 1;
+  uint32 arbiter_count = 2;
+  string min_bond = 3;
+  uint64 evidence_period = 4;
+  uint64 voting_period = 5;
+  uint64 quorum_threshold = 6;
+  uint64 majority_threshold = 7;
+}

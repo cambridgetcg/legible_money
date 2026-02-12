@@ -132,8 +132,8 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 	currentBlock := uint64(ctx.BlockHeight())
 
 	am.keeper.IteratePots(ctx, func(pot types.ClaimingPot) bool {
-		if pot.Status == types.PotStatusActive && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
-			pot.Status = types.PotStatusExpired
+		if pot.Status == string(types.PotStatusActive) && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
+			pot.Status = string(types.PotStatusExpired)
 			am.keeper.SetPot(ctx, pot)
 		}
 		return false

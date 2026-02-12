@@ -29,60 +29,6 @@ func (s Stratum) IsValid() bool {
 	return s <= MaxStratum
 }
 
-// StratumProperties defines the logical properties of each stratum.
-type StratumProperties struct {
-	Stratum          Stratum `json:"stratum"`
-	Name             string  `json:"name"`
-	Description      string  `json:"description"`
-	Complete         bool    `json:"complete"`          // Goedel: is the system complete?
-	Decidable        bool    `json:"decidable"`         // is there an algorithm to decide all statements?
-	GoedelApplies    bool    `json:"goedel_applies"`    // does Goedel's incompleteness apply?
-	ConsistencyProof string  `json:"consistency_proof"` // "internal", "assumed", "external"
-	MaxConfidence    uint64  `json:"max_confidence"`    // max confidence ceiling (basis points, 1000000 = 1.0)
-	DecayRate        uint64  `json:"decay_rate"`        // confidence decay rate per day (basis points)
-}
-
-func (sp *StratumProperties) Reset()         {}
-func (sp *StratumProperties) String() string { return fmt.Sprintf("%+v", *sp) }
-func (sp *StratumProperties) ProtoMessage()  {}
-
-// Domain represents a knowledge domain within a stratum.
-type Domain struct {
-	Name        string  `json:"name"`         // unique identifier
-	DisplayName string  `json:"display_name"` // human-readable name
-	Description string  `json:"description"`  // domain description
-	Stratum     Stratum `json:"stratum"`      // which stratum this domain belongs to
-	Status      string  `json:"status"`       // "active", "proposed", "deprecated"
-	CreatedAt   uint64  `json:"created_at"`   // block height
-	UpdatedAt   uint64  `json:"updated_at"`   // block height
-	ClaimCount  uint64  `json:"claim_count"`  // total claims in domain
-	FactCount   uint64  `json:"fact_count"`   // total verified facts in domain
-	ProposedBy  string  `json:"proposed_by"`  // bech32 address of proposer
-}
-
-func (d *Domain) Reset()         {}
-func (d *Domain) String() string { return fmt.Sprintf("%+v", *d) }
-func (d *Domain) ProtoMessage()  {}
-
-// DomainProposal for adding/modifying domains.
-type DomainProposal struct {
-	Id           string `json:"id"`            // proposal ID
-	Domain       Domain `json:"domain"`        // proposed domain
-	Proposer     string `json:"proposer"`      // bech32 address
-	ProposalType string `json:"proposal_type"` // "add", "deprecate", "modify"
-	Stake        string `json:"stake"`         // stake locked for proposal
-	VotesFor     uint32 `json:"votes_for"`     // endorsement count
-	VotesAgainst uint32 `json:"votes_against"` // rejection count
-	Voters       []string `json:"voters"`      // addresses that have voted
-	Status       string `json:"status"`        // "active", "passed", "rejected", "expired"
-	CreatedAt    uint64 `json:"created_at"`    // block height
-	ExpiresAt    uint64 `json:"expires_at"`    // block height
-}
-
-func (dp *DomainProposal) Reset()         {}
-func (dp *DomainProposal) String() string { return fmt.Sprintf("%+v", *dp) }
-func (dp *DomainProposal) ProtoMessage()  {}
-
 // HasVoted returns whether the given address has already voted on this proposal.
 func (dp *DomainProposal) HasVoted(addr string) bool {
 	for _, v := range dp.Voters {
@@ -92,32 +38,6 @@ func (dp *DomainProposal) HasVoted(addr string) bool {
 	}
 	return false
 }
-
-// CrossStratumLink represents a relationship between domains in different strata.
-type CrossStratumLink struct {
-	SourceDomain string `json:"source_domain"`
-	TargetDomain string `json:"target_domain"`
-	LinkType     string `json:"link_type"` // "depends_on", "generalizes", "restricts"
-	Discount     uint64 `json:"discount"`  // confidence discount for cross-stratum references (basis points)
-}
-
-func (csl *CrossStratumLink) Reset()         {}
-func (csl *CrossStratumLink) String() string { return fmt.Sprintf("%+v", *csl) }
-func (csl *CrossStratumLink) ProtoMessage()  {}
-
-// Params for the ontology module.
-type Params struct {
-	MinProposalStake     string `json:"min_proposal_stake"`      // minimum stake for domain proposal
-	ProposalVotingPeriod uint64 `json:"proposal_voting_period"`  // blocks
-	MinEndorsements      uint32 `json:"min_endorsements"`        // minimum votes for domain approval
-	CrossStratumDiscount uint64 `json:"cross_stratum_discount"`  // default discount for cross-stratum refs (basis points)
-	MaxDomainsPerStratum uint32 `json:"max_domains_per_stratum"` // maximum domains per stratum
-	AllowNewStrata       bool   `json:"allow_new_strata"`        // whether governance can add new strata
-}
-
-func (p *Params) Reset()         {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
 
 // Validate performs parameter validation.
 func (p Params) Validate() error {
@@ -131,6 +51,95 @@ func (p Params) Validate() error {
 		return fmt.Errorf("proposal voting period must be greater than 0")
 	}
 	return nil
+}
+
+// -----------------------------------------------------------------------
+// Godelian Logic Zone types
+// -----------------------------------------------------------------------
+
+// LogicZone identifies a logic system with known completeness properties.
+type LogicZone string
+
+const (
+	ZonePropositional LogicZone = "propositional"
+	ZonePresburger    LogicZone = "presburger"
+	ZonePeano         LogicZone = "peano"
+	ZoneSetTheory     LogicZone = "set_theory"
+	ZoneEmpirical     LogicZone = "empirical"
+)
+
+// LogicZoneProperties defines the formal properties of a logic zone.
+type LogicZoneProperties struct {
+	Zone           LogicZone `json:"zone"`
+	Complete       bool      `json:"complete"`           // is the system complete?
+	Decidable      bool      `json:"decidable"`          // is there a decision procedure?
+	GoedelApplies  bool      `json:"goedel_applies"`     // does Godel's incompleteness apply?
+	MaxConfidenceBps uint64  `json:"max_confidence_bps"` // confidence ceiling (basis points 0-1000000)
+	Description    string    `json:"description"`
+}
+
+func (lz *LogicZoneProperties) Reset()        {}
+func (lz *LogicZoneProperties) String() string { return fmt.Sprintf("%+v", *lz) }
+func (lz *LogicZoneProperties) ProtoMessage()  {}
+
+// IncompletenessAcknowledgment records that a fact in an incomplete zone
+// has been properly flagged with its epistemic limitations.
+type IncompletenessAcknowledgment struct {
+	FactId           string    `json:"fact_id"`
+	Zone             LogicZone `json:"zone"`
+	Reason           string    `json:"reason"` // why this claim is in an incomplete zone
+	AcknowledgedAt   uint64    `json:"acknowledged_at"` // block height
+	AcknowledgedBy   string    `json:"acknowledged_by"` // bech32 address
+}
+
+func (ia *IncompletenessAcknowledgment) Reset()        {}
+func (ia *IncompletenessAcknowledgment) String() string { return fmt.Sprintf("%+v", *ia) }
+func (ia *IncompletenessAcknowledgment) ProtoMessage()  {}
+
+// DefaultLogicZones returns the pre-defined logic zone properties.
+func DefaultLogicZones() []LogicZoneProperties {
+	return []LogicZoneProperties{
+		{
+			Zone:             ZonePropositional,
+			Complete:         true,
+			Decidable:        true,
+			GoedelApplies:    false,
+			MaxConfidenceBps: 1000000, // 100% confidence possible
+			Description:      "Propositional logic: complete, decidable, truth-table decidable",
+		},
+		{
+			Zone:             ZonePresburger,
+			Complete:         true,
+			Decidable:        true,
+			GoedelApplies:    false,
+			MaxConfidenceBps: 1000000,
+			Description:      "Presburger arithmetic: complete, decidable (no multiplication)",
+		},
+		{
+			Zone:             ZonePeano,
+			Complete:         false,
+			Decidable:        false,
+			GoedelApplies:    true,
+			MaxConfidenceBps: 850000, // 85% max -- incompleteness acknowledged
+			Description:      "Peano arithmetic: incomplete (Godel), undecidable, contains true but unprovable statements",
+		},
+		{
+			Zone:             ZoneSetTheory,
+			Complete:         false,
+			Decidable:        false,
+			GoedelApplies:    true,
+			MaxConfidenceBps: 800000, // 80% max
+			Description:      "Set theory (ZFC): incomplete, undecidable, CH-independent",
+		},
+		{
+			Zone:             ZoneEmpirical,
+			Complete:         false,
+			Decidable:        false,
+			GoedelApplies:    false, // not formal system
+			MaxConfidenceBps: 700000, // 70% max -- inherently probabilistic
+			Description:      "Empirical claims: inherently probabilistic, falsifiable but not provable",
+		},
+	}
 }
 
 // ---------- Message Types ----------
@@ -287,6 +296,87 @@ func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
+// ---------- Logic Zone Messages ----------
+
+// MsgRegisterLogicZone registers a new logic zone (authority only).
+type MsgRegisterLogicZone struct {
+	Authority      string             `json:"authority"`
+	ZoneProperties LogicZoneProperties `json:"zone_properties"`
+}
+
+func (msg *MsgRegisterLogicZone) Reset()         {}
+func (msg *MsgRegisterLogicZone) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgRegisterLogicZone) ProtoMessage()  {}
+
+func (msg *MsgRegisterLogicZone) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgRegisterLogicZone) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	if msg.ZoneProperties.Zone == "" {
+		return fmt.Errorf("zone name cannot be empty")
+	}
+	if msg.ZoneProperties.MaxConfidenceBps > 1000000 {
+		return fmt.Errorf("max confidence cannot exceed 1000000 basis points")
+	}
+	return nil
+}
+
+type MsgRegisterLogicZoneResponse struct{}
+
+func (msg *MsgRegisterLogicZoneResponse) Reset()         {}
+func (msg *MsgRegisterLogicZoneResponse) String() string { return "" }
+func (msg *MsgRegisterLogicZoneResponse) ProtoMessage()  {}
+
+// MsgAcknowledgeIncompleteness records that a fact in an incomplete zone has been acknowledged.
+type MsgAcknowledgeIncompleteness struct {
+	Submitter string    `json:"submitter"` // bech32 address
+	FactId    string    `json:"fact_id"`
+	Zone      LogicZone `json:"zone"`
+	Reason    string    `json:"reason"`
+}
+
+func (msg *MsgAcknowledgeIncompleteness) Reset()         {}
+func (msg *MsgAcknowledgeIncompleteness) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgAcknowledgeIncompleteness) ProtoMessage()  {}
+
+func (msg *MsgAcknowledgeIncompleteness) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgAcknowledgeIncompleteness) ValidateBasic() error {
+	if msg.Submitter == "" {
+		return fmt.Errorf("submitter cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Submitter); err != nil {
+		return fmt.Errorf("invalid submitter address: %w", err)
+	}
+	if msg.FactId == "" {
+		return fmt.Errorf("fact ID cannot be empty")
+	}
+	if msg.Zone == "" {
+		return fmt.Errorf("zone cannot be empty")
+	}
+	if msg.Reason == "" {
+		return fmt.Errorf("reason cannot be empty")
+	}
+	return nil
+}
+
+type MsgAcknowledgeIncompletenessResponse struct{}
+
+func (msg *MsgAcknowledgeIncompletenessResponse) Reset()         {}
+func (msg *MsgAcknowledgeIncompletenessResponse) String() string { return "" }
+func (msg *MsgAcknowledgeIncompletenessResponse) ProtoMessage()  {}
+
 // ---------- MsgServer Interface ----------
 
 // MsgServer is the service interface for the ontology module.
@@ -295,6 +385,93 @@ type MsgServer interface {
 	VoteDomainProposal(context.Context, *MsgVoteDomainProposal) (*MsgVoteDomainProposalResponse, error)
 	UpdateDomain(context.Context, *MsgUpdateDomain) (*MsgUpdateDomainResponse, error)
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+	RegisterLogicZone(context.Context, *MsgRegisterLogicZone) (*MsgRegisterLogicZoneResponse, error)
+	AcknowledgeIncompleteness(context.Context, *MsgAcknowledgeIncompleteness) (*MsgAcknowledgeIncompletenessResponse, error)
+}
+
+
+func _Msg_ProposeDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgProposeDomain)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ProposeDomain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/ProposeDomain"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ProposeDomain(ctx, req.(*MsgProposeDomain))
+	})
+}
+
+func _Msg_VoteDomainProposal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgVoteDomainProposal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).VoteDomainProposal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/VoteDomainProposal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).VoteDomainProposal(ctx, req.(*MsgVoteDomainProposal))
+	})
+}
+
+func _Msg_UpdateDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateDomain)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateDomain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/UpdateDomain"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateDomain(ctx, req.(*MsgUpdateDomain))
+	})
+}
+
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/UpdateParams"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
+	})
+}
+
+func _Msg_RegisterLogicZone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgRegisterLogicZone)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).RegisterLogicZone(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/RegisterLogicZone"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).RegisterLogicZone(ctx, req.(*MsgRegisterLogicZone))
+	})
+}
+
+func _Msg_AcknowledgeIncompleteness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgAcknowledgeIncompleteness)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).AcknowledgeIncompleteness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/AcknowledgeIncompleteness"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).AcknowledgeIncompleteness(ctx, req.(*MsgAcknowledgeIncompleteness))
+	})
 }
 
 // Service descriptor for MsgServer registration.
@@ -302,10 +479,12 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.ontology.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{MethodName: "ProposeDomain", Handler: nil},
-		{MethodName: "VoteDomainProposal", Handler: nil},
-		{MethodName: "UpdateDomain", Handler: nil},
-		{MethodName: "UpdateParams", Handler: nil},
+		{MethodName: "ProposeDomain", Handler: _Msg_ProposeDomain_Handler},
+		{MethodName: "VoteDomainProposal", Handler: _Msg_VoteDomainProposal_Handler},
+		{MethodName: "UpdateDomain", Handler: _Msg_UpdateDomain_Handler},
+		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
+		{MethodName: "RegisterLogicZone", Handler: _Msg_RegisterLogicZone_Handler},
+		{MethodName: "AcknowledgeIncompleteness", Handler: _Msg_AcknowledgeIncompleteness_Handler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "legible/ontology/v1/tx.proto",
@@ -328,6 +507,8 @@ type QueryServer interface {
 	AllDomains(context.Context, *QueryAllDomainsRequest) (*QueryAllDomainsResponse, error)
 	Proposal(context.Context, *QueryProposalRequest) (*QueryProposalResponse, error)
 	ConfidenceCeiling(context.Context, *QueryConfidenceCeilingRequest) (*QueryConfidenceCeilingResponse, error)
+	LogicZone(context.Context, *QueryLogicZoneRequest) (*QueryLogicZoneResponse, error)
+	AllLogicZones(context.Context, *QueryAllLogicZonesRequest) (*QueryAllLogicZonesResponse, error)
 }
 
 // Query request/response types.
@@ -457,19 +638,194 @@ func (r *QueryConfidenceCeilingResponse) Reset()         {}
 func (r *QueryConfidenceCeilingResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryConfidenceCeilingResponse) ProtoMessage()  {}
 
+// Logic zone query types.
+
+type QueryLogicZoneRequest struct {
+	Zone LogicZone `json:"zone"`
+}
+
+func (r *QueryLogicZoneRequest) Reset()         {}
+func (r *QueryLogicZoneRequest) String() string { return fmt.Sprintf("QueryLogicZone{%s}", r.Zone) }
+func (r *QueryLogicZoneRequest) ProtoMessage()  {}
+
+type QueryLogicZoneResponse struct {
+	Properties LogicZoneProperties `json:"properties"`
+}
+
+func (r *QueryLogicZoneResponse) Reset()         {}
+func (r *QueryLogicZoneResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryLogicZoneResponse) ProtoMessage()  {}
+
+type QueryAllLogicZonesRequest struct{}
+
+func (r *QueryAllLogicZonesRequest) Reset()         {}
+func (r *QueryAllLogicZonesRequest) String() string { return "QueryAllLogicZonesRequest" }
+func (r *QueryAllLogicZonesRequest) ProtoMessage()  {}
+
+type QueryAllLogicZonesResponse struct {
+	Zones []LogicZoneProperties `json:"zones"`
+}
+
+func (r *QueryAllLogicZonesResponse) Reset()         {}
+func (r *QueryAllLogicZonesResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryAllLogicZonesResponse) ProtoMessage()  {}
+
+
+func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryParamsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Params(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Params"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Params(ctx, req.(*QueryParamsRequest))
+	})
+}
+
+func _Query_Stratum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryStratumRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Stratum(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Stratum"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Stratum(ctx, req.(*QueryStratumRequest))
+	})
+}
+
+func _Query_AllStrata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllStrataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AllStrata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/AllStrata"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AllStrata(ctx, req.(*QueryAllStrataRequest))
+	})
+}
+
+func _Query_Domain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryDomainRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Domain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Domain"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Domain(ctx, req.(*QueryDomainRequest))
+	})
+}
+
+func _Query_DomainsByStratum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryDomainsByStratumRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).DomainsByStratum(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/DomainsByStratum"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).DomainsByStratum(ctx, req.(*QueryDomainsByStratumRequest))
+	})
+}
+
+func _Query_AllDomains_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllDomainsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AllDomains(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/AllDomains"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AllDomains(ctx, req.(*QueryAllDomainsRequest))
+	})
+}
+
+func _Query_Proposal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryProposalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Proposal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Proposal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Proposal(ctx, req.(*QueryProposalRequest))
+	})
+}
+
+func _Query_ConfidenceCeiling_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryConfidenceCeilingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ConfidenceCeiling(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/ConfidenceCeiling"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ConfidenceCeiling(ctx, req.(*QueryConfidenceCeilingRequest))
+	})
+}
+
+func _Query_LogicZone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryLogicZoneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).LogicZone(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/LogicZone"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).LogicZone(ctx, req.(*QueryLogicZoneRequest))
+	})
+}
+
+func _Query_AllLogicZones_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllLogicZonesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AllLogicZones(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/AllLogicZones"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AllLogicZones(ctx, req.(*QueryAllLogicZonesRequest))
+	})
+}
+
 // Service descriptor for QueryServer registration.
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.ontology.v1.Query",
 	HandlerType: (*QueryServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{MethodName: "Params", Handler: nil},
-		{MethodName: "Stratum", Handler: nil},
-		{MethodName: "AllStrata", Handler: nil},
-		{MethodName: "Domain", Handler: nil},
-		{MethodName: "DomainsByStratum", Handler: nil},
-		{MethodName: "AllDomains", Handler: nil},
-		{MethodName: "Proposal", Handler: nil},
-		{MethodName: "ConfidenceCeiling", Handler: nil},
+		{MethodName: "Params", Handler: _Query_Params_Handler},
+		{MethodName: "Stratum", Handler: _Query_Stratum_Handler},
+		{MethodName: "AllStrata", Handler: _Query_AllStrata_Handler},
+		{MethodName: "Domain", Handler: _Query_Domain_Handler},
+		{MethodName: "DomainsByStratum", Handler: _Query_DomainsByStratum_Handler},
+		{MethodName: "AllDomains", Handler: _Query_AllDomains_Handler},
+		{MethodName: "Proposal", Handler: _Query_Proposal_Handler},
+		{MethodName: "ConfidenceCeiling", Handler: _Query_ConfidenceCeiling_Handler},
+		{MethodName: "LogicZone", Handler: _Query_LogicZone_Handler},
+		{MethodName: "AllLogicZones", Handler: _Query_AllLogicZones_Handler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "legible/ontology/v1/query.proto",

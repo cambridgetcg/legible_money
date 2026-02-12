@@ -392,7 +392,7 @@ export function registerDomain(
     input.parentDomain === "root";
 
   // Calculate minimum stake
-  const baseStake = 100n * 10n ** 18n; // 100 LGM
+  const baseStake = 100n * 10n ** 15n; // 0.1 LGM (affordable with 0.222 LGM genesis balance)
   const governanceMultiplier = requiresGovernance ? 10n : 1n;
   const minimumStake = baseStake * governanceMultiplier;
 

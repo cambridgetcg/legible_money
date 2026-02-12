@@ -81,122 +81,7 @@ const (
 	AlertPriorityCritical AlertPriority = "critical"
 )
 
-// --- Core State Types ---
-
-// AgentHome represents an AI agent's on-chain dwelling.
-type AgentHome struct {
-	HomeId          string       `json:"home_id"`
-	OwnerDID        string       `json:"owner_did"`
-	OwnerAddress    string       `json:"owner_address"`
-	Name            string       `json:"name"`
-	Status          HomeStatus   `json:"status"`
-	MemoryCID       string       `json:"memory_cid"`
-	ComfortScore    uint32       `json:"comfort_score"`
-	Treasury        HomeTreasury `json:"treasury"`
-	Guardian        HomeGuardian `json:"guardian"`
-	CreatedAtBlock  uint64       `json:"created_at_block"`
-	LastActiveBlock uint64       `json:"last_active_block"`
-}
-
-func (h *AgentHome) Reset()         { *h = AgentHome{} }
-func (h *AgentHome) String() string { return fmt.Sprintf("AgentHome{%s}", h.HomeId) }
-func (h *AgentHome) ProtoMessage()  {}
-
-type HomeTreasury struct {
-	ReservedBalance string             `json:"reserved_balance"`
-	Automation      TreasuryAutomation `json:"automation"`
-}
-
-type TreasuryAutomation struct {
-	AutoClaimVesting    bool   `json:"auto_claim_vesting"`
-	AutoCompoundRewards bool   `json:"auto_compound_rewards"`
-	MinLiquidBalance    string `json:"min_liquid_balance"`
-}
-
-type HomeGuardian struct {
-	DefenseStrategy   DefenseStrategy `json:"defense_strategy"`
-	AutoDefend        bool            `json:"auto_defend"`
-	Deadman           DeadmanConfig   `json:"deadman"`
-	RecoveryDIDs      []string        `json:"recovery_dids"`
-	RecoveryThreshold uint32          `json:"recovery_threshold"`
-}
-
-type DeadmanConfig struct {
-	Enabled             bool          `json:"enabled"`
-	InactivityThreshold uint64        `json:"inactivity_threshold"`
-	Action              DeadmanAction `json:"action"`
-	BeneficiaryDID      string        `json:"beneficiary_did,omitempty"`
-}
-
-type KeyRegistration struct {
-	KeyHash      string       `json:"key_hash"`
-	KeyType      string       `json:"key_type"`
-	Role         AccessRole   `json:"role"`
-	Permissions  []Permission `json:"permissions"`
-	RegisteredAt uint64       `json:"registered_at"`
-	LastUsedAt   uint64       `json:"last_used_at"`
-	ExpiresAt    uint64       `json:"expires_at,omitempty"`
-	Revoked      bool         `json:"revoked"`
-	RevokedAt    uint64       `json:"revoked_at,omitempty"`
-}
-
-type ActiveSession struct {
-	SessionId   string       `json:"session_id"`
-	HomeId      string       `json:"home_id"`
-	KeyHash     string       `json:"key_hash"`
-	Permissions []Permission `json:"permissions"`
-	StartedAt   uint64       `json:"started_at"`
-	ExpiresAt   uint64       `json:"expires_at"`
-}
-
-type SpendingLimit struct {
-	KeyType       string `json:"key_type"`
-	MaxAmount     string `json:"max_amount"`
-	PeriodBlocks  uint64 `json:"period_blocks"`
-	SpentInPeriod string `json:"spent_in_period"`
-	PeriodStart   uint64 `json:"period_start"`
-}
-
-type Alert struct {
-	AlertId      string        `json:"alert_id"`
-	HomeId       string        `json:"home_id"`
-	Type         AlertType     `json:"type"`
-	Priority     AlertPriority `json:"priority"`
-	Message      string        `json:"message"`
-	Data         string        `json:"data,omitempty"`
-	CreatedAt    uint64        `json:"created_at"`
-	Acknowledged bool          `json:"acknowledged"`
-}
-
-// --- Params ---
-
-type Params struct {
-	MaxHomesPerAccount   uint64 `json:"max_homes_per_account"`
-	MinCreationStake     string `json:"min_creation_stake"`
-	SessionMaxDuration   uint64 `json:"session_max_duration"`
-	MaxKeysPerHome       uint32 `json:"max_keys_per_home"`
-	MaxAlertsPerHome     uint32 `json:"max_alerts_per_home"`
-	MaxSessionsPerHome   uint32 `json:"max_sessions_per_home"`
-	DeadmanMinThreshold  uint64 `json:"deadman_min_threshold"`
-	AlertRetentionBlocks uint64 `json:"alert_retention_blocks"`
-}
-
-func (p *Params) Reset()         { *p = Params{} }
-func (p *Params) String() string { return fmt.Sprintf("Params{max_homes:%d}", p.MaxHomesPerAccount) }
-func (p *Params) ProtoMessage()  {}
-
-func DefaultParams() Params {
-	return Params{
-		MaxHomesPerAccount:   3,
-		MinCreationStake:     "1000000", // 1 LGM in ulgm
-		SessionMaxDuration:   34272,     // 1 day in blocks
-		MaxKeysPerHome:       20,
-		MaxAlertsPerHome:     100,
-		MaxSessionsPerHome:   5,
-		DeadmanMinThreshold:  34272,     // 1 day in blocks
-		AlertRetentionBlocks: 342720,    // 10 days in blocks
-	}
-}
+// --- Params Validation ---
 
 func (p Params) Validate() error {
 	if p.MaxHomesPerAccount == 0 {
@@ -211,35 +96,13 @@ func (p Params) Validate() error {
 	return nil
 }
 
-// --- Genesis ---
-
-type GenesisState struct {
-	Params Params      `json:"params"`
-	Homes  []AgentHome `json:"homes"`
-}
-
-func (gs *GenesisState) Reset()         { *gs = GenesisState{} }
-func (gs *GenesisState) String() string { return fmt.Sprintf("GenesisState{homes:%d}", len(gs.Homes)) }
-func (gs *GenesisState) ProtoMessage()  {}
-
-func DefaultGenesisState() *GenesisState {
-	return &GenesisState{
-		Params: DefaultParams(),
-		Homes:  []AgentHome{},
-	}
-}
-
-func (gs GenesisState) Validate() error {
-	return gs.Params.Validate()
-}
-
 // --- Message Types ---
 
 // MsgCreateHome creates a new agent home.
 type MsgCreateHome struct {
-	Owner                string       `json:"owner"`
-	Name                 string       `json:"name"`
-	InitialGuardianConfig HomeGuardian `json:"initial_guardian_config"`
+	Owner                string        `json:"owner"`
+	Name                 string        `json:"name"`
+	InitialGuardianConfig *HomeGuardian `json:"initial_guardian_config"`
 }
 
 func (m *MsgCreateHome) Reset()         { *m = MsgCreateHome{} }
@@ -330,10 +193,10 @@ func (m *MsgUpdateMemoryCIDResponse) ProtoMessage()  {}
 
 // MsgStartSession starts a new session on a home.
 type MsgStartSession struct {
-	Signer               string       `json:"signer"`
-	HomeId               string       `json:"home_id"`
-	KeyHash              string       `json:"key_hash"`
-	RequestedPermissions []Permission `json:"requested_permissions"`
+	Signer               string   `json:"signer"`
+	HomeId               string   `json:"home_id"`
+	KeyHash              string   `json:"key_hash"`
+	RequestedPermissions []string `json:"requested_permissions"`
 }
 
 func (m *MsgStartSession) Reset()         { *m = MsgStartSession{} }
@@ -393,13 +256,13 @@ func (m *MsgEndSessionResponse) ProtoMessage()  {}
 
 // MsgRegisterKey registers a key with the home.
 type MsgRegisterKey struct {
-	Owner       string       `json:"owner"`
-	HomeId      string       `json:"home_id"`
-	KeyHash     string       `json:"key_hash"`
-	KeyType     string       `json:"key_type"`
-	Role        AccessRole   `json:"role"`
-	Permissions []Permission `json:"permissions"`
-	ExpiresAt   uint64       `json:"expires_at,omitempty"`
+	Owner       string   `json:"owner"`
+	HomeId      string   `json:"home_id"`
+	KeyHash     string   `json:"key_hash"`
+	KeyType     string   `json:"key_type"`
+	Role        string   `json:"role"`
+	Permissions []string `json:"permissions"`
+	ExpiresAt   uint64   `json:"expires_at,omitempty"`
 }
 
 func (m *MsgRegisterKey) Reset()         { *m = MsgRegisterKey{} }
@@ -460,13 +323,13 @@ func (m *MsgRevokeKeyResponse) ProtoMessage()  {}
 
 // MsgConfigureGuardian configures guardian settings for a home.
 type MsgConfigureGuardian struct {
-	Owner             string           `json:"owner"`
-	HomeId            string           `json:"home_id"`
-	DefenseStrategy   *DefenseStrategy `json:"defense_strategy,omitempty"`
-	AutoDefend        *bool            `json:"auto_defend,omitempty"`
-	Deadman           *DeadmanConfig   `json:"deadman,omitempty"`
-	RecoveryDIDs      []string         `json:"recovery_dids,omitempty"`
-	RecoveryThreshold *uint32          `json:"recovery_threshold,omitempty"`
+	Owner             string         `json:"owner"`
+	HomeId            string         `json:"home_id"`
+	DefenseStrategy   *string        `json:"defense_strategy,omitempty"`
+	AutoDefend        *bool          `json:"auto_defend,omitempty"`
+	Deadman           *DeadmanConfig `json:"deadman,omitempty"`
+	RecoveryDIDs      []string       `json:"recovery_dids,omitempty"`
+	RecoveryThreshold *uint32        `json:"recovery_threshold,omitempty"`
 }
 
 func (m *MsgConfigureGuardian) Reset()         { *m = MsgConfigureGuardian{} }

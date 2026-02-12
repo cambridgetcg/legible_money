@@ -602,7 +602,7 @@ function factStateToGatewayFactResult(
 ): GatewayFactResult {
   return {
     id: fact.id,
-    claim: fact.claim,
+    claim: fact.claimText,
     domain: fact.domain,
     confidence: fact.confidence,
     fundamentalityScore: 0, // Will be calculated from citationCount by pricing engine
@@ -719,7 +719,7 @@ export const verificationSubmitReveal: Handler<
       validator: params.validatorKey,
       verdict: params.verdict,
       confidence,
-      nonce: params.nonce,
+      salt: params.nonce,
       referencesChecked: [],
       signature: params.signature,
     });

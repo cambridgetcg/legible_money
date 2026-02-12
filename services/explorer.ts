@@ -144,7 +144,7 @@ async function getFacts(
     const facts = await client.searchFacts({ domain, limit });
     return facts.map((f) => ({
       id: f.id,
-      claim: f.claim,
+      claim: f.claimText,
       domain: f.domain,
       confidence: f.confidence,
       status: f.status,
@@ -162,7 +162,7 @@ async function getFact(factId: string): Promise<object | null> {
 
     return {
       id: fact.id,
-      claim: fact.claim,
+      claim: fact.claimText,
       domain: fact.domain,
       confidence: fact.confidence,
       status: fact.status,

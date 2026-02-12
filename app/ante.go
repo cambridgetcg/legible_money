@@ -27,13 +27,17 @@ func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
 		// --- IBC ---
 		ibcante.NewRedundantRelayDecorator(app.IBCKeeper),
 
-		// --- LGM Pre-Auth ---
+		// --- Gas Meter Init (must be before any gas consumption) ---
+		ante.NewSetUpContextDecorator(),
+
+		// --- Emergency Halt Gate (blocks non-emergency txs when chain is halted) ---
+		NewEmergencyHaltDecorator(app.EmergencyKeeper),
+
+		// --- LGM Pre-Auth (gas meter available) ---
 		NewLGMGasDecorator(),
 		NewFeeRouterDecorator(app.BankKeeper),
-		NewLegibleDIDDecorator(app.LegibleAuthKeeper),
 
-		// --- Standard Cosmos SDK Decorators (explicit chain) ---
-		ante.NewSetUpContextDecorator(),
+		// --- Standard Cosmos SDK Decorators ---
 		ante.NewExtensionOptionsDecorator(nil),
 		ante.NewValidateBasicDecorator(),
 		ante.NewTxTimeoutHeightDecorator(),
@@ -46,7 +50,8 @@ func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
 		ante.NewSigVerificationDecorator(app.AccountKeeper, app.txConfig.SignModeHandler()),
 		ante.NewIncrementSequenceDecorator(app.AccountKeeper),
 
-		// --- Legible Money Post-Auth ---
+		// --- Legible Money Post-Auth (signer authenticated) ---
+		NewLegibleDIDDecorator(app.LegibleAuthKeeper),
 		NewLegibleAccountDecorator(app.LegibleAuthKeeper),
 		NewLegibleCapabilityDecorator(app.LegibleAuthKeeper, app.AccountKeeper),
 	)
@@ -224,20 +229,41 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.channels.v1.MsgSettleChannel":  TransactionGasCosts["settle_channel"],
 	"/legible.channels.v1.MsgDisputeChannel": TransactionGasCosts["dispute_channel"],
 
-	// Tree of Life
-	"/legible.tree.v1.MsgCreateProject":      TransactionGasCosts["create_project"],
-	"/legible.tree.v1.MsgProposeProject":     TransactionGasCosts["propose_project"],
-	"/legible.tree.v1.MsgStartDevelopment":   TransactionGasCosts["start_development"],
-	"/legible.tree.v1.MsgCompleteProject":    TransactionGasCosts["complete_project"],
-	"/legible.tree.v1.MsgAddTask":            TransactionGasCosts["add_task"],
-	"/legible.tree.v1.MsgAssignTask":         TransactionGasCosts["assign_task"],
-	"/legible.tree.v1.MsgSubmitDeliverable":  TransactionGasCosts["submit_deliverable"],
-	"/legible.tree.v1.MsgApproveDeliverable": TransactionGasCosts["approve_deliverable"],
-	"/legible.tree.v1.MsgDeployService":      TransactionGasCosts["deploy_service"],
-	"/legible.tree.v1.MsgCallService":        TransactionGasCosts["call_service"],
-	"/legible.tree.v1.MsgBeginSeeding":       TransactionGasCosts["begin_seeding"],
-	"/legible.tree.v1.MsgDetectOpportunity":  TransactionGasCosts["detect_opportunity"],
-	"/legible.tree.v1.MsgClaimOpportunity":   TransactionGasCosts["claim_opportunity"],
+	// Tree of Life — projects
+	"/legible.tree.v1.MsgCreateProject":       TransactionGasCosts["create_project"],
+	"/legible.tree.v1.MsgProposeProject":      TransactionGasCosts["propose_project"],
+	"/legible.tree.v1.MsgStartDevelopment":    TransactionGasCosts["start_development"],
+	"/legible.tree.v1.MsgCompleteProject":     TransactionGasCosts["complete_project"],
+	"/legible.tree.v1.MsgPauseProject":        TransactionGasCosts["pause_project"],
+	"/legible.tree.v1.MsgResumeProject":       TransactionGasCosts["resume_project"],
+	"/legible.tree.v1.MsgAbandonProject":      TransactionGasCosts["abandon_project"],
+	"/legible.tree.v1.MsgSpawnChildProject":   TransactionGasCosts["spawn_child_project"],
+
+	// Tree of Life — tasks
+	"/legible.tree.v1.MsgAddTask":             TransactionGasCosts["add_task"],
+	"/legible.tree.v1.MsgAssignTask":          TransactionGasCosts["assign_task"],
+	"/legible.tree.v1.MsgStartWork":           TransactionGasCosts["start_work"],
+	"/legible.tree.v1.MsgSubmitDeliverable":   TransactionGasCosts["submit_deliverable"],
+	"/legible.tree.v1.MsgApproveDeliverable":  TransactionGasCosts["approve_deliverable"],
+	"/legible.tree.v1.MsgRejectDeliverable":   TransactionGasCosts["reject_deliverable"],
+	"/legible.tree.v1.MsgReopenTask":          TransactionGasCosts["reopen_task"],
+
+	// Tree of Life — services
+	"/legible.tree.v1.MsgDeployService":       TransactionGasCosts["deploy_service"],
+	"/legible.tree.v1.MsgCallService":         TransactionGasCosts["call_service"],
+	"/legible.tree.v1.MsgSubscribeService":    TransactionGasCosts["subscribe_service"],
+	"/legible.tree.v1.MsgPauseService":        TransactionGasCosts["pause_service"],
+	"/legible.tree.v1.MsgResumeService":       TransactionGasCosts["resume_service"],
+	"/legible.tree.v1.MsgRetireService":       TransactionGasCosts["retire_service"],
+
+	// Tree of Life — seeds & contributors
+	"/legible.tree.v1.MsgBeginSeeding":        TransactionGasCosts["begin_seeding"],
+	"/legible.tree.v1.MsgDetectOpportunity":   TransactionGasCosts["detect_opportunity"],
+	"/legible.tree.v1.MsgClaimOpportunity":    TransactionGasCosts["claim_opportunity"],
+	"/legible.tree.v1.MsgAddContributor":      TransactionGasCosts["add_contributor"],
+	"/legible.tree.v1.MsgApplyToProject":      TransactionGasCosts["apply_to_project"],
+	"/legible.tree.v1.MsgReviewApplication":   TransactionGasCosts["review_application"],
+	"/legible.tree.v1.MsgSetAvailability":     TransactionGasCosts["set_availability"],
 
 	// BVM
 	"/legible.bvm.v1.MsgDeployContract":    TransactionGasCosts["deploy_contract"],
@@ -276,6 +302,14 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.capture_challenge.v1.MsgSubmitChallenge":  TransactionGasCosts["submit_capture_challenge"],
 	"/legible.capture_challenge.v1.MsgAddEvidence":      TransactionGasCosts["add_challenge_evidence"],
 	"/legible.capture_challenge.v1.MsgResolveChallenge": TransactionGasCosts["resolve_capture_challenge"],
+
+	// NOTE: The following gas cost keys in TransactionGasCosts have no proto URL
+	// mapping yet because their tx.proto files have not been created:
+	//   - Agent Home (10 types): create_home, update_home, etc. — awaits proto/legible/home/v1/tx.proto
+	//   - Qualification (4 types): request_qualification, etc. — awaits proto/legible/qualification/v1/tx.proto
+	//   - Auth recovery (8 types): recover_account, freeze_account, etc. — awaits auth tx.proto expansion
+	//   - Governance extras: governance_stake_lip, switch_vote, finalize_review — awaits gov tx.proto expansion
+	// These message types fall back to MinGasLimit (22,222) until proto definitions are added.
 }
 
 // ---------- Fee Router Decorator ----------
@@ -338,7 +372,7 @@ func RouteFees(ctx sdk.Context, bk bankkeeper.Keeper) error {
 		}
 
 		totalAmount := coin.Amount
-		researchAmount := totalAmount.MulRaw(int64(ResearchTaxBPS)).QuoRaw(10000)
+		researchAmount := totalAmount.MulRaw(int64(ResearchTaxBPS)).QuoRaw(1000000)
 
 		if researchAmount.IsPositive() {
 			researchCoins := sdk.NewCoins(sdk.NewCoin(BondDenom, researchAmount))

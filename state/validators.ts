@@ -25,6 +25,11 @@ import {
   type UnbondingEntry,
   StateError,
 } from "./types.js";
+import { computeValidatorTier } from "../consensus/pot/validator_tiers.js";
+import {
+  DEFAULT_CONSENSUS_PARAMS,
+  MAX_APPRENTICE_VALIDATORS,
+} from "../consensus/pot/types.js";
 
 // ============ Serialization ============
 
@@ -43,6 +48,9 @@ function serializeValidatorState(validator: ValidatorState): Uint8Array {
     verificationsCompleted: validator.verificationsCompleted,
     verificationsCorrect: validator.verificationsCorrect,
     slashCount: validator.slashCount,
+    contestedVerificationsCorrect: validator.contestedVerificationsCorrect,
+    lastSlashBlock: validator.lastSlashBlock.toString(),
+    tier: validator.tier,
     commissionRate: validator.commissionRate,
   });
   return new TextEncoder().encode(json);
@@ -65,6 +73,9 @@ function deserializeValidatorState(bytes: Uint8Array): ValidatorState {
     verificationsCompleted: obj.verificationsCompleted,
     verificationsCorrect: obj.verificationsCorrect,
     slashCount: obj.slashCount,
+    contestedVerificationsCorrect: obj.contestedVerificationsCorrect ?? 0,
+    lastSlashBlock: BigInt(obj.lastSlashBlock ?? "0"),
+    tier: obj.tier ?? 0,
     commissionRate: obj.commissionRate,
   };
 }
@@ -116,10 +127,46 @@ export class ValidatorStateTree {
   private totalStake: bigint = 0n;
   private activeCount: number = 0;
   private currentEpoch: bigint = 0n;
+  private apprenticeCount: number = 0;
+  private currentBlock: bigint = 0n;
 
   constructor() {
     this.validatorSmt = new InMemorySMT();
     this.delegationSmt = new InMemorySMT();
+  }
+
+  // ============ Tier Helpers ============
+
+  /**
+   * Compute tier for a validator's current state.
+   */
+  private recomputeTier(validator: ValidatorState): number {
+    return computeValidatorTier({
+      stake: validator.totalStake,
+      totalVerifications: validator.verificationsCompleted,
+      correctVerifications: validator.verificationsCorrect,
+      slashCount: validator.slashCount,
+      contestedVerificationsCorrect: validator.contestedVerificationsCorrect,
+      lastSlashBlock: validator.lastSlashBlock,
+      currentBlock: this.currentBlock,
+      epochLength: DEFAULT_CONSENSUS_PARAMS.epochLength,
+    });
+  }
+
+  /**
+   * Update tier and track apprentice count changes.
+   */
+  private updateTierTracking(oldTier: number, newTier: number): void {
+    if (oldTier === 0 && newTier !== 0) this.apprenticeCount--;
+    if (oldTier !== 0 && newTier === 0) this.apprenticeCount++;
+  }
+
+  setCurrentBlock(block: bigint): void {
+    this.currentBlock = block;
+  }
+
+  getApprenticeValidatorCount(): number {
+    return this.apprenticeCount;
   }
 
   // ============ Roots ============
@@ -196,8 +243,25 @@ export class ValidatorStateTree {
       verificationsCompleted: 0,
       verificationsCorrect: 0,
       slashCount: 0,
+      contestedVerificationsCorrect: 0,
+      lastSlashBlock: 0n,
+      tier: 0,
       commissionRate: 0.1, // 10% default commission
     };
+
+    validator.tier = this.recomputeTier(validator);
+
+    // Enforce apprentice cap
+    if (validator.tier === 0) {
+      if (this.apprenticeCount >= MAX_APPRENTICE_VALIDATORS) {
+        throw new StateError(
+          "Maximum apprentice validators reached",
+          "APPRENTICE_CAP_EXCEEDED",
+          { cap: MAX_APPRENTICE_VALIDATORS },
+        );
+      }
+      this.apprenticeCount++;
+    }
 
     const key = validatorToKey(publicKey);
     const value = serializeValidatorState(validator);
@@ -235,6 +299,11 @@ export class ValidatorStateTree {
         (update.stake ?? existing.stake) +
         (update.delegatedStake ?? existing.delegatedStake),
     };
+
+    // Recompute tier after mutation
+    const oldTier = existing.tier;
+    updated.tier = this.recomputeTier(updated);
+    this.updateTierTracking(oldTier, updated.tier);
 
     const key = validatorToKey(publicKey);
     const value = serializeValidatorState(updated);
@@ -311,12 +380,13 @@ export class ValidatorStateTree {
 
   /**
    * Slash a validator
+   * Returns the Merkle root and the actual amount burned (after escalation + caps).
    */
   slashValidator(
     publicKey: PublicKey,
     amount: bigint,
     _reason: string,
-  ): MerkleRoot {
+  ): { root: MerkleRoot; burnedAmount: bigint } {
     const validator = this.getValidator(publicKey);
     if (!validator) {
       throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
@@ -324,15 +394,36 @@ export class ValidatorStateTree {
       });
     }
 
-    const slashFromStake = amount > validator.stake ? validator.stake : amount;
-    const slashFromDelegated = amount - slashFromStake;
+    // Progressive escalation: amount * (1M + slashCount * 100K) / 1M
+    const ESCALATION_BPS = 100000n; // 10% per prior slash
+    const BPS_DENOM = 1000000n;
+    const escalatedAmount =
+      validator.slashCount > 0
+        ? (amount *
+            (BPS_DENOM + BigInt(validator.slashCount) * ESCALATION_BPS)) /
+          BPS_DENOM
+        : amount;
 
-    return this.updateValidator(publicKey, {
+    const slashFromStake =
+      escalatedAmount > validator.stake ? validator.stake : escalatedAmount;
+    const remainingSlash = escalatedAmount - slashFromStake;
+    // Cap delegated slash to available delegated stake to prevent underflow
+    const slashFromDelegated =
+      remainingSlash > validator.delegatedStake
+        ? validator.delegatedStake
+        : remainingSlash;
+
+    const burnedAmount = slashFromStake + slashFromDelegated;
+
+    const root = this.updateValidator(publicKey, {
       stake: validator.stake - slashFromStake,
       delegatedStake: validator.delegatedStake - slashFromDelegated,
       reputation: Math.max(0, validator.reputation - 0.1),
       slashCount: validator.slashCount + 1,
+      lastSlashBlock: this.currentBlock,
     });
+
+    return { root, burnedAmount };
   }
 
   /**
@@ -353,9 +444,14 @@ export class ValidatorStateTree {
   }
 
   /**
-   * Record verification outcome
+   * Record verification outcome.
+   * @param contested - true if the claim was in a contested epistemic category
    */
-  recordVerification(publicKey: PublicKey, correct: boolean): MerkleRoot {
+  recordVerification(
+    publicKey: PublicKey,
+    correct: boolean,
+    contested: boolean = false,
+  ): MerkleRoot {
     const validator = this.getValidator(publicKey);
     if (!validator) {
       throw new StateError("Validator not found", "VALIDATOR_NOT_FOUND", {
@@ -365,7 +461,8 @@ export class ValidatorStateTree {
 
     const newCorrect = validator.verificationsCorrect + (correct ? 1 : 0);
     const newTotal = validator.verificationsCompleted + 1;
-    // accuracy = newTotal > 0 ? newCorrect / newTotal : 0 (available for future metrics)
+    const newContestedCorrect =
+      validator.contestedVerificationsCorrect + (correct && contested ? 1 : 0);
 
     // Reputation adjustment
     const reputationDelta = correct ? 0.001 : -0.005;
@@ -373,6 +470,7 @@ export class ValidatorStateTree {
     return this.updateValidator(publicKey, {
       verificationsCompleted: newTotal,
       verificationsCorrect: newCorrect,
+      contestedVerificationsCorrect: newContestedCorrect,
       reputation: Math.max(
         0,
         Math.min(1, validator.reputation + reputationDelta),
@@ -742,7 +840,7 @@ export class ValidatorStateTree {
 /**
  * Minimum stake required to be a validator
  */
-export const MIN_VALIDATOR_STAKE = 1000n * 10n ** 18n; // 1000 LGM
+export const MIN_VALIDATOR_STAKE = 111n * 10n ** 15n; // 0.111 LGM (tier 0 entry)
 
 /**
  * Unbonding period in blocks

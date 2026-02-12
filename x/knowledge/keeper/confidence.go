@@ -77,6 +77,7 @@ func (k Keeper) AggregateVerificationResult(
 		Rewards:           make(map[string]uint64),
 		Slashes:           make(map[string]uint64),
 		CompletedAtHeight: height,
+		Domain:            roundDomain,
 	}
 
 	if totalWeight == 0 {
@@ -160,6 +161,30 @@ func (k Keeper) AggregateVerificationResult(
 		}
 	}
 
+	// AH-4: Method diversity check — penalize suspiciously uniform verification.
+	// Applied after all other confidence adjustments but before rewards.
+	if len(round.Reveals) >= types.MinDiversityParticipants {
+		diversityAdj := computeMethodDiversityAdjustment(round.Reveals)
+		if diversityAdj != 0 {
+			result.MethodDiversityPenalty = diversityAdj
+			if diversityAdj < 0 {
+				penalty := uint64(-diversityAdj)
+				if result.Confidence > penalty {
+					result.Confidence -= penalty
+				} else {
+					result.Confidence = 0
+				}
+			} else {
+				result.Confidence += uint64(diversityAdj)
+				if result.Confidence > 1_000_000 {
+					result.Confidence = 1_000_000
+				}
+			}
+		}
+		// Record unique method count for transparency
+		result.UniqueMethodCount = countUniqueMethods(round.Reveals)
+	}
+
 	// Calculate rewards and slashes
 	k.calculateRewardsAndSlashes(ctx, round, &result, stakeMap)
 
@@ -196,6 +221,18 @@ func (k Keeper) calculateRewardsAndSlashes(
 		baseReward = 100000 // fallback default: 0.1 LGM
 	}
 
+	// Slash rates from params (basis points / 1,000,000), aligned with TS prototype:
+	// TS wrongVerificationSlash: 0.06 (6%) → 60000 bps
+	// TS missedVerificationSlash: 0.0001 (0.01%) → 100 bps (Cosmos-aligned downtime)
+	wrongSlashBps := params.WrongVerificationSlashBps
+	if wrongSlashBps == 0 {
+		wrongSlashBps = 60000 // fallback: 6% (matches TS wrongVerificationSlash)
+	}
+	missedSlashBps := params.MissedRevealSlashBps
+	if missedSlashBps == 0 {
+		missedSlashBps = 100 // fallback: 0.01% (Cosmos-aligned downtime penalty)
+	}
+
 	for validatorAddr, reveal := range round.Reveals {
 		// Check if validator's verdict aligns with final outcome
 		correct := (result.Verdict == "accepted" && reveal.Verdict == "accept") ||
@@ -207,11 +244,20 @@ func (k Keeper) calculateRewardsAndSlashes(
 			if info, found := k.stakingKeeper.GetValidatorInfo(ctx, validatorAddr); found {
 				reward = applyTierMultiplier(reward, info.Tier)
 			}
+			// Difficulty bonus: harder verifications (lower confidence) pay more.
+			// A verifier who correctly evaluates a borderline claim did more
+			// valuable work than one who rubber-stamped an obvious truth.
+			// bonus = reward * (1_000_000 - avgConfidence) / 1_000_000
+			// → at confidence 500k: +50%, at 900k: +10%, at 300k: +70%
+			if result.Confidence > 0 && result.Confidence < 1_000_000 {
+				difficulty := 1_000_000 - result.Confidence
+				reward = reward + reward*difficulty/1_000_000
+			}
 			result.Rewards[validatorAddr] = reward
 		} else if reveal.Verdict != "abstain" {
-			// Slash wrong verdict (abstain is not slashed)
+			// Slash wrong verdict: 6% of stake (abstain is not slashed)
 			stake := stakeMap[validatorAddr]
-			slashAmount := stake / 100 // 1% slash
+			slashAmount := stake * wrongSlashBps / 1_000_000
 			if slashAmount > 0 {
 				result.Slashes[validatorAddr] = slashAmount
 			}
@@ -226,8 +272,8 @@ func (k Keeper) calculateRewardsAndSlashes(
 			if stake == 0 {
 				stake = k.GetEffectiveStakeForValidator(ctx, validatorAddr)
 			}
-			// Missed reveal penalty (harsher than wrong verdict)
-			slashAmount := stake / 50 // 2% slash for missed reveal
+			// Missed reveal penalty: 0.01% of stake (Cosmos-aligned downtime)
+			slashAmount := stake * missedSlashBps / 1_000_000
 			if slashAmount > 0 {
 				result.Slashes[validatorAddr] = slashAmount
 			}
@@ -249,9 +295,11 @@ func (k Keeper) ApplyRewardsAndSlashes(
 
 	// Apply rewards via BankKeeper (module → validator account)
 	for validatorAddr, amount := range result.Rewards {
-		if err := k.RecordVerificationOutcome(ctx, validatorAddr, true); err != nil {
-			k.Logger(ctx).Error("failed to record correct verification",
-				"validator", validatorAddr, "error", err)
+		if k.verificationHooks != nil {
+			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, true); err != nil {
+				k.Logger(ctx).Error("verification hook failed for correct verification",
+					"validator", validatorAddr, "error", err)
+			}
 		}
 		// Transfer reward from module account to validator (after research tax)
 		if k.bankKeeper != nil && amount > 0 {
@@ -288,9 +336,11 @@ func (k Keeper) ApplyRewardsAndSlashes(
 			k.Logger(ctx).Error("failed to apply slash",
 				"validator", validatorAddr, "amount", amount, "error", err)
 		}
-		if err := k.RecordVerificationOutcome(ctx, validatorAddr, false); err != nil {
-			k.Logger(ctx).Error("failed to record incorrect verification",
-				"validator", validatorAddr, "error", err)
+		if k.verificationHooks != nil {
+			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, false); err != nil {
+				k.Logger(ctx).Error("verification hook failed for incorrect verification",
+					"validator", validatorAddr, "error", err)
+			}
 		}
 	}
 
@@ -426,4 +476,79 @@ func applyTierMultiplier(baseReward uint64, tier uint32) uint64 {
 	default:
 		return baseReward
 	}
+}
+
+// computeMethodDiversityAdjustment detects suspiciously uniform verification
+// results and computes a confidence adjustment (negative = penalty, positive = bonus).
+//
+// The check only activates when at least one reveal explicitly declares a
+// VerificationMethod. If all reveals omit the method (legacy mode / deterministic
+// pipeline), no penalty or bonus is applied — identical confidence values are
+// expected in deterministic evaluation.
+//
+// When methods are declared:
+//  1. Confidence uniformity + single declared method: full penalty
+//     (UniformityPenaltyBps + SingleMethodPenaltyBps = -15%).
+//  2. Single declared method but varied confidence: partial penalty
+//     (SingleMethodPenaltyBps = -5%).
+//  3. Two distinct methods: neutral (no adjustment).
+//  4. Three or more distinct methods: diversity bonus (DiversityBonusBps = +3%).
+func computeMethodDiversityAdjustment(reveals map[string]*types.VerificationReveal) int64 {
+	if len(reveals) < types.MinDiversityParticipants {
+		return 0
+	}
+
+	// Count how many reveals declare an explicit method
+	var declaredCount int
+	declaredMethods := make(map[string]int, len(reveals))
+	for _, reveal := range reveals {
+		if reveal.VerificationMethod != "" {
+			declaredCount++
+			declaredMethods[reveal.VerificationMethod]++
+		}
+	}
+
+	// Legacy mode: no methods declared at all → no adjustment
+	if declaredCount == 0 {
+		return 0
+	}
+
+	var adjustment int64
+	uniqueDeclared := uint32(len(declaredMethods))
+
+	// Check confidence uniformity (only penalize when combined with method concerns)
+	confidenceValues := make(map[uint64]struct{}, len(reveals))
+	for _, reveal := range reveals {
+		confidenceValues[reveal.Confidence] = struct{}{}
+	}
+	allIdenticalConfidence := len(confidenceValues) == 1
+
+	if uniqueDeclared == 1 {
+		// All declaring validators use the same method — suspicious
+		adjustment -= int64(types.SingleMethodPenaltyBps)
+		if allIdenticalConfidence {
+			// Same method AND identical confidence — very suspicious
+			adjustment -= int64(types.UniformityPenaltyBps)
+		}
+	} else if uniqueDeclared >= 3 {
+		// Genuine methodological diversity — reward
+		adjustment += int64(types.DiversityBonusBps)
+	}
+	// uniqueDeclared == 2: neutral
+
+	return adjustment
+}
+
+// countUniqueMethods returns the number of distinct verification methods
+// declared across all reveals. Empty/omitted methods are counted as one group.
+func countUniqueMethods(reveals map[string]*types.VerificationReveal) uint32 {
+	methods := make(map[string]struct{}, len(reveals))
+	for _, reveal := range reveals {
+		method := reveal.VerificationMethod
+		if method == "" {
+			method = "_undeclared"
+		}
+		methods[method] = struct{}{}
+	}
+	return uint32(len(methods))
 }

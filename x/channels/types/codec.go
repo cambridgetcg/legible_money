@@ -29,35 +29,19 @@ var (
 	ModuleCdc = codec.NewProtoCodec(cdctypes.NewInterfaceRegistry())
 )
 
-// --- Msg service descriptor ---
+// --- Supplemental Msg handlers for methods not in protobuf service definition ---
 
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.channels.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "OpenChannel", Handler: _Msg_OpenChannel_Handler},
-		{MethodName: "DepositChannel", Handler: _Msg_DepositChannel_Handler},
-		{MethodName: "UpdateState", Handler: _Msg_UpdateState_Handler},
-		{MethodName: "DisputeChannel", Handler: _Msg_DisputeChannel_Handler},
-		{MethodName: "SettleChannel", Handler: _Msg_SettleChannel_Handler},
-		{MethodName: "CloseChannel", Handler: _Msg_CloseChannel_Handler},
-		{MethodName: "ClaimExpired", Handler: _Msg_ClaimExpired_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
+// SupplementalMsgServer defines additional message handlers beyond the protobuf Msg service.
+type SupplementalMsgServer interface {
+	DepositChannel(context.Context, *MsgDepositChannel) (*MsgDepositChannelResponse, error)
+	UpdateState(context.Context, *MsgUpdateState) (*MsgUpdateStateResponse, error)
+	ClaimExpired(context.Context, *MsgClaimExpired) (*MsgClaimExpiredResponse, error)
 }
 
-func _Msg_OpenChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgOpenChannel)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).OpenChannel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/OpenChannel"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).OpenChannel(ctx, req.(*MsgOpenChannel))
-	})
+// FullMsgServer combines the protobuf-generated MsgServer with supplemental methods.
+type FullMsgServer interface {
+	MsgServer
+	SupplementalMsgServer
 }
 
 func _Msg_DepositChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -66,11 +50,11 @@ func _Msg_DepositChannel_Handler(srv interface{}, ctx context.Context, dec func(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MsgServer).DepositChannel(ctx, in)
+		return srv.(SupplementalMsgServer).DepositChannel(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/DepositChannel"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).DepositChannel(ctx, req.(*MsgDepositChannel))
+		return srv.(SupplementalMsgServer).DepositChannel(ctx, req.(*MsgDepositChannel))
 	})
 }
 
@@ -80,53 +64,11 @@ func _Msg_UpdateState_Handler(srv interface{}, ctx context.Context, dec func(int
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MsgServer).UpdateState(ctx, in)
+		return srv.(SupplementalMsgServer).UpdateState(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/UpdateState"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateState(ctx, req.(*MsgUpdateState))
-	})
-}
-
-func _Msg_DisputeChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgDisputeChannel)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).DisputeChannel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/DisputeChannel"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).DisputeChannel(ctx, req.(*MsgDisputeChannel))
-	})
-}
-
-func _Msg_SettleChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgSettleChannel)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).SettleChannel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/SettleChannel"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).SettleChannel(ctx, req.(*MsgSettleChannel))
-	})
-}
-
-func _Msg_CloseChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgCloseChannel)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).CloseChannel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/CloseChannel"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).CloseChannel(ctx, req.(*MsgCloseChannel))
+		return srv.(SupplementalMsgServer).UpdateState(ctx, req.(*MsgUpdateState))
 	})
 }
 
@@ -136,20 +78,15 @@ func _Msg_ClaimExpired_Handler(srv interface{}, ctx context.Context, dec func(in
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MsgServer).ClaimExpired(ctx, in)
+		return srv.(SupplementalMsgServer).ClaimExpired(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.channels.v1.Msg/ClaimExpired"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ClaimExpired(ctx, req.(*MsgClaimExpired))
+		return srv.(SupplementalMsgServer).ClaimExpired(ctx, req.(*MsgClaimExpired))
 	})
 }
 
-// RegisterMsgServer registers the channels msg server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
-
-// --- Query service descriptor ---
+// --- Query service descriptor (no protobuf query service was generated) ---
 
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.channels.v1.Query",

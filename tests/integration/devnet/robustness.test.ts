@@ -96,7 +96,7 @@ const STRESS_CONFIG: Partial<TestNetworkConfig> = {
   blockInterval: 50,
   deterministicMode: true,
   totalSupply: 10_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
   consensusParams: {
     targetBlockTimeMs: 50,
     verificationRoundBlocks: 10,
@@ -106,7 +106,7 @@ const STRESS_CONFIG: Partial<TestNetworkConfig> = {
     validatorQuorum: 0.66,
     acceptanceThreshold: 0.66,
     rejectionThreshold: 0.66,
-    minClaimStake: 10n * 10n ** 18n,
+    minClaimStake: 10n * 10n ** 15n,
     verificationReward: 1n * 10n ** 18n,
   } as Partial<ConsensusParams>,
 };

@@ -10,6 +10,7 @@
  * - Atomic balance transfers
  * - Session key tracking
  * - Nonce management
+ * - Per-period balance tracking for token expiration (Dynamic Array Method)
  */
 
 import {
@@ -56,6 +57,12 @@ function serializeAccountState(account: AccountState): Uint8Array {
           updatedAtBlock: account.availability.updatedAtBlock.toString(),
         }
       : undefined,
+    periodBalances: account.periodBalances
+      ? Array.from(account.periodBalances.entries()).map(([k, v]) => [
+          k,
+          v.toString(),
+        ])
+      : undefined,
   });
   return new TextEncoder().encode(json);
 }
@@ -86,6 +93,14 @@ function deserializeAccountState(bytes: Uint8Array): AccountState {
           minimumBounty: BigInt(obj.availability.minimumBounty),
           updatedAtBlock: BigInt(obj.availability.updatedAtBlock),
         }
+      : undefined,
+    periodBalances: obj.periodBalances
+      ? new Map(
+          (obj.periodBalances as Array<[number, string]>).map(([k, v]) => [
+            k,
+            BigInt(v),
+          ]),
+        )
       : undefined,
   };
 }
@@ -130,9 +145,32 @@ export class AccountStateTree {
   private accountCache: Map<string, AccountState> = new Map();
   private readonly cacheSize: number;
 
+  // Period tracking state
+  private currentPeriod: number | undefined = undefined;
+  private allDids: Set<string> = new Set();
+  // Backing store for all accounts (survives cache eviction, used by getAllAccounts/sweep)
+  private accountStore: Map<string, AccountState> = new Map();
+
   constructor(cacheSize: number = 10000) {
     this.smt = new InMemorySMT();
     this.cacheSize = cacheSize;
+  }
+
+  // ============ Period Tracking ============
+
+  /**
+   * Activate/deactivate period tracking.
+   * When set, credits go to currentPeriod, debits use FIFO from oldest period.
+   */
+  setCurrentPeriod(period: number | undefined): void {
+    this.currentPeriod = period;
+  }
+
+  /**
+   * Get the current period (undefined if tracking is inactive).
+   */
+  getCurrentPeriod(): number | undefined {
+    return this.currentPeriod;
   }
 
   /**
@@ -149,6 +187,13 @@ export class AccountStateTree {
     // Check cache first
     const cached = this.accountCache.get(did);
     if (cached) return cached;
+
+    // Check backing store (survives cache eviction)
+    const stored = this.accountStore.get(did);
+    if (stored) {
+      this.cacheAccount(did, stored);
+      return stored;
+    }
 
     // Get from SMT
     const key = didToKey(did);
@@ -223,6 +268,7 @@ export class AccountStateTree {
     const newRoot = this.smt.set(key, value);
 
     this.cacheAccount(did, account);
+    this.allDids.add(did);
     return newRoot;
   }
 
@@ -285,7 +331,8 @@ export class AccountStateTree {
   }
 
   /**
-   * Apply a delta to an account
+   * Apply a delta to an account.
+   * When period tracking is active, also updates periodBalances via lazy migration + FIFO.
    */
   applyDelta(delta: AccountDelta): MerkleRoot {
     const existing = this.getAccount(delta.did);
@@ -296,6 +343,8 @@ export class AccountStateTree {
     }
 
     let newBalance = existing.balance;
+    let periodBalances = existing.periodBalances;
+
     if (delta.balanceChange !== undefined) {
       newBalance = existing.balance + delta.balanceChange;
       if (newBalance < 0n) {
@@ -305,6 +354,52 @@ export class AccountStateTree {
           requested: (-delta.balanceChange).toString(),
         });
       }
+
+      // Period tracking logic
+      if (this.currentPeriod !== undefined) {
+        // Lazy migration: if no periodBalances yet, migrate existing balance
+        if (!periodBalances) {
+          periodBalances = new Map<number, bigint>();
+          if (existing.balance > 0n) {
+            periodBalances.set(this.currentPeriod, existing.balance);
+          }
+        }
+
+        if (delta.balanceChange > 0n) {
+          // Credit: add to currentPeriod
+          const current = periodBalances.get(this.currentPeriod) ?? 0n;
+          periodBalances.set(this.currentPeriod, current + delta.balanceChange);
+        } else if (delta.balanceChange < 0n) {
+          // Debit: FIFO from oldest period
+          let remaining = -delta.balanceChange;
+          const sortedPeriods = Array.from(periodBalances.keys()).sort(
+            (a, b) => a - b,
+          );
+          for (const period of sortedPeriods) {
+            if (remaining <= 0n) break;
+            const periodBal = periodBalances.get(period)!;
+            if (periodBal <= remaining) {
+              remaining -= periodBal;
+              periodBalances.delete(period);
+            } else {
+              periodBalances.set(period, periodBal - remaining);
+              remaining = 0n;
+            }
+          }
+        }
+      }
+    }
+
+    // Handle staking: when tokens are staked, debit from periodBalances (FIFO)
+    // When tokens are unstaked, credit to currentPeriod (fresh expiration)
+    if (
+      delta.stakedChange !== undefined &&
+      this.currentPeriod !== undefined &&
+      delta.balanceChange !== undefined
+    ) {
+      // Staking and unstaking are handled through the balanceChange path above
+      // (stake: balanceChange < 0, unstake: balanceChange > 0)
+      // No additional period logic needed — applyDelta already handled it.
     }
 
     let newStaked = existing.stakedBalance;
@@ -338,6 +433,7 @@ export class AccountStateTree {
       flags: delta.setFlags
         ? { ...existing.flags, ...delta.setFlags }
         : existing.flags,
+      periodBalances,
     };
 
     const key = didToKey(delta.did);
@@ -349,7 +445,8 @@ export class AccountStateTree {
   }
 
   /**
-   * Transfer balance between accounts
+   * Transfer balance between accounts.
+   * Sender uses FIFO debit; recipient gets tokens at currentPeriod (fresh expiration).
    */
   transfer(from: string, to: string, amount: bigint): MerkleRoot {
     if (amount <= 0n) {
@@ -379,6 +476,15 @@ export class AccountStateTree {
       });
     }
 
+    // H4: Self-transfer detection — only increment nonce, no balance change
+    if (from === to) {
+      return this.applyDelta({
+        did: from,
+        balanceChange: 0n,
+        nonceIncrement: true,
+      });
+    }
+
     // Create recipient if doesn't exist
     let toAccount = this.getAccount(to);
     if (!toAccount) {
@@ -395,13 +501,243 @@ export class AccountStateTree {
       );
     }
 
-    // Apply deltas
+    // Apply deltas — sender FIFO debit, recipient credit at currentPeriod
     this.applyDelta({
       did: from,
       balanceChange: -amount,
       nonceIncrement: true,
     });
     return this.applyDelta({ did: to, balanceChange: amount });
+  }
+
+  /**
+   * Transfer preserving the sender's period-of-origin in the recipient.
+   * Prevents ping-pong refresh attacks: tokens keep their original expiration.
+   *
+   * @param periodsUntilExpiration If provided, rejects transfer if FIFO includes expired periods
+   */
+  transferPreservingPeriods(
+    from: string,
+    to: string,
+    amount: bigint,
+    periodsUntilExpiration?: number,
+  ): MerkleRoot {
+    if (amount <= 0n) {
+      throw new StateError("Invalid transfer amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
+    }
+
+    const fromAccount = this.getAccount(from);
+    if (!fromAccount) {
+      throw new StateError("Sender not found", "ACCOUNT_NOT_FOUND", {
+        did: from,
+      });
+    }
+
+    if (fromAccount.balance < amount) {
+      throw new StateError("Insufficient balance", "INSUFFICIENT_BALANCE", {
+        did: from,
+        balance: fromAccount.balance.toString(),
+        requested: amount.toString(),
+      });
+    }
+
+    // If period tracking is inactive, fall back to regular transfer
+    if (this.currentPeriod === undefined || !fromAccount.periodBalances) {
+      return this.transfer(from, to, amount);
+    }
+
+    // Create recipient if doesn't exist
+    if (!this.exists(to)) {
+      this.createAccount(to, "", 0n);
+    }
+
+    // Compute FIFO debit plan from sender
+    const debitPlan: Array<[number, bigint]> = [];
+    let remaining = amount;
+    const sortedPeriods = Array.from(fromAccount.periodBalances.keys()).sort(
+      (a, b) => a - b,
+    );
+
+    // Expiration threshold: periods <= threshold are expired
+    const expirationThreshold =
+      periodsUntilExpiration !== undefined
+        ? this.currentPeriod - periodsUntilExpiration
+        : undefined;
+
+    for (const period of sortedPeriods) {
+      if (remaining <= 0n) break;
+
+      // Check if this period is expired
+      if (expirationThreshold !== undefined && period <= expirationThreshold) {
+        throw new StateError(
+          `Cannot transfer tokens from expired period ${period}`,
+          "TOKENS_EXPIRED",
+          {
+            period: period.toString(),
+            threshold: expirationThreshold.toString(),
+          },
+        );
+      }
+
+      const periodBal = fromAccount.periodBalances.get(period)!;
+      if (periodBal <= remaining) {
+        debitPlan.push([period, periodBal]);
+        remaining -= periodBal;
+      } else {
+        debitPlan.push([period, remaining]);
+        remaining = 0n;
+      }
+    }
+
+    // Apply sender debit (FIFO from periodBalances)
+    const senderPB = new Map(fromAccount.periodBalances);
+    for (const [period, amt] of debitPlan) {
+      const current = senderPB.get(period)!;
+      if (current === amt) {
+        senderPB.delete(period);
+      } else {
+        senderPB.set(period, current - amt);
+      }
+    }
+
+    // Update sender
+    this.updateAccount(from, {
+      balance: fromAccount.balance - amount,
+      nonce: fromAccount.nonce + 1n,
+      periodBalances: senderPB,
+    });
+
+    // Apply recipient credit (preserving sender's period-of-origin)
+    const toAccount = this.getAccount(to)!;
+    let recipientPB = toAccount.periodBalances;
+
+    // Lazy migration for recipient
+    if (!recipientPB && this.currentPeriod !== undefined) {
+      recipientPB = new Map<number, bigint>();
+      if (toAccount.balance > 0n) {
+        recipientPB.set(this.currentPeriod, toAccount.balance);
+      }
+    }
+
+    if (recipientPB) {
+      for (const [period, amt] of debitPlan) {
+        const existing = recipientPB.get(period) ?? 0n;
+        recipientPB.set(period, existing + amt);
+      }
+    }
+
+    this.updateAccount(to, {
+      balance: toAccount.balance + amount,
+      periodBalances: recipientPB,
+    });
+
+    return this.getRoot();
+  }
+
+  /**
+   * Credit balance to a specific period (not currentPeriod).
+   * Used for unbonding release to preserve original expiration.
+   */
+  creditBalanceToSpecificPeriod(
+    did: string,
+    amount: bigint,
+    period: number,
+  ): MerkleRoot {
+    if (amount <= 0n) {
+      throw new StateError("Invalid credit amount", "INVALID_TRANSITION", {
+        amount: amount.toString(),
+      });
+    }
+
+    // Create recipient if doesn't exist
+    if (!this.exists(did)) {
+      this.createAccount(did, "", 0n);
+    }
+
+    const account = this.getAccount(did)!;
+
+    // If period tracking is inactive, just credit normally
+    if (this.currentPeriod === undefined) {
+      return this.updateAccount(did, {
+        balance: account.balance + amount,
+      });
+    }
+
+    // Lazy migration
+    let periodBalances = account.periodBalances;
+    if (!periodBalances) {
+      periodBalances = new Map<number, bigint>();
+      if (account.balance > 0n) {
+        periodBalances.set(this.currentPeriod, account.balance);
+      }
+    }
+
+    // Credit to the specific period
+    const existing = periodBalances.get(period) ?? 0n;
+    periodBalances.set(period, existing + amount);
+
+    return this.updateAccount(did, {
+      balance: account.balance + amount,
+      periodBalances,
+    });
+  }
+
+  /**
+   * Sweep expired periods from an account.
+   * Removes all period entries <= threshold, deducts from balance, returns total swept.
+   */
+  sweepExpiredPeriods(did: string, threshold: number): bigint {
+    const account = this.getAccount(did);
+    if (!account || !account.periodBalances) return 0n;
+
+    let swept = 0n;
+    const periodBalances = new Map(account.periodBalances);
+
+    for (const [period, balance] of account.periodBalances) {
+      if (period <= threshold) {
+        swept += balance;
+        periodBalances.delete(period);
+      }
+    }
+
+    if (swept > 0n) {
+      this.updateAccount(did, {
+        balance: account.balance - swept,
+        periodBalances,
+      });
+    }
+
+    return swept;
+  }
+
+  /**
+   * Find all accounts with expired period balances.
+   * Scans ALL known DIDs (not just cache).
+   */
+  getAccountsWithExpiredPeriods(
+    threshold: number,
+  ): Array<{ did: string; totalExpired: bigint }> {
+    const results: Array<{ did: string; totalExpired: bigint }> = [];
+
+    for (const did of this.allDids) {
+      const account = this.getAccount(did);
+      if (!account || !account.periodBalances) continue;
+
+      let totalExpired = 0n;
+      for (const [period, balance] of account.periodBalances) {
+        if (period <= threshold) {
+          totalExpired += balance;
+        }
+      }
+
+      if (totalExpired > 0n) {
+        results.push({ did, totalExpired });
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -581,11 +917,15 @@ export class AccountStateTree {
   }
 
   /**
-   * Get all accounts (for snapshot/debugging)
-   * Note: In production, this would iterate the SMT
+   * Get all accounts (uses allDids index for completeness beyond cache)
    */
   getAllAccounts(): AccountState[] {
-    return Array.from(this.accountCache.values());
+    const results: AccountState[] = [];
+    for (const did of this.allDids) {
+      const account = this.getAccount(did);
+      if (account) results.push(account);
+    }
+    return results;
   }
 
   /**
@@ -593,8 +933,11 @@ export class AccountStateTree {
    */
   getTotalSupply(): bigint {
     let total = 0n;
-    for (const account of this.accountCache.values()) {
-      total += account.balance + account.stakedBalance;
+    for (const did of this.allDids) {
+      const account = this.getAccount(did);
+      if (account) {
+        total += account.balance + account.stakedBalance;
+      }
     }
     return total;
   }
@@ -615,12 +958,59 @@ export class AccountStateTree {
    */
   clone(): AccountStateTree {
     const cloned = new AccountStateTree(this.cacheSize);
+    cloned.currentPeriod = this.currentPeriod;
+    cloned.allDids = new Set(this.allDids);
+    // Deep clone backing store
+    for (const [did, account] of this.accountStore) {
+      const clonedAccount: AccountState = {
+        ...account,
+        flags: { ...account.flags },
+        periodBalances: account.periodBalances
+          ? new Map(account.periodBalances)
+          : undefined,
+        availability: account.availability
+          ? { ...account.availability }
+          : undefined,
+      };
+      cloned.accountStore.set(did, clonedAccount);
+    }
     // Deep clone cache
     for (const [did, account] of this.accountCache) {
-      cloned.accountCache.set(did, { ...account, flags: { ...account.flags } });
+      const clonedAccount: AccountState = {
+        ...account,
+        flags: { ...account.flags },
+        periodBalances: account.periodBalances
+          ? new Map(account.periodBalances)
+          : undefined,
+        availability: account.availability
+          ? { ...account.availability }
+          : undefined,
+      };
+      cloned.accountCache.set(did, clonedAccount);
       // Re-create in SMT
       const key = didToKey(did);
-      cloned.smt.set(key, serializeAccountState(account));
+      cloned.smt.set(key, serializeAccountState(clonedAccount));
+    }
+    // Also reconstruct any accounts in allDids that were evicted from cache
+    for (const did of this.allDids) {
+      if (!cloned.accountCache.has(did)) {
+        const account = this.getAccount(did);
+        if (account) {
+          const clonedAccount: AccountState = {
+            ...account,
+            flags: { ...account.flags },
+            periodBalances: account.periodBalances
+              ? new Map(account.periodBalances)
+              : undefined,
+            availability: account.availability
+              ? { ...account.availability }
+              : undefined,
+          };
+          cloned.accountCache.set(did, clonedAccount);
+          const key = didToKey(did);
+          cloned.smt.set(key, serializeAccountState(clonedAccount));
+        }
+      }
     }
     return cloned;
   }
@@ -634,6 +1024,8 @@ export class AccountStateTree {
       if (firstKey) this.accountCache.delete(firstKey);
     }
     this.accountCache.set(did, account);
+    this.accountStore.set(did, account);
+    this.allDids.add(did);
   }
 }
 
@@ -652,6 +1044,8 @@ export function createAccountTreeFromSnapshot(
     const value = serializeAccountState(account);
     tree["smt"].set(key, value);
     tree["accountCache"].set(account.did, account);
+    tree["accountStore"].set(account.did, account);
+    tree["allDids"].add(account.did);
   }
 
   return tree;

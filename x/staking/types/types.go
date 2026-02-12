@@ -1,24 +1,39 @@
 package types
 
 import (
-	"context"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
 )
 
-// ValidatorTier represents the graduated tier system
-type ValidatorTier uint32
-
+// Tier aliases — map legacy names to proto-generated ValidatorTier enum values.
 const (
-	TierApprentice ValidatorTier = 0
-	TierVerified   ValidatorTier = 1
-	TierBonded     ValidatorTier = 2
-	TierGuardian   ValidatorTier = 3
+	TierApprentice = ValidatorTier_VALIDATOR_TIER_APPRENTICE // 1
+	TierVerified   = ValidatorTier_VALIDATOR_TIER_VERIFIED   // 2
+	TierBonded     = ValidatorTier_VALIDATOR_TIER_BONDED     // 3
+	TierGuardian   = ValidatorTier_VALIDATOR_TIER_GUARDIAN   // 4
 )
 
-func (t ValidatorTier) String() string {
+// ValidatorTierFromString converts a tier string back to ValidatorTier.
+func ValidatorTierFromString(s string) ValidatorTier {
+	switch s {
+	case "apprentice":
+		return TierApprentice
+	case "verified":
+		return TierVerified
+	case "bonded":
+		return TierBonded
+	case "guardian":
+		return TierGuardian
+	default:
+		return TierApprentice
+	}
+}
+
+// ValidatorTierString returns a human-readable tier name (lowercase).
+// Use this instead of the proto-generated String() when a short tier name is needed.
+func ValidatorTierString(t ValidatorTier) string {
 	switch t {
 	case TierApprentice:
 		return "apprentice"
@@ -33,87 +48,67 @@ func (t ValidatorTier) String() string {
 	}
 }
 
-// TierConfig defines the requirements and benefits for each tier
-type TierConfig struct {
-	Tier              ValidatorTier
-	MinStake          string   // bigint as string in ulgm
-	MinVerifications  uint64   // minimum verifications completed
-	MinAccuracy       uint64   // 0-1000000 (77% = 770000)
-	MaxSlashCount     int64    // -1 means unlimited
-	AllowedCategories []string // epistemic categories
-	RewardMultiplier  uint64   // basis points (1000 = 1.0x)
-	SelectionWeight   uint64   // basis points for VRF selection probability
-}
+// Note: TierConfig struct is defined in state.pb.go (proto-generated).
 
 // DefaultTierConfigs returns the standard tier configuration
-func DefaultTierConfigs() []TierConfig {
-	return []TierConfig{
+func DefaultTierConfigs() []*TierConfig {
+	return []*TierConfig{
 		{
-			Tier:              TierApprentice,
-			MinStake:          "0",
-			MinVerifications:  0,
-			MinAccuracy:       0,
-			MaxSlashCount:     -1,
-			AllowedCategories: []string{"protocol", "analytic", "formal"},
-			RewardMultiplier:  100,  // 0.1x
-			SelectionWeight:   100,  // 0.1x for virtual stake calculation
+			Tier:                            "apprentice",
+			MinStake:                        "111000", // 0.111 LGM in ulgm (6 decimals)
+			MinVerifications:                0,
+			MinAccuracy:                     0,
+			MaxSlashCount:                   -1,
+			AllowedCategories:               []string{"protocol", "computational", "formal"},
+			RewardMultiplier:                100, // 0.1x
+			SelectionWeight:                 100, // 0.1x for virtual stake calculation
+			SlashWindowEpochs:               0,
+			MinContestedVerifications:       0,
+			ContestedVerificationMultiplier: 1,
 		},
 		{
-			Tier:              TierVerified,
-			MinStake:          "0",
-			MinVerifications:  22,
-			MinAccuracy:       770000, // 77%
-			MaxSlashCount:     -1,
-			AllowedCategories: []string{"protocol", "analytic", "formal", "empirical", "historical"},
-			RewardMultiplier:  500,  // 0.5x
-			SelectionWeight:   500,  // 0.5x
+			Tier:                            "verified",
+			MinStake:                        "1110000", // 1.11 LGM in ulgm (6 decimals)
+			MinVerifications:                22,
+			MinAccuracy:                     770000, // 77%
+			MaxSlashCount:                   -1,
+			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical"},
+			RewardMultiplier:                500, // 0.5x
+			SelectionWeight:                 500, // 0.5x
+			SlashWindowEpochs:               0,
+			MinContestedVerifications:       0,
+			ContestedVerificationMultiplier: 1,
 		},
 		{
-			Tier:              TierBonded,
-			MinStake:          "1111000000", // 1,111 LGM in ulgm (6 decimals)
-			MinVerifications:  0,
-			MinAccuracy:       0,
-			MaxSlashCount:     -1,
-			AllowedCategories: []string{"protocol", "analytic", "formal", "empirical", "historical", "testimonial", "revelation"},
-			RewardMultiplier:  1000, // 1.0x
-			SelectionWeight:   1000, // 1.0x
+			Tier:                            "bonded",
+			MinStake:                        "11100000", // 11.1 LGM in ulgm (6 decimals)
+			MinVerifications:                0,
+			MinAccuracy:                     0,
+			MaxSlashCount:                   -1,
+			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation"},
+			RewardMultiplier:                1000, // 1.0x
+			SelectionWeight:                 1000, // 1.0x
+			SlashWindowEpochs:               0,
+			MinContestedVerifications:       0,
+			ContestedVerificationMultiplier: 1,
 		},
 		{
-			Tier:              TierGuardian,
-			MinStake:          "11111000000", // 11,111 LGM in ulgm (6 decimals)
-			MinVerifications:  1111,
-			MinAccuracy:       770000, // 77%
-			MaxSlashCount:     0,      // zero slashes allowed
-			AllowedCategories: []string{"protocol", "analytic", "formal", "empirical", "historical", "testimonial", "revelation"},
-			RewardMultiplier:  1500, // 1.5x
-			SelectionWeight:   1500, // 1.5x
+			Tier:                            "guardian",
+			MinStake:                        "111000000", // 111 LGM in ulgm (6 decimals)
+			MinVerifications:                333,
+			MinAccuracy:                     770000, // 77%
+			MaxSlashCount:                   0,      // zero slashes in window
+			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation", "predictive", "social", "contested"},
+			RewardMultiplier:                1500, // 1.5x
+			SelectionWeight:                 1500, // 1.5x
+			SlashWindowEpochs:               10,   // Only slashes within last 10 epochs count
+			MinContestedVerifications:       33,   // Must engage hard claims
+			ContestedVerificationMultiplier: 3,    // Contested claims count 3x
 		},
 	}
 }
 
-// LegibleValidator extends standard Cosmos validator with PoT-specific fields
-type LegibleValidator struct {
-	OperatorAddress       string        // bech32 operator address
-	Did                   string        // did:lgm:xxx
-	ConsensusPubkey       string        // Ed25519 pubkey hex
-	Stake                 string        // self-bonded stake (bigint as string)
-	DelegatedStake        string        // stake from delegators
-	TotalStake            string        // stake + delegated
-	Commission            uint64        // basis points (1000 = 10%)
-	Tier                  ValidatorTier // current tier
-	IsActive              bool          // actively validating
-	ActiveSinceHeight     uint64        // when validator became active
-	LastProposedHeight    uint64        // last block proposed
-	BlocksProposed        uint64        // total blocks proposed
-	VerificationsCompleted uint64       // total verifications
-	VerificationsCorrect  uint64        // correct verifications
-	SlashCount            uint64        // times slashed
-	Reputation            uint64        // 0-1000000 (default 500000 = 0.5)
-}
-
-func (v *LegibleValidator) Reset()         { *v = LegibleValidator{} }
-func (v *LegibleValidator) String() string { return proto.CompactTextString(v) }
-func (v *LegibleValidator) ProtoMessage()  {}
+// Note: LegibleValidator struct is defined in state.pb.go (proto-generated).
 
 // GetAccuracyRate returns verification accuracy as basis points
 func (v *LegibleValidator) GetAccuracyRate() uint64 {
@@ -123,141 +118,32 @@ func (v *LegibleValidator) GetAccuracyRate() uint64 {
 	return (v.VerificationsCorrect * 1000000) / v.VerificationsCompleted
 }
 
-// Delegation represents stake delegation to a validator
-type Delegation struct {
-	DelegatorAddress  string // bech32 delegator address
-	ValidatorAddress  string // bech32 validator operator address
-	Amount            string // delegated amount (bigint as string)
-	DelegatedAtHeight uint64 // block height of delegation
-}
+// Note: Delegation, UnbondingEntry, Params, and GenesisState structs
+// are defined in state.pb.go and genesis.pb.go (proto-generated).
 
-func (d *Delegation) Reset()         { *d = Delegation{} }
-func (d *Delegation) String() string { return proto.CompactTextString(d) }
-func (d *Delegation) ProtoMessage()  {}
+// Note: MsgRegisterValidator and MsgRegisterValidatorResponse are defined in tx.pb.go (proto-generated).
 
-// UnbondingEntry represents an unbonding delegation
-type UnbondingEntry struct {
-	Id                 string `json:"id"`                            // unique identifier
-	DelegatorAddress   string `json:"delegator_address"`             // bech32 delegator
-	ValidatorAddress   string `json:"validator_address"`             // bech32 validator
-	Amount             string `json:"amount"`                        // unbonding amount
-	InitiatedAtHeight  uint64 `json:"initiated_at_height"`           // when unbonding started
-	CompletesAtHeight  uint64 `json:"completes_at_height"`           // when unbonding completes
-	Status             string `json:"status"`                        // "pending" or "completed"
-	OriginPeriod       uint64 `json:"origin_period,omitempty"`       // token expiration period preservation
-}
-
-func (u *UnbondingEntry) Reset()         { *u = UnbondingEntry{} }
-func (u *UnbondingEntry) String() string { return proto.CompactTextString(u) }
-func (u *UnbondingEntry) ProtoMessage()  {}
-
-// Params defines the module parameters
-type Params struct {
-	MaxApprenticeValidators uint32 // max tier 0 validators (Sybil defense)
-	UnbondingPeriod         uint64 // blocks (268560 ~7 days at 2.521s/block)
-	VirtualStake            string // virtual stake for tier 0/1 (111 LGM)
-	MaxValidators           uint32 // max total validators
-	MinSelfDelegation       string // minimum self-delegation
-}
-
-func DefaultParams() Params {
-	return Params{
-		MaxApprenticeValidators: 111,
-		UnbondingPeriod:         268560, // ~7 days
-		VirtualStake:            "111000000", // 111 LGM in ulgm
-		MaxValidators:           100,
-		MinSelfDelegation:       "0",
-	}
-}
-
-func (p *Params) Reset()         { *p = Params{} }
-func (p *Params) String() string { return proto.CompactTextString(p) }
-func (p *Params) ProtoMessage()  {}
-
-// GenesisState defines the staking module's genesis state
-type GenesisState struct {
-	Params           Params
-	Validators       []LegibleValidator
-	Delegations      []Delegation
-	UnbondingEntries []UnbondingEntry
-	TierConfigs      []TierConfig
-}
-
-func DefaultGenesisState() *GenesisState {
-	return &GenesisState{
-		Params:           DefaultParams(),
-		Validators:       []LegibleValidator{},
-		Delegations:      []Delegation{},
-		UnbondingEntries: []UnbondingEntry{},
-		TierConfigs:      DefaultTierConfigs(),
-	}
-}
-
-func (gs *GenesisState) Reset()         { *gs = GenesisState{} }
-func (gs *GenesisState) String() string { return proto.CompactTextString(gs) }
-func (gs *GenesisState) ProtoMessage()  {}
-
-// Validate performs basic genesis state validation
-func (gs *GenesisState) Validate() error {
-	if gs.Params.MaxApprenticeValidators == 0 {
-		return fmt.Errorf("max apprentice validators must be positive")
-	}
-	if gs.Params.UnbondingPeriod == 0 {
-		return fmt.Errorf("unbonding period must be positive")
-	}
-	if len(gs.TierConfigs) != 4 {
-		return fmt.Errorf("expected 4 tier configs, got %d", len(gs.TierConfigs))
-	}
-	return nil
-}
-
-// --- Message Types ---
-
-// MsgRegisterValidator registers a new validator (potentially tier 0 with zero stake)
-type MsgRegisterValidator struct {
-	Sender          string // bech32 operator address
-	ConsensusPubkey string // Ed25519 hex
-	Did             string // did:lgm:xxx
-	InitialStake    string // self-delegation amount (can be "0")
-	Commission      uint64 // basis points
-}
-
-func (m *MsgRegisterValidator) Reset()         { *m = MsgRegisterValidator{} }
-func (m *MsgRegisterValidator) String() string { return proto.CompactTextString(m) }
-func (m *MsgRegisterValidator) ProtoMessage()  {}
-
-// ValidateBasic performs stateless validation
+// ValidateBasic performs stateless validation for MsgRegisterValidator.
 func (m *MsgRegisterValidator) ValidateBasic() error {
-	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
-		return fmt.Errorf("invalid sender address: %w", err)
+	if _, err := sdk.AccAddressFromBech32(m.ValidatorAddress); err != nil {
+		return fmt.Errorf("invalid validator address: %w", err)
 	}
-	if m.ConsensusPubkey == "" {
+	if len(m.PubKey) == 0 {
 		return fmt.Errorf("consensus pubkey required")
 	}
-	if m.Did == "" {
-		return fmt.Errorf("DID required")
-	}
-	if m.Commission > 10000 {
+	if m.CommissionRate > 10000 {
 		return fmt.Errorf("commission cannot exceed 100%% (10000 basis points)")
 	}
 	return nil
 }
 
-// GetSigners returns the expected signers
+// GetSigners returns the expected signers for MsgRegisterValidator.
 func (m *MsgRegisterValidator) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(m.Sender)
+	addr, _ := sdk.AccAddressFromBech32(m.ValidatorAddress)
 	return []sdk.AccAddress{addr}
 }
 
-// MsgRegisterValidatorResponse is the response
-type MsgRegisterValidatorResponse struct {
-	ValidatorAddress string
-	InitialTier      ValidatorTier
-}
-
-func (m *MsgRegisterValidatorResponse) Reset()         { *m = MsgRegisterValidatorResponse{} }
-func (m *MsgRegisterValidatorResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgRegisterValidatorResponse) ProtoMessage()  {}
+// --- Additional Message Types (not in proto) ---
 
 // MsgUpdateValidatorStake updates self-delegation
 type MsgUpdateValidatorStake struct {
@@ -417,11 +303,12 @@ func (m *MsgRedelegateResponse) Reset()         { *m = MsgRedelegateResponse{} }
 func (m *MsgRedelegateResponse) String() string { return proto.CompactTextString(m) }
 func (m *MsgRedelegateResponse) ProtoMessage()  {}
 
-// MsgServer is the msg server interface
-type MsgServer interface {
-	RegisterValidator(context.Context, *MsgRegisterValidator) (*MsgRegisterValidatorResponse, error)
-	UpdateValidatorStake(context.Context, *MsgUpdateValidatorStake) (*MsgUpdateValidatorStakeResponse, error)
-	Delegate(context.Context, *MsgDelegate) (*MsgDelegateResponse, error)
-	Undelegate(context.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
-	Redelegate(context.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
+// FullMsgServer extends the proto-generated MsgServer with additional RPCs
+// that are not yet defined in the protobuf service.
+type FullMsgServer interface {
+	MsgServer
+	UpdateValidatorStake(sdk.Context, *MsgUpdateValidatorStake) (*MsgUpdateValidatorStakeResponse, error)
+	Delegate(sdk.Context, *MsgDelegate) (*MsgDelegateResponse, error)
+	Undelegate(sdk.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
+	Redelegate(sdk.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
 }

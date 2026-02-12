@@ -42,7 +42,7 @@ const DISPUTE_TEST_CONFIG: Partial<TestNetworkConfig> = {
   validatorCount: 5, // Need odd number for majority voting
   fullNodeCount: 0,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
   testAccounts: 5,
   autoBlocks: false,
   blockInterval: 100,
@@ -56,10 +56,10 @@ const DISPUTE_TEST_CONFIG: Partial<TestNetworkConfig> = {
     validatorQuorum: 0.66,
     acceptanceThreshold: 0.66,
     rejectionThreshold: 0.66,
-    minClaimStake: 10n * 10n ** 18n,
+    minClaimStake: 10n * 10n ** 15n,
     verificationReward: 1n * 10n ** 18n,
-    wrongVerificationSlash: 0.1,
-    missedVerificationSlash: 0.05,
+    wrongVerificationSlash: 0.06,
+    missedVerificationSlash: 0.0001,
   } as Partial<ConsensusParams>,
 };
 
@@ -274,7 +274,7 @@ describe.sequential("Dispute Resolution Workflow", () => {
 
     it("should require minimum stake to be arbiter", async () => {
       const minArbiterStake = DISPUTE_ECONOMICS.minArbiterStake;
-      expect(minArbiterStake).toBe(77n * 10n ** 18n);
+      expect(minArbiterStake).toBe(77n * 10n ** 15n);
 
       // All validators have enough stake
       validators.forEach((v) => {
@@ -335,11 +335,11 @@ describe.sequential("Dispute Resolution Workflow", () => {
       const wrongArbitrationSlash = PUNISHMENT_RATES.wrongArbitrationSlash;
       expect(wrongArbitrationSlash).toBe(0.11); // 11% slash
 
-      // Simulate arbiter with 1000 LGM stake voting wrong
-      const arbiterStake = 1000n * 10n ** 18n;
+      // Simulate arbiter with 1000 mLGM stake voting wrong
+      const arbiterStake = 1000n * 10n ** 15n;
       const slashAmount = (arbiterStake * 11n) / 100n;
 
-      expect(slashAmount).toBe(110n * 10n ** 18n);
+      expect(slashAmount).toBe(110n * 10n ** 15n);
     });
 
     it("should reward arbiters who vote correctly", async () => {
@@ -347,10 +347,10 @@ describe.sequential("Dispute Resolution Workflow", () => {
       expect(correctBonus).toBe(0.11); // 11% bonus
 
       // Simulate arbiter reward from slashed incorrect voters
-      const slashedAmount = 110n * 10n ** 18n;
+      const slashedAmount = 110n * 10n ** 15n;
       const bonusAmount = (slashedAmount * 11n) / 100n;
 
-      expect(bonusAmount).toBe(12100000000000000000n); // ~12.1 LGM
+      expect(bonusAmount).toBe(12100000000000000n); // ~0.0121 LGM
     });
   });
 
@@ -373,47 +373,47 @@ describe.sequential("Dispute Resolution Workflow", () => {
     });
 
     it("should slash defender when challenger wins", async () => {
-      const defenderStake = 1000n * 10n ** 18n;
+      const defenderStake = 1000n * 10n ** 15n;
 
       // False claim slash is 55%
       const slashAmount = (defenderStake * 55n) / 100n;
 
-      expect(slashAmount).toBe(550n * 10n ** 18n);
+      expect(slashAmount).toBe(550n * 10n ** 15n);
     });
 
     it("should slash challenger when defender wins", async () => {
-      const challengerStake = 1000n * 10n ** 18n;
+      const challengerStake = 1000n * 10n ** 15n;
 
       // Failed challenge slash is 33%
       const slashAmount = (challengerStake * 33n) / 100n;
 
-      expect(slashAmount).toBe(330n * 10n ** 18n);
+      expect(slashAmount).toBe(330n * 10n ** 15n);
     });
 
     it("should apply early detection bonus", async () => {
       // Early detection (within 1111 blocks) gets 22% bonus
-      const baseReward = 100n * 10n ** 18n;
+      const baseReward = 100n * 10n ** 15n;
       const earlyBonus = (baseReward * 22n) / 100n;
 
-      expect(earlyBonus).toBe(22n * 10n ** 18n);
+      expect(earlyBonus).toBe(22n * 10n ** 15n);
     });
 
     it("should allocate research fund share", async () => {
-      const totalPenalty = 1000n * 10n ** 18n;
+      const totalPenalty = 1000n * 10n ** 15n;
 
       // Research gets 22% of penalties
       const researchShare = (totalPenalty * 22n) / 100n;
 
-      expect(researchShare).toBe(220n * 10n ** 18n);
+      expect(researchShare).toBe(220n * 10n ** 15n);
     });
 
     it("should allocate protocol fee", async () => {
-      const totalPenalty = 1000n * 10n ** 18n;
+      const totalPenalty = 1000n * 10n ** 15n;
 
       // Protocol gets 5% fee
       const protocolFee = (totalPenalty * 5n) / 100n;
 
-      expect(protocolFee).toBe(50n * 10n ** 18n);
+      expect(protocolFee).toBe(50n * 10n ** 15n);
     });
   });
 
@@ -446,7 +446,7 @@ describe.sequential("Dispute Resolution Workflow", () => {
 
     it("should require loser to pay escalation stake", async () => {
       // Only the losing party can escalate and must pay higher stake
-      const loserInitialStake = 111n * 10n ** 18n;
+      const loserInitialStake = 111n * 10n ** 15n;
       const tier2Multiplier = 2.2;
 
       const escalationStake = BigInt(

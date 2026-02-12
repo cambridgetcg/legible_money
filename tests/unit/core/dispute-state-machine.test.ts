@@ -144,49 +144,49 @@ function createDisputeWithReveals(): Dispute {
         did: "did:lgm:a1",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
       {
         publicKey: "pk2",
         did: "did:lgm:a2",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
       {
         publicKey: "pk3",
         did: "did:lgm:a3",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
       {
         publicKey: "pk4",
         did: "did:lgm:a4",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
       {
         publicKey: "pk5",
         did: "did:lgm:a5",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
       {
         publicKey: "pk6",
         did: "did:lgm:a6",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
       {
         publicKey: "pk7",
         did: "did:lgm:a7",
         selectionWeight: 1,
         domainExpertise: 0.8,
-        stakedAmount: 100n * 10n ** 18n,
+        stakedAmount: 100n * 10n ** 15n,
       },
     ],
   });
@@ -206,7 +206,7 @@ function createDisputeWithVotes(
       vote: "challenger",
       justificationHash: `j${i}`,
       votedAtBlock: 100n,
-      lockedStake: 77n * 10n ** 18n,
+      lockedStake: 77n * 10n ** 15n,
     });
     i++;
   }
@@ -216,7 +216,7 @@ function createDisputeWithVotes(
       vote: "defender",
       justificationHash: `j${i}`,
       votedAtBlock: 100n,
-      lockedStake: 77n * 10n ** 18n,
+      lockedStake: 77n * 10n ** 15n,
     });
     i++;
   }
@@ -226,7 +226,7 @@ function createDisputeWithVotes(
       vote: "abstain",
       justificationHash: `j${i}`,
       votedAtBlock: 100n,
-      lockedStake: 77n * 10n ** 18n,
+      lockedStake: 77n * 10n ** 15n,
     });
     i++;
   }
@@ -430,7 +430,7 @@ describe("Dispute State Machine", () => {
             did: "d",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
         ],
       });
@@ -462,7 +462,7 @@ describe("Dispute State Machine", () => {
             did: "d",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
         ],
       });
@@ -532,49 +532,49 @@ describe("Dispute State Machine", () => {
             did: "a0",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
           {
             publicKey: "pk2",
             did: "a1",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
           {
             publicKey: "pk3",
             did: "a2",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
           {
             publicKey: "pk4",
             did: "a3",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
           {
             publicKey: "pk5",
             did: "a4",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
           {
             publicKey: "pk6",
             did: "a5",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
           {
             publicKey: "pk7",
             did: "a6",
             selectionWeight: 1,
             domainExpertise: 0.8,
-            stakedAmount: 100n * 10n ** 18n,
+            stakedAmount: 100n * 10n ** 15n,
           },
         ],
       };

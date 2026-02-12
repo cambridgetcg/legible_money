@@ -13,6 +13,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -140,7 +141,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper, 
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		mockSK,
 		mockOK,
 		mockBK,
@@ -148,7 +149,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper, 
 	)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
-	k.SetParams(ctx, types.DefaultParams())
+	k.SetParams(ctx, *types.DefaultParams())
 
 	return k, ctx, mockSK, mockOK
 }
@@ -169,14 +170,14 @@ func TestDomainQualificationRoundtrip(t *testing.T) {
 		ValidatorAddr:       testAddr("val1"),
 		Domain:              "mathematics",
 		Stratum:             3,
-		Pathway:             types.PathwayStakeCommitment,
-		Status:              types.StatusActive,
+		Pathway:             string(types.PathwayStakeCommitment),
+		Status:              string(types.StatusActive),
 		EarnedAtBlock:       50,
 		ExpiresAtBlock:      10050,
 		LockedStake:         "22000000",
 		StakeUnlocksAtBlock: 57777,
 		InheritanceDiscount: 1_000_000,
-		Metrics: types.QualificationMetrics{
+		Metrics: &types.QualificationMetrics{
 			TotalVerifications:    100,
 			CorrectVerifications:  90,
 			Accuracy:              900_000,
@@ -253,43 +254,49 @@ func TestIsolatedReputationRoundtrip(t *testing.T) {
 
 	rep := types.IsolatedReputation{
 		ValidatorAddr: testAddr("val1"),
-		GlobalReputation: types.GlobalReputation{
+		GlobalReputation: &types.GlobalReputation{
 			Score:                800,
 			TotalVerifications:   50,
 			CorrectVerifications: 40,
 			Accuracy:             800_000,
 		},
-		StratumReputations: map[uint32]types.StratumReputation{
-			3: {
-				Stratum:                3,
-				Score:                  750,
-				TotalVerifications:     30,
-				CorrectVerifications:   24,
-				Accuracy:               800_000,
-				DomainsVerified:        2,
-				FirstVerificationBlock: 10,
-				LastActivityBlock:      90,
-				LastDecayBlock:         80,
+		StratumReputations: []*types.StratumReputationEntry{
+			{
+				Key: 3,
+				Value: &types.StratumReputation{
+					Stratum:                3,
+					Score:                  750,
+					TotalVerifications:     30,
+					CorrectVerifications:   24,
+					Accuracy:               800_000,
+					DomainsVerified:        2,
+					FirstVerificationBlock: 10,
+					LastActivityBlock:      90,
+					LastDecayBlock:         80,
+				},
 			},
 		},
-		DomainReputations: map[string]types.DomainReputation{
-			"mathematics": {
-				Domain:                 "mathematics",
-				Stratum:                3,
-				Score:                  850,
-				TotalVerifications:     25,
-				CorrectVerifications:   22,
-				Accuracy:               880_000,
-				VerdictConsistency:     700_000,
-				ConfidenceCalibration:  600_000,
-				ChallengesReceived:     3,
-				ChallengesLost:         1,
-				ChallengeDefenseRate:   666_666,
-				ScoreConfidence:        250_000,
-				FirstVerificationBlock: 15,
-				LastVerificationBlock:  85,
-				DecayedScore:           820,
-				LastDecayBlock:         80,
+		DomainReputations: []*types.DomainReputationEntry{
+			{
+				Key: "mathematics",
+				Value: &types.DomainReputation{
+					Domain:                 "mathematics",
+					Stratum:                3,
+					Score:                  850,
+					TotalVerifications:     25,
+					CorrectVerifications:   22,
+					Accuracy:               880_000,
+					VerdictConsistency:     700_000,
+					ConfidenceCalibration:  600_000,
+					ChallengesReceived:     3,
+					ChallengesLost:         1,
+					ChallengeDefenseRate:   666_666,
+					ScoreConfidence:        250_000,
+					FirstVerificationBlock: 15,
+					LastVerificationBlock:  85,
+					DecayedScore:           820,
+					LastDecayBlock:         80,
+				},
 			},
 		},
 		CreatedAtBlock:   5,
@@ -322,8 +329,8 @@ func TestIsolatedReputationRoundtrip(t *testing.T) {
 		t.Errorf("LastUpdatedBlock: got %d, want %d", got.LastUpdatedBlock, rep.LastUpdatedBlock)
 	}
 
-	sr, ok := got.StratumReputations[3]
-	if !ok {
+	sr := findTestStratumRep(got.StratumReputations, 3)
+	if sr == nil {
 		t.Fatal("stratum reputation for stratum 3 not found")
 	}
 	if sr.Score != 750 {
@@ -333,8 +340,8 @@ func TestIsolatedReputationRoundtrip(t *testing.T) {
 		t.Errorf("StratumReputation[3].TotalVerifications: got %d, want 30", sr.TotalVerifications)
 	}
 
-	dr, ok := got.DomainReputations["mathematics"]
-	if !ok {
+	dr := findTestDomainRep(got.DomainReputations, "mathematics")
+	if dr == nil {
 		t.Fatal("domain reputation for mathematics not found")
 	}
 	if dr.Score != 850 {
@@ -426,10 +433,10 @@ func TestStakeCommitmentQualificationSuccess(t *testing.T) {
 	}
 
 	// Stake commitment starts as probationary
-	if qual.Status != types.StatusProbationary {
+	if qual.Status != string(types.StatusProbationary) {
 		t.Errorf("Status: got %s, want %s", qual.Status, types.StatusProbationary)
 	}
-	if qual.Pathway != types.PathwayStakeCommitment {
+	if qual.Pathway != string(types.PathwayStakeCommitment) {
 		t.Errorf("Pathway: got %s, want %s", qual.Pathway, types.PathwayStakeCommitment)
 	}
 	if qual.LockedStake != "30000000" {
@@ -494,16 +501,19 @@ func TestTrackRecordQualificationSuccess(t *testing.T) {
 	// MinVerificationsForQual = 19, MinAccuracyForQual = 770_000 (77%)
 	rep := types.IsolatedReputation{
 		ValidatorAddr:      validatorAddr,
-		GlobalReputation:   types.GlobalReputation{Score: 700, TotalVerifications: 19, CorrectVerifications: 15, Accuracy: 789_473},
-		StratumReputations: make(map[uint32]types.StratumReputation),
-		DomainReputations: map[string]types.DomainReputation{
-			domain: {
-				Domain:               domain,
-				Stratum:              3,
-				Score:                750,
-				TotalVerifications:   19,
-				CorrectVerifications: 15,
-				Accuracy:             789_473, // 15/19 * 1_000_000 = 789_473
+		GlobalReputation:   &types.GlobalReputation{Score: 700, TotalVerifications: 19, CorrectVerifications: 15, Accuracy: 789_473},
+		StratumReputations: nil,
+		DomainReputations: []*types.DomainReputationEntry{
+			{
+				Key: domain,
+				Value: &types.DomainReputation{
+					Domain:               domain,
+					Stratum:              3,
+					Score:                750,
+					TotalVerifications:   19,
+					CorrectVerifications: 15,
+					Accuracy:             789_473, // 15/19 * 1_000_000 = 789_473
+				},
 			},
 		},
 		CreatedAtBlock:   10,
@@ -521,10 +531,10 @@ func TestTrackRecordQualificationSuccess(t *testing.T) {
 	}
 
 	// Track record grants active status directly
-	if qual.Status != types.StatusActive {
+	if qual.Status != string(types.StatusActive) {
 		t.Errorf("Status: got %s, want %s", qual.Status, types.StatusActive)
 	}
-	if qual.Pathway != types.PathwayTrackRecord {
+	if qual.Pathway != string(types.PathwayTrackRecord) {
 		t.Errorf("Pathway: got %s, want %s", qual.Pathway, types.PathwayTrackRecord)
 	}
 	if qual.Metrics.TotalVerifications != 19 {
@@ -554,14 +564,17 @@ func TestTrackRecordInsufficientVerifications(t *testing.T) {
 	// Only 10 verifications (below 19 required)
 	rep := types.IsolatedReputation{
 		ValidatorAddr:      validatorAddr,
-		GlobalReputation:   types.GlobalReputation{Score: 700, TotalVerifications: 10, CorrectVerifications: 8, Accuracy: 800_000},
-		StratumReputations: make(map[uint32]types.StratumReputation),
-		DomainReputations: map[string]types.DomainReputation{
-			domain: {
-				Domain:               domain,
-				TotalVerifications:   10,
-				CorrectVerifications: 8,
-				Accuracy:             800_000,
+		GlobalReputation:   &types.GlobalReputation{Score: 700, TotalVerifications: 10, CorrectVerifications: 8, Accuracy: 800_000},
+		StratumReputations: nil,
+		DomainReputations: []*types.DomainReputationEntry{
+			{
+				Key: domain,
+				Value: &types.DomainReputation{
+					Domain:               domain,
+					TotalVerifications:   10,
+					CorrectVerifications: 8,
+					Accuracy:             800_000,
+				},
 			},
 		},
 		CreatedAtBlock:   10,
@@ -601,8 +614,8 @@ func TestCrossReferenceQualificationSuccess(t *testing.T) {
 		k.SetQualification(ctx, types.DomainQualification{
 			ValidatorAddr: e,
 			Domain:        domain,
-			Pathway:       types.PathwayStakeCommitment,
-			Status:        types.StatusActive,
+			Pathway:       string(types.PathwayStakeCommitment),
+			Status:        string(types.StatusActive),
 		})
 	}
 
@@ -618,10 +631,10 @@ func TestCrossReferenceQualificationSuccess(t *testing.T) {
 	}
 
 	// Cross-reference grants probationary status
-	if qual.Status != types.StatusProbationary {
+	if qual.Status != string(types.StatusProbationary) {
 		t.Errorf("Status: got %s, want %s", qual.Status, types.StatusProbationary)
 	}
-	if qual.Pathway != types.PathwayCrossReference {
+	if qual.Pathway != string(types.PathwayCrossReference) {
 		t.Errorf("Pathway: got %s, want %s", qual.Pathway, types.PathwayCrossReference)
 	}
 	if len(qual.Endorsers) != 3 {
@@ -649,8 +662,8 @@ func TestStratumInheritanceSuccess(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              parentDomain,
-		Pathway:             types.PathwayStakeCommitment,
-		Status:              types.StatusActive,
+		Pathway:             string(types.PathwayStakeCommitment),
+		Status:              string(types.StatusActive),
 		InheritanceDiscount: 1_000_000,
 	})
 
@@ -664,10 +677,10 @@ func TestStratumInheritanceSuccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if qual.Status != types.StatusProbationary {
+	if qual.Status != string(types.StatusProbationary) {
 		t.Errorf("Status: got %s, want %s", qual.Status, types.StatusProbationary)
 	}
-	if qual.Pathway != types.PathwayStratumInheritance {
+	if qual.Pathway != string(types.PathwayStratumInheritance) {
 		t.Errorf("Pathway: got %s, want %s", qual.Pathway, types.PathwayStratumInheritance)
 	}
 	if qual.InheritedFrom != parentDomain {
@@ -693,12 +706,12 @@ func TestQualificationExpiration(t *testing.T) {
 	qual := types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
-		Pathway:             types.PathwayTrackRecord,
-		Status:              types.StatusActive,
+		Pathway:             string(types.PathwayTrackRecord),
+		Status:              string(types.StatusActive),
 		EarnedAtBlock:       currentBlock,
 		ExpiresAtBlock:      currentBlock + 100, // expires at 200
 		InheritanceDiscount: 1_000_000,
-		Metrics:             types.QualificationMetrics{EffectiveWeight: 1_000_000},
+		Metrics:             &types.QualificationMetrics{EffectiveWeight: 1_000_000},
 	}
 	k.SetQualification(ctx, qual)
 
@@ -718,8 +731,8 @@ func TestQualificationExpiration(t *testing.T) {
 	// Simulate BeginBlock expiration logic: iterate and expire
 	k.IterateQualifications(expiredCtx, func(q types.DomainQualification) bool {
 		if q.ExpiresAtBlock > 0 && uint64(201) > q.ExpiresAtBlock {
-			if q.Status == types.StatusActive || q.Status == types.StatusProbationary {
-				q.Status = types.StatusExpired
+			if q.Status == string(types.StatusActive) || q.Status == string(types.StatusProbationary) {
+				q.Status = string(types.StatusExpired)
 				q.Metrics.EffectiveWeight = 0
 				k.SetQualification(expiredCtx, q)
 			}
@@ -732,7 +745,7 @@ func TestQualificationExpiration(t *testing.T) {
 	if !found {
 		t.Fatal("qualification should still exist")
 	}
-	if stored.Status != types.StatusExpired {
+	if stored.Status != string(types.StatusExpired) {
 		t.Errorf("Status: got %s, want %s", stored.Status, types.StatusExpired)
 	}
 	if stored.Metrics.EffectiveWeight != 0 {
@@ -795,19 +808,22 @@ func TestEffectiveReputationFallback(t *testing.T) {
 	// Validator 1: has domain reputation (should use domain source)
 	rep1 := types.IsolatedReputation{
 		ValidatorAddr:      validator1,
-		GlobalReputation:   types.GlobalReputation{Score: 500, TotalVerifications: 10, CorrectVerifications: 5, Accuracy: 500_000},
-		StratumReputations: make(map[uint32]types.StratumReputation),
-		DomainReputations: map[string]types.DomainReputation{
-			domain: {
-				Domain:                domain,
-				Stratum:               3,
-				Score:                 800,
-				TotalVerifications:    25, // above MinVerificationsForDomainRep (19)
-				CorrectVerifications:  20,
-				Accuracy:              800_000,
-				DecayedScore:          780,
-				ScoreConfidence:       250_000,
-				LastVerificationBlock: currentBlock,
+		GlobalReputation:   &types.GlobalReputation{Score: 500, TotalVerifications: 10, CorrectVerifications: 5, Accuracy: 500_000},
+		StratumReputations: nil,
+		DomainReputations: []*types.DomainReputationEntry{
+			{
+				Key: domain,
+				Value: &types.DomainReputation{
+					Domain:                domain,
+					Stratum:               3,
+					Score:                 800,
+					TotalVerifications:    25, // above MinVerificationsForDomainRep (19)
+					CorrectVerifications:  20,
+					Accuracy:              800_000,
+					DecayedScore:          780,
+					ScoreConfidence:       250_000,
+					LastVerificationBlock: currentBlock,
+				},
 			},
 		},
 		CreatedAtBlock:   10,
@@ -816,7 +832,7 @@ func TestEffectiveReputationFallback(t *testing.T) {
 	k.SetIsolatedReputation(ctx, rep1)
 
 	result1 := k.GetEffectiveReputation(ctx, validator1, domain)
-	if result1.Source != types.SourceDomain {
+	if result1.Source != string(types.SourceDomain) {
 		t.Errorf("validator1 should use domain source, got %s", result1.Source)
 	}
 	if result1.Discount != 1_000_000 {
@@ -826,23 +842,26 @@ func TestEffectiveReputationFallback(t *testing.T) {
 	// Validator 2: no domain rep but has stratum reputation
 	rep2 := types.IsolatedReputation{
 		ValidatorAddr:    validator2,
-		GlobalReputation: types.GlobalReputation{Score: 500, TotalVerifications: 10, CorrectVerifications: 5, Accuracy: 500_000},
-		StratumReputations: map[uint32]types.StratumReputation{
-			3: {
-				Stratum:            3,
-				Score:              700,
-				TotalVerifications: 25, // above threshold
-				LastActivityBlock:  currentBlock,
+		GlobalReputation: &types.GlobalReputation{Score: 500, TotalVerifications: 10, CorrectVerifications: 5, Accuracy: 500_000},
+		StratumReputations: []*types.StratumReputationEntry{
+			{
+				Key: 3,
+				Value: &types.StratumReputation{
+					Stratum:            3,
+					Score:              700,
+					TotalVerifications: 25, // above threshold
+					LastActivityBlock:  currentBlock,
+				},
 			},
 		},
-		DomainReputations: make(map[string]types.DomainReputation),
+		DomainReputations: nil,
 		CreatedAtBlock:    10,
 		LastUpdatedBlock:  currentBlock,
 	}
 	k.SetIsolatedReputation(ctx, rep2)
 
 	result2 := k.GetEffectiveReputation(ctx, validator2, domain)
-	if result2.Source != types.SourceStratum {
+	if result2.Source != string(types.SourceStratum) {
 		t.Errorf("validator2 should fallback to stratum source, got %s", result2.Source)
 	}
 	if result2.Discount != types.StratumReputationDiscount {
@@ -852,16 +871,16 @@ func TestEffectiveReputationFallback(t *testing.T) {
 	// Validator 3: no domain or stratum rep — falls back to global
 	rep3 := types.IsolatedReputation{
 		ValidatorAddr:      validator3,
-		GlobalReputation:   types.GlobalReputation{Score: 600, TotalVerifications: 30, CorrectVerifications: 18, Accuracy: 600_000},
-		StratumReputations: make(map[uint32]types.StratumReputation),
-		DomainReputations:  make(map[string]types.DomainReputation),
+		GlobalReputation:   &types.GlobalReputation{Score: 600, TotalVerifications: 30, CorrectVerifications: 18, Accuracy: 600_000},
+		StratumReputations: nil,
+		DomainReputations:  nil,
 		CreatedAtBlock:     10,
 		LastUpdatedBlock:   currentBlock,
 	}
 	k.SetIsolatedReputation(ctx, rep3)
 
 	result3 := k.GetEffectiveReputation(ctx, validator3, domain)
-	if result3.Source != types.SourceGlobal {
+	if result3.Source != string(types.SourceGlobal) {
 		t.Errorf("validator3 should fallback to global source, got %s", result3.Source)
 	}
 	if result3.Discount != types.GlobalReputationDiscount {
@@ -884,14 +903,14 @@ func TestReputationTimeDecay(t *testing.T) {
 	// Create reputation at block 0 with score 1000
 	rep := types.IsolatedReputation{
 		ValidatorAddr: validatorAddr,
-		GlobalReputation: types.GlobalReputation{
+		GlobalReputation: &types.GlobalReputation{
 			Score:                1000,
 			TotalVerifications:   100,
 			CorrectVerifications: 100,
 			Accuracy:             1_000_000,
 		},
-		StratumReputations: make(map[uint32]types.StratumReputation),
-		DomainReputations:  make(map[string]types.DomainReputation),
+		StratumReputations: nil,
+		DomainReputations:  nil,
 		CreatedAtBlock:     0,
 		LastUpdatedBlock:   0,
 	}
@@ -924,12 +943,12 @@ func TestUpdateAfterVerification(t *testing.T) {
 	k.SetQualification(ctx, types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
-		Pathway:             types.PathwayStakeCommitment,
-		Status:              types.StatusProbationary,
+		Pathway:             string(types.PathwayStakeCommitment),
+		Status:              string(types.StatusProbationary),
 		EarnedAtBlock:       100,
 		ExpiresAtBlock:      0,
 		InheritanceDiscount: 1_000_000,
-		Metrics:             types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
+		Metrics:             &types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
 	})
 
 	currentBlock := uint64(ctx.BlockHeight())
@@ -970,8 +989,8 @@ func TestUpdateAfterVerification(t *testing.T) {
 		t.Errorf("GlobalReputation.CorrectVerifications: got %d, want 1", rep.GlobalReputation.CorrectVerifications)
 	}
 
-	dr, ok := rep.DomainReputations[domain]
-	if !ok {
+	dr := findTestDomainRep(rep.DomainReputations, domain)
+	if dr == nil {
 		t.Fatal("domain reputation should be created")
 	}
 	if dr.TotalVerifications != 1 {
@@ -995,14 +1014,14 @@ func TestGetReputationScore(t *testing.T) {
 	// Set up reputation with known global score (no domain/stratum rep -> global fallback)
 	rep := types.IsolatedReputation{
 		ValidatorAddr: validatorAddr,
-		GlobalReputation: types.GlobalReputation{
+		GlobalReputation: &types.GlobalReputation{
 			Score:                800,
 			TotalVerifications:   50,
 			CorrectVerifications: 40,
 			Accuracy:             800_000,
 		},
-		StratumReputations: make(map[uint32]types.StratumReputation),
-		DomainReputations:  make(map[string]types.DomainReputation),
+		StratumReputations: nil,
+		DomainReputations:  nil,
 		CreatedAtBlock:     currentBlock,
 		LastUpdatedBlock:   currentBlock,
 	}
@@ -1110,13 +1129,13 @@ func TestHHICalculation(t *testing.T) {
 	// and 8 entries with 2 validators (dominant + minor)
 	// Simpler: create entries with controlled participation counts
 
-	entries := make([]types.VerificationHistoryEntry, 20)
+	entries := make([]*types.VerificationHistoryEntry, 20)
 	dominant := testAddr("dominant")
 	minor1 := testAddr("minor1")
 
 	// 12 entries: only dominant
 	for i := 0; i < 12; i++ {
-		entries[i] = types.VerificationHistoryEntry{
+		entries[i] = &types.VerificationHistoryEntry{
 			ClaimId:     "claim_" + string(rune('A'+i)),
 			BlockNumber: uint64(10 + i),
 			Validators:  []string{dominant},
@@ -1125,7 +1144,7 @@ func TestHHICalculation(t *testing.T) {
 	}
 	// 8 entries: dominant + minor1
 	for i := 12; i < 20; i++ {
-		entries[i] = types.VerificationHistoryEntry{
+		entries[i] = &types.VerificationHistoryEntry{
 			ClaimId:     "claim_" + string(rune('A'+i)),
 			BlockNumber: uint64(10 + i),
 			Validators:  []string{dominant, minor1},
@@ -1161,10 +1180,10 @@ func TestTimingCorrelation(t *testing.T) {
 	domain := "timing_domain"
 
 	// Create 20 entries with very similar submission timestamps (stddev < 2)
-	entries := make([]types.VerificationHistoryEntry, 20)
+	entries := make([]*types.VerificationHistoryEntry, 20)
 	for i := 0; i < 20; i++ {
 		baseTimestamp := uint64(1000 + i*10)
-		entries[i] = types.VerificationHistoryEntry{
+		entries[i] = &types.VerificationHistoryEntry{
 			ClaimId:     "claim_timing_" + string(rune('A'+i)),
 			BlockNumber: uint64(10 + i),
 			Validators:  []string{testAddr("v1"), testAddr("v2"), testAddr("v3")},
@@ -1191,9 +1210,9 @@ func TestVerdictCorrelation(t *testing.T) {
 	domain := "verdict_domain"
 
 	// Create 20 entries where all validators give the same verdict every time
-	entries := make([]types.VerificationHistoryEntry, 20)
+	entries := make([]*types.VerificationHistoryEntry, 20)
 	for i := 0; i < 20; i++ {
-		entries[i] = types.VerificationHistoryEntry{
+		entries[i] = &types.VerificationHistoryEntry{
 			ClaimId:     "claim_verdict_" + string(rune('A'+i)),
 			BlockNumber: uint64(10 + i),
 			Validators:  []string{testAddr("v1"), testAddr("v2"), testAddr("v3")},
@@ -1224,10 +1243,10 @@ func TestAutoBountyThreshold(t *testing.T) {
 
 	// Create history where a single validator dominates: HHI = 1.0 = 1_000_000
 	// (monopoly scenario)
-	entries := make([]types.VerificationHistoryEntry, 20)
+	entries := make([]*types.VerificationHistoryEntry, 20)
 	monopolist := testAddr("monopolist")
 	for i := 0; i < 20; i++ {
-		entries[i] = types.VerificationHistoryEntry{
+		entries[i] = &types.VerificationHistoryEntry{
 			ClaimId:              "claim_mono_" + string(rune('A'+i)),
 			BlockNumber:          uint64(10 + i),
 			Validators:           []string{monopolist},
@@ -1264,6 +1283,26 @@ func TestAutoBountyThreshold(t *testing.T) {
 	if stored.UniqueValidators != 1 {
 		t.Errorf("UniqueValidators: got %d, want 1", stored.UniqueValidators)
 	}
+}
+
+// ---------- Test Helpers ----------
+
+func findTestStratumRep(entries []*types.StratumReputationEntry, stratum uint32) *types.StratumReputation {
+	for _, e := range entries {
+		if e != nil && e.Key == stratum {
+			return e.Value
+		}
+	}
+	return nil
+}
+
+func findTestDomainRep(entries []*types.DomainReputationEntry, domain string) *types.DomainReputation {
+	for _, e := range entries {
+		if e != nil && e.Key == domain {
+			return e.Value
+		}
+	}
+	return nil
 }
 
 // Ensure math import is used (for tolerance comparison in decay test)

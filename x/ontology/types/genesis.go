@@ -2,23 +2,11 @@ package types
 
 import "fmt"
 
-// GenesisState represents the ontology module genesis state.
-type GenesisState struct {
-	Params    Params              `json:"params"`
-	Strata    []StratumProperties `json:"strata"`
-	Domains   []Domain            `json:"domains"`
-	Proposals []DomainProposal    `json:"proposals"`
-	Links     []CrossStratumLink  `json:"links"`
-}
-
-func (gs *GenesisState) Reset()         {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
-
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	params := DefaultParams()
 	return &GenesisState{
-		Params:  DefaultParams(),
+		Params:  &params,
 		Strata:  DefaultStrata(),
 		Domains: DefaultDomains(),
 	}
@@ -44,10 +32,10 @@ func DefaultParams() Params {
 //   - Upper strata (5-6) rely on human testimony and evidence weighting
 //
 // MaxConfidence and DecayRate are in basis points where 1000000 = 1.0.
-func DefaultStrata() []StratumProperties {
-	return []StratumProperties{
+func DefaultStrata() []*StratumProperties {
+	return []*StratumProperties{
 		{
-			Stratum:          StratumAxiomatic,
+			Stratum:          uint32(StratumAxiomatic),
 			Name:             "axiomatic",
 			Description:      "Mathematical axioms, tautologies, and logical foundations. Complete and decidable within their formal system.",
 			Complete:         true,
@@ -58,7 +46,7 @@ func DefaultStrata() []StratumProperties {
 			DecayRate:        0,       // axioms do not decay
 		},
 		{
-			Stratum:          StratumFormal,
+			Stratum:          uint32(StratumFormal),
 			Name:             "formal",
 			Description:      "Formal proofs and theorems derived from axioms. Complete in restricted domains (propositional, Presburger).",
 			Complete:         true,
@@ -69,7 +57,7 @@ func DefaultStrata() []StratumProperties {
 			DecayRate:        1,       // negligible decay for proof validity
 		},
 		{
-			Stratum:          StratumProtocol,
+			Stratum:          uint32(StratumProtocol),
 			Name:             "protocol",
 			Description:      "Blockchain-verifiable, deterministic facts. Verifiable by any full node via state replay.",
 			Complete:         false,
@@ -80,7 +68,7 @@ func DefaultStrata() []StratumProperties {
 			DecayRate:        5,      // minimal decay; protocol facts remain valid
 		},
 		{
-			Stratum:          StratumComputational,
+			Stratum:          uint32(StratumComputational),
 			Name:             "computational",
 			Description:      "Computation results that are reproducible but may involve undecidable problems (halting problem).",
 			Complete:         false,
@@ -91,7 +79,7 @@ func DefaultStrata() []StratumProperties {
 			DecayRate:        10,     // slow decay; computations remain reproducible
 		},
 		{
-			Stratum:          StratumEmpirical,
+			Stratum:          uint32(StratumEmpirical),
 			Name:             "empirical",
 			Description:      "Scientific observations, experimental results. Falsifiable and subject to revision by new evidence.",
 			Complete:         false,
@@ -102,7 +90,7 @@ func DefaultStrata() []StratumProperties {
 			DecayRate:        50,     // moderate decay; empirical knowledge needs reverification
 		},
 		{
-			Stratum:          StratumHistorical,
+			Stratum:          uint32(StratumHistorical),
 			Name:             "historical",
 			Description:      "Historical records and evidence-based claims about past events. Dependent on source reliability.",
 			Complete:         false,
@@ -113,7 +101,7 @@ func DefaultStrata() []StratumProperties {
 			DecayRate:        100,    // faster decay; historical sources degrade
 		},
 		{
-			Stratum:          StratumTestimonial,
+			Stratum:          uint32(StratumTestimonial),
 			Name:             "testimonial",
 			Description:      "Human attestations and trust-weighted claims. Lowest formal verifiability, highest social dependency.",
 			Complete:         false,
@@ -128,55 +116,55 @@ func DefaultStrata() []StratumProperties {
 
 // DefaultDomains returns bootstrap domains for the ontology module.
 // These are included in genesis so claims have domains to reference from block 1.
-func DefaultDomains() []Domain {
-	return []Domain{
+func DefaultDomains() []*Domain {
+	return []*Domain{
 		{
 			Name:        "logic",
 			DisplayName: "Logic & Foundations",
 			Description: "Propositional logic, predicate logic, set theory foundations, and metamathematics",
-			Stratum:     StratumAxiomatic,
+			Stratum:     uint32(StratumAxiomatic),
 			Status:      "active",
 		},
 		{
 			Name:        "mathematics",
 			DisplayName: "Mathematics",
 			Description: "Formal mathematical truths, proofs, and theorems",
-			Stratum:     StratumFormal,
+			Stratum:     uint32(StratumFormal),
 			Status:      "active",
 		},
 		{
 			Name:        "protocol",
 			DisplayName: "Blockchain Protocol",
 			Description: "On-chain state, transaction results, and protocol-verifiable facts",
-			Stratum:     StratumProtocol,
+			Stratum:     uint32(StratumProtocol),
 			Status:      "active",
 		},
 		{
 			Name:        "computer_science",
 			DisplayName: "Computer Science",
 			Description: "Algorithms, data structures, protocols, and computational theory",
-			Stratum:     StratumComputational,
+			Stratum:     uint32(StratumComputational),
 			Status:      "active",
 		},
 		{
 			Name:        "physics",
 			DisplayName: "Physics",
 			Description: "Physical laws, constants, and empirical observations about the natural world",
-			Stratum:     StratumEmpirical,
+			Stratum:     uint32(StratumEmpirical),
 			Status:      "active",
 		},
 		{
 			Name:        "general",
 			DisplayName: "General Knowledge",
 			Description: "General knowledge claims not fitting a specific domain",
-			Stratum:     StratumEmpirical,
+			Stratum:     uint32(StratumEmpirical),
 			Status:      "active",
 		},
 		{
 			Name:        "history",
 			DisplayName: "History",
 			Description: "Historical records, events, and evidence-based accounts of the past",
-			Stratum:     StratumHistorical,
+			Stratum:     uint32(StratumHistorical),
 			Status:      "active",
 		},
 	}
@@ -184,14 +172,16 @@ func DefaultDomains() []Domain {
 
 // Validate performs basic genesis state validation.
 func (gs GenesisState) Validate() error {
-	if err := gs.Params.Validate(); err != nil {
-		return fmt.Errorf("invalid params: %w", err)
+	if gs.Params != nil {
+		if err := gs.Params.Validate(); err != nil {
+			return fmt.Errorf("invalid params: %w", err)
+		}
 	}
 
 	// Validate strata
-	seen := make(map[Stratum]bool)
+	seen := make(map[uint32]bool)
 	for _, s := range gs.Strata {
-		if !s.Stratum.IsValid() {
+		if !Stratum(s.Stratum).IsValid() {
 			return fmt.Errorf("invalid stratum level: %d", s.Stratum)
 		}
 		if seen[s.Stratum] {
@@ -213,7 +203,7 @@ func (gs GenesisState) Validate() error {
 			return fmt.Errorf("duplicate domain name: %s", d.Name)
 		}
 		domainNames[d.Name] = true
-		if !d.Stratum.IsValid() {
+		if !Stratum(d.Stratum).IsValid() {
 			return fmt.Errorf("domain %s has invalid stratum: %d", d.Name, d.Stratum)
 		}
 	}

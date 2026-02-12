@@ -313,7 +313,7 @@ describe("Guardian Autonomy", () => {
         factId: "fact-456",
         challenger: "did:lgm:challenger",
         strategy: "moderate" as const,
-        stake: 100n * 10n ** 18n,
+        stake: 100n * 10n ** 15n,
         phase: "initiation",
         nextDeadline: 2000n,
         autoResponding: true,

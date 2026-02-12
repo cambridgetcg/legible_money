@@ -48,7 +48,7 @@ export type DecelerationType =
 export function applyAcceleration(
   vesting: RewardVesting,
   accelerationType: AccelerationType,
-  _currentBlock: bigint,
+  currentBlock: bigint,
 ): RewardVesting {
   // Check if vesting can be accelerated
   if (vesting.status !== "vesting") {
@@ -129,7 +129,7 @@ export function applyAcceleration(
     accelerationBreakdown: newBreakdown,
     defenseCount,
     replicationCount,
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 }
 
@@ -193,7 +193,7 @@ function getTypeAccelerationCap(type: AccelerationType): number {
 export function applyDeceleration(
   vesting: RewardVesting,
   decelerationType: DecelerationType,
-  _currentBlock: bigint,
+  currentBlock: bigint,
 ): RewardVesting {
   // Check if vesting can be decelerated
   if (vesting.status !== "vesting") {
@@ -207,7 +207,7 @@ export function applyDeceleration(
 
   // If factor is 0, this is a pause, not deceleration
   if (factor === 0) {
-    return pauseVesting(vesting, _currentBlock);
+    return pauseVesting(vesting, currentBlock);
   }
 
   // GAP-014 FIX: Track the active deceleration
@@ -224,7 +224,7 @@ export function applyDeceleration(
     ...vesting,
     decelerationFactor: newFactor,
     activeDecelerations: newActiveDecelerations,
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 }
 
@@ -271,6 +271,7 @@ function getDecelerationFactor(type: DecelerationType): number {
 export function removeDeceleration(
   vesting: RewardVesting,
   decelerationType: DecelerationType,
+  currentBlock: bigint = 0n,
 ): RewardVesting {
   if (vesting.status !== "vesting") {
     return vesting;
@@ -305,7 +306,7 @@ export function removeDeceleration(
     ...vesting,
     decelerationFactor: newFactor,
     activeDecelerations: newActiveDecelerations,
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 }
 
@@ -334,7 +335,7 @@ export function pauseVesting(
     isPaused: true,
     pausedAtBlock: currentBlock,
     decelerationFactor: 0,
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 }
 
@@ -369,7 +370,7 @@ export function resumeVesting(
     pausedAtBlock: undefined,
     totalPausedBlocks: vesting.totalPausedBlocks + pauseDuration,
     decelerationFactor: 1.0, // Restore to normal speed
-    updatedAt: Date.now(),
+    updatedAt: currentBlock,
   };
 
   // Apply defense bonus if requested (successful defense)

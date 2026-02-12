@@ -23,7 +23,11 @@ import {
   type RewardVesting,
   type ReleaseCalculation,
   getVestingConfig,
-} from './types.js';
+} from "./types.js";
+
+// Maximum bigint value safe for Number() conversion in exponential math.
+// Beyond this, the release ratio is effectively 1.0 (fully released).
+const MAX_SAFE_BLOCKS = BigInt(Number.MAX_SAFE_INTEGER);
 
 // ============ Core Formula ============
 
@@ -34,8 +38,15 @@ import {
  *
  * This is the same formula used in radioactive decay,
  * and matches knowledge obsolescence patterns.
+ *
+ * H1 FIX: Overflow guard for extreme half-life values.
  */
 export function calculateDecayConstant(halfLifeBlocks: bigint): number {
+  if (halfLifeBlocks <= 0n) return 0;
+  if (halfLifeBlocks > MAX_SAFE_BLOCKS) {
+    // For extremely large half-lives, use safe ceiling — releases infinitesimally slowly
+    return Math.LN2 / Number.MAX_SAFE_INTEGER;
+  }
   return Math.LN2 / Number(halfLifeBlocks);
 }
 
@@ -47,13 +58,20 @@ export function calculateDecayConstant(halfLifeBlocks: bigint): number {
  * At t = half_life: ratio = 0.5 (50% released)
  * At t = 2×half_life: ratio = 0.75 (75% released)
  * At t = ∞: ratio → 1.0
+ *
+ * H1 FIX: Overflow guard for large elapsed block values.
  */
 export function calculateRawReleaseRatio(
   decayConstant: number,
-  elapsedBlocks: bigint
+  elapsedBlocks: bigint,
 ): number {
+  if (elapsedBlocks <= 0n) return 0;
+  if (elapsedBlocks > MAX_SAFE_BLOCKS) return 1.0;
   const t = Number(elapsedBlocks);
-  return 1 - Math.exp(-decayConstant * t);
+  const exponent = -decayConstant * t;
+  // Guard: when exponent is very negative, e^x ≈ 0, ratio ≈ 1.0
+  if (exponent < -50) return 1.0;
+  return 1 - Math.exp(exponent);
 }
 
 /**
@@ -61,18 +79,22 @@ export function calculateRawReleaseRatio(
  *
  * A 10% acceleration means the half-life is reduced by 10%
  * effective_half_life = half_life / (1 + acceleration_bonus)
+ *
+ * H1 FIX: Pure bigint basis-point arithmetic instead of Number(bigint) * float.
  */
 export function calculateEffectiveHalfLife(
   baseHalfLife: bigint,
-  accelerationBonus: number
+  accelerationBonus: number,
 ): bigint {
   if (accelerationBonus <= 0) {
     return baseHalfLife;
   }
 
-  // Reduce half-life by acceleration factor
-  const multiplier = 1 / (1 + accelerationBonus);
-  return BigInt(Math.floor(Number(baseHalfLife) * multiplier));
+  // Convert to basis points: divisor = (1 + bonus) × 10000
+  const divisorBps = 10000n + BigInt(Math.floor(accelerationBonus * 10000));
+  const result = (baseHalfLife * 10000n) / divisorBps;
+  // Minimum 1 block half-life
+  return result > 0n ? result : 1n;
 }
 
 // ============ Main Release Calculation ============
@@ -89,7 +111,7 @@ export function calculateEffectiveHalfLife(
  */
 export function calculateRelease(
   vesting: RewardVesting,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): ReleaseCalculation {
   const config = getVestingConfig(vesting.category);
 
@@ -111,7 +133,13 @@ export function calculateRelease(
     return {
       totalReleased: vesting.releasedAmount,
       newlyReleasable: 0n,
-      releaseRatio: Number(vesting.releasedAmount) / Number(vesting.totalAmount - vesting.reserveAmount),
+      releaseRatio:
+        vesting.totalAmount - vesting.reserveAmount > 0n
+          ? Number(
+              (vesting.releasedAmount * 1000000n) /
+                (vesting.totalAmount - vesting.reserveAmount),
+            ) / 1000000
+          : 0,
       effectiveHalfLife: config.halfLifeBlocks,
       cliffEnded: true,
       maxReached: false,
@@ -126,13 +154,14 @@ export function calculateRelease(
   // Apply acceleration to get effective half-life
   const effectiveHalfLife = calculateEffectiveHalfLife(
     config.halfLifeBlocks,
-    vesting.accelerationBonus
+    vesting.accelerationBonus,
   );
 
-  // Apply deceleration to effective time
-  const deceleratedTime = BigInt(
-    Math.floor(Number(effectiveElapsed) * vesting.decelerationFactor)
+  // H1 FIX: Apply deceleration using bigint basis-point arithmetic
+  const decelerationBps = BigInt(
+    Math.floor(vesting.decelerationFactor * 10000),
   );
+  const deceleratedTime = (effectiveElapsed * decelerationBps) / 10000n;
 
   // Calculate decay constant and raw ratio
   const lambda = calculateDecayConstant(effectiveHalfLife);
@@ -141,12 +170,14 @@ export function calculateRelease(
   // Cap at max release rate
   const cappedRatio = Math.min(rawRatio, config.maxReleaseRate);
 
-  // Calculate amounts
+  // H1 FIX: Calculate amounts using 1,000,000 basis points (0.0001% precision)
   const releasablePool = vesting.totalAmount - vesting.reserveAmount;
-  const totalReleased = (releasablePool * BigInt(Math.floor(cappedRatio * 1e18))) / BigInt(1e18);
-  const newlyReleasable = totalReleased > vesting.releasedAmount
-    ? totalReleased - vesting.releasedAmount
-    : 0n;
+  const releaseBps = BigInt(Math.floor(cappedRatio * 1000000));
+  const totalReleased = (releasablePool * releaseBps) / 1000000n;
+  const newlyReleasable =
+    totalReleased > vesting.releasedAmount
+      ? totalReleased - vesting.releasedAmount
+      : 0n;
 
   // Check if max reached
   const maxReached = cappedRatio >= config.maxReleaseRate - 0.001; // Small tolerance
@@ -184,7 +215,7 @@ export function calculateRelease(
  */
 export function projectReleaseAtBlock(
   vesting: RewardVesting,
-  targetBlock: bigint
+  targetBlock: bigint,
 ): bigint {
   // Create a temporary vesting state at target block
   // (This is a projection, not actual state)
@@ -198,7 +229,7 @@ export function projectReleaseAtBlock(
 export function blocksUntilRelease(
   vesting: RewardVesting,
   targetRatio: number,
-  currentBlock: bigint
+  currentBlock: bigint,
 ): bigint | null {
   const config = getVestingConfig(vesting.category);
 
@@ -216,7 +247,7 @@ export function blocksUntilRelease(
   // Calculate effective half-life
   const effectiveHalfLife = calculateEffectiveHalfLife(
     config.halfLifeBlocks,
-    vesting.accelerationBonus
+    vesting.accelerationBonus,
   );
 
   // t = -ln(1 - ratio) / λ
@@ -232,7 +263,8 @@ export function blocksUntilRelease(
     return 0n; // Already reached
   }
 
-  const currentElapsed = currentBlock - vesting.cliffEndsAtBlock - vesting.totalPausedBlocks;
+  const currentElapsed =
+    currentBlock - vesting.cliffEndsAtBlock - vesting.totalPausedBlocks;
   const remainingTime = BigInt(Math.ceil(adjustedTime)) - currentElapsed;
 
   return blocksFromNow + (remainingTime > 0n ? remainingTime : 0n);
@@ -244,15 +276,16 @@ export function blocksUntilRelease(
  * Get all release milestones for a vesting schedule
  */
 export function getReleaseMilestones(
-  vesting: RewardVesting
+  vesting: RewardVesting,
 ): Array<{ ratio: number; block: bigint; amount: bigint }> {
   const config = getVestingConfig(vesting.category);
-  const milestones: Array<{ ratio: number; block: bigint; amount: bigint }> = [];
+  const milestones: Array<{ ratio: number; block: bigint; amount: bigint }> =
+    [];
 
-  const ratios = [0.25, 0.50, 0.75, 0.90, config.maxReleaseRate];
+  const ratios = [0.25, 0.5, 0.75, 0.9, config.maxReleaseRate];
   const effectiveHalfLife = calculateEffectiveHalfLife(
     config.halfLifeBlocks,
-    vesting.accelerationBonus
+    vesting.accelerationBonus,
   );
   const lambda = calculateDecayConstant(effectiveHalfLife);
   const releasablePool = vesting.totalAmount - vesting.reserveAmount;
@@ -262,9 +295,13 @@ export function getReleaseMilestones(
 
     // t = -ln(1 - ratio) / λ
     const timeBlocks = -Math.log(1 - ratio) / lambda;
-    const adjustedTime = BigInt(Math.ceil(timeBlocks / vesting.decelerationFactor));
-    const block = vesting.cliffEndsAtBlock + adjustedTime + vesting.totalPausedBlocks;
-    const amount = (releasablePool * BigInt(Math.floor(ratio * 1e18))) / BigInt(1e18);
+    const adjustedTime = BigInt(
+      Math.ceil(timeBlocks / vesting.decelerationFactor),
+    );
+    const block =
+      vesting.cliffEndsAtBlock + adjustedTime + vesting.totalPausedBlocks;
+    const amount =
+      (releasablePool * BigInt(Math.floor(ratio * 1e18))) / BigInt(1e18);
 
     milestones.push({ ratio, block, amount });
   }
@@ -278,9 +315,9 @@ export function getReleaseMilestones(
  * Compare release rates between two categories
  */
 export function compareCategories(
-  category1: RewardVesting['category'],
-  category2: RewardVesting['category'],
-  blocksElapsed: bigint
+  category1: RewardVesting["category"],
+  category2: RewardVesting["category"],
+  blocksElapsed: bigint,
 ): {
   category1Ratio: number;
   category2Ratio: number;
@@ -314,7 +351,7 @@ export function generateReleaseCurve(
   vesting: RewardVesting,
   startBlock: bigint,
   endBlock: bigint,
-  numPoints: number = 100
+  numPoints: number = 100,
 ): Array<{ block: bigint; ratio: number; amount: bigint }> {
   const points: Array<{ block: bigint; ratio: number; amount: bigint }> = [];
   const step = (endBlock - startBlock) / BigInt(numPoints);

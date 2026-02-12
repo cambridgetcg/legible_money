@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,10 +15,10 @@ import (
 
 // Keeper manages the bvm module's state.
 type Keeper struct {
-	cdc        codec.Codec
-	storeKey   storetypes.StoreKey
-	bankKeeper types.BankKeeper
-	authority  string
+	cdc          codec.Codec
+	storeService store.KVStoreService
+	bankKeeper   types.BankKeeper
+	authority    string
 
 	// Optional cross-module keepers (set via SetXxxKeeper after init)
 	knowledgeKeeper types.KnowledgeKeeper
@@ -29,16 +29,33 @@ type Keeper struct {
 // NewKeeper creates a new bvm module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bk types.BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		storeKey:   storeKey,
-		bankKeeper: bk,
-		authority:  authority,
+		cdc:          cdc,
+		storeService: storeService,
+		bankKeeper:   bk,
+		authority:    authority,
 	}
+}
+
+// prefixEndBytes returns the end key for prefix iteration.
+// It increments the last byte of the prefix. If overflow, returns nil (iterate to end).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -53,16 +70,16 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	k.SetParams(ctx, gs.Params)
+	k.SetParams(ctx, *gs.Params)
 
 	for _, contract := range gs.Contracts {
-		k.SetContract(ctx, contract)
+		k.SetContract(ctx, *contract)
 	}
 	for _, code := range gs.Code {
-		k.SetCode(ctx, code)
+		k.SetCode(ctx, *code)
 	}
 	for _, schedule := range gs.Schedules {
-		k.SetSchedule(ctx, schedule)
+		k.SetSchedule(ctx, *schedule)
 	}
 	for _, entry := range gs.State {
 		k.SetContractState(ctx, entry.ContractAddress, entry.Key, entry.Value)
@@ -71,31 +88,32 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	p := k.GetParams(ctx)
 	gs := &types.GenesisState{
-		Params:    k.GetParams(ctx),
-		Contracts: []types.DeployedContract{},
-		Code:      []types.ContractCode{},
-		Schedules: []types.ContractSchedule{},
-		State:     []types.ContractStateEntry{},
+		Params:    &p,
+		Contracts: []*types.DeployedContract{},
+		Code:      []*types.ContractCode{},
+		Schedules: []*types.ContractSchedule{},
+		State:     []*types.ContractStateEntry{},
 	}
 
 	k.IterateContracts(ctx, func(c types.DeployedContract) bool {
-		gs.Contracts = append(gs.Contracts, c)
+		gs.Contracts = append(gs.Contracts, &c)
 		return false
 	})
 	k.IterateCode(ctx, func(c types.ContractCode) bool {
-		gs.Code = append(gs.Code, c)
+		gs.Code = append(gs.Code, &c)
 		return false
 	})
 	k.IterateSchedules(ctx, func(s types.ContractSchedule) bool {
-		gs.Schedules = append(gs.Schedules, s)
+		gs.Schedules = append(gs.Schedules, &s)
 		return false
 	})
 
 	// Export contract state for each contract
 	for _, contract := range gs.Contracts {
 		k.IterateContractState(ctx, contract.Address, func(key, value string) bool {
-			gs.State = append(gs.State, types.ContractStateEntry{
+			gs.State = append(gs.State, &types.ContractStateEntry{
 				ContractAddress: contract.Address,
 				Key:             key,
 				Value:           value,

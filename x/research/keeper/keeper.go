@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,8 +15,8 @@ import (
 
 // Keeper manages the research module's state.
 type Keeper struct {
-	cdc      codec.Codec
-	storeKey storetypes.StoreKey
+	cdc          codec.Codec
+	storeService store.KVStoreService
 
 	bankKeeper    types.BankKeeper
 	stakingKeeper types.StakingKeeper
@@ -28,18 +28,34 @@ type Keeper struct {
 // NewKeeper creates a new research module Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	bk types.BankKeeper,
 	sk types.StakingKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
 		cdc:           cdc,
-		storeKey:      storeKey,
+		storeService:  storeService,
 		bankKeeper:    bk,
 		stakingKeeper: sk,
 		authority:     authority,
 	}
+}
+
+// prefixEndBytes returns the end key for prefix iteration (exclusive).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -54,36 +70,47 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
-	k.SetTreasuryBalance(ctx, genState.TreasuryBalance)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	}
+	if genState.TreasuryBalance != nil {
+		k.SetTreasuryBalance(ctx, genState.TreasuryBalance.Balance)
+	}
 
-	for _, sub := range genState.Submissions {
-		k.SetResearch(ctx, sub)
+	for _, sub := range genState.Researches {
+		if sub != nil {
+			k.SetResearch(ctx, *sub)
+		}
 	}
 	for _, bounty := range genState.Bounties {
-		k.SetBounty(ctx, bounty)
+		if bounty != nil {
+			k.SetBounty(ctx, *bounty)
+		}
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	var submissions []types.Research
+	var researches []*types.Research
 	k.IterateResearches(ctx, func(r types.Research) bool {
-		submissions = append(submissions, r)
+		rCopy := r
+		researches = append(researches, &rCopy)
 		return false
 	})
 
-	var bounties []types.Bounty
+	var bounties []*types.Bounty
 	k.IterateBounties(ctx, func(b types.Bounty) bool {
-		bounties = append(bounties, b)
+		bCopy := b
+		bounties = append(bounties, &bCopy)
 		return false
 	})
 
+	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:          k.GetParams(ctx),
-		Submissions:     submissions,
+		Params:          &params,
+		Researches:      researches,
 		Bounties:        bounties,
-		TreasuryBalance: k.GetTreasuryBalance(ctx),
+		TreasuryBalance: &types.TreasuryBalance{Balance: k.GetTreasuryBalance(ctx)},
 	}
 }
 

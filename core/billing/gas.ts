@@ -77,6 +77,7 @@ export const TRANSACTION_GAS_COSTS = {
   vestingAccelerate: 40000n,
   vestingFalsify: 150000n,
   vestingComplete: 40000n,
+  vestingClaimReserve: 50000n,
 
   // System transactions (internal consensus operations)
   registerValidator: 100000n,
@@ -287,6 +288,7 @@ const TRANSACTION_TYPE_GAS_MAP: Record<TransactionType, bigint> = {
   vesting_accelerate: TRANSACTION_GAS_COSTS.vestingAccelerate,
   vesting_falsify: TRANSACTION_GAS_COSTS.vestingFalsify,
   vesting_complete: TRANSACTION_GAS_COSTS.vestingComplete,
+  vesting_claim_reserve: TRANSACTION_GAS_COSTS.vestingClaimReserve,
   // Payment channel transactions (GAP-005)
   open_payment_channel: TRANSACTION_GAS_COSTS.openPaymentChannel,
   update_payment_channel: TRANSACTION_GAS_COSTS.updatePaymentChannel,
@@ -379,6 +381,16 @@ const TRANSACTION_TYPE_GAS_MAP: Record<TransactionType, bigint> = {
   disbursement_advance_stage: TRANSACTION_GAS_COSTS.governanceVote,
   disbursement_execute: 200000n,
   disbursement_cancel: TRANSACTION_GAS_COSTS.unstake,
+
+  // Expirable token transactions
+  token_mint_expirable: 60000n,
+  token_transfer_expirable: 70000n,
+  expired_token_retrieve: 60000n,
+  rai_distribute: 50000n,
+  token_extend_expiration: 60000n,
+
+  // Adversarial verification (survive-to-accept)
+  challenge_provisional_fact: TRANSACTION_GAS_COSTS.challenge,
 };
 
 /**

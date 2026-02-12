@@ -157,8 +157,8 @@ export const DEFAULT_TRUTH_CONTROLLER_CONFIG: TruthControllerConfig = {
   maxEvidencePhaseBlocks: 100,
   verificationTimeoutBlocks: 50,
   challengeResponseBlocks: 30,
-  minClaimStake: 100n * 10n ** 18n, // 100 LGM
-  minChallengeStake: 200n * 10n ** 18n, // 200 LGM
+  minClaimStake: 11n * 10n ** 15n, // 0.011 LGM (affordable with 0.222 LGM genesis balance)
+  minChallengeStake: 22n * 10n ** 15n, // 0.022 LGM (2x claim stake)
   minValidatorsForQuorum: 3,
 };
 

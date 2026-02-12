@@ -1,0 +1,66 @@
+syntax = "proto3";
+package legible.staking.v1;
+
+option go_package = "github.com/legible-money/legible/x/staking/types";
+
+// LegibleValidator extends standard Cosmos validator with PoT-specific fields.
+message LegibleValidator {
+  string operator_address        = 1;  // bech32 operator address
+  string did                     = 2;  // did:lgm:xxx
+  string consensus_pubkey        = 3;  // Ed25519 pubkey hex
+  string stake                   = 4;  // self-bonded stake (bigint as string)
+  string delegated_stake         = 5;  // stake from delegators
+  string total_stake             = 6;  // stake + delegated
+  uint64 commission              = 7;  // basis points (1000 = 10%)
+  string tier                    = 8;  // validator tier: "apprentice", "verified", "bonded", "guardian"
+  bool   is_active               = 9;  // actively validating
+  uint64 active_since_height     = 10; // when validator became active
+  uint64 last_proposed_height    = 11; // last block proposed
+  uint64 blocks_proposed         = 12; // total blocks proposed
+  uint64 verifications_completed = 13; // total verifications
+  uint64 verifications_correct   = 14; // correct verifications
+  uint64 slash_count             = 15; // times slashed
+  uint64 reputation              = 16; // 0-1000000 (default 500000 = 0.5)
+
+  // Anti-grief fields (R1/R2 remediation)
+  uint64 last_slashed_height     = 17; // block height of most recent slash
+  uint64 slashes_this_epoch      = 18; // slashes accumulated in current epoch (reset at boundary)
+
+  // Contested claim engagement (Strategy B: Bravery Bonus)
+  uint64 contested_verifications_correct = 19; // correct contested-category verifications
+}
+
+// Delegation represents stake delegation to a validator.
+message Delegation {
+  string delegator_address   = 1; // bech32 delegator address
+  string validator_address   = 2; // bech32 validator operator address
+  string amount              = 3; // delegated amount (bigint as string)
+  uint64 delegated_at_height = 4; // block height of delegation
+}
+
+// UnbondingEntry represents an unbonding delegation.
+message UnbondingEntry {
+  string id                  = 1; // unique identifier
+  string delegator_address   = 2; // bech32 delegator
+  string validator_address   = 3; // bech32 validator
+  string amount              = 4; // unbonding amount (bigint as string)
+  uint64 initiated_at_height = 5; // when unbonding started
+  uint64 completes_at_height = 6; // when unbonding completes
+  string status              = 7; // "pending" or "completed"
+  uint64 origin_period       = 8; // token expiration period preservation
+}
+
+// TierConfig defines the requirements and benefits for each validator tier.
+message TierConfig {
+  string tier               = 1;  // tier name: "apprentice", "verified", "bonded", "guardian"
+  string min_stake           = 2;  // minimum stake (bigint as string in ulgm)
+  uint64 min_verifications   = 3;  // minimum verifications completed
+  uint64 min_accuracy        = 4;  // 0-1000000 (77% = 770000)
+  int64  max_slash_count     = 5;  // -1 means unlimited
+  repeated string allowed_categories = 6; // epistemic categories
+  uint64 reward_multiplier   = 7;  // basis points (1000 = 1.0x)
+  uint64 selection_weight    = 8;  // basis points for VRF selection probability
+  uint64 slash_window_epochs = 9;  // epochs within which slashes count (0 = all-time)
+  uint64 min_contested_verifications = 10; // minimum contested-category verifications
+  uint64 contested_verification_multiplier = 11; // multiplier for contested verifications (1 = normal)
+}

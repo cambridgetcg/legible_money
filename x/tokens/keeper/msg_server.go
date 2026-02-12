@@ -13,14 +13,18 @@ import (
 
 type msgServer struct {
 	Keeper
+	types.UnimplementedMsgServer
 }
 
 // NewMsgServerImpl returns an implementation of the MsgServer interface.
-func NewMsgServerImpl(keeper Keeper) types.MsgServer {
+// The returned *msgServer also provides native LGM token methods (Transfer,
+// ApproveAllowance, Burn, UpdateParams) that are not part of the proto-generated
+// MsgServer interface.
+func NewMsgServerImpl(keeper Keeper) *msgServer {
 	return &msgServer{Keeper: keeper}
 }
 
-var _ types.MsgServer = msgServer{}
+var _ types.MsgServer = (*msgServer)(nil)
 
 // Transfer handles MsgTransfer — transfer tokens with period preservation.
 //
@@ -88,6 +92,97 @@ func (k msgServer) Transfer(goCtx context.Context, msg *types.MsgTransfer) (*typ
 	)
 
 	return &types.MsgTransferResponse{}, nil
+}
+
+// TransferFrom handles MsgTransferFrom — transfer tokens on behalf of an owner
+// using a previously approved allowance.
+//
+// Workflow:
+// 1. Validate all addresses
+// 2. Check spender has sufficient allowance from owner
+// 3. Decrement the allowance by the transfer amount
+// 4. Transfer from owner to receiver (period-preserving or fresh, per params)
+// 5. Execute underlying bank send from owner to receiver
+// 6. Emit events
+func (k msgServer) TransferFrom(goCtx context.Context, msg *types.MsgTransferFrom) (*types.MsgTransferFromResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	params := k.GetParams(ctx)
+
+	// Validate addresses (proto fields: Spender, From, To)
+	if _, err := sdk.AccAddressFromBech32(msg.Spender); err != nil {
+		return nil, fmt.Errorf("invalid spender address: %w", err)
+	}
+	fromAddr, err := sdk.AccAddressFromBech32(msg.From)
+	if err != nil {
+		return nil, fmt.Errorf("invalid from address: %w", err)
+	}
+	toAddr, err := sdk.AccAddressFromBech32(msg.To)
+	if err != nil {
+		return nil, fmt.Errorf("invalid to address: %w", err)
+	}
+
+	amtInt := new(big.Int)
+	if _, ok := amtInt.SetString(msg.Amount, 10); !ok || amtInt.Sign() <= 0 {
+		return nil, fmt.Errorf("%w: %s", types.ErrInvalidAmount, msg.Amount)
+	}
+
+	// Check and decrement allowance
+	allowanceStr := k.GetAllowance(ctx, msg.From, msg.Spender)
+	allowance := new(big.Int)
+	allowance.SetString(allowanceStr, 10)
+
+	if allowance.Cmp(amtInt) < 0 {
+		return nil, fmt.Errorf("%w: allowance %s < requested %s",
+			types.ErrAllowanceExceeded, allowanceStr, msg.Amount)
+	}
+
+	// Decrement allowance
+	allowance.Sub(allowance, amtInt)
+	if allowance.Sign() == 0 {
+		k.DeleteAllowance(ctx, msg.From, msg.Spender)
+	} else {
+		k.SetAllowance(ctx, msg.From, msg.Spender, allowance.String())
+	}
+
+	// Transfer from owner to receiver
+	if params.FreshExpirationOnTransfer {
+		if err := k.DebitBalance(ctx, msg.From, msg.Amount); err != nil {
+			return nil, fmt.Errorf("%w: %v", types.ErrInsufficientBalance, err)
+		}
+		height := uint64(ctx.BlockHeight())
+		if err := k.CreditBalance(ctx, msg.To, msg.Amount, height); err != nil {
+			return nil, fmt.Errorf("failed to credit receiver: %w", err)
+		}
+	} else {
+		if err := k.TransferPreservingPeriods(ctx, msg.From, msg.To, msg.Amount); err != nil {
+			return nil, err
+		}
+	}
+
+	// Execute underlying bank send
+	coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(amtInt)))
+	if err := k.bankKeeper.SendCoins(ctx, fromAddr, toAddr, coins); err != nil {
+		return nil, fmt.Errorf("bank send failed: %w", err)
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"expirable_transfer_from",
+			sdk.NewAttribute("spender", msg.Spender),
+			sdk.NewAttribute("from", msg.From),
+			sdk.NewAttribute("to", msg.To),
+			sdk.NewAttribute("amount", msg.Amount),
+		),
+	)
+
+	k.Logger(ctx).Info("expirable transfer_from executed",
+		"spender", msg.Spender,
+		"from", msg.From,
+		"to", msg.To,
+		"amount", msg.Amount,
+	)
+
+	return &types.MsgTransferFromResponse{}, nil
 }
 
 // ApproveAllowance handles MsgApproveAllowance — set spending allowance.

@@ -8,8 +8,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	evidencemgmtkeeper "github.com/legible-money/legible/x/evidence_mgmt/keeper"
+	evidencemgmttypes "github.com/legible-money/legible/x/evidence_mgmt/types"
+	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
 	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 	legiblestakingkeeper "github.com/legible-money/legible/x/staking/keeper"
+	stakingtypes "github.com/legible-money/legible/x/staking/types"
 	vestingrewardstypes "github.com/legible-money/legible/x/vesting_rewards/types"
 )
 
@@ -39,7 +42,7 @@ func (a *StakingKeeperAdapter) GetActiveValidatorInfos(ctx context.Context) []kn
 		infos = append(infos, knowledgetypes.ValidatorInfo{
 			Address:    v.OperatorAddress,
 			Stake:      totalStake,
-			Tier:       uint32(v.Tier),
+			Tier:       uint32(stakingtypes.ValidatorTierFromString(v.Tier)),
 			PublicKey:  pubkey,
 			Reputation: v.Reputation,
 		})
@@ -61,7 +64,7 @@ func (a *StakingKeeperAdapter) GetValidatorInfo(ctx context.Context, operatorAdd
 	return knowledgetypes.ValidatorInfo{
 		Address:    v.OperatorAddress,
 		Stake:      totalStake,
-		Tier:       uint32(v.Tier),
+		Tier:       uint32(stakingtypes.ValidatorTierFromString(v.Tier)),
 		PublicKey:  pubkey,
 		Reputation: v.Reputation,
 	}, true
@@ -88,12 +91,6 @@ func (a *StakingKeeperAdapter) GetTotalStake(ctx context.Context) uint64 {
 		total += bigIntStringToUint64(v.TotalStake)
 	}
 	return total
-}
-
-// RecordVerification delegates to the staking keeper.
-func (a *StakingKeeperAdapter) RecordVerification(ctx context.Context, operatorAddr string, correct bool) error {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	return a.keeper.RecordVerification(sdkCtx, operatorAddr, correct)
 }
 
 // SlashValidator delegates to the staking keeper.
@@ -167,4 +164,19 @@ func bigIntStringToUint64(s string) uint64 {
 		return ^uint64(0) // MaxUint64
 	}
 	return bi.Uint64()
+}
+
+// KnowledgeKeeperForEvidence wraps the knowledge keeper to satisfy
+// the evidence_mgmt module's KnowledgeKeeper interface.
+type KnowledgeKeeperForEvidence struct {
+	keeper knowledgekeeper.Keeper
+}
+
+var _ evidencemgmttypes.KnowledgeKeeper = (*KnowledgeKeeperForEvidence)(nil)
+
+// HasClaim checks whether a claim exists in the knowledge module.
+func (a *KnowledgeKeeperForEvidence) HasClaim(goCtx context.Context, claimId string) bool {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	_, found := a.keeper.GetClaim(ctx, claimId)
+	return found
 }

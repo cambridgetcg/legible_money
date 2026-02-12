@@ -73,7 +73,7 @@ describe.sequential("validateSessionKeyAction recipient checking", () => {
     const result = validateSessionKeyAction(
       auth,
       "canTransfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       200,
       "did:lgm:unauthorized",
     );
@@ -86,7 +86,7 @@ describe.sequential("validateSessionKeyAction recipient checking", () => {
     const result = validateSessionKeyAction(
       auth,
       "canTransfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       200,
       "did:lgm:allowed1",
     );
@@ -98,7 +98,7 @@ describe.sequential("validateSessionKeyAction recipient checking", () => {
     const result = validateSessionKeyAction(
       auth,
       "canTransfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       200,
     );
 
@@ -111,7 +111,7 @@ describe.sequential("validateSessionKeyAction recipient checking", () => {
     const result = validateSessionKeyAction(
       auth,
       "canTransfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       200,
       "did:lgm:anyone",
     );
@@ -125,7 +125,7 @@ describe.sequential("validateSessionKeyAction recipient checking", () => {
     const result = validateSessionKeyAction(
       auth,
       "canTransfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       200,
       "did:lgm:anyone",
     );
@@ -295,20 +295,20 @@ describe.sequential("Block-based daily reset", () => {
     const session = generateSessionKey(
       {
         allowedActions: ["transfer"],
-        maxPerTransaction: 100n * 10n ** 18n,
-        maxPerDay: 200n * 10n ** 18n,
-        maxTotal: 1000n * 10n ** 18n,
+        maxPerTransaction: 100n * 10n ** 15n,
+        maxPerDay: 200n * 10n ** 15n,
+        maxTotal: 1000n * 10n ** 15n,
       },
       3600000,
     );
-    session.usage.dailySpent = 150n * 10n ** 18n;
+    session.usage.dailySpent = 150n * 10n ** 15n;
     session.usage.lastDailyResetBlock = 0n;
 
     // Block-based: enough blocks have passed for reset
     const result = validateSessionAction(
       session,
       "transfer",
-      60n * 10n ** 18n,
+      60n * 10n ** 15n,
       BLOCKS_PER_DAY + 1n, // More than a day in blocks
     );
 
@@ -319,20 +319,20 @@ describe.sequential("Block-based daily reset", () => {
     const session = generateSessionKey(
       {
         allowedActions: ["transfer"],
-        maxPerTransaction: 100n * 10n ** 18n,
-        maxPerDay: 200n * 10n ** 18n,
-        maxTotal: 1000n * 10n ** 18n,
+        maxPerTransaction: 100n * 10n ** 15n,
+        maxPerDay: 200n * 10n ** 15n,
+        maxTotal: 1000n * 10n ** 15n,
       },
       3600000,
     );
-    session.usage.dailySpent = 150n * 10n ** 18n;
+    session.usage.dailySpent = 150n * 10n ** 15n;
     session.usage.lastDailyResetBlock = 0n;
 
     // Not enough blocks for reset
     const result = validateSessionAction(
       session,
       "transfer",
-      60n * 10n ** 18n,
+      60n * 10n ** 15n,
       100n, // Only 100 blocks, not a full day
     );
 
@@ -344,25 +344,25 @@ describe.sequential("Block-based daily reset", () => {
     const session = generateSessionKey(
       {
         allowedActions: ["transfer"],
-        maxPerTransaction: 100n * 10n ** 18n,
-        maxPerDay: 500n * 10n ** 18n,
-        maxTotal: 1000n * 10n ** 18n,
+        maxPerTransaction: 100n * 10n ** 15n,
+        maxPerDay: 500n * 10n ** 15n,
+        maxTotal: 1000n * 10n ** 15n,
       },
       3600000,
     );
-    session.usage.dailySpent = 400n * 10n ** 18n;
+    session.usage.dailySpent = 400n * 10n ** 15n;
     session.usage.lastDailyResetBlock = 0n;
 
     const currentBlock = BLOCKS_PER_DAY + 1n;
     const updated = updateSessionUsage(
       session,
       "transfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       currentBlock,
     );
 
     expect(updated.usage.lastDailyResetBlock).toBe(currentBlock);
-    expect(updated.usage.dailySpent).toBe(50n * 10n ** 18n);
+    expect(updated.usage.dailySpent).toBe(50n * 10n ** 15n);
   });
 });
 
@@ -373,13 +373,13 @@ describe.sequential("Session key recipient restrictions", () => {
     const session = generateSessionKey({
       allowedActions: ["transfer"],
       allowedRecipients: ["did:lgm:allowed1", "did:lgm:allowed2"],
-      maxPerTransaction: 100n * 10n ** 18n,
+      maxPerTransaction: 100n * 10n ** 15n,
     });
 
     const result = validateSessionAction(
       session,
       "transfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       undefined,
       "did:lgm:unauthorized",
     );
@@ -392,13 +392,13 @@ describe.sequential("Session key recipient restrictions", () => {
     const session = generateSessionKey({
       allowedActions: ["transfer"],
       allowedRecipients: ["did:lgm:allowed1"],
-      maxPerTransaction: 100n * 10n ** 18n,
+      maxPerTransaction: 100n * 10n ** 15n,
     });
 
     const result = validateSessionAction(
       session,
       "transfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       undefined,
       "did:lgm:allowed1",
     );
@@ -410,13 +410,13 @@ describe.sequential("Session key recipient restrictions", () => {
     const session = generateSessionKey({
       allowedActions: ["transfer"],
       allowedRecipients: [],
-      maxPerTransaction: 100n * 10n ** 18n,
+      maxPerTransaction: 100n * 10n ** 15n,
     });
 
     const result = validateSessionAction(
       session,
       "transfer",
-      50n * 10n ** 18n,
+      50n * 10n ** 15n,
       undefined,
       "did:lgm:anyone",
     );

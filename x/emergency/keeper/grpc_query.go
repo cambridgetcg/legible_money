@@ -55,7 +55,7 @@ func (q queryServer) CompletedCeremonies(goCtx context.Context, req *types.Query
 	var total uint64
 
 	q.IterateCeremonies(ctx, func(c types.EmergencyCeremony) bool {
-		if c.Phase == types.PhaseFinalized || c.Phase == types.PhaseFailed {
+		if c.Phase == string(types.PhaseFinalized) || c.Phase == string(types.PhaseFailed) {
 			total++
 			if total > uint64(req.Offset) && uint32(len(completed)) < limit {
 				completed = append(completed, c)

@@ -290,7 +290,7 @@ export const DEFAULT_AGENT_AUTOMATION: AgentAutomationConfig = {
   autoChallenge: false,
   autoEvidence: true,
   confidenceThreshold: 0.8,
-  stakeLimit: 100n * 10n ** 18n, // 100 LGM
+  stakeLimit: 100n * 10n ** 15n, // 0.1 LGM
   actionsPerHour: 60,
 };
 

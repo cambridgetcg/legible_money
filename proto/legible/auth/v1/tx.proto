@@ -4,6 +4,8 @@ package legible.auth.v1;
 option go_package = "github.com/legible-money/legible/x/auth/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/auth/v1/state.proto";
+import "legible/auth/v1/genesis.proto";
 
 // Msg defines the auth module's extended transaction service.
 // Extends standard Cosmos x/auth with DID support and 4-layer key architecture.
@@ -18,6 +20,9 @@ service Msg {
 
   // RevokeSession revokes an active session key.
   rpc RevokeSession(MsgRevokeSession) returns (MsgRevokeSessionResponse);
+
+  // UpdateParams updates module parameters. Authority (governance) only.
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
 // MsgRotateKey rotates the operational key for an account.
@@ -36,19 +41,13 @@ message MsgRotateKeyResponse {
 }
 
 // MsgCreateSession creates an ephemeral session key.
+// SessionCapabilities is imported from state.proto.
 message MsgCreateSession {
   option (cosmos.msg.v1.signer) = "owner";
   string owner = 1;
   bytes session_pub_key = 2;
   SessionCapabilities capabilities = 3;
   uint64 expires_at_height = 4;
-}
-
-// SessionCapabilities defines limits for a session key.
-message SessionCapabilities {
-  string max_spend_per_tx = 1;
-  string max_spend_per_day = 2;
-  repeated string allowed_actions = 3;
 }
 
 message MsgCreateSessionResponse {
@@ -64,39 +63,12 @@ message MsgRevokeSession {
 
 message MsgRevokeSessionResponse {}
 
-// ============================================================================
-// Extended Account Types
-// ============================================================================
-
-// LegibleAccount extends the standard Cosmos BaseAccount with DID and
-// 4-layer key architecture fields.
-message LegibleAccount {
-  // Standard Cosmos account fields are inherited via BaseAccount.
-  // DID derived from identity key: did:lgm:{32-hex}
-  string did = 1;
-  // Hash of current operational key
-  string operational_key_hash = 2;
-  uint32 operational_key_version = 3;
-  uint32 session_key_count = 4;
-  // Cached reputation score (0-1000000)
-  uint32 reputation_score = 5;
-  uint64 created_at_block = 6;
-  uint64 last_active_block = 7;
-  AccountFlags flags = 8;
+// MsgUpdateParams updates auth module parameters.
+// Only the module authority (governance) can execute this.
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params = 2;
 }
 
-// AccountFlags packed flags for account capabilities.
-message AccountFlags {
-  bool is_validator = 1;
-  bool can_submit_claims = 2;
-  bool can_challenge = 3;
-  bool in_recovery = 4;
-  bool frozen = 5;
-}
-
-// DIDMapping stores the bidirectional DID ↔ bech32 mapping for migration.
-message DIDMapping {
-  string did = 1;
-  string bech32_address = 2;
-  bytes public_key = 3;
-}
+message MsgUpdateParamsResponse {}

@@ -49,7 +49,7 @@ function createTestFact(
 ): Omit<FactState, "referenceRoot"> {
   return {
     id,
-    claim: `Test claim for ${id}`,
+    claimText: `Test claim for ${id}`,
     domain: "test.domain",
     confidence: (options.confidence ?? 0.85) as Confidence,
     verifiedAt: options.verifiedAt ?? 100n,

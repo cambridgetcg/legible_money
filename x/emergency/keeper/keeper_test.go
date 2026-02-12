@@ -11,6 +11,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -36,7 +37,7 @@ func (m *mockStakingKeeper) addGuardian(addr string, totalStake string) {
 	m.validators[addr] = stakingtypes.LegibleValidator{
 		OperatorAddress:        addr,
 		TotalStake:             totalStake,
-		Tier:                   stakingtypes.TierGuardian,
+		Tier:                   stakingtypes.TierGuardian.String(),
 		IsActive:               true,
 		VerificationsCompleted: 2000,
 		VerificationsCorrect:   1800,
@@ -47,7 +48,7 @@ func (m *mockStakingKeeper) addBonded(addr string, totalStake string) {
 	m.validators[addr] = stakingtypes.LegibleValidator{
 		OperatorAddress: addr,
 		TotalStake:      totalStake,
-		Tier:            stakingtypes.TierBonded,
+		Tier:            stakingtypes.TierBonded.String(),
 		IsActive:        true,
 	}
 }
@@ -103,9 +104,11 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 	mockSK.addGuardian("guardian5", "120000000000000000000000000") // 120M LGM
 	mockSK.addBonded("bonded1", "50000000000000000000000000")     // 50M LGM (not guardian)
 
+	storeService := runtime.NewKVStoreService(storeKey)
+
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		storeService,
 		mockSK,
 		"authority",
 	)
@@ -190,15 +193,14 @@ func TestHaltCeremony_FullLifecycle(t *testing.T) {
 
 	// Propose halt
 	resp, err := msgServer.ProposeHalt(sdk.WrapSDKContext(ctx), &types.MsgProposeHalt{
-		Proposer:     "guardian1",
-		Reason:       "Critical vulnerability discovered",
-		EvidenceHash: "abc123",
+		Proposer: "guardian1",
+		Reason:   "Critical vulnerability discovered",
 	})
 	if err != nil {
 		t.Fatalf("ProposeHalt failed: %v", err)
 	}
-	if resp.CeremonyId == "" {
-		t.Fatal("expected non-empty ceremony ID")
+	if resp.ProposalId == "" {
+		t.Fatal("expected non-empty proposal ID")
 	}
 
 	// Status should be halt_voting
@@ -210,10 +212,9 @@ func TestHaltCeremony_FullLifecycle(t *testing.T) {
 	// Prevote from 4 guardians (need 75% = 450M out of 600M)
 	for _, guardian := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		_, err := msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter:       guardian,
-			CeremonyId:  resp.CeremonyId,
-			Approve:     true,
-			IsPrecommit: false,
+			Voter:      guardian,
+			ProposalId: resp.ProposalId,
+			Approve:    true,
 		})
 		if err != nil {
 			t.Fatalf("VoteHalt prevote from %s failed: %v", guardian, err)
@@ -221,21 +222,20 @@ func TestHaltCeremony_FullLifecycle(t *testing.T) {
 	}
 
 	// Check that ceremony advanced to precommit
-	ceremony, found := k.GetCeremony(ctx, resp.CeremonyId)
+	ceremony, found := k.GetCeremony(ctx, resp.ProposalId)
 	if !found {
 		t.Fatal("ceremony not found")
 	}
-	if ceremony.Phase != types.PhasePrecommit {
+	if ceremony.Phase != string(types.PhasePrecommit) {
 		t.Errorf("expected phase %s, got %s", types.PhasePrecommit, ceremony.Phase)
 	}
 
-	// Precommit from 4 guardians
+	// Precommit from 4 guardians (phase-based: vote again while in precommit phase)
 	for _, guardian := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		_, err := msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter:       guardian,
-			CeremonyId:  resp.CeremonyId,
-			Approve:     true,
-			IsPrecommit: true,
+			Voter:      guardian,
+			ProposalId: resp.ProposalId,
+			Approve:    true,
 		})
 		if err != nil {
 			t.Fatalf("VoteHalt precommit from %s failed: %v", guardian, err)
@@ -250,8 +250,8 @@ func TestHaltCeremony_FullLifecycle(t *testing.T) {
 
 	// ActiveHaltCeremonyId should be set
 	haltId := k.GetActiveHaltCeremonyId(ctx)
-	if haltId != resp.CeremonyId {
-		t.Errorf("expected active halt ID %s, got %s", resp.CeremonyId, haltId)
+	if haltId != resp.ProposalId {
+		t.Errorf("expected active halt ID %s, got %s", resp.ProposalId, haltId)
 	}
 }
 
@@ -266,20 +266,18 @@ func TestResumeCeremony_AfterHalt(t *testing.T) {
 	})
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: haltResp.ProposalId, Approve: true,
 		})
 	}
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: true,
+			Voter: g, ProposalId: haltResp.ProposalId, Approve: true,
 		})
 	}
 
 	// Now propose resume
 	resumeResp, err := msgServer.ProposeResume(sdk.WrapSDKContext(ctx), &types.MsgProposeResume{
-		Proposer:        "guardian2",
-		ResumeFromBlock: uint64(ctx.BlockHeight()),
-		HaltCeremonyId:  haltResp.CeremonyId,
+		Proposer: "guardian2",
 	})
 	if err != nil {
 		t.Fatalf("ProposeResume failed: %v", err)
@@ -290,15 +288,15 @@ func TestResumeCeremony_AfterHalt(t *testing.T) {
 		t.Errorf("expected status %s, got %s", types.StatusResumeVoting, status)
 	}
 
-	// Vote resume through (80% quorum = 480M out of 600M, need g1+g2+g3+g4 = 530M)
+	// Vote resume through (80% quorum = 480M out of 600M, need g1+g2+g3+g4 = 480M)
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteResume(sdk.WrapSDKContext(ctx), &types.MsgVoteResume{
-			Voter: g, CeremonyId: resumeResp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: resumeResp.ProposalId, Approve: true,
 		})
 	}
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteResume(sdk.WrapSDKContext(ctx), &types.MsgVoteResume{
-			Voter: g, CeremonyId: resumeResp.CeremonyId, Approve: true, IsPrecommit: true,
+			Voter: g, ProposalId: resumeResp.ProposalId, Approve: true,
 		})
 	}
 
@@ -326,21 +324,20 @@ func TestRevertCeremony_AfterHalt(t *testing.T) {
 	})
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: haltResp.ProposalId, Approve: true,
 		})
 	}
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: true,
+			Voter: g, ProposalId: haltResp.ProposalId, Approve: true,
 		})
 	}
 
 	// Propose revert
 	revertResp, err := msgServer.ProposeRevert(sdk.WrapSDKContext(ctx), &types.MsgProposeRevert{
-		Proposer:          "guardian3",
-		TargetBlockNumber: 50,
-		Justification:     "state corruption at block 51",
-		HaltCeremonyId:    haltResp.CeremonyId,
+		Proposer:       "guardian3",
+		RevertToHeight: 50,
+		Justification:  "state corruption at block 51",
 	})
 	if err != nil {
 		t.Fatalf("ProposeRevert failed: %v", err)
@@ -353,12 +350,12 @@ func TestRevertCeremony_AfterHalt(t *testing.T) {
 	// Vote through revert (80% quorum)
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteRevert(sdk.WrapSDKContext(ctx), &types.MsgVoteRevert{
-			Voter: g, CeremonyId: revertResp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: revertResp.ProposalId, Approve: true,
 		})
 	}
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteRevert(sdk.WrapSDKContext(ctx), &types.MsgVoteRevert{
-			Voter: g, CeremonyId: revertResp.CeremonyId, Approve: true, IsPrecommit: true,
+			Voter: g, ProposalId: revertResp.ProposalId, Approve: true,
 		})
 	}
 
@@ -386,16 +383,16 @@ func TestCeremonyTimeout(t *testing.T) {
 	ctx = ctx.WithBlockHeight(200)
 
 	// CheckCeremonyProgress should detect timeout
-	_, err = k.CheckCeremonyProgress(ctx, resp.CeremonyId)
+	_, err = k.CheckCeremonyProgress(ctx, resp.ProposalId)
 	if err != nil {
 		t.Fatalf("CheckCeremonyProgress failed: %v", err)
 	}
 
-	ceremony, found := k.GetCeremony(ctx, resp.CeremonyId)
+	ceremony, found := k.GetCeremony(ctx, resp.ProposalId)
 	if !found {
 		t.Fatal("ceremony should still exist")
 	}
-	if ceremony.Phase != types.PhaseFailed {
+	if ceremony.Phase != string(types.PhaseFailed) {
 		t.Errorf("expected phase %s after timeout, got %s", types.PhaseFailed, ceremony.Phase)
 	}
 }
@@ -513,7 +510,7 @@ func TestNonGuardianVoteRejected(t *testing.T) {
 	// Non-guardian tries to vote
 	_, err := msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
 		Voter:      "bonded1",
-		CeremonyId: resp.CeremonyId,
+		ProposalId: resp.ProposalId,
 		Approve:    true,
 	})
 	if err == nil {
@@ -544,9 +541,8 @@ func TestCannotRevertWhenNotHalted(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	_, err := msgServer.ProposeRevert(sdk.WrapSDKContext(ctx), &types.MsgProposeRevert{
-		Proposer:          "guardian1",
-		TargetBlockNumber: 50,
-		HaltCeremonyId:    "halt-100-guardian1",
+		Proposer:       "guardian1",
+		RevertToHeight: 50,
 	})
 	if err == nil {
 		t.Error("expected error when proposing revert without halt")
@@ -558,8 +554,7 @@ func TestCannotResumeWhenNotHalted(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	_, err := msgServer.ProposeResume(sdk.WrapSDKContext(ctx), &types.MsgProposeResume{
-		Proposer:       "guardian1",
-		HaltCeremonyId: "halt-100-guardian1",
+		Proposer: "guardian1",
 	})
 	if err == nil {
 		t.Error("expected error when proposing resume without halt")
@@ -577,12 +572,12 @@ func TestRevertDepthExceeded(t *testing.T) {
 	})
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: haltResp.ProposalId, Approve: true,
 		})
 	}
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: true,
+			Voter: g, ProposalId: haltResp.ProposalId, Approve: true,
 		})
 	}
 
@@ -590,9 +585,8 @@ func TestRevertDepthExceeded(t *testing.T) {
 	// MaxRevertDepth = 111111, so set target to well beyond
 	ctx = ctx.WithBlockHeight(200000)
 	_, err := msgServer.ProposeRevert(sdk.WrapSDKContext(ctx), &types.MsgProposeRevert{
-		Proposer:          "guardian1",
-		TargetBlockNumber: 1, // depth = 200000 - 1 = 199999 > 111111
-		HaltCeremonyId:    haltResp.CeremonyId,
+		Proposer:       "guardian1",
+		RevertToHeight: 1, // depth = 200000 - 1 = 199999 > 111111
 	})
 	if err == nil {
 		t.Error("expected revert depth exceeded error")
@@ -612,7 +606,7 @@ func TestDuplicatePrevoteRejected(t *testing.T) {
 
 	// First prevote succeeds
 	_, err := msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-		Voter: "guardian2", CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: false,
+		Voter: "guardian2", ProposalId: resp.ProposalId, Approve: true,
 	})
 	if err != nil {
 		t.Fatalf("first prevote failed: %v", err)
@@ -620,7 +614,7 @@ func TestDuplicatePrevoteRejected(t *testing.T) {
 
 	// Duplicate prevote rejected
 	_, err = msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-		Voter: "guardian2", CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: false,
+		Voter: "guardian2", ProposalId: resp.ProposalId, Approve: true,
 	})
 	if err == nil {
 		t.Error("expected duplicate prevote error")
@@ -639,13 +633,14 @@ func TestPrecommitRequiresPriorYesPrevote(t *testing.T) {
 	// Get enough prevotes to advance to precommit phase
 	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: resp.ProposalId, Approve: true,
 		})
 	}
 
 	// guardian5 did NOT prevote — precommit should fail
+	// (now in precommit phase, vote will attempt precommit automatically)
 	_, err := msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-		Voter: "guardian5", CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: true,
+		Voter: "guardian5", ProposalId: resp.ProposalId, Approve: true,
 	})
 	if err == nil {
 		t.Error("expected error for precommit without prior prevote")
@@ -661,12 +656,23 @@ func TestPrecommitInPrevotePhaseRejected(t *testing.T) {
 		Reason:   "test",
 	})
 
-	// Try precommit while still in prevote phase
+	// In the phase-based model, voting during prevote phase always records a prevote.
+	// So this test verifies that a vote during prevote phase is treated as a prevote (not rejected).
 	_, err := msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-		Voter: "guardian1", CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: true,
+		Voter: "guardian1", ProposalId: resp.ProposalId, Approve: true,
 	})
-	if err == nil {
-		t.Error("expected error for precommit in prevote phase")
+	if err != nil {
+		t.Errorf("vote during prevote phase should succeed as prevote: %v", err)
+	}
+
+	// Verify it was recorded as a prevote
+	ceremony, found := k.GetCeremony(ctx, resp.ProposalId)
+	if !found {
+		t.Fatal("ceremony not found")
+	}
+	_, hasPrevote := ceremony.GetPrevote("guardian1")
+	if !hasPrevote {
+		t.Error("expected prevote to be recorded")
 	}
 }
 
@@ -717,7 +723,7 @@ func TestAuditLogRecordsActions(t *testing.T) {
 	// Check that the first entry records the halt proposal
 	found := false
 	for _, e := range entries {
-		if e.Action == types.AuditHaltProposed {
+		if e.Action == string(types.AuditHaltProposed) {
 			found = true
 			if e.Actor != "guardian1" {
 				t.Errorf("expected actor guardian1, got %s", e.Actor)
@@ -743,22 +749,22 @@ func TestStakeWeightedVoting(t *testing.T) {
 	// Not enough for 75% quorum
 	for _, g := range []string{"guardian1", "guardian2", "guardian3"} {
 		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: false,
+			Voter: g, ProposalId: resp.ProposalId, Approve: true,
 		})
 	}
 
-	ceremony, _ := k.GetCeremony(ctx, resp.CeremonyId)
-	if ceremony.Phase != types.PhasePrevote {
+	ceremony, _ := k.GetCeremony(ctx, resp.ProposalId)
+	if ceremony.Phase != string(types.PhasePrevote) {
 		t.Errorf("expected still in prevote (60%% < 75%%), got phase %s", ceremony.Phase)
 	}
 
 	// Add guardian4 = 480M / 600M = 80% — should advance past 75% threshold
 	msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-		Voter: "guardian4", CeremonyId: resp.CeremonyId, Approve: true, IsPrecommit: false,
+		Voter: "guardian4", ProposalId: resp.ProposalId, Approve: true,
 	})
 
-	ceremony, _ = k.GetCeremony(ctx, resp.CeremonyId)
-	if ceremony.Phase != types.PhasePrecommit {
+	ceremony, _ = k.GetCeremony(ctx, resp.ProposalId)
+	if ceremony.Phase != string(types.PhasePrecommit) {
 		t.Errorf("expected precommit after 80%% quorum, got %s", ceremony.Phase)
 	}
 }
@@ -777,7 +783,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 
 	// Export
 	genState := k.ExportGenesis(ctx)
-	if genState.Status != types.StatusNormal {
+	if genState.Status != string(types.StatusNormal) {
 		t.Errorf("expected normal status in genesis, got %s", genState.Status)
 	}
 	if len(genState.Params.GenesisCouncil) != 2 {
@@ -880,7 +886,7 @@ func TestQueryAuditLog(t *testing.T) {
 	// Add an audit entry
 	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 		BlockNumber: 100,
-		Action:      types.AuditHaltProposed,
+		Action:      string(types.AuditHaltProposed),
 		Actor:       "guardian1",
 		CeremonyId:  "test-123",
 		Details:     "test entry",
@@ -899,37 +905,6 @@ func TestQueryAuditLog(t *testing.T) {
 }
 
 // ---------- Invalid Halt Reference Tests ----------
-
-func TestRevertInvalidHaltReference(t *testing.T) {
-	k, ctx, _ := setupKeeper(t)
-	msgServer := keeper.NewMsgServerImpl(k)
-
-	// Execute halt
-	haltResp, _ := msgServer.ProposeHalt(sdk.WrapSDKContext(ctx), &types.MsgProposeHalt{
-		Proposer: "guardian1",
-		Reason:   "ref test",
-	})
-	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
-		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: false,
-		})
-	}
-	for _, g := range []string{"guardian1", "guardian2", "guardian3", "guardian4"} {
-		msgServer.VoteHalt(sdk.WrapSDKContext(ctx), &types.MsgVoteHalt{
-			Voter: g, CeremonyId: haltResp.CeremonyId, Approve: true, IsPrecommit: true,
-		})
-	}
-
-	// Try revert with wrong halt ceremony ID
-	_, err := msgServer.ProposeRevert(sdk.WrapSDKContext(ctx), &types.MsgProposeRevert{
-		Proposer:          "guardian1",
-		TargetBlockNumber: 50,
-		HaltCeremonyId:    "wrong-id",
-	})
-	if err == nil {
-		t.Error("expected error for invalid halt ceremony reference")
-	}
-}
 
 func TestCeremonyActiveBlocksNewProposal(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)

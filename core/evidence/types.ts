@@ -58,7 +58,8 @@ export type EvidenceType =
   | "chainlink_price_feed"
   | "chainlink_por" // Proof of Reserve
   | "chainlink_functions"
-  | "chainlink_ccip"; // Cross-Chain Interoperability
+  | "chainlink_ccip" // Cross-Chain Interoperability
+  | "prediction_market";
 
 /**
  * Evidence type strength values (extended from EVIDENCE_TYPE_STRENGTH)
@@ -72,12 +73,75 @@ export const EVIDENCE_TYPE_STRENGTH: Record<EvidenceType, number> = {
   chainlink_por: 0.91,
   chainlink_ccip: 0.9,
   chainlink_functions: 0.88,
+  prediction_market: 0.88,
   peer_reviewed: 0.85,
   institutional: 0.8,
   oracle: 0.7,
   archived_web: 0.6,
   attestation: 0.5,
   inference: 0.4,
+};
+
+// ============ Canonical Evidence Types (Go/Cosmos SDK alignment) ============
+
+/**
+ * Canonical evidence types matching Go x/knowledge module (6 types).
+ * Used at serialization boundaries when communicating with the Cosmos SDK chain.
+ */
+export type CanonicalEvidenceType =
+  | "on_chain"
+  | "oracle_feed"
+  | "attestation"
+  | "computation"
+  | "document"
+  | "experiment";
+
+/**
+ * Map TS's granular 14-type evidence taxonomy to Go's canonical 6 types.
+ * Internal TS code retains granularity; this mapper is used at wire boundaries.
+ */
+export function toCanonicalEvidenceType(
+  t: EvidenceType,
+): CanonicalEvidenceType {
+  switch (t) {
+    case "on_chain":
+      return "on_chain";
+    case "cryptographic_proof":
+    case "computational":
+    case "formal_proof":
+      return "computation";
+    case "peer_reviewed":
+      return "experiment";
+    case "institutional":
+    case "archived_web":
+      return "document";
+    case "oracle":
+    case "chainlink_price_feed":
+    case "chainlink_por":
+    case "chainlink_functions":
+    case "chainlink_ccip":
+    case "prediction_market":
+      return "oracle_feed";
+    case "attestation":
+    case "inference":
+      return "attestation";
+  }
+}
+
+/**
+ * Canonical evidence type strength values (aligned with Go uint64 scale).
+ * Go stores as 0-1,000,000; TS uses 0.0-1.0 float equivalents.
+ */
+export const CANONICAL_EVIDENCE_TYPE_STRENGTH: Record<
+  CanonicalEvidenceType,
+  number
+> = {
+  on_chain: 1.0, // Go: 1_000_000
+  computation: 0.95, // Go: 950_000
+  experiment: 0.85, // Go: 850_000
+  oracle_feed: 0.7, // Go: 700_000
+  document: 0.6, // Go: 600_000
+  attestation: 0.5, // Go: 500_000
 };
 
 // ============ Archive Types ============
@@ -503,6 +567,11 @@ export const DEFAULT_EXPIRY_CONFIGS: Record<
     freshnessScore: 1.0,
     isExpired: false,
   },
+  prediction_market: {
+    expiryType: "eternal",
+    freshnessScore: 1.0,
+    isExpired: false,
+  },
   peer_reviewed: {
     expiryType: "decay_based",
     expiresAfterBlocks: 500000, // ~15 days half-life
@@ -643,7 +712,14 @@ export interface ChainlinkMetadata {
  */
 export interface OracleMetadata {
   /** Oracle provider */
-  provider: "chainlink" | "band" | "api3" | "custom";
+  provider:
+    | "chainlink"
+    | "band"
+    | "api3"
+    | "polymarket"
+    | "kalshi"
+    | "metaculus"
+    | "custom";
 
   /** Feed/contract address */
   feedAddress: string;
@@ -668,6 +744,9 @@ export interface OracleMetadata {
 
   /** Chainlink-specific metadata */
   chainlinkMetadata?: ChainlinkMetadata;
+
+  /** Prediction market-specific metadata */
+  predictionMarketMetadata?: PredictionMarketMetadata;
 }
 
 /**
@@ -695,6 +774,111 @@ export interface ChainlinkFeedRegistration {
   heartbeatConfig: HeartbeatConfig;
   registeredAt: number;
   isActive: boolean;
+}
+
+// ============ Prediction Market Types ============
+
+/**
+ * Prediction market platform identifiers
+ */
+export type PredictionMarketPlatform =
+  | "polymarket"
+  | "kalshi"
+  | "metaculus"
+  | "custom";
+
+/**
+ * Prediction market outcome types
+ */
+export type PredictionMarketType = "binary_outcome" | "categorical" | "scalar";
+
+/**
+ * Market resolution lifecycle status
+ */
+export type MarketResolutionStatus =
+  | "open"
+  | "closed"
+  | "resolved"
+  | "disputed"
+  | "voided";
+
+/**
+ * Prediction market metadata for oracle evidence
+ */
+export interface PredictionMarketMetadata {
+  /** Platform identifier */
+  platform: PredictionMarketPlatform;
+
+  /** Platform-specific market ID */
+  marketId: string;
+
+  /** Human-readable market question */
+  question: string;
+
+  /** Market outcome type */
+  marketType: PredictionMarketType;
+
+  /** Current resolution status */
+  resolutionStatus: MarketResolutionStatus;
+
+  /** Resolved outcome (null if unresolved) */
+  resolvedOutcome: string | null;
+
+  /** When market was resolved (epoch ms) */
+  resolvedAt: number | null;
+
+  /** Total trading volume in USD */
+  volumeUsd: number;
+
+  /** Number of unique traders */
+  traderCount: number;
+
+  /** Final closing probability (0-1 for binary markets) */
+  closingProbability: number;
+
+  /** Resolution source description */
+  resolutionSource: string;
+
+  /** When market was created (epoch ms) */
+  createdAt: number;
+
+  /** When market closed for trading (epoch ms) */
+  closedAt: number | null;
+
+  /** Block at which dispute window ends */
+  disputeWindowEnd: bigint;
+
+  /** Whether dispute window has elapsed */
+  disputeWindowElapsed: boolean;
+}
+
+/**
+ * Prediction market registration for the registry
+ */
+export interface PredictionMarketRegistration {
+  /** Platform identifier */
+  platform: PredictionMarketPlatform;
+
+  /** Platform-specific market ID */
+  marketId: string;
+
+  /** Human-readable market question */
+  question: string;
+
+  /** Market outcome type */
+  marketType: PredictionMarketType;
+
+  /** Market URL for reference */
+  marketUrl: string;
+
+  /** When registered (epoch ms) */
+  registeredAt: number;
+
+  /** Whether this registration is active */
+  isActive: boolean;
+
+  /** Minimum volume in USD for this market to qualify */
+  minVolumeUsd: number;
 }
 
 // ============ Evidence Metadata ============

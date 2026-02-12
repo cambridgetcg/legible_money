@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/tokens/types"
@@ -15,21 +14,21 @@ import (
 
 // SetExpirableAccount stores an expirable account in the KV store.
 func (k Keeper) SetExpirableAccount(ctx sdk.Context, acct types.ExpirableAccount) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := accountKey(acct.Address)
 	bz, err := json.Marshal(acct)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal expirable account: %v", err))
 	}
-	store.Set(key, bz)
+	_ = kvStore.Set(key, bz)
 }
 
 // GetExpirableAccount retrieves an expirable account by address.
 func (k Keeper) GetExpirableAccount(ctx sdk.Context, address string) (types.ExpirableAccount, bool) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := accountKey(address)
-	bz := store.Get(key)
-	if bz == nil {
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
 		return types.ExpirableAccount{}, false
 	}
 	var acct types.ExpirableAccount
@@ -41,8 +40,8 @@ func (k Keeper) GetExpirableAccount(ctx sdk.Context, address string) (types.Expi
 
 // DeleteExpirableAccount removes an expirable account from the store.
 func (k Keeper) DeleteExpirableAccount(ctx sdk.Context, address string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(accountKey(address))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(accountKey(address))
 }
 
 // GetAllExpirableAccounts returns all expirable accounts.
@@ -58,8 +57,11 @@ func (k Keeper) GetAllExpirableAccounts(ctx sdk.Context) []types.ExpirableAccoun
 // IterateExpirableAccounts iterates over all expirable accounts.
 // Return true from cb to stop.
 func (k Keeper) IterateExpirableAccounts(ctx sdk.Context, cb func(types.ExpirableAccount) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.BalanceKeyPrefix)
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.BalanceKeyPrefix, prefixEndBytes(types.BalanceKeyPrefix))
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -77,18 +79,18 @@ func (k Keeper) IterateExpirableAccounts(ctx sdk.Context, cb func(types.Expirabl
 
 // SetAllowance sets a spending allowance for (owner, spender).
 func (k Keeper) SetAllowance(ctx sdk.Context, owner, spender, amount string) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := allowanceKey(owner, spender)
-	store.Set(key, []byte(amount))
+	_ = kvStore.Set(key, []byte(amount))
 }
 
 // GetAllowance returns the spending allowance for (owner, spender).
 // Returns "0" if no allowance is set.
 func (k Keeper) GetAllowance(ctx sdk.Context, owner, spender string) string {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := allowanceKey(owner, spender)
-	bz := store.Get(key)
-	if bz == nil {
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
 		return "0"
 	}
 	return string(bz)
@@ -96,27 +98,27 @@ func (k Keeper) GetAllowance(ctx sdk.Context, owner, spender string) string {
 
 // DeleteAllowance removes a spending allowance.
 func (k Keeper) DeleteAllowance(ctx sdk.Context, owner, spender string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(allowanceKey(owner, spender))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(allowanceKey(owner, spender))
 }
 
 // ---------- RAI Account Operations ----------
 
 // SetRAIAccount stores the RAI holding account.
 func (k Keeper) SetRAIAccount(ctx sdk.Context, rai types.RAIHoldingAccount) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(rai)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal RAI account: %v", err))
 	}
-	store.Set(types.RAIAccountKey, bz)
+	_ = kvStore.Set(types.RAIAccountKey, bz)
 }
 
 // GetRAIAccount returns the RAI holding account.
 func (k Keeper) GetRAIAccount(ctx sdk.Context) types.RAIHoldingAccount {
-	store := ctx.KVStore(k.storeKey)
-	bz := store.Get(types.RAIAccountKey)
-	if bz == nil {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.RAIAccountKey)
+	if err != nil || bz == nil {
 		return types.RAIHoldingAccount{
 			Balance:          "0",
 			TotalReceived:    "0",
@@ -140,16 +142,19 @@ func (k Keeper) GetRAIAccount(ctx sdk.Context) types.RAIHoldingAccount {
 
 // AddToSweepIndex adds an address to the sweep index for a given period.
 func (k Keeper) AddToSweepIndex(ctx sdk.Context, period uint64, address string) {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	key := sweepIndexKey(period, address)
-	store.Set(key, []byte(address))
+	_ = kvStore.Set(key, []byte(address))
 }
 
 // GetSweepAddresses returns addresses that need sweeping for a given period.
 func (k Keeper) GetSweepAddresses(ctx sdk.Context, period uint64) []string {
-	store := ctx.KVStore(k.storeKey)
+	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := sweepIndexPrefixForPeriod(period)
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
 	defer iter.Close()
 
 	var addresses []string
@@ -161,29 +166,45 @@ func (k Keeper) GetSweepAddresses(ctx sdk.Context, period uint64) []string {
 
 // RemoveFromSweepIndex removes an address from the sweep index for a period.
 func (k Keeper) RemoveFromSweepIndex(ctx sdk.Context, period uint64, address string) {
-	store := ctx.KVStore(k.storeKey)
-	store.Delete(sweepIndexKey(period, address))
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(sweepIndexKey(period, address))
 }
 
 // IterateExpiredPeriods iterates sweep index entries for periods that have expired
-// relative to the current period. Return true from cb to stop.
+// relative to the current period. Uses a bounded range query so only expired period
+// keys are visited — O(expired) instead of O(total entries).
+// Return true from cb to stop.
 func (k Keeper) IterateExpiredPeriods(ctx sdk.Context, currentPeriod uint64, periodsUntilExpiry uint64, cb func(period uint64, address string) bool) {
-	store := ctx.KVStore(k.storeKey)
-	iter := storetypes.KVStorePrefixIterator(store, types.SweepIndexPrefix)
+	// The maximum expired period is (currentPeriod - periodsUntilExpiry - 1).
+	// Periods at or below this value have expired.
+	if currentPeriod <= periodsUntilExpiry {
+		return // No periods can have expired yet
+	}
+	maxExpiredPeriod := currentPeriod - periodsUntilExpiry - 1
+
+	kvStore := k.storeService.OpenKVStore(ctx)
+
+	// Range: [SweepIndexPrefix | period=0] to [SweepIndexPrefix | maxExpiredPeriod+1)
+	// Since keys are BigEndian, this covers exactly the expired range.
+	start := types.SweepIndexPrefix
+	endPeriodBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(endPeriodBytes, maxExpiredPeriod+1)
+	end := append(append([]byte{}, types.SweepIndexPrefix...), endPeriodBytes...)
+
+	iter, err := kvStore.Iterator(start, end)
+	if err != nil {
+		return
+	}
 	defer iter.Close()
 
+	prefixLen := len(types.SweepIndexPrefix)
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
-		// key format: SweepIndexPrefix + 8-byte period + address
-		if len(key) < len(types.SweepIndexPrefix)+8 {
+		if len(key) < prefixLen+8 {
 			continue
 		}
-		periodBytes := key[len(types.SweepIndexPrefix) : len(types.SweepIndexPrefix)+8]
+		periodBytes := key[prefixLen : prefixLen+8]
 		period := binary.BigEndian.Uint64(periodBytes)
-
-		if !k.IsExpired(period, currentPeriod, periodsUntilExpiry) {
-			continue
-		}
 
 		address := string(iter.Value())
 		if cb(period, address) {

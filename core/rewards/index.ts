@@ -51,6 +51,7 @@ export {
   type ResumeVestingPayload,
   type AccelerateVestingPayload,
   type FalsifyVestingPayload,
+  type ClaimReservePayload,
 
   // Events
   type VestingEventType,
@@ -62,7 +63,7 @@ export {
 
   // Utilities
   getVestingConfig,
-} from './types.js';
+} from "./types.js";
 
 // ============ Release Curve ============
 
@@ -89,7 +90,7 @@ export {
   generateReleaseCurve,
   formatReleasePercentage,
   formatBlocksAsTime,
-} from './release_curve.js';
+} from "./release_curve.js";
 
 // ============ Acceleration ============
 
@@ -111,7 +112,7 @@ export {
   describeSpeed,
   canAccelerate,
   getRemainingAccelerationCapacity,
-} from './acceleration.js';
+} from "./acceleration.js";
 
 // ============ Clawback ============
 
@@ -131,7 +132,7 @@ export {
   // Edge cases
   handleEarlyFalsification,
   handleLateFalsification,
-} from './clawback.js';
+} from "./clawback.js";
 
 // ============ Vesting Engine ============
 
@@ -163,4 +164,4 @@ export {
   // Batch Operations
   batchUpdateReleases,
   findUpcomingMilestones,
-} from './vesting_engine.js';
+} from "./vesting_engine.js";

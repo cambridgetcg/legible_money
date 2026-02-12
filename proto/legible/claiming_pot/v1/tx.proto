@@ -65,56 +65,13 @@ message MsgClosePotResponse {
 }
 
 // ============================================================================
-// State Types
+// Transaction Enums
 // ============================================================================
 
-message ClaimingPot {
-  string id = 1;
-  string creator = 2;
-  string name = 3;
-  string domain = 4;
-  string total_funded = 5;
-  string remaining = 6;
-  PotDistributionRule distribution_rule = 7;
-  PotStatus status = 8;
-  uint64 created_at = 9;
-  uint64 expiry_height = 10;
-  repeated PotClaim claims = 11;
-}
-
-message PotClaim {
-  string claimer = 1;
-  string amount = 2;
-  repeated string fact_ids = 3;
-  uint64 claimed_at = 4;
-}
-
+// PotDistributionRule defines how rewards are distributed from a pot.
 enum PotDistributionRule {
   POT_DISTRIBUTION_RULE_UNSPECIFIED = 0;
   POT_DISTRIBUTION_RULE_EQUAL = 1;
   POT_DISTRIBUTION_RULE_PROPORTIONAL = 2;
   POT_DISTRIBUTION_RULE_FIRST_COME = 3;
-}
-
-enum PotStatus {
-  POT_STATUS_UNSPECIFIED = 0;
-  POT_STATUS_ACTIVE = 1;
-  POT_STATUS_DEPLETED = 2;
-  POT_STATUS_EXPIRED = 3;
-  POT_STATUS_CLOSED = 4;
-}
-
-// ============================================================================
-// Genesis
-// ============================================================================
-
-message GenesisState {
-  Params params = 1;
-  repeated ClaimingPot pots = 2;
-}
-
-message Params {
-  string min_pot_funding = 1;
-  uint64 max_pot_duration = 2;
-  uint32 max_claims_per_pot = 3;
 }

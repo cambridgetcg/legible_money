@@ -13,6 +13,11 @@ import (
 func (k Keeper) EvaluateEligibility(ctx sdk.Context, pot types.ClaimingPot, claimer string) (bool, string) {
 	elig := pot.Config.Eligibility
 
+	// No eligibility restrictions configured — everyone is eligible
+	if elig == nil {
+		return true, ""
+	}
+
 	// 1. Allowlist check (fast path) — if non-empty, claimer must be in it
 	if len(elig.Allowlist) > 0 {
 		found := false

@@ -81,8 +81,8 @@ export interface ExpenseRecord {
 
 // ============ Constants ============
 
-/** Flat stake requirement for all disbursement proposals (2000 LGM) */
-export const DISBURSEMENT_STAKE = 2000n * 10n ** 18n;
+/** Flat stake requirement for all disbursement proposals (2 LGM) */
+export const DISBURSEMENT_STAKE = 2000n * 10n ** 15n;
 
 /** Voting thresholds for disbursement approval (float, display-only) */
 export const DISBURSEMENT_THRESHOLDS = {

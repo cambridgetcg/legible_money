@@ -1,31 +1,38 @@
 package types
 
 import (
-	"context"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
-// Proto message interface stubs
-type ProtoMessage interface {
-	Reset()
-	String() string
-	ProtoMessage()
-}
-
-// Fact status constants (9-state lifecycle from TS reference)
+// Fact status constants (10-state lifecycle from TS reference + adversarial verification)
 const (
-	FactStatusPending    = "pending"
-	FactStatusVerified   = "verified"
-	FactStatusActive     = "active"
-	FactStatusContested  = "contested"
-	FactStatusChallenged = "challenged"
-	FactStatusSuperseded = "superseded"
-	FactStatusExpired    = "expired"
-	FactStatusDisproven  = "disproven"
-	FactStatusRevoked    = "revoked"
+	FactStatusPending      = "pending"
+	FactStatusProvisional  = "provisional" // survives structural eval, in challenge window
+	FactStatusVerified     = "verified"
+	FactStatusActive       = "active"
+	FactStatusContested    = "contested"
+	FactStatusChallenged   = "challenged"
+	FactStatusSuperseded   = "superseded"
+	FactStatusExpired      = "expired"
+	FactStatusDisproven    = "disproven"
+	FactStatusRevoked      = "revoked"
+)
+
+// Claim status constants (adversarial verification lifecycle)
+const (
+	ClaimStatusPending           = "pending"
+	ClaimStatusPendingEvaluation = "pending_evaluation" // submitted, awaiting structural eval
+	ClaimStatusEvaluated         = "evaluated"          // scored 300k-500k, in challenge window, no provisional fact
+	ClaimStatusProvisional       = "provisional"        // scored ≥500k, provisional fact exists, in challenge window
+	ClaimStatusInVerification    = "in_verification"    // legacy: in commit-reveal round
+	ClaimStatusAccepted          = "accepted"
+	ClaimStatusRejected          = "rejected"
+	ClaimStatusChallenged        = "challenged"
+	ClaimStatusExpired           = "expired"
+	ClaimStatusInsufficient      = "insufficient"
+	ClaimStatusContested         = "contested"
 )
 
 // Fact maturity levels
@@ -106,6 +113,72 @@ const (
 	MinConfidenceThreshold  = 300_000  // 30% — below this, fact expires
 )
 
+// Adversarial verification constants
+const (
+	BlocksPerDay = 34_272 // 2521ms block time → 34,272 blocks/day
+
+	// Structural evaluation thresholds
+	ProvisionalThresholdDefault = 500_000 // 50% — min score to create provisional fact
+	RejectThresholdDefault      = 300_000 // 30% — below this, claim is rejected
+
+	// Challenge window durations (in blocks)
+	BaseChallengeDurationDefault   = BlocksPerDay     // ~1 day
+	EternalChallengeMultiplier     = 3                // 3 days for eternal categories
+	SlowDecayChallengeMultiplier   = 2                // 2 days for slow-decay categories
+	FastDecayChallengeMultiplier   = 1                // 1 day for fast-decay categories
+
+	// Challenge economics
+	MinChallengeStakeDefault            = 11_000_000     // 11 LGM in ulgm
+	FailedChallengeSlashBpsDefault      = 220_000        // 22% slash on failed challenge
+	SuccessfulChallengeRewardBpsDefault = 300_000        // 30% of submitter's slashed stake to challenger
+	MaxConcurrentChallenges             = 3              // max 3 concurrent challenges per claim
+
+	// Confidence growth
+	ConfidenceGrowthPerEpochDefault = 11_000    // 1.1% per epoch
+	MaxSurvivalConfidenceDefault    = 770_000   // 77% cap for unchallenged facts
+	SurvivedChallengeConfidenceCap  = 880_000   // 88% cap after surviving challenge
+	ConfidenceGrowthEpoch           = 1_111     // growth applied every 1,111 blocks (~47 min)
+
+	// Challenge cooldown (anti-spam)
+	BaseCooldownBlocks  = 17_136  // ~0.5 day
+	MaxCooldownBlocks   = 171_360 // ~5 days
+
+	// Verification round types
+	RoundTypeVerification   = "verification"   // legacy commit-reveal
+	RoundTypeChallenge      = "challenge"       // arbiter round for Path B challenge
+	RoundTypeReverification = "reverification" // AH-5: auto-triggered by confidence decay
+
+	// MaxReverificationsPerBlock limits how many reverification rounds can be created
+	// per EndBlocker call to prevent block processing spikes.
+	MaxReverificationsPerBlock = 5
+)
+
+// ChallengeWindowProfile maps epistemic category to challenge window multiplier.
+// Eternal categories: analytic, formal, protocol, computational (3-day window)
+// Slow decay: historical, replicated (2-day window)
+// Fast decay: empirical, social, predictive (1-day window)
+var ChallengeWindowProfile = map[string]uint64{
+	"analytic":      EternalChallengeMultiplier,
+	"formal":        EternalChallengeMultiplier,
+	"protocol":      EternalChallengeMultiplier,
+	"computational": EternalChallengeMultiplier,
+	"historical":    SlowDecayChallengeMultiplier,
+	"replicated":    SlowDecayChallengeMultiplier,
+	"empirical":     FastDecayChallengeMultiplier,
+	"social":        FastDecayChallengeMultiplier,
+	"predictive":    FastDecayChallengeMultiplier,
+}
+
+// IsDeterministicCategory returns true for categories where challenge resolution
+// is fully deterministic (Path A). These categories can be verified by computation.
+func IsDeterministicCategory(category string) bool {
+	switch category {
+	case "protocol", "computational", "formal", "analytic":
+		return true
+	}
+	return false
+}
+
 // Evidence confidence bonus constants.
 // Evidence bonus is ADDITIVE to the verification confidence, capped at MaxEvidenceBonus.
 const (
@@ -133,238 +206,18 @@ const (
 	MaturityCanonicalMinVerifications  = 10
 )
 
-// Fact represents a verified knowledge claim
-type Fact struct {
-	Id                   string   `json:"id"`
-	ClaimText            string   `json:"claim_text"`
-	Domain               string   `json:"domain"`
-	EpistemicCategory    string   `json:"epistemic_category"` // protocol, analytic, formal, empirical, historical, computational, social, predictive, replicated
-	Confidence           uint64   `json:"confidence"`         // 0-1000000 (6 decimal precision)
-	Status               string   `json:"status"`             // pending, verified, active, contested, challenged, superseded, expired, disproven, revoked
-	Submitter            string   `json:"submitter"`          // bech32 address
-	SubmitterDid         string   `json:"submitter_did"`
-	References           []string `json:"references"`      // fact IDs
-	VerifiedAtHeight     uint64   `json:"verified_at_height"`
-	VerifierCount        uint32   `json:"verifier_count"`
-	LogicZone            string   `json:"logic_zone"`
-	CreatedAtHeight      uint64   `json:"created_at_height"`
-	LastVerifiedHeight   uint64   `json:"last_verified_height"`
-	LastConfidenceUpdate uint64   `json:"last_confidence_update,omitempty"` // block of last decay calculation
-	BaseConfidence       uint64   `json:"base_confidence,omitempty"`       // confidence before decay applied
-
-	// Expiration fields
-	ExpiresAtBlock uint64 `json:"expires_at_block,omitempty"` // explicit expiration (0 = no explicit expiry)
-
-	// Citation economics fields
-	CitationCount         uint64 `json:"citation_count,omitempty"`
-	LastCitedBlock        uint64 `json:"last_cited_block,omitempty"`
-	TotalCitationRewards  uint64 `json:"total_citation_rewards,omitempty"` // cumulative ulgm earned
-
-	// Supersession fields
-	SupersededBy       string `json:"superseded_by,omitempty"`        // fact ID that supersedes this one
-	SupersededAtHeight uint64 `json:"superseded_at_height,omitempty"`
-
-	// Maturity and stratum fields
-	Maturity       string `json:"maturity,omitempty"`        // emerging, established, canonical
-	StratumCeiling uint64 `json:"stratum_ceiling,omitempty"` // inherited ceiling from stratum (0 = no ceiling)
-	ChallengeCount uint32 `json:"challenge_count,omitempty"` // number of challenges received
-
-	// Evidence fields (transferred from claim on acceptance)
-	EvidenceSummaries []FactEvidenceSummary `json:"evidence_summaries,omitempty"` // evidence that supported this fact
-	EvidenceBonus     uint64                `json:"evidence_bonus,omitempty"`     // bonus applied during verification (basis points)
+// EquivocationEvidence records proof that a validator submitted conflicting
+// commitments or reveals in the same verification round.
+// This is the most serious PoT protocol violation — 100% stake slash.
+type EquivocationEvidence struct {
+	RoundId          string `json:"round_id"`
+	Validator        string `json:"validator"`
+	Type             string `json:"type"`              // "commitment" or "reveal"
+	OriginalValue    string `json:"original_value"`    // first commitment hash or reveal verdict
+	ConflictingValue string `json:"conflicting_value"` // equivocating commitment hash or reveal verdict
+	DetectedAtHeight uint64 `json:"detected_at_height"`
+	SlashedAmount    string `json:"slashed_amount"` // amount slashed (string for bigint)
 }
-
-// FactEvidenceSummary is a snapshot of evidence that supported a fact at verification time.
-// Stored on the Fact so evidence provenance is preserved after the claim is consumed.
-type FactEvidenceSummary struct {
-	EvidenceId   string `json:"evidence_id"`
-	EvidenceType string `json:"evidence_type"`
-	Reliability  uint64 `json:"reliability"`   // basis points at time of verification
-	TypeStrength uint64 `json:"type_strength"` // intrinsic type strength (basis points)
-}
-
-func (f *Fact) Reset()        {}
-func (f *Fact) String() string { return fmt.Sprintf("%+v", *f) }
-func (f *Fact) ProtoMessage()  {}
-
-// ClaimEvidence is supporting evidence for a knowledge claim.
-type ClaimEvidence struct {
-	EvidenceType string            `json:"evidence_type"`
-	URI          string            `json:"uri"`
-	ContentHash  string            `json:"content_hash"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-}
-
-// Claim represents a knowledge claim pending verification
-type Claim struct {
-	Id                string          `json:"id"`
-	ClaimText         string          `json:"claim_text"`
-	ContentHash       string          `json:"content_hash"`
-	Domain            string          `json:"domain"`
-	EpistemicCategory string          `json:"epistemic_category"`
-	Submitter         string          `json:"submitter"`     // bech32 address
-	SubmitterDid      string          `json:"submitter_did"`
-	StakeAmount       string          `json:"stake_amount"` // bigint as string
-	Status            string          `json:"status"`       // pending, in_verification, accepted, rejected, challenged, expired
-	SubmittedAtHeight uint64          `json:"submitted_at_height"`
-	References        []string        `json:"references"` // fact IDs
-	LogicZone         string          `json:"logic_zone"`
-	RoundId           string          `json:"round_id"`
-	Evidence          []ClaimEvidence `json:"evidence,omitempty"` // supporting evidence
-}
-
-func (c *Claim) Reset()        {}
-func (c *Claim) String() string { return fmt.Sprintf("%+v", *c) }
-func (c *Claim) ProtoMessage()  {}
-
-// VerificationRound represents a commit-reveal verification round
-type VerificationRound struct {
-	Id                    string                            `json:"id"`
-	ClaimId               string                            `json:"claim_id"`
-	Phase                 string                            `json:"phase"` // commit, reveal, aggregation, complete
-	StartHeight           uint64                            `json:"start_height"`
-	CommitDeadlineHeight  uint64                            `json:"commit_deadline_height"`
-	RevealDeadlineHeight  uint64                            `json:"reveal_deadline_height"`
-	SelectedValidators    []string                          `json:"selected_validators"` // addresses
-	Commitments           map[string]VerificationCommitment `json:"commitments"`         // validator→commitment
-	Reveals               map[string]VerificationReveal     `json:"reveals"`             // validator→reveal
-	FinalVerdict          string                            `json:"final_verdict"`       // accepted, rejected, inconclusive
-	FinalConfidence       uint64                            `json:"final_confidence"`
-	CompletedAtHeight     uint64                            `json:"completed_at_height"`
-}
-
-func (vr *VerificationRound) Reset()        {}
-func (vr *VerificationRound) String() string { return fmt.Sprintf("%+v", *vr) }
-func (vr *VerificationRound) ProtoMessage()  {}
-
-// VerificationCommitment represents a validator's commitment in commit phase
-type VerificationCommitment struct {
-	Validator         string `json:"validator"`
-	CommitmentHash    string `json:"commitment_hash"`
-	VrfOutput         string `json:"vrf_output"`          // hex-encoded VRF output (for selection verification)
-	VrfProof          string `json:"vrf_proof"`            // hex-encoded VRF proof (96 bytes)
-	SubmittedAtHeight uint64 `json:"submitted_at_height"`
-}
-
-func (vc *VerificationCommitment) Reset()        {}
-func (vc *VerificationCommitment) String() string { return fmt.Sprintf("%+v", *vc) }
-func (vc *VerificationCommitment) ProtoMessage()  {}
-
-// VerificationReveal represents a validator's reveal in reveal phase
-type VerificationReveal struct {
-	Validator         string `json:"validator"`
-	Verdict           string `json:"verdict"` // accept, reject, abstain
-	Confidence        uint64 `json:"confidence"`
-	Justification     string `json:"justification"`
-	VrfProof          string `json:"vrf_proof"`
-	Salt              string `json:"salt,omitempty"` // salt used in commitment hash, stored for auditability
-	SubmittedAtHeight uint64 `json:"submitted_at_height"`
-}
-
-func (vr *VerificationReveal) Reset()        {}
-func (vr *VerificationReveal) String() string { return fmt.Sprintf("%+v", *vr) }
-func (vr *VerificationReveal) ProtoMessage()  {}
-
-// FactReference represents a relationship between facts
-type FactReference struct {
-	FromFactId      string `json:"from_fact_id"`
-	ToFactId        string `json:"to_fact_id"`
-	ReferenceType   string `json:"reference_type"` // supports, contradicts, extends, qualifies
-	Weight          uint64 `json:"weight"`
-	CreatedAtHeight uint64 `json:"created_at_height,omitempty"` // block when reference was created
-}
-
-func (fr *FactReference) Reset()        {}
-func (fr *FactReference) String() string { return fmt.Sprintf("%+v", *fr) }
-func (fr *FactReference) ProtoMessage()  {}
-
-// ValidatorInfo represents a validator eligible for verification rounds.
-type ValidatorInfo struct {
-	Address         string `json:"address"`          // bech32 operator address
-	Stake           uint64 `json:"stake"`            // effective stake in ulgm
-	Tier            uint32 `json:"tier"`             // validator tier (0-3)
-	PublicKey       []byte `json:"public_key"`       // Ed25519 public key bytes
-	Reputation      uint64 `json:"reputation"`       // 0-1000000
-}
-
-func (vi *ValidatorInfo) Reset()        {}
-func (vi *ValidatorInfo) String() string { return fmt.Sprintf("%+v", *vi) }
-func (vi *ValidatorInfo) ProtoMessage()  {}
-
-// VerificationResult represents the aggregated outcome of a verification round.
-type VerificationResult struct {
-	Verdict           string            `json:"verdict"`          // accepted, rejected, contested, insufficient
-	Confidence        uint64            `json:"confidence"`       // 0-1000000 (6 decimal precision)
-	AgreementRatio    uint64            `json:"agreement_ratio"`  // 0-1000000
-	TotalWeight       uint64            `json:"total_weight"`     // total stake weight of participants
-	Rewards           map[string]uint64 `json:"rewards"`          // validator → reward amount
-	Slashes           map[string]uint64 `json:"slashes"`          // validator → slash amount
-	ParticipantCount  uint32            `json:"participant_count"`
-	CompletedAtHeight uint64            `json:"completed_at_height,omitempty"` // block height when aggregation completed
-	QuorumReached     bool              `json:"quorum_reached"`                // whether quorum threshold was met
-	EvidenceBonus     uint64            `json:"evidence_bonus,omitempty"`      // additive evidence bonus applied (basis points)
-}
-
-func (vr *VerificationResult) Reset()        {}
-func (vr *VerificationResult) String() string { return fmt.Sprintf("%+v", *vr) }
-func (vr *VerificationResult) ProtoMessage()  {}
-
-// OntologicalDomain represents a knowledge domain
-type OntologicalDomain struct {
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	Proposer        string `json:"proposer"` // bech32 address
-	Status          string `json:"status"`   // proposed, active, deprecated
-	Endorsements    uint32 `json:"endorsements"`
-	Challenges      uint32 `json:"challenges"`
-	CreatedAtHeight uint64 `json:"created_at_height"`
-}
-
-func (od *OntologicalDomain) Reset()        {}
-func (od *OntologicalDomain) String() string { return fmt.Sprintf("%+v", *od) }
-func (od *OntologicalDomain) ProtoMessage()  {}
-
-// GenesisState represents the knowledge module genesis state
-type GenesisState struct {
-	Params         Params                `json:"params"`
-	Domains        []OntologicalDomain   `json:"domains"`
-	Facts          []Fact                `json:"facts"`
-	Claims         []Claim               `json:"claims"`
-	FactReferences []FactReference       `json:"fact_references"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
-
-// Params defines the knowledge module parameters
-type Params struct {
-	OntologyVersion                 uint64 `json:"ontology_version"`
-	CrossStratumDiscount            uint64 `json:"cross_stratum_discount"`
-	MinDomainProposalStake          string `json:"min_domain_proposal_stake"`
-	DomainVotingPeriod              uint64 `json:"domain_voting_period"`
-	MinEndorsements                 uint32 `json:"min_endorsements"`
-	AllowPartialCoverage            bool   `json:"allow_partial_coverage"`
-	PartialCoveragePenalty          uint64 `json:"partial_coverage_penalty"`
-	LowerStratumVetoWeight          uint64 `json:"lower_stratum_veto_weight"`
-	CrossStratumAgreementThreshold  uint64 `json:"cross_stratum_agreement_threshold"`
-	MinClaimTextLength              uint32 `json:"min_claim_text_length"`           // default 20
-	MaxClaimRewardMultiplier        uint64 `json:"max_claim_reward_multiplier"`     // default 2 (times stake)
-	CommitPhaseDuration             uint64 `json:"commit_phase_duration"`           // blocks, default 4
-	RevealPhaseDuration             uint64 `json:"reveal_phase_duration"`           // blocks, default 4
-	AggregationPhaseDuration        uint64 `json:"aggregation_phase_duration"`      // blocks, default 3
-	MinVerifiers                    uint32 `json:"min_verifiers"`                   // default 3
-	AcceptanceThreshold             uint64 `json:"acceptance_threshold"`            // 0-1000000, default 770000 (77%)
-	QuorumThreshold                 uint64 `json:"quorum_threshold"`               // 0-1000000, default 660000 (66%)
-	MaxValidatorsPerRound           uint32 `json:"max_validators_per_round"`       // default 22
-	InvalidClaimSlashBps            uint64 `json:"invalid_claim_slash_bps"`        // slash on rejection (220000 = 22%)
-	VerificationRewardAmount        uint64 `json:"verification_reward_amount"`     // ulgm per correct verification (default 100000 = 0.1 LGM)
-	ResearchTaxRate                 uint64 `json:"research_tax_rate"`              // basis points taxed from rewards to research fund (default 220000 = 22%)
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
 
 // MustMarshal marshals params to bytes, panics on error
 func (p Params) MustMarshal() []byte {
@@ -377,19 +230,7 @@ func (p *Params) MustUnmarshal(bz []byte) {
 	// Placeholder - in real implementation would use amino/proto encoding
 }
 
-// Message types
-
-// MsgProposeDomain proposes a new ontological domain
-type MsgProposeDomain struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Proposer    string `json:"proposer"` // bech32 address
-	Stake       string `json:"stake"`    // bigint as string
-}
-
-func (msg *MsgProposeDomain) Reset()        {}
-func (msg *MsgProposeDomain) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgProposeDomain) ProtoMessage()  {}
+// --- ValidateBasic and GetSigners for proto-generated Msg types ---
 
 func (msg *MsgProposeDomain) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Proposer)
@@ -409,24 +250,6 @@ func (msg *MsgProposeDomain) ValidateBasic() error {
 	return nil
 }
 
-type MsgProposeDomainResponse struct {
-	DomainName string `json:"domain_name"`
-}
-
-func (msg *MsgProposeDomainResponse) Reset()        {}
-func (msg *MsgProposeDomainResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgProposeDomainResponse) ProtoMessage()  {}
-
-// MsgEndorseDomainProposal endorses a domain proposal
-type MsgEndorseDomainProposal struct {
-	DomainName string `json:"domain_name"`
-	Endorser   string `json:"endorser"` // bech32 address
-}
-
-func (msg *MsgEndorseDomainProposal) Reset()        {}
-func (msg *MsgEndorseDomainProposal) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgEndorseDomainProposal) ProtoMessage()  {}
-
 func (msg *MsgEndorseDomainProposal) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Endorser)
 	return []sdk.AccAddress{addr}
@@ -444,23 +267,6 @@ func (msg *MsgEndorseDomainProposal) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgEndorseDomainProposalResponse struct{}
-
-func (msg *MsgEndorseDomainProposalResponse) Reset()        {}
-func (msg *MsgEndorseDomainProposalResponse) String() string { return "" }
-func (msg *MsgEndorseDomainProposalResponse) ProtoMessage()  {}
-
-// MsgChallengeDomainProposal challenges a domain proposal
-type MsgChallengeDomainProposal struct {
-	DomainName string `json:"domain_name"`
-	Challenger string `json:"challenger"` // bech32 address
-	Reason     string `json:"reason"`
-}
-
-func (msg *MsgChallengeDomainProposal) Reset()        {}
-func (msg *MsgChallengeDomainProposal) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgChallengeDomainProposal) ProtoMessage()  {}
 
 func (msg *MsgChallengeDomainProposal) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Challenger)
@@ -480,23 +286,6 @@ func (msg *MsgChallengeDomainProposal) ValidateBasic() error {
 	return nil
 }
 
-type MsgChallengeDomainProposalResponse struct{}
-
-func (msg *MsgChallengeDomainProposalResponse) Reset()        {}
-func (msg *MsgChallengeDomainProposalResponse) String() string { return "" }
-func (msg *MsgChallengeDomainProposalResponse) ProtoMessage()  {}
-
-// MsgRegisterStratum registers an ontological stratum
-type MsgRegisterStratum struct {
-	StratumName string `json:"stratum_name"`
-	Description string `json:"description"`
-	Registrar   string `json:"registrar"` // bech32 address
-}
-
-func (msg *MsgRegisterStratum) Reset()        {}
-func (msg *MsgRegisterStratum) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRegisterStratum) ProtoMessage()  {}
-
 func (msg *MsgRegisterStratum) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Registrar)
 	return []sdk.AccAddress{addr}
@@ -515,22 +304,6 @@ func (msg *MsgRegisterStratum) ValidateBasic() error {
 	return nil
 }
 
-type MsgRegisterStratumResponse struct{}
-
-func (msg *MsgRegisterStratumResponse) Reset()        {}
-func (msg *MsgRegisterStratumResponse) String() string { return "" }
-func (msg *MsgRegisterStratumResponse) ProtoMessage()  {}
-
-// MsgUpdateParams updates module parameters
-type MsgUpdateParams struct {
-	Authority string `json:"authority"` // bech32 address (gov module)
-	Params    Params `json:"params"`
-}
-
-func (msg *MsgUpdateParams) Reset()        {}
-func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgUpdateParams) ProtoMessage()  {}
-
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
@@ -545,29 +318,6 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgUpdateParamsResponse struct{}
-
-func (msg *MsgUpdateParamsResponse) Reset()        {}
-func (msg *MsgUpdateParamsResponse) String() string { return "" }
-func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// MsgSubmitClaim submits a knowledge claim for verification
-type MsgSubmitClaim struct {
-	ClaimText         string          `json:"claim_text"`
-	Domain            string          `json:"domain"`
-	EpistemicCategory string          `json:"epistemic_category"`
-	Submitter         string          `json:"submitter"`      // bech32 address
-	SubmitterDid      string          `json:"submitter_did"`
-	StakeAmount       string          `json:"stake_amount"`   // bigint as string
-	References        []string        `json:"references"`     // fact IDs
-	LogicZone         string          `json:"logic_zone"`
-	Evidence          []ClaimEvidence `json:"evidence,omitempty"` // supporting evidence
-}
-
-func (msg *MsgSubmitClaim) Reset()        {}
-func (msg *MsgSubmitClaim) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSubmitClaim) ProtoMessage()  {}
 
 func (msg *MsgSubmitClaim) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
@@ -590,26 +340,6 @@ func (msg *MsgSubmitClaim) ValidateBasic() error {
 	return nil
 }
 
-type MsgSubmitClaimResponse struct {
-	ClaimId string `json:"claim_id"`
-	RoundId string `json:"round_id"`
-}
-
-func (msg *MsgSubmitClaimResponse) Reset()        {}
-func (msg *MsgSubmitClaimResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSubmitClaimResponse) ProtoMessage()  {}
-
-// MsgSubmitCommitment submits a commitment in the commit phase
-type MsgSubmitCommitment struct {
-	RoundId        string `json:"round_id"`
-	Validator      string `json:"validator"`        // bech32 address
-	CommitmentHash string `json:"commitment_hash"`
-}
-
-func (msg *MsgSubmitCommitment) Reset()        {}
-func (msg *MsgSubmitCommitment) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSubmitCommitment) ProtoMessage()  {}
-
 func (msg *MsgSubmitCommitment) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Validator)
 	return []sdk.AccAddress{addr}
@@ -630,27 +360,6 @@ func (msg *MsgSubmitCommitment) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgSubmitCommitmentResponse struct{}
-
-func (msg *MsgSubmitCommitmentResponse) Reset()        {}
-func (msg *MsgSubmitCommitmentResponse) String() string { return "" }
-func (msg *MsgSubmitCommitmentResponse) ProtoMessage()  {}
-
-// MsgSubmitReveal submits a reveal in the reveal phase
-type MsgSubmitReveal struct {
-	RoundId       string `json:"round_id"`
-	Validator     string `json:"validator"` // bech32 address
-	Verdict       string `json:"verdict"`   // accept, reject, abstain
-	Confidence    uint64 `json:"confidence"`
-	Justification string `json:"justification"`
-	VrfProof      string `json:"vrf_proof"`
-	Salt          string `json:"salt"` // for commitment verification
-}
-
-func (msg *MsgSubmitReveal) Reset()        {}
-func (msg *MsgSubmitReveal) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSubmitReveal) ProtoMessage()  {}
 
 func (msg *MsgSubmitReveal) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Validator)
@@ -676,24 +385,6 @@ func (msg *MsgSubmitReveal) ValidateBasic() error {
 	return nil
 }
 
-type MsgSubmitRevealResponse struct{}
-
-func (msg *MsgSubmitRevealResponse) Reset()        {}
-func (msg *MsgSubmitRevealResponse) String() string { return "" }
-func (msg *MsgSubmitRevealResponse) ProtoMessage()  {}
-
-// MsgChallengeFact challenges an existing fact
-type MsgChallengeFact struct {
-	FactId     string `json:"fact_id"`
-	Challenger string `json:"challenger"` // bech32 address
-	Reason     string `json:"reason"`
-	Stake      string `json:"stake"` // bigint as string
-}
-
-func (msg *MsgChallengeFact) Reset()        {}
-func (msg *MsgChallengeFact) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgChallengeFact) ProtoMessage()  {}
-
 func (msg *MsgChallengeFact) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Challenger)
 	return []sdk.AccAddress{addr}
@@ -712,28 +403,55 @@ func (msg *MsgChallengeFact) ValidateBasic() error {
 	return nil
 }
 
-type MsgChallengeFactResponse struct {
-	RoundId string `json:"round_id"`
+// MsgChallengeProvisionalFact challenges a provisionally accepted fact during its challenge window.
+// This is the core adversarial verification message — any agent can stake counter-evidence.
+// Not in proto — hand-written message type for adversarial verification.
+type MsgChallengeProvisionalFact struct {
+	Challenger   string   `json:"challenger"`    // bech32
+	ClaimId      string   `json:"claim_id"`      // target claim
+	FactId       string   `json:"fact_id"`       // provisional fact (if exists)
+	Stake        string   `json:"stake"`         // challenge bond
+	Reason       string   `json:"reason"`        // human-readable
+	EvidenceIds  []string `json:"evidence_ids"`  // counter-evidence from evidence_mgmt
+	CounterClaim string   `json:"counter_claim"` // optional: what challenger believes instead
 }
 
-func (msg *MsgChallengeFactResponse) Reset()        {}
-func (msg *MsgChallengeFactResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgChallengeFactResponse) ProtoMessage()  {}
+func (msg *MsgChallengeProvisionalFact) Reset()        {}
+func (msg *MsgChallengeProvisionalFact) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgChallengeProvisionalFact) ProtoMessage()  {}
 
-// MsgAddFact manually adds a fact (gov-only, for genesis/migration)
-type MsgAddFact struct {
-	Authority         string   `json:"authority"` // bech32 address (gov module)
-	ClaimText         string   `json:"claim_text"`
-	Domain            string   `json:"domain"`
-	EpistemicCategory string   `json:"epistemic_category"`
-	Confidence        uint64   `json:"confidence"`
-	References        []string `json:"references"`
-	LogicZone         string   `json:"logic_zone"`
+func (msg *MsgChallengeProvisionalFact) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Challenger)
+	return []sdk.AccAddress{addr}
 }
 
-func (msg *MsgAddFact) Reset()        {}
-func (msg *MsgAddFact) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgAddFact) ProtoMessage()  {}
+func (msg *MsgChallengeProvisionalFact) ValidateBasic() error {
+	if msg.Challenger == "" {
+		return fmt.Errorf("challenger cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Challenger); err != nil {
+		return fmt.Errorf("invalid challenger address: %w", err)
+	}
+	if msg.ClaimId == "" {
+		return fmt.Errorf("claim ID cannot be empty")
+	}
+	if msg.Stake == "" {
+		return fmt.Errorf("stake cannot be empty")
+	}
+	if msg.Reason == "" {
+		return fmt.Errorf("reason cannot be empty")
+	}
+	return nil
+}
+
+type MsgChallengeProvisionalFactResponse struct {
+	ChallengeId string `json:"challenge_id"`
+	DisputeId   string `json:"dispute_id,omitempty"` // set for Path B (arbiter resolution)
+}
+
+func (msg *MsgChallengeProvisionalFactResponse) Reset()        {}
+func (msg *MsgChallengeProvisionalFactResponse) String() string { return fmt.Sprintf("%+v", *msg) }
+func (msg *MsgChallengeProvisionalFactResponse) ProtoMessage()  {}
 
 func (msg *MsgAddFact) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
@@ -753,76 +471,230 @@ func (msg *MsgAddFact) ValidateBasic() error {
 	return nil
 }
 
-type MsgAddFactResponse struct {
-	FactId string `json:"fact_id"`
+func (msg *MsgSubmitContradiction) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
+	return []sdk.AccAddress{addr}
 }
 
-func (msg *MsgAddFactResponse) Reset()        {}
-func (msg *MsgAddFactResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgAddFactResponse) ProtoMessage()  {}
-
-// MsgServer is the service interface for the knowledge module
-type MsgServer interface {
-	ProposeDomain(context.Context, *MsgProposeDomain) (*MsgProposeDomainResponse, error)
-	EndorseDomainProposal(context.Context, *MsgEndorseDomainProposal) (*MsgEndorseDomainProposalResponse, error)
-	ChallengeDomainProposal(context.Context, *MsgChallengeDomainProposal) (*MsgChallengeDomainProposalResponse, error)
-	RegisterStratum(context.Context, *MsgRegisterStratum) (*MsgRegisterStratumResponse, error)
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
-	SubmitClaim(context.Context, *MsgSubmitClaim) (*MsgSubmitClaimResponse, error)
-	SubmitCommitment(context.Context, *MsgSubmitCommitment) (*MsgSubmitCommitmentResponse, error)
-	SubmitReveal(context.Context, *MsgSubmitReveal) (*MsgSubmitRevealResponse, error)
-	ChallengeFact(context.Context, *MsgChallengeFact) (*MsgChallengeFactResponse, error)
-	AddFact(context.Context, *MsgAddFact) (*MsgAddFactResponse, error)
+func (msg *MsgSubmitContradiction) ValidateBasic() error {
+	if msg.TargetFactId == "" {
+		return fmt.Errorf("target fact ID cannot be empty")
+	}
+	if msg.CounterClaim == "" {
+		return fmt.Errorf("counter-claim text cannot be empty")
+	}
+	if msg.Submitter == "" {
+		return fmt.Errorf("submitter cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Submitter); err != nil {
+		return fmt.Errorf("invalid submitter address: %w", err)
+	}
+	if msg.Stake == "" {
+		return fmt.Errorf("stake cannot be empty")
+	}
+	if len(msg.EvidenceIds) == 0 {
+		return fmt.Errorf("at least one evidence ID required for contradiction")
+	}
+	return nil
 }
 
-// Placeholder service descriptor for codec registration
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.knowledge.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "ProposeDomain",
-			Handler:    nil,
-		},
-		{
-			MethodName: "EndorseDomainProposal",
-			Handler:    nil,
-		},
-		{
-			MethodName: "ChallengeDomainProposal",
-			Handler:    nil,
-		},
-		{
-			MethodName: "RegisterStratum",
-			Handler:    nil,
-		},
-		{
-			MethodName: "UpdateParams",
-			Handler:    nil,
-		},
-		{
-			MethodName: "SubmitClaim",
-			Handler:    nil,
-		},
-		{
-			MethodName: "SubmitCommitment",
-			Handler:    nil,
-		},
-		{
-			MethodName: "SubmitReveal",
-			Handler:    nil,
-		},
-		{
-			MethodName: "ChallengeFact",
-			Handler:    nil,
-		},
-		{
-			MethodName: "AddFact",
-			Handler:    nil,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/knowledge/v1/tx.proto",
+// ProvisionalChallenge tracks a challenge against a provisional fact.
+// Not in proto — hand-written type for adversarial verification.
+type ProvisionalChallenge struct {
+	Id               string   `json:"id"`
+	ClaimId          string   `json:"claim_id"`
+	FactId           string   `json:"fact_id"`
+	Challenger       string   `json:"challenger"`        // bech32
+	Stake            string   `json:"stake"`             // challenge bond
+	Reason           string   `json:"reason"`
+	EvidenceIds      []string `json:"evidence_ids"`      // counter-evidence
+	CounterClaim     string   `json:"counter_claim"`
+	Status           string   `json:"status"`            // open, resolved_upheld, resolved_overturned, resolved_weakened, resolved_inconclusive
+	ResolutionPath   string   `json:"resolution_path"`   // "deterministic" (Path A) or "arbiter" (Path B)
+	DisputeId        string   `json:"dispute_id"`        // for Path B arbiter resolution
+	CreatedAtHeight  uint64   `json:"created_at_height"`
+	ResolvedAtHeight uint64   `json:"resolved_at_height,omitempty"`
+	Outcome          string   `json:"outcome,omitempty"` // upheld, overturned, weakened, inconclusive, undecidability
+	AttemptNumber    uint32   `json:"attempt_number"`    // for exponential cooldown
+}
+
+// Challenge outcome constants
+const (
+	ChallengeOutcomeUpheld         = "upheld"         // claim survives challenge
+	ChallengeOutcomeOverturned     = "overturned"     // claim falls
+	ChallengeOutcomeWeakened       = "weakened"       // partial success
+	ChallengeOutcomeInconclusive   = "inconclusive"   // no clear winner
+	ChallengeOutcomeUndecidability = "undecidability"  // Gödel zones — provably unprovable
+)
+
+// Challenge status constants
+const (
+	ChallengeStatusOpen     = "open"
+	ChallengeStatusResolved = "resolved"
+)
+
+// CalibrationRecord tracks a submitter's historical claim acceptance rate.
+// Used by the evaluation pipeline (Stage 1.5) to penalize hallucination-prone
+// agents and reward reliable submitters.
+// Not in proto — hand-written type for evaluation pipeline.
+type CalibrationRecord struct {
+	Submitter        string `json:"submitter"`          // bech32 address
+	TotalClaims      uint64 `json:"total_claims"`       // total finalized claims
+	AcceptedClaims   uint64 `json:"accepted_claims"`    // claims accepted
+	RejectedClaims   uint64 `json:"rejected_claims"`    // claims rejected
+	LastUpdateHeight uint64 `json:"last_update_height"` // block of last update
+}
+
+// Calibration constants
+const (
+	// MinCalibrationSamples is the minimum number of finalized claims before
+	// calibration adjustments are applied. Below this, the submitter is "unrated".
+	MinCalibrationSamples = 5
+
+	// CalibrationNeutralRate is the acceptance rate at which no adjustment is
+	// applied (70% acceptance = neutral). In basis points (0-1,000,000).
+	CalibrationNeutralRate = 700_000
+
+	// MaxCalibrationBonus is the maximum confidence bonus for high-acceptance submitters.
+	MaxCalibrationBonus = 50_000 // +5%
+
+	// MaxCalibrationPenalty is the maximum confidence penalty for low-acceptance submitters.
+	MaxCalibrationPenalty = 150_000 // -15%
+)
+
+// AH-4: Verifier method diversity constants.
+// These detect and penalize suspiciously uniform verification results,
+// which may indicate coordinated AI-only verification without genuine diversity.
+const (
+	// MinDiversityParticipants is the minimum number of reveals before
+	// uniformity detection is applied. Below this, sample size is too small.
+	MinDiversityParticipants = 3
+
+	// UniformityPenaltyBps is the confidence penalty (basis points) applied when
+	// ALL reveals have identical confidence values, suggesting homogeneous methods.
+	UniformityPenaltyBps uint64 = 100_000 // 10% penalty
+
+	// SingleMethodPenaltyBps is the additional penalty when all reveals declare
+	// the same non-empty verification method (or all omit it).
+	SingleMethodPenaltyBps uint64 = 50_000 // 5% additional penalty
+
+	// DiversityBonusBps is a small bonus when 3+ distinct methods are declared,
+	// rewarding genuine methodological diversity.
+	DiversityBonusBps uint64 = 30_000 // 3% bonus
+)
+
+// ============ Negative Knowledge System ============
+
+// Counter-fact negation types
+const (
+	NegationTypeRejection     = "rejection"     // Claim evaluated and rejected by validators
+	NegationTypeContradiction = "contradiction" // Explicit counter-claim with evidence
+	NegationTypeFalsification = "falsification" // Research outcome = "refutes"
+	NegationTypeSupersession  = "supersession"  // Newer evidence overturns prior acceptance
+)
+
+// Counter-fact lifecycle statuses
+const (
+	CounterFactStatusPending    = "pending"    // Awaiting verification
+	CounterFactStatusProvisional = "provisional" // In challenge window
+	CounterFactStatusVerified   = "verified"   // Confirmed false
+	CounterFactStatusContested  = "contested"  // Mixed verification
+	CounterFactStatusOverturned = "overturned" // Counter-fact itself was disproved
+)
+
+// ComputeBidirectionalStatus derives the epistemic status from net confidence.
+func ComputeBidirectionalStatus(net int64) string {
+	if net > 600_000 {
+		return "established"
+	}
+	if net < -600_000 {
+		return "disproven"
+	}
+	if net > -200_000 && net < 200_000 {
+		return "uncertain"
+	}
+	return "contested"
+}
+
+// Negative knowledge constants
+const (
+	// MaxContradictionsPerAgentPerEpoch limits contradiction spam.
+	MaxContradictionsPerAgentPerEpoch = 3
+
+	// MinContradictionStakeRatio is the minimum stake for contradiction as a
+	// fraction of the target fact's original stake (basis points).
+	MinContradictionStakeRatio = 500_000 // 50%
+
+	// FailedContradictionSlashBps is the slash applied when a submitted
+	// contradiction is rejected (the target fact was actually true).
+	// Set to 33% (reduced from 50% per R-1) to reduce asymmetry with
+	// the 22% claim rejection slash while still deterring frivolous contradictions.
+	FailedContradictionSlashBps = 330_000 // 33%
+
+	// FalsificationRewardCapBps caps the reward for disproving a fact
+	// at 3× the original claim's stake.
+	FalsificationRewardCapBps = 3_000_000
+
+	// FalsificationPoolShareBps is the max share of epoch block reward pool
+	// that can go to falsification rewards.
+	FalsificationPoolShareBps = 150_000 // 15%
+
+	// CounterFactHighConfidence is the threshold above which a counter-fact
+	// significantly penalizes new claims referencing the target fact.
+	CounterFactHighConfidence = 700_000
+
+	// CounterFactMediumConfidence threshold for moderate penalty.
+	CounterFactMediumConfidence = 400_000
+
+	// Evaluation stage 8 penalties for counter-facts
+	CounterFactHighPenalty    = 80_000
+	CounterFactMediumPenalty  = 40_000
+	CounterFactLowPenalty     = 10_000
+	MaxCounterFactPenalty     = 400_000
+
+	// EstablishedFactChallengePenalty when contradicting a high-confidence fact.
+	EstablishedFactChallengePenalty = 100_000
+
+	// WeakFactChallengeBoost when contradicting a low-confidence fact.
+	WeakFactChallengeBoost = 50_000
+
+	// AlreadyDisprovenPenalty when submitting a claim already known to be false.
+	AlreadyDisprovenPenalty = 200_000
+
+	// RoundTypeContradiction is the round type for contradiction verification.
+	RoundTypeContradiction = "contradiction"
+
+	// Counter-fact challenge window constants (R-2)
+	// Counter-facts must survive a challenge window before being finalized as "verified".
+	// This creates symmetry: both positive and negative knowledge face adversarial scrutiny.
+	CounterFactChallengeWindowBlocks = 34_272 // ~1 day (matches BLOCKS_PER_DAY)
+	CounterFactChallengeMinStake     = 50_000 // Minimum stake to challenge a counter-fact (50k ulgm)
+	CounterFactChallengeSlashBps     = 220_000 // 22% slash on failed counter-fact challenge (same as claim challenges)
+
+	// Counter-fact challenge statuses
+	CounterFactChallengeStatusOpen     = "open"
+	CounterFactChallengeStatusUpheld   = "upheld"   // Counter-fact survives challenge
+	CounterFactChallengeStatusReverted = "reverted"  // Counter-fact overturned by challenge
+
+	// Stale-contested resolution constants (R-5)
+	StaleContestedDecayEpochs  = uint64(10)     // Epochs without activity before decay starts
+	StaleContestedDecayRateBps = uint64(50_000) // 5% confidence decay per epoch when stale
+)
+
+// CounterFactChallenge represents a challenge against a verified counter-fact (R-2).
+// Enables symmetry: negative knowledge must survive adversarial scrutiny just like
+// positive knowledge does via the survive-to-accept model.
+// Not in proto — hand-written type for counter-fact challenge system.
+type CounterFactChallenge struct {
+	Id               string   `json:"id"`
+	CounterFactId    string   `json:"counter_fact_id"`     // Counter-fact being challenged
+	Challenger       string   `json:"challenger"`           // bech32 address
+	Stake            string   `json:"stake"`                // Locked challenge stake (ulgm)
+	Reason           string   `json:"reason"`               // Why the counter-fact is wrong
+	EvidenceIds      []string `json:"evidence_ids"`         // Supporting evidence
+	Status           string   `json:"status"`               // open, upheld, reverted
+	CreatedAtHeight  uint64   `json:"created_at_height"`
+	ResolvedAtHeight uint64   `json:"resolved_at_height,omitempty"`
 }
 
 // Note: RegisterCodec and RegisterInterfaces are in codec.go

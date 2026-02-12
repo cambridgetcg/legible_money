@@ -61,7 +61,7 @@ function createTestValidators(count: number): TestValidator[] {
     validators.push({
       publicKey,
       privateKey,
-      stake: 10000n * 10n ** 18n,
+      stake: 10000n * 10n ** 15n,
     });
   }
   return validators;
@@ -73,7 +73,7 @@ function createTestClaim(): ClaimSubmission {
     claim: "Test claim for unit testing",
     domain: "test.unit",
     submitter: "test-submitter",
-    stake: 100n * 10n ** 18n,
+    stake: 100n * 10n ** 15n,
     submittedAt: Date.now(),
     references: [
       {
@@ -110,8 +110,8 @@ const TEST_PARAMS: ConsensusParams = {
   commitPhaseBlocks: 3,
   revealPhaseBlocks: 3,
   verificationReward: 1n * 10n ** 18n,
-  wrongVerificationSlash: 0.1,
-  missedVerificationSlash: 0.05,
+  wrongVerificationSlash: 0.06,
+  missedVerificationSlash: 0.0001,
 };
 
 // ============ Round Creation Tests ============
@@ -294,7 +294,7 @@ describe("Verification Round - Commitments", () => {
 
   it("should generate valid commitment", () => {
     const validator = validators[0];
-    const { commitment, nonce } = generateCommitment(
+    const { commitment, salt } = generateCommitment(
       validator.privateKey,
       validator.publicKey,
       round.id,
@@ -306,8 +306,8 @@ describe("Verification Round - Commitments", () => {
     expect(commitment.validator).toBe(validator.publicKey);
     expect(commitment.commitment).toBeTruthy();
     expect(commitment.signature).toBeTruthy();
-    expect(nonce).toBeTruthy();
-    expect(nonce.length).toBe(64); // 32 bytes hex
+    expect(salt).toBeTruthy();
+    expect(salt.length).toBe(64); // 32 bytes hex
   });
 
   it("should require VRF proof for commitment", () => {
@@ -445,7 +445,7 @@ describe("Verification Round - Reveals", () => {
     expect(reveal.validator).toBe(validator.publicKey);
     expect(reveal.verdict).toBe("confirmed");
     expect(reveal.confidence).toBe(0.9);
-    expect(reveal.nonce).toBe("test-nonce");
+    expect(reveal.salt).toBe("test-nonce");
     expect(reveal.reasoning).toBe("Test reasoning");
     expect(reveal.signature).toBeTruthy();
   });
@@ -475,7 +475,7 @@ describe("Verification Round - Reveals", () => {
     const validator = validators[0];
 
     // Create commitment with 'confirmed' verdict
-    const { commitment, nonce } = generateCommitment(
+    const { commitment, salt } = generateCommitment(
       validator.privateKey,
       validator.publicKey,
       round.id,
@@ -497,7 +497,7 @@ describe("Verification Round - Reveals", () => {
       revealRound.id,
       "rejected", // Different from commitment
       0.9,
-      nonce,
+      salt,
       ["ref-1"],
     );
 
@@ -511,7 +511,7 @@ describe("Verification Round - Reveals", () => {
     const validator = validators[0];
 
     // Create commitment
-    const { commitment, nonce } = generateCommitment(
+    const { commitment, salt } = generateCommitment(
       validator.privateKey,
       validator.publicKey,
       round.id,
@@ -533,7 +533,7 @@ describe("Verification Round - Reveals", () => {
       revealRound.id,
       "confirmed", // Same as commitment
       0.9,
-      nonce,
+      salt,
       ["ref-1"],
     );
 
@@ -547,7 +547,7 @@ describe("Verification Round - Reveals", () => {
     const validator = validators[0];
 
     // Create and add commitment
-    const { commitment, nonce } = generateCommitment(
+    const { commitment, salt } = generateCommitment(
       validator.privateKey,
       validator.publicKey,
       round.id,
@@ -567,7 +567,7 @@ describe("Verification Round - Reveals", () => {
       revealRound.id,
       "confirmed",
       0.9,
-      nonce,
+      salt,
       ["ref-1"],
     );
 
@@ -606,7 +606,7 @@ describe("Verification Round - Aggregation", () => {
     // Add commitments and reveals for each validator
     for (let i = 0; i < verdicts.length; i++) {
       const validator = validators[i];
-      const { commitment, nonce } = generateCommitment(
+      const { commitment, salt } = generateCommitment(
         validator.privateKey,
         validator.publicKey,
         round.id,
@@ -623,7 +623,7 @@ describe("Verification Round - Aggregation", () => {
         round.id,
         verdicts[i],
         confidences[i],
-        nonce,
+        salt,
         ["ref-1"],
       );
 
@@ -684,7 +684,7 @@ describe("Verification Round - Aggregation", () => {
     // Add only 2 reveals (below 66% quorum)
     for (let i = 0; i < 2; i++) {
       const validator = validators[i];
-      const { commitment, nonce } = generateCommitment(
+      const { commitment, salt } = generateCommitment(
         validator.privateKey,
         validator.publicKey,
         round.id,
@@ -700,7 +700,7 @@ describe("Verification Round - Aggregation", () => {
         round.id,
         "confirmed",
         0.9,
-        nonce,
+        salt,
         ["ref-1"],
       );
       round.reveals.set(validator.publicKey, reveal);
@@ -749,7 +749,7 @@ describe("Verification Round - Aggregation", () => {
     // Add 3 commitments
     for (let i = 0; i < 3; i++) {
       const validator = validators[i];
-      const { commitment, nonce } = generateCommitment(
+      const { commitment, salt } = generateCommitment(
         validator.privateKey,
         validator.publicKey,
         round.id,
@@ -767,7 +767,7 @@ describe("Verification Round - Aggregation", () => {
           round.id,
           "confirmed",
           0.9,
-          nonce,
+          salt,
           ["ref-1"],
         );
         round.reveals.set(validator.publicKey, reveal);

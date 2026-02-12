@@ -1,0 +1,28 @@
+syntax = "proto3";
+package legible.evidence_mgmt.v1;
+
+option go_package = "github.com/legible-money/legible/x/evidence_mgmt/types";
+
+import "legible/evidence_mgmt/v1/state.proto";
+
+// GenesisState defines the evidence management module's genesis state.
+message GenesisState {
+  Params params = 1;
+  repeated Evidence evidence_items = 2;
+  repeated EvidenceAudit audits = 3;
+  repeated AuditConsensus consensus_records = 4;
+  repeated Oracle oracles = 5;
+}
+
+// Params defines the evidence management module parameters.
+message Params {
+  string min_audit_stake = 1;
+  uint64 audit_window = 2;
+  uint32 min_audits_for_consensus = 3;
+  uint64 accuracy_threshold = 4;
+  uint64 slash_rate = 5;
+  uint64 reward_rate = 6;
+  string min_oracle_stake = 7;
+  uint64 oracle_slash_rate = 8;
+  uint32 max_evidence_per_claim = 9;
+}

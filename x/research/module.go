@@ -113,26 +113,10 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock processes bounty expirations.
+// BeginBlock processes bounty expirations, returning locked rewards to creators.
 func (am AppModule) BeginBlock(goCtx context.Context) error {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	// Expire bounties past their deadline
-	am.keeper.IterateBounties(ctx, func(b types.Bounty) bool {
-		if b.Status == types.BountyStatusOpen && uint64(ctx.BlockHeight()) > b.DeadlineHeight {
-			b.Status = types.BountyStatusExpired
-			am.keeper.SetBounty(ctx, b)
-
-			ctx.EventManager().EmitEvent(
-				sdk.NewEvent(
-					"bounty_expired",
-					sdk.NewAttribute("bounty_id", b.Id),
-				),
-			)
-		}
-		return false
-	})
-
+	am.keeper.ExpireBounties(ctx)
 	return nil
 }
 

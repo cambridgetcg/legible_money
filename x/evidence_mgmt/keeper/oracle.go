@@ -22,7 +22,7 @@ func (k Keeper) RegisterOracle(ctx sdk.Context, oracle types.Oracle) error {
 
 	// Validate data types
 	for _, dt := range oracle.DataTypes {
-		if !types.IsValidEvidenceType(dt) {
+		if !types.IsValidEvidenceType(types.EvidenceType(dt)) {
 			return fmt.Errorf("%w: invalid data type %s",
 				types.ErrInvalidEvidence, dt)
 		}

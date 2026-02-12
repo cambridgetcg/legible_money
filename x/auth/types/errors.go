@@ -76,4 +76,13 @@ var (
 
 	// ErrAccountNotFrozen is returned when trying to unfreeze a non-frozen account
 	ErrAccountNotFrozen = errors.Register(ModuleName, 25, "account is not frozen")
+
+	// ErrBootstrapAlreadyClaimed is returned when bootstrap fund already claimed
+	ErrBootstrapAlreadyClaimed = errors.Register(ModuleName, 26, "bootstrap fund already claimed")
+
+	// ErrBootstrapDisabled is returned when bootstrap fund is disabled
+	ErrBootstrapDisabled = errors.Register(ModuleName, 27, "bootstrap fund is disabled")
+
+	// ErrBootstrapInsufficientFunds is returned when module account has insufficient funds
+	ErrBootstrapInsufficientFunds = errors.Register(ModuleName, 28, "bootstrap fund has insufficient balance")
 )

@@ -36,7 +36,7 @@ const ONE_LGM = 10n ** 18n;
 
 const BASE_PARAMS: ConsensusParams = {
   ...DEFAULT_CONSENSUS_PARAMS,
-  minClaimStake: 111n * ONE_LGM,
+  minClaimStake: 111n * 10n ** 15n,
   graduatedClaimStakeFloor: 222000000000000000n,
   claimStakeGraduationClaims: 22,
   bootstrapVestingBlocks: 0n,

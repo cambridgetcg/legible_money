@@ -121,7 +121,7 @@ export const RPC_TEST_CONFIG = {
   blockInterval: 100,
   deterministicMode: true,
   totalSupply: 1_000_000_000n * 10n ** 18n,
-  validatorStake: 10_000n * 10n ** 18n,
+  validatorStake: 10_000n * 10n ** 15n,
 } as const;
 
 // ============ Server Config ============

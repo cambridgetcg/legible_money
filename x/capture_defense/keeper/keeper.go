@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,12 +15,13 @@ import (
 
 // Keeper manages the capture defense module's state.
 type Keeper struct {
-	cdc      codec.Codec
-	storeKey storetypes.StoreKey
+	cdc          codec.Codec
+	storeService store.KVStoreService
 
-	stakingKeeper  types.StakingKeeper
-	ontologyKeeper types.OntologyKeeper
-	bankKeeper     types.BankKeeper
+	stakingKeeper   types.StakingKeeper
+	ontologyKeeper  types.OntologyKeeper
+	bankKeeper      types.BankKeeper
+	emergencyKeeper types.EmergencyKeeper
 
 	authority string
 }
@@ -28,7 +29,7 @@ type Keeper struct {
 // NewKeeper creates a new capture defense Keeper.
 func NewKeeper(
 	cdc codec.Codec,
-	storeKey storetypes.StoreKey,
+	storeService store.KVStoreService,
 	sk types.StakingKeeper,
 	ok types.OntologyKeeper,
 	bk types.BankKeeper,
@@ -36,12 +37,35 @@ func NewKeeper(
 ) Keeper {
 	return Keeper{
 		cdc:            cdc,
-		storeKey:       storeKey,
+		storeService:   storeService,
 		stakingKeeper:  sk,
 		ontologyKeeper: ok,
 		bankKeeper:     bk,
 		authority:      authority,
 	}
+}
+
+// SetEmergencyKeeper sets the emergency keeper (set after keeper creation to avoid circular deps).
+func (k *Keeper) SetEmergencyKeeper(ek types.EmergencyKeeper) {
+	k.emergencyKeeper = ek
+}
+
+// prefixEndBytes returns the end key for a prefix scan (exclusive upper bound).
+// It increments the last byte of the prefix; if it overflows, it tries the
+// previous byte, and so on. Returns nil if all bytes overflow (prefix is all 0xff).
+func prefixEndBytes(prefix []byte) []byte {
+	if len(prefix) == 0 {
+		return nil
+	}
+	end := make([]byte, len(prefix))
+	copy(end, prefix)
+	for i := len(end) - 1; i >= 0; i-- {
+		end[i]++
+		if end[i] != 0 {
+			return end
+		}
+	}
+	return nil
 }
 
 // Logger returns a module-specific logger.
@@ -51,36 +75,58 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 // InitGenesis initializes the module from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	}
 	for _, qual := range genState.Qualifications {
-		k.SetQualification(ctx, qual)
+		if qual == nil {
+			continue
+		}
+		k.SetQualification(ctx, *qual)
 	}
 	for _, rep := range genState.Reputations {
-		k.SetIsolatedReputation(ctx, rep)
+		if rep == nil {
+			continue
+		}
+		k.SetIsolatedReputation(ctx, *rep)
 	}
 	for _, m := range genState.Metrics {
-		k.SetCaptureMetrics(ctx, m)
+		if m == nil {
+			continue
+		}
+		k.SetCaptureMetrics(ctx, *m)
 	}
 }
 
 // ExportGenesis exports the module's genesis state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) types.GenesisState {
-	var quals []types.DomainQualification
+	var qualPtrs []*types.DomainQualification
 	k.IterateQualifications(ctx, func(q types.DomainQualification) bool {
-		quals = append(quals, q)
+		qCopy := q
+		qualPtrs = append(qualPtrs, &qCopy)
 		return false
 	})
 
-	var reps []types.IsolatedReputation
+	var repPtrs []*types.IsolatedReputation
 	k.IterateReputations(ctx, func(r types.IsolatedReputation) bool {
-		reps = append(reps, r)
+		rCopy := r
+		repPtrs = append(repPtrs, &rCopy)
 		return false
 	})
 
+	var metricPtrs []*types.CaptureMetrics
+	k.IterateCaptureMetrics(ctx, func(m types.CaptureMetrics) bool {
+		mCopy := m
+		metricPtrs = append(metricPtrs, &mCopy)
+		return false
+	})
+
+	params := k.GetParams(ctx)
 	return types.GenesisState{
-		Params:         k.GetParams(ctx),
-		Qualifications: quals,
-		Reputations:    reps,
+		Params:         &params,
+		Qualifications: qualPtrs,
+		Reputations:    repPtrs,
+		Metrics:        metricPtrs,
 	}
 }
 
@@ -106,7 +152,7 @@ func (k Keeper) ProcessQualificationRequest(
 
 	// Check not already qualified
 	if existing, found := k.GetQualification(ctx, validatorAddr, domain); found {
-		if existing.Status == types.StatusActive || existing.Status == types.StatusProbationary {
+		if existing.Status == string(types.StatusActive) || existing.Status == string(types.StatusProbationary) {
 			return types.DomainQualification{}, types.ErrAlreadyQualified
 		}
 	}
@@ -159,11 +205,11 @@ func (k Keeper) qualifyByStake(
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Stratum:             stratum,
-		Pathway:             types.PathwayStakeCommitment,
-		Status:              types.StatusProbationary,
+		Pathway:             string(types.PathwayStakeCommitment),
+		Status:              string(types.StatusProbationary),
 		EarnedAtBlock:       currentBlock,
 		ExpiresAtBlock:      0, // No expiry for stake commitment
-		Metrics:             types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
+		Metrics:             &types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
 		LockedStake:         stake,
 		StakeUnlocksAtBlock: currentBlock + params.StakeLockPeriod,
 		InheritanceDiscount: 1_000_000, // 100% = no discount
@@ -179,8 +225,8 @@ func (k Keeper) qualifyByTrackRecord(
 	params := k.GetParams(ctx)
 	rep := k.GetOrCreateReputation(ctx, validatorAddr, currentBlock)
 
-	domainRep, hasDomainRep := rep.DomainReputations[domain]
-	if !hasDomainRep || domainRep.TotalVerifications < params.MinVerificationsForQual {
+	domainRep := findDomainReputation(rep.DomainReputations, domain)
+	if domainRep == nil || domainRep.TotalVerifications < params.MinVerificationsForQual {
 		return types.DomainQualification{}, types.ErrInsufficientTrackRecord
 	}
 
@@ -194,11 +240,11 @@ func (k Keeper) qualifyByTrackRecord(
 		ValidatorAddr:  validatorAddr,
 		Domain:         domain,
 		Stratum:        stratum,
-		Pathway:        types.PathwayTrackRecord,
-		Status:         types.StatusActive,
+		Pathway:        string(types.PathwayTrackRecord),
+		Status:         string(types.StatusActive),
 		EarnedAtBlock:  currentBlock,
 		ExpiresAtBlock: currentBlock + params.InactivityExpirationBlocks,
-		Metrics: types.QualificationMetrics{
+		Metrics: &types.QualificationMetrics{
 			TotalVerifications:   domainRep.TotalVerifications,
 			CorrectVerifications: domainRep.CorrectVerifications,
 			Accuracy:             domainRep.Accuracy,
@@ -228,7 +274,7 @@ func (k Keeper) qualifyByCrossReference(
 			continue // Skip self-endorsement
 		}
 		eQual, found := k.GetQualification(ctx, endorser, domain)
-		if !found || (eQual.Status != types.StatusActive && eQual.Status != types.StatusProbationary) {
+		if !found || (eQual.Status != string(types.StatusActive) && eQual.Status != string(types.StatusProbationary)) {
 			continue
 		}
 		validEndorsers = append(validEndorsers, endorser)
@@ -244,11 +290,11 @@ func (k Keeper) qualifyByCrossReference(
 		ValidatorAddr:  validatorAddr,
 		Domain:         domain,
 		Stratum:        stratum,
-		Pathway:        types.PathwayCrossReference,
-		Status:         types.StatusProbationary,
+		Pathway:        string(types.PathwayCrossReference),
+		Status:         string(types.StatusProbationary),
 		EarnedAtBlock:  currentBlock,
 		ExpiresAtBlock: currentBlock + types.EndorsementDecayBlocks,
-		Metrics:        types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
+		Metrics:        &types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
 		Endorsers:      validEndorsers,
 		InheritanceDiscount: 1_000_000, // 100% = no discount
 	}, nil
@@ -269,7 +315,7 @@ func (k Keeper) qualifyByInheritance(
 	}
 
 	parentQual, found := k.GetQualification(ctx, validatorAddr, inheritFrom)
-	if !found || parentQual.Status != types.StatusActive {
+	if !found || parentQual.Status != string(types.StatusActive) {
 		return types.DomainQualification{}, types.ErrNoInheritableQualification
 	}
 
@@ -279,11 +325,11 @@ func (k Keeper) qualifyByInheritance(
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Stratum:             stratum,
-		Pathway:             types.PathwayStratumInheritance,
-		Status:              types.StatusProbationary,
+		Pathway:             string(types.PathwayStratumInheritance),
+		Status:              string(types.StatusProbationary),
 		EarnedAtBlock:       currentBlock,
 		ExpiresAtBlock:      currentBlock + types.InactivityExpirationBlocks,
-		Metrics:             types.QualificationMetrics{EffectiveWeight: types.StratumInheritanceDiscount},
+		Metrics:             &types.QualificationMetrics{EffectiveWeight: types.StratumInheritanceDiscount},
 		InheritedFrom:       inheritFrom,
 		InheritanceDiscount: types.StratumInheritanceDiscount,
 	}, nil
@@ -298,7 +344,7 @@ func (k Keeper) findInheritableQualification(ctx sdk.Context, validatorAddr, tar
 	if !found {
 		return ""
 	}
-	if qual, ok := k.GetQualification(ctx, validatorAddr, parent); ok && qual.Status == types.StatusActive {
+	if qual, ok := k.GetQualification(ctx, validatorAddr, parent); ok && qual.Status == string(types.StatusActive) {
 		return parent
 	}
 	return ""
@@ -342,7 +388,7 @@ func (k Keeper) IsQualifiedForDomain(ctx sdk.Context, validatorAddr, domain stri
 	if !found {
 		return false
 	}
-	if qual.Status != types.StatusActive && qual.Status != types.StatusProbationary {
+	if qual.Status != string(types.StatusActive) && qual.Status != string(types.StatusProbationary) {
 		return false
 	}
 	if qual.ExpiresAtBlock > 0 && currentBlock > qual.ExpiresAtBlock {
@@ -357,7 +403,7 @@ func (k Keeper) GetQualificationWeight(ctx sdk.Context, validatorAddr, domain st
 	if !found {
 		return 0
 	}
-	if qual.Status != types.StatusActive && qual.Status != types.StatusProbationary {
+	if qual.Status != string(types.StatusActive) && qual.Status != string(types.StatusProbationary) {
 		return 0
 	}
 	return qual.Metrics.EffectiveWeight
@@ -392,22 +438,22 @@ func (k Keeper) UpdateQualificationMetrics(
 	}
 
 	// Transition from probationary to active after sufficient verifications
-	if qual.Status == types.StatusProbationary {
+	if qual.Status == string(types.StatusProbationary) {
 		params := k.GetParams(ctx)
 		if qual.Metrics.TotalVerifications >= params.MinVerificationsForQual &&
 			qual.Metrics.Accuracy >= params.MinAccuracyForQual {
-			qual.Status = types.StatusActive
+			qual.Status = string(types.StatusActive)
 			qual.Metrics.EffectiveWeight = qual.InheritanceDiscount // Use full weight (or inheritance discount)
 		}
 	}
 
 	// Check for suspension
 	if qual.Metrics.ConsecutiveIncorrect >= types.ConsecutiveIncorrectSuspend {
-		qual.Status = types.StatusSuspended
+		qual.Status = string(types.StatusSuspended)
 		qual.Metrics.EffectiveWeight = 0
 	}
 	if qual.Metrics.Accuracy < types.AccuracyThresholdSuspension && qual.Metrics.TotalVerifications >= types.MinVerificationsForQual {
-		qual.Status = types.StatusSuspended
+		qual.Status = string(types.StatusSuspended)
 		qual.Metrics.EffectiveWeight = 0
 	}
 
@@ -441,5 +487,25 @@ func (k Keeper) UpdateAfterVerification(
 // RecordVerificationHistory records a verification round entry for capture analysis.
 func (k Keeper) RecordVerificationHistory(ctx sdk.Context, domain string, entry types.VerificationHistoryEntry) error {
 	k.AppendVerificationHistoryEntry(ctx, domain, entry)
+	return nil
+}
+
+// findDomainReputation looks up a DomainReputation by domain key in a proto entry slice.
+func findDomainReputation(entries []*types.DomainReputationEntry, domain string) *types.DomainReputation {
+	for _, e := range entries {
+		if e != nil && e.Key == domain {
+			return e.Value
+		}
+	}
+	return nil
+}
+
+// findStratumReputation looks up a StratumReputation by stratum key in a proto entry slice.
+func findStratumReputation(entries []*types.StratumReputationEntry, stratum uint32) *types.StratumReputation {
+	for _, e := range entries {
+		if e != nil && e.Key == stratum {
+			return e.Value
+		}
+	}
 	return nil
 }

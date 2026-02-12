@@ -190,10 +190,10 @@ export function generateCommitment(
   referencesChecked: string[],
 ): {
   commitment: ValidatorCommitment;
-  nonce: string;
+  salt: string;
 } {
-  // Generate random nonce
-  const nonce = bytesToHex(randomBytes(32));
+  // Generate random salt for commit-reveal
+  const salt = bytesToHex(randomBytes(32));
 
   // Create commitment hash
   const commitData = JSON.stringify({
@@ -201,7 +201,7 @@ export function generateCommitment(
     verdict,
     confidence,
     referencesChecked: referencesChecked.sort(),
-    nonce,
+    salt,
   });
 
   const commitmentHash = sha512_256Hex(
@@ -219,10 +219,10 @@ export function generateCommitment(
     commitment: {
       validator: validatorPublicKey,
       commitment: commitmentHash,
-      submittedAt: Date.now(),
+      submittedAtHeight: Date.now(),
       signature,
     },
-    nonce,
+    salt,
   };
 }
 
@@ -351,7 +351,7 @@ export function generateReveal(
   roundId: string,
   verdict: "confirmed" | "rejected" | "uncertain",
   confidence: Confidence,
-  nonce: string,
+  salt: string,
   referencesChecked: string[],
   reasoning?: string,
 ): ValidatorReveal {
@@ -360,7 +360,7 @@ export function generateReveal(
     roundId,
     verdict,
     confidence,
-    nonce,
+    salt,
     referencesChecked: referencesChecked.sort(),
     reasoning,
   });
@@ -375,10 +375,10 @@ export function generateReveal(
     validator: validatorPublicKey,
     verdict,
     confidence,
-    nonce,
+    salt,
     reasoning,
     referencesChecked,
-    submittedAt: Date.now(),
+    submittedAtHeight: Date.now(),
     signature,
   };
 }
@@ -417,7 +417,7 @@ export function addReveal(
     verdict: reveal.verdict,
     confidence: reveal.confidence,
     referencesChecked: reveal.referencesChecked.sort(),
-    nonce: reveal.nonce,
+    salt: reveal.salt,
   });
   const expectedCommitment = sha512_256Hex(
     domainHash(HASH_DOMAINS.COMMITMENT, commitData).toString(),
@@ -436,7 +436,7 @@ export function addReveal(
     roundId: round.id,
     verdict: reveal.verdict,
     confidence: reveal.confidence,
-    nonce: reveal.nonce,
+    salt: reveal.salt,
     referencesChecked: reveal.referencesChecked.sort(),
     reasoning: reveal.reasoning,
   });

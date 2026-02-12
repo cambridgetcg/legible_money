@@ -14,6 +14,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -133,7 +134,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 
 	mockBK := newMockBankKeeper()
 
-	k := keeper.NewKeeper(cdc, storeKey, mockBK, "lgm1authority")
+	k := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), mockBK, "lgm1authority")
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
@@ -206,8 +207,8 @@ func TestSetGetPot(t *testing.T) {
 		Balance:        "1000000",
 		TotalDeposited: "1000000",
 		TotalClaimed:   "0",
-		Status:         types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:         string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "1000",
 			MaxClaims:           100,
 			MaxClaimsPerAccount: 1,
@@ -240,7 +241,7 @@ func TestGetPotNotFound(t *testing.T) {
 func TestDeletePot(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	pot := types.ClaimingPot{PotId: "pot-del", Creator: creator1, Status: types.PotStatusActive}
+	pot := types.ClaimingPot{PotId: "pot-del", Creator: creator1, Status: string(types.PotStatusActive)}
 	k.SetPot(ctx, pot)
 
 	k.DeletePot(ctx, "pot-del")
@@ -258,7 +259,7 @@ func TestIteratePots(t *testing.T) {
 		pot := types.ClaimingPot{
 			PotId:   fmt.Sprintf("iter-%d", i),
 			Creator: creator1,
-			Status:  types.PotStatusActive,
+			Status:  string(types.PotStatusActive),
 		}
 		k.SetPot(ctx, pot)
 	}
@@ -276,9 +277,9 @@ func TestIteratePots(t *testing.T) {
 func TestGetPotsByStatus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetPot(ctx, types.ClaimingPot{PotId: "active1", Status: types.PotStatusActive})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "active2", Status: types.PotStatusActive})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "closed1", Status: types.PotStatusClosed})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "active1", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "active2", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "closed1", Status: string(types.PotStatusClosed)})
 
 	active := k.GetPotsByStatus(ctx, types.PotStatusActive)
 	if len(active) != 2 {
@@ -294,9 +295,9 @@ func TestGetPotsByStatus(t *testing.T) {
 func TestGetPotsByCreator(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetPot(ctx, types.ClaimingPot{PotId: "c1p1", Creator: creator1, Status: types.PotStatusActive})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "c1p2", Creator: creator1, Status: types.PotStatusActive})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "c2p1", Creator: creator2, Status: types.PotStatusActive})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "c1p1", Creator: creator1, Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "c1p2", Creator: creator1, Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "c2p1", Creator: creator2, Status: string(types.PotStatusActive)})
 
 	c1pots := k.GetPotsByCreator(ctx, creator1)
 	if len(c1pots) != 2 {
@@ -401,14 +402,10 @@ func TestCreatePot(t *testing.T) {
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	resp, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100000",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-			CreatorCanClose:     true,
-		},
-		InitialDeposit: "5000000",
+		Creator:        creator1,
+		Name:           "test-pot",
+		Domain:         "testing",
+		InitialFunding: "5000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -425,7 +422,7 @@ func TestCreatePot(t *testing.T) {
 	if pot.Balance != "5000000" {
 		t.Errorf("expected balance 5000000, got %s", pot.Balance)
 	}
-	if pot.Status != types.PotStatusActive {
+	if pot.Status != string(types.PotStatusActive) {
 		t.Errorf("expected active status, got %s", pot.Status)
 	}
 
@@ -441,13 +438,10 @@ func TestCreatePotInsufficientDeposit(t *testing.T) {
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-		},
-		InitialDeposit: "500", // Below MinInitialDeposit (1000000)
+		Creator:        creator1,
+		Name:           "test-pot",
+		Domain:         "testing",
+		InitialFunding: "500", // Below MinInitialDeposit (1000000)
 	})
 	if err == nil {
 		t.Error("expected error for insufficient deposit")
@@ -461,20 +455,17 @@ func TestCreatePotMaxPotsExceeded(t *testing.T) {
 	// Set max pots per creator to 2
 	params := types.DefaultParams()
 	params.MaxPotsPerCreator = 2
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, *params)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	// Create 2 pots
 	for i := 0; i < 2; i++ {
 		_, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-			Creator: creator1,
-			Config: types.PotConfig{
-				AmountPerClaim:      "1000",
-				MaxClaims:           10,
-				MaxClaimsPerAccount: 1,
-			},
-			InitialDeposit: "1000000",
+			Creator:        creator1,
+			Name:           fmt.Sprintf("pot-%d", i),
+			Domain:         "testing",
+			InitialFunding: "1000000",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error on pot %d: %v", i+1, err)
@@ -483,13 +474,10 @@ func TestCreatePotMaxPotsExceeded(t *testing.T) {
 
 	// Third should fail
 	_, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "1000",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-		},
-		InitialDeposit: "1000000",
+		Creator:        creator1,
+		Name:           "pot-overflow",
+		Domain:         "testing",
+		InitialFunding: "1000000",
 	})
 	if err == nil {
 		t.Error("expected error for max pots exceeded")
@@ -502,32 +490,26 @@ func TestCreatePotInvalidConfig(t *testing.T) {
 
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	// Zero amount per claim
+	// Zero initial funding
 	_, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "0",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-		},
-		InitialDeposit: "1000000",
+		Creator:        creator1,
+		Name:           "bad-pot",
+		Domain:         "testing",
+		InitialFunding: "0",
 	})
 	if err == nil {
-		t.Error("expected error for zero amount per claim")
+		t.Error("expected error for zero initial funding")
 	}
 
-	// Zero max claims per account
+	// Empty initial funding
 	_, err = msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "1000",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 0,
-		},
-		InitialDeposit: "1000000",
+		Creator:        creator1,
+		Name:           "bad-pot2",
+		Domain:         "testing",
+		InitialFunding: "",
 	})
 	if err == nil {
-		t.Error("expected error for zero max claims per account")
+		t.Error("expected error for empty initial funding")
 	}
 }
 
@@ -541,13 +523,10 @@ func TestFundPot(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	resp, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100000",
-			MaxClaims:           100,
-			MaxClaimsPerAccount: 1,
-		},
-		InitialDeposit: "2000000",
+		Creator:        creator1,
+		Name:           "fund-test-pot",
+		Domain:         "testing",
+		InitialFunding: "2000000",
 	})
 	if err != nil {
 		t.Fatalf("create pot failed: %v", err)
@@ -582,8 +561,8 @@ func TestFundPotReactivatesExhausted(t *testing.T) {
 		Balance:        "0",
 		TotalDeposited: "1000000",
 		TotalClaimed:   "1000000",
-		Status:         types.PotStatusExhausted,
-		Config: types.PotConfig{
+		Status:         string(types.PotStatusExhausted),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "100000",
 			MaxClaims:           100,
 			MaxClaimsPerAccount: 1,
@@ -603,7 +582,7 @@ func TestFundPotReactivatesExhausted(t *testing.T) {
 	}
 
 	got, _ := k.GetPot(ctx, "pot-exhausted")
-	if got.Status != types.PotStatusActive {
+	if got.Status != string(types.PotStatusActive) {
 		t.Errorf("expected active status after refunding, got %s", got.Status)
 	}
 }
@@ -615,8 +594,8 @@ func TestFundClosedPotFails(t *testing.T) {
 	pot := types.ClaimingPot{
 		PotId:   "pot-closed",
 		Creator: creator1,
-		Status:  types.PotStatusClosed,
-		Config:  types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1},
+		Status:  string(types.PotStatusClosed),
+		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1},
 	}
 	k.SetPot(ctx, pot)
 
@@ -640,13 +619,10 @@ func TestClaimFromPot(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	createResp, err := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100000",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-		},
-		InitialDeposit: "1000000",
+		Creator:        creator1,
+		Name:           "claim-test-pot",
+		Domain:         "testing",
+		InitialFunding: "1000000",
 	})
 	if err != nil {
 		t.Fatalf("create pot failed: %v", err)
@@ -659,17 +635,17 @@ func TestClaimFromPot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("claim failed: %v", err)
 	}
-	if claimResp.Amount != "100000" {
-		t.Errorf("expected claim amount 100000, got %s", claimResp.Amount)
+	if claimResp.AmountClaimed != "1000000" {
+		t.Errorf("expected claim amount 1000000, got %s", claimResp.AmountClaimed)
 	}
 
-	// Verify pot state
+	// Verify pot state (AmountPerClaim defaults to InitialFunding, so full balance is claimed)
 	pot, _ := k.GetPot(ctx, createResp.PotId)
 	if pot.ClaimCount != 1 {
 		t.Errorf("expected claim count 1, got %d", pot.ClaimCount)
 	}
-	if pot.Balance != "900000" {
-		t.Errorf("expected balance 900000, got %s", pot.Balance)
+	if pot.Balance != "0" {
+		t.Errorf("expected balance 0, got %s", pot.Balance)
 	}
 
 	// Verify claim record
@@ -689,13 +665,10 @@ func TestClaimFromPotMaxClaimsPerAccount(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	createResp, _ := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100000",
-			MaxClaims:           100,
-			MaxClaimsPerAccount: 1,
-		},
-		InitialDeposit: "5000000",
+		Creator:        creator1,
+		Name:           "max-claims-test",
+		Domain:         "testing",
+		InitialFunding: "5000000",
 	})
 
 	// First claim succeeds
@@ -707,7 +680,7 @@ func TestClaimFromPotMaxClaimsPerAccount(t *testing.T) {
 		t.Fatalf("first claim failed: %v", err)
 	}
 
-	// Second claim should fail
+	// Second claim should fail (max claims per account = 1 by default)
 	_, err = msgServer.ClaimFromPot(ctx, &types.MsgClaimFromPot{
 		Claimer: claimer1,
 		PotId:   createResp.PotId,
@@ -728,8 +701,8 @@ func TestClaimFromPotExhaustion(t *testing.T) {
 		TotalDeposited: "200000",
 		TotalClaimed:   "0",
 		ClaimCount:     0,
-		Status:         types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:         string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "100000",
 			MaxClaims:           0, // unlimited
 			MaxClaimsPerAccount: 1,
@@ -760,7 +733,7 @@ func TestClaimFromPotExhaustion(t *testing.T) {
 
 	// Pot should be exhausted
 	got, _ := k.GetPot(ctx, "pot-exhaust")
-	if got.Status != types.PotStatusExhausted {
+	if got.Status != string(types.PotStatusExhausted) {
 		t.Errorf("expected exhausted status, got %s", got.Status)
 	}
 }
@@ -771,8 +744,8 @@ func TestClaimFromInactivePot(t *testing.T) {
 	pot := types.ClaimingPot{
 		PotId:   "pot-inactive",
 		Creator: creator1,
-		Status:  types.PotStatusClosed,
-		Config:  types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1},
+		Status:  string(types.PotStatusClosed),
+		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1},
 	}
 	k.SetPot(ctx, pot)
 
@@ -794,8 +767,8 @@ func TestClaimFromExpiredPot(t *testing.T) {
 		PotId:   "pot-expired",
 		Creator: creator1,
 		Balance: "1000000",
-		Status:  types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:  string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "1000",
 			MaxClaimsPerAccount: 1,
 			ExpiresAtBlock:      50,
@@ -814,7 +787,7 @@ func TestClaimFromExpiredPot(t *testing.T) {
 
 	// Verify pot status was updated
 	got, _ := k.GetPot(ctx, "pot-expired")
-	if got.Status != types.PotStatusExpired {
+	if got.Status != string(types.PotStatusExpired) {
 		t.Errorf("expected expired status, got %s", got.Status)
 	}
 }
@@ -829,8 +802,8 @@ func TestClaimFromPotMaxTotalClaims(t *testing.T) {
 		TotalDeposited: "1000000",
 		TotalClaimed:   "0",
 		ClaimCount:     1,
-		Status:         types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:         string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "100000",
 			MaxClaims:           1, // only 1 total
 			MaxClaimsPerAccount: 1,
@@ -858,19 +831,15 @@ func TestClosePot(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	createResp, _ := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100000",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-			CreatorCanClose:     true,
-		},
-		InitialDeposit: "5000000",
+		Creator:        creator1,
+		Name:           "close-test-pot",
+		Domain:         "testing",
+		InitialFunding: "5000000",
 	})
 
 	closeResp, err := msgServer.ClosePot(ctx, &types.MsgClosePot{
-		Creator: creator1,
-		PotId:   createResp.PotId,
+		Authority: creator1,
+		PotId:     createResp.PotId,
 	})
 	if err != nil {
 		t.Fatalf("close pot failed: %v", err)
@@ -880,7 +849,7 @@ func TestClosePot(t *testing.T) {
 	}
 
 	pot, _ := k.GetPot(ctx, createResp.PotId)
-	if pot.Status != types.PotStatusClosed {
+	if pot.Status != string(types.PotStatusClosed) {
 		t.Errorf("expected closed status, got %s", pot.Status)
 	}
 	if pot.Balance != "0" {
@@ -895,19 +864,15 @@ func TestClosePotNotCreator(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	createResp, _ := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
-			AmountPerClaim:      "100000",
-			MaxClaims:           10,
-			MaxClaimsPerAccount: 1,
-			CreatorCanClose:     true,
-		},
-		InitialDeposit: "5000000",
+		Creator:        creator1,
+		Name:           "not-creator-test",
+		Domain:         "testing",
+		InitialFunding: "5000000",
 	})
 
 	_, err := msgServer.ClosePot(ctx, &types.MsgClosePot{
-		Creator: creator2, // wrong creator
-		PotId:   createResp.PotId,
+		Authority: creator2, // wrong creator
+		PotId:     createResp.PotId,
 	})
 	if err == nil {
 		t.Error("expected error for non-creator close attempt")
@@ -917,23 +882,29 @@ func TestClosePotNotCreator(t *testing.T) {
 func TestClosePotNotAllowed(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(creator1, "ulgm", 10_000_000)
+	bk.setModuleBalance(types.ModuleName, "ulgm", 0)
 
-	msgServer := keeper.NewMsgServerImpl(k)
-
-	createResp, _ := msgServer.CreatePot(ctx, &types.MsgCreatePot{
-		Creator: creator1,
-		Config: types.PotConfig{
+	// Create pot directly with CreatorCanClose = false
+	pot := types.ClaimingPot{
+		PotId:          "pot-no-close",
+		Creator:        creator1,
+		Balance:        "5000000",
+		TotalDeposited: "5000000",
+		TotalClaimed:   "0",
+		Status:         string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "100000",
 			MaxClaims:           10,
 			MaxClaimsPerAccount: 1,
 			CreatorCanClose:     false, // not allowed
 		},
-		InitialDeposit: "5000000",
-	})
+	}
+	k.SetPot(ctx, pot)
 
+	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.ClosePot(ctx, &types.MsgClosePot{
-		Creator: creator1,
-		PotId:   createResp.PotId,
+		Authority: creator1,
+		PotId:     "pot-no-close",
 	})
 	if err == nil {
 		t.Error("expected error when creator close not allowed")
@@ -948,11 +919,11 @@ func TestEligibilityAllowlist(t *testing.T) {
 	pot := types.ClaimingPot{
 		PotId:   "pot-allow",
 		Creator: creator1,
-		Status:  types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:  string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "1000",
 			MaxClaimsPerAccount: 1,
-			Eligibility: types.PotEligibility{
+			Eligibility: &types.PotEligibility{
 				Allowlist: []string{claimer1},
 			},
 		},
@@ -978,11 +949,11 @@ func TestEligibilityNoRestrictions(t *testing.T) {
 	pot := types.ClaimingPot{
 		PotId:   "pot-open",
 		Creator: creator1,
-		Status:  types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:  string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "1000",
 			MaxClaimsPerAccount: 1,
-			Eligibility:         types.PotEligibility{},
+			Eligibility:         &types.PotEligibility{},
 		},
 	}
 
@@ -1001,11 +972,11 @@ func TestEligibilityMaxBalance(t *testing.T) {
 	pot := types.ClaimingPot{
 		PotId:   "pot-maxbal",
 		Creator: creator1,
-		Status:  types.PotStatusActive,
-		Config: types.PotConfig{
+		Status:  string(types.PotStatusActive),
+		Config: &types.PotConfig{
 			AmountPerClaim:      "1000",
 			MaxClaimsPerAccount: 1,
-			Eligibility: types.PotEligibility{
+			Eligibility: &types.PotEligibility{
 				MaxBalance: "1000000",
 			},
 		},
@@ -1028,16 +999,16 @@ func TestInitExportGenesis(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	gs := types.GenesisState{
-		Params: types.Params{
+		Params: &types.Params{
 			MaxPotsPerCreator: 42,
 			MinInitialDeposit: "999",
 			MaxAllowlistSize:  100,
 			MinAmountPerClaim: "10",
 		},
-		Pots: []types.ClaimingPot{
-			{PotId: "g-pot-1", Creator: creator1, Status: types.PotStatusActive, Balance: "1000", TotalDeposited: "1000", TotalClaimed: "0", Config: types.PotConfig{AmountPerClaim: "100", MaxClaimsPerAccount: 1}},
+		Pots: []*types.ClaimingPot{
+			{PotId: "g-pot-1", Creator: creator1, Status: string(types.PotStatusActive), Balance: "1000", TotalDeposited: "1000", TotalClaimed: "0", Config: &types.PotConfig{AmountPerClaim: "100", MaxClaimsPerAccount: 1}},
 		},
-		Claims: []types.ClaimRecord{
+		Claims: []*types.ClaimRecord{
 			{PotId: "g-pot-1", Claimer: claimer1, ClaimCount: 1, TotalAmount: "100"},
 		},
 	}
@@ -1086,7 +1057,7 @@ func TestInitExportGenesis(t *testing.T) {
 func TestQueryPot(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	pot := types.ClaimingPot{PotId: "q-pot-1", Creator: creator1, Status: types.PotStatusActive, Balance: "500"}
+	pot := types.ClaimingPot{PotId: "q-pot-1", Creator: creator1, Status: string(types.PotStatusActive), Balance: "500"}
 	k.SetPot(ctx, pot)
 
 	qs := keeper.NewQueryServerImpl(k)
@@ -1112,9 +1083,9 @@ func TestQueryPotNotFound(t *testing.T) {
 func TestQueryPots(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-1", Status: types.PotStatusActive})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-2", Status: types.PotStatusActive})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-3", Status: types.PotStatusClosed})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-1", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-2", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-3", Status: string(types.PotStatusClosed)})
 
 	qs := keeper.NewQueryServerImpl(k)
 
@@ -1159,48 +1130,48 @@ func TestBeginBlockExpiresOldPots(t *testing.T) {
 	k.SetPot(ctx, types.ClaimingPot{
 		PotId:   "bb-expired",
 		Creator: creator1,
-		Status:  types.PotStatusActive,
-		Config:  types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1, ExpiresAtBlock: 50},
+		Status:  string(types.PotStatusActive),
+		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1, ExpiresAtBlock: 50},
 	})
 
 	// Active pot that expires at block 200 (should NOT expire)
 	k.SetPot(ctx, types.ClaimingPot{
 		PotId:   "bb-future",
 		Creator: creator1,
-		Status:  types.PotStatusActive,
-		Config:  types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1, ExpiresAtBlock: 200},
+		Status:  string(types.PotStatusActive),
+		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1, ExpiresAtBlock: 200},
 	})
 
 	// Active pot with no expiration (should NOT expire)
 	k.SetPot(ctx, types.ClaimingPot{
 		PotId:   "bb-forever",
 		Creator: creator1,
-		Status:  types.PotStatusActive,
-		Config:  types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1, ExpiresAtBlock: 0},
+		Status:  string(types.PotStatusActive),
+		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1, ExpiresAtBlock: 0},
 	})
 
 	// Simulate BeginBlock
 	currentBlock := uint64(ctx.BlockHeight())
 	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
-		if pot.Status == types.PotStatusActive && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
-			pot.Status = types.PotStatusExpired
+		if pot.Status == string(types.PotStatusActive) && pot.Config != nil && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
+			pot.Status = string(types.PotStatusExpired)
 			k.SetPot(ctx, pot)
 		}
 		return false
 	})
 
 	expired, _ := k.GetPot(ctx, "bb-expired")
-	if expired.Status != types.PotStatusExpired {
+	if expired.Status != string(types.PotStatusExpired) {
 		t.Errorf("expected expired, got %s", expired.Status)
 	}
 
 	future, _ := k.GetPot(ctx, "bb-future")
-	if future.Status != types.PotStatusActive {
+	if future.Status != string(types.PotStatusActive) {
 		t.Errorf("expected active, got %s", future.Status)
 	}
 
 	forever, _ := k.GetPot(ctx, "bb-forever")
-	if forever.Status != types.PotStatusActive {
+	if forever.Status != string(types.PotStatusActive) {
 		t.Errorf("expected active, got %s", forever.Status)
 	}
 }

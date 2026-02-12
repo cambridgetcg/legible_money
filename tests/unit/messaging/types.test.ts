@@ -64,7 +64,7 @@ describe("ClaimMessage", () => {
     claimType: "empirical" as const,
     epistemicCategory: "empirical" as const,
     proposedConfidence: 0.99,
-    stake: 100n * 10n ** 18n,
+    stake: 100n * 10n ** 15n,
     evidenceIds: ["evidence-1", "evidence-2"],
   };
 
@@ -182,7 +182,7 @@ describe("AttestationMessage", () => {
     targetId: "claim-123",
     attestationType: "confirm" as const,
     confidence: 0.9,
-    stake: 50n * 10n ** 18n,
+    stake: 50n * 10n ** 15n,
     expertise: ["physics", "astronomy"],
     reasoning: "Verified through independent observation",
   };
@@ -238,7 +238,7 @@ describe("ChallengeMessage", () => {
     reason: "Contradicts established scientific consensus",
     challengeType: "factual_error" as const,
     counterEvidenceIds: ["counter-evidence-1", "counter-evidence-2"],
-    stake: 200n * 10n ** 18n,
+    stake: 200n * 10n ** 15n,
     requestedOutcome: "retraction" as const,
   };
 
@@ -382,7 +382,7 @@ describe("ResolutionMessage", () => {
     rewards: [
       {
         recipient: TEST_DID,
-        amount: 10n * 10n ** 18n,
+        amount: 10n * 10n ** 15n,
         reason: "Correct verification",
       },
     ],
@@ -411,7 +411,7 @@ describe("ResolutionMessage", () => {
       outcome: "rejected" as const,
       finalConfidence: 0,
       slashes: [
-        { target: TEST_DID, amount: 50n * 10n ** 18n, reason: "False claim" },
+        { target: TEST_DID, amount: 50n * 10n ** 15n, reason: "False claim" },
       ],
     };
 
@@ -433,7 +433,7 @@ describe("EvidenceRequestMessage", () => {
     topic: "climate change evidence",
     domain: "environmental_science",
     minStrength: 0.7,
-    bounty: 50n * 10n ** 18n,
+    bounty: 50n * 10n ** 15n,
     deadline: 1000n,
     limit: 10,
   };
@@ -489,7 +489,7 @@ describe("validateTruthMessage", () => {
       claimType: "empirical",
       epistemicCategory: "empirical",
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
     });
 
     const result = validateTruthMessage(message);
@@ -504,7 +504,7 @@ describe("validateTruthMessage", () => {
       claimType: "empirical",
       epistemicCategory: "empirical",
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
     });
     (message as { messageId: string }).messageId = "";
 
@@ -520,7 +520,7 @@ describe("validateTruthMessage", () => {
       claimType: "empirical",
       epistemicCategory: "empirical",
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
     });
     (message as { sender: string }).sender = "";
 
@@ -536,7 +536,7 @@ describe("validateTruthMessage", () => {
       claimType: "empirical",
       epistemicCategory: "empirical",
       proposedConfidence: 0.9,
-      stake: 100n * 10n ** 18n,
+      stake: 100n * 10n ** 15n,
     });
     (message as { version: string }).version = "2.0.0" as "1.0.0";
 

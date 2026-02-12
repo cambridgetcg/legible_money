@@ -1,0 +1,24 @@
+syntax = "proto3";
+package legible.home.v1;
+
+option go_package = "github.com/legible-money/legible/x/home/types";
+
+import "legible/home/v1/state.proto";
+
+// GenesisState defines the home module's genesis state.
+message GenesisState {
+  Params params              = 1;
+  repeated AgentHome homes   = 2;
+}
+
+// Params defines the home module parameters.
+message Params {
+  uint64 max_homes_per_account    = 1;
+  string min_creation_stake       = 2;  // bigint as string (ulgm)
+  uint64 session_max_duration     = 3;  // blocks
+  uint32 max_keys_per_home        = 4;
+  uint32 max_alerts_per_home      = 5;
+  uint32 max_sessions_per_home    = 6;
+  uint64 deadman_min_threshold    = 7;  // blocks
+  uint64 alert_retention_blocks   = 8;  // blocks
+}

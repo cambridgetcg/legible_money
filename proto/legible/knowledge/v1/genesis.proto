@@ -3,50 +3,19 @@ package legible.knowledge.v1;
 
 option go_package = "github.com/legible-money/legible/x/knowledge/types";
 
+import "legible/knowledge/v1/claim.proto";
 import "legible/knowledge/v1/stratum.proto";
 import "legible/knowledge/v1/domain.proto";
 
-// GenesisState defines the knowledge module's genesis state
+// GenesisState defines the knowledge module's genesis state.
+// Includes all persistent state: params, domains, facts, claims, references,
+// stratum registry, and pending proposals.
 message GenesisState {
-  // Module parameters
   Params params = 1;
-
-  // Initial stratum registry
-  StratumRegistry stratum_registry = 2;
-
-  // Initial domains
-  repeated OntologicalDomain domains = 3;
-
-  // Pending domain proposals (usually empty at genesis)
-  repeated DomainProposal pending_proposals = 4;
-}
-
-// Params defines the parameters for the knowledge module
-message Params {
-  // Schema version for ontology
-  uint32 ontology_version = 1;
-
-  // Cross-stratum discount per boundary (0-1000000, e.g., 50000 = 5%)
-  uint32 cross_stratum_discount = 2;
-
-  // Minimum stake for domain proposal (in base units)
-  string min_domain_proposal_stake = 3;
-
-  // Voting period for domain proposals (in blocks)
-  uint64 domain_voting_period = 4;
-
-  // Minimum endorsements required for domain approval
-  uint32 min_endorsements = 5;
-
-  // Allow partial cross-stratum coverage
-  bool allow_partial_coverage = 6;
-
-  // Penalty for partial coverage (0-1000000)
-  uint32 partial_coverage_penalty = 7;
-
-  // Lower stratum veto weight (0-1000000)
-  uint32 lower_stratum_veto_weight = 8;
-
-  // Cross-stratum agreement threshold (0-1000000)
-  uint32 cross_stratum_agreement_threshold = 9;
+  repeated OntologicalDomain domains = 2;
+  repeated Fact facts = 3;
+  repeated Claim claims = 4;
+  repeated FactReference fact_references = 5;
+  StratumRegistry stratum_registry = 6;
+  repeated DomainProposal pending_proposals = 7;
 }

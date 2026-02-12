@@ -18,7 +18,6 @@ import {
 } from "node:worker_threads";
 import { cpus } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
 // Configuration
 const PERFORMANCE_CORES = 10; // M4 Max performance cores
@@ -48,144 +47,14 @@ if (!isMainThread) {
   // Worker thread - runs a single node
   const config = workerData as NodeConfig;
 
-  const runNode = async () => {
-    try {
-      // Register tsx ESM loader in worker thread so .js → .ts resolution works
-      const { register } = await import("tsx/esm/api");
-      register();
-
-      parentPort?.postMessage({
-        type: "status",
-        nodeId: config.nodeId,
-        status: "starting",
-      });
-
-      console.log(
-        `[Node ${config.nodeId}] Starting on ports ${config.p2pPort}/${config.rpcPort}`,
-      );
-
-      // ESM dirname helper for worker thread
-      const __workerFilename = fileURLToPath(import.meta.url);
-      const __workerDirname = dirname(__workerFilename);
-
-      // Import and run actual node with full persistence
-      const { createDevnetNode } =
-        await import("../../infrastructure/node/index.js");
-      const { readFileSync } = await import("fs");
-
-      // Load genesis configuration
-      const genesisPath = join(
-        __workerDirname,
-        "..",
-        "..",
-        "devnet",
-        "config",
-        "genesis.json",
-      );
-      let genesis;
-      try {
-        genesis = JSON.parse(readFileSync(genesisPath, "utf-8"));
-      } catch {
-        // Fallback minimal genesis for testing
-        genesis = {
-          network: {
-            chainId: "lgm-devnet-1",
-            name: "Devnet",
-            version: "0.1.0",
-          },
-          consensus: {},
-          initialValidators: [],
-          initialAccounts: [],
-          genesisAxioms: [],
-          genesisTime: new Date().toISOString(),
-        };
-      }
-
-      // Load validator keys if this is a validator node
-      let validatorKey: string | undefined;
-      let validatorPublicKey: string | undefined;
-      if (config.isValidator) {
-        try {
-          const secretsPath = join(
-            __workerDirname,
-            "..",
-            "..",
-            "devnet",
-            "secrets",
-            `validator-${config.nodeId + 1}.key`,
-          );
-          const keyData = JSON.parse(readFileSync(secretsPath, "utf-8"));
-          validatorKey = keyData.privateKey;
-          validatorPublicKey = keyData.publicKey;
-          console.log(
-            `[Node ${config.nodeId}] Loaded validator key: ${validatorPublicKey?.slice(0, 16)}...`,
-          );
-        } catch {
-          console.warn(
-            `[Node ${config.nodeId}] No validator key found, running as non-validator`,
-          );
-        }
-      }
-
-      // Create and start the node
-      const node = createDevnetNode(`node-${config.nodeId}`, genesis, {
-        rpcPort: config.rpcPort,
-        p2pPort: config.p2pPort,
-        isValidator: config.isValidator && !!validatorKey,
-        validatorKey,
-        validatorPublicKey,
-      });
-
-      await node.start();
-
-      // Get listen addresses for peer connection
-      const components = node.getComponents();
-      const listenAddrs = components?.network?.getListenAddresses() ?? [];
-
-      parentPort?.postMessage({
-        type: "status",
-        nodeId: config.nodeId,
-        status: "running",
-        pid: process.pid,
-        listenAddresses: listenAddrs,
-      });
-
-      // Listen for connect messages from main thread
-      parentPort?.on("message", async (msg) => {
-        if (msg.type === "connect" && components?.network) {
-          for (const addr of msg.addresses) {
-            try {
-              const { multiaddr } = await import("@multiformats/multiaddr");
-              await components.network.connect(multiaddr(addr).toString());
-              console.log(
-                `[Node ${config.nodeId}] Connected to ${addr.slice(-20)}`,
-              );
-            } catch (err) {
-              // Ignore self-connection errors
-            }
-          }
-        }
-      });
-
-      // Keep worker alive and handle shutdown
-      process.on("SIGTERM", async () => {
-        await node.stop();
-        process.exit(0);
-      });
-
-      await new Promise(() => {});
-    } catch (error) {
-      console.error(`[Node ${config.nodeId}] Error:`, error);
-      parentPort?.postMessage({
-        type: "status",
-        nodeId: config.nodeId,
-        status: "error",
-        error: String(error),
-      });
-    }
-  };
-
-  runNode();
+  // infrastructure/node module removed — use devnet/cmd/node.ts directly
+  parentPort?.postMessage({
+    type: "status",
+    nodeId: config.nodeId,
+    status: "error",
+    error:
+      "Multi-node spawner requires infrastructure/node module which has been removed. Use `npm run devnet` instead.",
+  });
 }
 
 // ============ Main Thread Code ============

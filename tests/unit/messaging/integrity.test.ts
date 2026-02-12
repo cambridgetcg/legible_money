@@ -31,7 +31,7 @@ function createTestClaimPayload(): ClaimPayload {
     claimType: "empirical",
     epistemicCategory: "empirical",
     proposedConfidence: 0.999,
-    stake: 100n * 10n ** 18n,
+    stake: 100n * 10n ** 15n,
     evidenceIds: ["evidence-1"],
   };
 }

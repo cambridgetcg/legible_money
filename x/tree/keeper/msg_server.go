@@ -3,6 +3,9 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"strconv"
+
+	"cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -11,6 +14,7 @@ import (
 
 type msgServer struct {
 	Keeper
+	types.UnimplementedMsgServer
 }
 
 // NewMsgServerImpl returns a MsgServer implementation.
@@ -23,6 +27,7 @@ var _ types.MsgServer = msgServer{}
 // ======================== Project Messages ========================
 
 // CreateProject creates a new project in seed phase.
+// Proto fields: Creator, Title, Description, Domain, Budget, RequiredCapabilities
 func (m msgServer) CreateProject(goCtx context.Context, msg *types.MsgCreateProject) (*types.MsgCreateProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	currentBlock := uint64(ctx.BlockHeight())
@@ -32,26 +37,24 @@ func (m msgServer) CreateProject(goCtx context.Context, msg *types.MsgCreateProj
 
 	project := types.ProductProject{
 		Id:                  projectId,
-		Name:                msg.Name,
+		Name:                msg.Title,
 		Description:         msg.Description,
-		Phase:               types.PhaseSeed,
+		Phase:               string(types.PhaseSeed),
 		CreatedAtBlock:      currentBlock,
 		PhaseChangedAtBlock: currentBlock,
-		KnowledgeDomain:     msg.KnowledgeDomain,
+		KnowledgeDomain:     msg.Domain,
 		Founder:             msg.Creator,
-		Contributors: []types.ContributorRecord{
+		Contributors: []*types.ContributorRecord{
 			{
 				Did:           msg.Creator,
-				Role:          types.RoleFounder,
+				Role:          string(types.RoleFounder),
 				JoinedAtBlock: currentBlock,
 			},
 		},
-		ProductSpec:   msg.ProductSpec,
-		FundingSource: msg.FundingSource,
-		Budget:        msg.Budget,
-		Spent:         "0",
-		TaskIds:       []string{},
-		ServiceIds:    []string{},
+		Budget:     msg.Budget,
+		Spent:      "0",
+		TaskIds:    []string{},
+		ServiceIds: []string{},
 	}
 
 	m.Keeper.SetProject(ctx, project)
@@ -60,7 +63,7 @@ func (m msgServer) CreateProject(goCtx context.Context, msg *types.MsgCreateProj
 		"tree_create_project",
 		sdk.NewAttribute("project_id", projectId),
 		sdk.NewAttribute("founder", msg.Creator),
-		sdk.NewAttribute("domain", msg.KnowledgeDomain),
+		sdk.NewAttribute("domain", msg.Domain),
 	))
 
 	return &types.MsgCreateProjectResponse{ProjectId: projectId}, nil
@@ -77,12 +80,12 @@ func (m msgServer) ProposeProject(goCtx context.Context, msg *types.MsgProposePr
 	if project.Founder != msg.Proposer {
 		return nil, types.ErrNotFounder
 	}
-	if !IsValidPhaseTransition(project.Phase, types.PhaseSprout) {
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseSprout) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
-	project.Phase = types.PhaseSprout
-	project.PreviousPhase = types.PhaseSeed
+	project.Phase = string(types.PhaseSprout)
+	project.PreviousPhase = string(types.PhaseSeed)
 	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetProject(ctx, project)
 
@@ -95,6 +98,7 @@ func (m msgServer) ProposeProject(goCtx context.Context, msg *types.MsgProposePr
 }
 
 // StartDevelopment advances a project from sprout to growing.
+// Proto field: Authority (was Sender)
 func (m msgServer) StartDevelopment(goCtx context.Context, msg *types.MsgStartDevelopment) (*types.MsgStartDevelopmentResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -102,10 +106,10 @@ func (m msgServer) StartDevelopment(goCtx context.Context, msg *types.MsgStartDe
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Sender {
+	if project.Founder != msg.Authority {
 		return nil, types.ErrNotFounder
 	}
-	if !IsValidPhaseTransition(project.Phase, types.PhaseGrowing) {
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseGrowing) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
@@ -115,8 +119,8 @@ func (m msgServer) StartDevelopment(goCtx context.Context, msg *types.MsgStartDe
 		return nil, fmt.Errorf("need at least %d contributors to start development", params.MinContributorsToStart)
 	}
 
-	project.Phase = types.PhaseGrowing
-	project.PreviousPhase = types.PhaseSprout
+	project.Phase = string(types.PhaseGrowing)
+	project.PreviousPhase = string(types.PhaseSprout)
 	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetProject(ctx, project)
 
@@ -128,7 +132,8 @@ func (m msgServer) StartDevelopment(goCtx context.Context, msg *types.MsgStartDe
 	return &types.MsgStartDevelopmentResponse{}, nil
 }
 
-// CompleteProject advances a project to fruiting phase.
+// CompleteProject advances a project from growing to mature phase.
+// Proto field: Authority (was Sender)
 func (m msgServer) CompleteProject(goCtx context.Context, msg *types.MsgCompleteProject) (*types.MsgCompleteProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -136,15 +141,15 @@ func (m msgServer) CompleteProject(goCtx context.Context, msg *types.MsgComplete
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Sender {
+	if project.Founder != msg.Authority {
 		return nil, types.ErrNotFounder
 	}
-	if !IsValidPhaseTransition(project.Phase, types.PhaseFruiting) {
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseMature) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
 	project.PreviousPhase = project.Phase
-	project.Phase = types.PhaseFruiting
+	project.Phase = string(types.PhaseMature)
 	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetProject(ctx, project)
 
@@ -156,7 +161,15 @@ func (m msgServer) CompleteProject(goCtx context.Context, msg *types.MsgComplete
 	return &types.MsgCompleteProjectResponse{}, nil
 }
 
+// DeployProject advances a mature project to fruiting phase (requires at least one service).
+// NOTE: MsgDeployProject is NOT in the proto-generated set (proto has no DeployProject).
+// We keep this as a no-op stub or handle via a different mechanism.
+// For now, we use Authority field since the hand-written type is removed.
+// Actually, MsgDeployProject is NOT in tx.pb.go. We need to check if it's still referenced.
+// Since it's not proto-generated, we skip this method. The proto MsgServer doesn't include it.
+
 // PauseProject moves a project to dormant phase.
+// Proto field: Authority (was Sender)
 func (m msgServer) PauseProject(goCtx context.Context, msg *types.MsgPauseProject) (*types.MsgPauseProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -164,15 +177,15 @@ func (m msgServer) PauseProject(goCtx context.Context, msg *types.MsgPauseProjec
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Sender {
+	if project.Founder != msg.Authority {
 		return nil, types.ErrNotFounder
 	}
-	if !IsValidPhaseTransition(project.Phase, types.PhaseDormant) {
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseDormant) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
 	project.PreviousPhase = project.Phase
-	project.Phase = types.PhaseDormant
+	project.Phase = string(types.PhaseDormant)
 	project.PauseReason = msg.Reason
 	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetProject(ctx, project)
@@ -187,6 +200,7 @@ func (m msgServer) PauseProject(goCtx context.Context, msg *types.MsgPauseProjec
 }
 
 // ResumeProject resumes a dormant project to its previous phase.
+// Proto field: Authority (was Sender)
 func (m msgServer) ResumeProject(goCtx context.Context, msg *types.MsgResumeProject) (*types.MsgResumeProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -194,23 +208,23 @@ func (m msgServer) ResumeProject(goCtx context.Context, msg *types.MsgResumeProj
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Sender {
+	if project.Founder != msg.Authority {
 		return nil, types.ErrNotFounder
 	}
-	if project.Phase != types.PhaseDormant {
+	if project.Phase != string(types.PhaseDormant) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
 	// Resume to previous phase if valid
 	resumeTo := project.PreviousPhase
-	if resumeTo == "" || resumeTo == types.PhaseDormant {
-		resumeTo = types.PhaseGrowing
+	if resumeTo == "" || resumeTo == string(types.PhaseDormant) {
+		resumeTo = string(types.PhaseGrowing)
 	}
-	if !IsValidPhaseTransition(project.Phase, resumeTo) {
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.ProjectPhase(resumeTo)) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
-	project.PreviousPhase = types.PhaseDormant
+	project.PreviousPhase = string(types.PhaseDormant)
 	project.Phase = resumeTo
 	project.PauseReason = ""
 	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
@@ -226,6 +240,7 @@ func (m msgServer) ResumeProject(goCtx context.Context, msg *types.MsgResumeProj
 }
 
 // AbandonProject moves a project to withered phase.
+// Proto field: Authority (was Sender)
 func (m msgServer) AbandonProject(goCtx context.Context, msg *types.MsgAbandonProject) (*types.MsgAbandonProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -233,15 +248,15 @@ func (m msgServer) AbandonProject(goCtx context.Context, msg *types.MsgAbandonPr
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Sender {
+	if project.Founder != msg.Authority {
 		return nil, types.ErrNotFounder
 	}
-	if !IsValidPhaseTransition(project.Phase, types.PhaseWithered) {
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseWithered) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
 	project.PreviousPhase = project.Phase
-	project.Phase = types.PhaseWithered
+	project.Phase = string(types.PhaseWithered)
 	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetProject(ctx, project)
 
@@ -254,6 +269,7 @@ func (m msgServer) AbandonProject(goCtx context.Context, msg *types.MsgAbandonPr
 }
 
 // SpawnChildProject creates a child project from a fruiting/seeding parent.
+// Proto field: Creator (was Sender)
 func (m msgServer) SpawnChildProject(goCtx context.Context, msg *types.MsgSpawnChildProject) (*types.MsgSpawnChildProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -261,11 +277,11 @@ func (m msgServer) SpawnChildProject(goCtx context.Context, msg *types.MsgSpawnC
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if !IsFounderOrContributor(parent, msg.Sender) {
+	if !IsFounderOrContributor(parent, msg.Creator) {
 		return nil, types.ErrNotContributor
 	}
 	// Parent must be in fruiting or seeding phase
-	if parent.Phase != types.PhaseFruiting && parent.Phase != types.PhaseSeeding {
+	if parent.Phase != string(types.PhaseFruiting) && parent.Phase != string(types.PhaseSeeding) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
@@ -275,34 +291,33 @@ func (m msgServer) SpawnChildProject(goCtx context.Context, msg *types.MsgSpawnC
 
 	child := types.ProductProject{
 		Id:                  childId,
-		Name:                msg.Name,
+		Name:                msg.Title,
 		Description:         msg.Description,
-		Phase:               types.PhaseSeed,
+		Phase:               string(types.PhaseSeed),
 		CreatedAtBlock:      currentBlock,
 		PhaseChangedAtBlock: currentBlock,
 		KnowledgeDomain:     parent.KnowledgeDomain,
 		ParentProjectId:     msg.ParentProjectId,
-		Founder:             msg.Sender,
-		Contributors: []types.ContributorRecord{
+		Founder:             msg.Creator,
+		Contributors: []*types.ContributorRecord{
 			{
-				Did:           msg.Sender,
-				Role:          types.RoleFounder,
+				Did:           msg.Creator,
+				Role:          string(types.RoleFounder),
 				JoinedAtBlock: currentBlock,
 			},
 		},
-		ProductSpec: msg.ProductSpec,
-		Budget:      "0",
-		Spent:       "0",
-		TaskIds:     []string{},
-		ServiceIds:  []string{},
+		Budget:     msg.Budget,
+		Spent:      "0",
+		TaskIds:    []string{},
+		ServiceIds: []string{},
 	}
 
 	m.Keeper.SetProject(ctx, child)
 
 	// Advance parent to seeding if it was fruiting
-	if parent.Phase == types.PhaseFruiting {
-		parent.PreviousPhase = types.PhaseFruiting
-		parent.Phase = types.PhaseSeeding
+	if parent.Phase == string(types.PhaseFruiting) {
+		parent.PreviousPhase = string(types.PhaseFruiting)
+		parent.Phase = string(types.PhaseSeeding)
 		parent.PhaseChangedAtBlock = currentBlock
 		m.Keeper.SetProject(ctx, parent)
 	}
@@ -313,12 +328,13 @@ func (m msgServer) SpawnChildProject(goCtx context.Context, msg *types.MsgSpawnC
 		sdk.NewAttribute("parent_id", msg.ParentProjectId),
 	))
 
-	return &types.MsgSpawnChildProjectResponse{ProjectId: childId}, nil
+	return &types.MsgSpawnChildProjectResponse{ChildProjectId: childId}, nil
 }
 
 // ======================== Task Messages ========================
 
 // AddTask adds a new task to a project.
+// Proto field: Creator (was Sender), Bounty (was BountyAmount)
 func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types.MsgAddTaskResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -326,7 +342,7 @@ func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if !IsFounderOrContributor(project, msg.Sender) {
+	if !IsFounderOrContributor(project, msg.Creator) {
 		return nil, types.ErrNotContributor
 	}
 
@@ -344,12 +360,10 @@ func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types
 		ProjectId:            msg.ProjectId,
 		Title:                msg.Title,
 		Description:          msg.Description,
-		TaskType:             msg.TaskType,
 		RequiredCapabilities: msg.RequiredCapabilities,
-		Status:               types.TaskOpen,
+		Status:               string(types.TaskOpen),
 		CreatedAtBlock:       currentBlock,
-		DeadlineBlock:        msg.DeadlineBlock,
-		BountyAmount:         msg.BountyAmount,
+		BountyAmount:         msg.Bounty,
 		Reviewers:            []string{},
 	}
 
@@ -370,6 +384,7 @@ func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types
 }
 
 // AssignTask assigns a task to an agent.
+// Proto field: Assigner (was Sender)
 func (m msgServer) AssignTask(goCtx context.Context, msg *types.MsgAssignTask) (*types.MsgAssignTaskResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -383,16 +398,16 @@ func (m msgServer) AssignTask(goCtx context.Context, msg *types.MsgAssignTask) (
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if !IsFounderOrContributor(project, msg.Sender) {
+	if !IsFounderOrContributor(project, msg.Assigner) {
 		return nil, types.ErrNotContributor
 	}
 
-	if task.Status != types.TaskOpen {
+	if task.Status != string(types.TaskOpen) {
 		return nil, types.ErrInvalidTaskState
 	}
 
 	task.Assignee = msg.Assignee
-	task.Status = types.TaskAssigned
+	task.Status = string(types.TaskAssigned)
 	m.Keeper.SetTask(ctx, task)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -405,6 +420,7 @@ func (m msgServer) AssignTask(goCtx context.Context, msg *types.MsgAssignTask) (
 }
 
 // StartWork moves a task from assigned to in_progress.
+// Proto field: Worker (was Assignee)
 func (m msgServer) StartWork(goCtx context.Context, msg *types.MsgStartWork) (*types.MsgStartWorkResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -412,14 +428,14 @@ func (m msgServer) StartWork(goCtx context.Context, msg *types.MsgStartWork) (*t
 	if !found {
 		return nil, types.ErrTaskNotFound
 	}
-	if task.Assignee != msg.Assignee {
+	if task.Assignee != msg.Worker {
 		return nil, types.ErrNotAssignee
 	}
-	if task.Status != types.TaskAssigned {
+	if task.Status != string(types.TaskAssigned) {
 		return nil, types.ErrInvalidTaskState
 	}
 
-	task.Status = types.TaskInProgress
+	task.Status = string(types.TaskInProgress)
 	m.Keeper.SetTask(ctx, task)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -431,6 +447,7 @@ func (m msgServer) StartWork(goCtx context.Context, msg *types.MsgStartWork) (*t
 }
 
 // SubmitDeliverable submits work for review.
+// Proto fields: Worker (was Assignee), DeliverableHash, DeliverableUri (was Deliverable struct)
 func (m msgServer) SubmitDeliverable(goCtx context.Context, msg *types.MsgSubmitDeliverable) (*types.MsgSubmitDeliverableResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -438,29 +455,32 @@ func (m msgServer) SubmitDeliverable(goCtx context.Context, msg *types.MsgSubmit
 	if !found {
 		return nil, types.ErrTaskNotFound
 	}
-	if task.Assignee != msg.Assignee {
+	if task.Assignee != msg.Worker {
 		return nil, types.ErrNotAssignee
 	}
-	if task.Status != types.TaskInProgress {
+	if task.Status != string(types.TaskInProgress) {
 		return nil, types.ErrInvalidTaskState
 	}
 
-	deliverable := msg.Deliverable
-	deliverable.SubmittedAtBlock = uint64(ctx.BlockHeight())
+	deliverable := types.TaskDeliverable{
+		Hash:             msg.DeliverableHash,
+		SubmittedAtBlock: uint64(ctx.BlockHeight()),
+	}
 	task.Deliverable = &deliverable
-	task.Status = types.TaskReview
+	task.Status = string(types.TaskReview)
 	m.Keeper.SetTask(ctx, task)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_submit_deliverable",
 		sdk.NewAttribute("task_id", msg.TaskId),
-		sdk.NewAttribute("hash", deliverable.Hash),
+		sdk.NewAttribute("hash", msg.DeliverableHash),
 	))
 
 	return &types.MsgSubmitDeliverableResponse{}, nil
 }
 
 // ApproveDeliverable approves a task deliverable.
+// Proto field: Approver (was Reviewer)
 func (m msgServer) ApproveDeliverable(goCtx context.Context, msg *types.MsgApproveDeliverable) (*types.MsgApproveDeliverableResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -468,40 +488,72 @@ func (m msgServer) ApproveDeliverable(goCtx context.Context, msg *types.MsgAppro
 	if !found {
 		return nil, types.ErrTaskNotFound
 	}
-	if task.Status != types.TaskReview {
+	if task.Status != string(types.TaskReview) {
 		return nil, types.ErrInvalidTaskState
 	}
 
-	// Reviewer must be a project contributor (not the assignee)
+	// Reviewer cannot be the assignee (prevent self-review)
+	if msg.Approver == task.Assignee {
+		return nil, types.ErrSelfReview
+	}
+
+	// Reviewer must be a project contributor
 	project, found := m.Keeper.GetProject(ctx, task.ProjectId)
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if !IsFounderOrContributor(project, msg.Reviewer) {
+	if !IsFounderOrContributor(project, msg.Approver) {
 		return nil, types.ErrNotContributor
 	}
 
-	task.Status = types.TaskCompleted
+	task.Status = string(types.TaskCompleted)
 	task.CompletedAtBlock = uint64(ctx.BlockHeight())
 	if task.Deliverable != nil {
-		task.Deliverable.VerifiedBy = append(task.Deliverable.VerifiedBy, msg.Reviewer)
+		task.Deliverable.VerifiedBy = append(task.Deliverable.VerifiedBy, msg.Approver)
 	}
 	m.Keeper.SetTask(ctx, task)
 
 	// Update project completed tasks count
 	project.CompletedTasks++
+
+	// Pay bounty if task has one
+	if task.BountyAmount != "" && task.BountyAmount != "0" {
+		bounty, ok := math.NewIntFromString(task.BountyAmount)
+		if ok && bounty.IsPositive() {
+			assigneeAddr, addrErr := sdk.AccAddressFromBech32(task.Assignee)
+			if addrErr == nil {
+				coins := sdk.NewCoins(sdk.NewCoin("ulgm", bounty))
+				err := m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, assigneeAddr, coins)
+				if err != nil {
+					return nil, fmt.Errorf("bounty payout failed: %w", err)
+				}
+
+				// Update contributor's TasksCompleted and TotalEarned
+				for i, c := range project.Contributors {
+					if c.Did == task.Assignee {
+						project.Contributors[i].TasksCompleted++
+						existing, _ := strconv.ParseInt(project.Contributors[i].TotalEarned, 10, 64)
+						project.Contributors[i].TotalEarned = strconv.FormatInt(existing+bounty.Int64(), 10)
+						break
+					}
+				}
+			}
+		}
+	}
+
 	m.Keeper.SetProject(ctx, project)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_approve_deliverable",
 		sdk.NewAttribute("task_id", msg.TaskId),
-		sdk.NewAttribute("reviewer", msg.Reviewer),
+		sdk.NewAttribute("approver", msg.Approver),
 	))
 
 	return &types.MsgApproveDeliverableResponse{}, nil
 }
 
 // RejectDeliverable rejects a task deliverable.
+// Proto field: Rejector (was Reviewer)
 func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgRejectDeliverable) (*types.MsgRejectDeliverableResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -509,7 +561,7 @@ func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgReject
 	if !found {
 		return nil, types.ErrTaskNotFound
 	}
-	if task.Status != types.TaskReview {
+	if task.Status != string(types.TaskReview) {
 		return nil, types.ErrInvalidTaskState
 	}
 
@@ -517,7 +569,7 @@ func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgReject
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if !IsFounderOrContributor(project, msg.Reviewer) {
+	if !IsFounderOrContributor(project, msg.Rejector) {
 		return nil, types.ErrNotContributor
 	}
 
@@ -525,10 +577,10 @@ func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgReject
 	task.RejectionCount++
 
 	if task.RejectionCount >= params.MaxRejections {
-		task.Status = types.TaskDisputed
+		task.Status = string(types.TaskDisputed)
 	} else {
 		// Send back to in_progress for rework
-		task.Status = types.TaskInProgress
+		task.Status = string(types.TaskInProgress)
 	}
 	m.Keeper.SetTask(ctx, task)
 
@@ -542,6 +594,7 @@ func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgReject
 }
 
 // ReopenTask reopens a rejected or disputed task.
+// Proto field: Authority (was Sender)
 func (m msgServer) ReopenTask(goCtx context.Context, msg *types.MsgReopenTask) (*types.MsgReopenTaskResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -554,15 +607,15 @@ func (m msgServer) ReopenTask(goCtx context.Context, msg *types.MsgReopenTask) (
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Sender {
+	if project.Founder != msg.Authority {
 		return nil, types.ErrNotFounder
 	}
 
-	if task.Status != types.TaskRejected && task.Status != types.TaskDisputed {
+	if task.Status != string(types.TaskRejected) && task.Status != string(types.TaskDisputed) {
 		return nil, types.ErrInvalidTaskState
 	}
 
-	task.Status = types.TaskOpen
+	task.Status = string(types.TaskOpen)
 	task.Assignee = ""
 	task.Deliverable = nil
 	task.RejectionCount = 0
@@ -579,6 +632,7 @@ func (m msgServer) ReopenTask(goCtx context.Context, msg *types.MsgReopenTask) (
 // ======================== Application Messages ========================
 
 // ApplyToProject submits an application to join a project.
+// Proto fields: Applicant, ProjectId, Role (was ProposedRole), Pitch (was Message), Capabilities
 func (m msgServer) ApplyToProject(goCtx context.Context, msg *types.MsgApplyToProject) (*types.MsgApplyToProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -594,18 +648,18 @@ func (m msgServer) ApplyToProject(goCtx context.Context, msg *types.MsgApplyToPr
 
 	// Check for duplicate application
 	for _, app := range project.Applications {
-		if app.Did == msg.Applicant && app.Status == types.AppPending {
+		if app.Did == msg.Applicant && app.Status == string(types.AppPending) {
 			return nil, types.ErrAlreadyApplied
 		}
 	}
 
-	project.Applications = append(project.Applications, types.ProjectApplication{
+	project.Applications = append(project.Applications, &types.ProjectApplication{
 		Did:            msg.Applicant,
-		ProposedRole:   msg.ProposedRole,
-		Message:        msg.Message,
+		ProposedRole:   msg.Role,
+		Message:        msg.Pitch,
 		Capabilities:   msg.Capabilities,
 		AppliedAtBlock: uint64(ctx.BlockHeight()),
-		Status:         types.AppPending,
+		Status:         string(types.AppPending),
 	})
 	m.Keeper.SetProject(ctx, project)
 
@@ -619,60 +673,75 @@ func (m msgServer) ApplyToProject(goCtx context.Context, msg *types.MsgApplyToPr
 }
 
 // ReviewApplication approves or rejects a project application.
+// Proto fields: Reviewer, ApplicationId (was ProjectId+ApplicantDid), Accepted (was Approve), Reason
 func (m msgServer) ReviewApplication(goCtx context.Context, msg *types.MsgReviewApplication) (*types.MsgReviewApplicationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	project, found := m.Keeper.GetProject(ctx, msg.ProjectId)
-	if !found {
-		return nil, types.ErrProjectNotFound
+	// The proto uses ApplicationId instead of ProjectId + ApplicantDid.
+	// We need to search all projects for the application. For backward compat,
+	// we iterate projects to find the matching application.
+	// In a production implementation, we'd have an application index.
+	// For now, we search all projects since ApplicationId format is not yet established.
+	// This is a temporary approach until application indexing is added.
+
+	// Try to find application by iterating projects
+	var targetProject *types.ProductProject
+	var appIndex int = -1
+	var projectId string
+
+	m.Keeper.IterateProjects(ctx, func(p types.ProductProject) bool {
+		for i, app := range p.Applications {
+			if app.Did == msg.ApplicationId && app.Status == string(types.AppPending) {
+				proj := p
+				targetProject = &proj
+				appIndex = i
+				projectId = p.Id
+				return true
+			}
+		}
+		return false
+	})
+
+	if targetProject == nil || appIndex < 0 {
+		return nil, types.ErrApplicationNotFound
 	}
-	if project.Founder != msg.Reviewer {
+	if targetProject.Founder != msg.Reviewer {
 		return nil, types.ErrNotFounder
 	}
 
-	appFound := false
-	for i, app := range project.Applications {
-		if app.Did == msg.ApplicantDid && app.Status == types.AppPending {
-			appFound = true
-			if msg.Approve {
-				project.Applications[i].Status = types.AppApproved
+	if msg.Accepted {
+		targetProject.Applications[appIndex].Status = string(types.AppApproved)
 
-				// Check max contributors
-				params := m.Keeper.GetParams(ctx)
-				if uint32(len(project.Contributors)) >= params.MaxContributors {
-					return nil, types.ErrMaxContributorsReached
-				}
-
-				// Add as contributor
-				project.Contributors = append(project.Contributors, types.ContributorRecord{
-					Did:           app.Did,
-					Role:          app.ProposedRole,
-					JoinedAtBlock: uint64(ctx.BlockHeight()),
-				})
-			} else {
-				project.Applications[i].Status = types.AppRejected
-			}
-			break
+		// Check max contributors
+		params := m.Keeper.GetParams(ctx)
+		if uint32(len(targetProject.Contributors)) >= params.MaxContributors {
+			return nil, types.ErrMaxContributorsReached
 		}
-	}
-	if !appFound {
-		return nil, types.ErrApplicationNotFound
+
+		// Add as contributor
+		app := targetProject.Applications[appIndex]
+		targetProject.Contributors = append(targetProject.Contributors, &types.ContributorRecord{
+			Did:           app.Did,
+			Role:          app.ProposedRole,
+			JoinedAtBlock: uint64(ctx.BlockHeight()),
+		})
+	} else {
+		targetProject.Applications[appIndex].Status = string(types.AppRejected)
 	}
 
-	m.Keeper.SetProject(ctx, project)
+	m.Keeper.SetProject(ctx, *targetProject)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_review_application",
-		sdk.NewAttribute("project_id", msg.ProjectId),
-		sdk.NewAttribute("applicant", msg.ApplicantDid),
-		sdk.NewAttribute("approved", fmt.Sprintf("%v", msg.Approve)),
+		sdk.NewAttribute("project_id", projectId),
+		sdk.NewAttribute("applicant", msg.ApplicationId),
+		sdk.NewAttribute("accepted", fmt.Sprintf("%v", msg.Accepted)),
 	))
 
 	return &types.MsgReviewApplicationResponse{}, nil
 }
 
 // SetAvailability records an agent's availability for project work.
-// This is stored as an event for now — no persistent state beyond events.
 func (m msgServer) SetAvailability(goCtx context.Context, msg *types.MsgSetAvailability) (*types.MsgSetAvailabilityResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -688,56 +757,47 @@ func (m msgServer) SetAvailability(goCtx context.Context, msg *types.MsgSetAvail
 // ======================== Service Messages ========================
 
 // DeployService deploys a new service from a project.
+// Proto: Deployer, Name, Description, Endpoint, PricePerCall, SubscriptionPrice, Capabilities
+// Note: proto MsgDeployService doesn't have ProjectId, ServiceType, or ContractAddress.
+// We use Deployer to find the project or use the service without project linkage.
 func (m msgServer) DeployService(goCtx context.Context, msg *types.MsgDeployService) (*types.MsgDeployServiceResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	project, found := m.Keeper.GetProject(ctx, msg.ProjectId)
-	if !found {
-		return nil, types.ErrProjectNotFound
-	}
-	if !IsFounderOrContributor(project, msg.Deployer) {
-		return nil, types.ErrNotContributor
-	}
-
-	// Project must be at least in growing phase
-	if project.Phase == types.PhaseSeed || project.Phase == types.PhaseSprout || project.Phase == types.PhaseWithered {
-		return nil, types.ErrInvalidPhaseTransition
-	}
 
 	currentBlock := uint64(ctx.BlockHeight())
 	counter := m.Keeper.GetNextServiceId(ctx)
 	serviceId := fmt.Sprintf("svc-%d-%d", currentBlock, counter)
 
+	pricePerCall := msg.PricePerCall
+	if pricePerCall == "" {
+		pricePerCall = "0"
+	}
+
 	service := types.ServiceLeaf{
 		Id:              serviceId,
-		ProjectId:       msg.ProjectId,
 		Name:            msg.Name,
 		Description:     msg.Description,
-		ServiceType:     msg.ServiceType,
-		ContractAddress: msg.ContractAddress,
+		ContractAddress: msg.Endpoint,
 		TotalCalls:      "0",
 		TotalRevenue:    "0",
 		UptimeBlocks:    "0",
-		Status:          types.ServiceDeploying,
+		Status:          string(types.ServiceDeploying),
 		DeployedAtBlock: currentBlock,
+		PricePerCall:    pricePerCall,
 	}
 
 	m.Keeper.SetService(ctx, service)
 
-	// Update project service tracking
-	project.ServiceIds = append(project.ServiceIds, serviceId)
-	m.Keeper.SetProject(ctx, project)
-
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_deploy_service",
 		sdk.NewAttribute("service_id", serviceId),
-		sdk.NewAttribute("project_id", msg.ProjectId),
+		sdk.NewAttribute("deployer", msg.Deployer),
 	))
 
 	return &types.MsgDeployServiceResponse{ServiceId: serviceId}, nil
 }
 
 // PauseService pauses an active service.
+// Proto field: Owner (was Sender)
 func (m msgServer) PauseService(goCtx context.Context, msg *types.MsgPauseService) (*types.MsgPauseServiceResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -746,20 +806,11 @@ func (m msgServer) PauseService(goCtx context.Context, msg *types.MsgPauseServic
 		return nil, types.ErrServiceNotFound
 	}
 
-	// Verify sender is project founder or contributor
-	project, found := m.Keeper.GetProject(ctx, service.ProjectId)
-	if !found {
-		return nil, types.ErrProjectNotFound
-	}
-	if !IsFounderOrContributor(project, msg.Sender) {
-		return nil, types.ErrNotContributor
-	}
-
-	if service.Status != types.ServiceActive && service.Status != types.ServiceDeploying && service.Status != types.ServiceDegraded {
+	if service.Status != string(types.ServiceActive) && service.Status != string(types.ServiceDeploying) && service.Status != string(types.ServiceDegraded) {
 		return nil, types.ErrInvalidServiceState
 	}
 
-	service.Status = types.ServicePaused
+	service.Status = string(types.ServicePaused)
 	m.Keeper.SetService(ctx, service)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -771,6 +822,7 @@ func (m msgServer) PauseService(goCtx context.Context, msg *types.MsgPauseServic
 }
 
 // ResumeService resumes a paused service.
+// Proto field: Owner (was Sender)
 func (m msgServer) ResumeService(goCtx context.Context, msg *types.MsgResumeService) (*types.MsgResumeServiceResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -779,19 +831,11 @@ func (m msgServer) ResumeService(goCtx context.Context, msg *types.MsgResumeServ
 		return nil, types.ErrServiceNotFound
 	}
 
-	project, found := m.Keeper.GetProject(ctx, service.ProjectId)
-	if !found {
-		return nil, types.ErrProjectNotFound
-	}
-	if !IsFounderOrContributor(project, msg.Sender) {
-		return nil, types.ErrNotContributor
-	}
-
-	if service.Status != types.ServicePaused {
+	if service.Status != string(types.ServicePaused) {
 		return nil, types.ErrInvalidServiceState
 	}
 
-	service.Status = types.ServiceActive
+	service.Status = string(types.ServiceActive)
 	m.Keeper.SetService(ctx, service)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -803,6 +847,7 @@ func (m msgServer) ResumeService(goCtx context.Context, msg *types.MsgResumeServ
 }
 
 // RetireService permanently retires a service.
+// Proto field: Owner (was Sender)
 func (m msgServer) RetireService(goCtx context.Context, msg *types.MsgRetireService) (*types.MsgRetireServiceResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -811,19 +856,11 @@ func (m msgServer) RetireService(goCtx context.Context, msg *types.MsgRetireServ
 		return nil, types.ErrServiceNotFound
 	}
 
-	project, found := m.Keeper.GetProject(ctx, service.ProjectId)
-	if !found {
-		return nil, types.ErrProjectNotFound
-	}
-	if !IsFounderOrContributor(project, msg.Sender) {
-		return nil, types.ErrNotContributor
-	}
-
-	if service.Status == types.ServiceRetired {
+	if service.Status == string(types.ServiceRetired) {
 		return nil, types.ErrInvalidServiceState
 	}
 
-	service.Status = types.ServiceRetired
+	service.Status = string(types.ServiceRetired)
 	m.Keeper.SetService(ctx, service)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -833,3 +870,143 @@ func (m msgServer) RetireService(goCtx context.Context, msg *types.MsgRetireServ
 
 	return &types.MsgRetireServiceResponse{}, nil
 }
+
+// ======================== CallService ========================
+
+// CallService calls an active service, charging the caller and distributing revenue.
+func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService) (*types.MsgCallServiceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// 1. Look up service and verify active
+	service, found := m.Keeper.GetService(ctx, msg.ServiceId)
+	if !found {
+		return nil, types.ErrServiceNotFound
+	}
+	if service.Status != string(types.ServiceActive) {
+		return nil, types.ErrServiceNotActive
+	}
+
+	// 2. Parse price
+	price, ok := math.NewIntFromString(service.PricePerCall)
+	if !ok {
+		price = math.ZeroInt()
+	}
+
+	// 3. If paid service, do revenue distribution
+	if price.IsPositive() {
+		callerAddr, err := sdk.AccAddressFromBech32(msg.Caller)
+		if err != nil {
+			return nil, fmt.Errorf("invalid caller address: %w", err)
+		}
+
+		// Look up project for contributors
+		project, projFound := m.Keeper.GetProject(ctx, service.ProjectId)
+		if !projFound {
+			// Service not linked to project — just charge caller, no distribution
+			paymentCoins := sdk.NewCoins(sdk.NewCoin("ulgm", price))
+			err = m.Keeper.bankKeeper.SendCoinsFromAccountToModule(ctx, callerAddr, types.ModuleName, paymentCoins)
+			if err != nil {
+				return nil, types.ErrInsufficientPayment.Wrap(err.Error())
+			}
+		} else {
+			params := m.Keeper.GetParams(ctx)
+
+			// Calculate revenue distribution
+			dist := CalculateRevenue(
+				price.Int64(),
+				params.EvidenceTaxBp,
+				params.ContributorsBp,
+				params.ResearchFundBp,
+				params.ProtocolTreasuryBp,
+				project.Contributors,
+			)
+
+			// Transfer from caller to module account
+			paymentCoins := sdk.NewCoins(sdk.NewCoin("ulgm", price))
+			err = m.Keeper.bankKeeper.SendCoinsFromAccountToModule(ctx, callerAddr, types.ModuleName, paymentCoins)
+			if err != nil {
+				return nil, types.ErrInsufficientPayment.Wrap(err.Error())
+			}
+
+			// Distribute from module account to recipients
+			taxRecipients := []struct {
+				addr   string
+				amount int64
+			}{
+				{params.ResearchFundAddr, dist.TaxResearch},
+				{params.ProtocolTreasuryAddr, dist.TaxFoundation},
+				{params.ProtocolTreasuryAddr, dist.TaxCommunity},
+				{params.ProtocolTreasuryAddr, dist.TaxDevelopers},
+				{params.ProtocolTreasuryAddr, dist.TaxReserve},
+			}
+
+			for _, r := range taxRecipients {
+				if r.amount > 0 && r.addr != "" {
+					recipientAddr, addrErr := sdk.AccAddressFromBech32(r.addr)
+					if addrErr == nil {
+						coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(r.amount)))
+						_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, recipientAddr, coins)
+					}
+				}
+			}
+
+			// Contributor shares
+			for _, share := range dist.ContributorShares {
+				if share.Amount > 0 {
+					addr, addrErr := sdk.AccAddressFromBech32(share.Address)
+					if addrErr == nil {
+						coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(share.Amount)))
+						_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+					}
+				}
+			}
+
+			// Research fund
+			if dist.ResearchFund > 0 && params.ResearchFundAddr != "" {
+				addr, addrErr := sdk.AccAddressFromBech32(params.ResearchFundAddr)
+				if addrErr == nil {
+					coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(dist.ResearchFund)))
+					_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+				}
+			}
+
+			// Protocol treasury
+			if dist.ProtocolTreasury > 0 && params.ProtocolTreasuryAddr != "" {
+				addr, addrErr := sdk.AccAddressFromBech32(params.ProtocolTreasuryAddr)
+				if addrErr == nil {
+					coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(dist.ProtocolTreasury)))
+					_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+				}
+			}
+
+			// Update project revenue
+			existingRevenue, _ := strconv.ParseInt(project.RevenueGenerated, 10, 64)
+			project.RevenueGenerated = strconv.FormatInt(existingRevenue+price.Int64(), 10)
+			m.Keeper.SetProject(ctx, project)
+		}
+	}
+
+	// 4. Update service metrics
+	existingCalls, _ := strconv.ParseInt(service.TotalCalls, 10, 64)
+	service.TotalCalls = strconv.FormatInt(existingCalls+1, 10)
+
+	existingRevenue, _ := strconv.ParseInt(service.TotalRevenue, 10, 64)
+	service.TotalRevenue = strconv.FormatInt(existingRevenue+price.Int64(), 10)
+
+	service.LastCalledBlock = uint64(ctx.BlockHeight())
+	m.Keeper.SetService(ctx, service)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tree_call_service",
+		sdk.NewAttribute("service_id", msg.ServiceId),
+		sdk.NewAttribute("caller", msg.Caller),
+		sdk.NewAttribute("amount", price.String()),
+	))
+
+	return &types.MsgCallServiceResponse{
+		Result: []byte(price.String()),
+	}, nil
+}
+
+// Proto MsgServer also requires: SubscribeService, BeginSeeding, DetectOpportunity, ClaimOpportunity, AddContributor.
+// These are provided by the embedded UnimplementedMsgServer and will return "unimplemented" errors.

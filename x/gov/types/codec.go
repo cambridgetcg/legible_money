@@ -19,6 +19,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgExecuteDisbursement{}, "lgm_gov/ExecuteDisbursement", nil)
 	cdc.RegisterConcrete(&MsgCancelDisbursement{}, "lgm_gov/CancelDisbursement", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "lgm_gov/UpdateParams", nil)
+	cdc.RegisterConcrete(&MsgAttachUpgradePlan{}, "lgm_gov/AttachUpgradePlan", nil)
 }
 
 // RegisterInterfaces registers the governance module's interfaces.
@@ -26,157 +27,8 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
 }
 
-// --- gRPC service descriptors for msg server ---
-
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.lgm_gov.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "SubmitLIP", Handler: _Msg_SubmitLIP_Handler},
-		{MethodName: "StakeLIP", Handler: _Msg_StakeLIP_Handler},
-		{MethodName: "CastVote", Handler: _Msg_CastVote_Handler},
-		{MethodName: "AdvanceLIPStage", Handler: _Msg_AdvanceLIPStage_Handler},
-		{MethodName: "WithdrawLIP", Handler: _Msg_WithdrawLIP_Handler},
-		{MethodName: "SubmitDisbursement", Handler: _Msg_SubmitDisbursement_Handler},
-		{MethodName: "ExecuteDisbursement", Handler: _Msg_ExecuteDisbursement_Handler},
-		{MethodName: "CancelDisbursement", Handler: _Msg_CancelDisbursement_Handler},
-		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
-}
-
-func _Msg_SubmitLIP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgSubmitLIP)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).SubmitLIP(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/SubmitLIP"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).SubmitLIP(ctx, req.(*MsgSubmitLIP))
-	})
-}
-
-func _Msg_StakeLIP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgStakeLIP)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).StakeLIP(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/StakeLIP"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).StakeLIP(ctx, req.(*MsgStakeLIP))
-	})
-}
-
-func _Msg_CastVote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgCastVote)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).CastVote(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/CastVote"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).CastVote(ctx, req.(*MsgCastVote))
-	})
-}
-
-func _Msg_AdvanceLIPStage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgAdvanceLIPStage)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).AdvanceLIPStage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/AdvanceLIPStage"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).AdvanceLIPStage(ctx, req.(*MsgAdvanceLIPStage))
-	})
-}
-
-func _Msg_WithdrawLIP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgWithdrawLIP)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).WithdrawLIP(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/WithdrawLIP"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).WithdrawLIP(ctx, req.(*MsgWithdrawLIP))
-	})
-}
-
-func _Msg_SubmitDisbursement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgSubmitDisbursement)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).SubmitDisbursement(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/SubmitDisbursement"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).SubmitDisbursement(ctx, req.(*MsgSubmitDisbursement))
-	})
-}
-
-func _Msg_ExecuteDisbursement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgExecuteDisbursement)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ExecuteDisbursement(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/ExecuteDisbursement"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ExecuteDisbursement(ctx, req.(*MsgExecuteDisbursement))
-	})
-}
-
-func _Msg_CancelDisbursement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgCancelDisbursement)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).CancelDisbursement(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/CancelDisbursement"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).CancelDisbursement(ctx, req.(*MsgCancelDisbursement))
-	})
-}
-
-func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateParams(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.lgm_gov.v1.Msg/UpdateParams"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
-	})
-}
-
-// RegisterMsgServer registers the governance msg server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
-
 // --- gRPC service descriptors for query server ---
+// (No query_grpc.pb.go exists, so these remain hand-written.)
 
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.lgm_gov.v1.Query",

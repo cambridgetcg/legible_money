@@ -86,8 +86,8 @@ func (am AppModule) IsAppModule()        {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Hand-written types lack proto typeURLs required by the SDK MsgServiceRouter.
-	// Service registration deferred to proto codegen phase.
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 }
 
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {

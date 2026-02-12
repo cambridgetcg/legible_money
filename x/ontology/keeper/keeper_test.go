@@ -14,6 +14,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -124,7 +125,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		bk,
 		"authority",
 	)
@@ -274,7 +275,7 @@ func TestGetDomain(t *testing.T) {
 	if domain.DisplayName != "Mathematics" {
 		t.Errorf("expected display_name=Mathematics, got %s", domain.DisplayName)
 	}
-	if domain.Stratum != types.StratumFormal {
+	if domain.Stratum != uint32(types.StratumFormal) {
 		t.Errorf("expected stratum=Formal(1), got %d", domain.Stratum)
 	}
 	if domain.Status != "active" {
@@ -473,7 +474,7 @@ func TestActivateDomain(t *testing.T) {
 	// Create a proposed domain
 	k.SetDomain(ctx, types.Domain{
 		Name:    "biology",
-		Stratum: types.StratumEmpirical,
+		Stratum: uint32(types.StratumEmpirical),
 		Status:  "proposed",
 	})
 
@@ -509,10 +510,10 @@ func TestCreateProposal(t *testing.T) {
 
 	proposal := types.DomainProposal{
 		Id: "test-proposal-1",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:        "chemistry",
 			DisplayName: "Chemistry",
-			Stratum:     types.StratumEmpirical,
+			Stratum:     uint32(types.StratumEmpirical),
 		},
 		Proposer:     testAddr("alice"),
 		ProposalType: "add",
@@ -550,9 +551,9 @@ func TestCreateProposalDuplicateDomain(t *testing.T) {
 
 	proposal := types.DomainProposal{
 		Id: "dup-proposal",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "mathematics", // already exists
-			Stratum: types.StratumFormal,
+			Stratum: uint32(types.StratumFormal),
 		},
 		ProposalType: "add",
 	}
@@ -568,9 +569,9 @@ func TestCreateProposalInvalidStratum(t *testing.T) {
 
 	proposal := types.DomainProposal{
 		Id: "bad-stratum",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "bad_domain",
-			Stratum: types.Stratum(99),
+			Stratum: uint32(99),
 		},
 		ProposalType: "add",
 	}
@@ -587,9 +588,9 @@ func TestVoteProposal(t *testing.T) {
 	// Create proposal
 	proposal := types.DomainProposal{
 		Id: "vote-test",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "biology",
-			Stratum: types.StratumEmpirical,
+			Stratum: uint32(types.StratumEmpirical),
 		},
 		Proposer:     testAddr("alice"),
 		ProposalType: "add",
@@ -631,9 +632,9 @@ func TestVoteProposalDuplicate(t *testing.T) {
 
 	proposal := types.DomainProposal{
 		Id: "dup-vote-test",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "ecology",
-			Stratum: types.StratumEmpirical,
+			Stratum: uint32(types.StratumEmpirical),
 		},
 		Proposer:     testAddr("alice"),
 		ProposalType: "add",
@@ -658,9 +659,9 @@ func TestVoteProposalReachesQuorum(t *testing.T) {
 
 	proposal := types.DomainProposal{
 		Id: "quorum-test",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "astronomy",
-			Stratum: types.StratumEmpirical,
+			Stratum: uint32(types.StratumEmpirical),
 		},
 		Proposer:     testAddr("alice"),
 		ProposalType: "add",
@@ -695,9 +696,9 @@ func TestVoteProposalExpired(t *testing.T) {
 
 	proposal := types.DomainProposal{
 		Id: "expired-test",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "geology",
-			Stratum: types.StratumEmpirical,
+			Stratum: uint32(types.StratumEmpirical),
 		},
 		Proposer:     testAddr("alice"),
 		ProposalType: "add",
@@ -719,9 +720,9 @@ func TestProcessExpiredProposals(t *testing.T) {
 	// Create proposal that will expire
 	proposal := types.DomainProposal{
 		Id: "will-expire",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "alchemy",
-			Stratum: types.StratumTestimonial,
+			Stratum: uint32(types.StratumTestimonial),
 		},
 		Proposer:     testAddr("alice"),
 		ProposalType: "add",
@@ -755,7 +756,7 @@ func TestExecuteProposalDeprecate(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	proposal := types.DomainProposal{
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name: "general",
 		},
 		ProposalType: "deprecate",
@@ -776,7 +777,7 @@ func TestExecuteProposalModify(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	proposal := types.DomainProposal{
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:        "physics",
 			DisplayName: "Physics & Cosmology",
 			Description: "Updated description",
@@ -1220,8 +1221,8 @@ func TestExportImportGenesis(t *testing.T) {
 	if len(exported.Strata) != 7 {
 		t.Errorf("exported strata count: expected 7, got %d", len(exported.Strata))
 	}
-	if len(exported.Links) != 1 {
-		t.Errorf("exported links count: expected 1, got %d", len(exported.Links))
+	if len(exported.CrossLinks) != 1 {
+		t.Errorf("exported links count: expected 1, got %d", len(exported.CrossLinks))
 	}
 
 	// Re-import into fresh context
@@ -1233,7 +1234,7 @@ func TestExportImportGenesis(t *testing.T) {
 
 	registry := codectypes.NewInterfaceRegistry()
 	cdc := codec.NewProtoCodec(registry)
-	k2 := keeper.NewKeeper(cdc, storeKey, nil, "authority")
+	k2 := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), nil, "authority")
 	ctx2 := sdk.NewContext(stateStore, cmtproto.Header{Height: 200}, false, log.NewNopLogger())
 
 	k2.InitGenesis(ctx2, *exported)
@@ -1264,8 +1265,8 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Invalid: duplicate strata
 	badStrata := types.DefaultGenesis()
-	badStrata.Strata = append(badStrata.Strata, types.StratumProperties{
-		Stratum:       types.StratumAxiomatic,
+	badStrata.Strata = append(badStrata.Strata, &types.StratumProperties{
+		Stratum:       uint32(types.StratumAxiomatic),
 		Name:          "duplicate",
 		MaxConfidence: 500000,
 	})
@@ -1275,9 +1276,9 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Invalid: duplicate domain names
 	badDomains := types.DefaultGenesis()
-	badDomains.Domains = append(badDomains.Domains, types.Domain{
+	badDomains.Domains = append(badDomains.Domains, &types.Domain{
 		Name:    "physics",
-		Stratum: types.StratumEmpirical,
+		Stratum: uint32(types.StratumEmpirical),
 	})
 	if err := badDomains.Validate(); err == nil {
 		t.Error("expected error for duplicate domain names")
@@ -1373,9 +1374,9 @@ func TestMaxDomainsPerStratumEnforced(t *testing.T) {
 	// Can add one more
 	err := k.CreateProposal(ctx, types.DomainProposal{
 		Id: "add-biology",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "biology",
-			Stratum: types.StratumEmpirical,
+			Stratum: uint32(types.StratumEmpirical),
 		},
 		ProposalType: "add",
 	})
@@ -1386,13 +1387,409 @@ func TestMaxDomainsPerStratumEnforced(t *testing.T) {
 	// Fourth should be rejected
 	err = k.CreateProposal(ctx, types.DomainProposal{
 		Id: "add-chemistry",
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:    "chemistry",
-			Stratum: types.StratumEmpirical,
+			Stratum: uint32(types.StratumEmpirical),
 		},
 		ProposalType: "add",
 	})
 	if err == nil {
 		t.Error("expected error when exceeding max domains per stratum")
+	}
+}
+
+// ---------- Logic Zone Tests ----------
+
+func TestDefaultLogicZonesInitialized(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	zones := k.GetAllLogicZones(ctx)
+	if len(zones) != 5 {
+		t.Fatalf("expected 5 default logic zones, got %d", len(zones))
+	}
+}
+
+func TestGetLogicZone(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Propositional — complete, decidable, no Gödel
+	prop, found := k.GetLogicZone(ctx, types.ZonePropositional)
+	if !found {
+		t.Fatal("propositional zone not found")
+	}
+	if !prop.Complete || !prop.Decidable {
+		t.Error("propositional zone should be complete and decidable")
+	}
+	if prop.GoedelApplies {
+		t.Error("Gödel should not apply to propositional zone")
+	}
+	if prop.MaxConfidenceBps != 1000000 {
+		t.Errorf("expected propositional max_confidence=1000000, got %d", prop.MaxConfidenceBps)
+	}
+
+	// Peano — incomplete, Gödel applies, confidence ceiling 850000
+	peano, found := k.GetLogicZone(ctx, types.ZonePeano)
+	if !found {
+		t.Fatal("peano zone not found")
+	}
+	if peano.Complete {
+		t.Error("peano zone should NOT be complete")
+	}
+	if !peano.GoedelApplies {
+		t.Error("Gödel should apply to peano zone")
+	}
+	if peano.MaxConfidenceBps != 850000 {
+		t.Errorf("expected peano max_confidence=850000, got %d", peano.MaxConfidenceBps)
+	}
+
+	// Empirical — not formal system, no Gödel, confidence ceiling 700000
+	emp, found := k.GetLogicZone(ctx, types.ZoneEmpirical)
+	if !found {
+		t.Fatal("empirical zone not found")
+	}
+	if emp.GoedelApplies {
+		t.Error("Gödel should not apply to empirical zone (not a formal system)")
+	}
+	if emp.MaxConfidenceBps != 700000 {
+		t.Errorf("expected empirical max_confidence=700000, got %d", emp.MaxConfidenceBps)
+	}
+}
+
+func TestGetLogicZoneNotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	_, found := k.GetLogicZone(ctx, types.LogicZone("nonexistent"))
+	if found {
+		t.Error("expected nonexistent zone to not be found")
+	}
+}
+
+func TestValidateClaimLogicZone(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Empty zone — should pass (backward compatible)
+	err := k.ValidateClaimLogicZone(ctx, "", 1000000)
+	if err != nil {
+		t.Errorf("empty zone should pass: %v", err)
+	}
+
+	// Propositional with 100% confidence — should pass
+	err = k.ValidateClaimLogicZone(ctx, "propositional", 1000000)
+	if err != nil {
+		t.Errorf("propositional 100%% should pass: %v", err)
+	}
+
+	// Peano with 85% confidence — should pass (exactly at ceiling)
+	err = k.ValidateClaimLogicZone(ctx, "peano", 850000)
+	if err != nil {
+		t.Errorf("peano at ceiling should pass: %v", err)
+	}
+
+	// Peano with 86% confidence — should FAIL (exceeds ceiling)
+	err = k.ValidateClaimLogicZone(ctx, "peano", 860000)
+	if err == nil {
+		t.Error("peano above ceiling should fail")
+	}
+
+	// Set theory with 80% — should pass (exactly at ceiling)
+	err = k.ValidateClaimLogicZone(ctx, "set_theory", 800000)
+	if err != nil {
+		t.Errorf("set_theory at ceiling should pass: %v", err)
+	}
+
+	// Set theory with 81% — should FAIL
+	err = k.ValidateClaimLogicZone(ctx, "set_theory", 810000)
+	if err == nil {
+		t.Error("set_theory above ceiling should fail")
+	}
+
+	// Empirical with 70% — should pass
+	err = k.ValidateClaimLogicZone(ctx, "empirical", 700000)
+	if err != nil {
+		t.Errorf("empirical at ceiling should pass: %v", err)
+	}
+
+	// Empirical with 71% — should FAIL
+	err = k.ValidateClaimLogicZone(ctx, "empirical", 710000)
+	if err == nil {
+		t.Error("empirical above ceiling should fail")
+	}
+
+	// Unknown zone — should FAIL
+	err = k.ValidateClaimLogicZone(ctx, "unknown_zone", 500000)
+	if err == nil {
+		t.Error("unknown zone should fail")
+	}
+}
+
+func TestRequiresIncompletenessAck(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Propositional — no ack required
+	if k.RequiresIncompletenessAck(ctx, "propositional") {
+		t.Error("propositional should not require incompleteness ack")
+	}
+
+	// Presburger — no ack required
+	if k.RequiresIncompletenessAck(ctx, "presburger") {
+		t.Error("presburger should not require incompleteness ack")
+	}
+
+	// Peano — ack required (Gödel applies)
+	if !k.RequiresIncompletenessAck(ctx, "peano") {
+		t.Error("peano should require incompleteness ack")
+	}
+
+	// Set theory — ack required
+	if !k.RequiresIncompletenessAck(ctx, "set_theory") {
+		t.Error("set_theory should require incompleteness ack")
+	}
+
+	// Empirical — no ack required (not formal system)
+	if k.RequiresIncompletenessAck(ctx, "empirical") {
+		t.Error("empirical should not require incompleteness ack")
+	}
+
+	// Empty zone — no ack required
+	if k.RequiresIncompletenessAck(ctx, "") {
+		t.Error("empty zone should not require ack")
+	}
+}
+
+func TestGetZoneConfidenceCeiling(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	if c := k.GetZoneConfidenceCeiling(ctx, "propositional"); c != 1000000 {
+		t.Errorf("expected propositional ceiling=1000000, got %d", c)
+	}
+	if c := k.GetZoneConfidenceCeiling(ctx, "peano"); c != 850000 {
+		t.Errorf("expected peano ceiling=850000, got %d", c)
+	}
+	if c := k.GetZoneConfidenceCeiling(ctx, "empirical"); c != 700000 {
+		t.Errorf("expected empirical ceiling=700000, got %d", c)
+	}
+	// Empty zone returns 100%
+	if c := k.GetZoneConfidenceCeiling(ctx, ""); c != 1000000 {
+		t.Errorf("expected empty zone ceiling=1000000, got %d", c)
+	}
+	// Unknown zone returns 100%
+	if c := k.GetZoneConfidenceCeiling(ctx, "nonexistent"); c != 1000000 {
+		t.Errorf("expected unknown zone ceiling=1000000, got %d", c)
+	}
+}
+
+// ---------- Logic Zone Message Handler Tests ----------
+
+func TestMsgRegisterLogicZone(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	// Register a custom zone
+	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
+		Authority: "authority",
+		ZoneProperties: types.LogicZoneProperties{
+			Zone:             "modal_logic",
+			Complete:         false,
+			Decidable:        true,
+			GoedelApplies:    false,
+			MaxConfidenceBps: 950000,
+			Description:      "Modal logic: decidable in many fragments",
+		},
+	})
+	if err != nil {
+		t.Fatalf("RegisterLogicZone failed: %v", err)
+	}
+
+	// Verify stored
+	zone, found := k.GetLogicZone(ctx, "modal_logic")
+	if !found {
+		t.Fatal("registered zone not found")
+	}
+	if zone.MaxConfidenceBps != 950000 {
+		t.Errorf("expected max_confidence=950000, got %d", zone.MaxConfidenceBps)
+	}
+}
+
+func TestMsgRegisterLogicZoneDuplicate(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	// propositional already exists from defaults
+	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
+		Authority: "authority",
+		ZoneProperties: types.LogicZoneProperties{
+			Zone:             types.ZonePropositional,
+			Complete:         true,
+			MaxConfidenceBps: 1000000,
+		},
+	})
+	if err == nil {
+		t.Error("expected error for duplicate zone registration")
+	}
+}
+
+func TestMsgRegisterLogicZoneUnauthorized(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
+		Authority: testAddr("hacker"),
+		ZoneProperties: types.LogicZoneProperties{
+			Zone:             "hacked_zone",
+			MaxConfidenceBps: 1000000,
+		},
+	})
+	if err == nil {
+		t.Error("expected error for unauthorized zone registration")
+	}
+}
+
+func TestMsgAcknowledgeIncompleteness(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	// Acknowledge incompleteness for a fact in peano zone
+	submitter := testAddr("alice")
+	_, err := msgSrv.AcknowledgeIncompleteness(sdk.WrapSDKContext(ctx), &types.MsgAcknowledgeIncompleteness{
+		Submitter: submitter,
+		FactId:    "fact-123",
+		Zone:      types.ZonePeano,
+		Reason:    "This theorem is stated within Peano arithmetic and may be unprovable within the system",
+	})
+	if err != nil {
+		t.Fatalf("AcknowledgeIncompleteness failed: %v", err)
+	}
+
+	// Verify stored
+	ack, found := k.GetIncompletenessAck(ctx, "fact-123")
+	if !found {
+		t.Fatal("acknowledgment not found")
+	}
+	if ack.Zone != types.ZonePeano {
+		t.Errorf("expected zone=peano, got %s", ack.Zone)
+	}
+	if ack.AcknowledgedBy != submitter {
+		t.Errorf("expected acknowledged_by=%s, got %s", submitter, ack.AcknowledgedBy)
+	}
+	if ack.AcknowledgedAt != 100 { // ctx block height
+		t.Errorf("expected acknowledged_at=100, got %d", ack.AcknowledgedAt)
+	}
+}
+
+func TestMsgAcknowledgeIncompletenessCompleteZone(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	// Try to acknowledge incompleteness in propositional (complete zone — should fail)
+	_, err := msgSrv.AcknowledgeIncompleteness(sdk.WrapSDKContext(ctx), &types.MsgAcknowledgeIncompleteness{
+		Submitter: testAddr("alice"),
+		FactId:    "fact-456",
+		Zone:      types.ZonePropositional,
+		Reason:    "This shouldn't work",
+	})
+	if err == nil {
+		t.Error("expected error for acknowledging incompleteness in complete zone")
+	}
+}
+
+func TestMsgAcknowledgeIncompletenessUnknownZone(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	_, err := msgSrv.AcknowledgeIncompleteness(sdk.WrapSDKContext(ctx), &types.MsgAcknowledgeIncompleteness{
+		Submitter: testAddr("alice"),
+		FactId:    "fact-789",
+		Zone:      "nonexistent",
+		Reason:    "Unknown zone",
+	})
+	if err == nil {
+		t.Error("expected error for unknown zone")
+	}
+}
+
+// ---------- Logic Zone Query Tests ----------
+
+func TestQueryLogicZone(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	qSrv := keeper.NewQueryServerImpl(k)
+
+	resp, err := qSrv.LogicZone(sdk.WrapSDKContext(ctx), &types.QueryLogicZoneRequest{
+		Zone: types.ZonePeano,
+	})
+	if err != nil {
+		t.Fatalf("query logic zone failed: %v", err)
+	}
+	if !resp.Properties.GoedelApplies {
+		t.Error("expected Gödel to apply to peano zone")
+	}
+	if resp.Properties.MaxConfidenceBps != 850000 {
+		t.Errorf("expected max_confidence=850000, got %d", resp.Properties.MaxConfidenceBps)
+	}
+}
+
+func TestQueryLogicZoneNotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	qSrv := keeper.NewQueryServerImpl(k)
+
+	_, err := qSrv.LogicZone(sdk.WrapSDKContext(ctx), &types.QueryLogicZoneRequest{
+		Zone: "nonexistent",
+	})
+	if err == nil {
+		t.Error("expected error for nonexistent zone query")
+	}
+}
+
+func TestQueryAllLogicZones(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	qSrv := keeper.NewQueryServerImpl(k)
+
+	resp, err := qSrv.AllLogicZones(sdk.WrapSDKContext(ctx), &types.QueryAllLogicZonesRequest{})
+	if err != nil {
+		t.Fatalf("query all logic zones failed: %v", err)
+	}
+	if len(resp.Zones) != 5 {
+		t.Errorf("expected 5 logic zones, got %d", len(resp.Zones))
+	}
+}
+
+// ---------- Logic Zone Genesis Tests ----------
+
+func TestLogicZonesExportImport(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Logic zones are initialized via InitializeDefaultZones, not proto GenesisState
+	zones := k.GetAllLogicZones(ctx)
+	if len(zones) != 5 {
+		t.Errorf("expected 5 logic zones, got %d", len(zones))
+	}
+
+	// Export and re-import (logic zones survive via InitializeDefaultZones in InitGenesis)
+	exported := k.ExportGenesis(ctx)
+
+	storeKey := storetypes.NewKVStoreKey("test_reimport_lz")
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	_ = stateStore.LoadLatestVersion()
+
+	registry := codectypes.NewInterfaceRegistry()
+	cdc := codec.NewProtoCodec(registry)
+	k2 := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), nil, "authority")
+	ctx2 := sdk.NewContext(stateStore, cmtproto.Header{Height: 200}, false, log.NewNopLogger())
+
+	k2.InitGenesis(ctx2, *exported)
+
+	zones = k2.GetAllLogicZones(ctx2)
+	if len(zones) != 5 {
+		t.Errorf("re-imported logic zones: expected 5, got %d", len(zones))
+	}
+
+	// Verify peano survived
+	peano, found := k2.GetLogicZone(ctx2, types.ZonePeano)
+	if !found {
+		t.Fatal("peano zone not found after re-import")
+	}
+	if peano.MaxConfidenceBps != 850000 {
+		t.Errorf("expected peano max_confidence=850000, got %d", peano.MaxConfidenceBps)
 	}
 }

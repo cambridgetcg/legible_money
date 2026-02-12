@@ -13,6 +13,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -28,30 +29,14 @@ func (m msgServer) CreatePot(goCtx context.Context, msg *types.MsgCreatePot) (*t
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := m.Keeper.GetParams(ctx)
 
-	// Validate config
-	if msg.Config.AmountPerClaim == "" || msg.Config.AmountPerClaim == "0" {
-		return nil, types.ErrInvalidConfig.Wrap("amount per claim must be positive")
+	// Validate initial funding
+	if msg.InitialFunding == "" || msg.InitialFunding == "0" {
+		return nil, types.ErrInvalidConfig.Wrap("initial funding must be positive")
 	}
-	if msg.Config.MaxClaimsPerAccount == 0 {
-		return nil, types.ErrInvalidConfig.Wrap("max claims per account must be positive")
-	}
-	if msg.Config.ExpiresAtBlock > 0 && msg.Config.ExpiresAtBlock <= uint64(ctx.BlockHeight()) {
+
+	// Check expiry height
+	if msg.ExpiryHeight > 0 && msg.ExpiryHeight <= uint64(ctx.BlockHeight()) {
 		return nil, types.ErrInvalidConfig.Wrap("expiration must be in the future")
-	}
-
-	// Check min amount per claim
-	minAmountPerClaim, _ := new(big.Int).SetString(params.MinAmountPerClaim, 10)
-	amountPerClaim, ok := new(big.Int).SetString(msg.Config.AmountPerClaim, 10)
-	if !ok || amountPerClaim.Sign() <= 0 {
-		return nil, types.ErrInvalidConfig.Wrap("invalid amount per claim")
-	}
-	if minAmountPerClaim != nil && amountPerClaim.Cmp(minAmountPerClaim) < 0 {
-		return nil, types.ErrInvalidConfig.Wrap("amount per claim below minimum")
-	}
-
-	// Check allowlist size
-	if uint32(len(msg.Config.Eligibility.Allowlist)) > params.MaxAllowlistSize {
-		return nil, types.ErrInvalidConfig.Wrap("allowlist exceeds maximum size")
 	}
 
 	// Check creator pot count
@@ -62,7 +47,7 @@ func (m msgServer) CreatePot(goCtx context.Context, msg *types.MsgCreatePot) (*t
 
 	// Check initial deposit >= minimum
 	minDeposit, _ := new(big.Int).SetString(params.MinInitialDeposit, 10)
-	deposit, ok := new(big.Int).SetString(msg.InitialDeposit, 10)
+	deposit, ok := new(big.Int).SetString(msg.InitialFunding, 10)
 	if !ok || deposit.Sign() <= 0 {
 		return nil, types.ErrInsufficientDeposit.Wrap("invalid deposit amount")
 	}
@@ -85,17 +70,26 @@ func (m msgServer) CreatePot(goCtx context.Context, msg *types.MsgCreatePot) (*t
 	// Generate pot ID
 	potId := m.Keeper.GetNextPotId(ctx)
 
+	// Build PotConfig from message fields
+	config := &types.PotConfig{
+		AmountPerClaim:      msg.InitialFunding, // default: entire funding is one claim
+		MaxClaims:           0,                   // unlimited by default
+		MaxClaimsPerAccount: 1,                   // default: one claim per account
+		ExpiresAtBlock:      msg.ExpiryHeight,
+		CreatorCanClose:     true,
+	}
+
 	// Create pot
 	pot := types.ClaimingPot{
 		PotId:          potId,
 		Creator:        msg.Creator,
-		Config:         msg.Config,
-		TotalDeposited: msg.InitialDeposit,
+		Config:         config,
+		TotalDeposited: msg.InitialFunding,
 		TotalClaimed:   "0",
-		Balance:        msg.InitialDeposit,
+		Balance:        msg.InitialFunding,
 		ClaimCount:     0,
 		CreatedAtBlock: uint64(ctx.BlockHeight()),
-		Status:         types.PotStatusActive,
+		Status:         string(types.PotStatusActive),
 	}
 
 	m.Keeper.SetPot(ctx, pot)
@@ -105,7 +99,7 @@ func (m msgServer) CreatePot(goCtx context.Context, msg *types.MsgCreatePot) (*t
 		"create_pot",
 		sdk.NewAttribute("pot_id", potId),
 		sdk.NewAttribute("creator", msg.Creator),
-		sdk.NewAttribute("deposit", msg.InitialDeposit),
+		sdk.NewAttribute("deposit", msg.InitialFunding),
 	))
 
 	return &types.MsgCreatePotResponse{PotId: potId}, nil
@@ -119,7 +113,7 @@ func (m msgServer) FundPot(goCtx context.Context, msg *types.MsgFundPot) (*types
 	if !found {
 		return nil, types.ErrPotNotFound
 	}
-	if pot.Status == types.PotStatusClosed {
+	if pot.Status == string(types.PotStatusClosed) {
 		return nil, types.ErrPotNotActive.Wrap("pot is closed")
 	}
 
@@ -149,10 +143,10 @@ func (m msgServer) FundPot(goCtx context.Context, msg *types.MsgFundPot) (*types
 	pot.TotalDeposited = totalDeposited.String()
 
 	// Reactivate exhausted pot if it now has enough for a claim
-	if pot.Status == types.PotStatusExhausted {
+	if pot.Status == string(types.PotStatusExhausted) {
 		amountPerClaim, _ := new(big.Int).SetString(pot.Config.AmountPerClaim, 10)
 		if amountPerClaim != nil && balance.Cmp(amountPerClaim) >= 0 {
-			pot.Status = types.PotStatusActive
+			pot.Status = string(types.PotStatusActive)
 		}
 	}
 
@@ -176,13 +170,13 @@ func (m msgServer) ClaimFromPot(goCtx context.Context, msg *types.MsgClaimFromPo
 	if !found {
 		return nil, types.ErrPotNotFound
 	}
-	if pot.Status != types.PotStatusActive {
+	if pot.Status != string(types.PotStatusActive) {
 		return nil, types.ErrPotNotActive
 	}
 
 	// Check expiration
 	if pot.Config.ExpiresAtBlock > 0 && uint64(ctx.BlockHeight()) > pot.Config.ExpiresAtBlock {
-		pot.Status = types.PotStatusExpired
+		pot.Status = string(types.PotStatusExpired)
 		m.Keeper.SetPot(ctx, pot)
 		return nil, types.ErrPotExpired
 	}
@@ -233,7 +227,7 @@ func (m msgServer) ClaimFromPot(goCtx context.Context, msg *types.MsgClaimFromPo
 
 	// Mark exhausted if balance < amountPerClaim
 	if balance.Cmp(amountPerClaim) < 0 {
-		pot.Status = types.PotStatusExhausted
+		pot.Status = string(types.PotStatusExhausted)
 	}
 
 	m.Keeper.SetPot(ctx, pot)
@@ -258,7 +252,7 @@ func (m msgServer) ClaimFromPot(goCtx context.Context, msg *types.MsgClaimFromPo
 		sdk.NewAttribute("amount", pot.Config.AmountPerClaim),
 	))
 
-	return &types.MsgClaimFromPotResponse{Amount: pot.Config.AmountPerClaim}, nil
+	return &types.MsgClaimFromPotResponse{AmountClaimed: pot.Config.AmountPerClaim}, nil
 }
 
 // ClosePot closes a pot and refunds remaining balance to creator.
@@ -270,8 +264,8 @@ func (m msgServer) ClosePot(goCtx context.Context, msg *types.MsgClosePot) (*typ
 		return nil, types.ErrPotNotFound
 	}
 
-	// Verify creator
-	if msg.Creator != pot.Creator {
+	// Verify authority matches pot creator
+	if msg.Authority != pot.Creator {
 		return nil, types.ErrNotPotCreator
 	}
 
@@ -281,7 +275,7 @@ func (m msgServer) ClosePot(goCtx context.Context, msg *types.MsgClosePot) (*typ
 	}
 
 	// Already closed
-	if pot.Status == types.PotStatusClosed {
+	if pot.Status == string(types.PotStatusClosed) {
 		return nil, types.ErrPotNotActive.Wrap("pot already closed")
 	}
 
@@ -299,7 +293,7 @@ func (m msgServer) ClosePot(goCtx context.Context, msg *types.MsgClosePot) (*typ
 		}
 	}
 
-	pot.Status = types.PotStatusClosed
+	pot.Status = string(types.PotStatusClosed)
 	pot.Balance = "0"
 	pot.ClosedAtBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetPot(ctx, pot)
@@ -307,7 +301,7 @@ func (m msgServer) ClosePot(goCtx context.Context, msg *types.MsgClosePot) (*typ
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"close_pot",
 		sdk.NewAttribute("pot_id", msg.PotId),
-		sdk.NewAttribute("creator", msg.Creator),
+		sdk.NewAttribute("authority", msg.Authority),
 		sdk.NewAttribute("refunded", refunded),
 	))
 

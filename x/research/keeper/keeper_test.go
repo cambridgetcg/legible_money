@@ -13,6 +13,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -168,7 +169,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 
 	k := keeper.NewKeeper(
 		cdc,
-		storeKey,
+		runtime.NewKVStoreService(storeKey),
 		bk,
 		&mockStakingKeeper{},
 		authority,
@@ -205,8 +206,8 @@ func TestSetGetParams(t *testing.T) {
 	if params.AcceptanceScoreThreshold != 60 {
 		t.Errorf("expected acceptance_score_threshold=60, got %d", params.AcceptanceScoreThreshold)
 	}
-	if params.RejectionSlashBps != 3300 {
-		t.Errorf("expected rejection_slash_bps=3300, got %d", params.RejectionSlashBps)
+	if params.RejectionSlashBps != 330000 {
+		t.Errorf("expected rejection_slash_bps=330000, got %d", params.RejectionSlashBps)
 	}
 	if params.ReviewPeriodBlocks != 68544 {
 		t.Errorf("expected review_period_blocks=68544, got %d", params.ReviewPeriodBlocks)
@@ -226,7 +227,7 @@ func TestUpdateParams(t *testing.T) {
 
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: authority,
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)
@@ -245,9 +246,10 @@ func TestUpdateParamsUnauthorized(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	ms := newMsgServer(k)
 
+	p := types.DefaultParams()
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr("rando"),
-		Params:    types.DefaultParams(),
+		Params:    &p,
 	})
 	if err == nil {
 		t.Fatal("expected unauthorized error")
@@ -264,13 +266,11 @@ func TestSubmitResearch(t *testing.T) {
 	bk.fundAccount(submitter, "ulgm", largeBalance)
 
 	resp, err := ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
-		Submitter:    submitter,
-		Title:        "Test Research",
-		Description:  "A test research submission",
-		Domain:       "physics",
-		ResearchType: types.ResearchTypeReplication,
-		TargetFactId: "FACT-1",
-		Stake:        "100000000", // 100 LGM in ulgm
+		Submitter:   submitter,
+		Title:       "Test Research",
+		Description: "A test research submission",
+		Domain:      "physics",
+		Stake:       "100000000", // 100 LGM in ulgm
 	})
 	if err != nil {
 		t.Fatalf("SubmitResearch failed: %v", err)
@@ -285,7 +285,7 @@ func TestSubmitResearch(t *testing.T) {
 	if !found {
 		t.Fatal("research not found after submit")
 	}
-	if r.Status != types.ResearchStatusSubmitted {
+	if r.Status != string(types.ResearchStatusSubmitted) {
 		t.Errorf("expected status=submitted, got %s", r.Status)
 	}
 	if r.Submitter != submitter {
@@ -307,12 +307,11 @@ func TestSubmitResearchInsufficientStake(t *testing.T) {
 	bk.fundAccount(submitter, "ulgm", largeBalance)
 
 	_, err := ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
-		Submitter:    submitter,
-		Title:        "Test",
-		Description:  "Test",
-		Domain:       "physics",
-		ResearchType: types.ResearchTypeReplication,
-		Stake:        "50000000", // 50 LGM (below 100 min)
+		Submitter:   submitter,
+		Title:       "Test",
+		Description: "Test",
+		Domain:      "physics",
+		Stake:       "50000000", // 50 LGM (below 100 min)
 	})
 	if err == nil {
 		t.Fatal("expected insufficient stake error")
@@ -327,12 +326,11 @@ func TestSubmitResearchSequentialIds(t *testing.T) {
 	bk.fundAccount(submitter, "ulgm", largeBalance)
 
 	msg := &types.MsgSubmitResearch{
-		Submitter:    submitter,
-		Title:        "Research",
-		Description:  "Desc",
-		Domain:       "physics",
-		ResearchType: types.ResearchTypeReplication,
-		Stake:        "100000000",
+		Submitter:   submitter,
+		Title:       "Research",
+		Description: "Desc",
+		Domain:      "physics",
+		Stake:       "100000000",
 	}
 
 	resp1, _ := ms.SubmitResearch(ctx, msg)
@@ -358,12 +356,11 @@ func TestChallengeResearch(t *testing.T) {
 
 	// Submit first
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
-		Submitter:    submitter,
-		Title:        "Research",
-		Description:  "Desc",
-		Domain:       "physics",
-		ResearchType: types.ResearchTypeReplication,
-		Stake:        "100000000",
+		Submitter:   submitter,
+		Title:       "Research",
+		Description: "Desc",
+		Domain:      "physics",
+		Stake:       "100000000",
 	})
 
 	// Challenge
@@ -378,7 +375,7 @@ func TestChallengeResearch(t *testing.T) {
 	}
 
 	r, _ := k.GetResearch(ctx, "RES-1")
-	if r.Status != types.ResearchStatusChallenged {
+	if r.Status != string(types.ResearchStatusChallenged) {
 		t.Errorf("expected status=challenged, got %s", r.Status)
 	}
 }
@@ -413,12 +410,12 @@ func TestChallengeResearchAlreadyAccepted(t *testing.T) {
 	// Create and manually accept
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	r, _ := k.GetResearch(ctx, "RES-1")
-	r.Status = types.ResearchStatusAccepted
+	r.Status = string(types.ResearchStatusAccepted)
 	k.SetResearch(ctx, r)
 
 	_, err := ms.ChallengeResearch(ctx, &types.MsgChallengeResearch{
@@ -442,16 +439,16 @@ func TestReviewResearch(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	_, err := ms.ReviewResearch(ctx, &types.MsgReviewResearch{
-		Reviewer:   reviewer,
-		ResearchId: "RES-1",
-		Verdict:    types.ReviewVerdictApprove,
-		Score:      80,
-		Reasoning:  "Good methodology",
+		Reviewer:     reviewer,
+		ResearchId:   "RES-1",
+		Verdict:      types.ReviewVerdict_REVIEW_VERDICT_APPROVE,
+		QualityScore: 80,
+		Reasoning:    "Good methodology",
 	})
 	if err != nil {
 		t.Fatalf("ReviewResearch failed: %v", err)
@@ -459,7 +456,7 @@ func TestReviewResearch(t *testing.T) {
 
 	// Check status transitioned to under_review
 	r, _ := k.GetResearch(ctx, "RES-1")
-	if r.Status != types.ResearchStatusUnderReview {
+	if r.Status != string(types.ResearchStatusUnderReview) {
 		t.Errorf("expected status=under_review, got %s", r.Status)
 	}
 	if r.ReviewCount != 1 {
@@ -482,22 +479,22 @@ func TestReviewResearchMultipleReviewers(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	// Three reviews
 	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: testAddr("rev1"), ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictApprove, Score: 80, Reasoning: "Good",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 80, Reasoning: "Good",
 	})
 	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: testAddr("rev2"), ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictApprove, Score: 70, Reasoning: "Ok",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 70, Reasoning: "Ok",
 	})
 	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: testAddr("rev3"), ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictReject, Score: 40, Reasoning: "Weak",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_REJECT, QualityScore: 40, Reasoning: "Weak",
 	})
 
 	r, _ := k.GetResearch(ctx, "RES-1")
@@ -526,19 +523,19 @@ func TestReviewResearchDuplicateReviewer(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: reviewer, ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictApprove, Score: 80, Reasoning: "Good",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 80, Reasoning: "Good",
 	})
 
 	// Duplicate review should fail
 	_, err := ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: reviewer, ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictReject, Score: 30, Reasoning: "Changed mind",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_REJECT, QualityScore: 30, Reasoning: "Changed mind",
 	})
 	if err == nil {
 		t.Fatal("expected duplicate reviewer error")
@@ -556,15 +553,15 @@ func TestResolveResearchAccepted(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	// Add 3 positive reviews to meet minimum
 	for i := 0; i < 3; i++ {
 		ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 			Reviewer: testAddr("rev" + string(rune('a'+i))), ResearchId: "RES-1",
-			Verdict: types.ReviewVerdictApprove, Score: 80, Reasoning: "Great",
+			Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 80, Reasoning: "Great",
 		})
 	}
 
@@ -576,12 +573,12 @@ func TestResolveResearchAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveResearch failed: %v", err)
 	}
-	if resp.Outcome != "accepted" {
-		t.Errorf("expected outcome=accepted, got %s", resp.Outcome)
+	if resp.Outcome != types.ResearchOutcome_RESEARCH_OUTCOME_ACCEPTED {
+		t.Errorf("expected outcome=ACCEPTED, got %v", resp.Outcome)
 	}
 
 	r, _ := k.GetResearch(ctx, "RES-1")
-	if r.Status != types.ResearchStatusAccepted {
+	if r.Status != string(types.ResearchStatusAccepted) {
 		t.Errorf("expected status=accepted, got %s", r.Status)
 	}
 }
@@ -595,15 +592,15 @@ func TestResolveResearchRejected(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	// Add 3 negative reviews (score below 60)
 	for i := 0; i < 3; i++ {
 		ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 			Reviewer: testAddr("rev" + string(rune('a'+i))), ResearchId: "RES-1",
-			Verdict: types.ReviewVerdictReject, Score: 30, Reasoning: "Flawed",
+			Verdict: types.ReviewVerdict_REVIEW_VERDICT_REJECT, QualityScore: 30, Reasoning: "Flawed",
 		})
 	}
 
@@ -614,12 +611,12 @@ func TestResolveResearchRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveResearch failed: %v", err)
 	}
-	if resp.Outcome != "rejected" {
-		t.Errorf("expected outcome=rejected, got %s", resp.Outcome)
+	if resp.Outcome != types.ResearchOutcome_RESEARCH_OUTCOME_REJECTED {
+		t.Errorf("expected outcome=REJECTED, got %v", resp.Outcome)
 	}
 
 	r, _ := k.GetResearch(ctx, "RES-1")
-	if r.Status != types.ResearchStatusRejected {
+	if r.Status != string(types.ResearchStatusRejected) {
 		t.Errorf("expected status=rejected, got %s", r.Status)
 	}
 }
@@ -633,14 +630,14 @@ func TestResolveResearchInsufficientReviews(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	// Only 1 review (need 3)
 	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: testAddr("rev1"), ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictApprove, Score: 80, Reasoning: "Good",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 80, Reasoning: "Good",
 	})
 
 	_, err := ms.ResolveResearch(ctx, &types.MsgResolveResearch{
@@ -661,8 +658,8 @@ func TestResolveResearchUnauthorized(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Research", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	_, err := ms.ResolveResearch(ctx, &types.MsgResolveResearch{
@@ -687,7 +684,6 @@ func TestCreateBounty(t *testing.T) {
 		Creator:        creator,
 		Title:          "Find error in proof",
 		Description:    "Bounty description",
-		Domain:         "mathematics",
 		Reward:         "1000000000", // 1000 LGM
 		DeadlineHeight: 100 + 34272 + 1,         // current(100) + min(34272) + 1
 	})
@@ -702,7 +698,7 @@ func TestCreateBounty(t *testing.T) {
 	if !found {
 		t.Fatal("bounty not found")
 	}
-	if b.Status != types.BountyStatusOpen {
+	if b.Status != string(types.BountyStatusOpen) {
 		t.Errorf("expected status=open, got %s", b.Status)
 	}
 	if b.Creator != creator {
@@ -721,7 +717,6 @@ func TestCreateBountyDeadlineTooSoon(t *testing.T) {
 		Creator:        creator,
 		Title:          "Too soon",
 		Description:    "Desc",
-		Domain:         "physics",
 		Reward:         "1000000000",
 		DeadlineHeight: 200, // not far enough (need 100 + 34272)
 	})
@@ -741,7 +736,6 @@ func TestCreateBountyExceedsMaxReward(t *testing.T) {
 		Creator:        creator,
 		Title:          "Too rich",
 		Description:    "Desc",
-		Domain:         "physics",
 		Reward:         "99999000000000", // way over max
 		DeadlineHeight: 100 + 34272 + 1,
 	})
@@ -760,7 +754,7 @@ func TestClaimBounty(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -773,7 +767,7 @@ func TestClaimBounty(t *testing.T) {
 	}
 
 	b, _ := k.GetBounty(ctx, "BOUNTY-1")
-	if b.Status != types.BountyStatusClaimed {
+	if b.Status != string(types.BountyStatusClaimed) {
 		t.Errorf("expected status=claimed, got %s", b.Status)
 	}
 	if b.ClaimedBy != claimer {
@@ -790,7 +784,7 @@ func TestClaimBountyNotOpen(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -817,7 +811,7 @@ func TestClaimBountyExpired(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -843,7 +837,7 @@ func TestFulfillBounty(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -851,19 +845,16 @@ func TestFulfillBounty(t *testing.T) {
 		Claimer: claimer, BountyId: "BOUNTY-1",
 	})
 
-	resp, err := ms.FulfillBounty(ctx, &types.MsgFulfillBounty{
+	_, err := ms.FulfillBounty(ctx, &types.MsgFulfillBounty{
 		Authority: authority,
 		BountyId:  "BOUNTY-1",
 	})
 	if err != nil {
 		t.Fatalf("FulfillBounty failed: %v", err)
 	}
-	if resp.Reward != "1000000000" {
-		t.Errorf("expected reward=1000000000, got %s", resp.Reward)
-	}
 
 	b, _ := k.GetBounty(ctx, "BOUNTY-1")
-	if b.Status != types.BountyStatusFulfilled {
+	if b.Status != string(types.BountyStatusFulfilled) {
 		t.Errorf("expected status=fulfilled, got %s", b.Status)
 	}
 	if b.FulfilledBy != claimer {
@@ -880,7 +871,7 @@ func TestFulfillBountyNotClaimed(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -904,7 +895,7 @@ func TestFulfillBountyUnauthorized(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -930,24 +921,32 @@ func TestFundResearch(t *testing.T) {
 	funder := testAddr("alice")
 	bk.fundAccount(funder, "ulgm", largeBalance)
 
-	resp, err := ms.FundResearch(ctx, &types.MsgFundResearch{
+	_, err := ms.FundResearch(ctx, &types.MsgFundResearch{
 		Funder: funder,
 		Amount: "5000000000", // 5000 LGM
 	})
 	if err != nil {
 		t.Fatalf("FundResearch failed: %v", err)
 	}
-	if resp.TreasuryBalance != "5000000000" {
-		t.Errorf("expected treasury=5000000000, got %s", resp.TreasuryBalance)
+
+	// Verify treasury balance through keeper
+	bal := k.GetTreasuryBalance(ctx)
+	if bal != "5000000000" {
+		t.Errorf("expected treasury=5000000000, got %s", bal)
 	}
 
 	// Fund again
-	resp2, _ := ms.FundResearch(ctx, &types.MsgFundResearch{
+	_, err = ms.FundResearch(ctx, &types.MsgFundResearch{
 		Funder: funder,
 		Amount: "3000000000",
 	})
-	if resp2.TreasuryBalance != "8000000000" {
-		t.Errorf("expected treasury=8000000000, got %s", resp2.TreasuryBalance)
+	if err != nil {
+		t.Fatalf("FundResearch (2nd) failed: %v", err)
+	}
+
+	bal = k.GetTreasuryBalance(ctx)
+	if bal != "8000000000" {
+		t.Errorf("expected treasury=8000000000, got %s", bal)
 	}
 }
 
@@ -960,24 +959,24 @@ func TestInitExportGenesis(t *testing.T) {
 	k.SetResearch(ctx, types.Research{
 		Id: "RES-42", Submitter: testAddr("alice"),
 		Title: "Genesis Research", Domain: "physics",
-		Status: types.ResearchStatusSubmitted,
+		Status: string(types.ResearchStatusSubmitted),
 	})
 	k.SetBounty(ctx, types.Bounty{
 		Id: "BOUNTY-7", Creator: testAddr("bob"),
-		Title: "Genesis Bounty", Status: types.BountyStatusOpen,
+		Title: "Genesis Bounty", Status: string(types.BountyStatusOpen),
 	})
 	k.SetTreasuryBalance(ctx, "999")
 
 	// Export
 	gs := k.ExportGenesis(ctx)
-	if len(gs.Submissions) != 1 {
-		t.Errorf("expected 1 submission, got %d", len(gs.Submissions))
+	if len(gs.Researches) != 1 {
+		t.Errorf("expected 1 submission, got %d", len(gs.Researches))
 	}
 	if len(gs.Bounties) != 1 {
 		t.Errorf("expected 1 bounty, got %d", len(gs.Bounties))
 	}
-	if gs.TreasuryBalance != "999" {
-		t.Errorf("expected treasury=999, got %s", gs.TreasuryBalance)
+	if gs.TreasuryBalance.Balance != "999" {
+		t.Errorf("expected treasury=999, got %s", gs.TreasuryBalance.Balance)
 	}
 }
 
@@ -993,14 +992,14 @@ func TestQueryResearch(t *testing.T) {
 
 	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Test", Description: "Desc",
-		Domain: "physics", ResearchType: types.ResearchTypeReplication,
-		Stake: "100000000",
+		Domain: "physics",
+		Stake:  "100000000",
 	})
 
 	// Add a review
 	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 		Reviewer: testAddr("rev1"), ResearchId: "RES-1",
-		Verdict: types.ReviewVerdictApprove, Score: 75, Reasoning: "Good",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 75, Reasoning: "Good",
 	})
 
 	resp, err := qs.Research(ctx, &types.QueryResearchRequest{ResearchId: "RES-1"})
@@ -1037,8 +1036,8 @@ func TestQuerySubmissions(t *testing.T) {
 	for _, domain := range []string{"physics", "physics", "math"} {
 		ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 			Submitter: submitter, Title: "Research " + domain, Description: "Desc",
-			Domain: domain, ResearchType: types.ResearchTypeReplication,
-			Stake: "100000000",
+			Domain: domain,
+			Stake:  "100000000",
 		})
 	}
 
@@ -1071,7 +1070,7 @@ func TestQueryBounty(t *testing.T) {
 
 	ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Query Bounty", Description: "Desc",
-		Domain: "physics", Reward: "1000000000",
+		Reward:         "1000000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 
@@ -1113,8 +1112,7 @@ func TestFullResearchLifecycle(t *testing.T) {
 	resp, err := ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
 		Submitter: submitter, Title: "Full Lifecycle",
 		Description: "Complete test", Domain: "physics",
-		ResearchType: types.ResearchTypeReplication,
-		Stake:        "100000000",
+		Stake: "100000000",
 	})
 	if err != nil {
 		t.Fatalf("submit failed: %v", err)
@@ -1125,7 +1123,7 @@ func TestFullResearchLifecycle(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		_, err := ms.ReviewResearch(ctx, &types.MsgReviewResearch{
 			Reviewer: testAddr("rev" + string(rune('a'+i))), ResearchId: resId,
-			Verdict: types.ReviewVerdictApprove, Score: 85, Reasoning: "Excellent",
+			Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 85, Reasoning: "Excellent",
 		})
 		if err != nil {
 			t.Fatalf("review %d failed: %v", i, err)
@@ -1134,7 +1132,7 @@ func TestFullResearchLifecycle(t *testing.T) {
 
 	// 3. Verify under review status
 	r, _ := k.GetResearch(ctx, resId)
-	if r.Status != types.ResearchStatusUnderReview {
+	if r.Status != string(types.ResearchStatusUnderReview) {
 		t.Fatalf("expected under_review, got %s", r.Status)
 	}
 
@@ -1145,13 +1143,13 @@ func TestFullResearchLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve failed: %v", err)
 	}
-	if resolveResp.Outcome != "accepted" {
-		t.Errorf("expected accepted, got %s", resolveResp.Outcome)
+	if resolveResp.Outcome != types.ResearchOutcome_RESEARCH_OUTCOME_ACCEPTED {
+		t.Errorf("expected ACCEPTED, got %v", resolveResp.Outcome)
 	}
 
 	// 5. Verify final state
 	r, _ = k.GetResearch(ctx, resId)
-	if r.Status != types.ResearchStatusAccepted {
+	if r.Status != string(types.ResearchStatusAccepted) {
 		t.Errorf("expected status=accepted, got %s", r.Status)
 	}
 }
@@ -1168,7 +1166,7 @@ func TestFullBountyLifecycle(t *testing.T) {
 	// 1. Create
 	resp, err := ms.CreateBounty(ctx, &types.MsgCreateBounty{
 		Creator: creator, Title: "Full Bounty", Description: "Complete test",
-		Domain: "physics", Reward: "500000000",
+		Reward:         "500000000",
 		DeadlineHeight: 100 + 34272 + 1,
 	})
 	if err != nil {
@@ -1185,19 +1183,16 @@ func TestFullBountyLifecycle(t *testing.T) {
 	}
 
 	// 3. Fulfill
-	fulfillResp, err := ms.FulfillBounty(ctx, &types.MsgFulfillBounty{
+	_, err = ms.FulfillBounty(ctx, &types.MsgFulfillBounty{
 		Authority: authority, BountyId: bountyId,
 	})
 	if err != nil {
 		t.Fatalf("fulfill bounty failed: %v", err)
 	}
-	if fulfillResp.Reward != "500000000" {
-		t.Errorf("expected reward=500000000, got %s", fulfillResp.Reward)
-	}
 
 	// 4. Verify final state
 	b, _ := k.GetBounty(ctx, bountyId)
-	if b.Status != types.BountyStatusFulfilled {
+	if b.Status != string(types.BountyStatusFulfilled) {
 		t.Errorf("expected fulfilled, got %s", b.Status)
 	}
 }
@@ -1212,7 +1207,7 @@ func TestIterateResearches(t *testing.T) {
 		k.SetResearch(ctx, types.Research{
 			Id:     "RES-" + string(rune('A'+i)),
 			Domain: "test",
-			Status: types.ResearchStatusSubmitted,
+			Status: string(types.ResearchStatusSubmitted),
 		})
 	}
 
@@ -1229,9 +1224,9 @@ func TestIterateResearches(t *testing.T) {
 func TestGetResearchesByStatus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetResearch(ctx, types.Research{Id: "RES-1", Status: types.ResearchStatusSubmitted})
-	k.SetResearch(ctx, types.Research{Id: "RES-2", Status: types.ResearchStatusAccepted})
-	k.SetResearch(ctx, types.Research{Id: "RES-3", Status: types.ResearchStatusSubmitted})
+	k.SetResearch(ctx, types.Research{Id: "RES-1", Status: string(types.ResearchStatusSubmitted)})
+	k.SetResearch(ctx, types.Research{Id: "RES-2", Status: string(types.ResearchStatusAccepted)})
+	k.SetResearch(ctx, types.Research{Id: "RES-3", Status: string(types.ResearchStatusSubmitted)})
 
 	submitted := k.GetResearchesByStatus(ctx, types.ResearchStatusSubmitted)
 	if len(submitted) != 2 {
@@ -1260,10 +1255,10 @@ func TestGetResearchesByDomain(t *testing.T) {
 func TestGetActiveBounties(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetBounty(ctx, types.Bounty{Id: "B-1", Status: types.BountyStatusOpen})
-	k.SetBounty(ctx, types.Bounty{Id: "B-2", Status: types.BountyStatusClaimed})
-	k.SetBounty(ctx, types.Bounty{Id: "B-3", Status: types.BountyStatusExpired})
-	k.SetBounty(ctx, types.Bounty{Id: "B-4", Status: types.BountyStatusFulfilled})
+	k.SetBounty(ctx, types.Bounty{Id: "B-1", Status: string(types.BountyStatusOpen)})
+	k.SetBounty(ctx, types.Bounty{Id: "B-2", Status: string(types.BountyStatusClaimed)})
+	k.SetBounty(ctx, types.Bounty{Id: "B-3", Status: string(types.BountyStatusExpired)})
+	k.SetBounty(ctx, types.Bounty{Id: "B-4", Status: string(types.BountyStatusFulfilled)})
 
 	active := k.GetActiveBounties(ctx)
 	if len(active) != 2 {

@@ -29,7 +29,7 @@ function createMockAccount(
   return {
     did: "did:lgm:test-account-12345678",
     balance: 10000n * 10n ** 18n,
-    stakedBalance: 1000n * 10n ** 18n,
+    stakedBalance: 1000n * 10n ** 15n,
     nonce: 5n,
     operationalKeyHash:
       "abc123def456789012345678901234567890123456789012345678901234",

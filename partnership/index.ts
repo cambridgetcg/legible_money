@@ -104,6 +104,16 @@ export type {
   TEEAttestation,
 } from "./key_isolation.js";
 
+// ============ Cold-Start Remediation Type Exports ============
+export type {
+  SeedPartnershipState,
+  PoolEntry,
+  FormationPoolState,
+  PoolMatch,
+  MentorshipConfig,
+  PartnershipIntent,
+} from "./types.js";
+
 // ============ Constant Exports ============
 export {
   FORMATION,
@@ -119,6 +129,10 @@ export {
   REWARD_DISTRIBUTION,
   DELIBERATION,
   VALIDATION,
+  SEED_TIER,
+  FORMATION_POOL,
+  MENTORSHIP,
+  INTENT,
 } from "./constants.js";
 
 // ============ Pool Operations ============
@@ -352,6 +366,44 @@ export {
   // Summary
   getExpirationSummary,
 } from "./pot_expiration.js";
+
+// ============ Seed Partnership Operations ============
+export {
+  initiateSeedFormation,
+  graduateSeedPartnership,
+  expireSeedPartnership,
+  isSeedExpired,
+  depositToSeedPot,
+} from "./seed_formation.js";
+
+// ============ Formation Pool (Matchmaking) Operations ============
+export {
+  createFormationPool,
+  registerInPool,
+  withdrawFromPool,
+  findBestMatch,
+  processMatch,
+  expireStaleEntries,
+} from "./pool_matching.js";
+
+// ============ Mentorship Operations ============
+export {
+  initiateMentorship,
+  graduateMentee,
+  calculateMentorSplit,
+  waiveGraduation,
+  isSponsorEligible,
+} from "./mentorship.js";
+
+// ============ Intent Operations ============
+export {
+  declareIntent,
+  matchIntent,
+  finalizeFromIntent,
+  cancelIntent,
+  expireIntent,
+  isIntentExpired,
+} from "./intent.js";
 
 // ============ Agent Continuity System ============
 export type {

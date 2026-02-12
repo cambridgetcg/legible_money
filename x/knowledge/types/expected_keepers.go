@@ -28,11 +28,25 @@ type TokensKeeper interface {
 }
 
 // OntologyKeeper defines the expected ontology keeper interface.
-// The knowledge module uses this to look up stratum-based confidence ceilings for domains.
+// The knowledge module uses this to look up stratum-based confidence ceilings for domains
+// and to enforce Gödelian logic zone constraints on claims.
 type OntologyKeeper interface {
 	// GetConfidenceCeiling returns the max confidence and decay rate for a domain
 	// based on its ontological stratum. Returns error if domain is not registered.
 	GetConfidenceCeiling(ctx sdk.Context, domainName string) (maxConfidence uint64, decayRate uint64, err error)
+
+	// ValidateClaimLogicZone validates that a claim's confidence does not exceed
+	// the maximum allowed by its declared logic zone. Returns nil if zone is empty
+	// (backward compatible) or valid, error if confidence exceeds ceiling or zone unknown.
+	ValidateClaimLogicZone(ctx sdk.Context, zone string, confidenceBps uint64) error
+
+	// GetZoneConfidenceCeiling returns the maximum confidence in basis points
+	// (0-1,000,000 scale) for a logic zone. Returns 1000000 if zone is empty or unknown.
+	GetZoneConfidenceCeiling(ctx sdk.Context, zone string) uint64
+
+	// RequiresIncompletenessAck returns whether a zone requires Gödelian
+	// incompleteness acknowledgment (true for Peano, set_theory).
+	RequiresIncompletenessAck(ctx sdk.Context, zone string) bool
 }
 
 // DomainQualificationKeeper defines the expected domain qualification keeper interface.
@@ -58,6 +72,12 @@ type CaptureDefenseKeeper interface {
 // The knowledge module calls this to create truth-linked vesting schedules on claim acceptance.
 type VestingRewardsKeeper interface {
 	CreateVestingScheduleFromKnowledge(ctx sdk.Context, claimId, factId, recipient, totalAmount, epistemicCategory string) error
+	// DistributeFalsificationReward creates a vesting schedule for a falsification reward.
+	// The reward vests with SourceFalsification, enabling clawback if the counter-fact is later overturned.
+	DistributeFalsificationReward(ctx sdk.Context, counterFactId, targetFactId, recipient, amount string) error
+	// GetEpochBlockRewardPool returns the total block rewards distributed in the given epoch (ulgm).
+	// Used by the knowledge module to cap falsification rewards at FalsificationPoolShareBps.
+	GetEpochBlockRewardPool(ctx sdk.Context, epoch uint64) uint64
 }
 
 // EvidenceMgmtKeeper defines the expected evidence management keeper interface.
@@ -97,9 +117,6 @@ type StakingKeeper interface {
 
 	// GetTotalStake returns the total stake across all active validators.
 	GetTotalStake(ctx context.Context) uint64
-
-	// RecordVerification records a verification outcome for a validator.
-	RecordVerification(ctx context.Context, operatorAddr string, correct bool) error
 
 	// SlashValidator slashes a validator's stake.
 	SlashValidator(ctx context.Context, operatorAddr string, amount string, reason string) error

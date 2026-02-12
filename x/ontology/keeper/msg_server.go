@@ -70,11 +70,11 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 
 	proposal := types.DomainProposal{
 		Id: proposalID,
-		Domain: types.Domain{
+		Domain: &types.Domain{
 			Name:        msg.Name,
 			DisplayName: msg.DisplayName,
 			Description: msg.Description,
-			Stratum:     msg.Stratum,
+			Stratum:     uint32(msg.Stratum),
 			Status:      "proposed",
 			ProposedBy:  msg.Proposer,
 		},
@@ -178,4 +178,69 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	)
 
 	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+// RegisterLogicZone handles MsgRegisterLogicZone — authority-only zone registration.
+func (k msgServer) RegisterLogicZone(goCtx context.Context, msg *types.MsgRegisterLogicZone) (*types.MsgRegisterLogicZoneResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Check if zone already exists
+	if _, found := k.GetLogicZone(ctx, msg.ZoneProperties.Zone); found {
+		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneExists, msg.ZoneProperties.Zone)
+	}
+
+	k.SetLogicZone(ctx, msg.ZoneProperties)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"logic_zone_registered",
+			sdk.NewAttribute("zone", string(msg.ZoneProperties.Zone)),
+			sdk.NewAttribute("complete", fmt.Sprintf("%v", msg.ZoneProperties.Complete)),
+			sdk.NewAttribute("goedel_applies", fmt.Sprintf("%v", msg.ZoneProperties.GoedelApplies)),
+			sdk.NewAttribute("max_confidence_bps", fmt.Sprintf("%d", msg.ZoneProperties.MaxConfidenceBps)),
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+
+	return &types.MsgRegisterLogicZoneResponse{}, nil
+}
+
+// AcknowledgeIncompleteness handles MsgAcknowledgeIncompleteness — records Gödelian acknowledgment.
+func (k msgServer) AcknowledgeIncompleteness(goCtx context.Context, msg *types.MsgAcknowledgeIncompleteness) (*types.MsgAcknowledgeIncompletenessResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Validate zone exists and Gödel applies
+	zone, found := k.GetLogicZone(ctx, msg.Zone)
+	if !found {
+		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneNotFound, msg.Zone)
+	}
+	if !zone.GoedelApplies {
+		return nil, fmt.Errorf("%w: zone %s is complete, no acknowledgment needed",
+			types.ErrGoedelInconsistency, msg.Zone)
+	}
+
+	// Store acknowledgment
+	ack := types.IncompletenessAcknowledgment{
+		FactId:         msg.FactId,
+		Zone:           msg.Zone,
+		Reason:         msg.Reason,
+		AcknowledgedAt: uint64(ctx.BlockHeight()),
+		AcknowledgedBy: msg.Submitter,
+	}
+	k.SetIncompletenessAck(ctx, ack)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"incompleteness_acknowledged",
+			sdk.NewAttribute("fact_id", msg.FactId),
+			sdk.NewAttribute("zone", string(msg.Zone)),
+			sdk.NewAttribute("submitter", msg.Submitter),
+		),
+	)
+
+	return &types.MsgAcknowledgeIncompletenessResponse{}, nil
 }

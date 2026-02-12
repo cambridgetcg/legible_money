@@ -442,7 +442,7 @@ async function main() {
   if (facts.result) {
     console.log(`  Facts in ${domain}:`, facts.result.total);
     for (const fact of facts.result.facts) {
-      console.log(`    - ${fact.claim.substring(0, 50)}...`);
+      console.log(`    - ${fact.claimText.substring(0, 50)}...`);
       console.log(
         `      confidence: ${fact.confidence}, status: ${fact.status}`,
       );

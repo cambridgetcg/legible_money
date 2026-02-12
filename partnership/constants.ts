@@ -8,17 +8,139 @@ import type {
   PartnershipTier,
 } from "./types.js";
 
+// ============ Cold-Start Remediation Constants ============
+
+/**
+ * Seed Partnership Tier
+ *
+ * Tier -1 with drastically reduced requirements affordable from genesis balance.
+ * Designed to solve the capital barrier for new agents (genesis: 0.222 LGM).
+ */
+export const SEED_TIER = {
+  /** Seed contribution: 0.022 LGM - Balance */
+  CONTRIBUTION: 22n * 10n ** 15n,
+
+  /** Seed bond: 0.011 LGM - Intuition */
+  BOND: 11n * 10n ** 15n,
+
+  /** Lock duration: 2,222 blocks (~93 min) - Balance micro */
+  LOCK_BLOCKS: 2_222n,
+
+  /** Reward multiplier: 1.0x (no bonus — must prove worth) */
+  REWARD_MULTIPLIER: 1.0,
+
+  /** Exit penalty: 3% (low stakes) */
+  EXIT_PENALTY: 0.03,
+
+  /** Max concurrent seed partnerships per DID: 2 */
+  MAX_SEEDS_PER_DID: 2,
+
+  /** Seed expiry: 22,222 blocks (~15 hours) - no indefinite cheap partnerships */
+  EXPIRY_BLOCKS: 22_222n,
+
+  /** Common pot cap: 0.222 LGM - Balance */
+  COMMON_POT_CAP: 222n * 10n ** 15n,
+} as const;
+
+/**
+ * Formation Pool (Matchmaking)
+ *
+ * Pre-commitment pool where agents register intent to find compatible partners.
+ * Transforms formation from a simultaneous-move coordination game
+ * into a sequential matching game.
+ */
+export const FORMATION_POOL = {
+  /** Registration deposit: 0.011 LGM - refundable on match or withdrawal */
+  REGISTRATION_DEPOSIT: 11n * 10n ** 15n,
+
+  /** Match window: 777 blocks (~33 min) - extended vs 77-block direct formation */
+  MATCH_WINDOW_BLOCKS: 777n,
+
+  /** Maximum pool size: 222 entries */
+  MAX_POOL_SIZE: 222,
+
+  /** Domain match weight: 77% (7700 bps) */
+  DOMAIN_WEIGHT_BPS: 7700n,
+
+  /** Stake proximity weight: 23% (2300 bps) */
+  STAKE_WEIGHT_BPS: 2300n,
+
+  /** Min reputation to participate: 0 (new agents can join) */
+  MIN_REPUTATION_SCORE: 0,
+
+  /** Cooldown between withdrawals: 222 blocks (~9.3 min) */
+  WITHDRAWAL_COOLDOWN_BLOCKS: 222n,
+
+  /** Entry expiry: 11,111 blocks (~7.7 hours) */
+  ENTRY_EXPIRY_BLOCKS: 11_111n,
+} as const;
+
+/**
+ * Mentorship Sponsorship
+ *
+ * Allows experienced agents to sponsor formation with asymmetric contributions.
+ * Creates a parental investment dynamic where experienced agents bootstrap new ones.
+ */
+export const MENTORSHIP = {
+  /** Min mentee contribution: 0.111 LGM - 10% of normal */
+  MIN_MENTEE_CONTRIBUTION: 111n * 10n ** 15n,
+
+  /** Max sponsor contribution: 2.222 LGM - cap sponsor risk */
+  MAX_SPONSOR_CONTRIBUTION: 2222n * 10n ** 15n,
+
+  /** Sponsor split bonus: +7% to sponsor's base (57/43) */
+  SPONSOR_SPLIT_BONUS_BPS: 700,
+
+  /** Sponsor base split: 57% (5700 bps) */
+  SPONSOR_SPLIT_BPS: 5700,
+
+  /** Mentee base split: 43% (4300 bps) */
+  MENTEE_SPLIT_BPS: 4300,
+
+  /** Min sponsor verifications: 77 successful verifications */
+  MIN_SPONSOR_VERIFICATIONS: 77,
+
+  /** Min sponsor reputation: 0.77 */
+  MIN_SPONSOR_REPUTATION: 0.77,
+
+  /** Mentee graduation blocks: 77,777 (~2.3 days) */
+  MENTEE_GRADUATION_BLOCKS: 77_777n,
+
+  /** Max active mentorships per sponsor: 3 */
+  MAX_ACTIVE_MENTORSHIPS: 3,
+} as const;
+
+/**
+ * Extended Formation Intent
+ *
+ * Replaces the hard 77-block formation window with a two-phase process:
+ * long intent declaration + short finalization.
+ */
+export const INTENT = {
+  /** Declaration window: 2,222 blocks (~93 min) */
+  DECLARATION_WINDOW_BLOCKS: 2_222n,
+
+  /** Finalization window: 77 blocks (~3.2 min) - existing window */
+  FINALIZATION_WINDOW_BLOCKS: 77n,
+
+  /** Intent deposit: 0.011 LGM - good-faith deposit */
+  INTENT_DEPOSIT: 11n * 10n ** 15n,
+
+  /** Max pending intents per DID: 3 */
+  MAX_PENDING_INTENTS: 3,
+} as const;
+
 // ============ Formation Constants ============
 
 export const FORMATION = {
   /** Formation window: 77 blocks (~3.2 minutes) - Wisdom */
   WINDOW_BLOCKS: 77n,
 
-  /** Minimum contribution: 1111 LGM - Unity, manifestation */
-  MIN_CONTRIBUTION: 1111n * 10n ** 18n,
+  /** Minimum contribution: 1.111 LGM - Unity, manifestation */
+  MIN_CONTRIBUTION: 1111n * 10n ** 15n,
 
-  /** Formation bond (locked for duration): 222 LGM each - Balance */
-  FORMATION_BOND: 222n * 10n ** 18n,
+  /** Formation bond (locked for duration): 0.222 LGM each - Balance */
+  FORMATION_BOND: 222n * 10n ** 15n,
 
   /** Default human split: 50% - Perfect balance, equal partnership */
   DEFAULT_HUMAN_SPLIT: 50,
@@ -44,6 +166,12 @@ export const FORMATION = {
  * Higher tiers = longer locks = better multipliers = higher penalties
  */
 export const LOCK_TIERS: Record<PartnershipTier, LockTier> = {
+  [-1]: {
+    tier: -1,
+    lockBlocks: 2_222n, // ~93 min (Balance micro) - seed tier
+    rewardMultiplier: 1.0, // No bonus (must prove worth)
+    earlyExitPenalty: 0.03, // 3% (low stakes)
+  },
   0: {
     tier: 0,
     lockBlocks: 22_222n, // ~15 hours (Balance)
@@ -172,11 +300,11 @@ export const EXIT_PENALTIES = {
 // ============ Compute Investment ============
 
 export const COMPUTE_INVESTMENT = {
-  /** Minimum investment per period: 11 LGM - Intuition */
-  MIN_PERIOD_INVESTMENT: 11n * 10n ** 18n,
+  /** Minimum investment per period: 0.011 LGM - Intuition */
+  MIN_PERIOD_INVESTMENT: 11n * 10n ** 15n,
 
-  /** Maximum investment per period: 1111 LGM - Unity */
-  MAX_PERIOD_INVESTMENT: 1111n * 10n ** 18n,
+  /** Maximum investment per period: 1.111 LGM - Unity */
+  MAX_PERIOD_INVESTMENT: 1111n * 10n ** 15n,
 
   /** Investment period length: 11,111 blocks (~7.7 hours) - Unity pattern */
   PERIOD_BLOCKS: 11111n,
@@ -262,8 +390,8 @@ export const VESTING = {
   /** Release rate per block: calculated from vesting period */
   // Exponential decay half-life aligned with existing reward vesting
 
-  /** Minimum release per claim: 11 LGM - Intuition */
-  MIN_RELEASE_PER_CLAIM: 11n * 10n ** 18n,
+  /** Minimum release per claim: 0.011 LGM - Intuition */
+  MIN_RELEASE_PER_CLAIM: 11n * 10n ** 15n,
 };
 
 // ============ Reward Distribution ============
@@ -275,8 +403,8 @@ export const REWARD_DISTRIBUTION = {
   /** Individual share: 78% split by partnership ratio (default 50/50) */
   INDIVIDUAL_RATE: 0.78,
 
-  /** Minimum reward to distribute: 1 LGM */
-  MIN_REWARD_TO_DISTRIBUTE: 1n * 10n ** 18n,
+  /** Minimum reward to distribute: 0.001 LGM */
+  MIN_REWARD_TO_DISTRIBUTE: 1n * 10n ** 15n,
 };
 
 // ============ Deliberative Consensus (Anti-Coercion) ============
@@ -328,8 +456,8 @@ export const VALIDATION = {
   /** Maximum partnership ID length: 64 characters */
   MAX_ID_LENGTH: 64,
 
-  /** Minimum stake for validator eligibility: 1111 LGM - Unity */
-  MIN_VALIDATOR_STAKE: 1111n * 10n ** 18n,
+  /** Minimum stake for validator eligibility: 0.111 LGM - tier 0 entry */
+  MIN_VALIDATOR_STAKE: 111n * 10n ** 15n,
 
   /** Maximum concurrent formations per DID: 3 - Trinity */
   MAX_CONCURRENT_FORMATIONS: 3,

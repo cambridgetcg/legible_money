@@ -66,7 +66,7 @@ func (ms msgServer) RequestQualification(goCtx context.Context, msg *types.MsgRe
 	))
 
 	return &types.MsgRequestQualificationResponse{
-		Status: q.Status,
+		Status: types.QualificationStatus(q.Status),
 	}, nil
 }
 

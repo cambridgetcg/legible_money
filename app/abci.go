@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -41,10 +42,6 @@ type VoteExtension struct {
 
 	// Reveals from validators in the reveal phase.
 	Reveals []VoteReveal `json:"reveals,omitempty"`
-
-	// VRF proof for this validator's eligibility.
-	VRFOutput []byte `json:"vrf_output,omitempty"`
-	VRFProof  []byte `json:"vrf_proof,omitempty"`
 
 	// Validator's operator address (bech32).
 	ValidatorAddress string `json:"validator_address"`
@@ -386,12 +383,21 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 		}
 
 		if err := app.KnowledgeKeeper.StoreCommitmentInRound(ctx, c.RoundID, commitment); err != nil {
-			// Log but don't fail — round may have expired or validator already committed
-			logger.Debug("skipped commitment from vote extension",
-				"round_id", c.RoundID,
-				"validator", c.Validator,
-				"reason", err.Error(),
-			)
+			if errors.Is(err, knowledgetypes.ErrEquivocation) {
+				// Equivocation already handled (slashed + evidence stored) inside keeper
+				logger.Error("EQUIVOCATION in vote extension commitment",
+					"round_id", c.RoundID,
+					"validator", c.Validator,
+					"error", err.Error(),
+				)
+			} else {
+				// Normal skip — round may have expired or validator already committed
+				logger.Debug("skipped commitment from vote extension",
+					"round_id", c.RoundID,
+					"validator", c.Validator,
+					"reason", err.Error(),
+				)
+			}
 			continue
 		}
 		storedCommitments++
@@ -408,12 +414,21 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 		}
 
 		if err := app.KnowledgeKeeper.StoreRevealInRound(ctx, r.RoundID, reveal); err != nil {
-			// Log but don't fail — round may have transitioned or validator already revealed
-			logger.Debug("skipped reveal from vote extension",
-				"round_id", r.RoundID,
-				"validator", r.Validator,
-				"reason", err.Error(),
-			)
+			if errors.Is(err, knowledgetypes.ErrEquivocation) {
+				// Equivocation already handled (slashed + evidence stored) inside keeper
+				logger.Error("EQUIVOCATION in vote extension reveal",
+					"round_id", r.RoundID,
+					"validator", r.Validator,
+					"error", err.Error(),
+				)
+			} else {
+				// Normal skip — round may have transitioned or validator already revealed
+				logger.Debug("skipped reveal from vote extension",
+					"round_id", r.RoundID,
+					"validator", r.Validator,
+					"reason", err.Error(),
+				)
+			}
 			continue
 		}
 		storedReveals++
@@ -437,14 +452,28 @@ func (app *LegibleApp) isValidVoteExtension(ctx sdk.Context, extBytes []byte) bo
 }
 
 // ComputeCommitmentHash generates a commitment hash for a verification verdict.
-// hash = SHA-256(roundID || verdict || confidence || salt)
+// Uses domain-separated, length-prefixed encoding to prevent second-preimage attacks.
+// hash = SHA-256("LGM.commitment.v1" || len(roundID) || roundID || len(verdict) || verdict || confidence || len(salt) || salt)
 func ComputeCommitmentHash(roundID, verdict string, confidence uint64, salt string) string {
 	h := sha256.New()
+	// Domain separation
+	h.Write([]byte("LGM.commitment.v1:"))
+	// Length-prefixed roundID
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(roundID)))
+	h.Write(lenBuf)
 	h.Write([]byte(roundID))
+	// Length-prefixed verdict
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(verdict)))
+	h.Write(lenBuf)
 	h.Write([]byte(verdict))
+	// Fixed-size confidence
 	confBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(confBytes, confidence)
 	h.Write(confBytes)
+	// Length-prefixed salt
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(salt)))
+	h.Write(lenBuf)
 	h.Write([]byte(salt))
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

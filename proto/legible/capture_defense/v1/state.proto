@@ -1,0 +1,142 @@
+syntax = "proto3";
+package legible.capture_defense.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_defense/types";
+
+// QualificationMetrics tracks verification performance per domain.
+message QualificationMetrics {
+  uint64 total_verifications = 1;
+  uint64 correct_verifications = 2;
+  uint64 accuracy = 3;
+  uint64 last_verification_block = 4;
+  uint64 consecutive_correct = 5;
+  uint64 consecutive_incorrect = 6;
+  uint64 challenges_received = 7;
+  uint64 challenges_lost = 8;
+  uint64 effective_weight = 9;
+}
+
+// DomainQualification represents a validator's qualification for a specific domain.
+message DomainQualification {
+  string validator_addr = 1;
+  string domain = 2;
+  uint32 stratum = 3;
+  string pathway = 4;
+  string status = 5;
+  uint64 earned_at_block = 6;
+  uint64 expires_at_block = 7;
+  QualificationMetrics metrics = 8;
+  string locked_stake = 9;
+  uint64 stake_unlocks_at_block = 10;
+  repeated string endorsers = 11;
+  string inherited_from = 12;
+  uint64 inheritance_discount = 13;
+}
+
+// GlobalReputation tracks a validator's overall reputation.
+message GlobalReputation {
+  uint64 score = 1;
+  uint64 total_verifications = 2;
+  uint64 correct_verifications = 3;
+  uint64 accuracy = 4;
+}
+
+// StratumReputation tracks a validator's reputation within a stratum.
+message StratumReputation {
+  uint32 stratum = 1;
+  uint64 score = 2;
+  uint64 total_verifications = 3;
+  uint64 correct_verifications = 4;
+  uint64 accuracy = 5;
+  uint64 domains_verified = 6;
+  uint64 first_verification_block = 7;
+  uint64 last_activity_block = 8;
+  uint64 last_decay_block = 9;
+}
+
+// DomainReputation tracks a validator's reputation within a specific domain.
+message DomainReputation {
+  string domain = 1;
+  uint32 stratum = 2;
+  uint64 score = 3;
+  uint64 total_verifications = 4;
+  uint64 correct_verifications = 5;
+  uint64 accuracy = 6;
+  uint64 verdict_consistency = 7;
+  uint64 confidence_calibration = 8;
+  uint64 challenges_received = 9;
+  uint64 challenges_lost = 10;
+  uint64 challenge_defense_rate = 11;
+  uint64 score_confidence = 12;
+  uint64 first_verification_block = 13;
+  uint64 last_verification_block = 14;
+  uint64 decayed_score = 15;
+  uint64 last_decay_block = 16;
+}
+
+// StratumReputationEntry is a map entry for stratum reputations keyed by stratum number.
+message StratumReputationEntry {
+  uint32 key = 1;
+  StratumReputation value = 2;
+}
+
+// DomainReputationEntry is a map entry for domain reputations keyed by domain name.
+message DomainReputationEntry {
+  string key = 1;
+  DomainReputation value = 2;
+}
+
+// IsolatedReputation holds all reputation data for a single validator.
+message IsolatedReputation {
+  string validator_addr = 1;
+  GlobalReputation global_reputation = 2;
+  repeated StratumReputationEntry stratum_reputations = 3;
+  repeated DomainReputationEntry domain_reputations = 4;
+  uint64 created_at_block = 5;
+  uint64 last_updated_block = 6;
+}
+
+// CaptureMetrics holds domain-level capture risk metrics.
+message CaptureMetrics {
+  string domain = 1;
+  uint64 herfindahl_index = 2;
+  uint64 timing_correlation = 3;
+  uint64 verdict_correlation = 4;
+  uint64 unique_validators = 5;
+  uint64 total_verifications = 6;
+  uint64 top3_validator_share = 7;
+  uint64 analyzed_at_block = 8;
+  uint64 risk_score = 9;
+}
+
+// VerificationHistoryEntry records a single verification round for capture analysis.
+message VerificationHistoryEntry {
+  string claim_id = 1;
+  uint64 block_number = 2;
+  repeated string validators = 3;
+  repeated string verdicts = 4;
+  string final_outcome = 5;
+  repeated uint64 submission_timestamps = 6;
+}
+
+// VerificationHistory holds the recent verification history for a domain.
+message VerificationHistory {
+  string domain = 1;
+  repeated VerificationHistoryEntry entries = 2;
+}
+
+// CrossStratumRequirement defines what strata must be covered for a claim stratum.
+message CrossStratumRequirement {
+  uint32 claim_stratum = 1;
+  repeated uint32 required_strata = 2;
+  map<uint32, uint32> min_validators_per_stratum = 3;
+  uint64 lower_stratum_weight_bonus = 4;
+}
+
+// EffectiveReputationResult is returned by GetEffectiveReputation.
+message EffectiveReputationResult {
+  uint64 score = 1;
+  string source = 2;
+  uint64 discount = 3;
+  uint64 confidence = 4;
+}

@@ -158,17 +158,28 @@ func VerifyVRF(seed, publicKey, proof []byte) (output []byte, valid bool) {
 // IsValidatorSelected checks if a validator is selected based on VRF output and stake.
 // Selection probability = (stake / totalStake) * targetCount.
 // Returns selected status and priority (lower = higher priority).
+//
+// All intermediate arithmetic uses math/big.Int to prevent overflow:
+// the comparison outputNum * totalStake < stake * targetCount * 2^64
+// can exceed uint64 range when totalStake or stake are large.
 func IsValidatorSelected(vrfOutput []byte, stake, totalStake uint64, targetCount uint32) (selected bool, priority uint64) {
-	if len(vrfOutput) < 8 || totalStake == 0 {
+	if len(vrfOutput) < 8 || totalStake == 0 || stake == 0 {
 		return false, 0
+	}
+
+	// Clamp stake to totalStake (defensive — should never exceed)
+	if stake > totalStake {
+		stake = totalStake
 	}
 
 	// Use first 8 bytes as priority value
 	outputNum := binary.BigEndian.Uint64(vrfOutput[:8])
-	maxNum := new(big.Int).SetUint64(0)
-	maxNum.SetBit(maxNum, 64, 1) // 2^64
+
+	// 2^64 as big.Int
+	maxNum := new(big.Int).Lsh(big.NewInt(1), 64)
 
 	// Selection: outputNum * totalStake < stake * targetCount * 2^64
+	// All operations in big.Int to prevent overflow
 	left := new(big.Int).SetUint64(outputNum)
 	left.Mul(left, new(big.Int).SetUint64(totalStake))
 

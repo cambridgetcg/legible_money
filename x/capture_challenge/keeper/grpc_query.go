@@ -28,16 +28,17 @@ func (k Keeper) Challenge(goCtx context.Context, req *types.QueryChallengeReques
 func (k Keeper) ActiveChallenges(goCtx context.Context, req *types.QueryActiveChallengesRequest) (*types.QueryActiveChallengesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	var active []types.CaptureChallenge
+	var active []*types.CaptureChallenge
 	k.IterateChallenges(ctx, func(ch types.CaptureChallenge) bool {
 		// Filter by domain if specified
 		if req.Domain != "" && ch.Domain != req.Domain {
 			return false
 		}
 		// Only active statuses
-		switch ch.Status {
+		switch types.ChallengeStatus(ch.Status) {
 		case types.ChallengeSubmitted, types.ChallengeEvidencePeriod, types.ChallengeUnderReview:
-			active = append(active, ch)
+			c := ch // copy for pointer
+			active = append(active, &c)
 		}
 		return false
 	})

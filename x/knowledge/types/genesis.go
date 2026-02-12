@@ -2,16 +2,17 @@ package types
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	params := DefaultParams()
 	return &GenesisState{
-		Params:  DefaultParams(),
+		Params:  &params,
 		Domains: DefaultDomains(),
 	}
 }
 
 // DefaultDomains returns the bootstrap domains for the knowledge module.
 // These are included in genesis so claims have domains to reference from block 1.
-func DefaultDomains() []OntologicalDomain {
-	return []OntologicalDomain{
+func DefaultDomains() []*OntologicalDomain {
+	return []*OntologicalDomain{
 		{
 			Name:        "mathematics",
 			Description: "Formal mathematical truths, proofs, and theorems",
@@ -36,6 +37,8 @@ func DefaultDomains() []OntologicalDomain {
 }
 
 // DefaultParams returns default module parameters.
+// Note: proto-generated Params has a subset of fields (18 of 29).
+// Extra fields (slash rates, adversarial params) are tracked in keeper state.
 func DefaultParams() Params {
 	return Params{
 		OntologyVersion:                1,
@@ -56,15 +59,17 @@ func DefaultParams() Params {
 		AcceptanceThreshold:            770000,  // 77% agreement required
 		QuorumThreshold:                660000,  // 66% participation required
 		MaxValidatorsPerRound:          22,
-		InvalidClaimSlashBps:           220000,  // 22% slash on rejection (matches TS)
-		VerificationRewardAmount:       100000,  // 0.1 LGM per correct verification
-		ResearchTaxRate:                220000,  // 22% of rewards taxed to research fund (matches TS)
+		InvalidClaimSlashBps:           220000, // 22% slash on rejected claims
+		VerificationRewardAmount:       100000, // base reward per correct verification (ulgm)
 	}
 }
 
 // Validate performs basic genesis state validation.
 func (gs GenesisState) Validate() error {
-	return gs.Params.Validate()
+	if gs.Params != nil {
+		return gs.Params.Validate()
+	}
+	return nil
 }
 
 // Validate performs parameter validation.

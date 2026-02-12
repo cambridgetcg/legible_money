@@ -17,4 +17,5 @@ type CosmosAccountKeeper interface {
 type BankKeeper interface {
 	GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin
 	GetAllBalances(ctx context.Context, addr sdk.AccAddress) sdk.Coins
+	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
 }

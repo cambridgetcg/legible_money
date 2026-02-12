@@ -49,13 +49,13 @@ const TEST_CONSENSUS_PARAMS: ConsensusParams = {
   acceptanceThreshold: 0.77,
   rejectionThreshold: 0.77,
   contestedThreshold: 0.55,
-  minValidatorStake: 1111n * ONE_LGM,
-  minClaimStake: 11n * ONE_LGM,
+  minValidatorStake: 111n * 10n ** 15n, // 0.111 LGM
+  minClaimStake: 11n * 10n ** 15n,
   blockReward: 11n * ONE_LGM,
   verificationReward: 1n * ONE_LGM,
   citationRewardPerFact: 1n * ONE_LGM,
-  wrongVerificationSlash: 0.11,
-  missedVerificationSlash: 0.05,
+  wrongVerificationSlash: 0.06,
+  missedVerificationSlash: 0.0001,
   invalidClaimSlash: 0.22,
   researchShareRate: 0.22,
   maxTransactionsPerBlock: 111,
@@ -145,7 +145,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
         claimType: "empirical",
         domain: "chemistry.phase_transitions",
         stratum: "chemical",
-        stake: 200n * ONE_LGM,
+        stake: 200n * 10n ** 15n,
         references: [],
       };
 
@@ -208,7 +208,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
 
       const fact = state.getFact(claim!.resultFactId!);
       expect(fact).not.toBeNull();
-      expect(fact!.claim).toBe("Water boils at 100°C at standard pressure");
+      expect(fact!.claimText).toBe("Water boils at 100°C at standard pressure");
       expect(fact!.domain).toBe("chemistry.phase_transitions");
       expect(fact!.confidence).toBe(0.92);
       expect(fact!.verifierCount).toBe(3);
@@ -287,7 +287,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
       // Seed a base fact
       state.addFact({
         id: "fact:base-physics-001",
-        claim: "F = ma",
+        claimText: "F = ma",
         domain: "physics.mechanics",
         confidence: 0.99,
         verifiedAt: 50n,
@@ -308,7 +308,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "physics.mechanics",
             stratum: "physical",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: ["fact:base-physics-001"],
           },
           SUBMITTER_KEY,
@@ -375,7 +375,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
       // Seed two parent facts
       state.addFact({
         id: "fact:premise-001",
-        claim: "All metals conduct electricity",
+        claimText: "All metals conduct electricity",
         domain: "physics.materials",
         confidence: 0.95,
         verifiedAt: 50n,
@@ -387,7 +387,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
 
       state.addFact({
         id: "fact:premise-002",
-        claim: "Copper is a metal",
+        claimText: "Copper is a metal",
         domain: "chemistry.elements",
         confidence: 0.99,
         verifiedAt: 50n,
@@ -408,7 +408,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "physics.materials",
             stratum: "physical",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [],
             derivedFrom: {
               factIds: ["fact:premise-001", "fact:premise-002"],
@@ -482,7 +482,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
     it("should use correct strength for inductive inference", () => {
       state.addFact({
         id: "fact:observation-001",
-        claim: "Swan 1 is white",
+        claimText: "Swan 1 is white",
         domain: "biological.ornithology",
         confidence: 0.9,
         verifiedAt: 50n,
@@ -502,7 +502,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "biological.ornithology",
             stratum: "biological",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [],
             derivedFrom: {
               factIds: ["fact:observation-001"],
@@ -559,7 +559,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
       // Seed a revoked fact
       state.addFact({
         id: "fact:revoked-001",
-        claim: "Revoked premise",
+        claimText: "Revoked premise",
         domain: "test",
         confidence: 0.5,
         verifiedAt: 50n,
@@ -579,7 +579,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "test",
             stratum: "physical",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [],
             derivedFrom: {
               factIds: ["fact:revoked-001"],
@@ -616,7 +616,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "physics.relativity",
             stratum: "physical",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [],
           },
           SUBMITTER_KEY,
@@ -670,7 +670,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "physics.nuclear",
             stratum: "physical",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [factAId],
           },
           SUBMITTER_KEY,
@@ -730,7 +730,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "technological.energy",
             stratum: "technological",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [],
             derivedFrom: {
               factIds: [factBId],
@@ -819,7 +819,7 @@ describe.sequential("Knowledge Pipeline Integration", () => {
             claimType: "empirical",
             domain: "test",
             stratum: "physical",
-            stake: 200n * ONE_LGM,
+            stake: 200n * 10n ** 15n,
             references: [],
           },
           SUBMITTER_KEY,

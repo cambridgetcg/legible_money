@@ -24,9 +24,9 @@ import type { OntologicalStratum } from "../../core/knowledge/ontology/types.js"
 export const DOMAIN_QUALIFICATION_CONFIG = {
   // Stake commitment pathway (22/222/2222 pattern)
   stakeRequirements: {
-    leaf: 22n * 10n ** 18n, // 22 LGM for leaf domains (depth > 2)
-    mid: 222n * 10n ** 18n, // 222 LGM for mid-level (depth 2)
-    top: 2222n * 10n ** 18n, // 2222 LGM for top-level (depth 1)
+    leaf: 22n * 10n ** 15n, // 0.022 LGM for leaf domains (depth > 2)
+    mid: 222n * 10n ** 15n, // 0.222 LGM for mid-level (depth 2)
+    top: 2222n * 10n ** 15n, // 2.222 LGM for top-level (depth 1)
   },
   stakeLockPeriod: 7777n, // ~5.4 hours at 2521ms blocks
 
@@ -37,7 +37,7 @@ export const DOMAIN_QUALIFICATION_CONFIG = {
 
   // Cross-reference pathway
   minEndorsersForQualification: 3,
-  endorserStakeRequirement: 22n * 10n ** 18n, // Each endorser stakes 22 LGM
+  endorserStakeRequirement: 22n * 10n ** 15n, // Each endorser stakes 0.022 LGM
   endorsementDecayBlocks: 77777n, // Endorsements expire (~5.4 hours)
 
   // Stratum inheritance

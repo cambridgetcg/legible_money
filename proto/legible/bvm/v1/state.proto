@@ -1,0 +1,56 @@
+syntax = "proto3";
+package legible.bvm.v1;
+
+option go_package = "github.com/legible-money/legible/x/bvm/types";
+
+// DeployedContract represents a contract deployed to the BVM.
+message DeployedContract {
+  string address           = 1;  // contract address
+  string code_hash         = 2;  // hash of the bytecode
+  string creator           = 3;  // deployer address
+  uint64 deployed_at_block = 4;  // block height of deployment
+  bool   is_agent          = 5;  // whether contract is agent-owned
+  string agent_did         = 6;  // did:lgm:xxx (if agent)
+  uint64 bytecode_size     = 7;  // size of bytecode in bytes
+  string label             = 8;  // human-readable label
+}
+
+// ContractCode stores the bytecode for a deployed contract, keyed by code hash.
+message ContractCode {
+  string code_hash = 1; // hash of the bytecode
+  bytes  bytecode  = 2; // raw bytecode
+  uint64 ref_count = 3; // number of contracts referencing this code
+}
+
+// ContractStateEntry represents a key-value state entry for a contract.
+message ContractStateEntry {
+  string contract_address = 1; // contract address
+  string key              = 2; // state key
+  string value            = 3; // state value
+}
+
+// ContractSchedule represents a scheduled contract execution.
+message ContractSchedule {
+  string schedule_id      = 1; // unique schedule identifier
+  string contract_address = 2; // contract to execute
+  string caller           = 3; // original scheduler
+  string method           = 4; // method to call
+  string payload          = 5; // execution payload
+  uint64 execute_at_block = 6; // target execution block
+  uint64 max_gas          = 7; // maximum gas for execution
+  bool   executed         = 8; // whether already executed
+  bool   cancelled        = 9; // whether cancelled
+}
+
+// ContractCallRecord stores the result of a contract call.
+message ContractCallRecord {
+  string tx_hash          = 1;  // transaction hash
+  string contract_address = 2;  // contract called
+  string caller           = 3;  // caller address
+  string method           = 4;  // method called
+  uint64 gas_used         = 5;  // gas consumed
+  bool   success          = 6;  // whether call succeeded
+  string return_data      = 7;  // return data (if any)
+  string error            = 8;  // error message (if failed)
+  uint64 block_number     = 9;  // block height of call
+}

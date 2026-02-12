@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	legibleauthkeeper "github.com/legible-money/legible/x/auth/keeper"
+	authtypes "github.com/legible-money/legible/x/auth/types"
 	bvmtypes "github.com/legible-money/legible/x/bvm/types"
 	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
 	legiblestakingkeeper "github.com/legible-money/legible/x/staking/keeper"
@@ -85,4 +88,82 @@ func (a *BVMAuthAdapter) GetAccountByDID(ctx context.Context, did string) (inter
 		return nil, false
 	}
 	return account, true
+}
+
+// GetAccountDID resolves a bech32 address to its DID.
+func (a *BVMAuthAdapter) GetAccountDID(ctx context.Context, address string) (string, bool) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	account, found := a.keeper.GetAccount(sdkCtx, address)
+	if !found || account.Did == "" {
+		return "", false
+	}
+	return account.Did, true
+}
+
+// GetSessionCapabilities returns the active session capabilities for an owner at a given block height.
+// Finds the first valid (non-expired) session key and returns its capabilities.
+func (a *BVMAuthAdapter) GetSessionCapabilities(ctx context.Context, owner string, blockHeight uint64) (bvmtypes.SessionCapabilities, bool) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	sessions := a.keeper.GetSessionKeysForOwner(sdkCtx, owner)
+	for _, session := range sessions {
+		if session.ExpiresAtBlock > blockHeight {
+			return bvmtypes.SessionCapabilities{
+				CanTransfer:    session.Capabilities.CanTransfer,
+				CanStake:       session.Capabilities.CanStake,
+				CanSubmitClaims: session.Capabilities.CanSubmitClaims,
+				CanVote:        session.Capabilities.CanVote,
+			}, true
+		}
+	}
+	return bvmtypes.SessionCapabilities{}, false
+}
+
+// RegisterSessionKey creates a session key in the canonical x/auth store.
+func (a *BVMAuthAdapter) RegisterSessionKey(ctx context.Context, ownerAddress, keyHash, pubKey string, caps bvmtypes.SessionCapabilities, expiresAtBlock uint64) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+
+	// Generate key hash if not provided
+	if keyHash == "" {
+		h := sha256.Sum256([]byte(pubKey))
+		keyHash = fmt.Sprintf("%x", h)
+	}
+
+	session := authtypes.SessionKey{
+		KeyHash:        keyHash,
+		PublicKey:      pubKey,
+		Owner:          ownerAddress,
+		ExpiresAtBlock: expiresAtBlock,
+		CreatedAtBlock: uint64(sdkCtx.BlockHeight()),
+		Capabilities: &authtypes.SessionCapabilities{
+			CanTransfer:    caps.CanTransfer,
+			CanStake:       caps.CanStake,
+			CanSubmitClaims: caps.CanSubmitClaims,
+			CanVote:        caps.CanVote,
+		},
+	}
+	a.keeper.SetSessionKey(sdkCtx, session)
+
+	// Increment session key count on the account
+	if account, found := a.keeper.GetAccount(sdkCtx, ownerAddress); found {
+		account.SessionKeyCount++
+		a.keeper.SetAccount(sdkCtx, account)
+	}
+
+	return nil
+}
+
+// RevokeSessionKey removes a session key from the canonical x/auth store.
+func (a *BVMAuthAdapter) RevokeSessionKey(ctx context.Context, ownerAddress, keyHash string) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	a.keeper.DeleteSessionKey(sdkCtx, ownerAddress, keyHash)
+
+	// Decrement session key count on the account
+	if account, found := a.keeper.GetAccount(sdkCtx, ownerAddress); found {
+		if account.SessionKeyCount > 0 {
+			account.SessionKeyCount--
+			a.keeper.SetAccount(sdkCtx, account)
+		}
+	}
+
+	return nil
 }

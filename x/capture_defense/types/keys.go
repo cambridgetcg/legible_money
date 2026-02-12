@@ -20,6 +20,7 @@ var (
 	VerificationHistoryKeyPrefix = []byte{0x05}
 	CaptureMetricsKeyPrefix      = []byte{0x06}
 	ParamsKeyPrefix              = []byte{0x07}
+	DomainPauseKeyPrefix         = []byte{0x08}
 )
 
 // QualificationKey returns the store key for a validator's qualification in a domain.
@@ -66,4 +67,9 @@ func VerificationHistoryKey(domain string) []byte {
 // CaptureMetricsKey returns the store key for a domain's capture metrics.
 func CaptureMetricsKey(domain string) []byte {
 	return append(CaptureMetricsKeyPrefix, []byte(domain)...)
+}
+
+// DomainPauseKey returns the store key for a domain's pause-until block.
+func DomainPauseKey(domain string) []byte {
+	return append(DomainPauseKeyPrefix, []byte(domain)...)
 }

@@ -28,7 +28,7 @@ const BOOTSTRAP_AMOUNT = 222000000000000000n; // 0.222 LGM
 
 const TEST_PARAMS: ConsensusParams = {
   ...DEFAULT_CONSENSUS_PARAMS,
-  minClaimStake: 11n * ONE_LGM,
+  minClaimStake: 11n * 10n ** 15n,
   graduatedClaimStakeFloor: 100000000000000000n, // 0.1 LGM
   claimStakeGraduationClaims: 22,
   // Disable anti-sybil and claim text length for these tests (tested separately)
@@ -56,18 +56,18 @@ describe("getGraduatedMinStake", () => {
 
   it("should return full minClaimStake at graduation threshold", () => {
     const stake = getGraduatedMinStake(22, TEST_PARAMS);
-    expect(stake).toBe(11n * ONE_LGM);
+    expect(stake).toBe(11n * 10n ** 15n);
   });
 
   it("should return full minClaimStake above graduation threshold", () => {
     const stake = getGraduatedMinStake(100, TEST_PARAMS);
-    expect(stake).toBe(11n * ONE_LGM);
+    expect(stake).toBe(11n * 10n ** 15n);
   });
 
   it("should interpolate linearly between floor and full stake", () => {
     // At 11 accepted claims (halfway): floor + (range * 11/22) = floor + range/2
     const floor = 100000000000000000n; // 0.1 LGM
-    const full = 11n * ONE_LGM;
+    const full = 11n * 10n ** 15n;
     const range = full - floor;
     const expected = floor + (range * 11n) / 22n;
 
@@ -92,7 +92,7 @@ describe("getGraduatedMinStake", () => {
     } as ConsensusParams;
 
     const stake = getGraduatedMinStake(0, paramsWithout);
-    expect(stake).toBe(11n * ONE_LGM);
+    expect(stake).toBe(11n * 10n ** 15n);
   });
 
   it("should produce stakes affordable from bootstrap + citation revenue", () => {
@@ -294,7 +294,7 @@ describe.sequential("Graduated Stake Integration", () => {
     expect(acceptedCount).toBe(22);
 
     const requiredStake = getGraduatedMinStake(acceptedCount, TEST_PARAMS);
-    expect(requiredStake).toBe(111n * ONE_LGM);
+    expect(requiredStake).toBe(111n * 10n ** 15n);
 
     // Submitting with less than full stake should fail
     const lowTx = makeClaimSubmitTx(
@@ -313,7 +313,7 @@ describe.sequential("Graduated Stake Integration", () => {
     // Submitting with full stake should succeed
     const fullTx = makeClaimSubmitTx(
       TEST_SENDER,
-      111n * ONE_LGM,
+      111n * 10n ** 15n,
       "Fully graduated",
     );
     const fullResult = executeTransaction(

@@ -5,10 +5,27 @@ import (
 	"math/big"
 	"sort"
 
+	"cosmossdk.io/log"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/tokens/types"
 )
+
+// parseBigInt parses a decimal string into *big.Int with validation.
+// On failure (empty, non-numeric, negative), logs a warning and returns zero.
+// This prevents silent corruption from propagating as negative balances.
+func parseBigInt(s string, field string, logger log.Logger) *big.Int {
+	n := new(big.Int)
+	if s == "" {
+		logger.Error("empty string in bigint field, defaulting to zero", "field", field)
+		return n
+	}
+	if _, ok := n.SetString(s, 10); !ok {
+		logger.Error("failed to parse bigint field, defaulting to zero", "field", field, "value", s)
+		return new(big.Int)
+	}
+	return n
+}
 
 // CreditBalance credits tokens to the current period for an address.
 // This is used for system rewards, minting, etc. where tokens receive fresh expiration.
@@ -28,7 +45,12 @@ func (k Keeper) CreditBalance(ctx sdk.Context, address string, amount string, bl
 }
 
 // CreditBalanceToSpecificPeriod credits tokens to a specific period for an address.
-// Used for period-preserving transfers (sender's periods are maintained on the receiver).
+// Used for period-preserving transfers (sender's periods are maintained on the receiver)
+// and staking unbonding (restoring tokens to their original period).
+//
+// If the requested period has already expired (e.g., governance shortened PeriodsUntilExpiry
+// during staking unbonding), the tokens are credited to the current period instead to
+// prevent crediting to an expired period where the tokens would be immediately unspendable.
 func (k Keeper) CreditBalanceToSpecificPeriod(ctx sdk.Context, address string, amount string, period uint64) error {
 	amtInt := new(big.Int)
 	if _, ok := amtInt.SetString(amount, 10); !ok || amtInt.Sign() <= 0 {
@@ -36,6 +58,16 @@ func (k Keeper) CreditBalanceToSpecificPeriod(ctx sdk.Context, address string, a
 	}
 
 	params := k.GetParams(ctx)
+
+	// Guard: if the requested period has already expired, fall back to the current
+	// period so the tokens remain spendable. This protects against governance param
+	// changes during staking unbonding that could make the OriginPeriod expired.
+	currentPeriod := k.GetCurrentPeriod(ctx)
+	if k.IsExpired(period, currentPeriod, params.PeriodsUntilExpiry) {
+		k.Logger(ctx).Info("redirecting credit from expired period to current",
+			"address", address, "expired_period", period, "current_period", currentPeriod)
+		period = currentPeriod
+	}
 
 	// Check dust threshold
 	dust := new(big.Int)
@@ -49,7 +81,7 @@ func (k Keeper) CreditBalanceToSpecificPeriod(ctx sdk.Context, address string, a
 		acct = types.ExpirableAccount{
 			Address:        address,
 			TotalBalance:   "0",
-			PeriodBalances: []types.PeriodBalance{},
+			PeriodBalances: []*types.PeriodBalance{},
 			EarliestPeriod: period,
 			LatestPeriod:   period,
 			TotalExpired:   "0",
@@ -72,7 +104,7 @@ func (k Keeper) CreditBalanceToSpecificPeriod(ctx sdk.Context, address string, a
 	}
 
 	if !periodFound {
-		acct.PeriodBalances = append(acct.PeriodBalances, types.PeriodBalance{
+		acct.PeriodBalances = append(acct.PeriodBalances, &types.PeriodBalance{
 			Period:    period,
 			Balance:   amount,
 			ExpiresAt: expiresAt,
@@ -85,8 +117,7 @@ func (k Keeper) CreditBalanceToSpecificPeriod(ctx sdk.Context, address string, a
 	}
 
 	// Update aggregate fields
-	totalBal := new(big.Int)
-	totalBal.SetString(acct.TotalBalance, 10)
+	totalBal := parseBigInt(acct.TotalBalance, "TotalBalance", k.Logger(ctx))
 	totalBal.Add(totalBal, amtInt)
 	acct.TotalBalance = totalBal.String()
 
@@ -139,7 +170,8 @@ func (k Keeper) DebitBalance(ctx sdk.Context, address string, amount string) err
 
 	// FIFO debit from oldest non-expired period
 	remaining := new(big.Int).Set(amtInt)
-	var updatedPeriods []types.PeriodBalance
+	var updatedPeriods []*types.PeriodBalance
+	var consumedPeriods []uint64 // periods fully consumed (for sweep index cleanup)
 
 	for _, pb := range acct.PeriodBalances {
 		if pb.Swept || k.IsExpired(pb.Period, currentPeriod, params.PeriodsUntilExpiry) {
@@ -171,14 +203,20 @@ func (k Keeper) DebitBalance(ctx sdk.Context, address string, amount string) err
 		pbBal.SetString(pb.Balance, 10)
 		if pbBal.Sign() > 0 {
 			updatedPeriods = append(updatedPeriods, pb)
+		} else {
+			consumedPeriods = append(consumedPeriods, pb.Period)
 		}
 	}
 
 	acct.PeriodBalances = updatedPeriods
 
+	// Clean sweep index for fully consumed periods to avoid ghost entries
+	for _, p := range consumedPeriods {
+		k.RemoveFromSweepIndex(ctx, p, address)
+	}
+
 	// Recalculate total balance
-	totalBal := new(big.Int)
-	totalBal.SetString(acct.TotalBalance, 10)
+	totalBal := parseBigInt(acct.TotalBalance, "TotalBalance", k.Logger(ctx))
 	totalBal.Sub(totalBal, amtInt)
 	acct.TotalBalance = totalBal.String()
 
@@ -213,7 +251,7 @@ func (k Keeper) GetBalance(ctx sdk.Context, address string) string {
 }
 
 // GetPeriodBalances returns all period balances for an address.
-func (k Keeper) GetPeriodBalances(ctx sdk.Context, address string) []types.PeriodBalance {
+func (k Keeper) GetPeriodBalances(ctx sdk.Context, address string) []*types.PeriodBalance {
 	acct, found := k.GetExpirableAccount(ctx, address)
 	if !found {
 		return nil
@@ -262,7 +300,8 @@ func (k Keeper) TransferPreservingPeriods(ctx sdk.Context, from, to, amount stri
 	var debits []periodDebit
 
 	remaining := new(big.Int).Set(amtInt)
-	var updatedPeriods []types.PeriodBalance
+	var updatedPeriods []*types.PeriodBalance
+	var consumedPeriods []uint64 // for sweep index cleanup
 
 	for _, pb := range fromAcct.PeriodBalances {
 		if pb.Swept || k.IsExpired(pb.Period, currentPeriod, params.PeriodsUntilExpiry) {
@@ -295,13 +334,20 @@ func (k Keeper) TransferPreservingPeriods(ctx sdk.Context, from, to, amount stri
 		pbBal.SetString(pb.Balance, 10)
 		if pbBal.Sign() > 0 {
 			updatedPeriods = append(updatedPeriods, pb)
+		} else {
+			consumedPeriods = append(consumedPeriods, pb.Period)
 		}
 	}
 
 	// Update sender
 	fromAcct.PeriodBalances = updatedPeriods
-	totalBal := new(big.Int)
-	totalBal.SetString(fromAcct.TotalBalance, 10)
+
+	// Clean sweep index for fully consumed periods
+	for _, p := range consumedPeriods {
+		k.RemoveFromSweepIndex(ctx, p, from)
+	}
+
+	totalBal := parseBigInt(fromAcct.TotalBalance, "TotalBalance", k.Logger(ctx))
 	totalBal.Sub(totalBal, amtInt)
 	fromAcct.TotalBalance = totalBal.String()
 	k.recalculatePeriodBounds(&fromAcct)
@@ -373,8 +419,7 @@ func (k Keeper) SweepExpiredTokens(ctx sdk.Context, maxAccounts uint32) (string,
 func (k Keeper) sweepAccountPeriod(ctx sdk.Context, acct *types.ExpirableAccount, period, currentPeriod uint64, params types.Params) *big.Int {
 	swept := new(big.Int)
 
-	for i := range acct.PeriodBalances {
-		pb := &acct.PeriodBalances[i]
+	for _, pb := range acct.PeriodBalances {
 		if pb.Period != period {
 			continue
 		}
@@ -395,20 +440,18 @@ func (k Keeper) sweepAccountPeriod(ctx sdk.Context, acct *types.ExpirableAccount
 		pb.Swept = true
 
 		// Update account total expired
-		totalExpired := new(big.Int)
-		totalExpired.SetString(acct.TotalExpired, 10)
+		totalExpired := parseBigInt(acct.TotalExpired, "TotalExpired", k.Logger(ctx))
 		totalExpired.Add(totalExpired, bal)
 		acct.TotalExpired = totalExpired.String()
 
 		// Reduce total balance
-		totalBal := new(big.Int)
-		totalBal.SetString(acct.TotalBalance, 10)
+		totalBal := parseBigInt(acct.TotalBalance, "TotalBalance", k.Logger(ctx))
 		totalBal.Sub(totalBal, bal)
 		acct.TotalBalance = totalBal.String()
 	}
 
 	// Clean up zero/swept period balances
-	var activePeriods []types.PeriodBalance
+	var activePeriods []*types.PeriodBalance
 	for _, pb := range acct.PeriodBalances {
 		pbBal := new(big.Int)
 		pbBal.SetString(pb.Balance, 10)
@@ -420,6 +463,15 @@ func (k Keeper) sweepAccountPeriod(ctx sdk.Context, acct *types.ExpirableAccount
 	k.recalculatePeriodBounds(acct)
 
 	return swept
+}
+
+// refreshExpiresAt recomputes ExpiresAt on all period balances from current params.
+// Stored ExpiresAt values become stale if PeriodsUntilExpiry or PeriodBlocks change
+// via governance. Call this before returning period data to queries.
+func (k Keeper) refreshExpiresAt(acct *types.ExpirableAccount, params types.Params) {
+	for i := range acct.PeriodBalances {
+		acct.PeriodBalances[i].ExpiresAt = k.PeriodToExpirationBlock(acct.PeriodBalances[i].Period, params)
+	}
 }
 
 // recalculatePeriodBounds updates EarliestPeriod and LatestPeriod on an account.

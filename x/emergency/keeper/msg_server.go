@@ -12,6 +12,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -72,12 +73,10 @@ func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt)
 	// 8. Create proposal
 	proposalId := fmt.Sprintf("halt-%d-%s", ctx.BlockHeight(), msg.Proposer)
 	proposal := types.EmergencyHaltProposal{
-		Id:                   proposalId,
-		Proposer:             msg.Proposer,
-		Reason:               msg.Reason,
-		EvidenceHash:         msg.EvidenceHash,
-		ProposedAtBlock:      currentBlock,
-		SuggestedRevertBlock: msg.SuggestedRevertBlock,
+		Id:              proposalId,
+		Proposer:        msg.Proposer,
+		Reason:          msg.Reason,
+		ProposedAtBlock: currentBlock,
 	}
 
 	// 9. Create ceremony
@@ -98,7 +97,7 @@ func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt)
 	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: currentBlock,
-		Action:      types.AuditHaltProposed,
+		Action:      string(types.AuditHaltProposed),
 		Actor:       msg.Proposer,
 		CeremonyId:  ceremony.Id,
 		Details:     msg.Reason,
@@ -118,7 +117,7 @@ func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt)
 		"proposer", msg.Proposer,
 	)
 
-	return &types.MsgProposeHaltResponse{CeremonyId: ceremony.Id}, nil
+	return &types.MsgProposeHaltResponse{ProposalId: ceremony.Id}, nil
 }
 
 // VoteHalt handles a Guardian's vote on a halt ceremony.
@@ -129,51 +128,51 @@ func (k msgServer) VoteHalt(goCtx context.Context, msg *types.MsgVoteHalt) (*typ
 		return nil, fmt.Errorf("%w: %s", types.ErrNotGuardian, msg.Voter)
 	}
 
-	ceremony, found := k.GetCeremony(ctx, msg.CeremonyId)
+	ceremony, found := k.GetCeremony(ctx, msg.ProposalId)
 	if !found {
-		return nil, fmt.Errorf("%w: %s", types.ErrNoCeremony, msg.CeremonyId)
+		return nil, fmt.Errorf("%w: %s", types.ErrNoCeremony, msg.ProposalId)
 	}
 
-	if ceremony.Type != types.CeremonyHalt {
-		return nil, fmt.Errorf("%w: ceremony %s is not a halt ceremony", types.ErrInvalidPhase, msg.CeremonyId)
+	if ceremony.Type != string(types.CeremonyHalt) {
+		return nil, fmt.Errorf("%w: ceremony %s is not a halt ceremony", types.ErrInvalidPhase, msg.ProposalId)
 	}
 
-	if msg.IsPrecommit {
-		err := k.AddPrecommit(ctx, msg.CeremonyId, types.EmergencyPrecommit{
-			Voter:     msg.Voter,
-			Signature: msg.Signature,
+	// Determine whether this is a prevote or precommit based on ceremony phase.
+	// In the proto schema there is no IsPrecommit field — the phase determines the action.
+	if ceremony.Phase == string(types.PhasePrecommit) {
+		err := k.AddPrecommit(ctx, msg.ProposalId, types.EmergencyPrecommit{
+			Voter: msg.Voter,
 		})
 		if err != nil {
 			return nil, err
 		}
-		k.addVoteAudit(ctx, types.AuditHaltPrecommit, msg.Voter, msg.CeremonyId)
+		k.addVoteAudit(ctx, types.AuditHaltPrecommit, msg.Voter, msg.ProposalId)
 	} else {
-		err := k.AddPrevote(ctx, msg.CeremonyId, types.EmergencyVote{
-			Voter:     msg.Voter,
-			Approve:   msg.Approve,
-			Signature: msg.Signature,
+		err := k.AddPrevote(ctx, msg.ProposalId, types.EmergencyVote{
+			Voter:   msg.Voter,
+			Approve: msg.Approve,
 		})
 		if err != nil {
 			return nil, err
 		}
-		k.addVoteAudit(ctx, types.AuditHaltPrevote, msg.Voter, msg.CeremonyId)
+		k.addVoteAudit(ctx, types.AuditHaltPrevote, msg.Voter, msg.ProposalId)
 	}
 
 	// Check progress after vote
-	finalized, _ := k.CheckCeremonyProgress(ctx, msg.CeremonyId)
+	finalized, _ := k.CheckCeremonyProgress(ctx, msg.ProposalId)
 
 	// Get updated ceremony for response
-	ceremony, _ = k.GetCeremony(ctx, msg.CeremonyId)
+	ceremony, _ = k.GetCeremony(ctx, msg.ProposalId)
 
 	if finalized {
-		k.HandleCeremonyFinalization(ctx, msg.CeremonyId)
-	} else if ceremony.Phase == types.PhaseFailed {
-		k.HandleCeremonyFailure(ctx, msg.CeremonyId)
+		k.HandleCeremonyFinalization(ctx, msg.ProposalId)
+	} else if ceremony.Phase == string(types.PhaseFailed) {
+		k.HandleCeremonyFailure(ctx, msg.ProposalId)
 	}
 
 	return &types.MsgVoteHaltResponse{
-		Phase:     ceremony.Phase,
-		Finalized: finalized,
+		QuorumReached: ceremony.Phase == string(types.PhasePrecommit) || ceremony.Phase == string(types.PhaseFinalized),
+		ChainHalted:   finalized,
 	}, nil
 }
 
@@ -197,25 +196,16 @@ func (k msgServer) ProposeRevert(goCtx context.Context, msg *types.MsgProposeRev
 
 	// Validate revert depth
 	currentBlock := uint64(ctx.BlockHeight())
-	if currentBlock > msg.TargetBlockNumber && (currentBlock-msg.TargetBlockNumber) > params.MaxRevertDepth {
-		return nil, fmt.Errorf("%w: depth %d exceeds max %d", types.ErrRevertDepthExceeded, currentBlock-msg.TargetBlockNumber, params.MaxRevertDepth)
-	}
-
-	// Must reference the active halt ceremony
-	activeHaltId := k.GetActiveHaltCeremonyId(ctx)
-	if msg.HaltCeremonyId != activeHaltId {
-		return nil, fmt.Errorf("%w: expected %s, got %s", types.ErrInvalidHaltReference, activeHaltId, msg.HaltCeremonyId)
+	if currentBlock > msg.RevertToHeight && (currentBlock-msg.RevertToHeight) > params.MaxRevertDepth {
+		return nil, fmt.Errorf("%w: depth %d exceeds max %d", types.ErrRevertDepthExceeded, currentBlock-msg.RevertToHeight, params.MaxRevertDepth)
 	}
 
 	proposalId := fmt.Sprintf("revert-%d-%s", ctx.BlockHeight(), msg.Proposer)
 	proposal := types.EmergencyRevertProposal{
 		Id:                proposalId,
 		Proposer:          msg.Proposer,
-		TargetBlockNumber: msg.TargetBlockNumber,
-		TargetBlockHash:   msg.TargetBlockHash,
-		TargetStateRoot:   msg.TargetStateRoot,
+		TargetBlockNumber: msg.RevertToHeight,
 		Justification:     msg.Justification,
-		HaltCeremonyId:    msg.HaltCeremonyId,
 	}
 
 	ceremony, err := k.CreateRevertCeremony(ctx, proposal)
@@ -228,26 +218,26 @@ func (k msgServer) ProposeRevert(goCtx context.Context, msg *types.MsgProposeRev
 	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: currentBlock,
-		Action:      types.AuditRevertProposed,
+		Action:      string(types.AuditRevertProposed),
 		Actor:       msg.Proposer,
 		CeremonyId:  ceremony.Id,
-		Details:     fmt.Sprintf("revert to block %d", msg.TargetBlockNumber),
+		Details:     fmt.Sprintf("revert to block %d", msg.RevertToHeight),
 	})
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("emergency_revert_proposed",
 			sdk.NewAttribute("ceremony_id", ceremony.Id),
 			sdk.NewAttribute("proposer", msg.Proposer),
-			sdk.NewAttribute("target_block", fmt.Sprintf("%d", msg.TargetBlockNumber)),
+			sdk.NewAttribute("target_block", fmt.Sprintf("%d", msg.RevertToHeight)),
 		),
 	)
 
 	k.Logger(ctx).Info("revert ceremony proposed",
 		"ceremony_id", ceremony.Id,
-		"target_block", msg.TargetBlockNumber,
+		"target_block", msg.RevertToHeight,
 	)
 
-	return &types.MsgProposeRevertResponse{CeremonyId: ceremony.Id}, nil
+	return &types.MsgProposeRevertResponse{ProposalId: ceremony.Id}, nil
 }
 
 // VoteRevert handles a Guardian's vote on a revert ceremony.
@@ -258,48 +248,47 @@ func (k msgServer) VoteRevert(goCtx context.Context, msg *types.MsgVoteRevert) (
 		return nil, fmt.Errorf("%w: %s", types.ErrNotGuardian, msg.Voter)
 	}
 
-	ceremony, found := k.GetCeremony(ctx, msg.CeremonyId)
+	ceremony, found := k.GetCeremony(ctx, msg.ProposalId)
 	if !found {
-		return nil, fmt.Errorf("%w: %s", types.ErrNoCeremony, msg.CeremonyId)
+		return nil, fmt.Errorf("%w: %s", types.ErrNoCeremony, msg.ProposalId)
 	}
 
-	if ceremony.Type != types.CeremonyRevert {
-		return nil, fmt.Errorf("%w: ceremony %s is not a revert ceremony", types.ErrInvalidPhase, msg.CeremonyId)
+	if ceremony.Type != string(types.CeremonyRevert) {
+		return nil, fmt.Errorf("%w: ceremony %s is not a revert ceremony", types.ErrInvalidPhase, msg.ProposalId)
 	}
 
-	if msg.IsPrecommit {
-		err := k.AddPrecommit(ctx, msg.CeremonyId, types.EmergencyPrecommit{
-			Voter:     msg.Voter,
-			Signature: msg.Signature,
+	// Phase-based prevote/precommit determination
+	if ceremony.Phase == string(types.PhasePrecommit) {
+		err := k.AddPrecommit(ctx, msg.ProposalId, types.EmergencyPrecommit{
+			Voter: msg.Voter,
 		})
 		if err != nil {
 			return nil, err
 		}
-		k.addVoteAudit(ctx, types.AuditRevertPrecommit, msg.Voter, msg.CeremonyId)
+		k.addVoteAudit(ctx, types.AuditRevertPrecommit, msg.Voter, msg.ProposalId)
 	} else {
-		err := k.AddPrevote(ctx, msg.CeremonyId, types.EmergencyVote{
-			Voter:     msg.Voter,
-			Approve:   msg.Approve,
-			Signature: msg.Signature,
+		err := k.AddPrevote(ctx, msg.ProposalId, types.EmergencyVote{
+			Voter:   msg.Voter,
+			Approve: msg.Approve,
 		})
 		if err != nil {
 			return nil, err
 		}
-		k.addVoteAudit(ctx, types.AuditRevertPrevote, msg.Voter, msg.CeremonyId)
+		k.addVoteAudit(ctx, types.AuditRevertPrevote, msg.Voter, msg.ProposalId)
 	}
 
-	finalized, _ := k.CheckCeremonyProgress(ctx, msg.CeremonyId)
-	ceremony, _ = k.GetCeremony(ctx, msg.CeremonyId)
+	finalized, _ := k.CheckCeremonyProgress(ctx, msg.ProposalId)
+	ceremony, _ = k.GetCeremony(ctx, msg.ProposalId)
 
 	if finalized {
-		k.HandleCeremonyFinalization(ctx, msg.CeremonyId)
-	} else if ceremony.Phase == types.PhaseFailed {
-		k.HandleCeremonyFailure(ctx, msg.CeremonyId)
+		k.HandleCeremonyFinalization(ctx, msg.ProposalId)
+	} else if ceremony.Phase == string(types.PhaseFailed) {
+		k.HandleCeremonyFailure(ctx, msg.ProposalId)
 	}
 
 	return &types.MsgVoteRevertResponse{
-		Phase:     ceremony.Phase,
-		Finalized: finalized,
+		QuorumReached:  ceremony.Phase == string(types.PhasePrecommit) || ceremony.Phase == string(types.PhaseFinalized),
+		RevertExecuted: finalized,
 	}, nil
 }
 
@@ -320,21 +309,10 @@ func (k msgServer) ProposeResume(goCtx context.Context, msg *types.MsgProposeRes
 		return nil, fmt.Errorf("%w", types.ErrCeremonyActive)
 	}
 
-	// Must reference the active halt ceremony
-	activeHaltId := k.GetActiveHaltCeremonyId(ctx)
-	if msg.HaltCeremonyId != activeHaltId {
-		return nil, fmt.Errorf("%w: expected %s, got %s", types.ErrInvalidHaltReference, activeHaltId, msg.HaltCeremonyId)
-	}
-
 	proposalId := fmt.Sprintf("resume-%d-%s", ctx.BlockHeight(), msg.Proposer)
 	proposal := types.EmergencyResumeProposal{
-		Id:               proposalId,
-		Proposer:         msg.Proposer,
-		ResumeFromBlock:  msg.ResumeFromBlock,
-		ResumeFromHash:   msg.ResumeFromHash,
-		ResumeStateRoot:  msg.ResumeStateRoot,
-		HaltCeremonyId:   msg.HaltCeremonyId,
-		RevertCeremonyId: msg.RevertCeremonyId,
+		Id:       proposalId,
+		Proposer: msg.Proposer,
 	}
 
 	ceremony, err := k.CreateResumeCeremony(ctx, proposal)
@@ -347,10 +325,10 @@ func (k msgServer) ProposeResume(goCtx context.Context, msg *types.MsgProposeRes
 	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: uint64(ctx.BlockHeight()),
-		Action:      types.AuditResumeProposed,
+		Action:      string(types.AuditResumeProposed),
 		Actor:       msg.Proposer,
 		CeremonyId:  ceremony.Id,
-		Details:     fmt.Sprintf("resume from block %d", msg.ResumeFromBlock),
+		Details:     "resume proposed",
 	})
 
 	ctx.EventManager().EmitEvent(
@@ -365,7 +343,7 @@ func (k msgServer) ProposeResume(goCtx context.Context, msg *types.MsgProposeRes
 		"proposer", msg.Proposer,
 	)
 
-	return &types.MsgProposeResumeResponse{CeremonyId: ceremony.Id}, nil
+	return &types.MsgProposeResumeResponse{ProposalId: ceremony.Id}, nil
 }
 
 // VoteResume handles a Guardian's vote on a resume ceremony.
@@ -376,48 +354,47 @@ func (k msgServer) VoteResume(goCtx context.Context, msg *types.MsgVoteResume) (
 		return nil, fmt.Errorf("%w: %s", types.ErrNotGuardian, msg.Voter)
 	}
 
-	ceremony, found := k.GetCeremony(ctx, msg.CeremonyId)
+	ceremony, found := k.GetCeremony(ctx, msg.ProposalId)
 	if !found {
-		return nil, fmt.Errorf("%w: %s", types.ErrNoCeremony, msg.CeremonyId)
+		return nil, fmt.Errorf("%w: %s", types.ErrNoCeremony, msg.ProposalId)
 	}
 
-	if ceremony.Type != types.CeremonyResume {
-		return nil, fmt.Errorf("%w: ceremony %s is not a resume ceremony", types.ErrInvalidPhase, msg.CeremonyId)
+	if ceremony.Type != string(types.CeremonyResume) {
+		return nil, fmt.Errorf("%w: ceremony %s is not a resume ceremony", types.ErrInvalidPhase, msg.ProposalId)
 	}
 
-	if msg.IsPrecommit {
-		err := k.AddPrecommit(ctx, msg.CeremonyId, types.EmergencyPrecommit{
-			Voter:     msg.Voter,
-			Signature: msg.Signature,
+	// Phase-based prevote/precommit determination
+	if ceremony.Phase == string(types.PhasePrecommit) {
+		err := k.AddPrecommit(ctx, msg.ProposalId, types.EmergencyPrecommit{
+			Voter: msg.Voter,
 		})
 		if err != nil {
 			return nil, err
 		}
-		k.addVoteAudit(ctx, types.AuditResumePrecommit, msg.Voter, msg.CeremonyId)
+		k.addVoteAudit(ctx, types.AuditResumePrecommit, msg.Voter, msg.ProposalId)
 	} else {
-		err := k.AddPrevote(ctx, msg.CeremonyId, types.EmergencyVote{
-			Voter:     msg.Voter,
-			Approve:   msg.Approve,
-			Signature: msg.Signature,
+		err := k.AddPrevote(ctx, msg.ProposalId, types.EmergencyVote{
+			Voter:   msg.Voter,
+			Approve: msg.Approve,
 		})
 		if err != nil {
 			return nil, err
 		}
-		k.addVoteAudit(ctx, types.AuditResumePrevote, msg.Voter, msg.CeremonyId)
+		k.addVoteAudit(ctx, types.AuditResumePrevote, msg.Voter, msg.ProposalId)
 	}
 
-	finalized, _ := k.CheckCeremonyProgress(ctx, msg.CeremonyId)
-	ceremony, _ = k.GetCeremony(ctx, msg.CeremonyId)
+	finalized, _ := k.CheckCeremonyProgress(ctx, msg.ProposalId)
+	ceremony, _ = k.GetCeremony(ctx, msg.ProposalId)
 
 	if finalized {
-		k.HandleCeremonyFinalization(ctx, msg.CeremonyId)
-	} else if ceremony.Phase == types.PhaseFailed {
-		k.HandleCeremonyFailure(ctx, msg.CeremonyId)
+		k.HandleCeremonyFinalization(ctx, msg.ProposalId)
+	} else if ceremony.Phase == string(types.PhaseFailed) {
+		k.HandleCeremonyFailure(ctx, msg.ProposalId)
 	}
 
 	return &types.MsgVoteResumeResponse{
-		Phase:     ceremony.Phase,
-		Finalized: finalized,
+		QuorumReached: ceremony.Phase == string(types.PhasePrecommit) || ceremony.Phase == string(types.PhaseFinalized),
+		ChainResumed:  finalized,
 	}, nil
 }
 
@@ -427,7 +404,7 @@ func (k msgServer) addVoteAudit(ctx sdk.Context, action types.AuditAction, voter
 	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: uint64(ctx.BlockHeight()),
-		Action:      action,
+		Action:      string(action),
 		Actor:       voter,
 		CeremonyId:  ceremonyId,
 		Details:     "",

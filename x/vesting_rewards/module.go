@@ -36,8 +36,8 @@ func (AppModuleBasic) Name() string { return types.ModuleName }
 
 // RegisterLegacyAminoCodec registers the module's amino codec.
 func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&types.MsgClaimVestedRewards{}, "vesting_rewards/ClaimVestedRewards", nil)
-	cdc.RegisterConcrete(&types.MsgFalsifyClaim{}, "vesting_rewards/FalsifyClaim", nil)
+	cdc.RegisterConcrete(&types.MsgClaimVesting{}, "vesting_rewards/ClaimVesting", nil)
+	cdc.RegisterConcrete(&types.MsgFalsifyVesting{}, "vesting_rewards/FalsifyVesting", nil)
 }
 
 // RegisterInterfaces registers the module's interface types.
@@ -59,7 +59,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 	if err := json.Unmarshal(bz, &gs); err != nil {
 		return fmt.Errorf("failed to unmarshal genesis state: %w", err)
 	}
-	return gs.Validate()
+	return (&gs).Validate()
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
@@ -107,9 +107,11 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	var gs types.GenesisState
 	if err := json.Unmarshal(data, &gs); err != nil {
 		// Fall back to defaults if genesis data is empty/invalid
-		gs = *types.DefaultGenesis()
+		defGs := types.DefaultGenesis()
+		am.keeper.InitGenesis(ctx, defGs)
+		return
 	}
-	am.keeper.InitGenesis(ctx, gs)
+	am.keeper.InitGenesis(ctx, &gs)
 }
 
 // ExportGenesis exports the module's genesis state.
@@ -163,13 +165,21 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 
 // EndBlock executes end-block logic.
 // Processes vesting releases for active schedules.
+//
+// L3 DESIGN NOTE: This EndBlocker proactively updates claimable amounts each block.
+// This keeps query results accurate but costs gas proportional to active schedule count.
+// An alternative "lazy evaluation" approach (only compute on ClaimVestedRewards) would
+// be more gas-efficient at scale but less query-accurate. The proactive approach is chosen
+// because: (1) accuracy matters for governance decisions referencing vesting state,
+// (2) the exponential release curve means most updates are small/zero and cheap,
+// (3) if schedule count grows large, this can be rate-limited to every N blocks.
 func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
 	// Update claimable amounts for active vesting schedules
 	schedules := am.keeper.GetAllActiveVestingSchedules(sdkCtx)
 	for _, schedule := range schedules {
-		if schedule.Status == types.VestingStatusActive {
+		if schedule.Status == string(types.VestingStatusActive) {
 			if err := am.keeper.UpdateClaimableAmount(sdkCtx, schedule.Id); err != nil {
 				am.keeper.Logger(sdkCtx).Error("failed to update claimable amount",
 					"vesting_id", schedule.Id, "error", err)

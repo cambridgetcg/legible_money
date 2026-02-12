@@ -37,7 +37,7 @@ export interface CouncilContext {
 }
 
 /** Virtual stake assigned to each council member for quorum calculation */
-const COUNCIL_MEMBER_VIRTUAL_STAKE = 11111n * 10n ** 18n; // 11,111 LGM each
+const COUNCIL_MEMBER_VIRTUAL_STAKE = 11111n * 10n ** 15n; // 11.111 LGM each
 
 /**
  * Check if the genesis council is active (within bootstrap period).
@@ -134,15 +134,16 @@ export function getGuardianEffectiveStake(
 
 /**
  * Get the quorum threshold for a ceremony type.
+ * Returns basis points (e.g. 750000 = 75%).
  */
-function getQuorumThreshold(type: EmergencyCeremonyType): number {
+function getQuorumThresholdBP(type: EmergencyCeremonyType): bigint {
   switch (type) {
     case "halt":
-      return EMERGENCY_PARAMS.GUARDIAN_HALT_QUORUM;
+      return EMERGENCY_PARAMS.GUARDIAN_HALT_QUORUM_BP;
     case "revert":
-      return EMERGENCY_PARAMS.GUARDIAN_REVERT_QUORUM;
+      return EMERGENCY_PARAMS.GUARDIAN_REVERT_QUORUM_BP;
     case "resume":
-      return EMERGENCY_PARAMS.GUARDIAN_RESUME_QUORUM;
+      return EMERGENCY_PARAMS.GUARDIAN_RESUME_QUORUM_BP;
   }
 }
 
@@ -387,38 +388,40 @@ export function checkCeremonyProgress(
     return ceremony;
   }
 
-  const threshold = getQuorumThreshold(ceremony.type);
+  // Quorum threshold in basis points (e.g. 750000 = 75%)
+  const thresholdBP = getQuorumThresholdBP(ceremony.type);
+  const BASIS = 1_000_000n;
 
   if (ceremony.phase === "prevote") {
     // Check if quorum reached for prevote
-    const yesRatio = Number(ceremony.yesPrevoteStake) / Number(guardianStake);
-    if (yesRatio >= threshold) {
+    // yesRatioBP = yesPrevoteStake * 1_000_000 / guardianStake
+    const yesRatioBP = (ceremony.yesPrevoteStake * BASIS) / guardianStake;
+    if (yesRatioBP >= thresholdBP) {
       // Advance to precommit
       ceremony.phase = "precommit";
       return ceremony;
     }
 
     // Check if quorum is impossible (too many "no" votes)
-    const noRatio = Number(ceremony.noPrevoteStake) / Number(guardianStake);
-    if (noRatio > 1 - threshold) {
+    const noRatioBP = (ceremony.noPrevoteStake * BASIS) / guardianStake;
+    if (noRatioBP > BASIS - thresholdBP) {
       ceremony.phase = "failed";
-      ceremony.failureReason = `Insufficient support: ${(yesRatio * 100).toFixed(1)}% < ${(threshold * 100).toFixed(0)}% required`;
+      ceremony.failureReason = `Insufficient support: ${(yesRatioBP * 100n) / BASIS}% < ${(thresholdBP * 100n) / BASIS}% required`;
       return ceremony;
     }
 
     // Check prevote deadline
     if (currentBlock > ceremony.prevoteDeadline) {
       ceremony.phase = "failed";
-      ceremony.failureReason = `Prevote quorum not reached before deadline: ${(yesRatio * 100).toFixed(1)}% < ${(threshold * 100).toFixed(0)}% required`;
+      ceremony.failureReason = `Prevote quorum not reached before deadline: ${(yesRatioBP * 100n) / BASIS}% < ${(thresholdBP * 100n) / BASIS}% required`;
       return ceremony;
     }
   }
 
   if (ceremony.phase === "precommit") {
     // Check if precommit quorum reached
-    const precommitRatio =
-      Number(ceremony.precommitStake) / Number(guardianStake);
-    if (precommitRatio >= threshold) {
+    const precommitRatioBP = (ceremony.precommitStake * BASIS) / guardianStake;
+    if (precommitRatioBP >= thresholdBP) {
       // Minimum distinct voter count — prevents single whale from acting alone
       if (ceremony.precommits.size < EMERGENCY_PARAMS.MIN_GUARDIAN_VOTERS) {
         // Don't fail yet — more voters may arrive before deadline
@@ -431,14 +434,14 @@ export function checkCeremonyProgress(
     // Check precommit deadline
     if (currentBlock > ceremony.precommitDeadline) {
       if (
-        precommitRatio >= threshold &&
+        precommitRatioBP >= thresholdBP &&
         ceremony.precommits.size < EMERGENCY_PARAMS.MIN_GUARDIAN_VOTERS
       ) {
         ceremony.phase = "failed";
         ceremony.failureReason = `Insufficient distinct voters: ${ceremony.precommits.size} < ${EMERGENCY_PARAMS.MIN_GUARDIAN_VOTERS} required`;
       } else {
         ceremony.phase = "failed";
-        ceremony.failureReason = `Precommit quorum not reached before deadline: ${(precommitRatio * 100).toFixed(1)}% < ${(threshold * 100).toFixed(0)}% required`;
+        ceremony.failureReason = `Precommit quorum not reached before deadline: ${(precommitRatioBP * 100n) / BASIS}% < ${(thresholdBP * 100n) / BASIS}% required`;
       }
       return ceremony;
     }
