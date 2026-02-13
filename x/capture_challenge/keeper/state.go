@@ -1,9 +1,8 @@
 package keeper
 
 import (
-	"encoding/json"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/capture_challenge/types"
 )
@@ -18,7 +17,7 @@ func (k Keeper) GetChallenge(ctx sdk.Context, challengeId string) (types.Capture
 		return types.CaptureChallenge{}, false
 	}
 	var challenge types.CaptureChallenge
-	if err := json.Unmarshal(bz, &challenge); err != nil {
+	if err := proto.Unmarshal(bz, &challenge); err != nil {
 		return types.CaptureChallenge{}, false
 	}
 	return challenge, true
@@ -27,7 +26,7 @@ func (k Keeper) GetChallenge(ctx sdk.Context, challengeId string) (types.Capture
 // SetChallenge stores a challenge.
 func (k Keeper) SetChallenge(ctx sdk.Context, challenge types.CaptureChallenge) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(challenge)
+	bz, err := proto.Marshal(&challenge)
 	if err != nil {
 		panic("failed to marshal challenge: " + err.Error())
 	}
@@ -55,7 +54,7 @@ func (k Keeper) IterateChallenges(ctx sdk.Context, cb func(types.CaptureChalleng
 
 	for ; iter.Valid(); iter.Next() {
 		var challenge types.CaptureChallenge
-		if err := json.Unmarshal(iter.Value(), &challenge); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &challenge); err != nil {
 			continue
 		}
 		if cb(challenge) {
@@ -74,7 +73,7 @@ func (k Keeper) GetBountyPool(ctx sdk.Context, domain string) (types.DomainBount
 		return types.DomainBountyPool{}, false
 	}
 	var pool types.DomainBountyPool
-	if err := json.Unmarshal(bz, &pool); err != nil {
+	if err := proto.Unmarshal(bz, &pool); err != nil {
 		return types.DomainBountyPool{}, false
 	}
 	return pool, true
@@ -83,7 +82,7 @@ func (k Keeper) GetBountyPool(ctx sdk.Context, domain string) (types.DomainBount
 // SetBountyPool stores a domain's bounty pool.
 func (k Keeper) SetBountyPool(ctx sdk.Context, pool types.DomainBountyPool) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(pool)
+	bz, err := proto.Marshal(&pool)
 	if err != nil {
 		panic("failed to marshal bounty pool: " + err.Error())
 	}
@@ -118,7 +117,7 @@ func (k Keeper) IterateBountyPools(ctx sdk.Context, cb func(types.DomainBountyPo
 
 	for ; iter.Valid(); iter.Next() {
 		var pool types.DomainBountyPool
-		if err := json.Unmarshal(iter.Value(), &pool); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &pool); err != nil {
 			continue
 		}
 		if cb(pool) {
@@ -138,7 +137,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return *p
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		p := types.DefaultParams()
 		return *p
 	}
@@ -148,7 +147,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // SetParams stores the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic("failed to marshal params: " + err.Error())
 	}

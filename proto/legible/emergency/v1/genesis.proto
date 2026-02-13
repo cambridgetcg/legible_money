@@ -48,4 +48,7 @@ message Params {
   repeated string genesis_council = 20;
   uint64 council_expiry_block = 21;
   string council_virtual_stake = 22;
+
+  // Auto-resume duration
+  uint64 max_halt_duration_blocks = 23;
 }

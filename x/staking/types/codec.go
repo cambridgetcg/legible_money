@@ -5,6 +5,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"google.golang.org/grpc"
 )
@@ -20,7 +21,9 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the interfaces types with the interface registry
 func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgRegisterValidator{},
+	)
 }
 
 var (

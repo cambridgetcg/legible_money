@@ -928,3 +928,72 @@ func TestCeremonyActiveBlocksNewProposal(t *testing.T) {
 		t.Error("expected error when ceremony is already active")
 	}
 }
+
+// --- Halt Expiry Tests ---
+
+func TestCheckHaltExpiry_AutoResume(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Manually set halted state at block 100
+	k.SetEmergencyStatus(ctx, types.StatusHalted)
+	k.SetActiveHaltCeremonyId(ctx, "test-ceremony")
+	k.SetHaltStartBlock(ctx, 100)
+
+	params := k.GetParams(ctx)
+	maxDuration := params.MaxHaltDurationBlocks // 34272
+
+	// At block 100 + maxDuration - 1: not expired
+	ctx = ctx.WithBlockHeight(int64(100 + maxDuration - 1))
+	k.CheckHaltExpiry(ctx)
+	if k.GetEmergencyStatus(ctx) != types.StatusHalted {
+		t.Fatal("halt should not expire before max duration")
+	}
+
+	// At block 100 + maxDuration: expired, auto-resume
+	ctx = ctx.WithBlockHeight(int64(100 + maxDuration))
+	k.CheckHaltExpiry(ctx)
+	status := k.GetEmergencyStatus(ctx)
+	if status != types.StatusNormal {
+		t.Fatalf("expected StatusNormal after expiry, got %s", status)
+	}
+	if k.GetActiveHaltCeremonyId(ctx) != "" {
+		t.Fatal("active halt ceremony should be cleared")
+	}
+	if k.GetHaltStartBlock(ctx) != 0 {
+		t.Fatal("halt start block should be cleared")
+	}
+
+	// Verify audit entry was created
+	auditLog := k.GetAuditLog(ctx)
+	found := false
+	for _, entry := range auditLog {
+		if entry.Action == string(types.AuditResumeExecuted) && entry.Actor == "system" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected auto-resume audit entry")
+	}
+}
+
+func TestCheckHaltExpiry_NotHalted(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Normal status — should be a no-op
+	k.CheckHaltExpiry(ctx)
+	if k.GetEmergencyStatus(ctx) != types.StatusNormal {
+		t.Fatal("status should remain normal")
+	}
+}
+
+func TestCheckHaltExpiry_NoStartBlock(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Halted but no start block recorded (pre-upgrade scenario)
+	k.SetEmergencyStatus(ctx, types.StatusHalted)
+	k.CheckHaltExpiry(ctx)
+	if k.GetEmergencyStatus(ctx) != types.StatusHalted {
+		t.Fatal("should not expire without start block (graceful for pre-upgrade halts)")
+	}
+}

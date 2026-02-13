@@ -60,7 +60,7 @@ func (ms *msgServer) RegisterInterchainAccount(goCtx context.Context, msg *types
 	}
 
 	// Store the pending registration
-	remoteAccount := types.RemoteAccount{
+	remoteAccount := &types.RemoteAccount{
 		ConnectionId:    msg.ConnectionId,
 		PortId:          fmt.Sprintf("icacontroller-%s", msg.Owner),
 		OwnerDid:        lgmAccount.Did,

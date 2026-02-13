@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -11,6 +10,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
 )
@@ -88,7 +88,7 @@ func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return &params
@@ -97,7 +97,7 @@ func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -124,7 +124,7 @@ func (k Keeper) GetCategoryConfig(ctx sdk.Context, category types.VestingCategor
 		return nil, false
 	}
 	var cfg types.CategoryConfig
-	if err := json.Unmarshal(bz, &cfg); err != nil {
+	if err := proto.Unmarshal(bz, &cfg); err != nil {
 		return nil, false
 	}
 	return &cfg, true
@@ -134,7 +134,7 @@ func (k Keeper) GetCategoryConfig(ctx sdk.Context, category types.VestingCategor
 func (k Keeper) SetCategoryConfig(ctx sdk.Context, cfg *types.CategoryConfig) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := append(types.CategoryConfigKeyPrefix, []byte(cfg.Category)...)
-	bz, err := json.Marshal(cfg)
+	bz, err := proto.Marshal(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal category config: %v", err))
 	}
@@ -239,7 +239,7 @@ func (k Keeper) GetAllCategoryConfigs(ctx sdk.Context) []*types.CategoryConfig {
 	var configs []*types.CategoryConfig
 	for ; iter.Valid(); iter.Next() {
 		var cfg types.CategoryConfig
-		if err := json.Unmarshal(iter.Value(), &cfg); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &cfg); err != nil {
 			continue
 		}
 		configs = append(configs, &cfg)
@@ -269,7 +269,7 @@ func (k Keeper) GetBlockRewardDistribution(ctx sdk.Context, blockHeight uint64) 
 		return nil, false
 	}
 	var dist types.BlockRewardDistribution
-	if err := json.Unmarshal(bz, &dist); err != nil {
+	if err := proto.Unmarshal(bz, &dist); err != nil {
 		return nil, false
 	}
 	return &dist, true

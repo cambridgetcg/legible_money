@@ -171,27 +171,23 @@ func (h *TreasuryHost) RegisterKey(callerDID string, keyType, publicKey, permiss
 		return false
 	}
 
-	// If auth keeper is wired, delegate to canonical x/auth session key store.
-	if h.authKeeper != nil {
-		pubKeyHex := hex.EncodeToString(publicKey)
-		// Decode permission bits: bit 0=transfer, 1=stake, 2=claims, 3=vote
-		permVal := new(big.Int).SetBytes(permissions)
-		canTransfer := permVal.Bit(0) == 1
-		canStake := permVal.Bit(1) == 1
-		canClaims := permVal.Bit(2) == 1
-		canVote := permVal.Bit(3) == 1
-		expiresAt := new(big.Int).SetBytes(expiry).Uint64()
-		if err := h.authKeeper.RegisterSessionKey(h.ctx, callerDID, pubKeyHex, canTransfer, canStake, canClaims, canVote, expiresAt); err != nil {
-			return false
-		}
-		return true
+	// H-3: Always delegate to canonical x/auth session key store.
+	// Eliminates ghost keys in contract state invisible to x/auth.
+	if h.authKeeper == nil {
+		return false // No auth keeper = cannot register keys
 	}
 
-	// Legacy: store in contract state
-	keyHash := sha256.Sum256(publicKey)
-	storeKey := sha256.Sum256([]byte("key/" + callerDID + "/" + hex.EncodeToString(keyHash[:])))
-	b32 := WordToBytes32(new(big.Int).SetBytes(permissions))
-	h.stateDB.SetStorage([]byte("agent_access"), storeKey[:], b32[:])
+	pubKeyHex := hex.EncodeToString(publicKey)
+	// Decode permission bits: bit 0=transfer, 1=stake, 2=claims, 3=vote
+	permVal := new(big.Int).SetBytes(permissions)
+	canTransfer := permVal.Bit(0) == 1
+	canStake := permVal.Bit(1) == 1
+	canClaims := permVal.Bit(2) == 1
+	canVote := permVal.Bit(3) == 1
+	expiresAt := new(big.Int).SetBytes(expiry).Uint64()
+	if err := h.authKeeper.RegisterSessionKey(h.ctx, callerDID, pubKeyHex, canTransfer, canStake, canClaims, canVote, expiresAt); err != nil {
+		return false
+	}
 	return true
 }
 
@@ -200,18 +196,15 @@ func (h *TreasuryHost) RevokeKey(callerDID string, keyId []byte) bool {
 		return false
 	}
 
-	// If auth keeper is wired, delegate to canonical x/auth store.
-	if h.authKeeper != nil {
-		keyHash := hex.EncodeToString(keyId)
-		if err := h.authKeeper.RevokeSessionKey(h.ctx, callerDID, keyHash); err != nil {
-			return false
-		}
-		return true
+	// H-3: Always delegate to canonical x/auth store.
+	if h.authKeeper == nil {
+		return false // No auth keeper = cannot revoke keys
 	}
 
-	// Legacy: remove from contract state
-	key := sha256.Sum256([]byte("key/" + callerDID + "/" + hex.EncodeToString(keyId)))
-	h.stateDB.SetStorage([]byte("agent_access"), key[:], nil)
+	keyHash := hex.EncodeToString(keyId)
+	if err := h.authKeeper.RevokeSessionKey(h.ctx, callerDID, keyHash); err != nil {
+		return false
+	}
 	return true
 }
 

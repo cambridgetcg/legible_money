@@ -1,0 +1,9 @@
+syntax = "proto3";
+package legible.ibcratelimit.v1;
+option go_package = "github.com/legible-money/legible/x/ibcratelimit/types";
+import "legible/ibcratelimit/v1/state.proto";
+
+message GenesisState {
+  Params params = 1;
+  repeated ChannelFlow flows = 2;
+}

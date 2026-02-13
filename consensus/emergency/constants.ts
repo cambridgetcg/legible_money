@@ -73,6 +73,11 @@ export const EMERGENCY_PARAMS = {
   /** ~55s mandatory observation delay before revert executes */
   REVERT_OBSERVATION_BLOCKS: 22n,
 
+  // ============ Halt Duration Limit ============
+
+  /** ~1 day max halt duration before auto-resume (prevents permanent chain freeze) */
+  MAX_HALT_DURATION_BLOCKS: 34272n,
+
   // ============ Auto-Snapshot ============
 
   /** Automatically snapshot state when halt is executed */

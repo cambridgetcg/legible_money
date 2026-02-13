@@ -9,6 +9,7 @@
 
 import { readFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
+import { homedir } from "os";
 import { EventEmitter } from "events";
 import { StateManager, type GenesisConfig } from "../../state/state_manager.js";
 import {
@@ -66,6 +67,11 @@ function jsonStringifyBigInt(obj: unknown): string {
   return JSON.stringify(obj, (_key, value) =>
     typeof value === "bigint" ? value.toString() : value,
   );
+}
+
+/** Expand leading ~ to the user's home directory */
+function expandHomePath(p: string): string {
+  return p.startsWith("~") ? p.replace("~", homedir()) : p;
 }
 
 // ============ Configuration ============
@@ -585,6 +591,7 @@ class LegibleMoneyNode extends EventEmitter {
       initialValidators,
       stateManager: state,
       params,
+      allowTestMethods: true,
     });
 
     // Get the state integration from the engine
@@ -1297,6 +1304,12 @@ async function main(): Promise<void> {
 
   const config: NodeConfig = JSON.parse(readFileSync(configPath, "utf-8"));
   const genesis: GenesisFile = JSON.parse(readFileSync(genesisPath, "utf-8"));
+
+  // Expand ~ in paths so local-validator.json can use ~/.lgm/devnet
+  config.node.dataDir = expandHomePath(config.node.dataDir);
+  if (config.storage?.path) {
+    config.storage.path = expandHomePath(config.storage.path);
+  }
 
   // VULN-017 FIX: Validate genesis file before using it
   console.log("[GENESIS] Validating genesis file...");

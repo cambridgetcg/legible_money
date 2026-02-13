@@ -1,9 +1,8 @@
 package keeper
 
 import (
-	"encoding/json"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
 )
@@ -12,7 +11,7 @@ import (
 func (k Keeper) SetVestingSchedule(ctx sdk.Context, schedule *types.VestingSchedule) {
 	store := k.storeService.OpenKVStore(ctx)
 
-	bz, err := json.Marshal(schedule)
+	bz, err := proto.Marshal(schedule)
 	if err != nil {
 		panic("failed to marshal vesting schedule: " + err.Error())
 	}
@@ -64,7 +63,7 @@ func (k Keeper) GetVestingSchedule(ctx sdk.Context, vestingId string) (*types.Ve
 		return nil, false
 	}
 	var schedule types.VestingSchedule
-	if err := json.Unmarshal(bz, &schedule); err != nil {
+	if err := proto.Unmarshal(bz, &schedule); err != nil {
 		return nil, false
 	}
 	return &schedule, true
@@ -137,7 +136,7 @@ func (k Keeper) GetAllActiveVestingSchedulePtrs(ctx sdk.Context) []*types.Vestin
 // SetClawbackRecord stores a clawback record.
 func (k Keeper) SetClawbackRecord(ctx sdk.Context, record *types.ClawbackRecord) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(record)
+	bz, err := proto.Marshal(record)
 	if err != nil {
 		panic("failed to marshal clawback record: " + err.Error())
 	}
@@ -159,7 +158,7 @@ func (k Keeper) GetClawbackRecord(ctx sdk.Context, id string) (*types.ClawbackRe
 		return nil, false
 	}
 	var record types.ClawbackRecord
-	if err := json.Unmarshal(bz, &record); err != nil {
+	if err := proto.Unmarshal(bz, &record); err != nil {
 		return nil, false
 	}
 	return &record, true
@@ -168,7 +167,7 @@ func (k Keeper) GetClawbackRecord(ctx sdk.Context, id string) (*types.ClawbackRe
 // SetBlockRewardDistribution stores a block reward distribution record.
 func (k Keeper) SetBlockRewardDistribution(ctx sdk.Context, dist *types.BlockRewardDistribution) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(dist)
+	bz, err := proto.Marshal(dist)
 	if err != nil {
 		return
 	}

@@ -1,0 +1,20 @@
+syntax = "proto3";
+package legible.ibcratelimit.v1;
+option go_package = "github.com/legible-money/legible/x/ibcratelimit/types";
+
+// ChannelFlow tracks transfer volume per channel per epoch.
+message ChannelFlow {
+  string channel_id = 1;
+  string denom = 2;
+  string outflow_total = 3;
+  string inflow_total = 4;
+  uint64 epoch_start_block = 5;
+}
+
+// Params configurable rate limit parameters.
+message Params {
+  uint64 epoch_length_blocks = 1;
+  string max_outflow_per_epoch = 2;
+  string max_inflow_per_epoch = 3;
+  string tracked_denom = 4;
+}

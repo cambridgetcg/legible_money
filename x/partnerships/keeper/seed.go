@@ -1,10 +1,10 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/partnerships/types"
 )
@@ -23,7 +23,7 @@ const (
 // SetSeedPartnership stores a seed partnership.
 func (k Keeper) SetSeedPartnership(ctx sdk.Context, sp types.SeedPartnership) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(sp)
+	bz, err := proto.Marshal(&sp)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal seed partnership: %v", err))
 	}
@@ -42,7 +42,7 @@ func (k Keeper) GetSeedPartnership(ctx sdk.Context, id string) (types.SeedPartne
 		return types.SeedPartnership{}, false
 	}
 	var sp types.SeedPartnership
-	if err := json.Unmarshal(bz, &sp); err != nil {
+	if err := proto.Unmarshal(bz, &sp); err != nil {
 		return types.SeedPartnership{}, false
 	}
 	return sp, true

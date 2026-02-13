@@ -289,7 +289,7 @@ func (k msgServer) ProposeOperation(goCtx context.Context, msg *types.MsgPropose
 		ProposedBy:    msg.Proposer,
 		Amount:        msg.Amount,
 		Status:        types.OpStatusProposed,
-		Deliberation:  delib,
+		Deliberation:  &delib,
 		CreatedAt:     currentBlock,
 	}
 	k.SetConsensusOperation(ctx, op)
@@ -461,7 +461,7 @@ func (k msgServer) RejectOperation(goCtx context.Context, msg *types.MsgRejectOp
 				ProposedBy:    msg.Rejecter,
 				Amount:        msg.CounterAmount,
 				Status:        types.OpStatusProposed,
-				Deliberation:  delib,
+				Deliberation:  &delib,
 				CreatedAt:     currentBlock,
 			}
 			k.SetConsensusOperation(ctx, counterOp)

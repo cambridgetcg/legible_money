@@ -5,7 +5,7 @@
  */
 
 import { ed25519 } from "@noble/curves/ed25519";
-import { sha512 } from "@noble/hashes/sha512";
+import { sha256 } from "@noble/hashes/sha256";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -218,7 +218,7 @@ async function main() {
   const disputeNonce = nextNonce();
   const disputeStake = "100000000000000000000"; // 100 LGM
   const reasonHash = bytesToHex(
-    sha512(new TextEncoder().encode("Testing dispute mechanism")),
+    sha256(new TextEncoder().encode("Testing dispute mechanism")),
   );
 
   const disputePayload = {
@@ -260,11 +260,11 @@ async function main() {
     const evidenceNonce = nextNonce();
     // Commitment hash for later reveal
     const evidenceHash = bytesToHex(
-      sha512(
+      sha256(
         new TextEncoder().encode(
           JSON.stringify({ evidenceIds, nonce: evidenceNonce }),
         ),
-      ).slice(0, 32),
+      ),
     );
 
     const commitPayload = {

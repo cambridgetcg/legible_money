@@ -24,7 +24,12 @@ import {
   type LightSyncConfig,
 } from "../../../network/protocols/light_sync.js";
 import type { SyncPeer } from "../../../network/protocols/sync.js";
-import { sha512_256Hex } from "../../../core/crypto/hashing.js";
+import {
+  sha512_256Hex,
+  domainHash,
+  HASH_DOMAINS,
+} from "../../../core/crypto/hashing.js";
+import { bytesToHex, hexToBytes } from "../../../core/crypto/keys.js";
 
 // ============ Helpers ============
 
@@ -67,7 +72,7 @@ function createMockKnowledgeNode(
 
 /**
  * Build a valid KnowledgeProof that passes verifyKnowledgeProof().
- * Hash chain: leaf → hash(leaf + sibling) → root
+ * ZD-C03: Uses domain-separated binary hashing with direction tracking.
  */
 function buildValidProof(factId: string): {
   proof: KnowledgeProof;
@@ -75,12 +80,30 @@ function buildValidProof(factId: string): {
 } {
   const leafHash = sha512_256Hex(Buffer.from(`leaf-${factId}`));
   const sibling = sha512_256Hex(Buffer.from("sibling-0"));
-  const root = sha512_256Hex(Buffer.from(leafHash + sibling));
+
+  // Compute leaf hash: domainHash(STATE, 0x00 || leafBytes)
+  const leafBytes = hexToBytes(leafHash);
+  const leafPrefixed = new Uint8Array(1 + leafBytes.length);
+  leafPrefixed[0] = 0x00;
+  leafPrefixed.set(leafBytes, 1);
+  const hashedLeaf = bytesToHex(domainHash(HASH_DOMAINS.STATE, leafPrefixed));
+
+  // Compute internal node: domainHash(STATE, 0x01 || current || sibling) (direction=0: sibling on right)
+  const currentBytes = hexToBytes(hashedLeaf);
+  const siblingBytes = hexToBytes(sibling);
+  const combined = new Uint8Array(
+    1 + currentBytes.length + siblingBytes.length,
+  );
+  combined[0] = 0x01;
+  combined.set(currentBytes, 1);
+  combined.set(siblingBytes, 1 + currentBytes.length);
+  const root = bytesToHex(domainHash(HASH_DOMAINS.STATE, combined));
 
   return {
     proof: {
       factId,
       proof: [sibling],
+      directions: [0], // 0 = sibling on right
       leaf: { hash: leafHash },
       root,
       blockNumber: 10n,

@@ -416,10 +416,12 @@ export class LegibleClient extends EventEmitter {
   ): Promise<{ commitment: string; nonce: string }> {
     const wallet = this.requireWallet();
 
-    // Create commitment
-    const nonce = Math.random().toString(36).slice(2);
-    const message = `${verdict}:${confidence}:${nonce}`;
-    const { commitment } = commit(new TextEncoder().encode(message));
+    // ZD-C01 FIX: Use core commit() which generates a cryptographically secure nonce
+    // via randomBytes(32). Previously used Math.random() which is predictable.
+    const message = `${verdict}:${confidence}`;
+    const commitResult = commit(new TextEncoder().encode(message));
+    const { commitment } = commitResult;
+    const nonce = commitResult.nonce; // 32-byte cryptographic nonce from randomBytes()
 
     const payload = { roundId, commitment };
     const signature = await wallet.signTransaction(payload);

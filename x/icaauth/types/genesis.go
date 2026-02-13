@@ -17,13 +17,17 @@ func DefaultParams() Params {
 
 // DefaultGenesisState returns the default genesis state.
 func DefaultGenesisState() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:  DefaultParams(),
-		Records: []InterchainAccountRecord{},
+		Params:  &p,
+		Records: []*InterchainAccountRecord{},
 	}
 }
 
 // Validate validates the genesis state.
 func (gs GenesisState) Validate() error {
+	if gs.Params == nil {
+		return nil
+	}
 	return gs.Params.Validate()
 }

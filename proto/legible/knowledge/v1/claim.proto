@@ -1,6 +1,8 @@
 syntax = "proto3";
 package legible.knowledge.v1;
 
+import "cosmos/msg/v1/msg.proto";
+
 option go_package = "github.com/legible-money/legible/x/knowledge/types";
 
 // ============================================================================
@@ -219,6 +221,7 @@ message ValidatorInfo {
 
 // MsgSubmitClaim submits a knowledge claim for verification.
 message MsgSubmitClaim {
+  option (cosmos.msg.v1.signer) = "submitter";
   string claim_text = 1;
   string domain = 2;
   string epistemic_category = 3;
@@ -237,6 +240,7 @@ message MsgSubmitClaimResponse {
 
 // MsgSubmitCommitment submits a verification commitment (commit phase).
 message MsgSubmitCommitment {
+  option (cosmos.msg.v1.signer) = "validator";
   string round_id = 1;
   string validator = 2;                 // bech32 address
   string commitment_hash = 3;
@@ -246,6 +250,7 @@ message MsgSubmitCommitmentResponse {}
 
 // MsgSubmitReveal submits a verification reveal (reveal phase).
 message MsgSubmitReveal {
+  option (cosmos.msg.v1.signer) = "validator";
   string round_id = 1;
   string validator = 2;                 // bech32 address
   string verdict = 3;                   // accept, reject, abstain
@@ -259,6 +264,7 @@ message MsgSubmitRevealResponse {}
 
 // MsgChallengeFact challenges an existing verified fact.
 message MsgChallengeFact {
+  option (cosmos.msg.v1.signer) = "challenger";
   string fact_id = 1;
   string challenger = 2;                // bech32 address
   string reason = 3;
@@ -271,6 +277,7 @@ message MsgChallengeFactResponse {
 
 // MsgAddFact is a governance-gated fact creation (for genesis/migration).
 message MsgAddFact {
+  option (cosmos.msg.v1.signer) = "authority";
   string authority = 1;                 // bech32 address (gov module)
   string claim_text = 2;
   string domain = 3;
@@ -290,6 +297,7 @@ message MsgAddFactResponse {
 
 // MsgProposeDomain proposes a new ontological domain.
 message MsgProposeDomain {
+  option (cosmos.msg.v1.signer) = "proposer";
   string name = 1;
   string description = 2;
   string proposer = 3;                  // bech32 address
@@ -302,6 +310,7 @@ message MsgProposeDomainResponse {
 
 // MsgEndorseDomainProposal endorses a domain proposal.
 message MsgEndorseDomainProposal {
+  option (cosmos.msg.v1.signer) = "endorser";
   string domain_name = 1;
   string endorser = 2;                  // bech32 address
 }
@@ -310,6 +319,7 @@ message MsgEndorseDomainProposalResponse {}
 
 // MsgChallengeDomainProposal challenges a domain proposal.
 message MsgChallengeDomainProposal {
+  option (cosmos.msg.v1.signer) = "challenger";
   string domain_name = 1;
   string challenger = 2;                // bech32 address
   string reason = 3;
@@ -319,6 +329,7 @@ message MsgChallengeDomainProposalResponse {}
 
 // MsgRegisterStratum registers an ontological stratum (Phase 2 feature).
 message MsgRegisterStratum {
+  option (cosmos.msg.v1.signer) = "registrar";
   string stratum_name = 1;
   string description = 2;
   string registrar = 3;                 // bech32 address
@@ -328,6 +339,7 @@ message MsgRegisterStratumResponse {}
 
 // MsgUpdateParams updates module parameters.
 message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
   string authority = 1;                 // bech32 address (gov module)
   Params params = 2;
 }

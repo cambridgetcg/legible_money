@@ -5,22 +5,8 @@ import (
 	"fmt"
 )
 
-// ChannelFlow tracks transfer volume per channel per epoch.
-type ChannelFlow struct {
-	ChannelID       string `json:"channel_id"`
-	Denom           string `json:"denom"`             // tracked denom (e.g., "ulgm")
-	OutflowTotal    string `json:"outflow_total"`     // cumulative outflow this epoch (string for math.Int compat)
-	InflowTotal     string `json:"inflow_total"`      // cumulative inflow this epoch
-	EpochStartBlock uint64 `json:"epoch_start_block"` // block height at which the current epoch started
-}
-
-// Params configurable rate limit parameters.
-type Params struct {
-	EpochLengthBlocks  uint64 `json:"epoch_length_blocks"`   // default: 34272 (~1 day at 2521ms blocks)
-	MaxOutflowPerEpoch string `json:"max_outflow_per_epoch"` // default: "10000000000" (10,000 LGM in ulgm)
-	MaxInflowPerEpoch  string `json:"max_inflow_per_epoch"`  // default: "10000000000"
-	TrackedDenom       string `json:"tracked_denom"`         // default: "ulgm"
-}
+// --- Params Validation ---
+// Methods below attach to protobuf-generated types from state.pb.go and genesis.pb.go.
 
 // DefaultParams returns the default rate limit parameters.
 func DefaultParams() Params {
@@ -43,26 +29,26 @@ func (p Params) Validate() error {
 	return nil
 }
 
-// GenesisState is the genesis state for the ibcratelimit module.
-type GenesisState struct {
-	Params Params        `json:"params"`
-	Flows  []ChannelFlow `json:"flows"`
-}
+// --- Genesis state validation ---
 
 // DefaultGenesisState returns the default genesis state.
 func DefaultGenesisState() GenesisState {
+	p := DefaultParams()
 	return GenesisState{
-		Params: DefaultParams(),
-		Flows:  []ChannelFlow{},
+		Params: &p,
+		Flows:  []*ChannelFlow{},
 	}
 }
 
 // Validate performs genesis state validation.
 func (gs GenesisState) Validate() error {
-	return gs.Params.Validate()
+	if gs.Params != nil {
+		return gs.Params.Validate()
+	}
+	return nil
 }
 
-// --- Message Types ---
+// --- Message Types (not in proto-generated files) ---
 
 // MsgUpdateParams updates the rate limit module parameters.
 type MsgUpdateParams struct {
@@ -101,7 +87,7 @@ type QueryServer interface {
 	ChannelFlow(context.Context, *QueryChannelFlowRequest) (*QueryChannelFlowResponse, error)
 }
 
-// --- Query Types ---
+// --- Query Types (not in proto-generated files) ---
 
 // QueryParamsRequest is the request for the Params query.
 type QueryParamsRequest struct{}
@@ -120,6 +106,8 @@ func (m *QueryParamsResponse) String() string { return fmt.Sprintf("QueryParamsR
 func (m *QueryParamsResponse) ProtoMessage()  {}
 
 // QueryChannelFlowRequest is the request for the ChannelFlow query.
+// NOTE: The proto-generated ChannelFlow type uses ChannelId (not ChannelID).
+// Keeper code referencing ChannelID will need to be updated to ChannelId.
 type QueryChannelFlowRequest struct {
 	ChannelID string `json:"channel_id"`
 }

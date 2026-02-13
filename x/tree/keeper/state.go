@@ -1,9 +1,8 @@
 package keeper
 
 import (
-	"encoding/json"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/tree/types"
 )
@@ -13,7 +12,7 @@ import (
 // SetProject stores a project and updates indexes.
 func (k Keeper) SetProject(ctx sdk.Context, project types.ProductProject) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(project)
+	bz, err := proto.Marshal(&project)
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +45,7 @@ func (k Keeper) GetProject(ctx sdk.Context, projectId string) (types.ProductProj
 		return types.ProductProject{}, false
 	}
 	var project types.ProductProject
-	if err := json.Unmarshal(bz, &project); err != nil {
+	if err := proto.Unmarshal(bz, &project); err != nil {
 		panic(err)
 	}
 	return project, true
@@ -82,7 +81,7 @@ func (k Keeper) IterateProjects(ctx sdk.Context, cb func(types.ProductProject) b
 
 	for ; iter.Valid(); iter.Next() {
 		var project types.ProductProject
-		if err := json.Unmarshal(iter.Value(), &project); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &project); err != nil {
 			panic(err)
 		}
 		if cb(project) {
@@ -137,7 +136,7 @@ func (k Keeper) GetNextProjectId(ctx sdk.Context) uint64 {
 // SetTask stores a task and updates indexes.
 func (k Keeper) SetTask(ctx sdk.Context, task types.ProjectTask) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(task)
+	bz, err := proto.Marshal(&task)
 	if err != nil {
 		panic(err)
 	}
@@ -170,7 +169,7 @@ func (k Keeper) GetTask(ctx sdk.Context, taskId string) (types.ProjectTask, bool
 		return types.ProjectTask{}, false
 	}
 	var task types.ProjectTask
-	if err := json.Unmarshal(bz, &task); err != nil {
+	if err := proto.Unmarshal(bz, &task); err != nil {
 		panic(err)
 	}
 	return task, true
@@ -206,7 +205,7 @@ func (k Keeper) IterateTasks(ctx sdk.Context, cb func(types.ProjectTask) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var task types.ProjectTask
-		if err := json.Unmarshal(iter.Value(), &task); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &task); err != nil {
 			panic(err)
 		}
 		if cb(task) {
@@ -260,7 +259,7 @@ func (k Keeper) GetNextTaskId(ctx sdk.Context) uint64 {
 // SetService stores a service and updates indexes.
 func (k Keeper) SetService(ctx sdk.Context, service types.ServiceLeaf) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(service)
+	bz, err := proto.Marshal(&service)
 	if err != nil {
 		panic(err)
 	}
@@ -286,7 +285,7 @@ func (k Keeper) GetService(ctx sdk.Context, serviceId string) (types.ServiceLeaf
 		return types.ServiceLeaf{}, false
 	}
 	var service types.ServiceLeaf
-	if err := json.Unmarshal(bz, &service); err != nil {
+	if err := proto.Unmarshal(bz, &service); err != nil {
 		panic(err)
 	}
 	return service, true
@@ -303,7 +302,7 @@ func (k Keeper) IterateServices(ctx sdk.Context, cb func(types.ServiceLeaf) bool
 
 	for ; iter.Valid(); iter.Next() {
 		var service types.ServiceLeaf
-		if err := json.Unmarshal(iter.Value(), &service); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &service); err != nil {
 			panic(err)
 		}
 		if cb(service) {
@@ -335,7 +334,7 @@ func (k Keeper) GetNextServiceId(ctx sdk.Context) uint64 {
 // SetSeed stores an opportunity seed and updates indexes.
 func (k Keeper) SetSeed(ctx sdk.Context, seed types.OpportunitySeed) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(seed)
+	bz, err := proto.Marshal(&seed)
 	if err != nil {
 		panic(err)
 	}
@@ -361,7 +360,7 @@ func (k Keeper) GetSeed(ctx sdk.Context, seedId string) (types.OpportunitySeed, 
 		return types.OpportunitySeed{}, false
 	}
 	var seed types.OpportunitySeed
-	if err := json.Unmarshal(bz, &seed); err != nil {
+	if err := proto.Unmarshal(bz, &seed); err != nil {
 		panic(err)
 	}
 	return seed, true
@@ -378,7 +377,7 @@ func (k Keeper) IterateSeeds(ctx sdk.Context, cb func(types.OpportunitySeed) boo
 
 	for ; iter.Valid(); iter.Next() {
 		var seed types.OpportunitySeed
-		if err := json.Unmarshal(iter.Value(), &seed); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &seed); err != nil {
 			panic(err)
 		}
 		if cb(seed) {
@@ -422,7 +421,7 @@ func (k Keeper) GetExpiredSeeds(ctx sdk.Context, currentBlock uint64) []types.Op
 // SetParams stores module params.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(err)
 	}
@@ -442,7 +441,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return *types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return *types.DefaultParams()
 	}
 	return params

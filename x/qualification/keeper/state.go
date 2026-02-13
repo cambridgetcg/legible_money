@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/qualification/types"
 )
@@ -15,7 +15,7 @@ import (
 // SetQualification stores a domain qualification and maintains indexes.
 func (k Keeper) SetQualification(ctx sdk.Context, q types.DomainQualification) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(q)
+	bz, err := proto.Marshal(&q)
 	if err != nil {
 		panic("failed to marshal domain qualification: " + err.Error())
 	}
@@ -37,7 +37,7 @@ func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) 
 		return types.DomainQualification{}, false
 	}
 	var q types.DomainQualification
-	if err := json.Unmarshal(bz, &q); err != nil {
+	if err := proto.Unmarshal(bz, &q); err != nil {
 		return types.DomainQualification{}, false
 	}
 	return q, true
@@ -63,7 +63,7 @@ func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr stri
 	var qualifications []types.DomainQualification
 	for ; iter.Valid(); iter.Next() {
 		var q types.DomainQualification
-		if err := json.Unmarshal(iter.Value(), &q); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &q); err != nil {
 			continue
 		}
 		qualifications = append(qualifications, q)
@@ -76,7 +76,7 @@ func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr stri
 // SetEndorsement stores an endorsement and maintains indexes.
 func (k Keeper) SetEndorsement(ctx sdk.Context, e types.QualificationEndorsement) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(e)
+	bz, err := proto.Marshal(&e)
 	if err != nil {
 		panic("failed to marshal endorsement: " + err.Error())
 	}
@@ -101,7 +101,7 @@ func (k Keeper) GetEndorsement(ctx sdk.Context, id string) (types.QualificationE
 		return types.QualificationEndorsement{}, false
 	}
 	var e types.QualificationEndorsement
-	if err := json.Unmarshal(bz, &e); err != nil {
+	if err := proto.Unmarshal(bz, &e); err != nil {
 		return types.QualificationEndorsement{}, false
 	}
 	return e, true
@@ -181,7 +181,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -190,7 +190,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // SetParams stores the qualification module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic("failed to marshal qualification params: " + err.Error())
 	}

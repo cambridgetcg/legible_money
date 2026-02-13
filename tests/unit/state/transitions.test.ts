@@ -457,10 +457,11 @@ describe.sequential("System Transactions", () => {
           domain: "science",
         },
         fee: 0n,
+        _systemInternal: true,
         nonce: 0n,
         timestamp: Date.now(),
         signature: "system",
-      };
+      } as any;
 
       const result = executeTransaction(state, tx, 100n, params);
 
@@ -482,10 +483,11 @@ describe.sequential("System Transactions", () => {
           verifiedAtBlock: 100,
         },
         fee: 0n,
+        _systemInternal: true,
         nonce: 0n,
         timestamp: Date.now(),
         signature: "system",
-      };
+      } as any;
 
       const result = executeTransaction(state, tx, 100n, params);
 
@@ -521,10 +523,11 @@ describe.sequential("System Transactions", () => {
           roundId: "round-1",
         },
         fee: 0n,
+        _systemInternal: true,
         nonce: 0n,
         timestamp: Date.now(),
         signature: "system",
-      };
+      } as any;
 
       const balanceBefore = state.getBalance(validatorDid);
       executeTransaction(state, tx, 100n, params);
@@ -576,10 +579,11 @@ describe.sequential("System Transactions", () => {
           reason: "Double signing",
         },
         fee: 0n,
+        _systemInternal: true,
         nonce: 0n,
         timestamp: Date.now(),
         signature: "system",
-      };
+      } as any;
 
       const stakeBefore =
         state.getValidator(validatorKey.publicKey)?.stake ?? 0n;
@@ -601,10 +605,11 @@ describe.sequential("System Transactions", () => {
           reason: "Missed verification",
         },
         fee: 0n,
+        _systemInternal: true,
         nonce: 0n,
         timestamp: Date.now(),
         signature: "system",
-      };
+      } as any;
 
       const result = executeTransaction(state, tx, 100n, params);
 

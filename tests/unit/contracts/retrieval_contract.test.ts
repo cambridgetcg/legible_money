@@ -64,6 +64,7 @@ function createScheduledExecutionTx(
     type: "scheduled_execution",
     sender: "system",
     fee: 0n,
+    _systemInternal: true,
     nonce: 0n,
     timestamp,
     signature: "system",

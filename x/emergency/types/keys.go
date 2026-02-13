@@ -29,6 +29,7 @@ var (
 	EpochProposalCountKey       = []byte{0x08}
 	LastProposalBlockKey        = []byte{0x09}
 	ActiveHaltCeremonyIdKey     = []byte{0x0A}
+	HaltStartBlockKey           = []byte{0x0B}
 )
 
 // CeremonyKey returns the store key for a ceremony by ID.

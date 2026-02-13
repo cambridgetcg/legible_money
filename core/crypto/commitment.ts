@@ -9,14 +9,20 @@
  * - Binding: Cannot open commitment to different value
  */
 
-import { sha512Hash, domainHash, HASH_DOMAINS, blake3Hash } from './hashing.js';
-import { bytesToHex, hexToBytes } from './keys.js';
-import { randomBytes } from '@noble/hashes/utils';
+import {
+  sha512Hash,
+  domainHash,
+  HASH_DOMAINS,
+  blake3Hash,
+  hashesEqual,
+} from "./hashing.js";
+import { bytesToHex, hexToBytes } from "./keys.js";
+import { randomBytes } from "@noble/hashes/utils";
 
 // ============ Types ============
 
-export type Commitment = string;    // Hex-encoded commitment
-export type Nonce = string;         // Hex-encoded nonce (32 bytes)
+export type Commitment = string; // Hex-encoded commitment
+export type Nonce = string; // Hex-encoded nonce (32 bytes)
 export type RevealedValue = string; // The revealed value
 
 export interface CommitmentData {
@@ -27,9 +33,9 @@ export interface CommitmentData {
 
 export interface CommitRevealRound<T> {
   id: string;
-  phase: 'commit' | 'reveal' | 'complete';
+  phase: "commit" | "reveal" | "complete";
   deadline: number;
-  commitments: Map<string, Commitment>;  // participant -> commitment
+  commitments: Map<string, Commitment>; // participant -> commitment
   reveals: Map<string, { value: T; nonce: Nonce }>;
   results?: T[];
 }
@@ -42,9 +48,8 @@ export interface CommitRevealRound<T> {
  */
 export function commit(value: string | Uint8Array): CommitmentData {
   const nonce = randomBytes(32);
-  const valueBytes = typeof value === 'string'
-    ? new TextEncoder().encode(value)
-    : value;
+  const valueBytes =
+    typeof value === "string" ? new TextEncoder().encode(value) : value;
 
   const combined = new Uint8Array(nonce.length + valueBytes.length);
   combined.set(nonce, 0);
@@ -55,7 +60,7 @@ export function commit(value: string | Uint8Array): CommitmentData {
   return {
     commitment,
     nonce: bytesToHex(nonce),
-    value: typeof value === 'string' ? value : bytesToHex(value),
+    value: typeof value === "string" ? value : bytesToHex(value),
   };
 }
 
@@ -65,19 +70,19 @@ export function commit(value: string | Uint8Array): CommitmentData {
 export function verifyCommitment(
   commitment: Commitment,
   value: string | Uint8Array,
-  nonce: Nonce
+  nonce: Nonce,
 ): boolean {
   const nonceBytes = hexToBytes(nonce);
-  const valueBytes = typeof value === 'string'
-    ? new TextEncoder().encode(value)
-    : value;
+  const valueBytes =
+    typeof value === "string" ? new TextEncoder().encode(value) : value;
 
   const combined = new Uint8Array(nonceBytes.length + valueBytes.length);
   combined.set(nonceBytes, 0);
   combined.set(valueBytes, nonceBytes.length);
 
+  // ZD-C02 FIX: Use constant-time comparison to prevent timing side-channels
   const expected = bytesToHex(domainHash(HASH_DOMAINS.COMMITMENT, combined));
-  return commitment === expected;
+  return hashesEqual(commitment, expected);
 }
 
 // ============ Pedersen-like Commitment (for numeric values) ============
@@ -120,7 +125,7 @@ export function commitNumeric(value: bigint): NumericCommitment {
 export function verifyNumericCommitment(
   commitment: Commitment,
   value: bigint,
-  blinding: Nonce
+  blinding: Nonce,
 ): boolean {
   const blindingBytes = hexToBytes(blinding);
   const valueBytes = bigintToBytes(value);
@@ -129,8 +134,9 @@ export function verifyNumericCommitment(
   combined.set(valueBytes, 0);
   combined.set(blindingBytes, valueBytes.length);
 
+  // ZD-C02 FIX: Use constant-time comparison to prevent timing side-channels
   const expected = bytesToHex(sha512Hash(combined));
-  return commitment === expected;
+  return hashesEqual(commitment, expected);
 }
 
 // ============ Validator Commit-Reveal ============
@@ -143,7 +149,7 @@ export interface VerdictCommitment {
   claimId: string;
   commitment: Commitment;
   nonce: Nonce;
-  verdict: 'confirmed' | 'rejected' | 'uncertain';
+  verdict: "confirmed" | "rejected" | "uncertain";
   confidence: number;
 }
 
@@ -152,9 +158,9 @@ export interface VerdictCommitment {
  */
 export function commitVerdict(
   claimId: string,
-  verdict: 'confirmed' | 'rejected' | 'uncertain',
+  verdict: "confirmed" | "rejected" | "uncertain",
   confidence: number,
-  validatorId: string
+  validatorId: string,
 ): VerdictCommitment {
   const nonce = randomBytes(32);
 
@@ -186,10 +192,10 @@ export function commitVerdict(
 export function verifyVerdictCommitment(
   commitment: Commitment,
   claimId: string,
-  verdict: 'confirmed' | 'rejected' | 'uncertain',
+  verdict: "confirmed" | "rejected" | "uncertain",
   confidence: number,
   validatorId: string,
-  nonce: Nonce
+  nonce: Nonce,
 ): boolean {
   const nonceBytes = hexToBytes(nonce);
 
@@ -204,8 +210,9 @@ export function verifyVerdictCommitment(
   combined.set(nonceBytes, 0);
   combined.set(new TextEncoder().encode(data), nonceBytes.length);
 
+  // ZD-C02 FIX: Use constant-time comparison to prevent timing side-channels
   const expected = bytesToHex(domainHash(HASH_DOMAINS.COMMITMENT, combined));
-  return commitment === expected;
+  return hashesEqual(commitment, expected);
 }
 
 // ============ Batch Commitment ============
@@ -215,7 +222,7 @@ export function verifyVerdictCommitment(
  * Uses Merkle tree for efficiency
  */
 export interface BatchCommitment {
-  commitment: Commitment;  // Merkle root
+  commitment: Commitment; // Merkle root
   nonces: Nonce[];
   values: string[];
 }
@@ -258,7 +265,7 @@ export function verifyBatchItem(
   index: number,
   value: string,
   nonce: Nonce,
-  proof: string[]  // Merkle proof
+  proof: string[], // Merkle proof
 ): boolean {
   const nonceBytes = hexToBytes(nonce);
   const valueBytes = new TextEncoder().encode(value);
@@ -295,13 +302,16 @@ export interface TimedCommitment {
   commitment: Commitment;
   nonce: Nonce;
   value: string;
-  revealAfter: number;  // Unix timestamp
+  revealAfter: number; // Unix timestamp
 }
 
 /**
  * Create timed commitment
  */
-export function commitTimed(value: string, revealAfter: number): TimedCommitment {
+export function commitTimed(
+  value: string,
+  revealAfter: number,
+): TimedCommitment {
   const { commitment, nonce } = commit(value);
 
   return {
@@ -355,6 +365,6 @@ function buildMerkleRoot(leaves: Uint8Array[]): Uint8Array {
  * Convert bigint to bytes
  */
 function bigintToBytes(num: bigint): Uint8Array {
-  const hex = num.toString(16).padStart(64, '0');
+  const hex = num.toString(16).padStart(64, "0");
   return hexToBytes(hex);
 }

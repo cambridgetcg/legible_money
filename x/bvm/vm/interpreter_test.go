@@ -933,21 +933,48 @@ func TestInterp_CodeSize(t *testing.T) {
 
 func TestCheckCapability_NilCaps(t *testing.T) {
 	ctx := makeCtx(100000)
-	// nil Capabilities = full permissions
+	// C-1 FIX: nil Capabilities = DENY all (secure default)
+	if checkCapability(ctx, "stake") {
+		t.Fatal("expected stake DENIED with nil capabilities")
+	}
+	if checkCapability(ctx, "transfer") {
+		t.Fatal("expected transfer DENIED with nil capabilities")
+	}
+	if checkCapability(ctx, "submit_claims") {
+		t.Fatal("expected submit_claims DENIED with nil capabilities")
+	}
+	if checkCapability(ctx, "vote") {
+		t.Fatal("expected vote DENIED with nil capabilities")
+	}
+	if checkCapability(ctx, "unknown") {
+		t.Fatal("expected unknown capability DENIED with nil capabilities")
+	}
+}
+
+func TestCheckCapability_AllGranted(t *testing.T) {
+	ctx := makeCtx(100000)
+	// Explicit all-true capabilities (set by keeper for identity/operational key callers)
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer:    true,
+		CanStake:       true,
+		CanSubmitClaims: true,
+		CanVote:        true,
+	}
 	if !checkCapability(ctx, "stake") {
-		t.Fatal("expected stake allowed with nil capabilities")
+		t.Fatal("expected stake allowed with all capabilities granted")
 	}
 	if !checkCapability(ctx, "transfer") {
-		t.Fatal("expected transfer allowed with nil capabilities")
+		t.Fatal("expected transfer allowed with all capabilities granted")
 	}
 	if !checkCapability(ctx, "submit_claims") {
-		t.Fatal("expected submit_claims allowed with nil capabilities")
+		t.Fatal("expected submit_claims allowed with all capabilities granted")
 	}
 	if !checkCapability(ctx, "vote") {
-		t.Fatal("expected vote allowed with nil capabilities")
+		t.Fatal("expected vote allowed with all capabilities granted")
 	}
-	if !checkCapability(ctx, "unknown") {
-		t.Fatal("expected unknown capability allowed with nil capabilities")
+	// Unknown capability should still be denied
+	if checkCapability(ctx, "unknown") {
+		t.Fatal("expected unknown capability DENIED even with all capabilities granted")
 	}
 }
 
@@ -1035,9 +1062,9 @@ func TestCheckCapability_AllBlocked(t *testing.T) {
 	if checkCapability(ctx, "vote") {
 		t.Fatal("expected vote blocked")
 	}
-	// Unknown capabilities default to allowed
-	if !checkCapability(ctx, "unknown_cap") {
-		t.Fatal("expected unknown capability allowed")
+	// C-1 FIX: Unknown capabilities now default to DENIED
+	if checkCapability(ctx, "unknown_cap") {
+		t.Fatal("expected unknown capability DENIED")
 	}
 }
 
@@ -1059,6 +1086,51 @@ func TestInterp_AgentOpcodeNilHost(t *testing.T) {
 	val := new(big.Int).SetBytes(result.ReturnData)
 	if val.Sign() != 0 {
 		t.Fatalf("expected 0 from agent opcode with nil host, got %s", val)
+	}
+}
+
+func TestReentrancyGuard_RejectsNestedAgentOpcode(t *testing.T) {
+	// H-1: When InHostCall is true, agent opcodes should fail (reentrancy blocked)
+	bytecode := []byte{
+		AGENT_DID, // This should fail because InHostCall = true
+		STOP,
+	}
+	ctx := makeCtx(100000)
+	ctx.CallerDID = "did:lgm:test1234567890abcdef"
+	ctx.Capabilities = &SessionCapabilities{
+		CanTransfer: true, CanStake: true,
+		CanSubmitClaims: true, CanVote: true,
+	}
+	ctx.InHostCall = true // Simulate being inside a host call
+	ctx.Bytecode = bytecode
+
+	state := NewMemoryStateDB()
+	interp := NewInterpreter()
+	result := interp.Execute(bytecode, ctx, state, nil)
+
+	if result.Success {
+		t.Fatal("expected failure: agent opcode should be rejected during host call (reentrancy guard)")
+	}
+}
+
+func TestReentrancyGuard_AllowsNormalExecution(t *testing.T) {
+	// H-1: When InHostCall is false, agent opcodes should work normally
+	bytecode := []byte{
+		AGENT_DID,
+		PUSH1, 0, MSTORE,
+		PUSH1, 32, PUSH1, 0, RETURN,
+	}
+	ctx := makeCtx(100000)
+	ctx.CallerDID = "did:lgm:test1234567890abcdef"
+	ctx.InHostCall = false // Normal execution
+	ctx.Bytecode = bytecode
+
+	state := NewMemoryStateDB()
+	interp := NewInterpreter()
+	result := interp.Execute(bytecode, ctx, state, nil)
+
+	if !result.Success {
+		t.Fatalf("expected success when InHostCall is false, got error: %v", result.Error)
 	}
 }
 
@@ -1372,5 +1444,54 @@ func TestInterp_Timestamp(t *testing.T) {
 	val := new(big.Int).SetBytes(result.ReturnData)
 	if val.Uint64() != 1700000000 {
 		t.Fatalf("expected 1700000000, got %d", val.Uint64())
+	}
+}
+
+// --- Safety Bounds Tests ---
+
+func TestInterp_CallDepthExceeded(t *testing.T) {
+	bytecode := []byte{STOP}
+	ctx := makeCtx(100000)
+	ctx.Bytecode = bytecode
+	state := NewMemoryStateDB()
+	interp := NewInterpreter()
+	interp.callDepth = MaxCallDepth + 1
+
+	result := interp.Execute(bytecode, ctx, state, nil)
+	if result.Success {
+		t.Fatal("expected call depth exceeded error")
+	}
+	if result.Error.Code != ErrCodeCallDepthExceeded {
+		t.Fatalf("expected ErrCodeCallDepthExceeded, got %d", result.Error.Code)
+	}
+}
+
+func TestInterp_BytecodeSizeExceeded(t *testing.T) {
+	// Create bytecode larger than MaxBytecodeSize
+	bytecode := make([]byte, MaxBytecodeSize+1)
+	bytecode[0] = STOP
+	ctx := makeCtx(100000)
+	ctx.Bytecode = bytecode
+	state := NewMemoryStateDB()
+	interp := NewInterpreter()
+
+	result := interp.Execute(bytecode, ctx, state, nil)
+	if result.Success {
+		t.Fatal("expected bytecode size exceeded error")
+	}
+}
+
+func TestInterp_BytecodeSizeAtLimit(t *testing.T) {
+	// Bytecode exactly at MaxBytecodeSize should be OK
+	bytecode := make([]byte, MaxBytecodeSize)
+	bytecode[0] = STOP
+	ctx := makeCtx(100000)
+	ctx.Bytecode = bytecode
+	state := NewMemoryStateDB()
+	interp := NewInterpreter()
+
+	result := interp.Execute(bytecode, ctx, state, nil)
+	if !result.Success {
+		t.Fatalf("bytecode at max size should succeed, got error: %v", result.Error)
 	}
 }

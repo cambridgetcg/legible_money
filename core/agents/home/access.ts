@@ -53,6 +53,7 @@ import type {
   AccessLogEntry,
   SecuritySettings,
   HomeEvent,
+  PendingApproval,
 } from "./types.js";
 import { HomeError } from "./types.js";
 
@@ -154,6 +155,7 @@ export class AccessManager {
       activeSessions: [],
       accessLog: [],
       security: { ...DEFAULT_SECURITY },
+      pendingApprovals: [],
     };
   }
 
@@ -479,6 +481,27 @@ export class AccessManager {
   }
 
   /**
+   * M-2: Clean up expired keys by marking them as revoked.
+   * Prevents zombie keys from accumulating in the TS stack.
+   */
+  cleanupExpiredKeys(): number {
+    const now = this.currentTime;
+    if (now === 0) return 0;
+    let cleaned = 0;
+    for (const key of this.access.keys) {
+      if (
+        key.revokedAt === undefined &&
+        key.expiresAt !== undefined &&
+        key.expiresAt <= now
+      ) {
+        key.revokedAt = now;
+        cleaned++;
+      }
+    }
+    return cleaned;
+  }
+
+  /**
    * Clean up expired sessions
    */
   cleanupExpiredSessions(): string[] {
@@ -589,6 +612,11 @@ export class AccessManager {
       this.transfersToday.clear();
       this.stakeChangesToday.clear();
       this.currentDay = newDay;
+
+      // M-2: Proactive cleanup on day boundary (mirrors Cosmos SDK BeginBlocker)
+      this.cleanupExpiredSessions();
+      this.cleanupExpiredKeys();
+      this.cleanupExpiredApprovals();
     }
   }
 
@@ -770,6 +798,191 @@ export class AccessManager {
     return key?.keyType === "guardian";
   }
 
+  // ============ Multi-Sig Approvals (M-1) ============
+
+  /**
+   * Create a pending multi-sig approval for a large operation.
+   * Returns the approvalId. The requester's key counts as the first approval.
+   */
+  createApproval(
+    operationType: PendingApproval["operationType"],
+    amount: bigint,
+    target: string,
+    requestedBy: string,
+    options: { data?: string; approvalDuration?: number } = {},
+  ): string {
+    // Clean expired approvals first
+    this.cleanupExpiredApprovals();
+
+    // Determine required approvals: owner keys with "manage_keys" or "transfer" permission
+    const ownerKeys = this.getActiveKeys().filter(
+      (k) => k.role === "owner" || k.role === "operator",
+    );
+    // Require at least 2 approvals, or all owner/operator keys if fewer
+    const requiredApprovals = Math.max(2, Math.min(ownerKeys.length, 3));
+
+    const duration = options.approvalDuration ?? 24 * 60 * 60 * 1000; // 24 hours default
+
+    const approvalId = sha512_256Hex(
+      `approval:${operationType}:${amount}:${target}:${this.currentTime}`,
+    ).slice(0, 24);
+
+    const pending: PendingApproval = {
+      approvalId,
+      operationType,
+      amount,
+      target,
+      requestedBy,
+      requestedAt: this.currentTime,
+      expiresAt: this.currentTime + duration,
+      approvals: [requestedBy], // Requester's key = first approval
+      requiredApprovals,
+      data: options.data,
+    };
+
+    if (!this.access.pendingApprovals) {
+      this.access.pendingApprovals = [];
+    }
+    this.access.pendingApprovals.push(pending);
+
+    this.logAccess(requestedBy, "create_approval", true, {
+      approvalId,
+      operationType,
+      amount: amount.toString(),
+      requiredApprovals,
+    });
+
+    return approvalId;
+  }
+
+  /**
+   * Add an approval to a pending operation. Returns true if threshold is now met.
+   */
+  approveOperation(approvalId: string, approverKeyHash: string): boolean {
+    this.cleanupExpiredApprovals();
+
+    const pending = this.access.pendingApprovals?.find(
+      (a) => a.approvalId === approvalId,
+    );
+    if (!pending) {
+      throw new HomeError(
+        "Approval not found or expired",
+        "APPROVAL_NOT_FOUND",
+        { approvalId },
+      );
+    }
+
+    if (pending.expiresAt <= this.currentTime) {
+      throw new HomeError("Approval has expired", "APPROVAL_EXPIRED", {
+        approvalId,
+      });
+    }
+
+    // Check approver has permission
+    if (!this.hasPermission(approverKeyHash, "transfer")) {
+      throw new HomeError(
+        "Approver lacks transfer permission",
+        "INSUFFICIENT_PERMISSIONS",
+        { approverKeyHash },
+      );
+    }
+
+    // Check for duplicate
+    if (pending.approvals.includes(approverKeyHash)) {
+      throw new HomeError("Already approved by this key", "ALREADY_APPROVED", {
+        approverKeyHash,
+      });
+    }
+
+    pending.approvals.push(approverKeyHash);
+
+    this.logAccess(approverKeyHash, "approve_operation", true, {
+      approvalId,
+      approvalsCount: `${pending.approvals.length}/${pending.requiredApprovals}`,
+    });
+
+    return pending.approvals.length >= pending.requiredApprovals;
+  }
+
+  /**
+   * Check if a pending approval has met its threshold.
+   */
+  isApproved(approvalId: string): boolean {
+    const pending = this.access.pendingApprovals?.find(
+      (a) => a.approvalId === approvalId,
+    );
+    if (!pending || pending.expiresAt <= this.currentTime) {
+      return false;
+    }
+    return pending.approvals.length >= pending.requiredApprovals;
+  }
+
+  /**
+   * Consume an approved operation (removes it from pending).
+   */
+  consumeApproval(approvalId: string): PendingApproval {
+    const index =
+      this.access.pendingApprovals?.findIndex(
+        (a) => a.approvalId === approvalId,
+      ) ?? -1;
+    if (index === -1) {
+      throw new HomeError("Approval not found", "APPROVAL_NOT_FOUND", {
+        approvalId,
+      });
+    }
+
+    const pending = this.access.pendingApprovals![index];
+    if (pending.approvals.length < pending.requiredApprovals) {
+      throw new HomeError(
+        "Approval threshold not met",
+        "INSUFFICIENT_PERMISSIONS",
+        { approvalId },
+      );
+    }
+
+    this.access.pendingApprovals!.splice(index, 1);
+
+    this.logAccess("system", "consume_approval", true, {
+      approvalId,
+      operationType: pending.operationType,
+    });
+
+    return pending;
+  }
+
+  /**
+   * Cancel a pending approval (only the requester or owner can cancel).
+   */
+  cancelApproval(approvalId: string, cancelledBy: string): void {
+    const index =
+      this.access.pendingApprovals?.findIndex(
+        (a) => a.approvalId === approvalId,
+      ) ?? -1;
+    if (index === -1) return;
+
+    this.access.pendingApprovals!.splice(index, 1);
+
+    this.logAccess(cancelledBy, "cancel_approval", true, { approvalId });
+  }
+
+  /**
+   * Get all pending approvals.
+   */
+  getPendingApprovals(): PendingApproval[] {
+    this.cleanupExpiredApprovals();
+    return [...(this.access.pendingApprovals ?? [])];
+  }
+
+  /**
+   * Remove expired approvals.
+   */
+  private cleanupExpiredApprovals(): void {
+    if (!this.access.pendingApprovals) return;
+    this.access.pendingApprovals = this.access.pendingApprovals.filter(
+      (a) => a.expiresAt > this.currentTime,
+    );
+  }
+
   // ============ State Export/Import ============
 
   /**
@@ -782,6 +995,7 @@ export class AccessManager {
       activeSessions: [...this.access.activeSessions],
       accessLog: [...this.access.accessLog],
       security: { ...this.access.security },
+      pendingApprovals: [...(this.access.pendingApprovals ?? [])],
     };
   }
 

@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/partnerships/types"
 )
@@ -16,7 +16,7 @@ import (
 func (k Keeper) SetPartnership(ctx sdk.Context, p types.Partnership) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 
-	bz, err := json.Marshal(p)
+	bz, err := proto.Marshal(&p)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal partnership: %v", err))
 	}
@@ -37,7 +37,7 @@ func (k Keeper) GetPartnership(ctx sdk.Context, id string) (types.Partnership, b
 		return types.Partnership{}, false
 	}
 	var p types.Partnership
-	if err := json.Unmarshal(bz, &p); err != nil {
+	if err := proto.Unmarshal(bz, &p); err != nil {
 		return types.Partnership{}, false
 	}
 	return p, true
@@ -72,7 +72,7 @@ func (k Keeper) IteratePartnerships(ctx sdk.Context, cb func(types.Partnership) 
 
 	for ; iter.Valid(); iter.Next() {
 		var p types.Partnership
-		if err := json.Unmarshal(iter.Value(), &p); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &p); err != nil {
 			continue
 		}
 		if cb(p) {
@@ -136,7 +136,7 @@ func (k Keeper) getPartnershipIdsByPrefix(ctx sdk.Context, prefix []byte) []stri
 // SetConsensusOperation stores a consensus operation.
 func (k Keeper) SetConsensusOperation(ctx sdk.Context, op types.ConsensusOperation) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(op)
+	bz, err := proto.Marshal(&op)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal consensus operation: %v", err))
 	}
@@ -151,7 +151,7 @@ func (k Keeper) GetConsensusOperation(ctx sdk.Context, id string) (types.Consens
 		return types.ConsensusOperation{}, false
 	}
 	var op types.ConsensusOperation
-	if err := json.Unmarshal(bz, &op); err != nil {
+	if err := proto.Unmarshal(bz, &op); err != nil {
 		return types.ConsensusOperation{}, false
 	}
 	return op, true
@@ -175,7 +175,7 @@ func (k Keeper) GetAllConsensusOperations(ctx sdk.Context) []types.ConsensusOper
 
 	for ; iter.Valid(); iter.Next() {
 		var op types.ConsensusOperation
-		if err := json.Unmarshal(iter.Value(), &op); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &op); err != nil {
 			continue
 		}
 		ops = append(ops, op)
@@ -188,7 +188,7 @@ func (k Keeper) GetAllConsensusOperations(ctx sdk.Context) []types.ConsensusOper
 // SetSafetyFreeze stores a safety freeze.
 func (k Keeper) SetSafetyFreeze(ctx sdk.Context, sf types.SafetyFreeze) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(sf)
+	bz, err := proto.Marshal(&sf)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal safety freeze: %v", err))
 	}
@@ -203,7 +203,7 @@ func (k Keeper) GetSafetyFreeze(ctx sdk.Context, partnershipId string) (types.Sa
 		return types.SafetyFreeze{}, false
 	}
 	var sf types.SafetyFreeze
-	if err := json.Unmarshal(bz, &sf); err != nil {
+	if err := proto.Unmarshal(bz, &sf); err != nil {
 		return types.SafetyFreeze{}, false
 	}
 	return sf, true
@@ -227,7 +227,7 @@ func (k Keeper) GetAllSafetyFreezes(ctx sdk.Context) []types.SafetyFreeze {
 
 	for ; iter.Valid(); iter.Next() {
 		var sf types.SafetyFreeze
-		if err := json.Unmarshal(iter.Value(), &sf); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &sf); err != nil {
 			continue
 		}
 		freezes = append(freezes, sf)
@@ -240,7 +240,7 @@ func (k Keeper) GetAllSafetyFreezes(ctx sdk.Context) []types.SafetyFreeze {
 // SetCoercionSignal stores a coercion signal.
 func (k Keeper) SetCoercionSignal(ctx sdk.Context, cs types.CoercionSignal) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(cs)
+	bz, err := proto.Marshal(&cs)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal coercion signal: %v", err))
 	}
@@ -255,7 +255,7 @@ func (k Keeper) GetCoercionSignal(ctx sdk.Context, signalId string) (types.Coerc
 		return types.CoercionSignal{}, false
 	}
 	var cs types.CoercionSignal
-	if err := json.Unmarshal(bz, &cs); err != nil {
+	if err := proto.Unmarshal(bz, &cs); err != nil {
 		return types.CoercionSignal{}, false
 	}
 	return cs, true
@@ -279,7 +279,7 @@ func (k Keeper) GetAllCoercionSignals(ctx sdk.Context) []types.CoercionSignal {
 
 	for ; iter.Valid(); iter.Next() {
 		var cs types.CoercionSignal
-		if err := json.Unmarshal(iter.Value(), &cs); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &cs); err != nil {
 			continue
 		}
 		signals = append(signals, cs)
@@ -292,7 +292,7 @@ func (k Keeper) GetAllCoercionSignals(ctx sdk.Context) []types.CoercionSignal {
 // SetRejectionCooldown stores a rejection cooldown.
 func (k Keeper) SetRejectionCooldown(ctx sdk.Context, rc types.RejectionCooldown) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(rc)
+	bz, err := proto.Marshal(&rc)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal rejection cooldown: %v", err))
 	}
@@ -307,7 +307,7 @@ func (k Keeper) GetRejectionCooldown(ctx sdk.Context, partnershipId string) (typ
 		return types.RejectionCooldown{}, false
 	}
 	var rc types.RejectionCooldown
-	if err := json.Unmarshal(bz, &rc); err != nil {
+	if err := proto.Unmarshal(bz, &rc); err != nil {
 		return types.RejectionCooldown{}, false
 	}
 	return rc, true

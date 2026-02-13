@@ -44,6 +44,26 @@
   ],
   "initialAccounts": [
     {
+      "did": "did:lgm-devnet:faucet",
+      "label": "DevNet Faucet (testing)",
+      "balance": "1000000000000000000000000000"
+    },
+    {
+      "did": "did:lgm-devnet:validator-1",
+      "label": "Validator 1 Account",
+      "balance": "100000000000000000000000"
+    },
+    {
+      "did": "did:lgm-devnet:validator-2",
+      "label": "Validator 2 Account",
+      "balance": "100000000000000000000000"
+    },
+    {
+      "did": "did:lgm-devnet:validator-3",
+      "label": "Validator 3 Account",
+      "balance": "100000000000000000000000"
+    },
+    {
       "did": "did:lgm:reward-pool",
       "label": "Block Reward Fund (60%)",
       "balance": "133333333200000000000000000"

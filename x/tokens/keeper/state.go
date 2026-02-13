@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/tokens/types"
 )
@@ -16,7 +16,7 @@ import (
 func (k Keeper) SetExpirableAccount(ctx sdk.Context, acct types.ExpirableAccount) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := accountKey(acct.Address)
-	bz, err := json.Marshal(acct)
+	bz, err := proto.Marshal(&acct)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal expirable account: %v", err))
 	}
@@ -32,7 +32,7 @@ func (k Keeper) GetExpirableAccount(ctx sdk.Context, address string) (types.Expi
 		return types.ExpirableAccount{}, false
 	}
 	var acct types.ExpirableAccount
-	if err := json.Unmarshal(bz, &acct); err != nil {
+	if err := proto.Unmarshal(bz, &acct); err != nil {
 		return types.ExpirableAccount{}, false
 	}
 	return acct, true
@@ -66,7 +66,7 @@ func (k Keeper) IterateExpirableAccounts(ctx sdk.Context, cb func(types.Expirabl
 
 	for ; iter.Valid(); iter.Next() {
 		var acct types.ExpirableAccount
-		if err := json.Unmarshal(iter.Value(), &acct); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &acct); err != nil {
 			continue
 		}
 		if cb(acct) {
@@ -107,7 +107,7 @@ func (k Keeper) DeleteAllowance(ctx sdk.Context, owner, spender string) {
 // SetRAIAccount stores the RAI holding account.
 func (k Keeper) SetRAIAccount(ctx sdk.Context, rai types.RAIHoldingAccount) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(rai)
+	bz, err := proto.Marshal(&rai)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal RAI account: %v", err))
 	}
@@ -127,7 +127,7 @@ func (k Keeper) GetRAIAccount(ctx sdk.Context) types.RAIHoldingAccount {
 		}
 	}
 	var rai types.RAIHoldingAccount
-	if err := json.Unmarshal(bz, &rai); err != nil {
+	if err := proto.Unmarshal(bz, &rai); err != nil {
 		return types.RAIHoldingAccount{
 			Balance:          "0",
 			TotalReceived:    "0",

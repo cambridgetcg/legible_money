@@ -7,6 +7,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/research/types"
 )
@@ -15,7 +16,7 @@ import (
 
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := json.Marshal(params)
+	bz, _ := proto.Marshal(&params)
 	_ = kvStore.Set(types.ParamsKey, bz)
 }
 
@@ -26,7 +27,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	json.Unmarshal(bz, &params)
+	proto.Unmarshal(bz, &params)
 	return params
 }
 
@@ -38,7 +39,7 @@ func submissionKey(id string) []byte {
 
 func (k Keeper) SetResearch(ctx sdk.Context, r types.Research) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := json.Marshal(r)
+	bz, _ := proto.Marshal(&r)
 	_ = kvStore.Set(submissionKey(r.Id), bz)
 }
 
@@ -49,7 +50,7 @@ func (k Keeper) GetResearch(ctx sdk.Context, id string) (types.Research, bool) {
 		return types.Research{}, false
 	}
 	var r types.Research
-	json.Unmarshal(bz, &r)
+	proto.Unmarshal(bz, &r)
 	return r, true
 }
 
@@ -67,7 +68,7 @@ func (k Keeper) IterateResearches(ctx sdk.Context, cb func(types.Research) bool)
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
 		var r types.Research
-		json.Unmarshal(iter.Value(), &r)
+		proto.Unmarshal(iter.Value(), &r)
 		if cb(r) {
 			break
 		}
@@ -104,7 +105,7 @@ func bountyKey(id string) []byte {
 
 func (k Keeper) SetBounty(ctx sdk.Context, b types.Bounty) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := json.Marshal(b)
+	bz, _ := proto.Marshal(&b)
 	_ = kvStore.Set(bountyKey(b.Id), bz)
 }
 
@@ -115,7 +116,7 @@ func (k Keeper) GetBounty(ctx sdk.Context, id string) (types.Bounty, bool) {
 		return types.Bounty{}, false
 	}
 	var b types.Bounty
-	json.Unmarshal(bz, &b)
+	proto.Unmarshal(bz, &b)
 	return b, true
 }
 
@@ -133,7 +134,7 @@ func (k Keeper) IterateBounties(ctx sdk.Context, cb func(types.Bounty) bool) {
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
 		var b types.Bounty
-		json.Unmarshal(iter.Value(), &b)
+		proto.Unmarshal(iter.Value(), &b)
 		if cb(b) {
 			break
 		}
@@ -218,7 +219,7 @@ func reviewPrefixForResearch(researchId string) []byte {
 
 func (k Keeper) SetPeerReview(ctx sdk.Context, r types.PeerReview) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := json.Marshal(r)
+	bz, _ := proto.Marshal(&r)
 	_ = kvStore.Set(reviewKey(r.ResearchId, r.Id), bz)
 }
 
@@ -229,7 +230,7 @@ func (k Keeper) GetPeerReview(ctx sdk.Context, researchId, reviewId string) (typ
 		return types.PeerReview{}, false
 	}
 	var r types.PeerReview
-	json.Unmarshal(bz, &r)
+	proto.Unmarshal(bz, &r)
 	return r, true
 }
 
@@ -245,7 +246,7 @@ func (k Keeper) GetReviewsForResearch(ctx sdk.Context, researchId string) []type
 	var results []types.PeerReview
 	for ; iter.Valid(); iter.Next() {
 		var r types.PeerReview
-		json.Unmarshal(iter.Value(), &r)
+		proto.Unmarshal(iter.Value(), &r)
 		results = append(results, r)
 	}
 	return results
@@ -266,7 +267,7 @@ func (k Keeper) HasReviewerReviewed(ctx sdk.Context, researchId, reviewer string
 func (k Keeper) SetTreasuryBalance(ctx sdk.Context, balance string) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	tb := types.TreasuryBalance{Balance: balance}
-	bz, _ := json.Marshal(tb)
+	bz, _ := proto.Marshal(&tb)
 	_ = kvStore.Set(types.TreasuryKeyPrefix, bz)
 }
 
@@ -277,7 +278,7 @@ func (k Keeper) GetTreasuryBalance(ctx sdk.Context) string {
 		return "0"
 	}
 	var tb types.TreasuryBalance
-	json.Unmarshal(bz, &tb)
+	proto.Unmarshal(bz, &tb)
 	return tb.Balance
 }
 

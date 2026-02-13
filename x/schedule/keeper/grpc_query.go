@@ -30,11 +30,15 @@ func (q queryServer) Process(goCtx context.Context, req *types.QueryProcessReque
 	if !found {
 		return nil, types.ErrProcessNotFound
 	}
-	return &types.QueryProcessResponse{Process: process}, nil
+	return &types.QueryProcessResponse{Process: &process}, nil
 }
 
 func (q queryServer) ProcessesByCreator(goCtx context.Context, req *types.QueryProcessesByCreatorRequest) (*types.QueryProcessesByCreatorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	processes := q.GetProcessesByCreator(ctx, req.Creator)
-	return &types.QueryProcessesByCreatorResponse{Processes: processes}, nil
+	ptrs := make([]*types.ScheduleProcess, len(processes))
+	for i := range processes {
+		ptrs[i] = &processes[i]
+	}
+	return &types.QueryProcessesByCreatorResponse{Processes: ptrs}, nil
 }

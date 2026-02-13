@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/gov/types"
 )
@@ -15,7 +16,7 @@ import (
 // SetLIP stores a LIP by ID.
 func (k Keeper) SetLIP(ctx sdk.Context, lip types.LIP) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(lip)
+	bz, err := proto.Marshal(&lip)
 	if err != nil {
 		panic("failed to marshal LIP: " + err.Error())
 	}
@@ -32,7 +33,7 @@ func (k Keeper) GetLIP(ctx sdk.Context, id string) (types.LIP, bool) {
 		return types.LIP{}, false
 	}
 	var lip types.LIP
-	if err := json.Unmarshal(bz, &lip); err != nil {
+	if err := proto.Unmarshal(bz, &lip); err != nil {
 		return types.LIP{}, false
 	}
 	return lip, true
@@ -71,7 +72,7 @@ func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var lip types.LIP
-		if err := json.Unmarshal(iter.Value(), &lip); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &lip); err != nil {
 			continue
 		}
 		if cb(lip) {
@@ -85,7 +86,7 @@ func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
 // SetVote stores a quadratic vote.
 func (k Keeper) SetVote(ctx sdk.Context, vote types.QuadraticVote) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(vote)
+	bz, err := proto.Marshal(&vote)
 	if err != nil {
 		panic("failed to marshal vote: " + err.Error())
 	}
@@ -102,7 +103,7 @@ func (k Keeper) GetVote(ctx sdk.Context, voteId string) (types.QuadraticVote, bo
 		return types.QuadraticVote{}, false
 	}
 	var vote types.QuadraticVote
-	if err := json.Unmarshal(bz, &vote); err != nil {
+	if err := proto.Unmarshal(bz, &vote); err != nil {
 		return types.QuadraticVote{}, false
 	}
 	return vote, true
@@ -120,7 +121,7 @@ func (k Keeper) GetVotesForProposal(ctx sdk.Context, proposalId string) []types.
 
 	for ; iter.Valid(); iter.Next() {
 		var vote types.QuadraticVote
-		if err := json.Unmarshal(iter.Value(), &vote); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &vote); err != nil {
 			continue
 		}
 		if vote.ProposalId == proposalId {
@@ -160,7 +161,7 @@ func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
 
 	for ; iter.Valid(); iter.Next() {
 		var vote types.QuadraticVote
-		if err := json.Unmarshal(iter.Value(), &vote); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &vote); err != nil {
 			continue
 		}
 		votes = append(votes, vote)
@@ -173,7 +174,7 @@ func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
 // SetDisbursement stores a disbursement proposal.
 func (k Keeper) SetDisbursement(ctx sdk.Context, disb types.DisbursementProposal) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(disb)
+	bz, err := proto.Marshal(&disb)
 	if err != nil {
 		panic("failed to marshal disbursement: " + err.Error())
 	}
@@ -190,7 +191,7 @@ func (k Keeper) GetDisbursement(ctx sdk.Context, id string) (types.DisbursementP
 		return types.DisbursementProposal{}, false
 	}
 	var disb types.DisbursementProposal
-	if err := json.Unmarshal(bz, &disb); err != nil {
+	if err := proto.Unmarshal(bz, &disb); err != nil {
 		return types.DisbursementProposal{}, false
 	}
 	return disb, true
@@ -217,7 +218,7 @@ func (k Keeper) IterateDisbursements(ctx sdk.Context, cb func(types.Disbursement
 
 	for ; iter.Valid(); iter.Next() {
 		var disb types.DisbursementProposal
-		if err := json.Unmarshal(iter.Value(), &disb); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &disb); err != nil {
 			continue
 		}
 		if cb(disb) {
@@ -278,7 +279,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -287,7 +288,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // SetParams stores the governance module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic("failed to marshal governance params: " + err.Error())
 	}

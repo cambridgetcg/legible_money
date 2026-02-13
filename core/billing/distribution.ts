@@ -426,10 +426,11 @@ export function generateAPIQuote(
   } else {
     confQuoteMult = 1;
   }
+  // ZD-S01 FIX: Use BPS-based BigInt arithmetic for all baseCost multiplications.
+  // Prevents Number() overflow when baseCost exceeds MAX_SAFE_INTEGER.
   confQuoteMult = Math.max(0.5, Math.min(1.5, confQuoteMult));
-  const confidencePremium = BigInt(
-    Math.floor(Number(baseCost) * (confQuoteMult - 1)),
-  );
+  const confBps = BigInt(Math.round((confQuoteMult - 1) * 1_000_000));
+  const confidencePremium = (baseCost * confBps) / 1_000_000n;
 
   const avgFundamentality =
     estimatedFacts.length > 0
@@ -437,11 +438,12 @@ export function generateAPIQuote(
         estimatedFacts.length
       : 0.25;
   // Novelty: highly cited = well-known = discount (negative premium)
-  const fundamentalityPremium = BigInt(
-    Math.floor(
-      Number(baseCost) * -avgFundamentality * params.fundamentalityPremiumRate,
+  const fundBps = BigInt(
+    Math.round(
+      -avgFundamentality * params.fundamentalityPremiumRate * 1_000_000,
     ),
   );
+  const fundamentalityPremium = (baseCost * fundBps) / 1_000_000n;
 
   const avgAge =
     estimatedFacts.length > 0
@@ -449,10 +451,9 @@ export function generateAPIQuote(
         estimatedFacts.length
       : 10000;
   // Freshness premium (inverted): recent = novel = more valuable
+  const freshBps = BigInt(Math.round(params.freshnessDiscountRate * 1_000_000));
   const freshnessDiscount =
-    avgAge < 1000
-      ? -BigInt(Math.floor(Number(baseCost) * params.freshnessDiscountRate))
-      : 0n;
+    avgAge < 1000 ? -(baseCost * freshBps) / 1_000_000n : 0n;
 
   const estimatedCost =
     baseCost + confidencePremium + fundamentalityPremium - freshnessDiscount;

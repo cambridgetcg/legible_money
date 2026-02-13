@@ -109,7 +109,7 @@ func (k Keeper) CalculateDistribution(ctx sdk.Context, totalPayment *big.Int, fa
 	return types.PaymentDistribution{
 		TotalPayment: totalPayment.String(),
 		ResearchShare: researchShare.String(),
-		ResearchSplit: types.ResearchFundSplit{
+		ResearchSplit: &types.ResearchFundSplit{
 			Research:   researchFund.String(),
 			Foundation: foundationFund.String(),
 			Community:  communityFund.String(),
@@ -125,7 +125,7 @@ func (k Keeper) CalculateDistribution(ctx sdk.Context, totalPayment *big.Int, fa
 
 // calculateKnowledgePoolDistribution distributes the knowledge pool share
 // weighted by confidence * log2(citations+1) for each fact.
-func (k Keeper) calculateKnowledgePoolDistribution(ctx sdk.Context, poolTotal *big.Int, factIds []string) []types.KnowledgePoolEntry {
+func (k Keeper) calculateKnowledgePoolDistribution(ctx sdk.Context, poolTotal *big.Int, factIds []string) []*types.KnowledgePoolEntry {
 	type factWeight struct {
 		factId    string
 		submitter string
@@ -161,11 +161,11 @@ func (k Keeper) calculateKnowledgePoolDistribution(ctx sdk.Context, poolTotal *b
 		totalWeight.Add(totalWeight, weight)
 	}
 
-	var pool []types.KnowledgePoolEntry
+	var pool []*types.KnowledgePoolEntry
 
 	if totalWeight.Sign() == 0 || len(entries) == 0 {
 		// No eligible facts; entire knowledge pool goes to protocol treasury
-		pool = append(pool, types.KnowledgePoolEntry{
+		pool = append(pool, &types.KnowledgePoolEntry{
 			FactId:    "",
 			Submitter: ProtocolTreasury,
 			Amount:    poolTotal.String(),
@@ -186,7 +186,7 @@ func (k Keeper) calculateKnowledgePoolDistribution(ctx sdk.Context, poolTotal *b
 		}
 		distributed.Add(distributed, amount)
 
-		pool = append(pool, types.KnowledgePoolEntry{
+		pool = append(pool, &types.KnowledgePoolEntry{
 			FactId:    entry.factId,
 			Submitter: entry.submitter,
 			Amount:    amount.String(),

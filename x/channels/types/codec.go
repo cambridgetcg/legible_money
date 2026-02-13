@@ -5,6 +5,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/grpc"
 )
 
@@ -21,7 +22,13 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the channels module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgOpenChannel{},
+		&MsgUpdateChannel{},
+		&MsgCloseChannel{},
+		&MsgSettleChannel{},
+		&MsgDisputeChannel{},
+	)
 }
 
 var (
@@ -84,6 +91,27 @@ func _Msg_ClaimExpired_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SupplementalMsgServer).ClaimExpired(ctx, req.(*MsgClaimExpired))
 	})
+}
+
+// _SupplementalMsg_serviceDesc is the gRPC service descriptor for supplemental
+// message handlers not in the protobuf Msg service definition.
+var _SupplementalMsg_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "legible.channels.v1.SupplementalMsg",
+	HandlerType: (*SupplementalMsgServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{MethodName: "DepositChannel", Handler: _Msg_DepositChannel_Handler},
+		{MethodName: "UpdateState", Handler: _Msg_UpdateState_Handler},
+		{MethodName: "ClaimExpired", Handler: _Msg_ClaimExpired_Handler},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "legible/channels/v1/tx.proto",
+}
+
+// RegisterFullMsgServer registers the full msg server that includes both
+// proto-generated handlers and supplemental handlers.
+func RegisterFullMsgServer(s grpc.ServiceRegistrar, srv FullMsgServer) {
+	RegisterMsgServer(s, srv)
+	s.RegisterService(&_SupplementalMsg_serviceDesc, srv)
 }
 
 // --- Query service descriptor (no protobuf query service was generated) ---

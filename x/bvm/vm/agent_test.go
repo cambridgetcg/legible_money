@@ -16,9 +16,33 @@ type compositeHost struct {
 func newCompositeHost(stateDB StateDB) *compositeHost {
 	return &compositeHost{
 		agent:    NewAgentHost(context.Background(), stateDB),
-		treasury: NewTreasuryHost(stateDB),
+		treasury: NewTreasuryHostWithAuth(stateDB, &testVMAuthKeeper{}, context.Background()),
 		kh:       NewKnowledgeHost(nil, context.Background()),
 	}
+}
+
+// testVMAuthKeeper is a mock VMAuthKeeper for tests. Stores registered keys in memory.
+type testVMAuthKeeper struct {
+	keys map[string]bool // ownerDID/pubKeyHex -> registered
+}
+
+func (m *testVMAuthKeeper) RegisterSessionKey(_ context.Context, ownerDID, pubKeyHex string, _, _, _, _ bool, _ uint64) error {
+	if m.keys == nil {
+		m.keys = make(map[string]bool)
+	}
+	m.keys[ownerDID+"/"+pubKeyHex] = true
+	return nil
+}
+
+func (m *testVMAuthKeeper) RevokeSessionKey(_ context.Context, ownerDID, keyHash string) error {
+	if m.keys != nil {
+		delete(m.keys, ownerDID+"/"+keyHash)
+	}
+	return nil
+}
+
+func (m *testVMAuthKeeper) GetSessionForDID(_ context.Context, _ string, _ uint64) (uint64, bool, bool, bool, bool, bool) {
+	return 0, false, false, false, false, false
 }
 
 // Knowledge
@@ -347,6 +371,7 @@ func TestTreasury_StakeTokens(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:staker"
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)

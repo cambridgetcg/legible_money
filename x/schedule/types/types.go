@@ -9,11 +9,15 @@ import (
 )
 
 // -----------------------------------------------------------------------
-// Core domain types
+// Core domain types — type aliases and constants
+// Struct definitions for TimeCondition, LogicCondition, CompoundCondition,
+// ScheduleCondition, ScheduleProcess, Params, and GenesisState are provided
+// by the proto-generated .pb.go files (state.pb.go and genesis.pb.go).
+// Only methods, type aliases, constants, and non-proto types are kept here.
 // -----------------------------------------------------------------------
 
 // ProcessStatus represents the lifecycle of a schedule process.
-type ProcessStatus string
+type ProcessStatus = string
 
 const (
 	StatusActive    ProcessStatus = "active"
@@ -24,7 +28,7 @@ const (
 )
 
 // TimeConditionType defines how time-based conditions work.
-type TimeConditionType string
+type TimeConditionType = string
 
 const (
 	TimeAbsolute TimeConditionType = "absolute" // fire at specific block
@@ -33,7 +37,7 @@ const (
 )
 
 // LogicConditionType defines state-based conditions.
-type LogicConditionType string
+type LogicConditionType = string
 
 const (
 	LogicStateCompare    LogicConditionType = "state_compare"
@@ -41,48 +45,12 @@ const (
 )
 
 // CompoundOperator for combining conditions.
-type CompoundOperator string
+type CompoundOperator = string
 
 const (
 	CompoundAnd CompoundOperator = "and"
 	CompoundOr  CompoundOperator = "or"
 )
-
-// TimeCondition triggers based on block height.
-type TimeCondition struct {
-	Type           TimeConditionType `json:"type"`
-	ExecuteAtBlock uint64            `json:"execute_at_block,omitempty"` // absolute/relative target
-	IntervalBlocks uint64            `json:"interval_blocks,omitempty"` // periodic interval
-	StartBlock     uint64            `json:"start_block,omitempty"`     // periodic start
-	EndBlock       uint64            `json:"end_block,omitempty"`       // periodic end (0 = no end)
-}
-
-func (tc *TimeCondition) Reset()        {}
-func (tc *TimeCondition) String() string { return fmt.Sprintf("%+v", *tc) }
-func (tc *TimeCondition) ProtoMessage()  {}
-
-// LogicCondition triggers based on state comparison.
-type LogicCondition struct {
-	Type         LogicConditionType `json:"type"`
-	StateKey     string             `json:"state_key"`               // key to watch
-	Comparator   string             `json:"comparator"`              // "eq", "gt", "lt", "gte", "lte", "neq"
-	CompareValue string             `json:"compare_value"`           // value to compare against
-	Direction    string             `json:"direction,omitempty"`     // "up" or "down" for threshold_crossed
-}
-
-func (lc *LogicCondition) Reset()        {}
-func (lc *LogicCondition) String() string { return fmt.Sprintf("%+v", *lc) }
-func (lc *LogicCondition) ProtoMessage()  {}
-
-// CompoundCondition combines multiple conditions.
-type CompoundCondition struct {
-	Operator   CompoundOperator   `json:"operator"`
-	Conditions []ScheduleCondition `json:"conditions"`
-}
-
-func (cc *CompoundCondition) Reset()        {}
-func (cc *CompoundCondition) String() string { return fmt.Sprintf("%+v", *cc) }
-func (cc *CompoundCondition) ProtoMessage()  {}
 
 // Depth returns the nesting depth of the compound condition.
 func (cc *CompoundCondition) Depth() int {
@@ -97,59 +65,6 @@ func (cc *CompoundCondition) Depth() int {
 	}
 	return maxDepth + 1
 }
-
-// ScheduleCondition wraps the three condition types (exactly one must be set).
-type ScheduleCondition struct {
-	TimeCondition     *TimeCondition     `json:"time_condition,omitempty"`
-	LogicCondition    *LogicCondition    `json:"logic_condition,omitempty"`
-	CompoundCondition *CompoundCondition `json:"compound_condition,omitempty"`
-}
-
-func (sc *ScheduleCondition) Reset()        {}
-func (sc *ScheduleCondition) String() string { return fmt.Sprintf("%+v", *sc) }
-func (sc *ScheduleCondition) ProtoMessage()  {}
-
-// ScheduleProcess represents a scheduled automation.
-type ScheduleProcess struct {
-	Id               string            `json:"id"`
-	Creator          string            `json:"creator"`           // bech32 address
-	Condition        ScheduleCondition `json:"condition"`
-	Status           ProcessStatus     `json:"status"`
-	ExecutionCount   uint64            `json:"execution_count"`
-	MaxExecutions    uint64            `json:"max_executions"`    // 0 = unlimited
-	RemainingFee     string            `json:"remaining_fee"`     // ulgm prepaid
-	FeePerExecution  string            `json:"fee_per_execution"` // ulgm per run
-	TargetAddress    string            `json:"target_address"`    // bech32 target
-	CallData         string            `json:"call_data"`         // encoded message
-	TransferValue    string            `json:"transfer_value"`    // ulgm to transfer on execution
-	LinkedEntityType string            `json:"linked_entity_type,omitempty"` // "project", "partnership", etc.
-	LinkedEntityId   string            `json:"linked_entity_id,omitempty"`
-	CreatedAtBlock   uint64            `json:"created_at_block"`
-	ExpiresAtBlock   uint64            `json:"expires_at_block"`  // 0 = no expiry
-	NextExecuteAt    uint64            `json:"next_execute_at"`   // next scheduled block
-}
-
-func (sp *ScheduleProcess) Reset()        {}
-func (sp *ScheduleProcess) String() string { return fmt.Sprintf("%+v", *sp) }
-func (sp *ScheduleProcess) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// Params
-// -----------------------------------------------------------------------
-
-// Params holds module parameters.
-type Params struct {
-	MaxActivePerAccount  uint32 `json:"max_active_per_account"`  // max active schedules per creator
-	MaxGasPerBlock       uint64 `json:"max_gas_per_block"`       // gas budget for schedule execution per block
-	MinIntervalBlocks    uint64 `json:"min_interval_blocks"`     // minimum periodic interval
-	MaxFutureBlocks      uint64 `json:"max_future_blocks"`       // max blocks into the future
-	MinPrepaidExecutions uint64 `json:"min_prepaid_executions"`  // min executions to prepay
-	ExpiredRetentionBlocks uint64 `json:"expired_retention_blocks"` // blocks to retain completed/cancelled
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
 
 // Validate performs parameter validation.
 func (p Params) Validate() error {
@@ -169,28 +84,13 @@ func (p Params) Validate() error {
 }
 
 // -----------------------------------------------------------------------
-// Genesis state
-// -----------------------------------------------------------------------
-
-// GenesisState defines the schedule module genesis state.
-type GenesisState struct {
-	Params    Params            `json:"params"`
-	Processes []ScheduleProcess `json:"processes"`
-	Sequence  uint64            `json:"sequence"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
 // Message types
 // -----------------------------------------------------------------------
 
 // MsgCreateSchedule creates a new scheduled process.
 type MsgCreateSchedule struct {
-	Creator          string            `json:"creator"`
-	Condition        ScheduleCondition `json:"condition"`
+	Creator          string             `json:"creator"`
+	Condition        *ScheduleCondition `json:"condition"`
 	MaxExecutions    uint64            `json:"max_executions"`
 	FeePerExecution  string            `json:"fee_per_execution"`
 	PrepaidFee       string            `json:"prepaid_fee"`
@@ -570,7 +470,7 @@ func (r *QueryProcessRequest) String() string { return fmt.Sprintf("QueryProcess
 func (r *QueryProcessRequest) ProtoMessage()  {}
 
 type QueryProcessResponse struct {
-	Process ScheduleProcess `json:"process"`
+	Process *ScheduleProcess `json:"process"`
 }
 
 func (r *QueryProcessResponse) Reset()        {}
@@ -586,7 +486,7 @@ func (r *QueryProcessesByCreatorRequest) String() string { return fmt.Sprintf("Q
 func (r *QueryProcessesByCreatorRequest) ProtoMessage()  {}
 
 type QueryProcessesByCreatorResponse struct {
-	Processes []ScheduleProcess `json:"processes"`
+	Processes []*ScheduleProcess `json:"processes"`
 }
 
 func (r *QueryProcessesByCreatorResponse) Reset()        {}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+package legible.icaauth.v1;
+option go_package = "github.com/legible-money/legible/x/icaauth/types";
+
+// RemoteAccount represents an interchain account controlled by a Legible agent.
+message RemoteAccount {
+  string connection_id = 1;
+  string port_id = 2;
+  string remote_address = 3;
+  string chain_id = 4;
+  string owner_did = 5;
+  string owner_address = 6;
+  uint64 registered_block = 7;
+  repeated string allowed_msg_types = 8;
+  bool active = 9;
+}
+
+// InterchainAccountRecord stores all remote accounts for a single DID.
+message InterchainAccountRecord {
+  string did = 1;
+  repeated RemoteAccount accounts = 2;
+}
+
+// Params defines the module parameters.
+message Params {
+  uint32 max_remote_accounts_per_did = 1;
+  repeated string allowed_host_msg_types = 2;
+  uint64 registration_cooldown = 3;
+}

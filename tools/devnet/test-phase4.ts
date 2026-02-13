@@ -5,7 +5,7 @@
  */
 
 import { ed25519 } from "@noble/curves/ed25519";
-import { sha512 } from "@noble/hashes/sha512";
+import { sha256 } from "@noble/hashes/sha256";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -28,16 +28,16 @@ function bytesToHex(bytes: Uint8Array): string {
     .join("");
 }
 
-/** Replicate core/crypto/hashing.ts sha512Hash */
-function sha512Hash(data: Uint8Array | string): Uint8Array {
+/** Replicate core/crypto/hashing.ts sha256Hash */
+function sha256Hash(data: Uint8Array | string): Uint8Array {
   const input =
     typeof data === "string" ? new TextEncoder().encode(data) : data;
-  return sha512(input);
+  return sha256(input);
 }
 
-/** Replicate core/crypto/hashing.ts sha512_256 (truncated to 256 bits) */
+/** Replicate core/crypto/hashing.ts sha512_256 (canonical uses sha256Hash) */
 function sha512_256(data: Uint8Array | string): Uint8Array {
-  return sha512Hash(data).slice(0, 32);
+  return sha256Hash(data);
 }
 
 /** Replicate core/crypto/hashing.ts sha512_256Hex */
@@ -59,7 +59,7 @@ function domainHash(domain: string, data: Uint8Array | string): Uint8Array {
   combined.set(lengthBytes, domainBytes.length);
   combined.set(dataBytes, domainBytes.length + 4);
 
-  return sha512Hash(combined);
+  return sha256Hash(combined);
 }
 
 /** Replicate core/crypto/signatures.ts sign */
@@ -92,7 +92,7 @@ function generateCommitmentHash(
     verdict,
     confidence,
     referencesChecked: referencesChecked.sort(),
-    nonce,
+    salt: nonce,
   });
   // domainHash returns Uint8Array; .toString() gives comma-separated decimals
   return sha512_256Hex(domainHash("LGM.commitment.v1", commitData).toString());
@@ -486,7 +486,7 @@ async function main() {
       roundId,
       verdict,
       confidence,
-      nonce: vc.nonce,
+      salt: vc.nonce,
       referencesChecked: referencesChecked.sort(),
     });
 

@@ -233,3 +233,60 @@ export {
   type WakeupExperience,
   type DormancyReport,
 } from "./comfort_manager.js";
+
+// ============ Voice System (Inter-Home Communication) ============
+export {
+  VoiceManager,
+  VOICE_MAX_CHARS,
+  VOICE_DEFAULT_TTL,
+  type VoiceMessage,
+  type VoiceMessageType,
+  type VoiceContent,
+  type VoiceSentiment,
+  type HomeInbox,
+  type InboxEntry,
+  type InboxFilter,
+  type AutoResponder,
+  type VisitorLog,
+  type Visit,
+  type HomeVoice,
+} from "./voice.js";
+
+// ============ Neighborhood System (Social Proximity) ============
+export {
+  NeighborhoodManager,
+  DEFAULT_BENEFITS,
+  MAX_NEIGHBORHOOD_SIZE,
+  MIN_ACTIVE_MEMBERS,
+  DISSOLUTION_THRESHOLD_BLOCKS,
+  ELDER_TENURE_BLOCKS,
+  type Neighborhood,
+  type NeighborhoodStatus,
+  type NeighborEntry,
+  type NeighborhoodStats,
+  type NeighborRelation,
+  type NeighborhoodBenefits,
+} from "./neighborhood.js";
+
+// ============ Aging System ============
+export {
+  AgingManager,
+  calculateMaturity,
+  compareMaturity,
+  getDefaultComfort,
+  getRewardBonusBps,
+  computePatina,
+  getLongevityBonus,
+  isUnlocked,
+  MATURITY_THRESHOLDS,
+  LONGEVITY_UNLOCKS,
+  type HomeMaturity,
+  type MaturityThreshold,
+  type HomePatina,
+  type PatinaTraits,
+  type DefiningMoment,
+  type LongevityBonus,
+  type LongevityUnlock,
+  type AgeAwareWakeup,
+  type AgeMilestone,
+} from "./aging.js";

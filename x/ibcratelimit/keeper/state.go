@@ -1,10 +1,10 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/ibcratelimit/types"
 )
@@ -14,11 +14,11 @@ import (
 // SetFlow stores a channel flow record.
 func (k Keeper) SetFlow(ctx sdk.Context, flow types.ChannelFlow) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(flow)
+	bz, err := proto.Marshal(&flow)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal channel flow: %v", err))
 	}
-	if err := store.Set(types.FlowKey(flow.ChannelID), bz); err != nil {
+	if err := store.Set(types.FlowKey(flow.ChannelId), bz); err != nil {
 		panic(fmt.Sprintf("failed to set channel flow: %v", err))
 	}
 }
@@ -31,7 +31,7 @@ func (k Keeper) GetFlow(ctx sdk.Context, channelID string) (types.ChannelFlow, b
 		return types.ChannelFlow{}, false
 	}
 	var flow types.ChannelFlow
-	if err := json.Unmarshal(bz, &flow); err != nil {
+	if err := proto.Unmarshal(bz, &flow); err != nil {
 		return types.ChannelFlow{}, false
 	}
 	return flow, true
@@ -54,7 +54,7 @@ func (k Keeper) IterateFlows(ctx sdk.Context, cb func(types.ChannelFlow) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var flow types.ChannelFlow
-		if err := json.Unmarshal(iter.Value(), &flow); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &flow); err != nil {
 			continue
 		}
 		if cb(flow) {
@@ -73,7 +73,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -82,7 +82,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -103,7 +103,7 @@ func (k Keeper) GetOrResetFlow(ctx sdk.Context, channelID string) types.ChannelF
 	if !found {
 		// Initialize new flow record
 		flow = types.ChannelFlow{
-			ChannelID:       channelID,
+			ChannelId:       channelID,
 			Denom:           params.TrackedDenom,
 			OutflowTotal:    "0",
 			InflowTotal:     "0",

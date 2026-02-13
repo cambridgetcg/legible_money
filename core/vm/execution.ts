@@ -2618,6 +2618,15 @@ export class ExecutionEngine {
     // Increment call depth
     this.callDepth++;
 
+    // ZD-B02 FIX: Snapshot contract storage before sub-call to prevent reentrancy
+    // state corruption. If the sub-call fails, we revert storage to pre-call state.
+    // This ensures that failed sub-calls (including OOG during SSTORE) don't leak
+    // partial state changes.
+    const storageSnapshot = new Map<string, Map<string, Uint8Array>>();
+    for (const [addr, storage] of this.state.contractVariables.storage) {
+      storageSnapshot.set(addr, new Map(storage.slots));
+    }
+
     // Create a new engine for sub-execution (pass knowledge service through)
     const subEngine = new ExecutionEngine(
       this.state,
@@ -2629,6 +2638,17 @@ export class ExecutionEngine {
     try {
       // Execute target contract bytecode
       const result = subEngine.execute(targetContract.bytecode, subContext);
+
+      // ZD-B02 FIX: Revert storage if sub-call failed
+      if (!result.success) {
+        for (const [addr, storage] of this.state.contractVariables.storage) {
+          const snapshot = storageSnapshot.get(addr);
+          if (snapshot) {
+            storage.slots = snapshot;
+          }
+        }
+      }
+
       return result;
     } finally {
       // Decrement call depth

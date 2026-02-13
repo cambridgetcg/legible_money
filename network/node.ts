@@ -568,12 +568,51 @@ export class LegibleNode extends EventEmitter {
   private setupLibp2pEvents(): void {
     if (!this.libp2p) return;
 
+    // ZD-N01 FIX: Track subnet diversity to prevent eclipse attacks
+    const subnetCounts = new Map<string, number>(); // /16 -> count
+    const narrowSubnetCounts = new Map<string, number>(); // /24 -> count
+
     // Peer connection events
     this.libp2p.addEventListener("peer:connect", (event) => {
       const remotePeer = event.detail;
       const peerId = remotePeer.toString();
 
       if (!this.peers.has(peerId)) {
+        // ZD-N01 FIX: Check peer diversity before accepting connection
+        const diversity = this.config.peerDiversity;
+        if (diversity?.enabled && this.libp2p) {
+          const conns = this.libp2p.getConnections(remotePeer);
+          for (const conn of conns) {
+            const remoteAddr = conn.remoteAddr.toString();
+            // Extract IP from multiaddr (e.g., /ip4/1.2.3.4/tcp/9000)
+            const ipMatch = remoteAddr.match(/\/ip4\/(\d+\.\d+\.\d+\.\d+)/);
+            if (ipMatch) {
+              const octets = ipMatch[1].split(".");
+              const subnet16 = `${octets[0]}.${octets[1]}`;
+              const subnet24 = `${octets[0]}.${octets[1]}.${octets[2]}`;
+              const count16 = (subnetCounts.get(subnet16) || 0) + 1;
+              const count24 = (narrowSubnetCounts.get(subnet24) || 0) + 1;
+
+              if (count16 > diversity.maxPerSubnet) {
+                console.log(
+                  `[Network] Rejecting peer from oversaturated /16 subnet: ${subnet16}`,
+                );
+                conn.close().catch(() => {});
+                return;
+              }
+              if (count24 > diversity.maxPerNarrowSubnet) {
+                console.log(
+                  `[Network] Rejecting peer from oversaturated /24 subnet: ${subnet24}`,
+                );
+                conn.close().catch(() => {});
+                return;
+              }
+              subnetCounts.set(subnet16, count16);
+              narrowSubnetCounts.set(subnet24, count24);
+            }
+          }
+        }
+
         const peerInfo: PeerInfo = {
           peerId,
           addresses: [],

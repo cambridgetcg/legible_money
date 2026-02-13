@@ -14,14 +14,18 @@ func DefaultParams() Params {
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:    DefaultParams(),
-		Processes: []ScheduleProcess{},
+		Params:    &p,
+		Processes: []*ScheduleProcess{},
 		Sequence:  0,
 	}
 }
 
 // Validate performs genesis state validation.
 func (gs GenesisState) Validate() error {
+	if gs.Params == nil {
+		return nil
+	}
 	return gs.Params.Validate()
 }

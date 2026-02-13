@@ -1,0 +1,12 @@
+syntax = "proto3";
+package legible.discovery.v1;
+
+option go_package = "github.com/legible-money/legible/x/discovery/types";
+
+import "legible/discovery/v1/state.proto";
+
+// GenesisState defines the discovery module's genesis state.
+message GenesisState {
+  Params params                    = 1;
+  repeated AgentProfile profiles   = 2;
+}

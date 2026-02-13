@@ -18,7 +18,7 @@ import {
   type PublicKey,
   type PrivateKey,
 } from "./keys.js";
-import { domainHash, HASH_DOMAINS, blake3Hash } from "./hashing.js";
+import { domainHash, HASH_DOMAINS, sha256Hash } from "./hashing.js";
 
 // ============ Types ============
 
@@ -96,8 +96,8 @@ export function vrfGenerate(
   const diff = kClamped - cTimessk;
   const s = ((diff % n) + n) % n;
 
-  // Output = hash(Gamma)
-  const output = blake3Hash(gamma.toRawBytes());
+  // Output = SHA-256(Gamma) — must match Go VRF (x/knowledge/crypto/vrf.go)
+  const output = sha256Hash(gamma.toRawBytes());
 
   // Proof = (Gamma, c, s) - 96 bytes total
   const proof = new Uint8Array(96);
@@ -175,8 +175,8 @@ export function vrfVerify(
       return { valid: false, output: null };
     }
 
-    // Output = hash(Gamma)
-    const output = blake3Hash(gamma.toRawBytes());
+    // Output = SHA-256(Gamma) — must match Go VRF (x/knowledge/crypto/vrf.go)
+    const output = sha256Hash(gamma.toRawBytes());
 
     return {
       valid: true,

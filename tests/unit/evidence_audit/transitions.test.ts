@@ -149,6 +149,7 @@ function makeAuditResolveTx(
       reason,
     },
     fee: 0n,
+    _systemInternal: true,
     nonce: 0n,
     timestamp: Date.now(),
     signature: "system",

@@ -8,6 +8,7 @@ import (
 	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/auth/types"
 )
@@ -62,7 +63,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // SetAccount stores a Legible account
 func (k Keeper) SetAccount(ctx sdk.Context, account types.LegibleAccount) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(account)
+	bz, err := proto.Marshal(&account)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal account: %v", err))
 	}
@@ -80,7 +81,7 @@ func (k Keeper) GetAccount(ctx sdk.Context, address string) (types.LegibleAccoun
 	}
 
 	var account types.LegibleAccount
-	if err := json.Unmarshal(bz, &account); err != nil {
+	if err := proto.Unmarshal(bz, &account); err != nil {
 		return types.LegibleAccount{}, false
 	}
 	return account, true
@@ -98,7 +99,7 @@ func (k Keeper) GetAccountByDID(ctx sdk.Context, did string) (types.LegibleAccou
 // SetDIDMapping stores a DID -> bech32 mapping
 func (k Keeper) SetDIDMapping(ctx sdk.Context, mapping types.DIDMapping) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(mapping)
+	bz, err := proto.Marshal(&mapping)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal DID mapping: %v", err))
 	}
@@ -116,7 +117,7 @@ func (k Keeper) GetDIDMapping(ctx sdk.Context, did string) (types.DIDMapping, bo
 	}
 
 	var mapping types.DIDMapping
-	if err := json.Unmarshal(bz, &mapping); err != nil {
+	if err := proto.Unmarshal(bz, &mapping); err != nil {
 		return types.DIDMapping{}, false
 	}
 	return mapping, true
@@ -134,7 +135,7 @@ func (k Keeper) GetAddressForDID(ctx sdk.Context, did string) (string, bool) {
 // SetSessionKey stores a session key
 func (k Keeper) SetSessionKey(ctx sdk.Context, session types.SessionKey) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(session)
+	bz, err := proto.Marshal(&session)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal session key: %v", err))
 	}
@@ -152,7 +153,7 @@ func (k Keeper) GetSessionKey(ctx sdk.Context, owner, keyHash string) (types.Ses
 	}
 
 	var session types.SessionKey
-	if err := json.Unmarshal(bz, &session); err != nil {
+	if err := proto.Unmarshal(bz, &session); err != nil {
 		return types.SessionKey{}, false
 	}
 	return session, true
@@ -177,7 +178,7 @@ func (k Keeper) GetSessionKeysForOwner(ctx sdk.Context, owner string) []types.Se
 	var sessions []types.SessionKey
 	for ; iter.Valid(); iter.Next() {
 		var session types.SessionKey
-		if err := json.Unmarshal(iter.Value(), &session); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &session); err != nil {
 			continue
 		}
 		sessions = append(sessions, session)
@@ -214,7 +215,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 		return err
 	}
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		return fmt.Errorf("failed to marshal params: %w", err)
 	}
@@ -233,7 +234,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -258,7 +259,7 @@ func (k Keeper) GetLastRotation(ctx sdk.Context, address string) uint64 {
 // SetRecoveryConfig stores recovery configuration for an account
 func (k Keeper) SetRecoveryConfig(ctx sdk.Context, address string, config types.RecoveryConfig) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(config)
+	bz, err := proto.Marshal(&config)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal recovery config: %v", err))
 	}
@@ -275,7 +276,7 @@ func (k Keeper) GetRecoveryConfig(ctx sdk.Context, address string) (types.Recove
 		return types.RecoveryConfig{}, false
 	}
 	var config types.RecoveryConfig
-	if err := json.Unmarshal(bz, &config); err != nil {
+	if err := proto.Unmarshal(bz, &config); err != nil {
 		return types.RecoveryConfig{}, false
 	}
 	return config, true
@@ -284,7 +285,7 @@ func (k Keeper) GetRecoveryConfig(ctx sdk.Context, address string) (types.Recove
 // SetRecoveryRequest stores a recovery request
 func (k Keeper) SetRecoveryRequest(ctx sdk.Context, req types.RecoveryRequest) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(req)
+	bz, err := proto.Marshal(&req)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal recovery request: %v", err))
 	}
@@ -301,7 +302,7 @@ func (k Keeper) GetRecoveryRequest(ctx sdk.Context, address string) (types.Recov
 		return types.RecoveryRequest{}, false
 	}
 	var req types.RecoveryRequest
-	if err := json.Unmarshal(bz, &req); err != nil {
+	if err := proto.Unmarshal(bz, &req); err != nil {
 		return types.RecoveryRequest{}, false
 	}
 	return req, true
@@ -324,7 +325,7 @@ func (k Keeper) IterateRecoveryRequests(ctx sdk.Context, cb func(types.RecoveryR
 
 	for ; iter.Valid(); iter.Next() {
 		var req types.RecoveryRequest
-		if err := json.Unmarshal(iter.Value(), &req); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &req); err != nil {
 			continue
 		}
 		if cb(req) {
@@ -352,7 +353,7 @@ func (k Keeper) CleanupExpiredSessions(ctx sdk.Context) {
 
 	for ; iter.Valid(); iter.Next() {
 		var session types.SessionKey
-		if err := json.Unmarshal(iter.Value(), &session); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &session); err != nil {
 			continue
 		}
 		if session.ExpiresAtBlock <= currentHeight {
@@ -403,6 +404,78 @@ func (k Keeper) ProcessRecoveryTimeouts(ctx sdk.Context) {
 	})
 }
 
+// ============================================================
+// Recovery shard storage (H-2)
+// ============================================================
+
+// StoreRecoveryShard persists an encrypted recovery shard on-chain.
+func (k Keeper) StoreRecoveryShard(ctx sdk.Context, shard types.RecoveryShard) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(shard)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal recovery shard: %v", err))
+	}
+	if err := kvStore.Set(types.RecoveryShardKey(shard.OwnerAddress, shard.ShardIndex), bz); err != nil {
+		panic(fmt.Sprintf("failed to store recovery shard: %v", err))
+	}
+}
+
+// GetRecoveryShard retrieves a single recovery shard by owner and index.
+func (k Keeper) GetRecoveryShard(ctx sdk.Context, ownerAddress string, shardIndex uint32) (types.RecoveryShard, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.RecoveryShardKey(ownerAddress, shardIndex))
+	if err != nil || bz == nil {
+		return types.RecoveryShard{}, false
+	}
+	var shard types.RecoveryShard
+	if err := json.Unmarshal(bz, &shard); err != nil {
+		return types.RecoveryShard{}, false
+	}
+	return shard, true
+}
+
+// GetRecoveryShards retrieves all submitted shards for an owner.
+func (k Keeper) GetRecoveryShards(ctx sdk.Context, ownerAddress string) []types.RecoveryShard {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.RecoveryShardOwnerPrefix(ownerAddress)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var shards []types.RecoveryShard
+	for ; iter.Valid(); iter.Next() {
+		var shard types.RecoveryShard
+		if err := json.Unmarshal(iter.Value(), &shard); err != nil {
+			continue
+		}
+		shards = append(shards, shard)
+	}
+	return shards
+}
+
+// DeleteRecoveryShards removes all stored shards for an owner (cleanup after recovery completes/cancels).
+func (k Keeper) DeleteRecoveryShards(ctx sdk.Context, ownerAddress string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.RecoveryShardOwnerPrefix(ownerAddress)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	var keys [][]byte
+	for ; iter.Valid(); iter.Next() {
+		keyCopy := make([]byte, len(iter.Key()))
+		copy(keyCopy, iter.Key())
+		keys = append(keys, keyCopy)
+	}
+	for _, key := range keys {
+		_ = kvStore.Delete(key)
+	}
+}
+
 // GetAuthority returns the module authority address
 func (k Keeper) GetAuthority() string {
 	return k.authority
@@ -432,7 +505,7 @@ func (k Keeper) IterateAccounts(ctx sdk.Context, cb func(types.LegibleAccount) b
 
 	for ; iter.Valid(); iter.Next() {
 		var account types.LegibleAccount
-		if err := json.Unmarshal(iter.Value(), &account); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &account); err != nil {
 			continue
 		}
 		if cb(account) {
@@ -505,7 +578,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		defer didIter.Close()
 		for ; didIter.Valid(); didIter.Next() {
 			var mapping types.DIDMapping
-			if err := json.Unmarshal(didIter.Value(), &mapping); err != nil {
+			if err := proto.Unmarshal(didIter.Value(), &mapping); err != nil {
 				continue
 			}
 			m := mapping
@@ -520,7 +593,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		defer sessionIter.Close()
 		for ; sessionIter.Valid(); sessionIter.Next() {
 			var session types.SessionKey
-			if err := json.Unmarshal(sessionIter.Value(), &session); err != nil {
+			if err := proto.Unmarshal(sessionIter.Value(), &session); err != nil {
 				continue
 			}
 			s := session
@@ -557,7 +630,7 @@ func (k Keeper) IterateRecoveryConfigs(ctx sdk.Context, cb func(address string, 
 
 	for ; iter.Valid(); iter.Next() {
 		var config types.RecoveryConfig
-		if err := json.Unmarshal(iter.Value(), &config); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &config); err != nil {
 			continue
 		}
 		// Extract address from key: prefix + address

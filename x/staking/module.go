@@ -40,7 +40,7 @@ func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the module's interface types
 func (AppModuleBasic) RegisterInterfaces(registry codectypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	types.RegisterInterfaces(registry)
 }
 
 // DefaultGenesis returns default genesis state as raw bytes for the staking module.

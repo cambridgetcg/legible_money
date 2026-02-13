@@ -7,6 +7,7 @@
 package types
 
 import (
+	_ "github.com/cosmos/cosmos-sdk/types/msgservice"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -3026,7 +3027,7 @@ var File_legible_knowledge_v1_claim_proto protoreflect.FileDescriptor
 
 const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\n" +
-	" legible/knowledge/v1/claim.proto\x12\x14legible.knowledge.v1\"\xf5\x01\n" +
+	" legible/knowledge/v1/claim.proto\x12\x14legible.knowledge.v1\x1a\x17cosmos/msg/v1/msg.proto\"\xf5\x01\n" +
 	"\rClaimEvidence\x12#\n" +
 	"\revidence_type\x18\x01 \x01(\tR\fevidenceType\x12\x10\n" +
 	"\x03uri\x18\x02 \x01(\tR\x03uri\x12!\n" +
@@ -3186,7 +3187,7 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"public_key\x18\x04 \x01(\fR\tpublicKey\x12\x1e\n" +
 	"\n" +
 	"reputation\x18\x05 \x01(\x04R\n" +
-	"reputation\"\xdc\x02\n" +
+	"reputation\"\xec\x02\n" +
 	"\x0eMsgSubmitClaim\x12\x1d\n" +
 	"\n" +
 	"claim_text\x18\x01 \x01(\tR\tclaimText\x12\x16\n" +
@@ -3200,15 +3201,15 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"references\x12\x1d\n" +
 	"\n" +
 	"logic_zone\x18\b \x01(\tR\tlogicZone\x12?\n" +
-	"\bevidence\x18\t \x03(\v2#.legible.knowledge.v1.ClaimEvidenceR\bevidence\"N\n" +
+	"\bevidence\x18\t \x03(\v2#.legible.knowledge.v1.ClaimEvidenceR\bevidence:\x0e\x82\xe7\xb0*\tsubmitter\"N\n" +
 	"\x16MsgSubmitClaimResponse\x12\x19\n" +
 	"\bclaim_id\x18\x01 \x01(\tR\aclaimId\x12\x19\n" +
-	"\bround_id\x18\x02 \x01(\tR\aroundId\"w\n" +
+	"\bround_id\x18\x02 \x01(\tR\aroundId\"\x87\x01\n" +
 	"\x13MsgSubmitCommitment\x12\x19\n" +
 	"\bround_id\x18\x01 \x01(\tR\aroundId\x12\x1c\n" +
 	"\tvalidator\x18\x02 \x01(\tR\tvalidator\x12'\n" +
-	"\x0fcommitment_hash\x18\x03 \x01(\tR\x0ecommitmentHash\"\x1d\n" +
-	"\x1bMsgSubmitCommitmentResponse\"\xdb\x01\n" +
+	"\x0fcommitment_hash\x18\x03 \x01(\tR\x0ecommitmentHash:\x0e\x82\xe7\xb0*\tvalidator\"\x1d\n" +
+	"\x1bMsgSubmitCommitmentResponse\"\xeb\x01\n" +
 	"\x0fMsgSubmitReveal\x12\x19\n" +
 	"\bround_id\x18\x01 \x01(\tR\aroundId\x12\x1c\n" +
 	"\tvalidator\x18\x02 \x01(\tR\tvalidator\x12\x18\n" +
@@ -3218,17 +3219,18 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"confidence\x12$\n" +
 	"\rjustification\x18\x05 \x01(\tR\rjustification\x12\x1b\n" +
 	"\tvrf_proof\x18\x06 \x01(\tR\bvrfProof\x12\x12\n" +
-	"\x04salt\x18\a \x01(\tR\x04salt\"\x19\n" +
-	"\x17MsgSubmitRevealResponse\"y\n" +
+	"\x04salt\x18\a \x01(\tR\x04salt:\x0e\x82\xe7\xb0*\tvalidator\"\x19\n" +
+	"\x17MsgSubmitRevealResponse\"\x8a\x01\n" +
 	"\x10MsgChallengeFact\x12\x17\n" +
 	"\afact_id\x18\x01 \x01(\tR\x06factId\x12\x1e\n" +
 	"\n" +
 	"challenger\x18\x02 \x01(\tR\n" +
 	"challenger\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x14\n" +
-	"\x05stake\x18\x04 \x01(\tR\x05stake\"5\n" +
+	"\x05stake\x18\x04 \x01(\tR\x05stake:\x0f\x82\xe7\xb0*\n" +
+	"challenger\"5\n" +
 	"\x18MsgChallengeFactResponse\x12\x19\n" +
-	"\bround_id\x18\x01 \x01(\tR\aroundId\"\xef\x01\n" +
+	"\bround_id\x18\x01 \x01(\tR\aroundId\"\xff\x01\n" +
 	"\n" +
 	"MsgAddFact\x12\x1c\n" +
 	"\tauthority\x18\x01 \x01(\tR\tauthority\x12\x1d\n" +
@@ -3243,38 +3245,39 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"references\x18\x06 \x03(\tR\n" +
 	"references\x12\x1d\n" +
 	"\n" +
-	"logic_zone\x18\a \x01(\tR\tlogicZone\"-\n" +
+	"logic_zone\x18\a \x01(\tR\tlogicZone:\x0e\x82\xe7\xb0*\tauthority\"-\n" +
 	"\x12MsgAddFactResponse\x12\x17\n" +
-	"\afact_id\x18\x01 \x01(\tR\x06factId\"z\n" +
+	"\afact_id\x18\x01 \x01(\tR\x06factId\"\x89\x01\n" +
 	"\x10MsgProposeDomain\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x1a\n" +
 	"\bproposer\x18\x03 \x01(\tR\bproposer\x12\x14\n" +
-	"\x05stake\x18\x04 \x01(\tR\x05stake\";\n" +
+	"\x05stake\x18\x04 \x01(\tR\x05stake:\r\x82\xe7\xb0*\bproposer\";\n" +
 	"\x18MsgProposeDomainResponse\x12\x1f\n" +
 	"\vdomain_name\x18\x01 \x01(\tR\n" +
-	"domainName\"W\n" +
+	"domainName\"f\n" +
 	"\x18MsgEndorseDomainProposal\x12\x1f\n" +
 	"\vdomain_name\x18\x01 \x01(\tR\n" +
 	"domainName\x12\x1a\n" +
-	"\bendorser\x18\x02 \x01(\tR\bendorser\"\"\n" +
-	" MsgEndorseDomainProposalResponse\"u\n" +
+	"\bendorser\x18\x02 \x01(\tR\bendorser:\r\x82\xe7\xb0*\bendorser\"\"\n" +
+	" MsgEndorseDomainProposalResponse\"\x86\x01\n" +
 	"\x1aMsgChallengeDomainProposal\x12\x1f\n" +
 	"\vdomain_name\x18\x01 \x01(\tR\n" +
 	"domainName\x12\x1e\n" +
 	"\n" +
 	"challenger\x18\x02 \x01(\tR\n" +
 	"challenger\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"$\n" +
-	"\"MsgChallengeDomainProposalResponse\"w\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason:\x0f\x82\xe7\xb0*\n" +
+	"challenger\"$\n" +
+	"\"MsgChallengeDomainProposalResponse\"\x87\x01\n" +
 	"\x12MsgRegisterStratum\x12!\n" +
 	"\fstratum_name\x18\x01 \x01(\tR\vstratumName\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x1c\n" +
-	"\tregistrar\x18\x03 \x01(\tR\tregistrar\"\x1c\n" +
-	"\x1aMsgRegisterStratumResponse\"e\n" +
+	"\tregistrar\x18\x03 \x01(\tR\tregistrar:\x0e\x82\xe7\xb0*\tregistrar\"\x1c\n" +
+	"\x1aMsgRegisterStratumResponse\"u\n" +
 	"\x0fMsgUpdateParams\x12\x1c\n" +
 	"\tauthority\x18\x01 \x01(\tR\tauthority\x124\n" +
-	"\x06params\x18\x02 \x01(\v2\x1c.legible.knowledge.v1.ParamsR\x06params\"\x19\n" +
+	"\x06params\x18\x02 \x01(\v2\x1c.legible.knowledge.v1.ParamsR\x06params:\x0e\x82\xe7\xb0*\tauthority\"\x19\n" +
 	"\x17MsgUpdateParamsResponse\"\xbc\x0e\n" +
 	"\x06Params\x12)\n" +
 	"\x10ontology_version\x18\x01 \x01(\x04R\x0fontologyVersion\x124\n" +

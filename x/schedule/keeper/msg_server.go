@@ -35,7 +35,10 @@ func (k msgServer) CreateSchedule(goCtx context.Context, msg *types.MsgCreateSch
 
 	// Validate condition
 	currentHeight := uint64(ctx.BlockHeight())
-	if err := validateCondition(msg.Condition, currentHeight, params); err != nil {
+	if msg.Condition == nil {
+		return nil, types.ErrInvalidCondition
+	}
+	if err := validateCondition(*msg.Condition, currentHeight, params); err != nil {
 		return nil, err
 	}
 
@@ -72,7 +75,7 @@ func (k msgServer) CreateSchedule(goCtx context.Context, msg *types.MsgCreateSch
 	processId := fmt.Sprintf("sched-%d", seq)
 
 	// Calculate next execution block
-	nextExecAt := calculateNextExecuteAt(msg.Condition, currentHeight)
+	nextExecAt := calculateNextExecuteAt(*msg.Condition, currentHeight)
 
 	process := types.ScheduleProcess{
 		Id:               processId,
@@ -163,7 +166,9 @@ func (k msgServer) ResumeSchedule(goCtx context.Context, msg *types.MsgResumeSch
 	process.Status = types.StatusActive
 	// Recalculate next execution from current height
 	currentHeight := uint64(ctx.BlockHeight())
-	process.NextExecuteAt = calculateNextExecuteAt(process.Condition, currentHeight)
+	if process.Condition != nil {
+		process.NextExecuteAt = calculateNextExecuteAt(*process.Condition, currentHeight)
+	}
 
 	k.SetProcess(ctx, process)
 
@@ -268,7 +273,9 @@ func (k msgServer) AddFee(goCtx context.Context, msg *types.MsgAddFee) (*types.M
 		k.RemoveStatusIndex(ctx, string(process.Status), process.Id)
 		process.Status = types.StatusActive
 		currentHeight := uint64(ctx.BlockHeight())
-		process.NextExecuteAt = calculateNextExecuteAt(process.Condition, currentHeight)
+		if process.Condition != nil {
+			process.NextExecuteAt = calculateNextExecuteAt(*process.Condition, currentHeight)
+		}
 	}
 
 	k.SetProcess(ctx, process)

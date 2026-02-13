@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/billing/types"
 )
@@ -16,7 +16,7 @@ import (
 func (k Keeper) SetProvider(ctx sdk.Context, provider types.Provider) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerKey(provider.Address)
-	bz, err := json.Marshal(provider)
+	bz, err := proto.Marshal(&provider)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal provider: %v", err))
 	}
@@ -32,7 +32,7 @@ func (k Keeper) GetProvider(ctx sdk.Context, address string) (types.Provider, bo
 		return types.Provider{}, false
 	}
 	var provider types.Provider
-	if err := json.Unmarshal(bz, &provider); err != nil {
+	if err := proto.Unmarshal(bz, &provider); err != nil {
 		return types.Provider{}, false
 	}
 	return provider, true
@@ -65,7 +65,7 @@ func (k Keeper) IterateProviders(ctx sdk.Context, cb func(types.Provider) bool) 
 
 	for ; iter.Valid(); iter.Next() {
 		var provider types.Provider
-		if err := json.Unmarshal(iter.Value(), &provider); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &provider); err != nil {
 			continue
 		}
 		if cb(provider) {
@@ -130,7 +130,7 @@ func (k Keeper) GetNextQuoteId(ctx sdk.Context) uint64 {
 func (k Keeper) SetQuote(ctx sdk.Context, quote types.APIQuote) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := quoteKey(quote.QuoteId)
-	bz, err := json.Marshal(quote)
+	bz, err := proto.Marshal(&quote)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal quote: %v", err))
 	}
@@ -146,7 +146,7 @@ func (k Keeper) GetQuote(ctx sdk.Context, quoteId uint64) (types.APIQuote, bool)
 		return types.APIQuote{}, false
 	}
 	var quote types.APIQuote
-	if err := json.Unmarshal(bz, &quote); err != nil {
+	if err := proto.Unmarshal(bz, &quote); err != nil {
 		return types.APIQuote{}, false
 	}
 	return quote, true
@@ -169,7 +169,7 @@ func (k Keeper) IterateQuotes(ctx sdk.Context, cb func(types.APIQuote) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var quote types.APIQuote
-		if err := json.Unmarshal(iter.Value(), &quote); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &quote); err != nil {
 			continue
 		}
 		if cb(quote) {
@@ -201,7 +201,7 @@ func (k Keeper) GetNextCallRecordId(ctx sdk.Context) uint64 {
 func (k Keeper) SetCallRecord(ctx sdk.Context, record types.CallRecord) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := callRecordKey(record.RecordId)
-	bz, err := json.Marshal(record)
+	bz, err := proto.Marshal(&record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal call record: %v", err))
 	}
@@ -217,7 +217,7 @@ func (k Keeper) GetCallRecord(ctx sdk.Context, recordId uint64) (types.CallRecor
 		return types.CallRecord{}, false
 	}
 	var record types.CallRecord
-	if err := json.Unmarshal(bz, &record); err != nil {
+	if err := proto.Unmarshal(bz, &record); err != nil {
 		return types.CallRecord{}, false
 	}
 	return record, true
@@ -234,7 +234,7 @@ func (k Keeper) IterateCallRecords(ctx sdk.Context, cb func(types.CallRecord) bo
 
 	for ; iter.Valid(); iter.Next() {
 		var record types.CallRecord
-		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &record); err != nil {
 			continue
 		}
 		if cb(record) {

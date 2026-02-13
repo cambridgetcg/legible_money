@@ -149,9 +149,10 @@ function systemTx(type: string, payload: Record<string, unknown>): Transaction {
     sender: "system" as any,
     nonce: 0n,
     fee: 0n,
+    _systemInternal: true,
     payload,
     signature: "" as any,
-  };
+  } as any;
 }
 
 // ============================================================================

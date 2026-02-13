@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/claiming_pot/types"
 )
@@ -94,7 +94,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		defer iter.Close()
 		for ; iter.Valid(); iter.Next() {
 			var record types.ClaimRecord
-			if err := json.Unmarshal(iter.Value(), &record); err != nil {
+			if err := proto.Unmarshal(iter.Value(), &record); err != nil {
 				continue
 			}
 			claims = append(claims, &record)

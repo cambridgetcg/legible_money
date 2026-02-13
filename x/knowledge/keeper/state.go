@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/knowledge/types"
 )
@@ -16,7 +17,7 @@ import (
 func (k Keeper) SetFact(ctx sdk.Context, fact types.Fact) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(fact.Id)
-	bz, err := json.Marshal(fact)
+	bz, err := proto.Marshal(&fact)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact: %v", err))
 	}
@@ -40,7 +41,7 @@ func (k Keeper) GetFact(ctx sdk.Context, factID string) (types.Fact, bool) {
 		return types.Fact{}, false
 	}
 	var fact types.Fact
-	if err := json.Unmarshal(bz, &fact); err != nil {
+	if err := proto.Unmarshal(bz, &fact); err != nil {
 		return types.Fact{}, false
 	}
 	return fact, true
@@ -68,7 +69,7 @@ func (k Keeper) IterateFacts(ctx sdk.Context, cb func(types.Fact) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var fact types.Fact
-		if err := json.Unmarshal(iter.Value(), &fact); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &fact); err != nil {
 			continue
 		}
 		if cb(fact) {
@@ -114,7 +115,7 @@ func (k Keeper) GetFactCount(ctx sdk.Context) uint64 {
 func (k Keeper) SetClaim(ctx sdk.Context, claim types.Claim) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claim.Id)
-	bz, err := json.Marshal(claim)
+	bz, err := proto.Marshal(&claim)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim: %v", err))
 	}
@@ -139,7 +140,7 @@ func (k Keeper) GetClaim(ctx sdk.Context, claimID string) (types.Claim, bool) {
 		return types.Claim{}, false
 	}
 	var claim types.Claim
-	if err := json.Unmarshal(bz, &claim); err != nil {
+	if err := proto.Unmarshal(bz, &claim); err != nil {
 		return types.Claim{}, false
 	}
 	return claim, true
@@ -176,7 +177,7 @@ func (k Keeper) IterateClaims(ctx sdk.Context, cb func(types.Claim) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var claim types.Claim
-		if err := json.Unmarshal(iter.Value(), &claim); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &claim); err != nil {
 			continue
 		}
 		if cb(claim) {
@@ -203,7 +204,7 @@ func (k Keeper) GetPendingClaims(ctx sdk.Context) []types.Claim {
 func (k Keeper) SetVerificationRound(ctx sdk.Context, round types.VerificationRound) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := roundKey(round.Id)
-	bz, err := json.Marshal(round)
+	bz, err := proto.Marshal(&round)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal round: %v", err))
 	}
@@ -233,10 +234,10 @@ func (k Keeper) GetVerificationRound(ctx sdk.Context, roundID string) (types.Ver
 		return types.VerificationRound{}, false
 	}
 	var round types.VerificationRound
-	if err := json.Unmarshal(bz, &round); err != nil {
+	if err := proto.Unmarshal(bz, &round); err != nil {
 		return types.VerificationRound{}, false
 	}
-	// Proto maps may be nil after JSON unmarshal (omitempty); initialize to avoid nil map panics
+	// Proto maps may be nil after unmarshal; initialize to avoid nil map panics
 	if round.Commitments == nil {
 		round.Commitments = make(map[string]*types.VerificationCommitment)
 	}
@@ -277,7 +278,7 @@ func (k Keeper) IterateVerificationRounds(ctx sdk.Context, cb func(types.Verific
 
 	for ; iter.Valid(); iter.Next() {
 		var round types.VerificationRound
-		if err := json.Unmarshal(iter.Value(), &round); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &round); err != nil {
 			continue
 		}
 		if cb(round) {
@@ -355,7 +356,7 @@ func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.
 func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factRefKey(ref.FromFactId, ref.ToFactId)
-	bz, err := json.Marshal(ref)
+	bz, err := proto.Marshal(&ref)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact reference: %v", err))
 	}
@@ -383,7 +384,7 @@ func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.Fa
 	var refs []types.FactReference
 	for ; iter.Valid(); iter.Next() {
 		var ref types.FactReference
-		if err := json.Unmarshal(iter.Value(), &ref); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &ref); err != nil {
 			continue
 		}
 		refs = append(refs, ref)
@@ -404,7 +405,7 @@ func (k Keeper) GetIncomingReferences(ctx sdk.Context, toFactID string) []types.
 	var refs []types.FactReference
 	for ; iter.Valid(); iter.Next() {
 		var ref types.FactReference
-		if err := json.Unmarshal(iter.Value(), &ref); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &ref); err != nil {
 			continue
 		}
 		refs = append(refs, ref)
@@ -442,7 +443,7 @@ func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []types.Fa
 func (k Keeper) SetDomain(ctx sdk.Context, domain types.OntologicalDomain) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := domainKey(domain.Name)
-	bz, err := json.Marshal(domain)
+	bz, err := proto.Marshal(&domain)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal domain: %v", err))
 	}
@@ -460,7 +461,7 @@ func (k Keeper) GetDomain(ctx sdk.Context, name string) (types.OntologicalDomain
 		return types.OntologicalDomain{}, false
 	}
 	var domain types.OntologicalDomain
-	if err := json.Unmarshal(bz, &domain); err != nil {
+	if err := proto.Unmarshal(bz, &domain); err != nil {
 		return types.OntologicalDomain{}, false
 	}
 	return domain, true
@@ -479,7 +480,7 @@ func (k Keeper) IterateDomains(ctx sdk.Context, cb func(types.OntologicalDomain)
 
 	for ; iter.Valid(); iter.Next() {
 		var domain types.OntologicalDomain
-		if err := json.Unmarshal(iter.Value(), &domain); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &domain); err != nil {
 			continue
 		}
 		if cb(domain) {
@@ -705,7 +706,7 @@ func (k Keeper) SetCounterFact(ctx sdk.Context, cf types.CounterFact) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 
 	// Primary storage
-	bz, err := json.Marshal(cf)
+	bz, err := proto.Marshal(&cf)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal counter-fact: %v", err))
 	}
@@ -741,7 +742,7 @@ func (k Keeper) GetCounterFact(ctx sdk.Context, id string) (types.CounterFact, b
 		return types.CounterFact{}, false
 	}
 	var cf types.CounterFact
-	if err := json.Unmarshal(bz, &cf); err != nil {
+	if err := proto.Unmarshal(bz, &cf); err != nil {
 		return types.CounterFact{}, false
 	}
 	return cf, true
@@ -817,7 +818,7 @@ func (k Keeper) IterateCounterFacts(ctx sdk.Context, cb func(types.CounterFact) 
 
 	for ; iter.Valid(); iter.Next() {
 		var cf types.CounterFact
-		if err := json.Unmarshal(iter.Value(), &cf); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &cf); err != nil {
 			continue
 		}
 		if cb(cf) {

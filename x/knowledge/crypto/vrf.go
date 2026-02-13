@@ -60,7 +60,13 @@ func GenerateVRF(seed, privateKey []byte) (output, proof []byte, err error) {
 	Gamma := new(edwards25519.Point).ScalarMult(skScalar, H)
 
 	// Generate deterministic nonce: k = hash(sk_seed || H_bytes) mod ℓ
-	kHash := sha512.Sum512(append(skSeed, H.Bytes()...))
+	// Must NOT use append(skSeed, ...) — skSeed may alias privateKey[:32] with cap=64,
+	// and append would overwrite the public key portion of the caller's key.
+	hBytes := H.Bytes()
+	nonceInput := make([]byte, len(skSeed)+len(hBytes))
+	copy(nonceInput, skSeed)
+	copy(nonceInput[len(skSeed):], hBytes)
+	kHash := sha512.Sum512(nonceInput)
 	k := scalarFromBytes(kHash[:32])
 
 	// U = k * G
@@ -194,42 +200,50 @@ func IsValidatorSelected(vrfOutput []byte, stake, totalStake uint64, targetCount
 }
 
 // GenerateVRFSeed creates a deterministic seed for verification round VRF.
-// seed = SHA-256("LGM.vrf.seed.v1:" || claimID || ":" || blockNumber || ":" || prevBlockHash)
+// Uses domainHash with structured binary payload to prevent ambiguity.
 func GenerateVRFSeed(claimID string, blockNumber uint64, prevBlockHash []byte) []byte {
-	h := sha256.New()
-	h.Write([]byte("LGM.vrf.seed.v1:verification:"))
-	h.Write([]byte(claimID))
-	h.Write([]byte(":"))
+	claimBytes := []byte(claimID)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, blockNumber)
-	h.Write(buf)
-	h.Write([]byte(":"))
-	h.Write(prevBlockHash)
-	return h.Sum(nil)
+
+	// Build payload: uint32BE(len(claimID)) || claimID || blockNumber(8) || prevBlockHash
+	payload := make([]byte, 4+len(claimBytes)+8+len(prevBlockHash))
+	binary.BigEndian.PutUint32(payload[0:4], uint32(len(claimBytes)))
+	copy(payload[4:], claimBytes)
+	copy(payload[4+len(claimBytes):], buf)
+	copy(payload[4+len(claimBytes)+8:], prevBlockHash)
+
+	return domainHash("LGM.vrf.seed.v1", payload)
 }
 
 // GenerateBlockSeed creates a deterministic seed for block proposal VRF.
+// Uses domainHash with structured binary payload to prevent ambiguity.
 func GenerateBlockSeed(prevBlockHash []byte, blockNumber, epoch uint64) []byte {
-	h := sha256.New()
-	h.Write([]byte("LGM.vrf.blockseed.v1:"))
-	h.Write(prevBlockHash)
-	h.Write([]byte(":"))
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, blockNumber)
-	h.Write(buf)
-	h.Write([]byte(":"))
-	binary.BigEndian.PutUint64(buf, epoch)
-	h.Write(buf)
-	return h.Sum(nil)
+	// Build payload: prevBlockHash(32) || blockNumber(8) || epoch(8)
+	// All fields are fixed-size so no length prefix needed within payload.
+	payload := make([]byte, len(prevBlockHash)+16)
+	copy(payload, prevBlockHash)
+	binary.BigEndian.PutUint64(payload[len(prevBlockHash):], blockNumber)
+	binary.BigEndian.PutUint64(payload[len(prevBlockHash)+8:], epoch)
+
+	return domainHash("LGM.vrf.blockseed.v1", payload)
 }
 
 // ---- Internal helpers ----
 
 // domainHash produces a domain-separated SHA-256 hash.
+// Format: SHA-256(domain || uint32BE(len(domain)) || data)
+// Aligned with TypeScript core/crypto/hashing.ts:domainHash for cross-stack compatibility.
+// The 4-byte length prefix prevents ambiguity (colon separator is vulnerable to
+// domain="a:", data="b" colliding with domain="a", data=":b").
 func domainHash(domain string, data []byte) []byte {
+	domainBytes := []byte(domain)
+	lengthBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(lengthBytes, uint32(len(domainBytes)))
+
 	h := sha256.New()
-	h.Write([]byte(domain))
-	h.Write([]byte(":"))
+	h.Write(domainBytes)
+	h.Write(lengthBytes)
 	h.Write(data)
 	return h.Sum(nil)
 }
@@ -238,16 +252,16 @@ func domainHash(domain string, data []byte) []byte {
 // Ed25519 key derivation: seed → SHA-512 → first 32 bytes clamped.
 func deriveScalarFromSeed(seed []byte) *edwards25519.Scalar {
 	h := sha512.Sum512(seed)
-	scalar := h[:32]
-
-	// Clamp (standard Ed25519 clamping)
-	scalar[0] &= 248  // Clear bits 0, 1, 2
-	scalar[31] &= 127 // Clear bit 255
-	scalar[31] |= 64  // Set bit 254
-
-	s, err := new(edwards25519.Scalar).SetBytesWithClamping(seed)
+	// SetBytesWithClamping applies Ed25519 clamping (clear bits 0-2, clear bit 255, set bit 254).
+	// Must use h[:32] (SHA-512 output), not raw seed — must match ed25519.NewKeyFromSeed().
+	s, err := new(edwards25519.Scalar).SetBytesWithClamping(h[:32])
 	if err != nil {
-		// Fallback: use the manually clamped bytes
+		// Fallback: manual clamp
+		scalar := make([]byte, 32)
+		copy(scalar, h[:32])
+		scalar[0] &= 248
+		scalar[31] &= 127
+		scalar[31] |= 64
 		s, _ = new(edwards25519.Scalar).SetCanonicalBytes(scalar)
 	}
 	return s

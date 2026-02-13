@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/schedule/types"
 )
@@ -15,7 +15,7 @@ import (
 // SetParams sets module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -32,7 +32,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -75,7 +75,7 @@ func (k Keeper) SetProcess(ctx sdk.Context, process types.ScheduleProcess) {
 
 	// Primary key
 	key := processKey(process.Id)
-	bz, err := json.Marshal(process)
+	bz, err := proto.Marshal(&process)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal process: %v", err))
 	}
@@ -121,7 +121,7 @@ func (k Keeper) GetProcess(ctx sdk.Context, id string) (types.ScheduleProcess, b
 		return types.ScheduleProcess{}, false
 	}
 	var process types.ScheduleProcess
-	if err := json.Unmarshal(bz, &process); err != nil {
+	if err := proto.Unmarshal(bz, &process); err != nil {
 		return types.ScheduleProcess{}, false
 	}
 	return process, true
@@ -167,7 +167,7 @@ func (k Keeper) IterateProcesses(ctx sdk.Context, cb func(types.ScheduleProcess)
 
 	for ; iter.Valid(); iter.Next() {
 		var process types.ScheduleProcess
-		if err := json.Unmarshal(iter.Value(), &process); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &process); err != nil {
 			continue
 		}
 		if cb(process) {

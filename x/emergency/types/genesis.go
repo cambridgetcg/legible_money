@@ -24,6 +24,7 @@ func DefaultParams() Params {
 		MinDistinctVoters:               4,
 		MaxRevertDepth:                  111111,
 		EpochBlocks:                     34272, // ~1 day at 2521ms blocks
+		MaxHaltDurationBlocks:           34272, // ~1 day — auto-resume if Guardians don't act
 		GenesisCouncil:                  []string{},
 		CouncilExpiryBlock:              0,
 		CouncilVirtualStake:             "11111000000", // 11,111 LGM in ulgm

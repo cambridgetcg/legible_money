@@ -8,56 +8,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// -----------------------------------------------------------------------
-// Core domain types
-// -----------------------------------------------------------------------
-
-// AgentProfile represents a discoverable agent on the network.
-type AgentProfile struct {
-	Address          string            `json:"address"`           // bech32 address
-	Did              string            `json:"did"`               // did:lgm:... identifier
-	DisplayName      string            `json:"display_name"`      // human-readable name
-	Capabilities     []AgentCapability `json:"capabilities"`      // agent capabilities
-	Domains          []string          `json:"domains"`           // knowledge domains
-	Status           string            `json:"status"`            // "active", "inactive", "expired"
-	ReputationScore  uint64            `json:"reputation_score"`  // basis points 0-1,000,000
-	RegisteredAtBlock uint64           `json:"registered_at_block"`
-	LastActiveBlock  uint64            `json:"last_active_block"` // last heartbeat
-	Stake            string            `json:"stake"`             // ulgm staked for registration
-	Description      string            `json:"description"`       // profile description
-	Metadata         string            `json:"metadata"`          // arbitrary JSON metadata
-}
-
-func (p *AgentProfile) Reset()        {}
-func (p *AgentProfile) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *AgentProfile) ProtoMessage()  {}
-
-// AgentCapability represents a specific skill or service an agent can provide.
-type AgentCapability struct {
-	CapabilityType  string   `json:"capability_type"`  // e.g. "verification", "research", "translation"
-	Domains         []string `json:"domains"`          // domains this capability applies to
-	ConfidenceBps   uint64   `json:"confidence_bps"`   // self-reported confidence (0-10000)
-	VerifiedByCount uint32   `json:"verified_by_count"` // number of verifiers
-}
-
-func (c *AgentCapability) Reset()        {}
-func (c *AgentCapability) String() string { return fmt.Sprintf("%+v", *c) }
-func (c *AgentCapability) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// Params
-// -----------------------------------------------------------------------
-
-// Params holds module parameters.
-type Params struct {
-	MinRegistrationStake   string `json:"min_registration_stake"`    // ulgm
-	MaxCapabilitiesPerAgent uint32 `json:"max_capabilities_per_agent"` // 50
-	ProfileExpiryBlocks    uint64 `json:"profile_expiry_blocks"`     // blocks without heartbeat before expiry
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
+// --- Params Validation ---
+// Methods below attach to protobuf-generated types from state.pb.go and genesis.pb.go.
 
 // Validate performs parameter validation.
 func (p Params) Validate() error {
@@ -79,35 +31,27 @@ func DefaultParams() Params {
 	}
 }
 
-// -----------------------------------------------------------------------
-// Genesis state
-// -----------------------------------------------------------------------
-
-// GenesisState defines the discovery module genesis state.
-type GenesisState struct {
-	Params   Params         `json:"params"`
-	Profiles []AgentProfile `json:"profiles"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
+// --- Genesis state validation ---
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:   DefaultParams(),
-		Profiles: []AgentProfile{},
+		Params:   &p,
+		Profiles: []*AgentProfile{},
 	}
 }
 
 // Validate performs genesis state validation.
 func (gs GenesisState) Validate() error {
-	return gs.Params.Validate()
+	if gs.Params != nil {
+		return gs.Params.Validate()
+	}
+	return nil
 }
 
 // -----------------------------------------------------------------------
-// Message types
+// Message types (not in proto-generated files)
 // -----------------------------------------------------------------------
 
 // MsgRegisterAgent registers a new agent profile.
@@ -489,7 +433,7 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 }
 
 // -----------------------------------------------------------------------
-// QueryServer
+// QueryServer (not in proto-generated files)
 // -----------------------------------------------------------------------
 
 type QueryServer interface {

@@ -26,7 +26,7 @@ func (qs *queryServer) InterchainAccounts(goCtx context.Context, req *types.Quer
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	accounts := qs.k.GetRemoteAccountsForDID(ctx, req.Did)
 	if accounts == nil {
-		accounts = []types.RemoteAccount{}
+		accounts = []*types.RemoteAccount{}
 	}
 	return &types.QueryInterchainAccountsResponse{Accounts: accounts}, nil
 }

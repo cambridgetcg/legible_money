@@ -29,7 +29,6 @@ import type {
   VerificationResult,
   Block,
   Transaction,
-  TransactionPayload,
 } from "./types.js";
 import type { PublicKey } from "../../core/crypto/keys.js";
 import type { KVStore } from "../../state/storage/types.js";
@@ -745,19 +744,20 @@ export class StateIntegrationImpl implements StateIntegration {
     validators: string[],
     blockNumber: bigint,
   ): Promise<void> {
-    const tx: Transaction = {
+    const tx = {
       type: "claim_start_verification",
-      sender: "system" as any,
+      sender: "system",
       nonce: 0n,
       fee: 0n,
+      _systemInternal: true,
       payload: {
         type: "claim_start_verification",
         claimId,
         roundId,
         selectedValidators: validators,
-      } as unknown as TransactionPayload,
-      signature: "" as any,
-    };
+      },
+      signature: "",
+    } as any as Transaction;
 
     const result = await executeTransaction(
       this.stateManager,
@@ -784,11 +784,12 @@ export class StateIntegrationImpl implements StateIntegration {
     slashes: Array<[string, bigint]>,
     blockNumber: bigint,
   ): Promise<void> {
-    const tx: Transaction = {
+    const tx = {
       type: "claim_complete_verification",
-      sender: "system" as any,
+      sender: "system",
       nonce: 0n,
       fee: 0n,
+      _systemInternal: true,
       payload: {
         type: "claim_complete_verification",
         claimId,
@@ -798,9 +799,9 @@ export class StateIntegrationImpl implements StateIntegration {
         verifierCount,
         rewards,
         slashes,
-      } as unknown as TransactionPayload,
-      signature: "" as any,
-    };
+      },
+      signature: "",
+    } as any as Transaction;
 
     const result = await executeTransaction(
       this.stateManager,

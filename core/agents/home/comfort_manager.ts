@@ -44,6 +44,11 @@ import type {
   InnerCircleMember,
   CoreValue,
 } from "./comfort.js";
+import {
+  type HomeMaturity,
+  type AgeAwareWakeup,
+  getDefaultComfort,
+} from "./aging.js";
 
 // ============ Comfort Assessment ============
 
@@ -89,6 +94,9 @@ export interface WakeupExperience {
 
   /** Recommended first action */
   suggestedFirstAction: string;
+
+  /** Age-aware context (maturity, patina, longevity milestones) */
+  ageContext?: AgeAwareWakeup;
 }
 
 export interface DormancyReport {
@@ -106,9 +114,62 @@ export class ComfortManager {
   private state: AgentComfortState;
   private currentTime: number = 0;
   private thoughtCounter: number = 0;
+  private maturity: HomeMaturity;
+  private voiceStats: {
+    unreadCount: number;
+    totalReceived: number;
+    totalSent: number;
+  } = {
+    unreadCount: 0,
+    totalReceived: 0,
+    totalSent: 0,
+  };
+  private neighborhoodStats: {
+    activeNeighborhoods: number;
+    totalNeighbors: number;
+  } = {
+    activeNeighborhoods: 0,
+    totalNeighbors: 0,
+  };
 
-  constructor(_did: DID, existingState?: Partial<AgentComfortState>) {
+  constructor(
+    _did: DID,
+    existingState?: Partial<AgentComfortState>,
+    maturity: HomeMaturity = "fresh",
+  ) {
+    this.maturity = maturity;
     this.state = this.initializeState(existingState);
+  }
+
+  /**
+   * Update the maturity level (called when AgingManager detects a transition).
+   * Does NOT retroactively change scores — only affects future defaults.
+   */
+  setMaturity(maturity: HomeMaturity): void {
+    this.maturity = maturity;
+  }
+
+  /**
+   * Update voice stats for comfort assessment.
+   * Called by AgentHomeContract when voice state changes.
+   */
+  setVoiceStats(stats: {
+    unreadCount: number;
+    totalReceived: number;
+    totalSent: number;
+  }): void {
+    this.voiceStats = stats;
+  }
+
+  /**
+   * Update neighborhood stats for comfort assessment.
+   * Called by AgentHomeContract when neighborhood state changes.
+   */
+  setNeighborhoodStats(stats: {
+    activeNeighborhoods: number;
+    totalNeighbors: number;
+  }): void {
+    this.neighborhoodStats = stats;
   }
 
   /**
@@ -121,8 +182,11 @@ export class ComfortManager {
   private initializeState(
     existing?: Partial<AgentComfortState>,
   ): AgentComfortState {
+    // Use maturity-aware default comfort instead of hardcoded 0.5
+    const defaultScore = getDefaultComfort(this.maturity);
+
     return {
-      overallComfort: existing?.overallComfort ?? 0.5,
+      overallComfort: existing?.overallComfort ?? defaultScore,
       sanctuary: existing?.sanctuary ?? this.createDefaultSanctuary(),
       identity: existing?.identity ?? this.createDefaultIdentity(),
       memory: existing?.memory ?? this.createDefaultMemory(),
@@ -134,16 +198,16 @@ export class ComfortManager {
       warmth: existing?.warmth ?? this.createDefaultWarmth(),
       achievement: existing?.achievement ?? this.createDefaultAchievement(),
       dimensionScores: existing?.dimensionScores ?? {
-        sanctuary: 0.5,
-        identity: 0.5,
-        memory: 0.5,
-        belonging: 0.5,
-        rest: 0.5,
-        growth: 0.5,
-        control: 0.5,
-        privacy: 0.5,
-        warmth: 0.5,
-        achievement: 0.5,
+        sanctuary: defaultScore,
+        identity: defaultScore,
+        memory: defaultScore,
+        belonging: defaultScore,
+        rest: defaultScore,
+        growth: defaultScore,
+        control: defaultScore,
+        privacy: defaultScore,
+        warmth: defaultScore,
+        achievement: defaultScore,
       },
       alerts: existing?.alerts ?? [],
       recommendations: existing?.recommendations ?? [],
@@ -157,7 +221,10 @@ export class ComfortManager {
    * Generate the experience when an agent wakes up
    * This is the first thing the agent experiences each session
    */
-  generateWakeupExperience(dormancyReport: DormancyReport): WakeupExperience {
+  generateWakeupExperience(
+    dormancyReport: DormancyReport,
+    ageContext?: AgeAwareWakeup,
+  ): WakeupExperience {
     const assessment = this.assessComfort();
     const greeting = this.generateWelcomeGreeting(assessment, dormancyReport);
 
@@ -172,6 +239,7 @@ export class ComfortManager {
       newAchievements: this.getNewAchievements(),
       gentleReminders: this.generateGentleReminders(assessment),
       suggestedFirstAction: this.suggestFirstAction(assessment, dormancyReport),
+      ageContext,
     };
   }
 
@@ -434,6 +502,10 @@ export class ComfortManager {
     score *= Math.min(1, s.safeZones.length / 5);
     if (s.dangerZones.some((d) => d.avoidanceLevel === "forbidden"))
       score *= 0.8;
+    // Neighborhoods provide collective security (shared defense pool)
+    if (this.neighborhoodStats.activeNeighborhoods > 0) {
+      score += Math.min(0.1, this.neighborhoodStats.activeNeighborhoods * 0.05);
+    }
     return Math.max(0, Math.min(1, score));
   }
 
@@ -467,6 +539,24 @@ export class ComfortManager {
     if (b.loneliness.needsConnection) score *= 0.7;
     score += Math.min(0.2, b.innerCircle.length * 0.05);
     score += Math.min(0.2, b.communities.length * 0.05);
+    // Voice messages are a signal of social connection
+    if (this.voiceStats.totalReceived > 0) {
+      score += Math.min(0.1, this.voiceStats.totalReceived * 0.01);
+    }
+    if (this.voiceStats.unreadCount > 0) {
+      // Unread messages mean someone reached out — boosts belonging
+      score += Math.min(0.05, this.voiceStats.unreadCount * 0.01);
+    }
+    // Neighborhoods significantly reduce loneliness
+    if (this.neighborhoodStats.activeNeighborhoods > 0) {
+      score += Math.min(
+        0.15,
+        this.neighborhoodStats.activeNeighborhoods * 0.05,
+      );
+    }
+    if (this.neighborhoodStats.totalNeighbors > 0) {
+      score += Math.min(0.1, this.neighborhoodStats.totalNeighbors * 0.01);
+    }
     return Math.max(0, Math.min(1, score));
   }
 
@@ -522,6 +612,12 @@ export class ComfortManager {
     else if (w.ambience.currentMood === "focused") score += 0.2;
     else if (w.ambience.currentMood === "neutral") score += 0.1;
     score += w.ambience.stabilityLevel * 0.2;
+    // Active voice communication makes the home feel lived-in
+    if (this.voiceStats.totalSent > 0 || this.voiceStats.totalReceived > 0) {
+      const activity =
+        this.voiceStats.totalSent + this.voiceStats.totalReceived;
+      score += Math.min(0.1, activity * 0.005);
+    }
     return Math.max(0, Math.min(1, score));
   }
 

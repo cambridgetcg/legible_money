@@ -35,6 +35,9 @@ var (
 
 	// BootstrapClaimPrefix tracks which accounts have claimed their bootstrap fund
 	BootstrapClaimPrefix = []byte{0x08}
+
+	// RecoveryShardPrefix stores encrypted recovery shard data: 0x09 + ownerAddr + "/" + shardIndex
+	RecoveryShardPrefix = []byte{0x09}
 )
 
 // AccountKey returns the store key for an account by bech32 address
@@ -78,6 +81,31 @@ func RecoveryConfigKey(address string) []byte {
 // BootstrapClaimKey returns the store key for tracking a bootstrap claim by address
 func BootstrapClaimKey(address string) []byte {
 	return append(BootstrapClaimPrefix, []byte(address)...)
+}
+
+// RecoveryShardKey returns the store key for an encrypted recovery shard
+func RecoveryShardKey(ownerAddress string, shardIndex uint32) []byte {
+	key := append(RecoveryShardPrefix, []byte(ownerAddress)...)
+	key = append(key, byte('/'))
+	key = append(key, Uint32ToBytes(shardIndex)...)
+	return key
+}
+
+// RecoveryShardOwnerPrefix returns the prefix for all shards of an owner
+func RecoveryShardOwnerPrefix(ownerAddress string) []byte {
+	key := append(RecoveryShardPrefix, []byte(ownerAddress)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// Uint32ToBytes converts uint32 to 4 bytes (big-endian)
+func Uint32ToBytes(n uint32) []byte {
+	b := make([]byte, 4)
+	b[0] = byte(n >> 24)
+	b[1] = byte(n >> 16)
+	b[2] = byte(n >> 8)
+	b[3] = byte(n)
+	return b
 }
 
 // Uint64ToBytes converts uint64 to bytes for storage

@@ -23,6 +23,17 @@ export interface NetworkConfig {
   maxConnections: number;
   minConnections: number;
 
+  // ZD-N01 FIX: Peer diversity settings to prevent eclipse attacks.
+  // Limits how many peers from the same /16 subnet can connect.
+  peerDiversity?: {
+    /** Maximum connections from same /16 subnet (default: 3) */
+    maxPerSubnet: number;
+    /** Maximum connections from same /24 subnet (default: 2) */
+    maxPerNarrowSubnet: number;
+    /** Enable subnet-based diversity enforcement (default: true for mainnet) */
+    enabled: boolean;
+  };
+
   // Timeouts
   connectionTimeout: number; // ms
   dialTimeout: number; // ms
@@ -88,6 +99,13 @@ export const DEFAULT_NETWORK_CONFIG: NetworkConfig = {
   // Connection limits
   maxConnections: 100,
   minConnections: 10,
+
+  // ZD-N01 FIX: Peer diversity to prevent eclipse attacks
+  peerDiversity: {
+    maxPerSubnet: 3, // Max 3 peers from same /16
+    maxPerNarrowSubnet: 2, // Max 2 peers from same /24
+    enabled: true,
+  },
 
   // Timeouts
   connectionTimeout: 30000, // 30 seconds

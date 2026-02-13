@@ -1,13 +1,13 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/icaauth/types"
 )
@@ -69,7 +69,7 @@ func prefixEndBytes(prefix []byte) []byte {
 // SetRecord stores an InterchainAccountRecord for a DID.
 func (k Keeper) SetRecord(ctx sdk.Context, record types.InterchainAccountRecord) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(record)
+	bz, err := proto.Marshal(&record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal ICA record: %v", err))
 	}
@@ -86,14 +86,14 @@ func (k Keeper) GetRecord(ctx sdk.Context, did string) (types.InterchainAccountR
 		return types.InterchainAccountRecord{}, false
 	}
 	var record types.InterchainAccountRecord
-	if err := json.Unmarshal(bz, &record); err != nil {
+	if err := proto.Unmarshal(bz, &record); err != nil {
 		return types.InterchainAccountRecord{}, false
 	}
 	return record, true
 }
 
 // GetRemoteAccountsForDID returns all remote accounts for a DID.
-func (k Keeper) GetRemoteAccountsForDID(ctx sdk.Context, did string) []types.RemoteAccount {
+func (k Keeper) GetRemoteAccountsForDID(ctx sdk.Context, did string) []*types.RemoteAccount {
 	record, found := k.GetRecord(ctx, did)
 	if !found {
 		return nil
@@ -102,13 +102,13 @@ func (k Keeper) GetRemoteAccountsForDID(ctx sdk.Context, did string) []types.Rem
 }
 
 // AddRemoteAccount adds a remote account to a DID's record.
-func (k Keeper) AddRemoteAccount(ctx sdk.Context, did string, account types.RemoteAccount) error {
+func (k Keeper) AddRemoteAccount(ctx sdk.Context, did string, account *types.RemoteAccount) error {
 	params := k.GetParams(ctx)
 	record, found := k.GetRecord(ctx, did)
 	if !found {
 		record = types.InterchainAccountRecord{
 			Did:      did,
-			Accounts: []types.RemoteAccount{},
+			Accounts: []*types.RemoteAccount{},
 		}
 	}
 
@@ -129,17 +129,17 @@ func (k Keeper) AddRemoteAccount(ctx sdk.Context, did string, account types.Remo
 }
 
 // GetRemoteAccountByConnection returns the remote account for a DID on a specific connection.
-func (k Keeper) GetRemoteAccountByConnection(ctx sdk.Context, did, connectionId string) (types.RemoteAccount, bool) {
+func (k Keeper) GetRemoteAccountByConnection(ctx sdk.Context, did, connectionId string) (*types.RemoteAccount, bool) {
 	record, found := k.GetRecord(ctx, did)
 	if !found {
-		return types.RemoteAccount{}, false
+		return nil, false
 	}
 	for _, acc := range record.Accounts {
 		if acc.ConnectionId == connectionId {
 			return acc, true
 		}
 	}
-	return types.RemoteAccount{}, false
+	return nil, false
 }
 
 // UpdateRemoteAccountAddress sets the remote address once the ICA is registered on the host.
@@ -166,7 +166,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 		return err
 	}
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		return fmt.Errorf("failed to marshal params: %w", err)
 	}
@@ -181,7 +181,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -191,11 +191,15 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // InitGenesis initializes the module state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) error {
-	if err := k.SetParams(ctx, data.Params); err != nil {
-		return fmt.Errorf("failed to set params: %w", err)
+	if data.Params != nil {
+		if err := k.SetParams(ctx, *data.Params); err != nil {
+			return fmt.Errorf("failed to set params: %w", err)
+		}
 	}
 	for _, record := range data.Records {
-		k.SetRecord(ctx, record)
+		if record != nil {
+			k.SetRecord(ctx, *record)
+		}
 	}
 	return nil
 }
@@ -206,21 +210,21 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.InterchainAccountPrefix, prefixEndBytes(types.InterchainAccountPrefix))
 	if err != nil {
-		return &types.GenesisState{Params: params}
+		return &types.GenesisState{Params: &params}
 	}
 	defer iter.Close()
 
-	var records []types.InterchainAccountRecord
+	var records []*types.InterchainAccountRecord
 	for ; iter.Valid(); iter.Next() {
 		var record types.InterchainAccountRecord
-		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &record); err != nil {
 			continue
 		}
-		records = append(records, record)
+		records = append(records, &record)
 	}
 
 	return &types.GenesisState{
-		Params:  params,
+		Params:  &params,
 		Records: records,
 	}
 }

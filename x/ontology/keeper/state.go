@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/ontology/types"
 )
@@ -15,7 +16,7 @@ import (
 // SetParams sets module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -32,7 +33,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -44,7 +45,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 func (k Keeper) SetStratum(ctx sdk.Context, props types.StratumProperties) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := stratumKey(types.Stratum(props.Stratum))
-	bz, err := json.Marshal(props)
+	bz, err := proto.Marshal(&props)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal stratum: %v", err))
 	}
@@ -62,7 +63,7 @@ func (k Keeper) GetStratum(ctx sdk.Context, stratum types.Stratum) (types.Stratu
 		return types.StratumProperties{}, false
 	}
 	var props types.StratumProperties
-	if err := json.Unmarshal(bz, &props); err != nil {
+	if err := proto.Unmarshal(bz, &props); err != nil {
 		return types.StratumProperties{}, false
 	}
 	return props, true
@@ -80,7 +81,7 @@ func (k Keeper) GetAllStrata(ctx sdk.Context) []types.StratumProperties {
 	var strata []types.StratumProperties
 	for ; iter.Valid(); iter.Next() {
 		var props types.StratumProperties
-		if err := json.Unmarshal(iter.Value(), &props); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &props); err != nil {
 			continue
 		}
 		strata = append(strata, props)
@@ -94,7 +95,7 @@ func (k Keeper) GetAllStrata(ctx sdk.Context) []types.StratumProperties {
 func (k Keeper) SetDomain(ctx sdk.Context, domain types.Domain) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := domainKey(domain.Name)
-	bz, err := json.Marshal(domain)
+	bz, err := proto.Marshal(&domain)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal domain: %v", err))
 	}
@@ -118,7 +119,7 @@ func (k Keeper) GetDomain(ctx sdk.Context, name string) (types.Domain, bool) {
 		return types.Domain{}, false
 	}
 	var domain types.Domain
-	if err := json.Unmarshal(bz, &domain); err != nil {
+	if err := proto.Unmarshal(bz, &domain); err != nil {
 		return types.Domain{}, false
 	}
 	return domain, true
@@ -157,7 +158,7 @@ func (k Keeper) GetAllDomains(ctx sdk.Context) []types.Domain {
 	var domains []types.Domain
 	for ; iter.Valid(); iter.Next() {
 		var domain types.Domain
-		if err := json.Unmarshal(iter.Value(), &domain); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &domain); err != nil {
 			continue
 		}
 		domains = append(domains, domain)
@@ -182,7 +183,7 @@ func (k Keeper) DeleteDomain(ctx sdk.Context, name string) {
 func (k Keeper) SetProposal(ctx sdk.Context, proposal types.DomainProposal) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := proposalKey(proposal.Id)
-	bz, err := json.Marshal(proposal)
+	bz, err := proto.Marshal(&proposal)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal proposal: %v", err))
 	}
@@ -200,7 +201,7 @@ func (k Keeper) GetProposal(ctx sdk.Context, id string) (types.DomainProposal, b
 		return types.DomainProposal{}, false
 	}
 	var proposal types.DomainProposal
-	if err := json.Unmarshal(bz, &proposal); err != nil {
+	if err := proto.Unmarshal(bz, &proposal); err != nil {
 		return types.DomainProposal{}, false
 	}
 	return proposal, true
@@ -223,7 +224,7 @@ func (k Keeper) IterateProposals(ctx sdk.Context, cb func(types.DomainProposal) 
 
 	for ; iter.Valid(); iter.Next() {
 		var proposal types.DomainProposal
-		if err := json.Unmarshal(iter.Value(), &proposal); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &proposal); err != nil {
 			continue
 		}
 		if cb(proposal) {
@@ -238,7 +239,7 @@ func (k Keeper) IterateProposals(ctx sdk.Context, cb func(types.DomainProposal) 
 func (k Keeper) SetLink(ctx sdk.Context, link types.CrossStratumLink) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := linkKey(link.SourceDomain, link.TargetDomain)
-	bz, err := json.Marshal(link)
+	bz, err := proto.Marshal(&link)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal link: %v", err))
 	}
@@ -256,7 +257,7 @@ func (k Keeper) GetLink(ctx sdk.Context, source, target string) (types.CrossStra
 		return types.CrossStratumLink{}, false
 	}
 	var link types.CrossStratumLink
-	if err := json.Unmarshal(bz, &link); err != nil {
+	if err := proto.Unmarshal(bz, &link); err != nil {
 		return types.CrossStratumLink{}, false
 	}
 	return link, true
@@ -274,7 +275,7 @@ func (k Keeper) GetAllLinks(ctx sdk.Context) []types.CrossStratumLink {
 	var links []types.CrossStratumLink
 	for ; iter.Valid(); iter.Next() {
 		var link types.CrossStratumLink
-		if err := json.Unmarshal(iter.Value(), &link); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &link); err != nil {
 			continue
 		}
 		links = append(links, link)

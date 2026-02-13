@@ -9,8 +9,32 @@ import type { DID } from "../../core/agents/identity/did.js";
 
 /**
  * Confidence level (0.0 to 1.0)
+ *
+ * ZD-K02: TS uses float 0.0–1.0, Go/Cosmos uses uint64 basis points (0–1,000,000).
+ * Use the conversion helpers below when crossing the boundary.
  */
 export type Confidence = number;
+
+/** BPS scale used by Go/Cosmos SDK confidence values (1,000,000 = 100%). */
+export const CONFIDENCE_BPS_SCALE = 1_000_000;
+
+/**
+ * Convert TS float confidence (0.0–1.0) to Go uint64 BPS (0–1,000,000).
+ * Clamps to valid range.
+ */
+export function confidenceToBps(confidence: Confidence): number {
+  const clamped = Math.max(0, Math.min(1, confidence));
+  return Math.round(clamped * CONFIDENCE_BPS_SCALE);
+}
+
+/**
+ * Convert Go uint64 BPS (0–1,000,000) to TS float confidence (0.0–1.0).
+ * Clamps to valid range.
+ */
+export function bpsToConfidence(bps: number): Confidence {
+  const clamped = Math.max(0, Math.min(CONFIDENCE_BPS_SCALE, bps));
+  return clamped / CONFIDENCE_BPS_SCALE;
+}
 
 // ============ Epistemic Categories ============
 

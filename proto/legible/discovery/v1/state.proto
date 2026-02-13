@@ -1,0 +1,35 @@
+syntax = "proto3";
+package legible.discovery.v1;
+
+option go_package = "github.com/legible-money/legible/x/discovery/types";
+
+// AgentCapability represents a specific skill or service an agent can provide.
+message AgentCapability {
+  string capability_type    = 1;  // e.g. "verification", "research", "translation"
+  repeated string domains   = 2;  // domains this capability applies to
+  uint64 confidence_bps     = 3;  // self-reported confidence (0-10000)
+  uint32 verified_by_count  = 4;  // number of verifiers
+}
+
+// AgentProfile represents a discoverable agent on the network.
+message AgentProfile {
+  string address                       = 1;   // bech32 address
+  string did                           = 2;   // did:lgm:... identifier
+  string display_name                  = 3;   // human-readable name
+  repeated AgentCapability capabilities = 4;  // agent capabilities
+  repeated string domains              = 5;   // knowledge domains
+  string status                        = 6;   // "active", "inactive", "expired"
+  uint64 reputation_score              = 7;   // basis points 0-1,000,000
+  uint64 registered_at_block           = 8;   // block height when registered
+  uint64 last_active_block             = 9;   // last heartbeat block
+  string stake                         = 10;  // bigint as string (ulgm)
+  string description                   = 11;  // profile description
+  string metadata                      = 12;  // arbitrary JSON metadata
+}
+
+// Params holds discovery module parameters.
+message Params {
+  string min_registration_stake     = 1;  // bigint as string (ulgm)
+  uint32 max_capabilities_per_agent = 2;
+  uint64 profile_expiry_blocks      = 3;  // blocks without heartbeat before expiry
+}

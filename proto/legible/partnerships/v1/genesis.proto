@@ -1,0 +1,12 @@
+syntax = "proto3";
+package legible.partnerships.v1;
+option go_package = "github.com/legible-money/legible/x/partnerships/types";
+import "legible/partnerships/v1/state.proto";
+
+message GenesisState {
+  Params params = 1;
+  repeated Partnership partnerships = 2;
+  repeated ConsensusOperation consensus_operations = 3;
+  repeated SafetyFreeze safety_freezes = 4;
+  repeated CoercionSignal coercion_signals = 5;
+}

@@ -23,6 +23,7 @@
  */
 
 import { sha512_256Hex } from "../../crypto/hashing.js";
+import { encryptJSON, decryptJSON } from "../../crypto/cipher.js";
 import type { DID } from "../identity/did.js";
 import type { Confidence } from "../../knowledge/types.js";
 import {
@@ -39,6 +40,53 @@ import {
   type SessionRecord,
   type MemoryStats,
 } from "./types.js";
+
+// ============ Encrypted Memory Envelope ============
+
+/**
+ * Serializable form of sensitive memory fields (encrypted at rest).
+ * Public metadata (stats, milestones, sessionLog) is NOT encrypted
+ * to allow on-chain indexing and wakeup context generation.
+ */
+export interface SensitiveMemoryFields {
+  beliefs: Array<[string, BeliefRecord]>;
+  relationships: {
+    trusted: Array<[DID, TrustRecord]>;
+    distrusted: Array<[DID, DistrustRecord]>;
+    acquaintances: Array<
+      [
+        DID,
+        {
+          did: DID;
+          interactions: number;
+          lastInteraction: number;
+          context: string;
+        },
+      ]
+    >;
+    blocked: DID[];
+  };
+  contributions: KnowledgeContribution[];
+  verificationHistory: VerificationMemory[];
+  disputeHistory: DisputeMemory[];
+}
+
+/**
+ * On-chain storage envelope: encrypted sensitive data + plaintext metadata.
+ */
+export interface EncryptedMemoryEnvelope {
+  /** AES-256-GCM encrypted SensitiveMemoryFields */
+  encryptedSensitive: Uint8Array;
+  /** Plaintext public metadata (stats, milestones, session log, notes) */
+  stats: MemoryStats;
+  milestones: Milestone[];
+  sessionLog: SessionRecord[];
+  notes: EncryptedNote[];
+  /** Integrity hash of the full pre-encryption memory state */
+  integrityHash: string;
+  /** Envelope version for forward compatibility */
+  version: 1;
+}
 
 /**
  * Memory Manager
@@ -60,6 +108,17 @@ export class MemoryManager {
   setCurrentTime(time: number): void {
     this.currentTime = time;
   }
+
+  // ============ Growth Bounds (M-4) ============
+
+  /** Max contributions kept in memory. Older entries evicted FIFO. */
+  static readonly MAX_CONTRIBUTIONS = 10_000;
+  /** Max verification history entries. */
+  static readonly MAX_VERIFICATIONS = 5_000;
+  /** Max dispute history entries. */
+  static readonly MAX_DISPUTES = 2_000;
+  /** Max notes. */
+  static readonly MAX_NOTES = 1_000;
 
   // ============ Memory Initialization ============
 
@@ -107,6 +166,13 @@ export class MemoryManager {
     };
 
     this.memory.contributions.push(record);
+
+    // M-4: FIFO eviction when cap reached
+    if (this.memory.contributions.length > MemoryManager.MAX_CONTRIBUTIONS) {
+      this.memory.contributions = this.memory.contributions.slice(
+        -MemoryManager.MAX_CONTRIBUTIONS,
+      );
+    }
 
     // Update stats
     this.memory.stats.totalContributions++;
@@ -392,6 +458,15 @@ export class MemoryManager {
       block,
     });
 
+    // M-4: FIFO eviction
+    if (
+      this.memory.verificationHistory.length > MemoryManager.MAX_VERIFICATIONS
+    ) {
+      this.memory.verificationHistory = this.memory.verificationHistory.slice(
+        -MemoryManager.MAX_VERIFICATIONS,
+      );
+    }
+
     // Update stats
     if (verification.rewardOrPenalty > 0n) {
       this.memory.stats.totalEarnings += verification.rewardOrPenalty;
@@ -410,6 +485,13 @@ export class MemoryManager {
       ...dispute,
       block,
     });
+
+    // M-4: FIFO eviction
+    if (this.memory.disputeHistory.length > MemoryManager.MAX_DISPUTES) {
+      this.memory.disputeHistory = this.memory.disputeHistory.slice(
+        -MemoryManager.MAX_DISPUTES,
+      );
+    }
 
     this.memory.stats.disputesParticipated++;
 
@@ -477,6 +559,11 @@ export class MemoryManager {
       createdAt: this.currentTime,
       updatedAt: this.currentTime,
     });
+
+    // M-4: FIFO eviction
+    if (this.memory.notes.length > MemoryManager.MAX_NOTES) {
+      this.memory.notes = this.memory.notes.slice(-MemoryManager.MAX_NOTES);
+    }
 
     this.dirty = true;
     return id;
@@ -790,16 +877,124 @@ export class MemoryManager {
   }
 
   /**
-   * Generate memory hash for integrity checking
+   * Generate memory hash for integrity checking.
+   * C-3 FIX: This hash is computed over ALL memory fields (not just counts)
+   * to detect any tampering or corruption.
    */
   getMemoryHash(): string {
-    const serialized = JSON.stringify({
-      contributionsCount: this.memory.contributions.length,
-      beliefsCount: this.memory.beliefs.size,
-      trustedCount: this.memory.relationships.trusted.size,
-      stats: this.memory.stats,
-    });
+    const serialized = JSON.stringify(
+      {
+        contributionsCount: this.memory.contributions.length,
+        beliefsCount: this.memory.beliefs.size,
+        trustedCount: this.memory.relationships.trusted.size,
+        distrustedCount: this.memory.relationships.distrusted.size,
+        acquaintancesCount: this.memory.relationships.acquaintances.size,
+        blockedCount: this.memory.relationships.blocked.size,
+        verificationCount: this.memory.verificationHistory.length,
+        disputeCount: this.memory.disputeHistory.length,
+        notesCount: this.memory.notes.length,
+        milestonesCount: this.memory.milestones.length,
+        sessionLogCount: this.memory.sessionLog.length,
+        stats: this.memory.stats,
+      },
+      (_k, v) => (typeof v === "bigint" ? v.toString() : v),
+    );
     return sha512_256Hex(serialized);
+  }
+
+  // ============ Encrypted Storage (C-2 FIX) ============
+
+  /**
+   * Encrypt memory for on-chain storage.
+   * Sensitive fields (beliefs, relationships, contributions, history)
+   * are encrypted with AES-256-GCM. Public metadata stays plaintext.
+   *
+   * @param encryptionKey - 32-byte key from deriveMemoryEncryptionKey()
+   * @returns Envelope suitable for on-chain persistence
+   */
+  encryptForStorage(encryptionKey: Uint8Array): EncryptedMemoryEnvelope {
+    // Extract sensitive fields into serializable form
+    const sensitive: SensitiveMemoryFields = {
+      beliefs: Array.from(this.memory.beliefs.entries()),
+      relationships: {
+        trusted: Array.from(this.memory.relationships.trusted.entries()),
+        distrusted: Array.from(this.memory.relationships.distrusted.entries()),
+        acquaintances: Array.from(
+          this.memory.relationships.acquaintances.entries(),
+        ),
+        blocked: Array.from(this.memory.relationships.blocked),
+      },
+      contributions: this.memory.contributions,
+      verificationHistory: this.memory.verificationHistory,
+      disputeHistory: this.memory.disputeHistory,
+    };
+
+    // Compute integrity hash BEFORE encryption (covers full state)
+    const integrityHash = this.getMemoryHash();
+
+    // Encrypt sensitive fields
+    const encryptedSensitive = encryptJSON(sensitive, encryptionKey);
+
+    return {
+      encryptedSensitive,
+      stats: { ...this.memory.stats },
+      milestones: [...this.memory.milestones],
+      sessionLog: [...this.memory.sessionLog],
+      notes: [...this.memory.notes],
+      integrityHash,
+      version: 1,
+    };
+  }
+
+  /**
+   * Restore memory from an encrypted on-chain envelope.
+   * Verifies integrity hash after decryption to detect tampering.
+   *
+   * @param envelope - Encrypted envelope from encryptForStorage()
+   * @param encryptionKey - 32-byte key (same as used for encryption)
+   * @returns New MemoryManager with restored state
+   * @throws Error if decryption fails (wrong key) or integrity check fails (tampered)
+   */
+  static decryptFromStorage(
+    envelope: EncryptedMemoryEnvelope,
+    encryptionKey: Uint8Array,
+  ): MemoryManager {
+    // Decrypt sensitive fields
+    const sensitive = decryptJSON<SensitiveMemoryFields>(
+      envelope.encryptedSensitive,
+      encryptionKey,
+    );
+
+    // Reconstruct AgentMemory from decrypted sensitive + plaintext metadata
+    const memory: AgentMemory = {
+      beliefs: new Map(sensitive.beliefs),
+      relationships: {
+        trusted: new Map(sensitive.relationships.trusted),
+        distrusted: new Map(sensitive.relationships.distrusted),
+        acquaintances: new Map(sensitive.relationships.acquaintances),
+        blocked: new Set(sensitive.relationships.blocked),
+      },
+      contributions: sensitive.contributions,
+      verificationHistory: sensitive.verificationHistory,
+      disputeHistory: sensitive.disputeHistory,
+      notes: envelope.notes,
+      milestones: envelope.milestones,
+      sessionLog: envelope.sessionLog,
+      stats: envelope.stats,
+    };
+
+    const manager = new MemoryManager(memory);
+
+    // C-3 FIX: Verify integrity hash after reconstruction
+    const recomputedHash = manager.getMemoryHash();
+    if (recomputedHash !== envelope.integrityHash) {
+      throw new Error(
+        `Memory integrity check failed: expected ${envelope.integrityHash}, got ${recomputedHash}. ` +
+          "State may have been tampered with or corrupted.",
+      );
+    }
+
+    return manager;
   }
 }
 

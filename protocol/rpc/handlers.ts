@@ -801,6 +801,39 @@ export const logicGetZones: Handler<
   return { zones: ZONE_PROPERTIES };
 };
 
+/**
+ * Get current block height (convenience alias)
+ */
+export const lgmGetBlockHeight: Handler<
+  Record<string, never>,
+  { blockHeight: string }
+> = async (_, ctx) => {
+  return { blockHeight: ctx.state.getBlockNumber().toString() };
+};
+
+/**
+ * Get network statistics
+ */
+export const lgmGetNetworkStats: Handler<
+  Record<string, never>,
+  {
+    peerCount: number;
+    latestBlock: string;
+    activeRounds: number;
+    syncStatus: string;
+    version: string;
+  }
+> = async (_, ctx) => {
+  const rounds = ctx.consensus.getActiveRounds();
+  return {
+    peerCount: ctx.network?.getPeerCount() ?? 0,
+    latestBlock: ctx.state.getBlockNumber().toString(),
+    activeRounds: rounds.length,
+    syncStatus: "synced",
+    version: ctx.nodeVersion,
+  };
+};
+
 // ============ Handler Registry ============
 
 export const handlers: Record<string, Handler<any, any>> = {
@@ -833,6 +866,8 @@ export const handlers: Record<string, Handler<any, any>> = {
 
   // Network
   network_health: networkHealth,
+  lgm_getBlockHeight: lgmGetBlockHeight,
+  lgm_getNetworkStats: lgmGetNetworkStats,
 
   // B3 FIX: Staking, Transactions, Disputes, Channels
   ...b3Handlers,

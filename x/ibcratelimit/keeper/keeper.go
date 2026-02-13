@@ -62,22 +62,26 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	k.SetParams(ctx, gs.Params)
+	if gs.Params != nil {
+		k.SetParams(ctx, *gs.Params)
+	}
 	for _, flow := range gs.Flows {
-		k.SetFlow(ctx, flow)
+		k.SetFlow(ctx, *flow)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	var flows []types.ChannelFlow
+	params := k.GetParams(ctx)
+	var flows []*types.ChannelFlow
 	k.IterateFlows(ctx, func(flow types.ChannelFlow) bool {
-		flows = append(flows, flow)
+		cp := flow // copy to avoid aliasing
+		flows = append(flows, &cp)
 		return false
 	})
 
 	gs := &types.GenesisState{
-		Params: k.GetParams(ctx),
+		Params: &params,
 		Flows:  flows,
 	}
 	return gs

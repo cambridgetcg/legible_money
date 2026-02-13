@@ -131,7 +131,8 @@ func TestSubmitLIP(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test LIP",
 		Description: "A test improvement proposal",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -160,13 +161,15 @@ func TestSubmitLIP_IncrementingIds(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "First LIP",
 		Description: "First",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	resp2, _ := ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
 		Proposer:    testAddr("bob"),
 		Title:       "Second LIP",
 		Description: "Second",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	if resp1.LipId != "LIP-1" {
@@ -186,7 +189,8 @@ func TestStakeLIP_AdvancesToReview(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Process LIP",
 		Description: "Process improvement",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	// Set category manually to "process" for stake test compatibility
@@ -218,7 +222,8 @@ func TestStakeLIP_InsufficientStake(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Consensus LIP",
 		Description: "Big stake needed",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	// Set category manually to "consensus"
@@ -260,7 +265,8 @@ func createAndAdvanceToVoting(t *testing.T, k keeper.Keeper, ms types.MsgServer,
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	// Set category to process for stake threshold
 	lip, _ := k.GetLIP(ctx, "LIP-1")
@@ -285,7 +291,8 @@ func TestAdvanceLIPStage_ReviewToLastCall(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	lip, _ := k.GetLIP(ctx, "LIP-1")
 	lip.Category = string(types.CategoryProcess)
@@ -319,7 +326,8 @@ func TestAdvanceLIPStage_LastCallToVoting(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	lip, _ := k.GetLIP(ctx, "LIP-1")
 	lip.Category = string(types.CategoryProcess)
@@ -360,7 +368,8 @@ func TestAdvanceLIPStage_FromDraft_Fails(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	_, err := ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{
@@ -380,7 +389,8 @@ func TestWithdrawLIP(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Withdraw Me",
 		Description: "Will be withdrawn",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	_, err := ms.WithdrawLIP(ctx, &types.MsgWithdrawLIP{
@@ -405,7 +415,8 @@ func TestWithdrawLIP_NotProposer(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	_, err := ms.WithdrawLIP(ctx, &types.MsgWithdrawLIP{
@@ -425,7 +436,8 @@ func TestWithdrawLIP_AlreadyTerminal(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	ms.WithdrawLIP(ctx, &types.MsgWithdrawLIP{
 		Proposer: testAddr("alice"),
@@ -500,7 +512,8 @@ func TestCastVote_NotInVotingStage(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	// LIP is in draft stage
@@ -762,7 +775,8 @@ func TestInitExportGenesis(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Genesis LIP",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	ms.SubmitDisbursement(ctx, &types.MsgSubmitDisbursement{
 		Submitter:   testAddr("bob"),
@@ -799,7 +813,8 @@ func TestQueryLIP(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Query Test",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_ECONOMIC_POLICY,
+		LipType:      types.LIPType_LIP_TYPE_ECONOMIC_POLICY,
+		InitialStake: "1000000",
 	})
 
 	resp, err := qs.LIP(ctx, &types.QueryLIPRequest{LipId: "LIP-1"})
@@ -830,13 +845,15 @@ func TestQueryLIPs_ByStage(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Draft 1",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
 		Proposer:    testAddr("alice"),
 		Title:       "Draft 2",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 
 	// Set first LIP to process category and advance to review
@@ -907,9 +924,11 @@ func TestValidateBasic_MsgSubmitLIP(t *testing.T) {
 		msg     types.MsgSubmitLIP
 		wantErr bool
 	}{
-		{"valid", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY}, false},
-		{"empty title", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY}, true},
-		{"invalid addr", types.MsgSubmitLIP{Proposer: "bad", Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY}, true},
+		{"valid", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY, InitialStake: "1000000"}, false},
+		{"empty title", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY, InitialStake: "1000000"}, true},
+		{"invalid addr", types.MsgSubmitLIP{Proposer: "bad", Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY, InitialStake: "1000000"}, true},
+		{"zero stake", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY, InitialStake: "0"}, true},
+		{"empty stake", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY, InitialStake: ""}, true},
 	}
 
 	for _, tt := range tests {
@@ -932,6 +951,7 @@ func TestValidateBasic_MsgCastVote(t *testing.T) {
 		{"invalid addr", types.MsgCastVote{Voter: "bad", ProposalId: "LIP-1", Option: types.VoteOption_VOTE_OPTION_YES, Stake: "1"}, true},
 		{"empty proposal", types.MsgCastVote{Voter: testAddr("v"), ProposalId: "", Option: types.VoteOption_VOTE_OPTION_YES, Stake: "1"}, true},
 		{"unspecified option", types.MsgCastVote{Voter: testAddr("v"), ProposalId: "LIP-1", Option: types.VoteOption_VOTE_OPTION_UNSPECIFIED, Stake: "1"}, true},
+		{"empty stake", types.MsgCastVote{Voter: testAddr("v"), ProposalId: "LIP-1", Option: types.VoteOption_VOTE_OPTION_YES, Stake: ""}, true},
 	}
 
 	for _, tt := range tests {
@@ -987,7 +1007,8 @@ func TestAttachUpgradePlan(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Upgrade v2",
 		Description: "Software upgrade to v2",
-		LipType:     types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		InitialStake: "1000000",
 	})
 	lip, _ := k.GetLIP(ctx, "LIP-1")
 	lip.Category = string(types.CategoryConsensus)
@@ -1026,7 +1047,8 @@ func TestAttachUpgradePlan_NotConsensus(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Process LIP",
 		Description: "Not a consensus LIP",
-		LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+		InitialStake: "1000000",
 	})
 	// Category defaults to LipType int, not "consensus"
 
@@ -1049,7 +1071,8 @@ func TestAttachUpgradePlan_NotProposer(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Upgrade v2",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		InitialStake: "1000000",
 	})
 	lip, _ := k.GetLIP(ctx, "LIP-1")
 	lip.Category = string(types.CategoryConsensus)
@@ -1074,7 +1097,8 @@ func TestAttachUpgradePlan_DuplicatePlan(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Upgrade v2",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		InitialStake: "1000000",
 	})
 	lip, _ := k.GetLIP(ctx, "LIP-1")
 	lip.Category = string(types.CategoryConsensus)
@@ -1106,7 +1130,8 @@ func TestAttachUpgradePlan_TerminalLIP(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Upgrade v2",
 		Description: "Test",
-		LipType:     types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		InitialStake: "1000000",
 	})
 	lip, _ := k.GetLIP(ctx, "LIP-1")
 	lip.Category = string(types.CategoryConsensus)
@@ -1181,7 +1206,8 @@ func TestGenesisRoundtrip_LIPFields(t *testing.T) {
 		Proposer:    testAddr("alice"),
 		Title:       "Roundtrip LIP",
 		Description: "Tests field preservation",
-		LipType:     types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
+		InitialStake: "1000000",
 	})
 	// Set category for stake test
 	lip, _ := k.GetLIP(ctx, "LIP-1")
@@ -1220,8 +1246,9 @@ func TestGenesisRoundtrip_LIPFields(t *testing.T) {
 	if lip.Stage != string(types.StageReview) {
 		t.Errorf("stage: got %s, want review", lip.Stage)
 	}
-	if lip.StakedAmount != "1000000000" {
-		t.Errorf("staked_amount: got %s, want 1000000000", lip.StakedAmount)
+	// 1000000 (initial deposit) + 1000000000 (StakeLIP) = 1001000000
+	if lip.StakedAmount != "1001000000" {
+		t.Errorf("staked_amount: got %s, want 1001000000", lip.StakedAmount)
 	}
 }
 
@@ -1293,10 +1320,11 @@ func TestGenesisRoundtrip_Counters(t *testing.T) {
 	// Create several LIPs and disbursements to advance counters
 	for i := 0; i < 5; i++ {
 		ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-			Proposer:    testAddr("alice"),
-			Title:       "LIP",
-			Description: "Test",
-			LipType:     types.LIPType_LIP_TYPE_COMMUNITY,
+			Proposer:     testAddr("alice"),
+			Title:        "LIP",
+			Description:  "Test",
+			LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
+			InitialStake: "1000000",
 		})
 	}
 	for i := 0; i < 3; i++ {

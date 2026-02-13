@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/partnerships/types"
 )
@@ -73,7 +73,7 @@ func (k Keeper) GetAuthority() string {
 // SetParams sets module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -88,7 +88,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -134,19 +134,29 @@ func (k Keeper) ExpireFormations(ctx sdk.Context) {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	}
 
 	for _, p := range genState.Partnerships {
-		k.SetPartnership(ctx, p)
+		if p != nil {
+			k.SetPartnership(ctx, *p)
+		}
 	}
 	for _, op := range genState.ConsensusOperations {
-		k.SetConsensusOperation(ctx, op)
+		if op != nil {
+			k.SetConsensusOperation(ctx, *op)
+		}
 	}
 	for _, sf := range genState.SafetyFreezes {
-		k.SetSafetyFreeze(ctx, sf)
+		if sf != nil {
+			k.SetSafetyFreeze(ctx, *sf)
+		}
 	}
 	for _, cs := range genState.CoercionSignals {
-		k.SetCoercionSignal(ctx, cs)
+		if cs != nil {
+			k.SetCoercionSignal(ctx, *cs)
+		}
 	}
 }
 
@@ -157,11 +167,29 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	freezes := k.GetAllSafetyFreezes(ctx)
 	signals := k.GetAllCoercionSignals(ctx)
 
+	pPtrs := make([]*types.Partnership, len(partnerships))
+	for i := range partnerships {
+		pPtrs[i] = &partnerships[i]
+	}
+	opPtrs := make([]*types.ConsensusOperation, len(ops))
+	for i := range ops {
+		opPtrs[i] = &ops[i]
+	}
+	fPtrs := make([]*types.SafetyFreeze, len(freezes))
+	for i := range freezes {
+		fPtrs[i] = &freezes[i]
+	}
+	sPtrs := make([]*types.CoercionSignal, len(signals))
+	for i := range signals {
+		sPtrs[i] = &signals[i]
+	}
+
+	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:              k.GetParams(ctx),
-		Partnerships:        partnerships,
-		ConsensusOperations: ops,
-		SafetyFreezes:       freezes,
-		CoercionSignals:     signals,
+		Params:              &params,
+		Partnerships:        pPtrs,
+		ConsensusOperations: opPtrs,
+		SafetyFreezes:       fPtrs,
+		CoercionSignals:     sPtrs,
 	}
 }

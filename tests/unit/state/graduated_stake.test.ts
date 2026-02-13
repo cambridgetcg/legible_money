@@ -156,9 +156,10 @@ describe.sequential("Graduated Stake Integration", () => {
       sender: "system" as any,
       nonce: 0n,
       fee: 0n,
+      _systemInternal: true,
       payload,
       signature: "" as any,
-    };
+    } as any;
   }
 
   /** Create a complete_verification payload with required rewards/slashes arrays */

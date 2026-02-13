@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -114,5 +113,3 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	}
 }
 
-// Ensure unused imports are referenced.
-var _ = json.Marshal

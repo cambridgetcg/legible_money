@@ -24,4 +24,6 @@ var (
 	ErrNotConsensusCategory  = errors.Register(ModuleName, 20, "upgrade plans can only be attached to consensus-category LIPs")
 	ErrUpgradePlanExists     = errors.Register(ModuleName, 21, "upgrade plan already attached to this LIP")
 	ErrInvalidUpgradePlan    = errors.Register(ModuleName, 22, "invalid upgrade plan")
+	ErrZeroStake             = errors.Register(ModuleName, 23, "stake amount must be positive")
+	ErrInsufficientBalance   = errors.Register(ModuleName, 24, "insufficient balance for stake escrow")
 )

@@ -350,14 +350,33 @@ export class Mempool extends EventEmitter {
       return { valid: false, reason: "Fee too low" };
     }
 
-    // Verify signature against payload (matches wallet SDK signing convention).
-    // TODO: Migrate to getSignableMessage() covering type+nonce+fee+payload.
-    const payload = JSON.stringify(tx.payload);
-    const valid = verify(
-      new TextEncoder().encode(payload),
+    // ZD-E01 FIX: Verify signature against full signable message (type+nonce+fee+payload).
+    // This prevents transaction type mutation, fee stripping, and nonce replay attacks.
+    // Falls back to legacy payload-only verification for backward compatibility during migration.
+    const fullMessage = JSON.stringify(
+      {
+        type: tx.type,
+        nonce: tx.nonce.toString(),
+        fee: tx.fee.toString(),
+        payload: tx.payload,
+      },
+      (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v),
+    );
+    let valid = verify(
+      new TextEncoder().encode(fullMessage),
       tx.signature,
       tx.sender,
     );
+
+    // Legacy fallback: accept payload-only signatures during migration period
+    if (!valid) {
+      const legacyPayload = JSON.stringify(tx.payload);
+      valid = verify(
+        new TextEncoder().encode(legacyPayload),
+        tx.signature,
+        tx.sender,
+      );
+    }
 
     if (!valid) {
       return { valid: false, reason: "Invalid signature" };

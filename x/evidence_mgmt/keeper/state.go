@@ -3,10 +3,10 @@ package keeper
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/evidence_mgmt/types"
 )
@@ -17,7 +17,7 @@ import (
 func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.Evidence) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := evidenceKey(evidence.Id)
-	bz, err := json.Marshal(evidence)
+	bz, err := proto.Marshal(&evidence)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence: %v", err))
 	}
@@ -40,7 +40,7 @@ func (k Keeper) GetEvidence(ctx sdk.Context, id string) (types.Evidence, bool) {
 		return types.Evidence{}, false
 	}
 	var evidence types.Evidence
-	if err := json.Unmarshal(bz, &evidence); err != nil {
+	if err := proto.Unmarshal(bz, &evidence); err != nil {
 		return types.Evidence{}, false
 	}
 	return evidence, true
@@ -68,7 +68,7 @@ func (k Keeper) IterateEvidence(ctx sdk.Context, cb func(types.Evidence) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var evidence types.Evidence
-		if err := json.Unmarshal(iter.Value(), &evidence); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &evidence); err != nil {
 			continue
 		}
 		if cb(evidence) {
@@ -109,7 +109,7 @@ func (k Keeper) GetEvidenceCountForClaim(ctx sdk.Context, claimId string) uint32
 func (k Keeper) SetAudit(ctx sdk.Context, audit types.EvidenceAudit) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := auditKey(audit.Id)
-	bz, err := json.Marshal(audit)
+	bz, err := proto.Marshal(&audit)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal audit: %v", err))
 	}
@@ -132,7 +132,7 @@ func (k Keeper) GetAudit(ctx sdk.Context, id string) (types.EvidenceAudit, bool)
 		return types.EvidenceAudit{}, false
 	}
 	var audit types.EvidenceAudit
-	if err := json.Unmarshal(bz, &audit); err != nil {
+	if err := proto.Unmarshal(bz, &audit); err != nil {
 		return types.EvidenceAudit{}, false
 	}
 	return audit, true
@@ -160,7 +160,7 @@ func (k Keeper) IterateAudits(ctx sdk.Context, cb func(types.EvidenceAudit) bool
 
 	for ; iter.Valid(); iter.Next() {
 		var audit types.EvidenceAudit
-		if err := json.Unmarshal(iter.Value(), &audit); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &audit); err != nil {
 			continue
 		}
 		if cb(audit) {
@@ -203,7 +203,7 @@ func (k Keeper) IterateConsensus(ctx sdk.Context, cb func(types.AuditConsensus) 
 
 	for ; iter.Valid(); iter.Next() {
 		var consensus types.AuditConsensus
-		if err := json.Unmarshal(iter.Value(), &consensus); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &consensus); err != nil {
 			continue
 		}
 		if cb(consensus) {
@@ -216,7 +216,7 @@ func (k Keeper) IterateConsensus(ctx sdk.Context, cb func(types.AuditConsensus) 
 func (k Keeper) SetConsensus(ctx sdk.Context, consensus types.AuditConsensus) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := consensusKey(consensus.EvidenceId)
-	bz, err := json.Marshal(consensus)
+	bz, err := proto.Marshal(&consensus)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal consensus: %v", err))
 	}
@@ -233,7 +233,7 @@ func (k Keeper) GetConsensus(ctx sdk.Context, evidenceId string) (types.AuditCon
 		return types.AuditConsensus{}, false
 	}
 	var consensus types.AuditConsensus
-	if err := json.Unmarshal(bz, &consensus); err != nil {
+	if err := proto.Unmarshal(bz, &consensus); err != nil {
 		return types.AuditConsensus{}, false
 	}
 	return consensus, true
@@ -286,7 +286,7 @@ func (k Keeper) IterateExpiredEvidence(ctx sdk.Context, currentHeight uint64, cb
 func (k Keeper) SetOracle(ctx sdk.Context, oracle types.Oracle) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := oracleKey(oracle.Id)
-	bz, err := json.Marshal(oracle)
+	bz, err := proto.Marshal(&oracle)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal oracle: %v", err))
 	}
@@ -303,7 +303,7 @@ func (k Keeper) GetOracle(ctx sdk.Context, id string) (types.Oracle, bool) {
 		return types.Oracle{}, false
 	}
 	var oracle types.Oracle
-	if err := json.Unmarshal(bz, &oracle); err != nil {
+	if err := proto.Unmarshal(bz, &oracle); err != nil {
 		return types.Oracle{}, false
 	}
 	return oracle, true
@@ -327,7 +327,7 @@ func (k Keeper) IterateOracles(ctx sdk.Context, cb func(types.Oracle) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var oracle types.Oracle
-		if err := json.Unmarshal(iter.Value(), &oracle); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &oracle); err != nil {
 			continue
 		}
 		if cb(oracle) {

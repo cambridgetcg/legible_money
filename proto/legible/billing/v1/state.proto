@@ -1,0 +1,91 @@
+syntax = "proto3";
+package legible.billing.v1;
+
+option go_package = "github.com/legible-money/legible/x/billing/types";
+
+// Provider represents a registered knowledge API provider.
+message Provider {
+  string address       = 1;  // bech32 address
+  repeated string domains = 2;
+  string stake_amount  = 3;  // bigint as string (ulgm)
+  bool active          = 4;
+  uint64 total_calls   = 5;
+  string total_revenue = 6;  // bigint as string (ulgm)
+  uint64 registered_at = 7;  // block height when registered
+}
+
+// FactPriceBreakdown shows the pricing computation for a single fact.
+message FactPriceBreakdown {
+  string fact_id              = 1;
+  string base_cost            = 2;  // bigint as string (ulgm)
+  string confidence_premium   = 3;  // bigint as string (ulgm)
+  string fundamentality_bonus = 4;  // bigint as string (ulgm)
+  string freshness_discount   = 5;  // bigint as string (ulgm)
+  string total_price          = 6;  // bigint as string (ulgm)
+}
+
+// APIQuote represents a price quote for a knowledge query.
+message APIQuote {
+  uint64 quote_id                    = 1;
+  string provider                    = 2;  // bech32 address
+  string caller                      = 3;  // bech32 address
+  repeated string fact_ids           = 4;
+  repeated FactPriceBreakdown breakdown = 5;
+  string total_price                 = 6;  // bigint as string (ulgm)
+  uint64 valid_until                 = 7;  // block height
+  uint64 created_at                  = 8;  // block height
+  bool executed                      = 9;
+}
+
+// ResearchFundSplit describes the 5-way split of the research share.
+message ResearchFundSplit {
+  string research   = 1;  // bigint as string (ulgm)
+  string foundation = 2;  // bigint as string (ulgm)
+  string community  = 3;  // bigint as string (ulgm)
+  string developers = 4;  // bigint as string (ulgm)
+  string reserve    = 5;  // bigint as string (ulgm)
+}
+
+// KnowledgePoolEntry describes a payment to a fact submitter.
+message KnowledgePoolEntry {
+  string fact_id   = 1;
+  string submitter = 2;  // bech32 address
+  string amount    = 3;  // bigint as string (ulgm)
+  string weight    = 4;  // bigint as string
+}
+
+// PaymentDistribution describes how a payment is split among recipients.
+message PaymentDistribution {
+  string total_payment                    = 1;  // bigint as string (ulgm)
+  string research_share                   = 2;  // bigint as string (ulgm)
+  ResearchFundSplit research_split        = 3;
+  string provider_share                   = 4;  // bigint as string (ulgm)
+  repeated KnowledgePoolEntry knowledge_pool = 5;
+  string protocol_burn                    = 6;  // bigint as string (ulgm)
+  string protocol_treasury                = 7;  // bigint as string (ulgm)
+}
+
+// CallRecord logs an executed API payment.
+message CallRecord {
+  uint64 record_id  = 1;
+  uint64 quote_id   = 2;
+  string caller     = 3;  // bech32 address
+  string provider   = 4;  // bech32 address
+  string total_paid = 5;  // bigint as string (ulgm)
+  uint32 fact_count = 6;
+  uint64 block      = 7;  // block height
+}
+
+// Params holds billing module parameters.
+message Params {
+  string base_cost_per_fact       = 1;  // bigint as string (ulgm)
+  uint64 confidence_threshold     = 2;  // basis points (0-1000000)
+  uint64 confidence_premium_bps   = 3;  // basis points
+  uint64 freshness_window_blocks  = 4;  // blocks
+  uint64 freshness_discount_bps   = 5;  // basis points
+  uint64 quote_validity_blocks    = 6;  // blocks
+  string min_provider_stake       = 7;  // bigint as string (ulgm)
+  uint64 research_share_bps       = 8;  // basis points
+  uint64 research_min_bps         = 9;  // basis points
+  uint64 research_ramp_blocks     = 10; // blocks to reach full research share
+}

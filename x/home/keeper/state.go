@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/home/types"
 )
@@ -15,7 +16,7 @@ import (
 // SetHome stores an agent home.
 func (k Keeper) SetHome(ctx sdk.Context, home types.AgentHome) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(home)
+	bz, err := proto.Marshal(&home)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal agent home: %v", err))
 	}
@@ -32,7 +33,7 @@ func (k Keeper) GetHome(ctx sdk.Context, homeId string) (types.AgentHome, bool) 
 		return types.AgentHome{}, false
 	}
 	var home types.AgentHome
-	if err := json.Unmarshal(bz, &home); err != nil {
+	if err := proto.Unmarshal(bz, &home); err != nil {
 		return types.AgentHome{}, false
 	}
 	return home, true
@@ -57,7 +58,7 @@ func (k Keeper) IterateHomes(ctx sdk.Context, cb func(types.AgentHome) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var home types.AgentHome
-		if err := json.Unmarshal(iter.Value(), &home); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &home); err != nil {
 			continue
 		}
 		if cb(home) {
@@ -103,7 +104,7 @@ func (k Keeper) GetHomesByOwner(ctx sdk.Context, ownerAddr string) []string {
 // SetSession stores a session.
 func (k Keeper) SetSession(ctx sdk.Context, session types.ActiveSession) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(session)
+	bz, err := proto.Marshal(&session)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal session: %v", err))
 	}
@@ -120,7 +121,7 @@ func (k Keeper) GetSession(ctx sdk.Context, homeId, sessionId string) (types.Act
 		return types.ActiveSession{}, false
 	}
 	var session types.ActiveSession
-	if err := json.Unmarshal(bz, &session); err != nil {
+	if err := proto.Unmarshal(bz, &session); err != nil {
 		return types.ActiveSession{}, false
 	}
 	return session, true
@@ -146,7 +147,7 @@ func (k Keeper) IterateSessions(ctx sdk.Context, homeId string, cb func(types.Ac
 
 	for ; iter.Valid(); iter.Next() {
 		var session types.ActiveSession
-		if err := json.Unmarshal(iter.Value(), &session); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &session); err != nil {
 			continue
 		}
 		if cb(session) {
@@ -170,7 +171,7 @@ func (k Keeper) CountSessions(ctx sdk.Context, homeId string) uint32 {
 // SetKeyRegistration stores a key registration.
 func (k Keeper) SetKeyRegistration(ctx sdk.Context, homeId string, reg types.KeyRegistration) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(reg)
+	bz, err := proto.Marshal(&reg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal key registration: %v", err))
 	}
@@ -187,7 +188,7 @@ func (k Keeper) GetKeyRegistration(ctx sdk.Context, homeId, keyHash string) (typ
 		return types.KeyRegistration{}, false
 	}
 	var reg types.KeyRegistration
-	if err := json.Unmarshal(bz, &reg); err != nil {
+	if err := proto.Unmarshal(bz, &reg); err != nil {
 		return types.KeyRegistration{}, false
 	}
 	return reg, true
@@ -205,7 +206,7 @@ func (k Keeper) IterateKeyRegistrations(ctx sdk.Context, homeId string, cb func(
 
 	for ; iter.Valid(); iter.Next() {
 		var reg types.KeyRegistration
-		if err := json.Unmarshal(iter.Value(), &reg); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &reg); err != nil {
 			continue
 		}
 		if cb(reg) {
@@ -231,7 +232,7 @@ func (k Keeper) CountKeyRegistrations(ctx sdk.Context, homeId string) uint32 {
 // SetAlert stores an alert.
 func (k Keeper) SetAlert(ctx sdk.Context, alert types.Alert) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(alert)
+	bz, err := proto.Marshal(&alert)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal alert: %v", err))
 	}
@@ -248,7 +249,7 @@ func (k Keeper) GetAlert(ctx sdk.Context, homeId, alertId string) (types.Alert, 
 		return types.Alert{}, false
 	}
 	var alert types.Alert
-	if err := json.Unmarshal(bz, &alert); err != nil {
+	if err := proto.Unmarshal(bz, &alert); err != nil {
 		return types.Alert{}, false
 	}
 	return alert, true
@@ -274,7 +275,7 @@ func (k Keeper) IterateAlerts(ctx sdk.Context, homeId string, cb func(types.Aler
 
 	for ; iter.Valid(); iter.Next() {
 		var alert types.Alert
-		if err := json.Unmarshal(iter.Value(), &alert); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &alert); err != nil {
 			continue
 		}
 		if cb(alert) {
@@ -300,7 +301,7 @@ func (k Keeper) CountPendingAlerts(ctx sdk.Context, homeId string) uint32 {
 // SetSpendingLimit stores a spending limit.
 func (k Keeper) SetSpendingLimit(ctx sdk.Context, homeId string, limit types.SpendingLimit) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(limit)
+	bz, err := proto.Marshal(&limit)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal spending limit: %v", err))
 	}
@@ -317,7 +318,7 @@ func (k Keeper) GetSpendingLimit(ctx sdk.Context, homeId, keyType string) (types
 		return types.SpendingLimit{}, false
 	}
 	var limit types.SpendingLimit
-	if err := json.Unmarshal(bz, &limit); err != nil {
+	if err := proto.Unmarshal(bz, &limit); err != nil {
 		return types.SpendingLimit{}, false
 	}
 	return limit, true

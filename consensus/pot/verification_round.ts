@@ -15,6 +15,7 @@ import {
   sha512_256Hex,
   domainHash,
   HASH_DOMAINS,
+  hashesEqual,
 } from "../../core/crypto/hashing.js";
 import {
   verifyDomainSeparated,
@@ -423,7 +424,8 @@ export function addReveal(
     domainHash(HASH_DOMAINS.COMMITMENT, commitData).toString(),
   );
 
-  if (expectedCommitment !== commitment.commitment) {
+  // ZD-C02 FIX: Use constant-time comparison to prevent timing side-channels
+  if (!hashesEqual(expectedCommitment, commitment.commitment)) {
     return {
       round,
       accepted: false,

@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // RegisterCodec registers the tree module's types with the amino codec.
@@ -38,7 +39,36 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the tree module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgCreateProject{},
+		&MsgProposeProject{},
+		&MsgStartDevelopment{},
+		&MsgCompleteProject{},
+		&MsgPauseProject{},
+		&MsgResumeProject{},
+		&MsgAbandonProject{},
+		&MsgSpawnChildProject{},
+		&MsgAssignTask{},
+		&MsgAddTask{},
+		&MsgStartWork{},
+		&MsgSubmitDeliverable{},
+		&MsgApproveDeliverable{},
+		&MsgRejectDeliverable{},
+		&MsgReopenTask{},
+		&MsgDeployService{},
+		&MsgCallService{},
+		&MsgSubscribeService{},
+		&MsgPauseService{},
+		&MsgResumeService{},
+		&MsgRetireService{},
+		&MsgBeginSeeding{},
+		&MsgDetectOpportunity{},
+		&MsgClaimOpportunity{},
+		&MsgAddContributor{},
+		&MsgApplyToProject{},
+		&MsgReviewApplication{},
+		&MsgSetAvailability{},
+	)
 }
 
 var (

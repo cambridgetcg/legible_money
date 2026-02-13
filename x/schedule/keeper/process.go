@@ -105,7 +105,9 @@ func (k Keeper) ProcessDueSchedules(ctx sdk.Context) int {
 		}
 
 		// Schedule next execution
-		process.NextExecuteAt = calculateNextPeriodicExecution(process.Condition, currentHeight)
+		if process.Condition != nil {
+			process.NextExecuteAt = calculateNextPeriodicExecution(*process.Condition, currentHeight)
+		}
 		k.SetProcess(ctx, process)
 		executed++
 	}

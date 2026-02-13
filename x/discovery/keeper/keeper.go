@@ -66,22 +66,26 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	}
 	for _, profile := range genState.Profiles {
-		k.SetProfile(ctx, profile)
+		k.SetProfile(ctx, *profile)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	var profiles []types.AgentProfile
+	params := k.GetParams(ctx)
+	var profiles []*types.AgentProfile
 	k.IterateProfiles(ctx, func(p types.AgentProfile) bool {
-		profiles = append(profiles, p)
+		cp := p // copy to avoid aliasing
+		profiles = append(profiles, &cp)
 		return false
 	})
 
 	return &types.GenesisState{
-		Params:   k.GetParams(ctx),
+		Params:   &params,
 		Profiles: profiles,
 	}
 }

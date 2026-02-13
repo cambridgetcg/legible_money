@@ -7,6 +7,7 @@
 package types
 
 import (
+	_ "github.com/cosmos/cosmos-sdk/types/msgservice"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -457,7 +458,7 @@ var File_legible_knowledge_v1_counter_fact_proto protoreflect.FileDescriptor
 
 const file_legible_knowledge_v1_counter_fact_proto_rawDesc = "" +
 	"\n" +
-	"'legible/knowledge/v1/counter_fact.proto\x12\x14legible.knowledge.v1\"\x9f\x05\n" +
+	"'legible/knowledge/v1/counter_fact.proto\x12\x14legible.knowledge.v1\x1a\x17cosmos/msg/v1/msg.proto\"\x9f\x05\n" +
 	"\vCounterFact\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12$\n" +
 	"\x0etarget_fact_id\x18\x02 \x01(\tR\ftargetFactId\x12&\n" +
@@ -488,7 +489,7 @@ const file_legible_knowledge_v1_counter_fact_proto_rawDesc = "" +
 	"\x12falsity_confidence\x18\x03 \x01(\x04R\x11falsityConfidence\x12%\n" +
 	"\x0enet_confidence\x18\x04 \x01(\x03R\rnetConfidence\x12,\n" +
 	"\x12counter_fact_count\x18\x05 \x01(\rR\x10counterFactCount\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\"\xad\x02\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\"\xbd\x02\n" +
 	"\x16MsgSubmitContradiction\x12$\n" +
 	"\x0etarget_fact_id\x18\x01 \x01(\tR\ftargetFactId\x12#\n" +
 	"\rcounter_claim\x18\x02 \x01(\tR\fcounterClaim\x12\x1c\n" +
@@ -498,7 +499,7 @@ const file_legible_knowledge_v1_counter_fact_proto_rawDesc = "" +
 	"\fevidence_ids\x18\x06 \x03(\tR\vevidenceIds\x12\x1d\n" +
 	"\n" +
 	"logic_zone\x18\a \x01(\tR\tlogicZone\x12-\n" +
-	"\x12incompleteness_ack\x18\b \x01(\bR\x11incompletenessAck\"c\n" +
+	"\x12incompleteness_ack\x18\b \x01(\bR\x11incompletenessAck:\x0e\x82\xe7\xb0*\tsubmitter\"c\n" +
 	"\x1eMsgSubmitContradictionResponse\x12&\n" +
 	"\x0fcounter_fact_id\x18\x01 \x01(\tR\rcounterFactId\x12\x19\n" +
 	"\bround_id\x18\x02 \x01(\tR\aroundIdB4Z2github.com/legible-money/legible/x/knowledge/typesb\x06proto3"

@@ -19,7 +19,9 @@ const (
 	contradictionHighConf = 700_000
 
 	// maxBFSDepth for circular reference detection.
-	maxBFSDepth = 5
+	// ZD-K01 FIX: Increased from 5 to 10 — shallow depth allowed attackers
+	// to create cycles at depth 6+ that evaded detection.
+	maxBFSDepth = 10
 
 	// Domain coherence penalties (AH-3: anti-hallucination)
 	// Applied when references come from domains unrelated to the claim's domain.

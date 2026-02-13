@@ -3,7 +3,6 @@ package keeper
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
@@ -12,6 +11,7 @@ import (
 	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/staking/types"
 )
@@ -72,7 +72,7 @@ func prefixEndBytes(prefix []byte) []byte {
 // SetValidator stores a validator
 func (k Keeper) SetValidator(ctx sdk.Context, validator types.LegibleValidator) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(validator)
+	bz, err := proto.Marshal(&validator)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (k Keeper) GetValidator(ctx sdk.Context, operatorAddr string) (types.Legibl
 	}
 
 	var validator types.LegibleValidator
-	if err := json.Unmarshal(bz, &validator); err != nil {
+	if err := proto.Unmarshal(bz, &validator); err != nil {
 		return types.LegibleValidator{}, false
 	}
 
@@ -148,7 +148,7 @@ func (k Keeper) IterateValidators(ctx sdk.Context, cb func(types.LegibleValidato
 
 	for ; iterator.Valid(); iterator.Next() {
 		var validator types.LegibleValidator
-		if err := json.Unmarshal(iterator.Value(), &validator); err != nil {
+		if err := proto.Unmarshal(iterator.Value(), &validator); err != nil {
 			continue
 		}
 		if cb(validator) {
@@ -188,7 +188,7 @@ func (k Keeper) CountBlockProducers(ctx sdk.Context) uint32 {
 // SetDelegation stores a delegation
 func (k Keeper) SetDelegation(ctx sdk.Context, delegation types.Delegation) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(delegation)
+	bz, err := proto.Marshal(&delegation)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (k Keeper) GetDelegation(ctx sdk.Context, delegatorAddr, validatorAddr stri
 	}
 
 	var delegation types.Delegation
-	if err := json.Unmarshal(bz, &delegation); err != nil {
+	if err := proto.Unmarshal(bz, &delegation); err != nil {
 		return types.Delegation{}, false
 	}
 
@@ -229,7 +229,7 @@ func (k Keeper) GetDelegationsForValidator(ctx sdk.Context, validatorAddr string
 	var delegations []types.Delegation
 	for ; iterator.Valid(); iterator.Next() {
 		var delegation types.Delegation
-		if err := json.Unmarshal(iterator.Value(), &delegation); err != nil {
+		if err := proto.Unmarshal(iterator.Value(), &delegation); err != nil {
 			continue
 		}
 		delegations = append(delegations, delegation)
@@ -250,7 +250,7 @@ func (k Keeper) DeleteDelegation(ctx sdk.Context, delegatorAddr, validatorAddr s
 // SetUnbonding stores an unbonding entry
 func (k Keeper) SetUnbonding(ctx sdk.Context, unbonding types.UnbondingEntry) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(unbonding)
+	bz, err := proto.Marshal(&unbonding)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func (k Keeper) GetUnbonding(ctx sdk.Context, id string) (types.UnbondingEntry, 
 	}
 
 	var unbonding types.UnbondingEntry
-	if err := json.Unmarshal(bz, &unbonding); err != nil {
+	if err := proto.Unmarshal(bz, &unbonding); err != nil {
 		return types.UnbondingEntry{}, false
 	}
 
@@ -290,7 +290,7 @@ func (k Keeper) GetMatureUnbondings(ctx sdk.Context, currentHeight uint64) []typ
 	var mature []types.UnbondingEntry
 	for ; iterator.Valid(); iterator.Next() {
 		var unbonding types.UnbondingEntry
-		if err := json.Unmarshal(iterator.Value(), &unbonding); err != nil {
+		if err := proto.Unmarshal(iterator.Value(), &unbonding); err != nil {
 			continue
 		}
 		if unbonding.Status == "pending" && unbonding.CompletesAtHeight <= currentHeight {
@@ -332,7 +332,7 @@ func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(types.UnbondingEntry)
 
 	for ; iterator.Valid(); iterator.Next() {
 		var unbonding types.UnbondingEntry
-		if err := json.Unmarshal(iterator.Value(), &unbonding); err != nil {
+		if err := proto.Unmarshal(iterator.Value(), &unbonding); err != nil {
 			continue
 		}
 		if cb(unbonding) {
@@ -392,7 +392,7 @@ func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bo
 
 	for ; iterator.Valid(); iterator.Next() {
 		var delegation types.Delegation
-		if err := json.Unmarshal(iterator.Value(), &delegation); err != nil {
+		if err := proto.Unmarshal(iterator.Value(), &delegation); err != nil {
 			continue
 		}
 		if cb(delegation) {
@@ -406,7 +406,7 @@ func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bo
 // SetTierConfig stores a tier configuration
 func (k Keeper) SetTierConfig(ctx sdk.Context, config types.TierConfig) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(config)
+	bz, err := proto.Marshal(&config)
 	if err != nil {
 		return err
 	}
@@ -426,7 +426,7 @@ func (k Keeper) GetTierConfig(ctx sdk.Context, tier types.ValidatorTier) (types.
 	}
 
 	var config types.TierConfig
-	if err := json.Unmarshal(bz, &config); err != nil {
+	if err := proto.Unmarshal(bz, &config); err != nil {
 		return types.TierConfig{}, false
 	}
 
@@ -637,7 +637,7 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 // SetParams stores module parameters
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		return err
 	}
@@ -653,7 +653,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params

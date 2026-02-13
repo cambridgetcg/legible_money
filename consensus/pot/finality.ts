@@ -25,8 +25,9 @@ export const FINALITY_PARAMS = {
   CHECKPOINT_INTERVAL: 1111, // Blocks between checkpoints
   CHECKPOINT_SIGNATURES_REQUIRED: 0.67, // Stake needed to sign checkpoint (BFT 2/3)
 
-  // Fork choice
-  MAX_REORG_DEPTH: 111, // Maximum reorg depth allowed
+  // Fork choice — MAX_REORG_DEPTH must equal CONFIRMATION_DEPTH to ensure
+  // finalized blocks cannot be reorged (PP-SEC: finality/reorg contradiction fix)
+  MAX_REORG_DEPTH: 19, // Maximum reorg depth allowed (= CONFIRMATION_DEPTH)
   FORK_CHOICE_RULE: "heaviest_stake", // How to choose between forks
 };
 
@@ -714,4 +715,82 @@ export function createCheckpointWithAggregation(
   );
 
   return checkpoint;
+}
+
+// ============ ZD-S03 FIX: Weak Subjectivity Checkpointing ============
+
+/**
+ * Weak subjectivity checkpoint — a trusted checkpoint distributed out-of-band
+ * that syncing nodes MUST verify against to prevent long-range attacks.
+ *
+ * Without this, an attacker with old validator keys (from validators who have
+ * since unbonded) could construct a valid alternative chain from genesis.
+ */
+export interface WeakSubjectivityCheckpoint {
+  /** Block number of the trusted checkpoint */
+  blockNumber: bigint;
+  /** Block hash at that height */
+  blockHash: string;
+  /** State root at that height */
+  stateRoot: string;
+  /** Knowledge root at that height */
+  knowledgeRoot: string;
+  /** When this checkpoint was published (unix timestamp) */
+  publishedAt: number;
+  /** Source identifier (e.g., "legible.money/ws-checkpoint") */
+  source: string;
+}
+
+/**
+ * Weak subjectivity period — the maximum age (in blocks) a weak subjectivity
+ * checkpoint can be before a syncing node should refuse to sync without a
+ * more recent one.
+ *
+ * Calculated as: unbonding_period / block_time.
+ * With 7-day unbonding and 2.521s blocks: ~240,000 blocks.
+ * After this period, old validators could have fully unbonded and their
+ * keys could be compromised without consequence.
+ */
+export const WEAK_SUBJECTIVITY_PERIOD = 240_000n; // ~7 days in blocks
+
+/**
+ * Verify that a node's chain is consistent with a weak subjectivity checkpoint.
+ * Should be called during initial sync and periodically during operation.
+ */
+export function verifyWeakSubjectivity(
+  localCheckpoint: Checkpoint | undefined,
+  wsCheckpoint: WeakSubjectivityCheckpoint,
+  currentBlock: bigint,
+): { valid: boolean; reason?: string } {
+  // If no local checkpoint at the WS height, cannot verify yet
+  if (!localCheckpoint) {
+    return { valid: true }; // Will verify when we reach that height
+  }
+
+  // Verify block hash matches
+  if (localCheckpoint.blockHash !== wsCheckpoint.blockHash) {
+    return {
+      valid: false,
+      reason: `Weak subjectivity violation: local block hash ${localCheckpoint.blockHash} != WS checkpoint ${wsCheckpoint.blockHash} at height ${wsCheckpoint.blockNumber}. Node may be on a forked chain.`,
+    };
+  }
+
+  // Verify state root matches
+  if (localCheckpoint.stateRoot !== wsCheckpoint.stateRoot) {
+    return {
+      valid: false,
+      reason: `Weak subjectivity violation: state root mismatch at height ${wsCheckpoint.blockNumber}`,
+    };
+  }
+
+  // Check if the WS checkpoint is too old
+  const age = currentBlock - wsCheckpoint.blockNumber;
+  if (age > WEAK_SUBJECTIVITY_PERIOD) {
+    return {
+      valid: false,
+      reason: `Weak subjectivity checkpoint is stale: age ${age} blocks > period ${WEAK_SUBJECTIVITY_PERIOD} blocks. Obtain a fresh WS checkpoint from a trusted source.`,
+    };
+  }
+
+  return { valid: true };
 }

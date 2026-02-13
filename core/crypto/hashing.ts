@@ -36,13 +36,19 @@ export function sha512Hex(data: Uint8Array | string): Hash {
 }
 
 /**
- * SHA-512/256 (truncated to 256 bits)
- * Used for: addresses, short identifiers
+ * @deprecated Misleading name: this actually computes SHA-256, NOT SHA-512/256.
+ * Use `sha256Hash` or `lgmHash` directly instead.
+ * Kept as an alias for backward compatibility only.
  */
 export function sha512_256(data: Uint8Array | string): HashBytes {
   return sha256Hash(data);
 }
 
+/**
+ * @deprecated Misleading name: this actually computes SHA-256, NOT SHA-512/256.
+ * Use `sha256Hex` or `lgmHashHex` directly instead.
+ * Kept as an alias for backward compatibility only.
+ */
 export function sha512_256Hex(data: Uint8Array | string): Hash {
   return bytesToHex(sha512_256(data));
 }

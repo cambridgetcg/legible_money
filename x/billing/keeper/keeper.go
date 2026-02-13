@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/billing/types"
 )
@@ -73,7 +73,7 @@ func prefixEndBytes(prefix []byte) []byte {
 // SetParams sets module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -88,7 +88,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -98,17 +98,24 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
-	k.SetParams(ctx, genState.Params)
+	if genState.Params != nil {
+		k.SetParams(ctx, *genState.Params)
+	}
 	for _, provider := range genState.Providers {
-		k.SetProvider(ctx, provider)
+		k.SetProvider(ctx, *provider)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	params := k.GetParams(ctx)
 	providers := k.GetAllProviders(ctx)
+	providerPtrs := make([]*types.Provider, len(providers))
+	for i := range providers {
+		providerPtrs[i] = &providers[i]
+	}
 	return &types.GenesisState{
-		Params:    k.GetParams(ctx),
-		Providers: providers,
+		Params:    &params,
+		Providers: providerPtrs,
 	}
 }

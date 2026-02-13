@@ -40,7 +40,8 @@ type ExecutionContext struct {
 	Coinbase        []byte // Block proposer
 	PrevRandao      *big.Int
 	BaseFee         *big.Int
-	Capabilities    *SessionCapabilities // nil = full permissions (no session restriction)
+	Capabilities *SessionCapabilities // nil = deny all agent opcodes (C-1 secure default)
+	InHostCall   bool                // H-1: reentrancy guard — true during host function execution
 }
 
 // ExecutionResult is returned after bytecode execution completes.
@@ -100,6 +101,7 @@ const (
 	ErrCodeInsufficientBalance
 	ErrCodeReturnDataOutOfBounds
 	ErrCodeCallDepthExceeded
+	ErrCodeStorageLimitExceeded
 	ErrCodeExecutionFailed
 )
 
@@ -113,6 +115,12 @@ type StateDB interface {
 	GetCodeSize(addr []byte) int
 	GetCodeHash(addr []byte) []byte
 	Exists(addr []byte) bool
+}
+
+// StorageCounter is an optional interface for StateDB implementations that
+// can report per-contract storage slot counts (for MaxStorageSlotsPerContract enforcement).
+type StorageCounter interface {
+	GetStorageSlotCount(contract []byte) uint64
 }
 
 // HostFunctions provides hooks for agent-specific opcodes (0xB0-0xEF, 0xF6-0xF9).
@@ -200,4 +208,14 @@ type ScheduleKeeper interface {
 	MaxSchedulesAllowed() uint64
 }
 
-const MaxCallDepth = 1024
+const (
+	// MaxCallDepth limits nested contract calls to prevent stack overflow DoS.
+	MaxCallDepth = 1024
+
+	// MaxStorageSlotsPerContract limits per-contract storage slots to prevent
+	// unbounded state growth. 16K slots × 32 bytes = 512 KB per contract.
+	MaxStorageSlotsPerContract = 16384
+
+	// MaxBytecodeSize limits deployed contract code (24 KB, matching EVM's EIP-170).
+	MaxBytecodeSize = 24576
+)

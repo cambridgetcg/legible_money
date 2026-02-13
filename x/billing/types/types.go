@@ -9,128 +9,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// -----------------------------------------------------------------------
-// Core domain types
-// -----------------------------------------------------------------------
-
-// Provider represents a registered knowledge API provider.
-type Provider struct {
-	Address      string   `json:"address"`
-	Domains      []string `json:"domains"`
-	StakeAmount  string   `json:"stake_amount"`
-	Active       bool     `json:"active"`
-	TotalCalls   uint64   `json:"total_calls"`
-	TotalRevenue string   `json:"total_revenue"`
-	RegisteredAt uint64   `json:"registered_at"`
-}
-
-func (p *Provider) Reset()        {}
-func (p *Provider) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Provider) ProtoMessage()  {}
-
-// FactPriceBreakdown shows the pricing computation for a single fact.
-type FactPriceBreakdown struct {
-	FactId              string `json:"fact_id"`
-	BaseCost            string `json:"base_cost"`
-	ConfidencePremium   string `json:"confidence_premium"`
-	FundamentalityBonus string `json:"fundamentality_bonus"`
-	FreshnessDiscount   string `json:"freshness_discount"`
-	TotalPrice          string `json:"total_price"`
-}
-
-func (f *FactPriceBreakdown) Reset()        {}
-func (f *FactPriceBreakdown) String() string { return fmt.Sprintf("%+v", *f) }
-func (f *FactPriceBreakdown) ProtoMessage()  {}
-
-// APIQuote represents a price quote for a knowledge query.
-type APIQuote struct {
-	QuoteId    uint64               `json:"quote_id"`
-	Provider   string               `json:"provider"`
-	Caller     string               `json:"caller"`
-	FactIds    []string             `json:"fact_ids"`
-	Breakdown  []FactPriceBreakdown `json:"breakdown"`
-	TotalPrice string               `json:"total_price"`
-	ValidUntil uint64               `json:"valid_until"`
-	CreatedAt  uint64               `json:"created_at"`
-	Executed   bool                 `json:"executed"`
-}
-
-func (q *APIQuote) Reset()        {}
-func (q *APIQuote) String() string { return fmt.Sprintf("%+v", *q) }
-func (q *APIQuote) ProtoMessage()  {}
-
-// PaymentDistribution describes how a payment is split among recipients.
-type PaymentDistribution struct {
-	TotalPayment     string               `json:"total_payment"`
-	ResearchShare    string               `json:"research_share"`
-	ResearchSplit    ResearchFundSplit     `json:"research_split"`
-	ProviderShare    string               `json:"provider_share"`
-	KnowledgePool    []KnowledgePoolEntry `json:"knowledge_pool"`
-	ProtocolBurn     string               `json:"protocol_burn"`
-	ProtocolTreasury string               `json:"protocol_treasury"`
-}
-
-func (d *PaymentDistribution) Reset()        {}
-func (d *PaymentDistribution) String() string { return fmt.Sprintf("%+v", *d) }
-func (d *PaymentDistribution) ProtoMessage()  {}
-
-// ResearchFundSplit describes the 5-way split of the research share.
-type ResearchFundSplit struct {
-	Research   string `json:"research"`
-	Foundation string `json:"foundation"`
-	Community  string `json:"community"`
-	Developers string `json:"developers"`
-	Reserve    string `json:"reserve"`
-}
-
-func (r *ResearchFundSplit) Reset()        {}
-func (r *ResearchFundSplit) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *ResearchFundSplit) ProtoMessage()  {}
-
-// KnowledgePoolEntry describes a payment to a fact submitter.
-type KnowledgePoolEntry struct {
-	FactId    string `json:"fact_id"`
-	Submitter string `json:"submitter"`
-	Amount    string `json:"amount"`
-	Weight    string `json:"weight"`
-}
-
-func (k *KnowledgePoolEntry) Reset()        {}
-func (k *KnowledgePoolEntry) String() string { return fmt.Sprintf("%+v", *k) }
-func (k *KnowledgePoolEntry) ProtoMessage()  {}
-
-// CallRecord logs an executed API payment.
-type CallRecord struct {
-	RecordId uint64 `json:"record_id"`
-	QuoteId  uint64 `json:"quote_id"`
-	Caller   string `json:"caller"`
-	Provider string `json:"provider"`
-	TotalPaid string `json:"total_paid"`
-	FactCount uint32 `json:"fact_count"`
-	Block    uint64 `json:"block"`
-}
-
-func (c *CallRecord) Reset()        {}
-func (c *CallRecord) String() string { return fmt.Sprintf("%+v", *c) }
-func (c *CallRecord) ProtoMessage()  {}
-
-// Params holds module parameters.
-type Params struct {
-	BaseCostPerFact       string `json:"base_cost_per_fact"`
-	ConfidenceThreshold   uint64 `json:"confidence_threshold"`
-	ConfidencePremiumBps  uint64 `json:"confidence_premium_bps"`
-	FreshnessWindowBlocks uint64 `json:"freshness_window_blocks"`
-	FreshnessDiscountBps  uint64 `json:"freshness_discount_bps"`
-	QuoteValidityBlocks   uint64 `json:"quote_validity_blocks"`
-	MinProviderStake      string `json:"min_provider_stake"`
-	ResearchShareBps      uint64 `json:"research_share_bps"`
-	ResearchMinBps        uint64 `json:"research_min_bps"`
-	ResearchRampBlocks    uint64 `json:"research_ramp_blocks"`
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
+// --- Params Validation ---
+// Methods below attach to protobuf-generated types from state.pb.go and genesis.pb.go.
 
 // Validate performs parameter validation.
 func (p Params) Validate() error {
@@ -182,32 +62,23 @@ func DefaultParams() Params {
 	}
 }
 
-// -----------------------------------------------------------------------
-// Genesis state
-// -----------------------------------------------------------------------
-
-// GenesisState defines the billing module genesis state.
-type GenesisState struct {
-	Params    Params     `json:"params"`
-	Providers []Provider `json:"providers"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
+// --- Genesis state validation ---
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:    DefaultParams(),
-		Providers: []Provider{},
+		Params:    &p,
+		Providers: []*Provider{},
 	}
 }
 
 // Validate validates the genesis state.
 func (gs GenesisState) Validate() error {
-	if err := gs.Params.Validate(); err != nil {
-		return fmt.Errorf("invalid params: %w", err)
+	if gs.Params != nil {
+		if err := gs.Params.Validate(); err != nil {
+			return fmt.Errorf("invalid params: %w", err)
+		}
 	}
 	seen := make(map[string]bool)
 	for _, p := range gs.Providers {
@@ -220,7 +91,7 @@ func (gs GenesisState) Validate() error {
 }
 
 // -----------------------------------------------------------------------
-// Message types
+// Message types (not in proto-generated files)
 // -----------------------------------------------------------------------
 
 // MsgRegisterProvider registers a new knowledge API provider.

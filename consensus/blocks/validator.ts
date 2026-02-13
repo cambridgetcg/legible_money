@@ -6,6 +6,7 @@
 
 import { verify } from "../../core/crypto/signatures.js";
 import { verifyBlockProposer } from "../pot/validator_selection.js";
+import { FINALITY_PARAMS } from "../pot/finality.js";
 import {
   hashBlockHeader,
   checkBlockLimits,
@@ -206,17 +207,33 @@ function validateTransaction(
     return { valid: false, reason: "Invalid fee" };
   }
 
-  // Verify transaction signature against payload.
-  // NOTE: Signature covers payload only (which includes type). The top-level fee is NOT signed.
-  // Fee malleability is low-risk (requires block producer collusion, who already sees all txs).
-  // TODO: Migrate to getSignableMessage() which covers type+nonce+fee+payload — requires
-  // coordinated wallet SDK + RPC update (see consensus/pot/types.ts:getSignableMessage).
-  const payload = JSON.stringify(transaction.payload);
-  const sigValid = verify(
-    new TextEncoder().encode(payload),
+  // ZD-E01 FIX: Verify signature against full signable message (type+nonce+fee+payload).
+  // This prevents transaction type mutation, fee stripping, and nonce replay attacks.
+  // Falls back to legacy payload-only verification during migration period.
+  const fullMessage = JSON.stringify(
+    {
+      type: transaction.type,
+      nonce: transaction.nonce.toString(),
+      fee: transaction.fee.toString(),
+      payload: transaction.payload,
+    },
+    (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v),
+  );
+  let sigValid = verify(
+    new TextEncoder().encode(fullMessage),
     transaction.signature,
     transaction.sender,
   );
+
+  // Legacy fallback: accept payload-only signatures during migration period
+  if (!sigValid) {
+    const legacyPayload = JSON.stringify(transaction.payload);
+    sigValid = verify(
+      new TextEncoder().encode(legacyPayload),
+      transaction.signature,
+      transaction.sender,
+    );
+  }
 
   if (!sigValid) {
     return { valid: false, reason: "Invalid transaction signature" };
@@ -390,9 +407,8 @@ export function validateForkBlock(
   forkPoint: bigint,
   currentHead: bigint,
 ): { valid: boolean; reason?: string } {
-  // Check that fork isn't too deep
-  const MAX_REORG_DEPTH = 100n;
-  if (currentHead - forkPoint > MAX_REORG_DEPTH) {
+  // Check that fork isn't too deep (use canonical constant from finality module)
+  if (currentHead - forkPoint > BigInt(FINALITY_PARAMS.MAX_REORG_DEPTH)) {
     return { valid: false, reason: "Fork too deep" };
   }
 

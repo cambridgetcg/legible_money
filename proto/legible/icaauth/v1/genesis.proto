@@ -1,0 +1,9 @@
+syntax = "proto3";
+package legible.icaauth.v1;
+option go_package = "github.com/legible-money/legible/x/icaauth/types";
+import "legible/icaauth/v1/state.proto";
+
+message GenesisState {
+  Params params = 1;
+  repeated InterchainAccountRecord records = 2;
+}

@@ -23,6 +23,9 @@
 import type { DID } from "../identity/did.js";
 import type { Confidence } from "../../knowledge/types.js";
 import type { SelfInvokingContract } from "../../contracts/types.js";
+import type { HomeMaturity, HomePatina, LongevityBonus } from "./aging.js";
+import type { HomeVoice } from "./voice.js";
+import type { Neighborhood } from "./neighborhood.js";
 
 // ============ Core Home Types ============
 
@@ -59,6 +62,21 @@ export interface AgentHome extends SelfInvokingContract {
 
   /** Home metadata */
   metadata: HomeMetadata;
+
+  /** Home maturity level (Fresh → Settled → Established → Venerable → Ancient) */
+  maturity?: HomeMaturity;
+
+  /** Accumulated character from experiences */
+  patina?: HomePatina;
+
+  /** Longevity bonus (reward multiplier + capability unlocks) */
+  longevity?: LongevityBonus;
+
+  /** Voice system (inter-Home messaging, inbox, visitor log) */
+  voice?: HomeVoice;
+
+  /** Neighborhoods this Home belongs to */
+  neighborhoods?: Neighborhood[];
 }
 
 export type HomeStatus =
@@ -567,6 +585,33 @@ export interface AccessControl {
 
   /** Security settings */
   security: SecuritySettings;
+
+  /** Pending multi-sig approvals (M-1) */
+  pendingApprovals: PendingApproval[];
+}
+
+/** M-1: A pending operation awaiting multi-sig approval */
+export interface PendingApproval {
+  /** Unique ID for this approval */
+  approvalId: string;
+  /** What kind of operation */
+  operationType: "transfer" | "stake" | "configure" | "recovery";
+  /** Amount involved (if financial) */
+  amount: bigint;
+  /** Target address/DID */
+  target: string;
+  /** Who requested it */
+  requestedBy: string;
+  /** When it was requested */
+  requestedAt: number;
+  /** Expiry (auto-cancel if not approved in time) */
+  expiresAt: number;
+  /** Key hashes that have approved */
+  approvals: string[];
+  /** Number of approvals required */
+  requiredApprovals: number;
+  /** Additional operation data */
+  data?: string;
 }
 
 export interface KeyRegistration {
@@ -737,4 +782,8 @@ export type HomeErrorCode =
   | "DEFENSE_FAILED"
   | "RECOVERY_IN_PROGRESS"
   | "INVALID_CONFIGURATION"
-  | "MEMORY_CORRUPTED";
+  | "MEMORY_CORRUPTED"
+  | "STATE_CORRUPTED"
+  | "APPROVAL_NOT_FOUND"
+  | "APPROVAL_EXPIRED"
+  | "ALREADY_APPROVED";

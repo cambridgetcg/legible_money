@@ -293,12 +293,14 @@ export function executeTransaction(
     let bootstrapClaimed = 0n;
 
     // Auto-claim bootstrap fund on first transaction (nonce === 0)
+    // ZD-S02 FIX: System tx detection uses _systemInternal flag
     const isSystemTx =
-      tx.sender === "system" ||
-      (tx.fee === 0n &&
-        ["add_fact", "verification_reward", "slash_validator"].includes(
-          tx.type,
-        ));
+      (tx as any)._systemInternal === true &&
+      (tx.sender === "system" ||
+        (tx.fee === 0n &&
+          ["add_fact", "verification_reward", "slash_validator"].includes(
+            tx.type,
+          )));
 
     if (!isSystemTx) {
       const senderDid = resolveSenderDid(tx);
@@ -4648,8 +4650,12 @@ export function applyVerificationResult(
       const claim = state.getClaim(result.claimId);
       if (claim && claim.submitter && state.accountExists(claim.submitter)) {
         // GAP-006 FIX: Handle rejected claim - slash portion of stake
-        const slashRate = params.invalidClaimSlash; // 22% slash for invalid claims
-        const slashAmount = BigInt(Math.floor(Number(claim.stake) * slashRate));
+        // ZD-S01 FIX: Use BPS-based BigInt arithmetic to prevent Number() overflow
+        // invalidClaimSlash is 0.22 (22%) → 220000 BPS
+        const slashRateBps = BigInt(
+          Math.round(params.invalidClaimSlash * 1_000_000),
+        );
+        const slashAmount = (claim.stake * slashRateBps) / 1_000_000n;
         // Unstake the full amount first (moves from stakedBalance to balance)
         if (claim.stake > 0n) {
           state.unstake(claim.submitter, claim.stake);
@@ -4824,12 +4830,16 @@ function validateTransaction(
   state: StateManager,
   tx: Transaction,
 ): { valid: boolean; reason?: string } {
-  // System transactions (created by consensus layer) bypass sender validation
-  // They have sender='system' and fee=0n
+  // ZD-S02 FIX: System transaction bypass now requires the _systemInternal flag,
+  // which is only set by consensus-layer functions (applyVerificationResult, executeBlock).
+  // This prevents malicious block producers from injecting system transactions.
   const isSystemTx =
-    tx.sender === "system" ||
-    (tx.fee === 0n &&
-      ["add_fact", "verification_reward", "slash_validator"].includes(tx.type));
+    (tx as any)._systemInternal === true &&
+    (tx.sender === "system" ||
+      (tx.fee === 0n &&
+        ["add_fact", "verification_reward", "slash_validator"].includes(
+          tx.type,
+        )));
 
   if (isSystemTx) {
     return { valid: true };
@@ -4979,6 +4989,11 @@ export function executeBlock(
   const results: TransitionResult[] = [];
   let totalGasUsed = 0n;
   let successCount = 0;
+
+  // ZD-E02 FIX: Process matured unbonding entries at block start.
+  // Previously processUnbondingQueue was defined but never called from executeBlock,
+  // causing all undelegated funds to be permanently locked.
+  processUnbondingQueue(state, blockNumber);
 
   // Execute transactions
   for (const tx of transactions) {

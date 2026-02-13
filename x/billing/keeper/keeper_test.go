@@ -875,7 +875,7 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Duplicate provider
 	dup := types.DefaultGenesis()
-	dup.Providers = []types.Provider{
+	dup.Providers = []*types.Provider{
 		{Address: "lgm1abc"}, {Address: "lgm1abc"},
 	}
 	if err := dup.Validate(); err == nil {

@@ -25,14 +25,14 @@ var bpsBasis = big.NewInt(1000000)
 //     Many citations = well-known = discount.
 //   - Freshness (inverted): recent = NOT in training data = premium.
 //     Old = probably in training data = no adjustment.
-func (k Keeper) CalculateQueryPrice(ctx sdk.Context, factIds []string, currentBlock uint64) (*big.Int, []types.FactPriceBreakdown) {
+func (k Keeper) CalculateQueryPrice(ctx sdk.Context, factIds []string, currentBlock uint64) (*big.Int, []*types.FactPriceBreakdown) {
 	params := k.GetParams(ctx)
 
 	baseCost := new(big.Int)
 	baseCost.SetString(params.BaseCostPerFact, 10)
 
 	totalPrice := new(big.Int)
-	var breakdown []types.FactPriceBreakdown
+	var breakdown []*types.FactPriceBreakdown
 
 	for _, factId := range factIds {
 		factPrice := new(big.Int).Set(baseCost)
@@ -105,7 +105,7 @@ func (k Keeper) CalculateQueryPrice(ctx sdk.Context, factIds []string, currentBl
 
 		totalPrice.Add(totalPrice, factPrice)
 
-		breakdown = append(breakdown, types.FactPriceBreakdown{
+		breakdown = append(breakdown, &types.FactPriceBreakdown{
 			FactId:              factId,
 			BaseCost:            baseCost.String(),
 			ConfidencePremium:   confidencePremium.String(),

@@ -1,11 +1,11 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/emergency/types"
 )
@@ -31,7 +31,7 @@ func (k Keeper) CreateHaltCeremony(ctx sdk.Context, proposal types.EmergencyHalt
 	}
 
 	// Marshal proposal into ProposalData
-	proposalData, err := marshalProposal(proposal)
+	proposalData, err := marshalProposal(&proposal)
 	if err != nil {
 		return types.EmergencyCeremony{}, fmt.Errorf("failed to marshal halt proposal: %w", err)
 	}
@@ -63,7 +63,7 @@ func (k Keeper) CreateRevertCeremony(ctx sdk.Context, proposal types.EmergencyRe
 		PrecommitStake:    "0",
 	}
 
-	proposalData, err := marshalProposal(proposal)
+	proposalData, err := marshalProposal(&proposal)
 	if err != nil {
 		return types.EmergencyCeremony{}, fmt.Errorf("failed to marshal revert proposal: %w", err)
 	}
@@ -95,7 +95,7 @@ func (k Keeper) CreateResumeCeremony(ctx sdk.Context, proposal types.EmergencyRe
 		PrecommitStake:    "0",
 	}
 
-	proposalData, err := marshalProposal(proposal)
+	proposalData, err := marshalProposal(&proposal)
 	if err != nil {
 		return types.EmergencyCeremony{}, fmt.Errorf("failed to marshal resume proposal: %w", err)
 	}
@@ -361,6 +361,7 @@ func (k Keeper) HandleCeremonyFinalization(ctx sdk.Context, ceremonyId string) {
 	case types.CeremonyHalt:
 		k.SetEmergencyStatus(ctx, types.StatusHalted)
 		k.SetActiveHaltCeremonyId(ctx, ceremony.Id)
+		k.SetHaltStartBlock(ctx, uint64(ctx.BlockHeight()))
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
@@ -391,6 +392,7 @@ func (k Keeper) HandleCeremonyFinalization(ctx sdk.Context, ceremonyId string) {
 	case types.CeremonyResume:
 		k.SetEmergencyStatus(ctx, types.StatusNormal)
 		k.SetActiveHaltCeremonyId(ctx, "")
+		k.ClearHaltStartBlock(ctx)
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
@@ -447,6 +449,44 @@ func getQuorumThreshold(ceremonyType types.CeremonyType, params types.Params) ui
 	}
 }
 
-func marshalProposal(proposal interface{}) ([]byte, error) {
-	return json.Marshal(proposal)
+// CheckHaltExpiry checks if the current halt has exceeded MaxHaltDurationBlocks.
+// If expired, auto-resumes the chain and logs an audit entry.
+// This should be called in BeginBlock/EndBlock.
+func (k Keeper) CheckHaltExpiry(ctx sdk.Context) {
+	status := k.GetEmergencyStatus(ctx)
+	if status != types.StatusHalted {
+		return
+	}
+
+	params := k.GetParams(ctx)
+	if params.MaxHaltDurationBlocks == 0 {
+		return // No limit configured (should not happen per validation)
+	}
+
+	haltStart := k.GetHaltStartBlock(ctx)
+	if haltStart == 0 {
+		return // No start block recorded (pre-upgrade halt)
+	}
+
+	currentHeight := uint64(ctx.BlockHeight())
+	if currentHeight < haltStart+params.MaxHaltDurationBlocks {
+		return // Not expired yet
+	}
+
+	// Auto-resume: halt duration exceeded
+	k.SetEmergencyStatus(ctx, types.StatusNormal)
+	k.SetActiveHaltCeremonyId(ctx, "")
+	k.ClearHaltStartBlock(ctx)
+	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+		Timestamp:   ctx.BlockTime().Unix(),
+		BlockNumber: currentHeight,
+		Action:      string(types.AuditResumeExecuted),
+		Actor:       "system",
+		CeremonyId:  "",
+		Details:     fmt.Sprintf("auto-resume: halt exceeded max duration of %d blocks (started at block %d)", params.MaxHaltDurationBlocks, haltStart),
+	})
+}
+
+func marshalProposal(proposal proto.Message) ([]byte, error) {
+	return proto.Marshal(proposal)
 }

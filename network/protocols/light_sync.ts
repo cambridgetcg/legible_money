@@ -25,7 +25,12 @@ import * as lp from "it-length-prefixed";
 import type { Stream } from "@libp2p/interface";
 import { SYNC_CONFIG, type SyncPeer, type SyncStatus } from "./sync.js";
 import { PROTOCOL_IDS, networkReplacer } from "../config.js";
-import { sha512_256Hex } from "../../core/crypto/hashing.js";
+import {
+  domainHash,
+  HASH_DOMAINS,
+  hashesEqual,
+} from "../../core/crypto/hashing.js";
+import { bytesToHex, hexToBytes } from "../../core/crypto/keys.js";
 
 // ============================================================================
 // Types
@@ -109,8 +114,10 @@ export interface KnowledgeTreeNode {
 export interface KnowledgeProof {
   /** Fact ID */
   factId: string;
-  /** Merkle proof path */
+  /** Merkle proof path (sibling hashes from leaf to root) */
   proof: string[];
+  /** Direction bits: 0 = sibling on right, 1 = sibling on left */
+  directions: number[];
   /** Leaf data */
   leaf: KnowledgeTreeNode;
   /** Root hash (should match block's knowledgeRoot) */
@@ -517,24 +524,62 @@ export class LightSyncManager extends EventEmitter {
 
   /**
    * Verify a knowledge proof against the current root.
+   *
+   * ZD-C03 FIX: Rewrites light client Merkle proof verification with:
+   * 1. Direction tracking (left/right at each level based on key bits)
+   * 2. Binary hashing (not string concatenation of hex)
+   * 3. Leaf/internal node domain separation (0x00 for leaves, 0x01 for internals)
+   * 4. Constant-time root comparison
    */
   verifyKnowledgeProof(proof: KnowledgeProof): boolean {
-    if (proof.root !== this.status.latestKnowledgeRoot) {
+    // ZD-C02 FIX: Constant-time root comparison
+    if (
+      !this.status.latestKnowledgeRoot ||
+      !hashesEqual(proof.root, this.status.latestKnowledgeRoot)
+    ) {
       return false;
     }
 
-    // Verify Merkle path
-    let currentHash = proof.leaf.hash;
-    for (const sibling of proof.proof) {
-      // Combine hashes (simplified - actual implementation would use proper hashing)
-      currentHash = this.hashNodes(currentHash, sibling);
+    // Validate proof structure
+    if (proof.proof.length !== proof.directions.length) {
+      return false;
     }
 
-    return currentHash === proof.root;
-  }
+    // Start with leaf hash (domain-separated: 0x00 prefix for leaves)
+    const leafBytes = hexToBytes(proof.leaf.hash);
+    const leafPrefixed = new Uint8Array(1 + leafBytes.length);
+    leafPrefixed[0] = 0x00; // Leaf domain separator
+    leafPrefixed.set(leafBytes, 1);
+    let currentHash = bytesToHex(domainHash(HASH_DOMAINS.STATE, leafPrefixed));
 
-  private hashNodes(left: string, right: string): string {
-    return sha512_256Hex(Buffer.from(left + right));
+    // Traverse proof from leaf to root
+    for (let i = 0; i < proof.proof.length; i++) {
+      const sibling = proof.proof[i];
+      const direction = proof.directions[i];
+
+      // Domain-separated internal node: 0x01 prefix
+      const currentBytes = hexToBytes(currentHash);
+      const siblingBytes = hexToBytes(sibling);
+      const combined = new Uint8Array(
+        1 + currentBytes.length + siblingBytes.length,
+      );
+      combined[0] = 0x01; // Internal node domain separator
+
+      if (direction === 0) {
+        // Sibling on right: H(0x01 || current || sibling)
+        combined.set(currentBytes, 1);
+        combined.set(siblingBytes, 1 + currentBytes.length);
+      } else {
+        // Sibling on left: H(0x01 || sibling || current)
+        combined.set(siblingBytes, 1);
+        combined.set(currentBytes, 1 + siblingBytes.length);
+      }
+
+      currentHash = bytesToHex(domainHash(HASH_DOMAINS.STATE, combined));
+    }
+
+    // ZD-C02 FIX: Constant-time root comparison
+    return hashesEqual(currentHash, proof.root);
   }
 
   // ============================================================================

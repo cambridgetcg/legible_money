@@ -1,10 +1,10 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/disputes/types"
 )
@@ -15,7 +15,7 @@ import (
 func (k Keeper) SetDispute(ctx sdk.Context, dispute types.Dispute) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := disputeKey(dispute.Id)
-	bz, err := json.Marshal(dispute)
+	bz, err := proto.Marshal(&dispute)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal dispute: %v", err))
 	}
@@ -45,7 +45,7 @@ func (k Keeper) GetDispute(ctx sdk.Context, id string) (types.Dispute, bool) {
 		return types.Dispute{}, false
 	}
 	var dispute types.Dispute
-	if err := json.Unmarshal(bz, &dispute); err != nil {
+	if err := proto.Unmarshal(bz, &dispute); err != nil {
 		return types.Dispute{}, false
 	}
 	return dispute, true
@@ -74,7 +74,7 @@ func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(types.Dispute) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var dispute types.Dispute
-		if err := json.Unmarshal(iter.Value(), &dispute); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &dispute); err != nil {
 			continue
 		}
 		if cb(dispute) {
@@ -142,7 +142,7 @@ func (k Keeper) GetActiveDisputeCountForFact(ctx sdk.Context, factId string) uin
 func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.DisputeEvidence) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := evidenceKey(evidence.DisputeId, evidence.Id)
-	bz, err := json.Marshal(evidence)
+	bz, err := proto.Marshal(&evidence)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence: %v", err))
 	}
@@ -158,7 +158,7 @@ func (k Keeper) GetEvidence(ctx sdk.Context, disputeId, evidenceId string) (type
 		return types.DisputeEvidence{}, false
 	}
 	var evidence types.DisputeEvidence
-	if err := json.Unmarshal(bz, &evidence); err != nil {
+	if err := proto.Unmarshal(bz, &evidence); err != nil {
 		return types.DisputeEvidence{}, false
 	}
 	return evidence, true
@@ -177,7 +177,7 @@ func (k Keeper) GetEvidenceByDispute(ctx sdk.Context, disputeId string) []types.
 	var evidences []types.DisputeEvidence
 	for ; iter.Valid(); iter.Next() {
 		var evidence types.DisputeEvidence
-		if err := json.Unmarshal(iter.Value(), &evidence); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &evidence); err != nil {
 			continue
 		}
 		evidences = append(evidences, evidence)
@@ -191,7 +191,7 @@ func (k Keeper) GetEvidenceByDispute(ctx sdk.Context, disputeId string) []types.
 func (k Keeper) SetVote(ctx sdk.Context, vote types.DisputeVote) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := voteKey(vote.DisputeId, vote.Arbiter)
-	bz, err := json.Marshal(vote)
+	bz, err := proto.Marshal(&vote)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal vote: %v", err))
 	}
@@ -207,7 +207,7 @@ func (k Keeper) GetVote(ctx sdk.Context, disputeId, arbiter string) (types.Dispu
 		return types.DisputeVote{}, false
 	}
 	var vote types.DisputeVote
-	if err := json.Unmarshal(bz, &vote); err != nil {
+	if err := proto.Unmarshal(bz, &vote); err != nil {
 		return types.DisputeVote{}, false
 	}
 	return vote, true
@@ -226,7 +226,7 @@ func (k Keeper) GetVotes(ctx sdk.Context, disputeId string) []types.DisputeVote 
 	var votes []types.DisputeVote
 	for ; iter.Valid(); iter.Next() {
 		var vote types.DisputeVote
-		if err := json.Unmarshal(iter.Value(), &vote); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &vote); err != nil {
 			continue
 		}
 		votes = append(votes, vote)
@@ -265,7 +265,7 @@ func commitmentKey(disputeId, submitter string) []byte {
 // SetEvidenceCommitment stores an evidence commitment.
 func (k Keeper) SetEvidenceCommitment(ctx sdk.Context, commitment types.EvidenceCommitment) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(commitment)
+	bz, err := proto.Marshal(&commitment)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence commitment: %v", err))
 	}
@@ -280,7 +280,7 @@ func (k Keeper) GetEvidenceCommitment(ctx sdk.Context, disputeId, submitter stri
 		return types.EvidenceCommitment{}, false
 	}
 	var commitment types.EvidenceCommitment
-	if err := json.Unmarshal(bz, &commitment); err != nil {
+	if err := proto.Unmarshal(bz, &commitment); err != nil {
 		return types.EvidenceCommitment{}, false
 	}
 	return commitment, true
@@ -300,7 +300,7 @@ func (k Keeper) GetUnrevealedCommitments(ctx sdk.Context, disputeId string) []ty
 
 	for ; iter.Valid(); iter.Next() {
 		var commitment types.EvidenceCommitment
-		if err := json.Unmarshal(iter.Value(), &commitment); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &commitment); err != nil {
 			continue
 		}
 		if !commitment.Revealed {

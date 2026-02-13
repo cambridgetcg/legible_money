@@ -8,39 +8,10 @@ import (
 	"google.golang.org/grpc"
 )
 
-// RemoteAccount represents an interchain account controlled by a Legible agent.
-type RemoteAccount struct {
-	ConnectionId    string   `json:"connection_id"`
-	PortId          string   `json:"port_id"`
-	RemoteAddress   string   `json:"remote_address"`    // bech32 address on remote chain
-	ChainId         string   `json:"chain_id"`          // remote chain identifier
-	OwnerDid        string   `json:"owner_did"`         // did:lgm:{hex} of the controlling agent
-	OwnerAddress    string   `json:"owner_address"`     // bech32 address on Legible
-	RegisteredBlock uint64   `json:"registered_block"`  // block height when registered
-	AllowedMsgTypes []string `json:"allowed_msg_types"` // proto URL allowlist for this account
-	Active          bool     `json:"active"`
-}
-
-func (r *RemoteAccount) Reset()        {}
-func (r *RemoteAccount) String() string { return fmt.Sprintf("RemoteAccount{%s@%s}", r.OwnerDid, r.ChainId) }
-func (r *RemoteAccount) ProtoMessage()  {}
-
-// InterchainAccountRecord stores all remote accounts for a single DID.
-type InterchainAccountRecord struct {
-	Did      string          `json:"did"`
-	Accounts []RemoteAccount `json:"accounts"`
-}
-
-// Params defines the module parameters.
-type Params struct {
-	MaxRemoteAccountsPerDid uint32   `json:"max_remote_accounts_per_did"`
-	AllowedHostMsgTypes     []string `json:"allowed_host_msg_types"` // msg types the host will accept
-	RegistrationCooldown    uint64   `json:"registration_cooldown"`  // blocks between registrations
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("Params{max:%d}", p.MaxRemoteAccountsPerDid) }
-func (p *Params) ProtoMessage()  {}
+// --- ValidateBasic methods for protobuf message types ---
+// Struct definitions for RemoteAccount, InterchainAccountRecord, Params, and
+// GenesisState are provided by the proto-generated .pb.go files (state.pb.go
+// and genesis.pb.go).  Only methods and non-proto types are kept here.
 
 // Validate validates the module parameters.
 func (p Params) Validate() error {
@@ -52,16 +23,6 @@ func (p Params) Validate() error {
 	}
 	return nil
 }
-
-// GenesisState defines the icaauth module's genesis state.
-type GenesisState struct {
-	Params  Params                    `json:"params"`
-	Records []InterchainAccountRecord `json:"records"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("GenesisState{records:%d}", len(gs.Records)) }
-func (gs *GenesisState) ProtoMessage()  {}
 
 // --- Messages ---
 
@@ -161,7 +122,7 @@ func (r *QueryInterchainAccountsRequest) ProtoMessage()  {}
 
 // QueryInterchainAccountsResponse returns the ICA accounts for a DID.
 type QueryInterchainAccountsResponse struct {
-	Accounts []RemoteAccount `json:"accounts"`
+	Accounts []*RemoteAccount `json:"accounts"`
 }
 
 func (r *QueryInterchainAccountsResponse) Reset()        {}

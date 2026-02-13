@@ -61,11 +61,18 @@ func (k msgServer) RegisterAgent(goCtx context.Context, msg *types.MsgRegisterAg
 
 	currentHeight := uint64(ctx.BlockHeight())
 
+	// Convert value capabilities to pointer capabilities for proto type
+	capPtrs := make([]*types.AgentCapability, len(msg.Capabilities))
+	for i := range msg.Capabilities {
+		cp := msg.Capabilities[i]
+		capPtrs[i] = &cp
+	}
+
 	profile := types.AgentProfile{
 		Address:           msg.Address,
 		Did:               msg.Did,
 		DisplayName:       msg.DisplayName,
-		Capabilities:      msg.Capabilities,
+		Capabilities:      capPtrs,
 		Domains:           msg.Domains,
 		Status:            "active",
 		ReputationScore:   500000, // start at 0.5
@@ -146,7 +153,8 @@ func (k msgServer) AddCapability(goCtx context.Context, msg *types.MsgAddCapabil
 	// Remove old indexes before mutation
 	k.DeleteProfile(ctx, profile)
 
-	profile.Capabilities = append(profile.Capabilities, msg.Capability)
+	capCopy := msg.Capability
+	profile.Capabilities = append(profile.Capabilities, &capCopy)
 	k.SetProfile(ctx, profile)
 
 	return &types.MsgAddCapabilityResponse{}, nil
@@ -163,7 +171,7 @@ func (k msgServer) RemoveCapability(goCtx context.Context, msg *types.MsgRemoveC
 
 	// Find and remove capability
 	foundCap := false
-	newCaps := make([]types.AgentCapability, 0, len(profile.Capabilities))
+	newCaps := make([]*types.AgentCapability, 0, len(profile.Capabilities))
 	for _, cap := range profile.Capabilities {
 		if cap.CapabilityType == msg.CapabilityType {
 			foundCap = true

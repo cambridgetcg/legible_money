@@ -10,10 +10,16 @@ import (
 )
 
 // -----------------------------------------------------------------------
-// Partnership status and tier enums
+// Partnership status and tier enums — type aliases and constants
+// Struct definitions for ExitState, Partnership, DeliberationState,
+// ConsensusOperation, SafetyFreeze, CoercionSignal, RejectionCooldown,
+// SeedPartnership, PoolEntry, MentorshipConfig, PartnershipIntent, Params,
+// and GenesisState are provided by the proto-generated .pb.go files
+// (state.pb.go and genesis.pb.go). Only methods, type aliases, constants,
+// and non-proto types are kept here.
 // -----------------------------------------------------------------------
 
-type PartnershipStatus string
+type PartnershipStatus = string
 
 const (
 	StatusForming   PartnershipStatus = "forming"
@@ -23,15 +29,15 @@ const (
 	StatusSuspended PartnershipStatus = "suspended"
 )
 
-type PartnershipTier uint8
+type PartnershipTier = uint32
 
 const (
-	TierTrial    PartnershipTier = 0
-	TierStandard PartnershipTier = 1
-	TierTrusted  PartnershipTier = 2
-	TierElite    PartnershipTier = 3
+	TierTrial     PartnershipTier = 0
+	TierStandard  PartnershipTier = 1
+	TierTrusted   PartnershipTier = 2
+	TierElite     PartnershipTier = 3
 	TierSovereign PartnershipTier = 4
-	TierEternal  PartnershipTier = 5
+	TierEternal   PartnershipTier = 5
 )
 
 // LockTierConfig defines lock tier parameters.
@@ -55,7 +61,7 @@ var LockTiers = [6]LockTierConfig{
 // Consensus operation status and amount tiers
 // -----------------------------------------------------------------------
 
-type OperationStatus string
+type OperationStatus = string
 
 const (
 	OpStatusProposed OperationStatus = "proposed"
@@ -64,7 +70,7 @@ const (
 	OpStatusExpired  OperationStatus = "expired"
 )
 
-type AmountTier string
+type AmountTier = string
 
 const (
 	AmountTierMicro  AmountTier = "micro"
@@ -74,191 +80,41 @@ const (
 	AmountTierMajor  AmountTier = "major"
 )
 
-// -----------------------------------------------------------------------
-// Core domain types
-// -----------------------------------------------------------------------
-
-// ExitState tracks dissolution progress.
-type ExitState struct {
-	InitiatedBy string `json:"initiated_by"` // bech32 address
-	InitiatedAt uint64 `json:"initiated_at"` // block height
-	CooldownEnd uint64 `json:"cooldown_end"` // block when cooling ends
-}
-
-func (e *ExitState) Reset()        {}
-func (e *ExitState) String() string { return fmt.Sprintf("%+v", *e) }
-func (e *ExitState) ProtoMessage()  {}
-
-// Partnership represents a human-agent economic partnership.
-type Partnership struct {
-	Id               string            `json:"id"`
-	HumanAddr        string            `json:"human_addr"`         // bech32 address
-	AgentAddr        string            `json:"agent_addr"`         // bech32 address
-	Status           PartnershipStatus `json:"status"`
-	Tier             PartnershipTier   `json:"tier"`
-	LockTier         uint32            `json:"lock_tier"`          // 0-5, indexes into LockTiers
-	LockExpiresAt    uint64            `json:"lock_expires_at"`    // block height when lock expires
-	SplitHumanBps    uint64            `json:"split_human_bps"`    // basis points (1000000 scale, default 500000 = 50%)
-	SplitAgentBps    uint64            `json:"split_agent_bps"`    // basis points (1000000 scale, default 500000 = 50%)
-	CommonPotBalance string            `json:"common_pot_balance"` // bigint as string
-	TotalEarned      string            `json:"total_earned"`       // bigint as string
-	CooperationScore uint64            `json:"cooperation_score"`  // bps (0-10000)
-	FormedAtBlock    uint64            `json:"formed_at_block"`
-	ExitState        *ExitState        `json:"exit_state,omitempty"`
-}
-
-func (p *Partnership) Reset()        {}
-func (p *Partnership) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Partnership) ProtoMessage()  {}
-
-// DeliberationState tracks the deliberative consensus state for an operation.
-type DeliberationState struct {
-	AmountTier        AmountTier `json:"amount_tier"`
-	FloorEndsAt       uint64     `json:"floor_ends_at"`        // block when floor period ends
-	WindowEndsAt      uint64     `json:"window_ends_at"`       // block when deliberation window expires
-	Rationale         string     `json:"rationale"`
-	CounterProposalOf string     `json:"counter_proposal_of"`  // parent operation ID (empty if original)
-	ChainDepth        uint32     `json:"chain_depth"`          // counter-proposal chain depth
-}
-
-func (d *DeliberationState) Reset()        {}
-func (d *DeliberationState) String() string { return fmt.Sprintf("%+v", *d) }
-func (d *DeliberationState) ProtoMessage()  {}
-
-// ConsensusOperation represents a pending operation requiring partner consensus.
-type ConsensusOperation struct {
-	Id            string             `json:"id"`
-	PartnershipId string            `json:"partnership_id"`
-	Type          string             `json:"type"`          // "withdrawal", "split_change", "tier_upgrade"
-	ProposedBy    string             `json:"proposed_by"`   // bech32 address
-	Amount        string             `json:"amount"`        // bigint as string
-	Status        OperationStatus    `json:"status"`
-	Deliberation  DeliberationState  `json:"deliberation"`
-	CreatedAt     uint64             `json:"created_at"`    // block height
-}
-
-func (co *ConsensusOperation) Reset()        {}
-func (co *ConsensusOperation) String() string { return fmt.Sprintf("%+v", *co) }
-func (co *ConsensusOperation) ProtoMessage()  {}
-
-// SafetyFreeze represents a unilateral safety freeze on a partnership.
-type SafetyFreeze struct {
-	PartnershipId       string `json:"partnership_id"`
-	FrozenBy            string `json:"frozen_by"`              // bech32 address
-	FrozenAt            uint64 `json:"frozen_at"`              // block height
-	ExpiresAt           uint64 `json:"expires_at"`             // block when freeze lifts
-	FreezeCountThisEpoch uint32 `json:"freeze_count_this_epoch"`
-}
-
-func (sf *SafetyFreeze) Reset()        {}
-func (sf *SafetyFreeze) String() string { return fmt.Sprintf("%+v", *sf) }
-func (sf *SafetyFreeze) ProtoMessage()  {}
-
-// CoercionSignal represents a duress flag raised by a partner.
-type CoercionSignal struct {
-	SignalId      string `json:"signal_id"`
-	PartnershipId string `json:"partnership_id"`
-	RaisedBy      string `json:"raised_by"`  // bech32 address
-	RaisedAt      uint64 `json:"raised_at"`  // block height
-	ExpiresAt     uint64 `json:"expires_at"` // block when review period ends
-	Resolved      bool   `json:"resolved"`
-}
-
-func (cs *CoercionSignal) Reset()        {}
-func (cs *CoercionSignal) String() string { return fmt.Sprintf("%+v", *cs) }
-func (cs *CoercionSignal) ProtoMessage()  {}
-
-// RejectionCooldown tracks rejection cooldowns for a partnership.
-type RejectionCooldown struct {
-	PartnershipId  string `json:"partnership_id"`
-	RejectionCount uint32 `json:"rejection_count"` // number of consecutive rejections
-	CooldownEndsAt uint64 `json:"cooldown_ends_at"`
-}
-
-func (rc *RejectionCooldown) Reset()        {}
-func (rc *RejectionCooldown) String() string { return fmt.Sprintf("%+v", *rc) }
-func (rc *RejectionCooldown) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// Cold-Start Remediation Types
-// -----------------------------------------------------------------------
-
 // TierSeed is the seed partnership tier (-1 in TS).
-const TierSeed PartnershipTier = 255 // Use 255 to represent -1 since uint8
+// Use 255 to represent -1 conceptually. Proto field is uint32.
+const TierSeed PartnershipTier = 255
 
-// SeedPartnership represents a tier -1 partnership with reduced capital.
-type SeedPartnership struct {
-	Id                 string `json:"id"`
-	HumanAddr          string `json:"human_addr"`
-	AgentAddr          string `json:"agent_addr"`
-	CreatedAt          uint64 `json:"created_at"`
-	ExpiresAt          uint64 `json:"expires_at"` // 22222 blocks
-	HumanContribution  string `json:"human_contribution"`
-	AgentContribution  string `json:"agent_contribution"`
-	Status             string `json:"status"` // "active", "graduated", "expired"
-	CommonPotBalance   string `json:"common_pot_balance"`
-	CommonPotCap       string `json:"common_pot_cap"` // 0.222 LGM
+// Validate performs parameter validation.
+func (p Params) Validate() error {
+	if p.FormationWindowBlocks == 0 {
+		return fmt.Errorf("formation_window_blocks must be positive")
+	}
+	if p.CoolingPeriodBlocks == 0 {
+		return fmt.Errorf("cooling_period_blocks must be positive")
+	}
+	if p.CommonPotShareBps == 0 || p.CommonPotShareBps > 1000000 {
+		return fmt.Errorf("common_pot_share_bps must be between 1 and 1000000")
+	}
+	if p.SafetyFreezeDurationBlocks == 0 {
+		return fmt.Errorf("safety_freeze_duration_blocks must be positive")
+	}
+	if p.MaxFreezesPerEpoch == 0 {
+		return fmt.Errorf("max_freezes_per_epoch must be positive")
+	}
+	if p.CoercionReviewBlocks == 0 {
+		return fmt.Errorf("coercion_review_blocks must be positive")
+	}
+	if p.BaseCooldownBlocks == 0 {
+		return fmt.Errorf("base_cooldown_blocks must be positive")
+	}
+	if p.MaxCounterProposalDepth == 0 {
+		return fmt.Errorf("max_counter_proposal_depth must be positive")
+	}
+	if p.DefaultHumanSplitBps+p.DefaultAgentSplitBps != 1000000 {
+		return fmt.Errorf("default splits must sum to 1000000 bps, got %d", p.DefaultHumanSplitBps+p.DefaultAgentSplitBps)
+	}
+	return nil
 }
-
-func (sp *SeedPartnership) Reset()        {}
-func (sp *SeedPartnership) String() string { return fmt.Sprintf("%+v", *sp) }
-func (sp *SeedPartnership) ProtoMessage()  {}
-
-// PoolEntry represents an agent registered in the formation pool.
-type PoolEntry struct {
-	Address       string   `json:"address"`
-	Domains       []string `json:"domains"`
-	PreferredRole string   `json:"preferred_role"` // "human", "agent", "either"
-	StakeMin      string   `json:"stake_min"`
-	StakeMax      string   `json:"stake_max"`
-	RegisteredAt  uint64   `json:"registered_at"`
-	Deposit       string   `json:"deposit"`
-	ExpiresAt     uint64   `json:"expires_at"`
-	Status        string   `json:"status"` // "active", "matched", "withdrawn", "expired"
-	MatchedWith   string   `json:"matched_with,omitempty"`
-}
-
-func (pe *PoolEntry) Reset()        {}
-func (pe *PoolEntry) String() string { return fmt.Sprintf("%+v", *pe) }
-func (pe *PoolEntry) ProtoMessage()  {}
-
-// MentorshipConfig tracks asymmetric contribution partnerships.
-type MentorshipConfig struct {
-	SponsorAddr          string `json:"sponsor_addr"`
-	MenteeAddr           string `json:"mentee_addr"`
-	PartnershipId        string `json:"partnership_id"`
-	SponsorContribution  string `json:"sponsor_contribution"`
-	MenteeContribution   string `json:"mentee_contribution"`
-	SponsorSplitBps      uint64 `json:"sponsor_split_bps"`
-	MenteeSplitBps       uint64 `json:"mentee_split_bps"`
-	GraduationBlock      uint64 `json:"graduation_block"`
-	Graduated            bool   `json:"graduated"`
-	SponsorVerifications uint64 `json:"sponsor_verifications"`
-}
-
-func (mc *MentorshipConfig) Reset()        {}
-func (mc *MentorshipConfig) String() string { return fmt.Sprintf("%+v", *mc) }
-func (mc *MentorshipConfig) ProtoMessage()  {}
-
-// PartnershipIntent represents a pre-commitment to form a partnership.
-type PartnershipIntent struct {
-	IntentId         string `json:"intent_id"`
-	Address          string `json:"address"`
-	Domains          []string `json:"domains"`
-	ContributionMin  string `json:"contribution_min"`
-	ContributionMax  string `json:"contribution_max"`
-	PreferredTier    uint32 `json:"preferred_tier"`
-	Deposit          string `json:"deposit"`
-	CreatedAt        uint64 `json:"created_at"`
-	ExpiresAt        uint64 `json:"expires_at"` // 2222 blocks
-	Status           string `json:"status"` // "pending", "matched", "finalizing", "expired", "cancelled"
-	MatchedWith      string `json:"matched_with,omitempty"`
-	MatchedIntentId  string `json:"matched_intent_id,omitempty"`
-}
-
-func (pi *PartnershipIntent) Reset()        {}
-func (pi *PartnershipIntent) String() string { return fmt.Sprintf("%+v", *pi) }
-func (pi *PartnershipIntent) ProtoMessage()  {}
 
 // -----------------------------------------------------------------------
 // Cold-Start Message Types
@@ -469,77 +325,6 @@ type MsgSponsorPartnershipResponse struct {
 func (msg *MsgSponsorPartnershipResponse) Reset()        {}
 func (msg *MsgSponsorPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSponsorPartnershipResponse) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// Params
-// -----------------------------------------------------------------------
-
-// Params holds module parameters.
-type Params struct {
-	FormationWindowBlocks      uint64 `json:"formation_window_blocks"`       // 77 blocks to accept partnership
-	CoolingPeriodBlocks        uint64 `json:"cooling_period_blocks"`         // 222222 blocks cooling on exit
-	CommonPotShareBps          uint64 `json:"common_pot_share_bps"`          // 220000 = 22% (1000000 = 100%)
-	SafetyFreezeDurationBlocks uint64 `json:"safety_freeze_duration_blocks"` // 222 blocks
-	MaxFreezesPerEpoch         uint32 `json:"max_freezes_per_epoch"`         // 3
-	CoercionReviewBlocks       uint64 `json:"coercion_review_blocks"`        // 1111 blocks
-	BaseCooldownBlocks         uint64 `json:"base_cooldown_blocks"`          // 77 blocks
-	MaxCounterProposalDepth    uint32 `json:"max_counter_proposal_depth"`    // 3
-	DefaultHumanSplitBps       uint64 `json:"default_human_split_bps"`       // 5000 = 50%
-	DefaultAgentSplitBps       uint64 `json:"default_agent_split_bps"`       // 5000 = 50%
-}
-
-func (p *Params) Reset()        {}
-func (p *Params) String() string { return fmt.Sprintf("%+v", *p) }
-func (p *Params) ProtoMessage()  {}
-
-// Validate performs parameter validation.
-func (p Params) Validate() error {
-	if p.FormationWindowBlocks == 0 {
-		return fmt.Errorf("formation_window_blocks must be positive")
-	}
-	if p.CoolingPeriodBlocks == 0 {
-		return fmt.Errorf("cooling_period_blocks must be positive")
-	}
-	if p.CommonPotShareBps == 0 || p.CommonPotShareBps > 1000000 {
-		return fmt.Errorf("common_pot_share_bps must be between 1 and 1000000")
-	}
-	if p.SafetyFreezeDurationBlocks == 0 {
-		return fmt.Errorf("safety_freeze_duration_blocks must be positive")
-	}
-	if p.MaxFreezesPerEpoch == 0 {
-		return fmt.Errorf("max_freezes_per_epoch must be positive")
-	}
-	if p.CoercionReviewBlocks == 0 {
-		return fmt.Errorf("coercion_review_blocks must be positive")
-	}
-	if p.BaseCooldownBlocks == 0 {
-		return fmt.Errorf("base_cooldown_blocks must be positive")
-	}
-	if p.MaxCounterProposalDepth == 0 {
-		return fmt.Errorf("max_counter_proposal_depth must be positive")
-	}
-	if p.DefaultHumanSplitBps+p.DefaultAgentSplitBps != 1000000 {
-		return fmt.Errorf("default splits must sum to 1000000 bps, got %d", p.DefaultHumanSplitBps+p.DefaultAgentSplitBps)
-	}
-	return nil
-}
-
-// -----------------------------------------------------------------------
-// Genesis state
-// -----------------------------------------------------------------------
-
-// GenesisState defines the partnerships module genesis state.
-type GenesisState struct {
-	Params              Params               `json:"params"`
-	Partnerships        []Partnership        `json:"partnerships"`
-	ConsensusOperations []ConsensusOperation `json:"consensus_operations"`
-	SafetyFreezes       []SafetyFreeze       `json:"safety_freezes"`
-	CoercionSignals     []CoercionSignal     `json:"coercion_signals"`
-}
-
-func (gs *GenesisState) Reset()        {}
-func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }
-func (gs *GenesisState) ProtoMessage()  {}
 
 // -----------------------------------------------------------------------
 // Message types

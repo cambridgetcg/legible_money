@@ -139,7 +139,7 @@ func TestSetGetProcess(t *testing.T) {
 		FeePerExecution: "100000",
 		CreatedAtBlock:  100,
 		NextExecuteAt:   200,
-		Condition: types.ScheduleCondition{
+		Condition: &types.ScheduleCondition{
 			TimeCondition: &types.TimeCondition{
 				Type:           types.TimeAbsolute,
 				ExecuteAtBlock: 200,
@@ -178,7 +178,7 @@ func TestGetProcessesByCreator(t *testing.T) {
 			FeePerExecution: "100000",
 			CreatedAtBlock:  100,
 			NextExecuteAt:   200,
-			Condition: types.ScheduleCondition{
+			Condition: &types.ScheduleCondition{
 				TimeCondition: &types.TimeCondition{
 					Type:           types.TimePeriodic,
 					IntervalBlocks: 10,
@@ -201,7 +201,7 @@ func TestCreateScheduleHandler(t *testing.T) {
 		Creator:         testCreator,
 		FeePerExecution: "1000",
 		PrepaidFee:      "100000", // 100 executions worth
-		Condition: types.ScheduleCondition{
+		Condition: &types.ScheduleCondition{
 			TimeCondition: &types.TimeCondition{
 				Type:           types.TimeAbsolute,
 				ExecuteAtBlock: 200,
@@ -242,7 +242,7 @@ func TestProcessDueSchedules(t *testing.T) {
 		MaxExecutions:   1,
 		CreatedAtBlock:  50,
 		NextExecuteAt:   100,
-		Condition: types.ScheduleCondition{
+		Condition: &types.ScheduleCondition{
 			TimeCondition: &types.TimeCondition{
 				Type:           types.TimeAbsolute,
 				ExecuteAtBlock: 100,
@@ -283,7 +283,7 @@ func TestCancelScheduleRefund(t *testing.T) {
 		FeePerExecution: "100",
 		CreatedAtBlock:  50,
 		NextExecuteAt:   200,
-		Condition: types.ScheduleCondition{
+		Condition: &types.ScheduleCondition{
 			TimeCondition: &types.TimeCondition{
 				Type:           types.TimeAbsolute,
 				ExecuteAtBlock: 200,

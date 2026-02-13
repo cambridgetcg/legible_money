@@ -380,18 +380,40 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 		}
 	}
 
-	// Load session capabilities if available
+	// Load session capabilities if available.
+	// C-1 FIX: checkCapability() now defaults to DENY when Capabilities == nil.
+	// Authenticated callers (identity/operational key) who have no session key
+	// must receive an all-permissions capability set so they aren't blocked.
 	var caps *vm.SessionCapabilities
 	if m.authKeeper != nil && callerDID != "" {
 		if sc, found := m.authKeeper.GetSessionCapabilities(ctx, msg.Caller, uint64(ctx.BlockHeight())); found {
+			// Session key: use its restricted capabilities
 			caps = &vm.SessionCapabilities{
 				CanTransfer:    sc.CanTransfer,
 				CanStake:       sc.CanStake,
 				CanSubmitClaims: sc.CanSubmitClaims,
 				CanVote:        sc.CanVote,
 			}
+		} else {
+			// No session key — caller authenticated with identity/operational key.
+			// Grant full capabilities (they own the account).
+			caps = &vm.SessionCapabilities{
+				CanTransfer:    true,
+				CanStake:       true,
+				CanSubmitClaims: true,
+				CanVote:        true,
+			}
+		}
+	} else if callerDID != "" {
+		// authKeeper not wired but caller has DID — grant full capabilities
+		caps = &vm.SessionCapabilities{
+			CanTransfer:    true,
+			CanStake:       true,
+			CanSubmitClaims: true,
+			CanVote:        true,
 		}
 	}
+	// If callerDID == "" (anonymous), caps stays nil → all agent opcodes denied
 
 	// Contract address as bytes
 	contractBytes := []byte(msg.ContractAddress)
@@ -700,8 +722,16 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 					}
 				}
 
-				// No session caps for scheduled executions — they run with full
-				// authority of the original caller who created the schedule.
+				// ZD-B01 FIX: Scheduled executions must have explicit Capabilities,
+				// otherwise the C-1 secure default (nil = deny all) silently blocks
+				// all agent opcodes (SUBMIT_CLAIM, STAKE, UNSTAKE, etc.).
+				// Scheduled executions run with full authority of the original caller.
+				fullCaps := &vm.SessionCapabilities{
+					CanStake:        true,
+					CanTransfer:     true,
+					CanSubmitClaims: true,
+					CanVote:         true,
+				}
 
 				execCtx := &vm.ExecutionContext{
 					Caller:          callerBytes,
@@ -718,6 +748,7 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 					Mode:            vm.ModeCall,
 					Bytecode:        code.Bytecode,
 					ChainID:         big.NewInt(2521),
+					Capabilities:    fullCaps,
 				}
 
 				stateDB := vm.NewCosmosStateDB(&kvStoreAdapter{store: kvStore})

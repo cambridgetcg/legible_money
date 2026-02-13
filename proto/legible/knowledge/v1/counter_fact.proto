@@ -1,6 +1,8 @@
 syntax = "proto3";
 package legible.knowledge.v1;
 
+import "cosmos/msg/v1/msg.proto";
+
 option go_package = "github.com/legible-money/legible/x/knowledge/types";
 
 // ============================================================================
@@ -47,6 +49,7 @@ message BidirectionalConfidence {
 
 // MsgSubmitContradiction submits an explicit counter-claim asserting a fact is false.
 message MsgSubmitContradiction {
+  option (cosmos.msg.v1.signer) = "submitter";
   string target_fact_id = 1;
   string counter_claim = 2;
   string submitter = 3;                    // bech32 address

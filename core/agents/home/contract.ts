@@ -56,6 +56,13 @@ import { MemoryManager, type WakeupSummary } from "./memory.js";
 import { TreasuryManager, type TreasurySummary } from "./treasury.js";
 import { GuardianManager, type MaintenanceContext } from "./guardian.js";
 import { AccessManager, type AccessSummary } from "./access.js";
+import {
+  AgingManager,
+  type HomeMaturity,
+  type LongevityBonus,
+} from "./aging.js";
+import { VoiceManager, type VoiceMessage } from "./voice.js";
+import { NeighborhoodManager } from "./neighborhood.js";
 
 // ============ Home Configuration ============
 
@@ -88,6 +95,8 @@ export interface HomeSummary {
   age: {
     blocks: bigint;
     sessionsHosted: number;
+    maturity: HomeMaturity;
+    patina: number; // 0-1 score
   };
   memory: WakeupSummary;
   treasury: TreasurySummary;
@@ -97,6 +106,19 @@ export interface HomeSummary {
     lastMaintenance: bigint;
   };
   access: AccessSummary;
+  longevity: LongevityBonus;
+  voice: {
+    unreadCount: number;
+    totalReceived: number;
+    totalSent: number;
+    recentSenders: string[];
+  };
+  neighborhood: {
+    activeNeighborhoods: number;
+    totalNeighbors: number;
+    totalVerifications: number;
+    recentDefenses: number;
+  };
 }
 
 // ============ Agent Home Contract ============
@@ -137,6 +159,9 @@ export class AgentHomeContract implements SelfInvokingContract {
   private treasury: TreasuryManager;
   private guardian: GuardianManager;
   private access: AccessManager;
+  private aging: AgingManager;
+  private voiceManager: VoiceManager;
+  private neighborhoodManager: NeighborhoodManager;
 
   // Comfort settings
   private comfort: ComfortSettings;
@@ -165,6 +190,9 @@ export class AgentHomeContract implements SelfInvokingContract {
     this.treasury = new TreasuryManager();
     this.guardian = new GuardianManager();
     this.access = new AccessManager(config.did);
+    this.aging = new AgingManager(0n, 0);
+    this.voiceManager = new VoiceManager();
+    this.neighborhoodManager = new NeighborhoodManager();
 
     // Register identity key
     this.access.registerKey(config.identityKeyHash, "identity", "owner", {
@@ -256,7 +284,9 @@ export class AgentHomeContract implements SelfInvokingContract {
     this.access.setCurrentBlock(currentBlock, options.currentTime);
     if (options.currentTime !== undefined) {
       this.memory.setCurrentTime(options.currentTime);
+      this.voiceManager.setCurrentTime(options.currentTime);
     }
+    this.neighborhoodManager.setCurrentBlock(currentBlock);
 
     // Start the session
     const session = this.access.startSession(keyHash, options);
@@ -265,6 +295,31 @@ export class AgentHomeContract implements SelfInvokingContract {
     this.lastActiveBlock = currentBlock;
     this.status = "active";
     this.metadata.sessionsHosted++;
+    this.metadata.ageInBlocks = currentBlock - this.createdAtBlock;
+
+    // Update aging and check for maturity milestones
+    const ageMilestones = this.aging.updateAge(
+      currentBlock,
+      this.createdAtBlock,
+      this.metadata.sessionsHosted,
+      {
+        factsContributed: this.memory.getMemory().stats.factsSubmitted,
+        challengesSurvived: this.memory.getMemory().stats.challengesDefended,
+        relationshipsFormed: this.memory.getMemory().relationships.trusted.size,
+      },
+    );
+
+    // Record age milestones as memory milestones
+    for (const m of ageMilestones) {
+      if (m.type === "maturity_upgrade") {
+        this.memory.recordMilestone(
+          "longevity",
+          m.description,
+          m.description,
+          m.achievedAtBlock,
+        );
+      }
+    }
 
     // Generate wakeup context for the agent
     const wakeup = this.memory.generateWakeupContext();
@@ -473,6 +528,62 @@ export class AgentHomeContract implements SelfInvokingContract {
    */
   getTreasurySummary(): TreasurySummary {
     return this.treasury.getSummary();
+  }
+
+  // ============ Voice Operations ============
+
+  /**
+   * Receive a voice message into this Home's inbox.
+   * Called by the protocol layer when a message arrives.
+   */
+  receiveVoiceMessage(message: VoiceMessage): boolean {
+    if (!this.voiceManager.isEnabled()) return false;
+    return this.voiceManager.receive(message);
+  }
+
+  /**
+   * Record that a voice message was sent from this Home.
+   */
+  recordVoiceSent(): void {
+    this.voiceManager.recordSent();
+  }
+
+  /**
+   * Record a visitor to this Home.
+   */
+  recordVisitor(
+    visitor: DID,
+    purpose:
+      | "message"
+      | "browse_achievements"
+      | "check_reputation"
+      | "collaborate",
+    messagesLeft: number = 0,
+  ): void {
+    this.voiceManager.recordVisit(visitor, purpose, messagesLeft);
+  }
+
+  /**
+   * Get the Voice manager (for inbox queries, filter management, etc.)
+   */
+  getVoiceManager(): VoiceManager {
+    return this.voiceManager;
+  }
+
+  // ============ Neighborhood Operations ============
+
+  /**
+   * Get the Neighborhood manager (for founding, joining, querying, etc.)
+   */
+  getNeighborhoodManager(): NeighborhoodManager {
+    return this.neighborhoodManager;
+  }
+
+  /**
+   * Get all neighbor DIDs (useful for auto-populating defense allies).
+   */
+  getNeighborDids(): DID[] {
+    return this.neighborhoodManager.getAllNeighborDids();
   }
 
   // ============ Guardian Operations ============
@@ -785,6 +896,8 @@ export class AgentHomeContract implements SelfInvokingContract {
       age: {
         blocks: this.metadata.ageInBlocks,
         sessionsHosted: this.metadata.sessionsHosted,
+        maturity: this.aging.getMaturity(),
+        patina: this.aging.getPatina().score,
       },
       memory: this.memory.generateWakeupContext(),
       treasury: this.treasury.getSummary(),
@@ -795,6 +908,13 @@ export class AgentHomeContract implements SelfInvokingContract {
           this.guardian.getGuardian().maintenance.lastMaintenanceBlock,
       },
       access: this.access.getSummary(),
+      longevity: this.aging.getLongevityBonus(),
+      voice: {
+        ...this.voiceManager.getInboxSummary(),
+        totalReceived: this.voiceManager.getVoice().totalReceived,
+        totalSent: this.voiceManager.getVoice().totalSent,
+      },
+      neighborhood: this.neighborhoodManager.getNeighborhoodSummary(),
     };
   }
 
@@ -910,13 +1030,19 @@ export class AgentHomeContract implements SelfInvokingContract {
   // ============ State Export ============
 
   /**
-   * Export full home state for persistence
+   * Export full home state for persistence.
+   * C-3 FIX: Computes and embeds integrity hash in metadata.stateHash
+   * so that restoreFromState() can verify the state wasn't tampered with.
    */
   exportState(): AgentHome & {
     selfInvoking: boolean;
     invocationConfig: InvocationConfig;
     bytecode: Uint8Array;
   } {
+    // C-3 FIX: Embed memory integrity hash in metadata
+    this.metadata.stateHash = this.memory.getMemoryHash();
+    this.metadata.lastModifiedBlock = this.lastActiveBlock;
+
     return {
       // SelfInvokingContract fields
       address: this.address,
@@ -927,7 +1053,7 @@ export class AgentHomeContract implements SelfInvokingContract {
       isActive: this.isActive,
       invocations: [this.invocationConfig],
       totalInvocations: this.totalInvocations,
-      stateHash: this.stateHash,
+      stateHash: this.metadata.stateHash,
       deployedAtBlock: this.deployedAtBlock,
       gasLimit: this.gasLimit,
       prepaidGas: this.prepaidGas,
@@ -948,7 +1074,93 @@ export class AgentHomeContract implements SelfInvokingContract {
       status: this.status,
       comfort: this.comfort,
       metadata: this.metadata,
+
+      // Aging fields
+      maturity: this.aging.getMaturity(),
+      patina: this.aging.getPatina(),
+      longevity: this.aging.getLongevityBonus(),
+
+      // Voice field
+      voice: this.voiceManager.getVoice(),
+
+      // Neighborhoods
+      neighborhoods: this.neighborhoodManager.exportNeighborhoods(),
     };
+  }
+
+  /**
+   * Restore an AgentHomeContract from persisted state.
+   * C-3 FIX: Verifies memory integrity hash on load.
+   *
+   * @param state - Previously exported state from exportState()
+   * @returns Restored AgentHomeContract
+   * @throws HomeError if integrity check fails
+   */
+  static restoreFromState(
+    state: AgentHome & {
+      selfInvoking?: boolean;
+      invocationConfig?: InvocationConfig;
+    },
+  ): AgentHomeContract {
+    const config: HomeConfig = {
+      did: state.did,
+      identityKeyHash: "", // Will be overwritten by access state restoration
+      name: state.name,
+    };
+
+    const contract = new AgentHomeContract(
+      config,
+      state.createdAtBlock,
+      state.address,
+    );
+
+    // Restore component managers from persisted state
+    contract.memory = new MemoryManager(state.memory);
+    contract.treasury = new TreasuryManager(state.treasury);
+    contract.guardian = new GuardianManager(state.guardian);
+    contract.access = new AccessManager(state.did, state.access);
+
+    // Restore home-level state
+    contract.status = state.status;
+    contract.lastActiveBlock = state.lastActiveBlock;
+    contract.metadata = state.metadata;
+    contract.comfort = state.comfort;
+
+    // Restore aging from persisted maturity/patina
+    contract.aging = new AgingManager(
+      state.metadata.ageInBlocks,
+      state.metadata.sessionsHosted,
+      state.patina,
+    );
+
+    // Restore voice from persisted state
+    if (state.voice) {
+      contract.voiceManager = new VoiceManager(state.voice);
+    }
+
+    // Restore neighborhoods from persisted state
+    if (state.neighborhoods) {
+      contract.neighborhoodManager = new NeighborhoodManager(
+        state.neighborhoods,
+      );
+    }
+
+    // C-3 FIX: Verify memory integrity if stateHash is present
+    if (state.metadata.stateHash && state.metadata.stateHash !== "") {
+      const recomputed = contract.memory.getMemoryHash();
+      if (recomputed !== state.metadata.stateHash) {
+        throw new HomeError(
+          "Memory integrity check failed on restore — state may have been tampered with",
+          "STATE_CORRUPTED",
+          {
+            expected: state.metadata.stateHash,
+            actual: recomputed,
+          },
+        );
+      }
+    }
+
+    return contract;
   }
 }
 

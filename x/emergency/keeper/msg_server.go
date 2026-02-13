@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -411,5 +410,3 @@ func (k msgServer) addVoteAudit(ctx sdk.Context, action types.AuditAction, voter
 	})
 }
 
-// Ensure json is imported for marshalProposal usage in ceremony.go
-var _ = json.Marshal

@@ -299,14 +299,20 @@ func TestDetectCycle_WithCycle(t *testing.T) {
 }
 
 func TestDetectCycle_BeyondMaxDepth(t *testing.T) {
-	// Create a chain longer than maxBFSDepth that loops back
+	// ZD-K01: maxBFSDepth increased from 5 to 10.
+	// Create a chain longer than maxBFSDepth=10 that loops back.
 	facts := map[string]types.Fact{
-		"f1": {Id: "f1", References: []string{"f2"}},
-		"f2": {Id: "f2", References: []string{"f3"}},
-		"f3": {Id: "f3", References: []string{"f4"}},
-		"f4": {Id: "f4", References: []string{"f5"}},
-		"f5": {Id: "f5", References: []string{"f6"}},
-		"f6": {Id: "f6", References: []string{"f1"}}, // cycle at depth 6 > maxBFSDepth=5
+		"f1":  {Id: "f1", References: []string{"f2"}},
+		"f2":  {Id: "f2", References: []string{"f3"}},
+		"f3":  {Id: "f3", References: []string{"f4"}},
+		"f4":  {Id: "f4", References: []string{"f5"}},
+		"f5":  {Id: "f5", References: []string{"f6"}},
+		"f6":  {Id: "f6", References: []string{"f7"}},
+		"f7":  {Id: "f7", References: []string{"f8"}},
+		"f8":  {Id: "f8", References: []string{"f9"}},
+		"f9":  {Id: "f9", References: []string{"f10"}},
+		"f10": {Id: "f10", References: []string{"f11"}},
+		"f11": {Id: "f11", References: []string{"f1"}}, // cycle at depth 11 > maxBFSDepth=10
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{GetFact: makeFacts(facts)}

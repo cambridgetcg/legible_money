@@ -513,6 +513,18 @@ func (ms msgServer) SubmitRecoveryShard(goCtx context.Context, msg *types.MsgSub
 
 	req.ShardsProvided = append(req.ShardsProvided, msg.ShardIndex)
 
+	// H-2: Store encrypted shard data on-chain if provided
+	if len(msg.EncryptedShard) > 0 {
+		shard := types.RecoveryShard{
+			OwnerAddress:   msg.AccountAddress,
+			ShardIndex:     msg.ShardIndex,
+			SubmitterAddr:  msg.Sender,
+			EncryptedData:  msg.EncryptedShard,
+			SubmittedBlock: uint64(ctx.BlockHeight()),
+		}
+		ms.Keeper.StoreRecoveryShard(ctx, shard)
+	}
+
 	// Check threshold met
 	if uint32(len(req.ShardsProvided)) >= req.ShardsRequired {
 		req.Status = "delayed"
@@ -564,6 +576,9 @@ func (ms msgServer) ChallengeRecovery(goCtx context.Context, msg *types.MsgChall
 		}
 		ms.SetAccount(ctx, account)
 	}
+
+	// H-2: Clean up stored recovery shards after recovery is cancelled
+	ms.Keeper.DeleteRecoveryShards(ctx, msg.AccountAddress)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -630,6 +645,9 @@ func (ms msgServer) ExecuteRecovery(goCtx context.Context, msg *types.MsgExecute
 	// Mark request as completed
 	req.Status = "completed"
 	ms.Keeper.SetRecoveryRequest(ctx, req)
+
+	// H-2: Clean up stored recovery shards after recovery completes
+	ms.Keeper.DeleteRecoveryShards(ctx, msg.AccountAddress)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

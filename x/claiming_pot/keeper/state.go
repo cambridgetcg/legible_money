@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/claiming_pot/types"
 )
@@ -15,7 +15,7 @@ import (
 // SetPot stores a claiming pot.
 func (k Keeper) SetPot(ctx sdk.Context, pot types.ClaimingPot) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(pot)
+	bz, err := proto.Marshal(&pot)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claiming pot: %v", err))
 	}
@@ -32,7 +32,7 @@ func (k Keeper) GetPot(ctx sdk.Context, potId string) (types.ClaimingPot, bool) 
 		return types.ClaimingPot{}, false
 	}
 	var pot types.ClaimingPot
-	if err := json.Unmarshal(bz, &pot); err != nil {
+	if err := proto.Unmarshal(bz, &pot); err != nil {
 		return types.ClaimingPot{}, false
 	}
 	return pot, true
@@ -55,7 +55,7 @@ func (k Keeper) IteratePots(ctx sdk.Context, cb func(types.ClaimingPot) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var pot types.ClaimingPot
-		if err := json.Unmarshal(iter.Value(), &pot); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &pot); err != nil {
 			continue
 		}
 		if cb(pot) {
@@ -93,7 +93,7 @@ func (k Keeper) GetPotsByCreator(ctx sdk.Context, creator string) []types.Claimi
 // SetClaimRecord stores a claim record.
 func (k Keeper) SetClaimRecord(ctx sdk.Context, record types.ClaimRecord) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(record)
+	bz, err := proto.Marshal(&record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim record: %v", err))
 	}
@@ -110,7 +110,7 @@ func (k Keeper) GetClaimRecord(ctx sdk.Context, potId, claimer string) (types.Cl
 		return types.ClaimRecord{}, false
 	}
 	var record types.ClaimRecord
-	if err := json.Unmarshal(bz, &record); err != nil {
+	if err := proto.Unmarshal(bz, &record); err != nil {
 		return types.ClaimRecord{}, false
 	}
 	return record, true
@@ -128,7 +128,7 @@ func (k Keeper) IterateClaimRecords(ctx sdk.Context, potId string, cb func(types
 
 	for ; iter.Valid(); iter.Next() {
 		var record types.ClaimRecord
-		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &record); err != nil {
 			continue
 		}
 		if cb(record) {
@@ -180,7 +180,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return *types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return *types.DefaultParams()
 	}
 	return params
@@ -189,7 +189,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}

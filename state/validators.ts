@@ -381,6 +381,9 @@ export class ValidatorStateTree {
   /**
    * Slash a validator
    * Returns the Merkle root and the actual amount burned (after escalation + caps).
+   *
+   * ZD-E03 FIX: Now also slashes pending unbonding entries proportionally,
+   * preventing slashing evasion via pre-emptive undelegation.
    */
   slashValidator(
     publicKey: PublicKey,
@@ -413,7 +416,30 @@ export class ValidatorStateTree {
         ? validator.delegatedStake
         : remainingSlash;
 
-    const burnedAmount = slashFromStake + slashFromDelegated;
+    // ZD-E03 FIX: Slash pending unbonding entries proportionally.
+    // Prevents slashing evasion via pre-emptive undelegation.
+    let slashFromUnbonding = 0n;
+    const stillRemaining =
+      escalatedAmount - slashFromStake - slashFromDelegated;
+    if (stillRemaining > 0n) {
+      const validatorDid = validator.did || publicKey;
+      const pendingEntries = this.getPendingUnbondingEntries(validatorDid);
+      let unbondingBudget = stillRemaining;
+
+      for (const entry of pendingEntries) {
+        if (unbondingBudget <= 0n) break;
+        const entrySlash =
+          entry.amount < unbondingBudget ? entry.amount : unbondingBudget;
+        // Reduce the unbonding entry amount
+        entry.amount -= entrySlash;
+        this.unbondingQueue.set(entry.id, entry);
+        slashFromUnbonding += entrySlash;
+        unbondingBudget -= entrySlash;
+      }
+    }
+
+    const burnedAmount =
+      slashFromStake + slashFromDelegated + slashFromUnbonding;
 
     const root = this.updateValidator(publicKey, {
       stake: validator.stake - slashFromStake,

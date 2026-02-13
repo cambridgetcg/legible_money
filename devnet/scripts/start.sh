@@ -1,9 +1,10 @@
 #!/bin/bash
-
-# Legible Money Devnet Quick Start
-# Usage: ./start.sh [options]
 #
-# Options:
+# Legible Money Devnet Quick Start (backward-compat wrapper)
+#
+# Delegates to devnet-ctl.sh. Kept for backward compatibility.
+#
+# Usage: ./start.sh [options]
 #   --init      Initialize devnet first (generate keys)
 #   --full      Include fullnode
 #   --explorer  Include block explorer
@@ -14,35 +15,21 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEVNET_DIR="$(dirname "$SCRIPT_DIR")"
+CTL="$SCRIPT_DIR/devnet-ctl.sh"
 
-cd "$DEVNET_DIR"
-
-# Parse arguments
-INIT=false
-PROFILES=""
+# Translate flags to devnet-ctl commands
 RESET=false
+INIT=false
+START_ARGS=()
 
 for arg in "$@"; do
-  case $arg in
-    --init)
-      INIT=true
-      ;;
-    --full)
-      PROFILES="$PROFILES --profile fullnode"
-      ;;
-    --explorer)
-      PROFILES="$PROFILES --profile explorer"
-      ;;
-    --monitor)
-      PROFILES="$PROFILES --profile monitoring"
-      ;;
-    --all)
-      PROFILES="--profile fullnode --profile explorer --profile monitoring"
-      ;;
-    --reset)
-      RESET=true
-      ;;
+  case "$arg" in
+    --reset)    RESET=true ;;
+    --init)     INIT=true ;;
+    --full)     START_ARGS+=("--full") ;;
+    --explorer) START_ARGS+=("--explorer") ;;
+    --monitor)  START_ARGS+=("--monitor") ;;
+    --all)      START_ARGS+=("--all") ;;
     *)
       echo "Unknown option: $arg"
       exit 1
@@ -50,47 +37,15 @@ for arg in "$@"; do
   esac
 done
 
-# Reset if requested
 if [ "$RESET" = true ]; then
-  echo "Resetting devnet..."
-  docker-compose down -v 2>/dev/null || true
-  INIT=true
+  "$CTL" reset
 fi
 
-# Initialize if requested or secrets don't exist
-if [ "$INIT" = true ] || [ ! -f "secrets/validator-1.key" ]; then
-  echo "Initializing devnet..."
-  cd ..
-  npx ts-node devnet/scripts/init-devnet.ts
-  cd devnet
+if [ "$INIT" = true ]; then
+  # Force re-initialization by removing existing secrets
+  DEVNET_DIR="$(dirname "$SCRIPT_DIR")"
+  PROJECT_DIR="$(dirname "$DEVNET_DIR")"
+  (cd "$PROJECT_DIR" && npx tsx devnet/scripts/init-devnet.ts)
 fi
 
-# Start services
-echo ""
-echo "Starting Legible Money Devnet..."
-echo ""
-
-docker-compose $PROFILES up -d
-
-echo ""
-echo "Devnet started!"
-echo ""
-echo "Endpoints:"
-echo "  Validator 1 RPC:  http://localhost:8545"
-echo "  Validator 2 RPC:  http://localhost:8547"
-echo "  Validator 3 RPC:  http://localhost:8549"
-echo "  Faucet:           http://localhost:8080"
-
-if [[ "$PROFILES" == *"explorer"* ]] || [[ "$PROFILES" == *"fullnode --profile explorer --profile monitoring"* ]]; then
-  echo "  Explorer:         http://localhost:3000"
-fi
-
-if [[ "$PROFILES" == *"monitoring"* ]] || [[ "$PROFILES" == *"fullnode --profile explorer --profile monitoring"* ]]; then
-  echo "  Grafana:          http://localhost:3001 (admin/devnet)"
-fi
-
-echo ""
-echo "Commands:"
-echo "  Logs:   docker-compose logs -f"
-echo "  Stop:   docker-compose down"
-echo "  Reset:  ./scripts/start.sh --reset"
+exec "$CTL" start "${START_ARGS[@]}"

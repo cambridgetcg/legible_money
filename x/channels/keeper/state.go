@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/channels/types"
 )
@@ -15,7 +15,7 @@ import (
 // SetChannel stores a payment channel and updates indexes.
 func (k Keeper) SetChannel(ctx sdk.Context, ch types.PaymentChannel) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(ch)
+	bz, err := proto.Marshal(&ch)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal payment channel: %v", err))
 	}
@@ -40,7 +40,7 @@ func (k Keeper) GetChannel(ctx sdk.Context, channelId string) (types.PaymentChan
 		return types.PaymentChannel{}, false
 	}
 	var ch types.PaymentChannel
-	if err := json.Unmarshal(bz, &ch); err != nil {
+	if err := proto.Unmarshal(bz, &ch); err != nil {
 		return types.PaymentChannel{}, false
 	}
 	return ch, true
@@ -65,7 +65,7 @@ func (k Keeper) IterateChannels(ctx sdk.Context, cb func(types.PaymentChannel) b
 
 	for ; iter.Valid(); iter.Next() {
 		var ch types.PaymentChannel
-		if err := json.Unmarshal(iter.Value(), &ch); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &ch); err != nil {
 			continue
 		}
 		if cb(ch) {
@@ -145,7 +145,7 @@ func (k Keeper) GetChannelsByStatus(ctx sdk.Context, status string) []types.Paym
 // SetDispute stores a channel dispute.
 func (k Keeper) SetDispute(ctx sdk.Context, d types.ChannelDispute) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(d)
+	bz, err := proto.Marshal(&d)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal channel dispute: %v", err))
 	}
@@ -162,7 +162,7 @@ func (k Keeper) GetDispute(ctx sdk.Context, channelId string) (types.ChannelDisp
 		return types.ChannelDispute{}, false
 	}
 	var d types.ChannelDispute
-	if err := json.Unmarshal(bz, &d); err != nil {
+	if err := proto.Unmarshal(bz, &d); err != nil {
 		return types.ChannelDispute{}, false
 	}
 	return d, true
@@ -185,7 +185,7 @@ func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(types.ChannelDispute) b
 
 	for ; iter.Valid(); iter.Next() {
 		var d types.ChannelDispute
-		if err := json.Unmarshal(iter.Value(), &d); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &d); err != nil {
 			continue
 		}
 		if cb(d) {
@@ -216,7 +216,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return *types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		return *types.DefaultParams()
 	}
 	return params
@@ -225,7 +225,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}

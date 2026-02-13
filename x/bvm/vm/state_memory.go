@@ -94,3 +94,12 @@ func (s *MemoryStateDB) GetNonce(addr []byte) uint64 {
 func (s *MemoryStateDB) SetNonce(addr []byte, nonce uint64) {
 	s.nonces[addrHex(addr)] = nonce
 }
+
+// GetStorageSlotCount returns the number of storage slots used by a contract.
+func (s *MemoryStateDB) GetStorageSlotCount(contract []byte) uint64 {
+	m, ok := s.storage[addrHex(contract)]
+	if !ok {
+		return 0
+	}
+	return uint64(len(m))
+}

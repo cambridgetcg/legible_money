@@ -492,7 +492,7 @@ func TestValidateCounterProposal(t *testing.T) {
 
 	// Depth 2 should be OK (can create depth 3)
 	op := types.ConsensusOperation{
-		Deliberation: types.DeliberationState{ChainDepth: 2},
+		Deliberation: &types.DeliberationState{ChainDepth: 2},
 	}
 	if err := k.ValidateCounterProposal(ctx, op); err != nil {
 		t.Errorf("expected no error at depth 2, got: %v", err)
@@ -1124,7 +1124,7 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Duplicate ID
 	dup := types.DefaultGenesis()
-	dup.Partnerships = []types.Partnership{
+	dup.Partnerships = []*types.Partnership{
 		{Id: "p-1", HumanAddr: "a", AgentAddr: "b", SplitHumanBps: 500000, SplitAgentBps: 500000},
 		{Id: "p-1", HumanAddr: "c", AgentAddr: "d", SplitHumanBps: 500000, SplitAgentBps: 500000},
 	}
@@ -1134,7 +1134,7 @@ func TestGenesisValidation(t *testing.T) {
 
 	// Invalid splits
 	badSplits := types.DefaultGenesis()
-	badSplits.Partnerships = []types.Partnership{
+	badSplits.Partnerships = []*types.Partnership{
 		{Id: "p-2", HumanAddr: "a", AgentAddr: "b", SplitHumanBps: 600000, SplitAgentBps: 500000},
 	}
 	if err := badSplits.Validate(); err == nil {
@@ -1699,7 +1699,7 @@ func TestWithdrawalExecution(t *testing.T) {
 		ProposedBy:    human,
 		Amount:        "3000",
 		Status:        types.OpStatusProposed,
-		Deliberation: types.DeliberationState{
+		Deliberation: &types.DeliberationState{
 			AmountTier:   types.AmountTierMedium,
 			FloorEndsAt:  currentBlock - 10, // floor already passed
 			WindowEndsAt: currentBlock + 100, // window still open
@@ -1838,7 +1838,7 @@ func TestConsensusOperationCRUD(t *testing.T) {
 		ProposedBy:    testAddr(1),
 		Amount:        "5000",
 		Status:        types.OpStatusProposed,
-		Deliberation: types.DeliberationState{
+		Deliberation: &types.DeliberationState{
 			AmountTier:   types.AmountTierSmall,
 			WindowEndsAt: 200,
 			FloorEndsAt:  150,

@@ -52,3 +52,4 @@ export * from "./hashing.js";
 export * from "./vrf.js";
 export * from "./merkle.js";
 export * from "./commitment.js";
+export * from "./cipher.js";

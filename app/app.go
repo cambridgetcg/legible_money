@@ -104,6 +104,9 @@ import (
 	// Crypto codec for keyring support
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 
+	// Tx types (cosmos.tx.v1beta1.Tx registration)
+	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
+
 	// gRPC
 	"google.golang.org/grpc"
 
@@ -438,6 +441,7 @@ func NewLegibleApp(
 	cryptocodec.RegisterInterfaces(interfaceRegistry)
 	ModuleBasics.RegisterInterfaces(interfaceRegistry)
 	ModuleBasics.RegisterLegacyAminoCodec(legacyAmino)
+	txtypes.RegisterInterfaces(interfaceRegistry)
 
 	bApp := baseapp.NewBaseApp(AppName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
 	bApp.SetCommitMultiStoreTracer(traceStore)
@@ -1496,6 +1500,7 @@ func MakeEncodingConfig() EncodingConfig {
 	// genesis types (e.g. slashing, staking, gov).
 	ModuleBasics.RegisterInterfaces(interfaceRegistry)
 	ModuleBasics.RegisterLegacyAminoCodec(legacyAmino)
+	txtypes.RegisterInterfaces(interfaceRegistry)
 
 	return EncodingConfig{
 		InterfaceRegistry: interfaceRegistry,

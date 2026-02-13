@@ -256,8 +256,11 @@ function calculateWeightedConfidence(
   const requirement = CROSS_STRATUM_CONFIG.requirements[claimStratum];
   const lowerBonus = requirement?.lowerStratumWeightBonus || 1.0;
 
-  let weightedSum = 0;
-  let totalWeight = 0;
+  // ZD-S01 FIX: Use BigInt-scaled weights to prevent Number() overflow on large stakes.
+  // Scale factor: 1M BPS for fractional multipliers applied to BigInt stakes.
+  const SCALE = 1_000_000n;
+  let weightedSumScaled = 0n;
+  let totalWeightScaled = 0n;
 
   for (const [validatorId, reveal] of reveals) {
     const validator = validators.get(validatorId);
@@ -268,22 +271,30 @@ function calculateWeightedConfidence(
 
     const validatorLevel = ontology.getLevel(validatorStratum);
 
-    // Base weight from stake
-    let weight = Number(validator.stake);
+    // Base weight from stake (BigInt)
+    let weightScaled = validator.stake * SCALE;
 
     // Apply stratum bonus for lower stratum validators
     if (validatorLevel < claimLevel) {
-      weight *= lowerBonus;
+      const bonusBps = BigInt(Math.round(lowerBonus * 1_000_000));
+      weightScaled = (weightScaled * bonusBps) / SCALE;
     }
 
-    // Weight by reputation
-    weight *= 0.5 + validator.reputation * 0.5;
+    // Weight by reputation: 0.5 + reputation * 0.5
+    const repBps = BigInt(
+      Math.round((0.5 + validator.reputation * 0.5) * 1_000_000),
+    );
+    weightScaled = (weightScaled * repBps) / SCALE;
 
-    weightedSum += reveal.confidence * weight;
-    totalWeight += weight;
+    // Confidence is a float 0.0-1.0, apply to BigInt weight
+    const confBps = BigInt(Math.round(reveal.confidence * 1_000_000));
+    weightedSumScaled += (weightScaled * confBps) / SCALE;
+    totalWeightScaled += weightScaled;
   }
 
-  return totalWeight > 0 ? weightedSum / totalWeight : 0;
+  return totalWeightScaled > 0n
+    ? Number((weightedSumScaled * SCALE) / totalWeightScaled) / 1_000_000
+    : 0;
 }
 
 /**

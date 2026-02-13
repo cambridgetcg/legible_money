@@ -53,6 +53,12 @@ export interface AgentIdentity {
  * wallet, SDK, and all transaction processing.
  *
  * Format: did:lgm:{first 32 hex chars of publicKey}
+ *
+ * ZD-I01 NOTE: Uses 32 hex chars (128 bits / 16 bytes) — birthday-attack
+ * collision resistance is ~2^64, which is adequate for pre-mainnet.
+ * For mainnet, consider migrating to full 64-char (256-bit) DIDs via
+ * a coordinated state migration. Changing this without migration would
+ * break all existing accounts.
  */
 export function publicKeyToDid(publicKey: PublicKey): string {
   return `did:lgm:${publicKey.slice(0, 32)}`;
@@ -63,6 +69,8 @@ export function publicKeyToDid(publicKey: PublicKey): string {
  * Used for DID documents and off-chain identity resolution.
  *
  * Format: did:lgm:{network}:{first 44 hex chars of publicKey}
+ *
+ * ZD-I01 NOTE: See publicKeyToDid for DID length security considerations.
  */
 export function createDID(
   publicKey: PublicKey,

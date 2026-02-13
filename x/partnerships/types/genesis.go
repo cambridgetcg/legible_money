@@ -20,24 +20,30 @@ func DefaultParams() Params {
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
+	p := DefaultParams()
 	return &GenesisState{
-		Params:              DefaultParams(),
-		Partnerships:        []Partnership{},
-		ConsensusOperations: []ConsensusOperation{},
-		SafetyFreezes:       []SafetyFreeze{},
-		CoercionSignals:     []CoercionSignal{},
+		Params:              &p,
+		Partnerships:        []*Partnership{},
+		ConsensusOperations: []*ConsensusOperation{},
+		SafetyFreezes:       []*SafetyFreeze{},
+		CoercionSignals:     []*CoercionSignal{},
 	}
 }
 
 // Validate performs basic genesis state validation.
 func (gs GenesisState) Validate() error {
-	if err := gs.Params.Validate(); err != nil {
-		return fmt.Errorf("invalid params: %w", err)
+	if gs.Params != nil {
+		if err := gs.Params.Validate(); err != nil {
+			return fmt.Errorf("invalid params: %w", err)
+		}
 	}
 
 	// Validate partnerships: no duplicate IDs.
 	seen := make(map[string]bool)
 	for _, p := range gs.Partnerships {
+		if p == nil {
+			continue
+		}
 		if p.Id == "" {
 			return fmt.Errorf("partnership id cannot be empty")
 		}

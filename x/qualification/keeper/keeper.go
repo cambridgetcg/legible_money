@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/qualification/types"
 )
@@ -293,7 +293,7 @@ func (k Keeper) GetAllQualifications(ctx sdk.Context) []types.DomainQualificatio
 	var qualifications []types.DomainQualification
 	for ; iter.Valid(); iter.Next() {
 		var q types.DomainQualification
-		if err := json.Unmarshal(iter.Value(), &q); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &q); err != nil {
 			continue
 		}
 		qualifications = append(qualifications, q)
@@ -313,7 +313,7 @@ func (k Keeper) GetAllEndorsements(ctx sdk.Context) []types.QualificationEndorse
 	var endorsements []types.QualificationEndorsement
 	for ; iter.Valid(); iter.Next() {
 		var e types.QualificationEndorsement
-		if err := json.Unmarshal(iter.Value(), &e); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &e); err != nil {
 			continue
 		}
 		endorsements = append(endorsements, e)

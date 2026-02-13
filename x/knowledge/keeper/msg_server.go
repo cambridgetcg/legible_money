@@ -17,12 +17,12 @@ type msgServer struct {
 	Keeper
 }
 
-// NewMsgServerImpl returns an implementation of the MsgServer interface.
-func NewMsgServerImpl(keeper Keeper) types.MsgServer {
+// NewMsgServerImpl returns an implementation of the ExtendedMsgServer interface.
+func NewMsgServerImpl(keeper Keeper) types.ExtendedMsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
-var _ types.MsgServer = msgServer{}
+var _ types.ExtendedMsgServer = msgServer{}
 
 // SubmitClaim handles MsgSubmitClaim — the core PoT transaction.
 //

@@ -132,6 +132,9 @@ func (p Params) Validate() error {
 	if p.MaxRevertDepth == 0 {
 		return fmt.Errorf("max revert depth must be positive")
 	}
+	if p.MaxHaltDurationBlocks == 0 {
+		return fmt.Errorf("max halt duration blocks must be positive (prevents permanent chain freeze)")
+	}
 	return nil
 }
 

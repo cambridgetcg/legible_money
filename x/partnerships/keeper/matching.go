@@ -1,10 +1,10 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/partnerships/types"
 )
@@ -25,7 +25,7 @@ const (
 // SetPoolEntry stores a pool entry.
 func (k Keeper) SetPoolEntry(ctx sdk.Context, pe types.PoolEntry) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(pe)
+	bz, err := proto.Marshal(&pe)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal pool entry: %v", err))
 	}
@@ -40,7 +40,7 @@ func (k Keeper) GetPoolEntry(ctx sdk.Context, addr string) (types.PoolEntry, boo
 		return types.PoolEntry{}, false
 	}
 	var pe types.PoolEntry
-	if err := json.Unmarshal(bz, &pe); err != nil {
+	if err := proto.Unmarshal(bz, &pe); err != nil {
 		return types.PoolEntry{}, false
 	}
 	return pe, true
@@ -64,7 +64,7 @@ func (k Keeper) CountActivePoolEntries(ctx sdk.Context) int {
 	count := 0
 	for ; iter.Valid(); iter.Next() {
 		var pe types.PoolEntry
-		if err := json.Unmarshal(iter.Value(), &pe); err == nil && pe.Status == "active" {
+		if err := proto.Unmarshal(iter.Value(), &pe); err == nil && pe.Status == "active" {
 			count++
 		}
 	}
@@ -83,7 +83,7 @@ func (k Keeper) GetAllPoolEntries(ctx sdk.Context) []types.PoolEntry {
 
 	for ; iter.Valid(); iter.Next() {
 		var pe types.PoolEntry
-		if err := json.Unmarshal(iter.Value(), &pe); err == nil {
+		if err := proto.Unmarshal(iter.Value(), &pe); err == nil {
 			entries = append(entries, pe)
 		}
 	}
@@ -95,7 +95,7 @@ func (k Keeper) GetAllPoolEntries(ctx sdk.Context) []types.PoolEntry {
 // SetIntent stores a partnership intent.
 func (k Keeper) SetIntent(ctx sdk.Context, pi types.PartnershipIntent) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(pi)
+	bz, err := proto.Marshal(&pi)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal intent: %v", err))
 	}
@@ -111,7 +111,7 @@ func (k Keeper) GetIntent(ctx sdk.Context, id string) (types.PartnershipIntent, 
 		return types.PartnershipIntent{}, false
 	}
 	var pi types.PartnershipIntent
-	if err := json.Unmarshal(bz, &pi); err != nil {
+	if err := proto.Unmarshal(bz, &pi); err != nil {
 		return types.PartnershipIntent{}, false
 	}
 	return pi, true
@@ -149,7 +149,7 @@ func (k Keeper) CountPendingIntentsByDID(ctx sdk.Context, addr string) int {
 // SetMentorship stores a mentorship config.
 func (k Keeper) SetMentorship(ctx sdk.Context, mc types.MentorshipConfig) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(mc)
+	bz, err := proto.Marshal(&mc)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal mentorship: %v", err))
 	}
@@ -165,7 +165,7 @@ func (k Keeper) GetMentorship(ctx sdk.Context, partnershipId string) (types.Ment
 		return types.MentorshipConfig{}, false
 	}
 	var mc types.MentorshipConfig
-	if err := json.Unmarshal(bz, &mc); err != nil {
+	if err := proto.Unmarshal(bz, &mc); err != nil {
 		return types.MentorshipConfig{}, false
 	}
 	return mc, true

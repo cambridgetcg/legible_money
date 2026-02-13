@@ -1,0 +1,10 @@
+syntax = "proto3";
+package legible.schedule.v1;
+option go_package = "github.com/legible-money/legible/x/schedule/types";
+import "legible/schedule/v1/state.proto";
+
+message GenesisState {
+  Params params = 1;
+  repeated ScheduleProcess processes = 2;
+  uint64 sequence = 3;
+}

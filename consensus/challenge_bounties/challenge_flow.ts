@@ -236,13 +236,14 @@ export function calculateChallengerReward(
   challenge: CaptureChallenge,
   bountyPool: DomainBountyPool,
 ): bigint {
-  // Base: stake * multiplier
-  const stakeReturn = BigInt(
-    Math.floor(
-      Number(challenge.challengeStake) *
-        CHALLENGE_BOUNTY_CONFIG.challengeStakeMultiplierOnSuccess,
+  // ZD-S01 FIX: Use BPS-based BigInt arithmetic to prevent Number() overflow.
+  // challengeStakeMultiplierOnSuccess is 7.7 → 7_700_000 BPS (out of 1M)
+  const multiplierBps = BigInt(
+    Math.round(
+      CHALLENGE_BOUNTY_CONFIG.challengeStakeMultiplierOnSuccess * 1_000_000,
     ),
   );
+  const stakeReturn = (challenge.challengeStake * multiplierBps) / 1_000_000n;
 
   // Capture exposure bonus
   const exposureBonus = CHALLENGE_BOUNTY_CONFIG.captureExposureBonus;
@@ -250,9 +251,8 @@ export function calculateChallengerReward(
   // Share of bounty pool (proportional to evidence quality)
   const evidenceQuality =
     challenge.evidence.length / Math.max(challenge.evidence.length, 10);
-  const poolShare = BigInt(
-    Math.floor(Number(bountyPool.balance) * evidenceQuality * 0.5),
-  );
+  const qualityBps = BigInt(Math.round(evidenceQuality * 500_000)); // 0.5 * quality, in BPS
+  const poolShare = (bountyPool.balance * qualityBps) / 1_000_000n;
 
   return stakeReturn + exposureBonus + poolShare;
 }
@@ -270,11 +270,14 @@ export function calculateValidatorSlashes(
     const stake = validatorStakes.get(validatorId);
     if (!stake) continue;
 
-    const slashAmount = BigInt(
-      Math.floor(
-        Number(stake) * CHALLENGE_BOUNTY_CONFIG.validatorSlashOnUpheldChallenge,
+    // ZD-S01 FIX: Use BPS-based BigInt arithmetic
+    // validatorSlashOnUpheldChallenge is 0.3 → 300_000 BPS
+    const slashBps = BigInt(
+      Math.round(
+        CHALLENGE_BOUNTY_CONFIG.validatorSlashOnUpheldChallenge * 1_000_000,
       ),
     );
+    const slashAmount = (stake * slashBps) / 1_000_000n;
     slashes.set(validatorId, slashAmount);
   }
 
@@ -287,12 +290,11 @@ export function calculateValidatorSlashes(
 export function calculateFailedChallengePenalty(
   challenge: CaptureChallenge,
 ): bigint {
-  return BigInt(
-    Math.floor(
-      Number(challenge.challengeStake) *
-        CHALLENGE_BOUNTY_CONFIG.failedChallengePenalty,
-    ),
+  // ZD-S01 FIX: Use BPS-based BigInt arithmetic
+  const penaltyBps = BigInt(
+    Math.round(CHALLENGE_BOUNTY_CONFIG.failedChallengePenalty * 1_000_000),
   );
+  return (challenge.challengeStake * penaltyBps) / 1_000_000n;
 }
 
 /**

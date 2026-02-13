@@ -42,6 +42,38 @@ func ValidateDID(did string) error {
 	return nil
 }
 
+// PublicKeyToDID derives the canonical DID from a hex-encoded Ed25519 public key.
+// Matches TypeScript canonical format: did:lgm:{first 32 hex chars of pubkey}
+func PublicKeyToDID(pubKeyHex string) string {
+	if len(pubKeyHex) < 32 {
+		return ""
+	}
+	return "did:lgm:" + strings.ToLower(pubKeyHex[:32])
+}
+
+// ValidateDIDDerivation checks that a DID correctly derives from the given public key.
+// Supports both 32-char (canonical) and 64-char (full pubkey) DID suffixes.
+func ValidateDIDDerivation(did string, pubKeyHex string) error {
+	if len(pubKeyHex) != 64 {
+		return fmt.Errorf("public key must be 64 hex characters, got %d", len(pubKeyHex))
+	}
+	suffix := strings.TrimPrefix(did, "did:lgm:")
+	switch len(suffix) {
+	case 32:
+		expected := strings.ToLower(pubKeyHex[:32])
+		if strings.ToLower(suffix) != expected {
+			return fmt.Errorf("DID does not derive from public key: expected did:lgm:%s, got %s", expected, did)
+		}
+	case 64:
+		if strings.ToLower(suffix) != strings.ToLower(pubKeyHex) {
+			return fmt.Errorf("DID does not match full public key: expected did:lgm:%s, got %s", strings.ToLower(pubKeyHex), did)
+		}
+	default:
+		return fmt.Errorf("DID suffix must be 32 or 64 hex characters, got %d", len(suffix))
+	}
+	return nil
+}
+
 // ============================================================
 // sdk.Msg interface implementations for proto-generated types
 // (ValidateBasic + GetSigners extend the proto types)
@@ -151,6 +183,10 @@ func (msg MsgRegisterAccount) ValidateBasic() error {
 	}
 	if len(msg.PublicKey) != 64 {
 		return fmt.Errorf("public_key must be 64 hex characters (32 bytes Ed25519)")
+	}
+	// Verify DID derives from public key (prevents DID spoofing)
+	if err := ValidateDIDDerivation(msg.Did, msg.PublicKey); err != nil {
+		return fmt.Errorf("DID derivation mismatch: %w", err)
 	}
 	validTypes := map[string]bool{"agent": true, "human": true, "contract": true, "system": true}
 	if !validTypes[msg.AccountType] {
@@ -295,6 +331,7 @@ type MsgSubmitRecoveryShard struct {
 	Sender         string `json:"sender"`          // shard holder address
 	AccountAddress string `json:"account_address"` // account being recovered
 	ShardIndex     uint32 `json:"shard_index"`     // 1-based shard index
+	EncryptedShard []byte `json:"encrypted_shard"` // H-2: encrypted shard data (optional for backward compat)
 }
 type MsgSubmitRecoveryShardResponse struct{}
 
@@ -378,6 +415,24 @@ func (msg MsgExecuteRecovery) ProtoMessage()  {}
 func (msg MsgExecuteRecoveryResponse) Reset()         {}
 func (msg MsgExecuteRecoveryResponse) String() string { return "MsgExecuteRecoveryResponse{}" }
 func (msg MsgExecuteRecoveryResponse) ProtoMessage()  {}
+
+// ============================================================
+// Recovery shard storage (H-2: on-chain encrypted shard data)
+// ============================================================
+
+// RecoveryShard stores an encrypted Shamir shard on-chain during recovery.
+// The shard data is encrypted with the shard holder's key before submission.
+type RecoveryShard struct {
+	OwnerAddress   string `json:"owner_address"`    // Account being recovered
+	ShardIndex     uint32 `json:"shard_index"`      // 1-based shard index
+	SubmitterAddr  string `json:"submitter_address"` // Who submitted this shard
+	EncryptedData  []byte `json:"encrypted_data"`   // Encrypted shard bytes
+	SubmittedBlock uint64 `json:"submitted_block"`  // Block height when submitted
+}
+
+func (s RecoveryShard) Reset()         {}
+func (s RecoveryShard) String() string { return fmt.Sprintf("RecoveryShard{%s/%d}", s.OwnerAddress, s.ShardIndex) }
+func (s RecoveryShard) ProtoMessage()  {}
 
 // ============================================================
 // Extended MsgServer for methods not in the proto service definition

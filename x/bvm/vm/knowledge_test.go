@@ -208,6 +208,7 @@ func TestKnowledge_SubmitClaim(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:test123"
 	ctx.BlockNumber = 100
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()
@@ -258,6 +259,7 @@ func TestKnowledge_CommitVote(t *testing.T) {
 	}
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:validator1"
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()
@@ -286,6 +288,7 @@ func TestKnowledge_RevealVote(t *testing.T) {
 	}
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:validator1"
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()

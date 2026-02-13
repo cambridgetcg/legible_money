@@ -85,4 +85,7 @@ var (
 
 	// ErrBootstrapInsufficientFunds is returned when module account has insufficient funds
 	ErrBootstrapInsufficientFunds = errors.Register(ModuleName, 28, "bootstrap fund has insufficient balance")
+
+	// ErrDIDDerivationMismatch is returned when DID does not derive from the provided public key
+	ErrDIDDerivationMismatch = errors.Register(ModuleName, 29, "DID does not derive from public key")
 )

@@ -44,6 +44,16 @@ func (interp *Interpreter) Execute(
 	interp.stopped = false
 	interp.gas = NewGasMeter(ctx.GasLimit)
 
+	// Enforce call depth limit (prevents recursive call DoS)
+	if interp.callDepth > MaxCallDepth {
+		return interp.errorResult(ErrCodeCallDepthExceeded, "call depth exceeded")
+	}
+
+	// Enforce bytecode size limit (EIP-170: 24 KB)
+	if len(bytecode) > MaxBytecodeSize {
+		return interp.errorResult(ErrCodeExecutionFailed, "bytecode exceeds max size")
+	}
+
 	// Pre-scan for JUMPDEST
 	interp.jumpDests = scanJumpDests(bytecode)
 
@@ -799,6 +809,15 @@ func (interp *Interpreter) executeOpcode(
 			oldWord.SetBytes(oldVal)
 		}
 
+		// Enforce per-contract storage slot limit on new slot creation
+		if oldWord.Sign() == 0 && val.Sign() != 0 {
+			if sc, ok := state.(StorageCounter); ok {
+				if sc.GetStorageSlotCount(ctx.CurrentContract) >= MaxStorageSlotsPerContract {
+					return actionError // Storage limit exceeded
+				}
+			}
+		}
+
 		// Dynamic gas: EIP-2200 simplified
 		if oldWord.Sign() == 0 && val.Sign() != 0 {
 			if err := interp.gas.Consume(GasSstoreSet); err != nil {
@@ -960,40 +979,57 @@ func (interp *Interpreter) executeOpcode(
 			Data:    data,
 		})
 
-	// --- CALL/CREATE (stub — Phase 3) ---
+	// --- CALL/CREATE (ZD-X03 FIX: proper gas accounting + error signal) ---
+	// These opcodes are not yet implemented but must consume gas and
+	// leave the stack in a well-defined state (0 = failure).
 	case CALL, CALLCODE:
-		// Pop 7 args, push 0 (failure) — real implementation in Phase 3
+		// Pop 7 args: gas, addr, value, argsOff, argsLen, retOff, retLen
 		for i := 0; i < 7; i++ {
 			if _, ok := pop(); !ok {
 				return actionError
 			}
 		}
-		push(new(big.Int)) // 0 = call failed
+		// Consume base call gas to prevent free probing
+		if err := interp.gas.Consume(700); err != nil {
+			return actionError
+		}
+		push(new(big.Int)) // 0 = call failed (not implemented)
 
 	case DELEGATECALL, STATICCALL:
-		// Pop 6 args, push 0
+		// Pop 6 args: gas, addr, argsOff, argsLen, retOff, retLen
 		for i := 0; i < 6; i++ {
 			if _, ok := pop(); !ok {
 				return actionError
 			}
 		}
-		push(new(big.Int))
+		if err := interp.gas.Consume(700); err != nil {
+			return actionError
+		}
+		push(new(big.Int)) // 0 = call failed (not implemented)
 
 	case CREATE:
+		// Pop 3 args: value, offset, length
 		for i := 0; i < 3; i++ {
 			if _, ok := pop(); !ok {
 				return actionError
 			}
 		}
-		push(new(big.Int))
+		if err := interp.gas.Consume(32000); err != nil {
+			return actionError
+		}
+		push(new(big.Int)) // 0 = create failed (not implemented)
 
 	case CREATE2:
+		// Pop 4 args: value, offset, length, salt
 		for i := 0; i < 4; i++ {
 			if _, ok := pop(); !ok {
 				return actionError
 			}
 		}
-		push(new(big.Int))
+		if err := interp.gas.Consume(32000); err != nil {
+			return actionError
+		}
+		push(new(big.Int)) // 0 = create failed (not implemented)
 
 	default:
 		// PUSH1-PUSH32
@@ -1041,10 +1077,13 @@ func (interp *Interpreter) executeOpcode(
 }
 
 // checkCapability returns true if the execution context permits the given capability.
-// If Capabilities is nil (no session key restriction), all capabilities are allowed.
+// C-1 FIX: Secure default — nil capabilities DENY all restricted operations.
+// Only explicit SessionCapabilities grant access to agent opcodes.
+// Callers authenticated via identity/operational key (not session) should have
+// their capabilities set to all-true by the keeper before execution.
 func checkCapability(ctx *ExecutionContext, cap string) bool {
 	if ctx.Capabilities == nil {
-		return true
+		return false // SECURE DEFAULT: deny without explicit session
 	}
 	switch cap {
 	case "stake":
@@ -1056,11 +1095,12 @@ func checkCapability(ctx *ExecutionContext, cap string) bool {
 	case "vote":
 		return ctx.Capabilities.CanVote
 	default:
-		return true
+		return false // Unknown capability: deny
 	}
 }
 
 // executeAgentOpcode handles all Legible Money extension opcodes.
+// H-1: Reentrancy guard — rejects agent opcodes if already inside a host call.
 func (interp *Interpreter) executeAgentOpcode(
 	opcode byte,
 	ctx *ExecutionContext,
@@ -1076,6 +1116,11 @@ func (interp *Interpreter) executeAgentOpcode(
 	}
 	push := func(v *big.Int) {
 		interp.stack.Push(v)
+	}
+
+	// H-1: Reentrancy guard — reject if already inside a host function call
+	if ctx.InHostCall {
+		return actionError
 	}
 
 	// If no host functions, agent opcodes silently push 0 / no-op
@@ -1095,6 +1140,10 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 		return actionContinue
 	}
+
+	// H-1: Set reentrancy guard before host function dispatch, clear after.
+	ctx.InHostCall = true
+	defer func() { ctx.InHostCall = false }()
 
 	switch opcode {
 	// Knowledge (0xB0-0xB5)

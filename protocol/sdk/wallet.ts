@@ -103,10 +103,33 @@ export class AgentWallet implements Wallet {
   }
 
   /**
-   * Sign a transaction payload
+   * Sign a transaction payload (legacy — signs payload only)
+   * @deprecated Use signFullTransaction() which covers type+nonce+fee+payload
    */
   async signTransaction(payload: object): Promise<string> {
     const message = JSON.stringify(payload);
+    return sign(new TextEncoder().encode(message), this.privateKey);
+  }
+
+  /**
+   * Sign a full transaction covering type+nonce+fee+payload.
+   * ZD-E01 FIX: Prevents type/nonce/fee mutation attacks.
+   */
+  async signFullTransaction(tx: {
+    type: string;
+    nonce: bigint;
+    fee: bigint;
+    payload: unknown;
+  }): Promise<string> {
+    const message = JSON.stringify(
+      {
+        type: tx.type,
+        nonce: tx.nonce.toString(),
+        fee: tx.fee.toString(),
+        payload: tx.payload,
+      },
+      (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+    );
     return sign(new TextEncoder().encode(message), this.privateKey);
   }
 

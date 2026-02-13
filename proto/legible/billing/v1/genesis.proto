@@ -1,0 +1,12 @@
+syntax = "proto3";
+package legible.billing.v1;
+
+option go_package = "github.com/legible-money/legible/x/billing/types";
+
+import "legible/billing/v1/state.proto";
+
+// GenesisState defines the billing module's genesis state.
+message GenesisState {
+  Params params              = 1;
+  repeated Provider providers = 2;
+}

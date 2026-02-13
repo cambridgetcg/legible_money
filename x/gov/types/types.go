@@ -159,6 +159,10 @@ func (msg *MsgSubmitLIP) ValidateBasic() error {
 	if len(msg.Description) > 2000 {
 		return fmt.Errorf("description too long (max 2000)")
 	}
+	// Require positive initial stake to prevent zero-cost proposal spam
+	if msg.InitialStake == "" || msg.InitialStake == "0" {
+		return fmt.Errorf("initial_stake must be positive: proposals require a deposit")
+	}
 	return nil
 }
 
@@ -191,6 +195,10 @@ func (msg *MsgCastVote) ValidateBasic() error {
 	}
 	if msg.Option == VoteOption_VOTE_OPTION_UNSPECIFIED {
 		return fmt.Errorf("vote option cannot be unspecified")
+	}
+	// Require positive stake to prevent unstaked voting
+	if msg.Stake == "" {
+		return fmt.Errorf("stake cannot be empty: voters must stake tokens")
 	}
 	return nil
 }

@@ -63,6 +63,11 @@ services:
     depends_on:
       - validator-1
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8545/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   validator-3:
     build:
@@ -90,6 +95,11 @@ services:
     depends_on:
       - validator-1
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8545/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ============ Full Node (Non-Validator) ============
 

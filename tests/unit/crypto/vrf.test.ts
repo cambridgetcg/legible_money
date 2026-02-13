@@ -212,7 +212,7 @@ describe("generateBlockSeed", () => {
   it("returns a Uint8Array", () => {
     const seed = generateBlockSeed("abc123", 1n, 0n);
     expect(seed).toBeInstanceOf(Uint8Array);
-    expect(seed.length).toBe(64); // SHA-512 output via domainHash
+    expect(seed.length).toBe(32); // SHA-256 output via domainHash
   });
 
   it("is deterministic for same inputs", () => {

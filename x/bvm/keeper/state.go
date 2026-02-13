@@ -2,10 +2,10 @@ package keeper
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/legible-money/legible/x/bvm/types"
 )
@@ -15,7 +15,7 @@ import (
 // SetContract stores a deployed contract and maintains the creator index.
 func (k Keeper) SetContract(ctx sdk.Context, contract types.DeployedContract) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(contract)
+	bz, err := proto.Marshal(&contract)
 	if err != nil {
 		panic(err)
 	}
@@ -37,7 +37,7 @@ func (k Keeper) GetContract(ctx sdk.Context, address string) (types.DeployedCont
 		return types.DeployedContract{}, false
 	}
 	var contract types.DeployedContract
-	if err := json.Unmarshal(bz, &contract); err != nil {
+	if err := proto.Unmarshal(bz, &contract); err != nil {
 		panic(err)
 	}
 	return contract, true
@@ -79,7 +79,7 @@ func (k Keeper) IterateContracts(ctx sdk.Context, cb func(types.DeployedContract
 
 	for ; iter.Valid(); iter.Next() {
 		var contract types.DeployedContract
-		if err := json.Unmarshal(iter.Value(), &contract); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &contract); err != nil {
 			panic(err)
 		}
 		if cb(contract) {
@@ -133,7 +133,7 @@ func (k Keeper) GetNextContractNonce(ctx sdk.Context) uint64 {
 // SetCode stores contract code keyed by its hash.
 func (k Keeper) SetCode(ctx sdk.Context, code types.ContractCode) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(code)
+	bz, err := proto.Marshal(&code)
 	if err != nil {
 		panic(err)
 	}
@@ -150,7 +150,7 @@ func (k Keeper) GetCode(ctx sdk.Context, codeHash string) (types.ContractCode, b
 		return types.ContractCode{}, false
 	}
 	var code types.ContractCode
-	if err := json.Unmarshal(bz, &code); err != nil {
+	if err := proto.Unmarshal(bz, &code); err != nil {
 		panic(err)
 	}
 	return code, true
@@ -175,7 +175,7 @@ func (k Keeper) IterateCode(ctx sdk.Context, cb func(types.ContractCode) bool) {
 
 	for ; iter.Valid(); iter.Next() {
 		var code types.ContractCode
-		if err := json.Unmarshal(iter.Value(), &code); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &code); err != nil {
 			panic(err)
 		}
 		if cb(code) {
@@ -246,7 +246,7 @@ func (k Keeper) CountContractState(ctx sdk.Context, contractAddress string) uint
 // SetSchedule stores a contract schedule and maintains the block index.
 func (k Keeper) SetSchedule(ctx sdk.Context, schedule types.ContractSchedule) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(schedule)
+	bz, err := proto.Marshal(&schedule)
 	if err != nil {
 		panic(err)
 	}
@@ -270,7 +270,7 @@ func (k Keeper) GetSchedule(ctx sdk.Context, scheduleId string) (types.ContractS
 		return types.ContractSchedule{}, false
 	}
 	var schedule types.ContractSchedule
-	if err := json.Unmarshal(bz, &schedule); err != nil {
+	if err := proto.Unmarshal(bz, &schedule); err != nil {
 		panic(err)
 	}
 	return schedule, true
@@ -298,7 +298,7 @@ func (k Keeper) IterateSchedules(ctx sdk.Context, cb func(types.ContractSchedule
 
 	for ; iter.Valid(); iter.Next() {
 		var schedule types.ContractSchedule
-		if err := json.Unmarshal(iter.Value(), &schedule); err != nil {
+		if err := proto.Unmarshal(iter.Value(), &schedule); err != nil {
 			panic(err)
 		}
 		if cb(schedule) {
@@ -378,7 +378,7 @@ func (k Keeper) CountContractSchedules(ctx sdk.Context, contractAddress string) 
 // SetParams stores the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(params)
+	bz, err := proto.Marshal(&params)
 	if err != nil {
 		panic(err)
 	}
@@ -395,7 +395,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	if err := proto.Unmarshal(bz, &params); err != nil {
 		panic(err)
 	}
 	return params

@@ -105,7 +105,7 @@ func TestSetGetProfile(t *testing.T) {
 		RegisteredAtBlock: 100,
 		LastActiveBlock:   100,
 		Stake:             "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification", Domains: []string{"mathematics"}, ConfidenceBps: 8000},
 		},
 	}
@@ -159,7 +159,7 @@ func TestGetProfilesByCapability(t *testing.T) {
 		Address: testAgent1,
 		Status:  "active",
 		Stake:   "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification"},
 			{CapabilityType: "research"},
 		},

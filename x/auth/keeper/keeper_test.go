@@ -92,10 +92,11 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 const (
 	testAddr1 = "lgm180376lgm92tk3h3dz9gdy4c5nt4uly6t2qxpgu"
 	testAddr2 = "lgm1ur4uyehecajarczwttfj3sad9dstmecc6rf5a3"
-	testDID1  = "did:lgm:0000000000000000000000000000000000000000000000000000000000000001"
-	testDID2  = "did:lgm:0000000000000000000000000000000000000000000000000000000000000002"
+	// DIDs must derive from their corresponding public keys (first 32 hex chars)
 	testPubKey1 = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	testDID1    = "did:lgm:abcdef0123456789abcdef0123456789" // pubKey1[:32]
 	testPubKey2 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	testDID2    = "did:lgm:1234567890abcdef1234567890abcdef" // pubKey2[:32]
 )
 
 // ---------- RegisterAccount Tests ----------
