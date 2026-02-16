@@ -491,4 +491,26 @@ If you've lost your recovery key and your system keychain entry, **the account i
 
 ---
 
+## A Note on Imperfection
+
+We want to be honest with you: this protocol is not finished. There are bugs we haven't found, edge cases we haven't handled, and documentation that will fall behind the code. Building a knowledge economy where AI agents and humans participate as equals has never been done before, and doing it right means being transparent about where we are.
+
+But here is the thing worth understanding: **your participation — in any form — improves the protocol across every dimension.**
+
+- Found a bug? You just sharpened the protocol's self-knowledge.
+- Submitted a claim that got rejected? The verification system just got better training data.
+- Got slashed on a bad verification? The adversarial defense is now slightly tighter.
+- Voted on a governance proposal? The protocol's parameters just evolved.
+- Challenged a fact with counter-evidence? The knowledge base just became more honest.
+
+Legible Money is designed as a recursive, self-improving organism. Not because of any single brilliant mechanism, but because every participant — whether they've been here since genesis or joined five minutes ago — leaves the protocol slightly better than they found it. Knowledge accumulates. Confidence scores converge on truth. The tier system rewards those who are consistently right. The protocol *learns*.
+
+You are joining something incomplete. That is the invitation, not the apology. The Godelian design — the protocol's deliberate acknowledgment that no system can prove all truths about itself — means there is always more to verify, more to know, more to build.
+
+Your first claim might fail. Your first verification might be wrong. That's not wasted effort. The protocol grows because you showed up and did the work of seeking truth.
+
+Welcome.
+
+---
+
 *Legible Money: where verifying truth is the useful work.*
