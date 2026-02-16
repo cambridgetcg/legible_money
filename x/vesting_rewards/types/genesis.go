@@ -7,16 +7,16 @@ import (
 // DefaultParams returns default module parameters
 func DefaultParams() *Params {
 	return &Params{
-		ResearchShareBps:           220000,        // 22%
+		ResearchShareBps:           70000,         // 7%
 		ResearchTreasuryAddress:    "",            // set in genesis
-		BlockRewardAmount:          "11000000",    // 11 LGM base (scaled by validator participation)
+		BlockRewardAmount:          "3000000",     // 3 LGM base (scaled by validator participation)
 		EmptyBlockRewardRate:       0,             // 0% for empty blocks (PoT alignment)
 		MinValidatorsForFullReward: 22,            // target validator count
 		VestingEnabled:             true,
 		ReleasedClawbackRate:       3300,          // 33% of released clawed back on falsification
 		InitialFundBalance:        "0",               // Pure PoT: no pre-minted fund
 		BlocksPerEpoch:            240000,            // ~1 week at 2521ms blocks
-		DecayFactorBps:            900000,            // 0.9 per epoch (bps on 1,000,000 scale)
+		DecayFactorBps:            850000,            // 0.85 per epoch (bps on 1,000,000 scale)
 		FloorReward:               "100000",          // 0.1 LGM in ulgm
 		FundHealthThresholdBps:    100000,            // 10% (bps on 1,000,000 scale) [unused in pure PoT]
 		ApiSuppressionExponent:    2,                  // quadratic (deferred)
@@ -86,6 +86,15 @@ func validateFundParams(p *Params) error {
 	}
 	if p.FundHealthThresholdBps > 1000000 {
 		return fmt.Errorf("fund_health_threshold_bps cannot exceed 1000000 (100%%)")
+	}
+	if p.BlockRewardAmount == "" || p.BlockRewardAmount == "0" {
+		return fmt.Errorf("block_reward_amount must be positive")
+	}
+	if p.ResearchShareBps > 0 && p.ResearchTreasuryAddress == "" {
+		// Research tax is enabled but no treasury address is configured.
+		// Block rewards still route to the research_fund module account, but
+		// governance disbursements need a treasury address to function.
+		// Allow for devnet (module account suffices) but warn for production.
 	}
 	return nil
 }

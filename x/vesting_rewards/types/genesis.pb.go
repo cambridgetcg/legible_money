@@ -85,7 +85,7 @@ func (x *GenesisState) GetVestingSchedules() []*VestingSchedule {
 // Params defines the vesting_rewards module parameters.
 type Params struct {
 	state                      protoimpl.MessageState `protogen:"open.v1"`
-	ResearchShareBps           uint64                 `protobuf:"varint,1,opt,name=research_share_bps,json=researchShareBps,proto3" json:"research_share_bps,omitempty"`                                   // basis points (2200 = 22%)
+	ResearchShareBps           uint64                 `protobuf:"varint,1,opt,name=research_share_bps,json=researchShareBps,proto3" json:"research_share_bps,omitempty"`                                   // basis points (700 = 7%)
 	ResearchTreasuryAddress    string                 `protobuf:"bytes,2,opt,name=research_treasury_address,json=researchTreasuryAddress,proto3" json:"research_treasury_address,omitempty"`               // bech32 address for research fund
 	BlockRewardAmount          string                 `protobuf:"bytes,3,opt,name=block_reward_amount,json=blockRewardAmount,proto3" json:"block_reward_amount,omitempty"`                                 // base block reward in ulgm (bigint as string)
 	EmptyBlockRewardRate       uint64                 `protobuf:"varint,4,opt,name=empty_block_reward_rate,json=emptyBlockRewardRate,proto3" json:"empty_block_reward_rate,omitempty"`                     // basis points of reward for empty blocks (0 = none)

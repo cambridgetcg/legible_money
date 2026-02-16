@@ -135,8 +135,8 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 // BeginBlock executes begin-block logic.
-// 1. Routes 22% of accumulated transaction fees to research fund.
-// 2. Distributes block rewards to the block producer with 22% research tax.
+// 1. Routes 7% of accumulated transaction fees to research fund.
+// 2. Distributes block rewards to the block producer with 7% research tax.
 func (am AppModule) BeginBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	height := sdkCtx.BlockHeight()
@@ -146,7 +146,7 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 		return nil
 	}
 
-	// Route accumulated transaction fees: 22% to research fund, 78% stays in fee_collector.
+	// Route accumulated transaction fees: 7% to research fund, 93% stays in fee_collector.
 	// Must run BEFORE x/distribution's BeginBlocker sweeps fee_collector to validators.
 	if err := am.keeper.RouteFees(sdkCtx); err != nil {
 		am.keeper.Logger(sdkCtx).Error("failed to route fees to research fund",
@@ -166,8 +166,10 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 		activeValidatorCount = sk.GetActiveValidatorCount(sdkCtx)
 	}
 
-	// Check if block has transactions (PoT: 0% for empty blocks)
-	hasTransactions := len(sdkCtx.BlockHeader().DataHash) > 0 && activeValidatorCount > 0
+	// Check if block has transactions (PoT: 0% for empty blocks).
+	// Uses actual tx count from PreBlocker, not DataHash (which is always >0 bytes
+	// in CometBFT even for empty blocks, making it unreliable for this check).
+	hasTransactions := am.keeper.GetBlockTxCount() > 0 && activeValidatorCount > 0
 
 	_, err := am.keeper.DistributeBlockReward(sdkCtx, producer, activeValidatorCount, hasTransactions)
 	if err != nil {

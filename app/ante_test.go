@@ -174,9 +174,11 @@ func TestAllGasCostsBelowTxLimit(t *testing.T) {
 	}
 }
 
-func TestFeeRoutingBPSSumTo10000(t *testing.T) {
-	if ResearchTaxBPS+ValidatorFeeBPS != 10000 {
-		t.Errorf("ResearchTaxBPS (%d) + ValidatorFeeBPS (%d) = %d, want 10000",
+func TestFeeRoutingBPSSumTo1000000(t *testing.T) {
+	// BPS constants are on a 1,000,000 scale (not 10,000):
+	// 70000 = 7%, 930000 = 93%, sum = 1,000,000 = 100%
+	if ResearchTaxBPS+ValidatorFeeBPS != 1000000 {
+		t.Errorf("ResearchTaxBPS (%d) + ValidatorFeeBPS (%d) = %d, want 1000000",
 			ResearchTaxBPS, ValidatorFeeBPS, ResearchTaxBPS+ValidatorFeeBPS)
 	}
 }

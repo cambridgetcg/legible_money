@@ -18,6 +18,15 @@ const (
 
 	// MaxSupplyUlgm is the hard supply cap: 222,222,222 LGM in ulgm.
 	MaxSupplyUlgm = "222222222000000"
+
+	// VerificationPoolShareBps is the share of post-research block reward
+	// routed to the knowledge module account to fund verification rewards.
+	// 500000 = 50% on 1,000,000 scale.
+	VerificationPoolShareBps = 500000
+
+	// KnowledgeModuleName is the module account name for the knowledge module.
+	// Used for routing verification pool funds.
+	KnowledgeModuleName = "knowledge"
 )
 
 // Store key prefixes.

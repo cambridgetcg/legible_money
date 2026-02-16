@@ -26,6 +26,10 @@ type Keeper struct {
 
 	// Module authority (typically governance module address)
 	authority string
+
+	// blockTxCount is set by PreBlocker each block with the actual transaction count.
+	// Used by BeginBlocker to detect empty blocks (CometBFT DataHash is always >0).
+	blockTxCount int
 }
 
 // NewKeeper creates a new vesting_rewards module Keeper.
@@ -75,6 +79,17 @@ func (k Keeper) GetAuthority() string {
 // GetStakingKeeper returns the staking keeper for external use.
 func (k Keeper) GetStakingKeeper() types.StakingKeeper {
 	return k.stakingKeeper
+}
+
+// SetBlockTxCount stores the transaction count for the current block.
+// Called by PreBlocker before BeginBlocker runs.
+func (k *Keeper) SetBlockTxCount(count int) {
+	k.blockTxCount = count
+}
+
+// GetBlockTxCount returns the transaction count for the current block.
+func (k Keeper) GetBlockTxCount() int {
+	return k.blockTxCount
 }
 
 // GetParams returns the module parameters.

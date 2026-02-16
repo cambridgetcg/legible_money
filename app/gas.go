@@ -68,6 +68,9 @@ var TransactionGasCosts = map[string]uint64{
 	"challenge_recovery":    50_000,
 	"execute_recovery":      80_000,
 
+	// Knowledge pruning
+	"patronize_fact": 50_000,
+
 	// Ontology
 	"propose_domain":    80_000,
 	"endorse_domain":    30_000,
@@ -282,8 +285,8 @@ var TransactionGasCosts = map[string]uint64{
 
 // Fee routing constants (basis points, 1000000 = 100%).
 const (
-	ResearchTaxBPS  uint64 = 220000  // 22% to research fund
-	ValidatorFeeBPS uint64 = 780000  // 78% to block producer / validators
+	ResearchTaxBPS  uint64 = 70000   // 7% to research fund
+	ValidatorFeeBPS uint64 = 930000  // 93% to block producer / validators
 	BurnRateBPS     uint64 = 50000   // 5% burn rate (applied at penalty sites)
 )
 

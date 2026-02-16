@@ -16,7 +16,7 @@ import (
 // NewAnteHandler returns an AnteHandler with:
 // 1. Standard Cosmos SDK decorators (explicit chain, not wrapped)
 // 2. LGM-specific gas cost validation
-// 3. Fee routing: 22% to research fund, 78% to validators
+// 3. Fee routing: 7% to research fund, 93% to validators
 // 4. Legible Money custom decorators:
 //    - DID resolution and validation
 //    - Frozen account enforcement + LastActiveBlock tracking
@@ -395,7 +395,7 @@ var msgTypeURLToGas = map[string]uint64{
 
 // ---------- Fee Router Decorator ----------
 
-// FeeRouterDecorator splits collected fees: 22% to research fund, 78% to validators.
+// FeeRouterDecorator splits collected fees: 7% to research fund, 93% to validators.
 // This implements the LGM fee routing from core/billing/reward_router.ts.
 type FeeRouterDecorator struct {
 	bankKeeper bankkeeper.Keeper
@@ -408,8 +408,8 @@ func NewFeeRouterDecorator(bk bankkeeper.Keeper) FeeRouterDecorator {
 
 func (frd FeeRouterDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
 	// Fee routing is handled in x/vesting_rewards BeginBlocker via keeper.RouteFees().
-	// The BeginBlocker sweeps 22% of fee_collector to research_fund before
-	// x/distribution's BeginBlocker sends the remaining 78% to validators.
+	// The BeginBlocker sweeps 7% of fee_collector to research_fund before
+	// x/distribution's BeginBlocker sends the remaining 93% to validators.
 	//
 	// This decorator only logs the intended split for observability.
 

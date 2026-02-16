@@ -656,6 +656,10 @@ func TestDistributeBlockReward_MintAndDistribute(t *testing.T) {
 	if _, ok := bk.sentToModule["research_fund"]; !ok {
 		t.Fatal("expected SendCoinsFromModuleToModule to be called for research_fund")
 	}
+	// Verify verification pool routing to knowledge module
+	if _, ok := bk.sentToModule["knowledge"]; !ok {
+		t.Fatal("expected SendCoinsFromModuleToModule to be called for knowledge (verification pool)")
+	}
 }
 
 func TestDistributeBlockReward_ValidatorScaling(t *testing.T) {
@@ -670,7 +674,7 @@ func TestDistributeBlockReward_ValidatorScaling(t *testing.T) {
 		t.Fatalf("distribute block reward failed: %v", err)
 	}
 
-	// Scaled reward: 11000000 * 3/22 = 1500000
+	// Scaled reward: 3000000 * 3/22 = 409090
 	if dist.ValidatorCount != 3 {
 		t.Errorf("expected validator count 3, got %d", dist.ValidatorCount)
 	}
@@ -678,8 +682,8 @@ func TestDistributeBlockReward_ValidatorScaling(t *testing.T) {
 		t.Fatal("expected non-zero total minted even with reduced validators")
 	}
 
-	// With 3/22 validators, reward should be less than full block reward (11000000)
-	if dist.TotalMinted == "11000000" {
+	// With 3/22 validators, reward should be less than full block reward (3000000)
+	if dist.TotalMinted == "3000000" {
 		t.Error("expected scaled reward, got full reward amount")
 	}
 }
@@ -800,12 +804,12 @@ func TestRouteReward_ResearchSplit(t *testing.T) {
 		t.Fatalf("route reward failed: %v", err)
 	}
 
-	// Default: 22% research share (220000 bps on 1000000 scale)
-	if routing.ResearchShare != "2200" {
-		t.Errorf("expected research share 2200, got %s", routing.ResearchShare)
+	// Default: 7% research share (70000 bps on 1000000 scale)
+	if routing.ResearchShare != "700" {
+		t.Errorf("expected research share 700, got %s", routing.ResearchShare)
 	}
-	if routing.RecipientAmount != "7800" {
-		t.Errorf("expected recipient amount 7800, got %s", routing.RecipientAmount)
+	if routing.RecipientAmount != "9300" {
+		t.Errorf("expected recipient amount 9300, got %s", routing.RecipientAmount)
 	}
 }
 
@@ -964,9 +968,9 @@ func setupMintKeeper(t *testing.T, bk *mockBankKeeper, totalMinted string, block
 	t.Helper()
 	gs := types.DefaultGenesis()
 	gs.Params.InitialFundBalance = totalMinted // InitialFundBalance stores TotalMinted on export/import
-	gs.Params.BlockRewardAmount = "11000000"   // 11 LGM initial reward
+	gs.Params.BlockRewardAmount = "3000000"    // 3 LGM initial reward
 	gs.Params.BlocksPerEpoch = 240000
-	gs.Params.DecayFactorBps = 900000           // 0.9 per epoch
+	gs.Params.DecayFactorBps = 850000           // 0.85 per epoch
 	gs.Params.FloorReward = "100000"             // 0.1 LGM floor
 	gs.Params.FundHealthThresholdBps = 100000    // 10% (unused in pure PoT)
 
@@ -1000,13 +1004,13 @@ func TestBlockReward_Epoch0(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// At epoch 0, no decay. Reward = 11000000 (full block reward).
-	if dist.TotalMinted != "11000000" {
-		t.Errorf("expected full reward 11000000 at epoch 0, got %s", dist.TotalMinted)
+	// At epoch 0, no decay. Reward = 3000000 (full block reward).
+	if dist.TotalMinted != "3000000" {
+		t.Errorf("expected full reward 3000000 at epoch 0, got %s", dist.TotalMinted)
 	}
 	// Verify tokens were minted
-	if bk.mintedCoins.AmountOf("ulgm").Int64() != 11000000 {
-		t.Errorf("expected 11000000 ulgm minted, got %s", bk.mintedCoins.AmountOf("ulgm").String())
+	if bk.mintedCoins.AmountOf("ulgm").Int64() != 3000000 {
+		t.Errorf("expected 3000000 ulgm minted, got %s", bk.mintedCoins.AmountOf("ulgm").String())
 	}
 }
 
@@ -1021,9 +1025,9 @@ func TestBlockReward_Epoch1(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// At epoch 1: 11000000 * 0.9 = 9900000
-	if dist.TotalMinted != "9900000" {
-		t.Errorf("expected decayed reward 9900000 at epoch 1, got %s", dist.TotalMinted)
+	// At epoch 1: 3000000 * 0.85 = 2550000
+	if dist.TotalMinted != "2550000" {
+		t.Errorf("expected decayed reward 2550000 at epoch 1, got %s", dist.TotalMinted)
 	}
 }
 
@@ -1039,14 +1043,14 @@ func TestBlockReward_Epoch10(t *testing.T) {
 	}
 
 	totalMinted := dist.TotalMinted
-	if totalMinted == "0" || totalMinted == "11000000" {
-		t.Errorf("expected decayed reward ~3834863 at epoch 10, got %s", totalMinted)
+	if totalMinted == "0" || totalMinted == "3000000" {
+		t.Errorf("expected decayed reward ~590622 at epoch 10, got %s", totalMinted)
 	}
-	// Should be between 3500000 and 4000000
+	// Should be between 550000 and 650000 (3000000 * 0.85^10 ≈ 590622)
 	minted := new(big.Int)
 	minted.SetString(totalMinted, 10)
-	if minted.Cmp(big.NewInt(3500000)) < 0 || minted.Cmp(big.NewInt(4000000)) > 0 {
-		t.Errorf("epoch 10 reward %s outside expected range [3500000, 4000000]", totalMinted)
+	if minted.Cmp(big.NewInt(550000)) < 0 || minted.Cmp(big.NewInt(650000)) > 0 {
+		t.Errorf("epoch 10 reward %s outside expected range [550000, 650000]", totalMinted)
 	}
 }
 
@@ -1146,11 +1150,11 @@ func TestApplyDecay(t *testing.T) {
 		minReward int64
 		maxReward int64
 	}{
-		{"epoch 0", 0, 11000000, 11000000},
-		{"epoch 1", 240000, 9900000, 9900000},
-		{"epoch 2", 480000, 8910000, 8910000},
-		{"epoch 5", 1200000, 6000000, 6600000},
-		{"epoch 10", 2400000, 3500000, 4000000},
+		{"epoch 0", 0, 3000000, 3000000},
+		{"epoch 1", 240000, 2550000, 2550000},
+		{"epoch 2", 480000, 2167500, 2167500},
+		{"epoch 5", 1200000, 1300000, 1400000},
+		{"epoch 10", 2400000, 550000, 650000},
 	}
 
 	for _, tt := range tests {
@@ -1205,9 +1209,51 @@ func TestExportGenesis_PreservesTotalMinted(t *testing.T) {
 	if exported.Params.InitialFundBalance == "0" || exported.Params.InitialFundBalance == "" {
 		t.Error("expected non-zero exported total minted after distributing rewards")
 	}
-	// Should be 11000000 (one block reward at epoch 0)
-	if exported.Params.InitialFundBalance != "11000000" {
-		t.Errorf("expected exported total minted 11000000, got %s", exported.Params.InitialFundBalance)
+	// Should be 3000000 (one block reward at epoch 0)
+	if exported.Params.InitialFundBalance != "3000000" {
+		t.Errorf("expected exported total minted 3000000, got %s", exported.Params.InitialFundBalance)
+	}
+}
+
+func TestDistributeBlockReward_VerificationPoolRouting(t *testing.T) {
+	bk := newMockBankKeeper()
+	sk := &mockStakingKeeper{activeCount: 22}
+	k, ctx := setupKeeperWithBank(t, bk, sk)
+
+	producer := sdk.AccAddress("producer____________").String()
+
+	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
+	if err != nil {
+		t.Fatalf("distribute block reward failed: %v", err)
+	}
+
+	// At epoch 0, full validators: total minted = 3000000
+	// Research share (7%): 3000000 * 70000 / 1000000 = 210000
+	// Post-research: 3000000 - 210000 = 2790000
+	// Verification pool (50%): 2790000 * 500000 / 1000000 = 1395000
+	// Producer (50%): 2790000 - 1395000 = 1395000
+	if dist.TotalMinted != "3000000" {
+		t.Errorf("expected total minted 3000000, got %s", dist.TotalMinted)
+	}
+	if dist.ResearchShare != "210000" {
+		t.Errorf("expected research share 210000, got %s", dist.ResearchShare)
+	}
+	if dist.ProducerReward != "1395000" {
+		t.Errorf("expected producer reward 1395000, got %s", dist.ProducerReward)
+	}
+
+	// Verify bank sends
+	researchCoins := bk.sentToModule["research_fund"]
+	if researchCoins.AmountOf("ulgm").Int64() != 210000 {
+		t.Errorf("expected 210000 to research_fund, got %d", researchCoins.AmountOf("ulgm").Int64())
+	}
+	knowledgeCoins := bk.sentToModule["knowledge"]
+	if knowledgeCoins.AmountOf("ulgm").Int64() != 1395000 {
+		t.Errorf("expected 1395000 to knowledge module, got %d", knowledgeCoins.AmountOf("ulgm").Int64())
+	}
+	producerCoins := bk.sentToAccount[producer]
+	if producerCoins.AmountOf("ulgm").Int64() != 1395000 {
+		t.Errorf("expected 1395000 to producer, got %d", producerCoins.AmountOf("ulgm").Int64())
 	}
 }
 
@@ -1237,13 +1283,13 @@ func TestBlockReward_TotalMintedAfterField(t *testing.T) {
 //
 // This test suite verifies that:
 // 1. RouteReward() only applies to protocol-generated value (block rewards, verification)
-// 2. RouteFees() sweeps 22% of gas fees (flat-rate, NOT proportional to transfer amount)
+// 2. RouteFees() sweeps 7% of gas fees (flat-rate, NOT proportional to transfer amount)
 // 3. P2P transfer amounts are NEVER subject to any circulation tax
-// 4. The 22/78 split math is correct on the 1,000,000 BPS scale
+// 4. The 7/93 split math is correct on the 1,000,000 BPS scale
 
 func TestRouteFees_SweepsFeeCollector(t *testing.T) {
 	// Simulate: fee_collector has 21000 ulgm from a P2P transfer gas fee.
-	// RouteFees should sweep 22% (4620 ulgm) to research_fund.
+	// RouteFees should sweep 7% (1470 ulgm) to research_fund.
 	feeCollectorAddr := sdk.AccAddress("fee_collector________").String() // placeholder, real addr doesn't matter
 	_ = feeCollectorAddr
 
@@ -1262,10 +1308,10 @@ func TestRouteFees_SweepsFeeCollector(t *testing.T) {
 		t.Fatalf("RouteFees failed: %v", err)
 	}
 
-	// 22% of 21000 = 4620 ulgm should go to research_fund
+	// 7% of 21000 = 1470 ulgm should go to research_fund
 	researchCoins := bk.sentToModule["research_fund"]
-	if researchCoins.AmountOf("ulgm").Int64() != 4620 {
-		t.Errorf("expected 4620 ulgm to research_fund, got %s", researchCoins.String())
+	if researchCoins.AmountOf("ulgm").Int64() != 1470 {
+		t.Errorf("expected 1470 ulgm to research_fund, got %s", researchCoins.String())
 	}
 }
 
@@ -1307,10 +1353,10 @@ func TestRouteFees_OnlyProcessesUlgm(t *testing.T) {
 		t.Fatalf("RouteFees failed: %v", err)
 	}
 
-	// Only ulgm should be routed: 22% of 100000 = 22000
+	// Only ulgm should be routed: 7% of 100000 = 7000
 	researchCoins := bk.sentToModule["research_fund"]
-	if researchCoins.AmountOf("ulgm").Int64() != 22000 {
-		t.Errorf("expected 22000 ulgm to research_fund, got %s", researchCoins.String())
+	if researchCoins.AmountOf("ulgm").Int64() != 7000 {
+		t.Errorf("expected 7000 ulgm to research_fund, got %s", researchCoins.String())
 	}
 	// atom should NOT be sent
 	if researchCoins.AmountOf("atom").Int64() != 0 {
@@ -1324,7 +1370,7 @@ func TestRouteFees_GasFeeIsFlat_NotProportionalToTransferAmount(t *testing.T) {
 	// on gas fee only, NOT on the transfer amount.
 	//
 	// This test proves the fee collector accumulates the SAME amount
-	// regardless of transfer size, and the 22% sweep is therefore flat.
+	// regardless of transfer size, and the 7% sweep is therefore flat.
 
 	feeCollectorModuleAddr := authtypes.NewModuleAddress(authtypes.FeeCollectorName)
 
@@ -1360,8 +1406,8 @@ func TestRouteFees_GasFeeIsFlat_NotProportionalToTransferAmount(t *testing.T) {
 	if research1 != research2 {
 		t.Errorf("AUDIT FAIL: small transfer research fee (%d) != large transfer research fee (%d). This means the tax IS proportional to transfer amount!", research1, research2)
 	}
-	if research1 != 4620 { // 22% of 21000
-		t.Errorf("expected 4620, got %d", research1)
+	if research1 != 1470 { // 7% of 21000
+		t.Errorf("expected 1470, got %d", research1)
 	}
 }
 
@@ -1386,22 +1432,22 @@ func TestRouteReward_OnlyForProtocolRewards(t *testing.T) {
 			t.Fatalf("RouteReward failed for source %s: %v", src, err)
 		}
 
-		// 22% research share
+		// 7% research share
 		resBig := new(big.Int)
 		resBig.SetString(routing.ResearchShare, 10)
-		expectedResearch := new(big.Int).SetInt64(22000) // 22% of 100000
+		expectedResearch := new(big.Int).SetInt64(7000) // 7% of 100000
 
 		if resBig.Cmp(expectedResearch) != 0 {
-			t.Errorf("source %s: expected research share 22000, got %s", src, routing.ResearchShare)
+			t.Errorf("source %s: expected research share 7000, got %s", src, routing.ResearchShare)
 		}
 
-		// 78% to recipient
+		// 93% to recipient
 		recipBig := new(big.Int)
 		recipBig.SetString(routing.RecipientAmount, 10)
-		expectedRecip := new(big.Int).SetInt64(78000) // 78% of 100000
+		expectedRecip := new(big.Int).SetInt64(93000) // 93% of 100000
 
 		if recipBig.Cmp(expectedRecip) != 0 {
-			t.Errorf("source %s: expected recipient amount 78000, got %s", src, routing.RecipientAmount)
+			t.Errorf("source %s: expected recipient amount 93000, got %s", src, routing.RecipientAmount)
 		}
 	}
 }
@@ -1413,8 +1459,8 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 	// The fee flow for a P2P transfer (MsgSend):
 	// 1. Sender pays flat gas fee (21000 gas) → goes to fee_collector
 	// 2. ante.DeductFeeDecorator deducts fee from sender to fee_collector
-	// 3. BeginBlock: RouteFees sweeps 22% of fee_collector to research_fund
-	// 4. x/distribution sweeps remaining 78% to validators
+	// 3. BeginBlock: RouteFees sweeps 7% of fee_collector to research_fund
+	// 4. x/distribution sweeps remaining 93% to validators
 	// 5. The transfer amount goes directly from sender to recipient via x/bank
 	//
 	// At NO POINT is the transfer amount taxed. Only the gas fee is split.
@@ -1435,7 +1481,7 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 		feeCollectorModuleAddr.String(): sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(gasFee))),
 	}
 
-	// STEP 2: RouteFees sweeps 22% of gas fee to research
+	// STEP 2: RouteFees sweeps 7% of gas fee to research
 	err := k.RouteFees(ctx)
 	if err != nil {
 		t.Fatalf("RouteFees failed: %v", err)
@@ -1443,10 +1489,10 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 
 	// STEP 3: Verify ONLY the gas fee was taxed
 	researchSweep := bk.sentToModule["research_fund"].AmountOf("ulgm").Int64()
-	expectedResearchFromGas := gasFee * 220000 / 1000000 // 22% of 525 = 115
+	expectedResearchFromGas := gasFee * 70000 / 1000000 // 7% of 525 = 36
 
 	if researchSweep != expectedResearchFromGas {
-		t.Errorf("expected research sweep %d ulgm (22%% of gas fee), got %d", expectedResearchFromGas, researchSweep)
+		t.Errorf("expected research sweep %d ulgm (7%% of gas fee), got %d", expectedResearchFromGas, researchSweep)
 	}
 
 	// CRITICAL ASSERTION: The transfer amount was NEVER involved in any tax calculation
@@ -1463,17 +1509,17 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 }
 
 func TestRouteFees_22_78_MathCorrectness(t *testing.T) {
-	// Verify the 22/78 split math is correct across various fee amounts
+	// Verify the 7/93 split math is correct across various fee amounts
 	tests := []struct {
 		name             string
 		feeAmount        int64
 		expectedResearch int64
 	}{
-		{"minimal_fee", 100, 22},          // 100 * 220000 / 1000000 = 22
-		{"standard_transfer", 21000, 4620}, // 21000 * 220000 / 1000000 = 4620
-		{"large_fee", 1000000, 220000},     // 1000000 * 220000 / 1000000 = 220000
-		{"small_fee", 10, 2},               // 10 * 220000 / 1000000 = 2 (integer truncation)
-		{"rounding_case", 1, 0},            // 1 * 220000 / 1000000 = 0 (rounded down)
+		{"minimal_fee", 100, 7},            // 100 * 70000 / 1000000 = 7
+		{"standard_transfer", 21000, 1470}, // 21000 * 70000 / 1000000 = 1470
+		{"large_fee", 1000000, 70000},      // 1000000 * 70000 / 1000000 = 70000
+		{"small_fee", 10, 0},               // 10 * 70000 / 1000000 = 0 (integer truncation)
+		{"rounding_case", 1, 0},            // 1 * 70000 / 1000000 = 0 (rounded down)
 	}
 
 	feeCollectorModuleAddr := authtypes.NewModuleAddress(authtypes.FeeCollectorName)
@@ -1506,8 +1552,8 @@ func TestNoCirculationTax_Exists(t *testing.T) {
 	//
 	// The only fee mechanisms in the protocol are:
 	// 1. Gas fees (flat per tx type, deducted by ante handler)
-	// 2. Research tax (22% of gas fees, swept in BeginBlock)
-	// 3. Reward routing (22% of protocol rewards like block production, verification)
+	// 2. Research tax (7% of gas fees, swept in BeginBlock)
+	// 3. Reward routing (7% of protocol rewards like block production, verification)
 	//
 	// There is NO:
 	// - retrievalRate (transfer tax proportional to amount)
@@ -1524,12 +1570,12 @@ func TestNoCirculationTax_Exists(t *testing.T) {
 		t.Fatalf("RouteReward failed: %v", err)
 	}
 
-	// Verify research share is exactly 22%
-	if routing.ResearchShare != "220000" {
-		t.Errorf("expected research share 220000 (22%% of 1000000), got %s", routing.ResearchShare)
+	// Verify research share is exactly 7%
+	if routing.ResearchShare != "70000" {
+		t.Errorf("expected research share 70000 (7%% of 1000000), got %s", routing.ResearchShare)
 	}
-	if routing.RecipientAmount != "780000" {
-		t.Errorf("expected recipient 780000 (78%% of 1000000), got %s", routing.RecipientAmount)
+	if routing.RecipientAmount != "930000" {
+		t.Errorf("expected recipient 930000 (93%% of 1000000), got %s", routing.RecipientAmount)
 	}
 
 	// RouteFees only processes fee_collector — it has no concept of "transfer tax"

@@ -19,7 +19,7 @@ const (
 )
 
 // RouteReward routes a reward through the research share deduction.
-// 22% goes to the research fund, 78% goes to the recipient.
+// 7% goes to the research fund, 93% goes to the recipient.
 //
 // All rewards in the protocol flow through this router to ensure
 // consistent funding for research verification.
@@ -61,7 +61,7 @@ func (k Keeper) RouteReward(
 	return routing, nil
 }
 
-// RouteFees sweeps 22% of accumulated transaction fees from fee_collector to research_fund.
+// RouteFees sweeps 7% of accumulated transaction fees from fee_collector to research_fund.
 // Called in BeginBlock before x/distribution sweeps the remaining 78% to validators.
 //
 // The standard Cosmos SDK fee flow is: tx fees → fee_collector → x/distribution → validators.
@@ -297,9 +297,20 @@ func (k Keeper) DistributeBlockReward(
 		return dist, nil
 	}
 
+	// Split post-research remainder between verification pool and block producer.
+	// VerificationPoolShareBps (50%) of the post-research amount goes to the
+	// knowledge module account to fund verification rewards; the rest goes to the producer.
+	postResearchBig := new(big.Int)
+	postResearchBig.SetString(routing.RecipientAmount, 10)
+
+	verificationPoolBig := new(big.Int).Mul(postResearchBig, big.NewInt(int64(types.VerificationPoolShareBps)))
+	verificationPoolBig.Div(verificationPoolBig, big.NewInt(1000000))
+
+	producerBig := new(big.Int).Sub(postResearchBig, verificationPoolBig)
+
 	dist := &types.BlockRewardDistribution{
 		BlockHeight:    height,
-		ProducerReward: routing.RecipientAmount,
+		ProducerReward: producerBig.String(),
 		ResearchShare:  routing.ResearchShare,
 		TotalMinted:    routing.OriginalAmount,
 		ValidatorCount: activeValidatorCount,
@@ -307,9 +318,7 @@ func (k Keeper) DistributeBlockReward(
 
 	// Distribute minted coins via bank keeper (nil-safe for tests)
 	if k.bankKeeper != nil {
-		// Send producer share (78%) to block producer
-		producerBig := new(big.Int)
-		producerBig.SetString(routing.RecipientAmount, 10)
+		// Send producer share to block producer
 		if producerBig.Sign() > 0 {
 			producerAddr, addrErr := sdk.AccAddressFromBech32(producer)
 			if addrErr == nil {
@@ -320,13 +329,21 @@ func (k Keeper) DistributeBlockReward(
 			}
 		}
 
-		// Send research share (22%) to research fund
+		// Send research share (7%) to research fund
 		researchBig := new(big.Int)
 		researchBig.SetString(routing.ResearchShare, 10)
 		if researchBig.Sign() > 0 {
 			researchCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(researchBig)))
 			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, ResearchFundModuleName, researchCoins); err != nil {
 				k.Logger(ctx).Error("failed to send research share", "error", err)
+			}
+		}
+
+		// Send verification pool share to knowledge module account
+		if verificationPoolBig.Sign() > 0 {
+			verificationCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(verificationPoolBig)))
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, types.KnowledgeModuleName, verificationCoins); err != nil {
+				k.Logger(ctx).Error("failed to send verification pool share", "error", err)
 			}
 		}
 	}
