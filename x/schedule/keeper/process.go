@@ -50,6 +50,16 @@ func (k Keeper) ProcessDueSchedules(ctx sdk.Context) int {
 			continue
 		}
 
+		// Evaluate non-time conditions before executing.
+		// Logic and compound conditions are checked each block but only fire when satisfied.
+		if process.Condition != nil && !evaluateCondition(ctx, *process.Condition, k) {
+			// Condition not met — re-index for next block check without deducting fee
+			k.RemoveTimeIndex(ctx, process.NextExecuteAt, process.Id)
+			process.NextExecuteAt = currentHeight + 1
+			k.SetProcess(ctx, process)
+			continue
+		}
+
 		// Execute: deduct fee
 		remaining.Sub(remaining, feePerExec)
 
@@ -146,6 +156,103 @@ func calculateNextPeriodicExecution(cond types.ScheduleCondition, currentHeight 
 		}
 		return next
 	}
-	// Non-periodic: check next block
+	// Logic/compound conditions: check every block
 	return currentHeight + 1
+}
+
+// evaluateCondition checks whether a schedule's condition is currently satisfied.
+// Time conditions are implicitly satisfied (they fire when due via the time index).
+// Logic conditions compare on-chain state against a target value.
+// Compound conditions combine sub-conditions with AND/OR.
+func evaluateCondition(ctx sdk.Context, cond types.ScheduleCondition, k Keeper) bool {
+	// Pure time conditions: always satisfied when due (time index handles scheduling)
+	if cond.TimeCondition != nil && cond.LogicCondition == nil && cond.CompoundCondition == nil {
+		return true
+	}
+
+	// Logic condition evaluation
+	if cond.LogicCondition != nil {
+		return evaluateLogicCondition(ctx, cond.LogicCondition, k)
+	}
+
+	// Compound condition evaluation
+	if cond.CompoundCondition != nil {
+		return evaluateCompoundCondition(ctx, cond.CompoundCondition, k)
+	}
+
+	// No condition set — default to satisfied
+	return true
+}
+
+// evaluateLogicCondition reads the state key from the module's own store and compares it.
+// StateKey format: raw KV store key (hex-encoded or plain string).
+// Comparator: "eq", "neq", "gt", "gte", "lt", "lte".
+// CompareValue: string to compare against (numeric comparison for gt/gte/lt/lte).
+func evaluateLogicCondition(ctx sdk.Context, lc *types.LogicCondition, k Keeper) bool {
+	if lc == nil || lc.StateKey == "" {
+		return false
+	}
+
+	// Read the state key from the schedule module's own KV store
+	store := k.storeService.OpenKVStore(ctx)
+	val, err := store.Get([]byte(lc.StateKey))
+	if err != nil || val == nil {
+		return false // Key not found — condition not met
+	}
+	stateValue := string(val)
+
+	switch lc.Comparator {
+	case "eq":
+		return stateValue == lc.CompareValue
+	case "neq":
+		return stateValue != lc.CompareValue
+	case "gt", "gte", "lt", "lte":
+		stateNum := new(big.Int)
+		compareNum := new(big.Int)
+		if _, ok := stateNum.SetString(stateValue, 10); !ok {
+			return false
+		}
+		if _, ok := compareNum.SetString(lc.CompareValue, 10); !ok {
+			return false
+		}
+		cmp := stateNum.Cmp(compareNum)
+		switch lc.Comparator {
+		case "gt":
+			return cmp > 0
+		case "gte":
+			return cmp >= 0
+		case "lt":
+			return cmp < 0
+		case "lte":
+			return cmp <= 0
+		}
+	}
+
+	return false
+}
+
+// evaluateCompoundCondition evaluates AND/OR combinations of sub-conditions.
+func evaluateCompoundCondition(ctx sdk.Context, cc *types.CompoundCondition, k Keeper) bool {
+	if cc == nil || len(cc.Conditions) == 0 {
+		return false
+	}
+
+	switch cc.Operator {
+	case types.CompoundAnd:
+		for _, sub := range cc.Conditions {
+			if !evaluateCondition(ctx, *sub, k) {
+				return false
+			}
+		}
+		return true
+	case types.CompoundOr:
+		for _, sub := range cc.Conditions {
+			if evaluateCondition(ctx, *sub, k) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
 }

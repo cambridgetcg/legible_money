@@ -81,14 +81,17 @@ func (a *StakingKeeperAdapter) GetEffectiveStake(ctx context.Context, operatorAd
 	return bigIntStringToUint64(stakeStr)
 }
 
-// GetTotalStake returns total active stake.
+// GetTotalStake returns total effective stake (including virtual stakes for Tier 0/1).
+// This must match the sum of individual GetEffectiveStake calls so that
+// VRF selection probabilities (effectiveStake / totalStake) sum to <= 1.0.
 func (a *StakingKeeperAdapter) GetTotalStake(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	validators := a.keeper.GetActiveValidatorSet(sdkCtx)
 
 	var total uint64
 	for _, v := range validators {
-		total += bigIntStringToUint64(v.TotalStake)
+		stakeStr := a.keeper.GetEffectiveSelectionStake(sdkCtx, v)
+		total += bigIntStringToUint64(stakeStr)
 	}
 	return total
 }
@@ -112,8 +115,9 @@ func NewVestingStakingAdapter(keeper legiblestakingkeeper.Keeper) *VestingStakin
 var _ vestingrewardstypes.StakingKeeper = (*VestingStakingAdapter)(nil)
 
 // GetActiveValidatorCount returns the number of active validators.
-func (a *VestingStakingAdapter) GetActiveValidatorCount(ctx sdk.Context) uint32 {
-	validators := a.keeper.GetActiveValidatorSet(ctx)
+func (a *VestingStakingAdapter) GetActiveValidatorCount(ctx context.Context) uint32 {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	validators := a.keeper.GetActiveValidatorSet(sdkCtx)
 	return uint32(len(validators))
 }
 

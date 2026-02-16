@@ -63,19 +63,13 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
-func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Phase 2: Register query service gateway routes
-}
+func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {}
 
 // GetTxCmd returns the module's tx CLI command.
-func (a AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
-}
+func (a AppModuleBasic) GetTxCmd() *cobra.Command { return nil }
 
 // GetQueryCmd returns the module's query CLI command.
-func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
-}
+func (AppModuleBasic) GetQueryCmd() *cobra.Command { return nil }
 
 // AppModule implements the AppModule interface.
 type AppModule struct {
@@ -102,6 +96,11 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to register %s migration: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis initializes the module from genesis.
@@ -126,37 +125,8 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic.
-// Sweeps expired tokens and moves them to the RAI holding pool.
+// BeginBlock executes begin-block logic. No-op after expiration removal.
 func (am AppModule) BeginBlock(ctx context.Context) error {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	params := am.keeper.GetParams(sdkCtx)
-
-	totalSwept, accountsProcessed := am.keeper.SweepExpiredTokens(sdkCtx, params.SweepBatchSize)
-	if accountsProcessed > 0 {
-		am.keeper.Logger(sdkCtx).Debug("BeginBlock sweep completed",
-			"swept", totalSwept,
-			"accounts", accountsProcessed,
-		)
-	}
-
-	// Distribute RAI if enough blocks have passed and pool has balance
-	if am.keeper.ShouldDistributeRAI(sdkCtx, params.RaiDistributionRate) {
-		recipients := am.keeper.GetEligibleRAIRecipients(sdkCtx)
-		if len(recipients) > 0 {
-			dist, err := am.keeper.DistributeRAI(sdkCtx, recipients)
-			if err != nil {
-				am.keeper.Logger(sdkCtx).Error("RAI distribution failed", "error", err)
-			} else {
-				am.keeper.Logger(sdkCtx).Info("BeginBlock RAI distribution",
-					"distribution_id", dist.Id,
-					"recipients", dist.RecipientCount,
-					"total", dist.TotalAmount,
-				)
-			}
-		}
-	}
-
 	return nil
 }
 

@@ -27,4 +27,6 @@ var (
 	ErrServiceNotActive       = errors.Register(ModuleName, 23, "service is not active")
 	ErrInsufficientPayment    = errors.Register(ModuleName, 24, "insufficient payment for service call")
 	ErrServiceCallFailed      = errors.Register(ModuleName, 25, "service call execution failed")
+	ErrSeedAlreadyClaimed     = errors.Register(ModuleName, 26, "opportunity seed already claimed")
+	ErrSubscriptionNotFound   = errors.Register(ModuleName, 27, "subscription not found")
 )

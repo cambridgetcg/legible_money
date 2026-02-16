@@ -30,6 +30,9 @@ var (
 	LastProposalBlockKey        = []byte{0x09}
 	ActiveHaltCeremonyIdKey     = []byte{0x0A}
 	HaltStartBlockKey           = []byte{0x0B}
+	RevertTargetHeightKey       = []byte{0x0C}
+	RevertTargetHashKey         = []byte{0x0D}
+	RevertCeremonyIdKey         = []byte{0x0E}
 )
 
 // CeremonyKey returns the store key for a ceremony by ID.

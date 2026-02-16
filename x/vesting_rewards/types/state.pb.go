@@ -308,8 +308,8 @@ type RewardRouting struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Source          string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`                                          // reward source
 	OriginalAmount  string                 `protobuf:"bytes,2,opt,name=original_amount,json=originalAmount,proto3" json:"original_amount,omitempty"`    // original reward amount (bigint as string)
-	ResearchShare   string                 `protobuf:"bytes,3,opt,name=research_share,json=researchShare,proto3" json:"research_share,omitempty"`       // 22% to research fund (bigint as string)
-	RecipientAmount string                 `protobuf:"bytes,4,opt,name=recipient_amount,json=recipientAmount,proto3" json:"recipient_amount,omitempty"` // 78% to recipient (bigint as string)
+	ResearchShare   string                 `protobuf:"bytes,3,opt,name=research_share,json=researchShare,proto3" json:"research_share,omitempty"`       // 7% to research fund (bigint as string)
+	RecipientAmount string                 `protobuf:"bytes,4,opt,name=recipient_amount,json=recipientAmount,proto3" json:"recipient_amount,omitempty"` // 93% to recipient (bigint as string)
 	Recipient       string                 `protobuf:"bytes,5,opt,name=recipient,proto3" json:"recipient,omitempty"`                                    // bech32 recipient address
 	FactId          string                 `protobuf:"bytes,6,opt,name=fact_id,json=factId,proto3" json:"fact_id,omitempty"`                            // related fact
 	BlockNumber     uint64                 `protobuf:"varint,7,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`            // block height
@@ -401,7 +401,7 @@ type BlockRewardDistribution struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	BlockHeight      uint64                 `protobuf:"varint,1,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`                 // block number
 	ProducerReward   string                 `protobuf:"bytes,2,opt,name=producer_reward,json=producerReward,proto3" json:"producer_reward,omitempty"`         // reward to block producer (bigint as string)
-	ResearchShare    string                 `protobuf:"bytes,3,opt,name=research_share,json=researchShare,proto3" json:"research_share,omitempty"`            // 22% to research fund (bigint as string)
+	ResearchShare    string                 `protobuf:"bytes,3,opt,name=research_share,json=researchShare,proto3" json:"research_share,omitempty"`            // 7% to research fund (bigint as string)
 	TotalMinted      string                 `protobuf:"bytes,4,opt,name=total_minted,json=totalMinted,proto3" json:"total_minted,omitempty"`                  // total new tokens (bigint as string)
 	ValidatorCount   uint32                 `protobuf:"varint,5,opt,name=validator_count,json=validatorCount,proto3" json:"validator_count,omitempty"`        // active validators
 	FundBalanceAfter string                 `protobuf:"bytes,6,opt,name=fund_balance_after,json=fundBalanceAfter,proto3" json:"fund_balance_after,omitempty"` // remaining fund balance after this block (finite fund mode only)

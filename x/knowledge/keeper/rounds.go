@@ -490,14 +490,6 @@ func (k Keeper) returnClaimStake(ctx sdk.Context, claim types.Claim) {
 		return
 	}
 
-	// Credit back to period overlay
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.CreditBalance(ctx, claim.Submitter, claim.StakeAmount, uint64(ctx.BlockHeight())); err != nil {
-			k.Logger(ctx).Error("failed to credit period balance for stake return",
-				"submitter", claim.Submitter, "error", err)
-		}
-	}
-
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("claim_stake_returned",
 			sdk.NewAttribute("claim_id", claim.Id),
@@ -542,13 +534,6 @@ func (k Keeper) slashAndReturnClaimStake(ctx sdk.Context, claim types.Claim, sla
 				"claim_id", claim.Id, "amount", returnAmount.String(), "error", err)
 		}
 
-		// Credit back to period overlay
-		if k.tokensKeeper != nil {
-			if err := k.tokensKeeper.CreditBalance(ctx, claim.Submitter, returnAmount.String(), uint64(ctx.BlockHeight())); err != nil {
-				k.Logger(ctx).Error("failed to credit period balance for partial return",
-					"submitter", claim.Submitter, "error", err)
-			}
-		}
 	}
 
 	// Burn the slashed portion (deflationary — TS chain routes to BURN_DID)
@@ -851,14 +836,6 @@ func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf types.CounterF
 
 	// Track epoch payout for pool cap
 	k.SetFalsificationEpochPaid(ctx, epoch, epochPaid+rewardAmount.Uint64())
-
-	// Credit back to period overlay
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.CreditBalance(ctx, cf.Submitter, rewardAmount.String(), height); err != nil {
-			k.Logger(ctx).Error("failed to credit period balance for falsification reward",
-				"submitter", cf.Submitter, "error", err)
-		}
-	}
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("falsification_reward_distributed",

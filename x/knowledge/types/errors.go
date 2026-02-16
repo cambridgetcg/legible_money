@@ -56,4 +56,12 @@ var (
 	ErrCannotContradictCounterFact   = errors.Register(ModuleName, 55, "cannot create counter-fact of a counter-fact")
 	ErrFactAlreadyDisproven          = errors.Register(ModuleName, 56, "fact is already disproven")
 	ErrCounterFactAlreadyExists      = errors.Register(ModuleName, 57, "counter-fact already exists for this target")
+
+	// Knowledge pruning errors
+	ErrFactNotAtRisk           = errors.Register(ModuleName, 58, "fact is not at risk of pruning")
+	ErrFactImmune              = errors.Register(ModuleName, 59, "fact is immune to pruning")
+	ErrInsufficientPatronage   = errors.Register(ModuleName, 60, "insufficient patronage amount")
+	ErrFactAlreadyPruned       = errors.Register(ModuleName, 61, "fact is already pruned")
+	ErrPatronageExpired        = errors.Register(ModuleName, 62, "patronage has expired")
+	ErrPruningDisabled         = errors.Register(ModuleName, 63, "pruning is not enabled")
 )

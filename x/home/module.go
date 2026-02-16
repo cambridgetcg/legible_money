@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
@@ -102,6 +103,11 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to register %s migration: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis initializes the module from genesis.
@@ -126,11 +132,13 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic: deadman switches and session cleanup.
+// BeginBlock executes begin-block logic: deadman switches, session cleanup, treasury automation, aging.
 func (am AppModule) BeginBlock(goCtx context.Context) error {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	am.keeper.CheckDeadmanSwitches(ctx)
 	am.keeper.CleanupExpiredSessions(ctx)
+	am.keeper.ProcessTreasuryAutomation(ctx)
+	am.keeper.ProcessHomeAging(ctx)
 	return nil
 }
 

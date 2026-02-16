@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
@@ -17,13 +18,13 @@ import (
 )
 
 type Keeper struct {
-	cdc           codec.Codec
-	storeService  store.KVStoreService
-	accountKeeper types.AccountKeeper
-	bankKeeper    types.BankKeeper
-	authKeeper    types.LegibleAuthKeeper
-	tokensKeeper  types.TokensKeeper
-	authority     string // module authority (gov module)
+	cdc               codec.Codec
+	storeService      store.KVStoreService
+	accountKeeper     types.AccountKeeper
+	bankKeeper        types.BankKeeper
+	authKeeper        types.LegibleAuthKeeper
+	autopoiesisKeeper types.AutopoiesisKeeper
+	authority         string // module authority (gov module)
 }
 
 func NewKeeper(
@@ -32,7 +33,6 @@ func NewKeeper(
 	accountKeeper types.AccountKeeper,
 	bankKeeper types.BankKeeper,
 	authKeeper types.LegibleAuthKeeper,
-	tokensKeeper types.TokensKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
@@ -41,13 +41,22 @@ func NewKeeper(
 		accountKeeper: accountKeeper,
 		bankKeeper:    bankKeeper,
 		authKeeper:    authKeeper,
-		tokensKeeper:  tokensKeeper,
 		authority:     authority,
 	}
 }
 
+// SetAutopoiesisKeeper sets the autopoiesis keeper after init (avoids circular dep).
+func (k *Keeper) SetAutopoiesisKeeper(ak types.AutopoiesisKeeper) {
+	k.autopoiesisKeeper = ak
+}
+
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", types.ModuleName)
+}
+
+// GetAuthority returns the module's governance authority address.
+func (k Keeper) GetAuthority() string {
+	return k.authority
 }
 
 // prefixEndBytes returns the end key for prefix iteration.
@@ -538,8 +547,11 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 		return nil // skip slash but don't error
 	}
 
-	// Apply tier-adjusted slash
-	adjustedAmount := k.CalculateTierSlash(ctx, types.ValidatorTierFromString(validator.Tier), amount)
+	// Use the caller-provided amount directly. The caller (e.g., knowledge module)
+	// already computed a stake-proportional slash using effective stake, which
+	// incorporates tier differentiation via virtual/real stake. Applying
+	// CalculateTierSlash here would double-count tier-based scaling.
+	adjustedAmount := amount
 
 	// Progressive escalation: adjustedAmount * (1M + slashCount * escalationBps) / 1M
 	if validator.SlashCount > 0 {
@@ -550,6 +562,18 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 		adjInt.Mul(adjInt, multiplier)
 		adjInt.Div(adjInt, big.NewInt(1000000))
 		adjustedAmount = adjInt.String()
+	}
+
+	// Apply autopoiesis SSI multiplier (1.0x default, up to 3.0x under stress)
+	if k.autopoiesisKeeper != nil {
+		ssiMult := k.autopoiesisKeeper.GetMultiplier(ctx, "system.slash")
+		if ssiMult != 0 && ssiMult != 1_000_000 { // skip if default 1.0x
+			adjInt := new(big.Int)
+			adjInt.SetString(adjustedAmount, 10)
+			adjInt.Mul(adjInt, new(big.Int).SetUint64(ssiMult))
+			adjInt.Div(adjInt, big.NewInt(1_000_000))
+			adjustedAmount = adjInt.String()
+		}
 	}
 
 	// Parse stake fields
@@ -585,11 +609,12 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 	newStake := new(big.Int).Sub(totalStake, slashInt)
 	validator.TotalStake = newStake.String()
 
-	// Explicitly burn slashed tokens from the staking module account
+	// Explicitly burn slashed tokens from the staking module account.
+	// If burn fails, abort the slash entirely to prevent state/supply discrepancy.
 	if slashInt.Sign() > 0 {
 		burnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(slashInt)))
 		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, burnCoins); err != nil {
-			k.Logger(ctx).Error("failed to burn slashed tokens", "err", err, "amount", slashInt.String())
+			return fmt.Errorf("slash aborted: failed to burn %s ulgm from staking module: %w", slashInt.String(), err)
 		}
 	}
 
@@ -630,6 +655,26 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 	}
 
 	return k.SetValidator(ctx, validator)
+}
+
+// --- Redelegation Cooldown ---
+
+// SetLastRedelegationHeight records the height at which a delegator last redelegated.
+func (k Keeper) SetLastRedelegationHeight(ctx sdk.Context, delegatorAddr string, height uint64) error {
+	store := k.storeService.OpenKVStore(ctx)
+	bz := make([]byte, 8)
+	binary.BigEndian.PutUint64(bz, height)
+	return store.Set(types.RedelegationCooldownKey(delegatorAddr), bz)
+}
+
+// GetLastRedelegationHeight returns the height at which a delegator last redelegated.
+func (k Keeper) GetLastRedelegationHeight(ctx sdk.Context, delegatorAddr string) uint64 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.RedelegationCooldownKey(delegatorAddr))
+	if err != nil || bz == nil || len(bz) < 8 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(bz)
 }
 
 // --- Params ---
@@ -789,6 +834,10 @@ func (k msgServer) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types
 	return k.Keeper.Redelegate(ctx, msg)
 }
 
+func (k msgServer) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	return k.Keeper.UpdateParams(ctx, msg)
+}
+
 // --- Block Processing ---
 
 // BeginBlocker is called at the beginning of every block
@@ -860,21 +909,6 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 				"error", err,
 			)
 			continue
-		}
-
-		// Credit tokens in period overlay, preserving the original period
-		if k.tokensKeeper != nil {
-			if unbonding.OriginPeriod > 0 {
-				if err := k.tokensKeeper.CreditBalanceToSpecificPeriod(ctx, unbonding.DelegatorAddress, unbonding.Amount, unbonding.OriginPeriod); err != nil {
-					k.Logger(ctx).Error("failed to credit period balance for unbonding",
-						"id", unbonding.Id, "error", err)
-				}
-			} else {
-				if err := k.tokensKeeper.CreditBalance(ctx, unbonding.DelegatorAddress, unbonding.Amount, uint64(ctx.BlockHeight())); err != nil {
-					k.Logger(ctx).Error("failed to credit period balance for unbonding",
-						"id", unbonding.Id, "error", err)
-				}
-			}
 		}
 
 		// Mark as completed

@@ -106,6 +106,18 @@ const (
 	FundingCommunity FundingSourceType = "community"
 )
 
+// --- Subscription (no proto type; JSON-serialized) ---
+
+// ServiceSubscription represents an active subscription to a service.
+type ServiceSubscription struct {
+	Id             string `json:"id"`
+	ServiceId      string `json:"service_id"`
+	Subscriber     string `json:"subscriber"`
+	StartBlock     uint64 `json:"start_block"`
+	DurationBlocks uint64 `json:"duration_blocks"`
+	ExpiresAtBlock uint64 `json:"expires_at_block"`
+}
+
 // --- Params Validation ---
 // Params struct is proto-generated in genesis.pb.go.
 
@@ -371,6 +383,68 @@ func (m *MsgCallService) ValidateBasic() error {
 	}
 	if m.ServiceId == "" {
 		return fmt.Errorf("service id cannot be empty")
+	}
+	return nil
+}
+
+func (m *MsgSubscribeService) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Subscriber); err != nil {
+		return fmt.Errorf("invalid subscriber address: %w", err)
+	}
+	if m.ServiceId == "" {
+		return fmt.Errorf("service id cannot be empty")
+	}
+	if m.DurationBlocks == 0 {
+		return fmt.Errorf("duration must be positive")
+	}
+	return nil
+}
+
+func (m *MsgBeginSeeding) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Seeder); err != nil {
+		return fmt.Errorf("invalid seeder address: %w", err)
+	}
+	if m.ProjectId == "" {
+		return fmt.Errorf("project id cannot be empty")
+	}
+	return nil
+}
+
+func (m *MsgDetectOpportunity) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Detector); err != nil {
+		return fmt.Errorf("invalid detector address: %w", err)
+	}
+	if m.Domain == "" {
+		return fmt.Errorf("domain cannot be empty")
+	}
+	if m.Description == "" {
+		return fmt.Errorf("description cannot be empty")
+	}
+	return nil
+}
+
+func (m *MsgClaimOpportunity) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Claimer); err != nil {
+		return fmt.Errorf("invalid claimer address: %w", err)
+	}
+	if m.OpportunityId == "" {
+		return fmt.Errorf("opportunity id cannot be empty")
+	}
+	return nil
+}
+
+func (m *MsgAddContributor) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	if m.ProjectId == "" {
+		return fmt.Errorf("project id cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(m.Contributor); err != nil {
+		return fmt.Errorf("invalid contributor address: %w", err)
+	}
+	if m.Role == "" {
+		return fmt.Errorf("role cannot be empty")
 	}
 	return nil
 }

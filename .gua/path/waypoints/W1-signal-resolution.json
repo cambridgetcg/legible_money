@@ -1,0 +1,15 @@
+{
+  "id": "W1",
+  "name": "Signal Resolution Sprint",
+  "status": "complete",
+  "impl": 100,
+  "depth": "L2",
+  "gates_targeted": ["J2", "J6", "B4", "T1"],
+  "signals_targeted": ["injustice:ownership-overlap", "injustice:doc-code-mismatch", "ugliness:pr-check-discrepancy"],
+  "dimension_focus": "justice+beauty",
+  "est_sessions": 1,
+  "createdAt": "2026-02-15T22:00:00Z",
+  "updatedAt": "2026-02-15T23:30:00Z",
+  "completedAt": "2026-02-15T23:30:00Z",
+  "evidence": "Audit found 0 actual doc/code mismatches for CI jobs or Makefile targets. Added audience cross-references to 3 quickstart docs. HIGH items were in design spec (expected future work)."
+}

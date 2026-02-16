@@ -9,7 +9,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
 )
@@ -17,7 +16,7 @@ import (
 // NewAnteHandler returns an AnteHandler with:
 // 1. Standard Cosmos SDK decorators (explicit chain, not wrapped)
 // 2. LGM-specific gas cost validation
-// 3. Fee routing: 22% to research fund, 78% to validators
+// 3. Fee routing: 7% to research fund, 93% to validators
 // 4. Legible Money custom decorators:
 //    - DID resolution and validation
 //    - Frozen account enforcement + LastActiveBlock tracking
@@ -29,6 +28,9 @@ func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
 
 		// --- Gas Meter Init (must be before any gas consumption) ---
 		ante.NewSetUpContextDecorator(),
+
+		// --- Bootstrap Gas-Free (waives gas for PoT txs during first ~14 days) ---
+		NewBootstrapGasFreeDecorator(),
 
 		// --- Emergency Halt Gate (blocks non-emergency txs when chain is halted) ---
 		NewEmergencyHaltDecorator(app.EmergencyKeeper),
@@ -303,18 +305,97 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.capture_challenge.v1.MsgAddEvidence":      TransactionGasCosts["add_challenge_evidence"],
 	"/legible.capture_challenge.v1.MsgResolveChallenge": TransactionGasCosts["resolve_capture_challenge"],
 
-	// NOTE: The following gas cost keys in TransactionGasCosts have no proto URL
-	// mapping yet because their tx.proto files have not been created:
-	//   - Agent Home (10 types): create_home, update_home, etc. — awaits proto/legible/home/v1/tx.proto
-	//   - Qualification (4 types): request_qualification, etc. — awaits proto/legible/qualification/v1/tx.proto
-	//   - Auth recovery (8 types): recover_account, freeze_account, etc. — awaits auth tx.proto expansion
-	//   - Governance extras: governance_stake_lip, switch_vote, finalize_review — awaits gov tx.proto expansion
-	// These message types fall back to MinGasLimit (22,222) until proto definitions are added.
+	// Agent Home
+	"/legible.home.v1.MsgCreateHome":        TransactionGasCosts["create_home"],
+	"/legible.home.v1.MsgUpdateHome":        TransactionGasCosts["update_home"],
+	"/legible.home.v1.MsgUpdateMemoryCID":   TransactionGasCosts["update_memory_cid"],
+	"/legible.home.v1.MsgStartSession":      TransactionGasCosts["home_start_session"],
+	"/legible.home.v1.MsgEndSession":        TransactionGasCosts["home_end_session"],
+	"/legible.home.v1.MsgRegisterKey":       TransactionGasCosts["home_register_key"],
+	"/legible.home.v1.MsgRevokeKey":         TransactionGasCosts["home_revoke_key"],
+	"/legible.home.v1.MsgConfigureGuardian": TransactionGasCosts["configure_guardian"],
+	"/legible.home.v1.MsgAcknowledgeAlert":  TransactionGasCosts["acknowledge_alert"],
+	"/legible.home.v1.MsgSetSpendingLimit":  TransactionGasCosts["set_spending_limit"],
+
+	// Qualification
+	"/legible.qualification.v1.MsgRequestQualification":  TransactionGasCosts["request_qualification"],
+	"/legible.qualification.v1.MsgEndorseValidator":       TransactionGasCosts["endorse_validator"],
+	"/legible.qualification.v1.MsgRenewQualification":     TransactionGasCosts["renew_qualification"],
+	"/legible.qualification.v1.MsgWithdrawQualification":  TransactionGasCosts["withdraw_qualification"],
+
+	// Auth recovery (hand-written ExtendedMsg service)
+	"/legible.auth.v1.MsgRecoverAccount":       TransactionGasCosts["recover_account"],
+	"/legible.auth.v1.MsgFreezeAccount":        TransactionGasCosts["freeze_account"],
+	"/legible.auth.v1.MsgUnfreezeAccount":      TransactionGasCosts["unfreeze_account"],
+	"/legible.auth.v1.MsgSetRecoveryConfig":    TransactionGasCosts["set_recovery_config"],
+	"/legible.auth.v1.MsgInitiateRecovery":     TransactionGasCosts["initiate_recovery"],
+	"/legible.auth.v1.MsgSubmitRecoveryShard":  TransactionGasCosts["submit_recovery_shard"],
+	"/legible.auth.v1.MsgChallengeRecovery":    TransactionGasCosts["challenge_recovery"],
+	"/legible.auth.v1.MsgExecuteRecovery":      TransactionGasCosts["execute_recovery"],
+
+	// Governance extras
+	"/legible.gov.v1.MsgStakeLIP":             TransactionGasCosts["governance_stake_lip"],
+	"/legible.gov.v1.MsgAmendLIP":             TransactionGasCosts["amend_lip"],
+	"/legible.gov.v1.MsgAdvanceLIPStage":      TransactionGasCosts["advance_lip_stage"],
+	"/legible.gov.v1.MsgWithdrawLIP":          TransactionGasCosts["withdraw_lip"],
+	"/legible.gov.v1.MsgSwitchVote":           TransactionGasCosts["switch_vote"],
+	"/legible.gov.v1.MsgFinalizeReview":       TransactionGasCosts["finalize_review"],
+	"/legible.gov.v1.MsgStakeDisbursement":    TransactionGasCosts["stake_disbursement"],
+	"/legible.gov.v1.MsgAdvanceDisbursement":  TransactionGasCosts["advance_disbursement"],
+	"/legible.gov.v1.MsgCancelDisbursement":   TransactionGasCosts["cancel_disbursement"],
+	"/legible.gov.v1.MsgRegisterOperator":     TransactionGasCosts["register_operator"],
+	"/legible.gov.v1.MsgAddAgent":             TransactionGasCosts["add_agent"],
+	"/legible.gov.v1.MsgRemoveAgent":          TransactionGasCosts["remove_agent"],
+	"/legible.gov.v1.MsgSlashOperator":        TransactionGasCosts["slash_operator"],
+	"/legible.gov.v1.MsgCreateDeployment":     TransactionGasCosts["create_deployment"],
+	"/legible.gov.v1.MsgAdvanceDeployment":    TransactionGasCosts["advance_deployment"],
+	"/legible.gov.v1.MsgApproveDeployment":    TransactionGasCosts["approve_deployment"],
+	"/legible.gov.v1.MsgRollbackDeployment":   TransactionGasCosts["rollback_deployment"],
+
+	// Discovery
+	"/legible.discovery.v1.MsgRegisterAgent":     TransactionGasCosts["register_agent"],
+	"/legible.discovery.v1.MsgUpdateProfile":     TransactionGasCosts["update_profile"],
+	"/legible.discovery.v1.MsgAddCapability":     TransactionGasCosts["add_capability"],
+	"/legible.discovery.v1.MsgRemoveCapability":  TransactionGasCosts["remove_capability"],
+	"/legible.discovery.v1.MsgDeregisterAgent":   TransactionGasCosts["deregister_agent"],
+	"/legible.discovery.v1.MsgHeartbeat":         TransactionGasCosts["heartbeat"],
+
+	// Partnerships
+	"/legible.partnerships.v1.MsgInitiatePartnership":  TransactionGasCosts["initiate_partnership"],
+	"/legible.partnerships.v1.MsgAcceptPartnership":    TransactionGasCosts["accept_partnership"],
+	"/legible.partnerships.v1.MsgDepositToPot":         TransactionGasCosts["deposit_to_pot"],
+	"/legible.partnerships.v1.MsgDistributeReward":     TransactionGasCosts["distribute_reward"],
+	"/legible.partnerships.v1.MsgProposeOperation":     TransactionGasCosts["propose_operation"],
+	"/legible.partnerships.v1.MsgApproveOperation":     TransactionGasCosts["approve_operation"],
+	"/legible.partnerships.v1.MsgRejectOperation":      TransactionGasCosts["reject_operation"],
+	"/legible.partnerships.v1.MsgSafetyFreeze":         TransactionGasCosts["safety_freeze"],
+	"/legible.partnerships.v1.MsgRaiseCoercionSignal":  TransactionGasCosts["raise_coercion_signal"],
+	"/legible.partnerships.v1.MsgInitiateExit":         TransactionGasCosts["initiate_exit"],
+
+	// Ontology
+	"/legible.ontology.v1.MsgProposeDomain":             TransactionGasCosts["propose_domain"],
+	"/legible.ontology.v1.MsgVoteDomainProposal":        TransactionGasCosts["vote_domain_proposal"],
+	"/legible.ontology.v1.MsgUpdateDomain":              TransactionGasCosts["update_domain"],
+	"/legible.ontology.v1.MsgRegisterLogicZone":         TransactionGasCosts["register_logic_zone"],
+	"/legible.ontology.v1.MsgAcknowledgeIncompleteness": TransactionGasCosts["acknowledge_incompleteness"],
+
+	// Schedule
+	"/legible.schedule.v1.MsgCreateSchedule":  TransactionGasCosts["create_schedule"],
+	"/legible.schedule.v1.MsgPauseSchedule":   TransactionGasCosts["pause_schedule"],
+	"/legible.schedule.v1.MsgResumeSchedule":  TransactionGasCosts["resume_schedule"],
+	"/legible.schedule.v1.MsgCancelSchedule":  TransactionGasCosts["cancel_schedule"],
+	"/legible.schedule.v1.MsgAddFee":          TransactionGasCosts["add_fee"],
+
+	// Billing
+	"/legible.billing.v1.MsgRegisterProvider":    TransactionGasCosts["register_provider"],
+	"/legible.billing.v1.MsgDeregisterProvider":  TransactionGasCosts["deregister_provider"],
+	"/legible.billing.v1.MsgRequestQuote":        TransactionGasCosts["request_quote"],
+	"/legible.billing.v1.MsgExecutePayment":      TransactionGasCosts["execute_payment"],
 }
 
 // ---------- Fee Router Decorator ----------
 
-// FeeRouterDecorator splits collected fees: 22% to research fund, 78% to validators.
+// FeeRouterDecorator splits collected fees: 7% to research fund, 93% to validators.
 // This implements the LGM fee routing from core/billing/reward_router.ts.
 type FeeRouterDecorator struct {
 	bankKeeper bankkeeper.Keeper
@@ -326,15 +407,11 @@ func NewFeeRouterDecorator(bk bankkeeper.Keeper) FeeRouterDecorator {
 }
 
 func (frd FeeRouterDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	// Fee routing happens post-execution in EndBlocker via distribution module.
-	// Here we just validate and log the intended split.
+	// Fee routing is handled in x/vesting_rewards BeginBlocker via keeper.RouteFees().
+	// The BeginBlocker sweeps 7% of fee_collector to research_fund before
+	// x/distribution's BeginBlocker sends the remaining 93% to validators.
 	//
-	// The actual split is:
-	//   - 22% (ResearchTaxBPS) → research_fund module account
-	//   - 78% (ValidatorFeeBPS) → fee_collector (standard Cosmos distribution)
-	//
-	// Phase 2: Implement BeginBlock fee sweep from fee_collector to research_fund.
-	// For now, all fees go to fee_collector and distribution handles validator rewards.
+	// This decorator only logs the intended split for observability.
 
 	feeTx, ok := tx.(sdk.FeeTx)
 	if !ok {
@@ -346,7 +423,6 @@ func (frd FeeRouterDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 		return next(ctx, tx, simulate)
 	}
 
-	// Log the fee split for observability
 	ctx.Logger().Debug("LGM fee routing",
 		"total_fee", fee.String(),
 		"research_share_bps", ResearchTaxBPS,
@@ -354,40 +430,6 @@ func (frd FeeRouterDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 	)
 
 	return next(ctx, tx, simulate)
-}
-
-// RouteFees splits collected fees between research fund and validators.
-// Called in BeginBlock to sweep accumulated fees.
-func RouteFees(ctx sdk.Context, bk bankkeeper.Keeper) error {
-	feeCollectorAddr := authtypes.NewModuleAddress(authtypes.FeeCollectorName)
-	balance := bk.GetAllBalances(ctx, feeCollectorAddr)
-
-	if balance.IsZero() {
-		return nil
-	}
-
-	for _, coin := range balance {
-		if coin.Denom != BondDenom {
-			continue
-		}
-
-		totalAmount := coin.Amount
-		researchAmount := totalAmount.MulRaw(int64(ResearchTaxBPS)).QuoRaw(1000000)
-
-		if researchAmount.IsPositive() {
-			researchCoins := sdk.NewCoins(sdk.NewCoin(BondDenom, researchAmount))
-			err := bk.SendCoinsFromModuleToModule(ctx, authtypes.FeeCollectorName, ResearchFundName, researchCoins)
-			if err != nil {
-				// Research fund module account may not exist yet — log and continue.
-				ctx.Logger().Warn("failed to route fees to research fund",
-					"amount", researchAmount.String(),
-					"err", err,
-				)
-			}
-		}
-	}
-
-	return nil
 }
 
 // GetMinimumFee calculates the minimum fee for a transaction based on message types.

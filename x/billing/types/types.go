@@ -56,9 +56,9 @@ func DefaultParams() Params {
 		FreshnessDiscountBps:  100000,
 		QuoteValidityBlocks:   100,
 		MinProviderStake:      "100000000",
-		ResearchShareBps:      220000,
+		ResearchShareBps:      70000,
 		ResearchMinBps:        50000,          // 5% starting rate
-		ResearchRampBlocks:    34272 * 90,     // ~90 days to reach full 22%
+		ResearchRampBlocks:    34272 * 90,     // ~90 days to reach full 7%
 	}
 }
 

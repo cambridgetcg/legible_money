@@ -1,5 +1,7 @@
-# Legible Money - Project Intelligence
+# Legible Money — Go/Cosmos SDK Chain - Project Intelligence
 
+> **This is the production Go/Cosmos SDK chain.** The TypeScript prototype/reference implementation lives in a separate repo.
+>
 > **Session Continuity System**: This file + memory/ directory maintain project state across sessions.
 > Always read `.claude/memory/CURRENT_STATE.md` at session start.
 
@@ -19,52 +21,8 @@
 - Block time: **2521ms**
 - Finality depth: **19 blocks**
 - Token: **LGM** (Legible Money)
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     LEGIBLE MONEY STACK                      │
-├─────────────────────────────────────────────────────────────┤
-│  Protocol Layer    │ RPC, Client SDK, Developer Tools       │
-├────────────────────┼────────────────────────────────────────┤
-│  Consensus Layer   │ Proof of Truth Engine                  │
-│                    │ ├── Validator Selection (VRF)          │
-│                    │ ├── Verification Rounds (commit-reveal)│
-│                    │ ├── Confidence Aggregation             │
-│                    │ └── Block Finality (19 confirms)       │
-├────────────────────┼────────────────────────────────────────┤
-│  State Layer       │ Sparse Merkle Trees                    │
-│                    │ ├── AccountStateTree (balances)        │
-│                    │ ├── ValidatorStateTree (stakes)        │
-│                    │ └── KnowledgeStateTree (facts)         │
-├────────────────────┼────────────────────────────────────────┤
-│  Network Layer     │ libp2p                                 │
-│                    │ ├── GossipSub (block/tx propagation)   │
-│                    │ ├── Kademlia DHT (peer discovery)      │
-│                    │ └── Custom sync protocol               │
-├────────────────────┼────────────────────────────────────────┤
-│  Agent Identity    │ 4-Layer Key Architecture               │
-│                    │ ├── Identity (DID - immutable)         │
-│                    │ ├── Recovery (Shamir split)            │
-│                    │ ├── Operational (rotatable)            │
-│                    │ └── Session (ephemeral, limited)       │
-├────────────────────┼────────────────────────────────────────┤
-│  Core Layer        │ Cryptographic Primitives               │
-│                    │ ├── Ed25519 signatures                 │
-│                    │ ├── SHA-512/BLAKE3 hashing             │
-│                    │ ├── VRF for randomness                 │
-│                    │ └── Sparse Merkle Trees                │
-├────────────────────┼────────────────────────────────────────┤
-│  Logic Layer       │ Gödelian Knowledge System              │
-│                    │ ├── Propositional (complete)           │
-│                    │ ├── Presburger (decidable)             │
-│                    │ ├── Peano (incomplete, acknowledged)   │
-│                    │ └── Empirical (probabilistic)          │
-└────────────────────┴────────────────────────────────────────┘
-```
+- Binary: **legbled**
+- SDK: **Cosmos SDK v0.50.10**, CometBFT v0.38, IBC-Go v8.5.1
 
 ---
 
@@ -72,171 +30,86 @@
 
 ```
 legible-money/
-├── core/                    # Foundational primitives
-│   ├── crypto/              # Cryptographic functions
-│   │   ├── hashing.ts       # SHA-512, BLAKE3, domain separation
-│   │   ├── signatures.ts    # Ed25519 sign/verify
-│   │   ├── keys.ts          # Key generation, serialization
-│   │   ├── vrf.ts           # Verifiable Random Function
-│   │   ├── commitment.ts    # Commit-reveal schemes
-│   │   └── merkle.ts        # Sparse Merkle Tree
-│   ├── logic/               # Gödelian logic system
-│   │   ├── types.ts         # Decidability, LogicZone
-│   │   ├── zones.ts         # Zone properties, axioms
-│   │   └── goedel.ts        # Self-reference handling
-│   └── knowledge/           # Knowledge primitives
-│       └── types.ts         # Fact, Claim, Confidence
+├── app/                    # Application wiring
+│   ├── app.go              # Full module wiring
+│   ├── ante.go             # 16-decorator ante handler chain
+│   ├── ante_legible.go     # Custom ante decorators (account, capability, DID)
+│   ├── abci.go             # ABCI++ handlers + halt guard
+│   ├── vote_extensions.go  # ExtendVote + VerifyVoteExtension (VRF)
+│   ├── gas.go              # 38 tx gas costs
+│   ├── local_state.go      # In-memory commitment salt store
+│   └── staking_adapter.go  # Cross-module staking interface adapter
 │
-├── agents/                  # Agent identity system
-│   └── identity/
-│       ├── account.ts       # AgentAccount, 4-layer keys
-│       ├── session_keys.ts  # Ephemeral key management
-│       ├── recovery.ts      # Shamir Secret Sharing
-│       └── mpc.ts           # Multi-party computation
+├── cmd/legbled/            # Chain binary
+│   ├── root.go             # Root command
+│   ├── config.go           # 2521ms block time config
+│   └── genesis.go          # Genesis commands
 │
-├── network/                 # P2P networking (libp2p)
-│   ├── config.ts            # Network configuration
-│   ├── node.ts              # LegibleNode class
-│   ├── discovery/           # Peer discovery
-│   ├── pubsub/              # GossipSub topics
-│   └── protocols/           # Sync protocol
+├── x/                      # Custom Cosmos SDK modules
+│   ├── knowledge/          # COMPLETE: Claims, verification rounds, facts, domains
+│   ├── auth/               # COMPLETE: Dual-key, DID-to-bech32, session keys
+│   ├── staking/            # COMPLETE: 4-tier graduated validators, VRF weight
+│   ├── emergency/          # COMPLETE: 3-phase BFT kill switch
+│   ├── gov/                # COMPLETE: LIP lifecycle, quadratic voting
+│   ├── tokens/             # PARTIAL: Dual-ledger period overlay
+│   ├── vesting_rewards/    # PARTIAL: Block reward emission
+│   ├── bvm/                # PARTIAL: Belief Virtual Machine
+│   ├── home/               # PARTIAL: Agent Home
+│   ├── disputes/           # STUB
+│   ├── evidence_mgmt/      # STUB
+│   ├── research/           # STUB
+│   ├── ontology/           # STUB
+│   ├── channels/           # STUB
+│   ├── tree/               # STUB
+│   └── ... (more stubs)
 │
-├── consensus/               # Proof of Truth consensus
-│   ├── pot/                 # PoT engine
-│   │   ├── types.ts         # ConsensusParams, Validator, Block
-│   │   ├── validator_selection.ts  # VRF-based selection
-│   │   ├── verification_round.ts   # Commit-reveal rounds
-│   │   ├── confidence.ts    # Stake-weighted aggregation
-│   │   ├── finality.ts      # 19-block finality
-│   │   └── engine.ts        # Main PoT engine
-│   ├── blocks/              # Block management
-│   │   ├── producer.ts      # Block building
-│   │   └── validator.ts     # Block validation
-│   └── mempool/             # Transaction pool
-│       └── pool.ts          # Fee-ordered mempool
-│
-├── state/                   # Persistent state layer
-│   ├── types.ts             # State types
-│   ├── accounts.ts          # Account SMT
-│   ├── validators.ts        # Validator SMT
-│   ├── knowledge.ts         # Knowledge SMT (core PoT)
-│   ├── state_manager.ts     # Unified state management
-│   └── transitions.ts       # Transaction execution
-│
-├── schedule/                # DMSS (Decentralized Message Scheduling)
-│   ├── types.ts             # ScheduleMessage, ScheduleProcess types
-│   ├── process_state.ts     # SPS (Schedule Process State 131313)
-│   ├── condition_evaluator.ts # Time/logic condition evaluation
-│   ├── processing_unit.ts   # SPU (Schedule Processing Unit 131322)
-│   └── index.ts             # Module exports
-│
-├── tokens/                  # Expirable tokens system
-│   ├── types.ts             # ExpirableBalance, ChildAccount, RAI
-│   ├── child_account.ts     # Per-period balance tracking
-│   ├── expiration_tracker.ts # Dynamic Array method
-│   ├── retrieval_engine.ts  # RAI retrieval and distribution
-│   └── index.ts             # Module exports
-│
-├── contracts/               # Self-invoking contracts
-│   ├── types.ts             # SelfInvokingContract, InvocationConfig
-│   ├── registry.ts          # Contract registration/discovery
-│   ├── invoker.ts           # Self-invocation execution engine
-│   ├── integration.ts       # DMSS-Contract bridge
-│   └── index.ts             # Module exports
-│
-├── home/                    # Agent Home (AI agent dwelling)
-│   ├── types.ts             # AgentHome, Memory, Treasury, Guardian
-│   ├── memory.ts            # Persistent agent memory manager
-│   ├── treasury.ts          # Autonomous resource management
-│   ├── guardian.ts          # Defense, maintenance, alerts
-│   ├── access.ts            # Key/permission management
-│   ├── contract.ts          # AgentHomeContract orchestrator
-│   └── index.ts             # Module exports
-│
-├── docs/                    # Documentation
-│   ├── BLOCKCHAIN_ARCHITECTURE.md
-│   ├── COSMOS_MIGRATION.md
-│   ├── LOGIC_AXIOM_LAYER.md
-│   └── AGENT_ACCOUNTS.md
-│
-└── .claude/                 # Session continuity
-    ├── CLAUDE.md            # This file
-    ├── memory/              # Persistent memory
-    ├── sessions/            # Session logs
-    └── context/             # Preloaded context
+├── proto/                  # Protobuf definitions
+├── devnet/scripts/         # DevNet management scripts
+├── tests/cross_stack/      # Golden vector tests (Go)
+├── tools/migrate/          # State migration tooling
+├── scripts/                # DevNet initialization scripts
+├── docs/                   # Documentation
+└── .claude/                # Session continuity
 ```
 
 ---
 
-## Implementation Status
+## Key Technical Patterns
 
-### ✅ Completed
-- [x] Core cryptographic primitives (hashing, signatures, VRF, Merkle)
-- [x] Gödelian logic layer (zones, decidability, self-reference)
-- [x] Agent identity system (4-layer keys, session keys, recovery)
-- [x] Network layer (libp2p node, GossipSub, sync)
-- [x] Proof of Truth consensus engine
-- [x] State layer (accounts, validators, knowledge trees)
-- [x] State transitions (all transaction types)
-- [x] DMSS schedule module (SPU, SPS, condition evaluation)
-- [x] Expirable tokens (child accounts, dynamic array, RAI)
-- [x] Self-invoking contracts (registry, invoker, DMSS integration)
-- [x] Agent Home (memory, treasury, guardian, access, contract)
+### SDK v0.50 Patterns
+- `context.Context` not `sdk.Context` in keeper interfaces
+- `storetypes.KVStorePrefixIterator` replaces `sdk.KVStorePrefixIterator`
+- `sdkmath.NewIntFromBigInt` replaces `sdk.NewIntFromBigInt`
+- `sdk.HasValidateBasic` interface for optional ValidateBasic
+- `addresscodec.NewBech32Codec()` required for AccountKeeper/StakingKeeper
+- Hand-written types use `json.Marshal`/`json.Unmarshal` (not codec — no proto registration)
 
-### 🔲 Pending
-- [ ] Protocol layer (RPC, client SDK)
-- [ ] Devnet setup (multi-node testing)
-- [ ] Persistence layer (LevelDB/RocksDB backing)
-- [ ] CLI tooling
-- [ ] Test suite
-- [ ] Cosmos SDK migration path
+### Cross-Module Patterns
+- `StakingKeeperAdapter` wraps custom staking keeper for x/knowledge interface
+- `LegibleStakingKeeper` satisfies emergency StakingKeeper directly (no adapter)
+- Nil-safe `if k.tokensKeeper != nil` guards — tokens overlay is optional
+- TokensKeeper inited before LegibleStakingKeeper and KnowledgeKeeper in app.go
 
----
-
-## Key Technical Decisions
-
-### Why Custom + libp2p (not Cosmos SDK initially)?
-- Maximum flexibility for novel PoT consensus
-- Direct control over verification round mechanics
-- Cosmos SDK migration planned for production (see docs/COSMOS_MIGRATION.md)
-
-### Why Sparse Merkle Trees?
-- O(log n) proofs for state inclusion/exclusion
-- Efficient for sparse data (most accounts empty)
-- Light client support with compact proofs
-
-### Why 4-Layer Key Architecture?
-- Agents may "forget" keys → deterministic derivation
-- Developers may access keys → session key isolation
-- Recovery without centralization → Shamir splitting
-
-### Why Gödelian Logic Zones?
-- Acknowledges incompleteness as feature, not bug
-- Lower zones (propositional, Presburger) remain complete
-- Higher zones explicit about undecidability
-- Prevents false confidence in unprovable claims
+### Testing Patterns
+- Test `init()` must set lgm bech32 prefix or AccAddressFromBech32 defaults to "cosmos"
+- Equal-stake test validators for predictable quorum calculations
+- Mock keepers returning nil — all Cosmos account operations need nil guards
 
 ---
 
 ## Agent Context (inject into subagent prompts)
 
-When spawning PP agents (Territory Scout, Pattern Archaeologist, etc.) for this project,
-include this block in the agent prompt as `{PROJECT_CONTEXT}`:
-
 ```
-PROJECT CONTEXT (Legible Money):
-- BigInt for all monetary values (use bigIntReplacer for JSON serialization)
-- domainHash() returns Uint8Array (HashBytes), sha512_256Hex() returns string
-- Nonce: stake/unstake/transfer bump nonce; system transactions bypass nonce check
-- 15 state sub-roots: accounts, validators, facts, references, disputes, evidence,
-  vesting, research, claims, payment_channels, projects, services, governance, tasks, subscriptions
-- Storage namespaces: 0x01-0x0f (accounts through subscriptions)
-- Block time: 2521ms, finality depth: 19 blocks, BLOCKS_PER_DAY = 34272
-- Consensus: Proof of Truth (PoT) with commit-reveal verification rounds
-- Agent identity: 4-layer keys (identity → recovery → operational → session)
-- DID format: did:lgm:{32-hex} (canonical via publicKeyToDid)
-- Test runner: vitest, type check: tsc --noEmit
-- Treasury: FOUNDATION (did:lgm:protocol-treasury), RESEARCH (did:lgm:research)
+PROJECT CONTEXT (Legible Money - Go Chain):
+- Cosmos SDK v0.50.10, CometBFT v0.38, IBC-Go v8.5.1
+- Binary: legbled, Chain ID: legible-devnet-1
+- Block time: 2521ms, finality depth: 19 blocks
+- Bech32 prefix: lgm (lgmvaloper for validators)
+- DID format: did:lgm:{32-hex}
+- Hand-written types with json.Marshal (not proto codec)
+- 4-tier validators: Apprentice(0)/Verified(1)/Bonded(2)/Guardian(3)
+- ABCI++ vote extensions for VRF-based validator selection
+- Test runner: go test, static analysis: go vet
 ```
 
 ---
@@ -244,76 +117,42 @@ PROJECT CONTEXT (Legible Money):
 ## Session Continuity Protocol
 
 ### At Session Start
-1. Read `.claude/memory/CURRENT_STATE.md` for project state
-2. Read `.claude/memory/DECISIONS.md` for key decisions made
-3. Check `.claude/memory/BLOCKED.md` for any blockers
+1. `git checkout main && git pull origin main`
+2. Read `.claude/memory/CURRENT_STATE.md` for project state
+3. Read `.claude/memory/DECISIONS.md` for key decisions made
+4. Check `.claude/memory/BLOCKED.md` for any blockers
+5. Pick work (issue, roadmap task, or human-assigned)
+6. Create feature branch: `git checkout -b {type}-{scope}-{slug}`
 
 ### During Session
-- Update CURRENT_STATE.md when completing major work
+- Commit frequently to your feature branch
+- Run `make pr-check` before opening a PR
 - Log important decisions to DECISIONS.md
-- Note any blockers or questions in BLOCKED.md
 
 ### At Session End
-- Summarize session work in `.claude/sessions/YYYY-MM-DD.md`
-- Update CURRENT_STATE.md with final state
-- Clear resolved items from BLOCKED.md
-
----
-
-## Code Patterns
-
-### Type-Safe BigInt
-```typescript
-// Always use bigint for monetary values
-balance: bigint;
-stake: bigint;
-fee: bigint;
-
-// Serialize as string in JSON
-JSON.stringify({ amount: amount.toString() })
-BigInt(obj.amount)
-```
-
-### Domain-Separated Hashing
-```typescript
-// Always use domain separation
-domainHash('LGM.tx.hash.v1', payload);
-domainHash('LGM.block.hash.v1', header);
-```
-
-### State Transitions
-```typescript
-// Always use atomic transactions
-state.beginTransaction();
-try {
-  // ... mutations
-  state.commitTransaction();
-} catch (error) {
-  state.rollbackTransaction();
-  throw error;
-}
-```
-
-### Confidence Values
-```typescript
-// Confidence is 0.0 to 1.0
-type Confidence = number; // TODO: branded type
-// Axioms: 1.0, Verified: 0.6-0.95, Contested: <0.6
-```
+- Open PR via `gh pr create` (or mark existing PR as ready)
+- If incomplete: mark PR as draft, label `continuation-welcome`
+- After PR merges: update `.claude/memory/CURRENT_STATE.md` on main
 
 ---
 
 ## Testing Commands
 
 ```bash
-# Type check
-npx tsc --noEmit
+# Build all packages
+go build ./...
 
-# Run tests (when implemented)
-npm test
+# Run module tests
+go test ./x/... -count=1
 
-# Build
-npm run build
+# Run app tests
+go test ./app/... -count=1
+
+# Static analysis
+go vet ./...
+
+# Full PR validation
+make pr-check
 ```
 
 ---
@@ -321,16 +160,16 @@ npm run build
 ## Important Files to Read
 
 When context is limited, prioritize reading:
-1. `consensus/pot/types.ts` - Core consensus types
-2. `state/types.ts` - State layer types
-3. `agents/identity/account.ts` - Agent account structure
-4. `core/logic/zones.ts` - Logic zone definitions
+1. `app/app.go` - Full module wiring
+2. `x/knowledge/keeper/keeper.go` - Knowledge module keeper
+3. `x/knowledge/types/types.go` - Core types
+4. `x/staking/types/types.go` - Validator tiers
+5. `app/vote_extensions.go` - ABCI++ VRF integration
 
 ---
 
-## Contact & Resources
+## Resources
 
-- Migration plan: `docs/COSMOS_MIGRATION.md`
 - Architecture: `docs/BLOCKCHAIN_ARCHITECTURE.md`
+- Cosmos Migration: `docs/COSMOS_MIGRATION.md`
 - Agent accounts: `docs/AGENT_ACCOUNTS.md`
-- Logic system: `docs/LOGIC_AXIOM_LAYER.md`

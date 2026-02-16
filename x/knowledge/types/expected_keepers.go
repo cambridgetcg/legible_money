@@ -20,13 +20,6 @@ type BankKeeper interface {
 	BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 }
 
-// TokensKeeper defines the expected tokens module keeper for period-based balance tracking.
-// The knowledge module calls this to maintain the period overlay alongside BankKeeper transfers.
-type TokensKeeper interface {
-	DebitBalance(ctx sdk.Context, address, amount string) error
-	CreditBalance(ctx sdk.Context, address, amount string, blockHeight uint64) error
-}
-
 // OntologyKeeper defines the expected ontology keeper interface.
 // The knowledge module uses this to look up stratum-based confidence ceilings for domains
 // and to enforce Gödelian logic zone constraints on claims.
@@ -78,6 +71,9 @@ type VestingRewardsKeeper interface {
 	// GetEpochBlockRewardPool returns the total block rewards distributed in the given epoch (ulgm).
 	// Used by the knowledge module to cap falsification rewards at FalsificationPoolShareBps.
 	GetEpochBlockRewardPool(ctx sdk.Context, epoch uint64) uint64
+	// PauseVestingByClaimId pauses the vesting schedule associated with a claim.
+	// Used when a fact is archived (pruned) to stop further reward vesting.
+	PauseVestingByClaimId(ctx sdk.Context, claimId string) error
 }
 
 // EvidenceMgmtKeeper defines the expected evidence management keeper interface.

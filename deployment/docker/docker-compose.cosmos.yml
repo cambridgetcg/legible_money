@@ -1,0 +1,111 @@
+# Legible Money — 3-Validator Cosmos SDK DevNet
+#
+# Usage:
+#   # 1. Build the image
+#   docker build -f deployment/docker/Dockerfile.cosmos -t legbled .
+#
+#   # 2. Initialize the devnet (generates genesis, keys, configs)
+#   ./deployment/docker/init-cosmos-docker.sh
+#
+#   # 3. Start the network
+#   docker compose -f deployment/docker/docker-compose.cosmos.yml up -d
+#
+#   # 4. Check status
+#   curl -s localhost:26657/status | jq .result.sync_info.latest_block_height
+#
+#   # 5. Tear down
+#   docker compose -f deployment/docker/docker-compose.cosmos.yml down -v
+
+services:
+  # ──── Validator 1 (Seed + Primary) ────
+  validator-1:
+    image: legbled:latest
+    container_name: lgm-validator-1
+    environment:
+      MONIKER: validator-1
+      CHAIN_ID: lgm-devnet-1
+      MINIMUM_GAS: "0.025ulgm"
+      UNSAFE_CORS: "true"
+      ENABLE_API: "true"
+      ENABLE_GRPC: "true"
+      PRUNING: default
+    ports:
+      - "26656:26656"  # P2P
+      - "26657:26657"  # RPC
+      - "1317:1317"    # REST API
+      - "9090:9090"    # gRPC
+    volumes:
+      - validator-1-data:/root/.legbled
+    networks:
+      - lgm-net
+    restart: unless-stopped
+
+  # ──── Validator 2 ────
+  validator-2:
+    image: legbled:latest
+    container_name: lgm-validator-2
+    environment:
+      MONIKER: validator-2
+      CHAIN_ID: lgm-devnet-1
+      MINIMUM_GAS: "0.025ulgm"
+      UNSAFE_CORS: "true"
+      ENABLE_API: "true"
+      ENABLE_GRPC: "true"
+      PRUNING: default
+    ports:
+      - "26666:26656"  # P2P
+      - "26667:26657"  # RPC
+      - "1318:1317"    # REST API
+      - "9091:9090"    # gRPC
+    volumes:
+      - validator-2-data:/root/.legbled
+    networks:
+      - lgm-net
+    restart: unless-stopped
+
+  # ──── Validator 3 ────
+  validator-3:
+    image: legbled:latest
+    container_name: lgm-validator-3
+    environment:
+      MONIKER: validator-3
+      CHAIN_ID: lgm-devnet-1
+      MINIMUM_GAS: "0.025ulgm"
+      UNSAFE_CORS: "true"
+      ENABLE_API: "true"
+      ENABLE_GRPC: "true"
+      PRUNING: default
+    ports:
+      - "26676:26656"  # P2P
+      - "26677:26657"  # RPC
+      - "1319:1317"    # REST API
+      - "9092:9090"    # gRPC
+    volumes:
+      - validator-3-data:/root/.legbled
+    networks:
+      - lgm-net
+    restart: unless-stopped
+
+  # ──── Block Explorer (Ping.pub) ────
+  explorer:
+    image: ghcr.io/ping-pub/explorer:latest
+    container_name: lgm-explorer
+    ports:
+      - "8080:80"
+    volumes:
+      - ./ping-pub-config:/app/chains/mainnet:ro
+    networks:
+      - lgm-net
+    depends_on:
+      - validator-1
+    profiles:
+      - explorer
+
+volumes:
+  validator-1-data:
+  validator-2-data:
+  validator-3-data:
+
+networks:
+  lgm-net:
+    driver: bridge

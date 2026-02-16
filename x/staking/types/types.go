@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
@@ -81,9 +82,9 @@ func DefaultTierConfigs() []*TierConfig {
 		},
 		{
 			Tier:                            "bonded",
-			MinStake:                        "11100000", // 11.1 LGM in ulgm (6 decimals)
-			MinVerifications:                0,
-			MinAccuracy:                     0,
+			MinStake:                        "1111000000", // 1,111 LGM in ulgm (6 decimals)
+			MinVerifications:                11,
+			MinAccuracy:                     500000, // 50% — oracle/attestation access requires some epistemic track record
 			MaxSlashCount:                   -1,
 			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation"},
 			RewardMultiplier:                1000, // 1.0x
@@ -94,12 +95,12 @@ func DefaultTierConfigs() []*TierConfig {
 		},
 		{
 			Tier:                            "guardian",
-			MinStake:                        "111000000", // 111 LGM in ulgm (6 decimals)
+			MinStake:                        "11111000000", // 11,111 LGM in ulgm (6 decimals)
 			MinVerifications:                333,
 			MinAccuracy:                     770000, // 77%
 			MaxSlashCount:                   0,      // zero slashes in window
 			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation", "predictive", "social", "contested"},
-			RewardMultiplier:                1500, // 1.5x
+			RewardMultiplier:                2000, // 2.0x — compensates asymmetric risk (zero-slash tolerance + contested engagement)
 			SelectionWeight:                 1500, // 1.5x
 			SlashWindowEpochs:               10,   // Only slashes within last 10 epochs count
 			MinContestedVerifications:       33,   // Must engage hard claims
@@ -303,6 +304,62 @@ func (m *MsgRedelegateResponse) Reset()         { *m = MsgRedelegateResponse{} }
 func (m *MsgRedelegateResponse) String() string { return proto.CompactTextString(m) }
 func (m *MsgRedelegateResponse) ProtoMessage()  {}
 
+// --- Params Validation ---
+
+// Validate performs parameter validation.
+func (p *Params) Validate() error {
+	if p.UnbondingPeriod == 0 {
+		return fmt.Errorf("unbonding_period must be positive")
+	}
+	if p.MaxValidators == 0 {
+		return fmt.Errorf("max_validators must be positive")
+	}
+	stake := new(big.Int)
+	if _, ok := stake.SetString(p.VirtualStake, 10); !ok || stake.Sign() <= 0 {
+		return fmt.Errorf("invalid virtual_stake: %s", p.VirtualStake)
+	}
+	minDel := new(big.Int)
+	if _, ok := minDel.SetString(p.MinSelfDelegation, 10); !ok || minDel.Sign() <= 0 {
+		return fmt.Errorf("invalid min_self_delegation: %s", p.MinSelfDelegation)
+	}
+	if p.SlashEscalationBps > 1000000 {
+		return fmt.Errorf("slash_escalation_bps must be <= 1000000")
+	}
+	return nil
+}
+
+// MsgUpdateParams updates module parameters (governance-gated).
+type MsgUpdateParams struct {
+	Authority string `json:"authority"` // gov module address
+	Params    Params `json:"params"`
+}
+
+func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams" }
+func (msg *MsgUpdateParams) ProtoMessage()  {}
+
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUpdateParams) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	return msg.Params.Validate()
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams.
+type MsgUpdateParamsResponse struct{}
+
+func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) String() string { return "" }
+func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
+
 // FullMsgServer extends the proto-generated MsgServer with additional RPCs
 // that are not yet defined in the protobuf service.
 type FullMsgServer interface {
@@ -311,4 +368,5 @@ type FullMsgServer interface {
 	Delegate(sdk.Context, *MsgDelegate) (*MsgDelegateResponse, error)
 	Undelegate(sdk.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
 	Redelegate(sdk.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
+	UpdateParams(sdk.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }

@@ -1,0 +1,14 @@
+{
+  "id": "W5",
+  "name": "Cross-Stack Golden Vectors",
+  "status": "pending",
+  "impl": 0,
+  "depth": "L0",
+  "gates_targeted": ["T3", "T1", "T4", "U4"],
+  "dimension_focus": "truth+understanding",
+  "est_sessions": 3,
+  "blockedBy": ["W3"],
+  "ref": "docs/INTEGRATED_GROWTH_ROADMAP.md Phase F",
+  "createdAt": "2026-02-15T22:00:00Z",
+  "updatedAt": "2026-02-15T22:00:00Z"
+}

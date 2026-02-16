@@ -3,15 +3,15 @@
 > **Created**: 2026-02-08
 > **Updated**: 2026-02-09 (Rev 3 — vesting_rewards wired, P0-2 confirmed fixed, staking decimals fixed)
 > **Scope**: All x/ modules, app.go wiring, genesis CLI, config defaults, cross-module flows
-> **Status**: 0 P0 remaining, 4 P1 open, 6 P2 open
+> **Status**: 0 P0 remaining, 3 P1 open (P1-6/P1-7 FIXED), 6 P2 open
 
 ---
 
 ## Summary
 
-The Go chain (`legbled`) has 13 custom modules. Seven are wired into `app.go` (auth, staking,
-tokens, emergency, gov, research, knowledge). Six are defined but not wired (ontology, disputes,
-evidence_mgmt, vesting_rewards, bvm, channels, claiming_pot, tree).
+The Go chain (`legbled`) has 27 custom modules, all wired into `app.go` ModuleBasics and
+ModuleManager. Five are fully implemented (knowledge, auth, staking, emergency, gov).
+The rest are at varying stages from partial to stub.
 
 **Overall Genesis Readiness: 70% for DevNet, 40% for TestNet, 20% for MainNet.**
 *(Up from 60/35/15 — decimal fixes and module additions have improved posture)*
@@ -62,12 +62,12 @@ auto-generated genesis is incomplete.
 
 ### ~~P0-1: Decimal Mismatch~~ → Downgraded to P1-7 (2 remaining fields)
 
-**10 of 12 original fields FIXED** since Rev 1. Only 2 remain wrong:
+**12 of 12 original fields FIXED**. All decimal mismatches resolved.
 
-| Module | Field | Current Value (WRONG) | Correct (6-dec) | Line |
-|--------|-------|----------------------|------------------|------|
-| `x/staking` | `DefaultTierConfigs[TierBonded].MinStake` | `"1111000000000000000000"` | `"1111000000"` | :73 |
-| `x/staking` | `DefaultTierConfigs[TierGuardian].MinStake` | `"11111000000000000000000"` | `"11111000000"` | :83 |
+| Module | Field | Status |
+|--------|-------|--------|
+| `x/staking` | `DefaultTierConfigs[TierBonded].MinStake` | **FIXED** → `"1111000000"` (1,111 LGM) |
+| `x/staking` | `DefaultTierConfigs[TierGuardian].MinStake` | **FIXED** → `"11111000000"` (11,111 LGM) |
 
 **Fixed fields** (verified via direct file read):
 - `x/emergency/types/types.go:218` — MinGuardianStake: `"111111000000"` (6-dec) ✅
@@ -79,28 +79,19 @@ auto-generated genesis is incomplete.
 - `x/research/types/types.go:134-140` — All 3 research values: 6-dec ✅
 - `x/vesting_rewards/types/genesis.go:10` — BlockRewardAmount: `"11000000"` (6-dec) ✅
 
-**Impact of remaining 2**: Tier progression from Verified(1) to Bonded(2) requires
-"1111000000000000000000" ulgm instead of "1111000000" ulgm — that's 1.111 * 10^12 LGM instead
-of 1,111 LGM. No validator can ever reach Bonded or Guardian tier. VRF selection works only for
-Apprentice and Verified tiers.
+**All decimal mismatches resolved.** Tier progression works correctly:
+Bonded requires 1,111 LGM (`"1111000000"` ulgm), Guardian requires 11,111 LGM (`"11111000000"` ulgm).
 
 ---
 
 ### ~~P0-3: Unwired Modules~~ → Split: P2-4 (stubs) + NEW P1-6 (vesting_rewards)
 
-4 modules with real genesis implementations remain unwired:
+**ALL modules now wired** — including vesting_rewards (Rev 3), ontology, disputes, evidence_mgmt,
+and 13 additional modules added since Rev 1 (channels, tree, bvm, home, qualification,
+capture_defense, capture_challenge, billing, autopoiesis, discovery, partnerships, icaauth, ibcratelimit).
 
-| Module | Has Genesis | Implementation Depth | In ModuleManager | Risk |
-|--------|-------------|---------------------|------------------|------|
-| `x/vesting_rewards` | Yes (10 cats, 7 msg types, tests) | **Full** | No | **P1** — No block rewards |
-| `x/ontology` | Yes (7 strata, 7 domains) | Moderate | No | P2 — Deferred OK |
-| `x/disputes` | Yes (3 tiers, params) | Moderate | No | P2 — Deferred OK |
-| `x/evidence_mgmt` | Yes (params, oracles) | Moderate | No | P2 — Deferred OK |
-
-**Key insight**: `x/vesting_rewards` has been fully implemented (types.go with 7 msg types,
-codec.go with gRPC registration, msg_server.go with 7 handlers, keeper_test.go with tests) but
-is NOT wired. This means **block reward distribution is completely dead** — no token emission,
-no research fund routing, no truth-linked vesting. See P1-6.
+`x/vesting_rewards` is fully wired with BeginBlocker (fee routing + block rewards) running BEFORE
+x/distribution, EndBlocker (vesting releases), and PreBlocker integration (empty block detection).
 
 ---
 

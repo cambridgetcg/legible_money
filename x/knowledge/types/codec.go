@@ -21,6 +21,8 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgChallengeDomainProposal{}, "knowledge/ChallengeDomainProposal", nil)
 	cdc.RegisterConcrete(&MsgRegisterStratum{}, "knowledge/RegisterStratum", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "knowledge/UpdateParams", nil)
+	cdc.RegisterConcrete(&MsgUpdateExtendedParams{}, "knowledge/UpdateExtendedParams", nil)
+	cdc.RegisterConcrete(&MsgPatronizeFact{}, "knowledge/PatronizeFact", nil)
 }
 
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
@@ -39,6 +41,8 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgUpdateParams{},
 		// counter_fact.pb.go
 		&MsgSubmitContradiction{},
+		// knowledge pruning
+		&MsgPatronizeFact{},
 	)
 }
 
@@ -58,6 +62,8 @@ type ExtendedMsgServer interface {
 	ChallengeFact(context.Context, *MsgChallengeFact) (*MsgChallengeFactResponse, error)
 	AddFact(context.Context, *MsgAddFact) (*MsgAddFactResponse, error)
 	SubmitContradiction(context.Context, *MsgSubmitContradiction) (*MsgSubmitContradictionResponse, error)
+	UpdateExtendedParams(context.Context, *MsgUpdateExtendedParams) (*MsgUpdateExtendedParamsResponse, error)
+	PatronizeFact(context.Context, *MsgPatronizeFact) (*MsgPatronizeFactResponse, error)
 }
 
 // RegisterExtendedMsgServer registers the extended msg server that includes
@@ -80,6 +86,8 @@ var _ExtendedMsg_serviceDesc = grpc.ServiceDesc{
 		{MethodName: "ChallengeFact", Handler: _Msg_ChallengeFact_Handler},
 		{MethodName: "AddFact", Handler: _Msg_AddFact_Handler},
 		{MethodName: "SubmitContradiction", Handler: _Msg_SubmitContradiction_Handler},
+		{MethodName: "UpdateExtendedParams", Handler: _Msg_UpdateExtendedParams_Handler},
+		{MethodName: "PatronizeFact", Handler: _Msg_PatronizeFact_Handler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "legible/knowledge/v1/tx.proto",
@@ -166,5 +174,33 @@ func _Msg_SubmitContradiction_Handler(srv interface{}, ctx context.Context, dec 
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.knowledge.v1.ExtendedMsg/SubmitContradiction"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ExtendedMsgServer).SubmitContradiction(ctx, req.(*MsgSubmitContradiction))
+	})
+}
+
+func _Msg_UpdateExtendedParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateExtendedParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExtendedMsgServer).UpdateExtendedParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.knowledge.v1.ExtendedMsg/UpdateExtendedParams"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExtendedMsgServer).UpdateExtendedParams(ctx, req.(*MsgUpdateExtendedParams))
+	})
+}
+
+func _Msg_PatronizeFact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgPatronizeFact)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExtendedMsgServer).PatronizeFact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.knowledge.v1.ExtendedMsg/PatronizeFact"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExtendedMsgServer).PatronizeFact(ctx, req.(*MsgPatronizeFact))
 	})
 }

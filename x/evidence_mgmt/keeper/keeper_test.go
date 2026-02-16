@@ -1207,6 +1207,7 @@ func TestExpireStaleEvidence(t *testing.T) {
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
 	})
+	k.SetExpiryIndex(ctx, 80+params.AuditWindow, "ev-1") // expires at height 90
 
 	// Evidence 2: fresh (within window) → stays submitted
 	k.SetEvidence(ctx, types.Evidence{
@@ -1214,6 +1215,7 @@ func TestExpireStaleEvidence(t *testing.T) {
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 95,
 	})
+	k.SetExpiryIndex(ctx, 95+params.AuditWindow, "ev-2") // expires at height 105
 
 	k.ExpireStaleEvidence(ctx)
 

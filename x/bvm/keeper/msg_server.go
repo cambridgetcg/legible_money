@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	corestore "cosmossdk.io/core/store"
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -372,6 +373,21 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 	callerBytes := make([]byte, 20)
 	copy(callerBytes, callerAddr)
 
+	// Parse and transfer Value (payable contract support)
+	callValue := new(big.Int)
+	if msg.Value != "" && msg.Value != "0" {
+		if v, ok := new(big.Int).SetString(msg.Value, 10); ok && v.Sign() > 0 {
+			callValue = v
+			// Transfer from caller to BVM module account
+			if m.bankKeeper != nil {
+				valueCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(callValue)))
+				if err := m.bankKeeper.SendCoinsFromAccountToModule(ctx, callerAddr, types.ModuleName, valueCoins); err != nil {
+					return nil, fmt.Errorf("insufficient funds for contract value: %w", err)
+				}
+			}
+		}
+	}
+
 	// Resolve caller's DID from x/auth (not the contract's AgentDID)
 	var callerDID string
 	if m.authKeeper != nil {
@@ -429,7 +445,7 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 		Timestamp:       uint64(ctx.BlockTime().Unix()),
 		GasPrice:        new(big.Int),
 		GasLimit:        msg.GasLimit,
-		Value:           new(big.Int),
+		Value:           callValue,
 		CallData:        callData,
 		Mode:            vm.ModeCall,
 		Bytecode:        code.Bytecode,
@@ -463,11 +479,18 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 		}
 	}
 
+	// If execution failed and value was transferred, refund the caller
+	if !result.Success && callValue.Sign() > 0 && m.bankKeeper != nil {
+		refundCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(callValue)))
+		_ = m.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, callerAddr, refundCoins)
+	}
+
 	// Emit event
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"bvm_call_contract",
 		sdk.NewAttribute("contract", msg.ContractAddress),
 		sdk.NewAttribute("caller", msg.Caller),
+		sdk.NewAttribute("value", callValue.String()),
 		sdk.NewAttribute("gas_used", fmt.Sprintf("%d", result.GasUsed)),
 		sdk.NewAttribute("success", fmt.Sprintf("%v", result.Success)),
 	))

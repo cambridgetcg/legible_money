@@ -7,7 +7,7 @@ func DefaultParams() Params {
 	return Params{
 		MaxApprenticeValidators: 0,              // deprecated: Sybil defense via MinSelfDelegation
 		UnbondingPeriod:         268560,          // ~7 days
-		VirtualStake:            "111000000",     // 111 LGM in ulgm
+		VirtualStake:            "11000000",      // 11 LGM in ulgm (H-3 fix)
 		MaxValidators:           100,             // max block producers (tier 2+ only); verifiers are uncapped
 		MinSelfDelegation:       "111000",        // 0.111 LGM — required to register as validator (Sybil defense)
 		// Anti-grief parameters (R1-R4 remediation)

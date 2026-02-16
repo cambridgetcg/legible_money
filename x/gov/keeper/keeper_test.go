@@ -261,6 +261,12 @@ func TestStakeLIP_NotFound(t *testing.T) {
 // helper to create a LIP and advance it to voting stage via category manipulation
 func createAndAdvanceToVoting(t *testing.T, k keeper.Keeper, ms types.MsgServer, ctx sdk.Context) {
 	t.Helper()
+
+	// Set review period to 0 so we can advance immediately in tests
+	params := k.GetParams(ctx)
+	params.ReviewPeriodBlocks = 0
+	k.SetParams(ctx, params)
+
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
@@ -278,13 +284,22 @@ func createAndAdvanceToVoting(t *testing.T, k keeper.Keeper, ms types.MsgServer,
 		LipId:  "LIP-1",
 		Amount: "200000000",
 	})
-	ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{Authority: testAddr("alice"), LipId: "LIP-1"})
-	ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{Authority: testAddr("alice"), LipId: "LIP-1"})
+	if _, err := ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{Authority: testAddr("alice"), LipId: "LIP-1"}); err != nil {
+		t.Fatalf("advance review->last_call failed: %v", err)
+	}
+	if _, err := ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{Authority: testAddr("alice"), LipId: "LIP-1"}); err != nil {
+		t.Fatalf("advance last_call->voting failed: %v", err)
+	}
 }
 
 func TestAdvanceLIPStage_ReviewToLastCall(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	ms := keeper.NewMsgServerImpl(k)
+
+	// Set review period to 0 for immediate advancement
+	params := k.GetParams(ctx)
+	params.ReviewPeriodBlocks = 0
+	k.SetParams(ctx, params)
 
 	// Create and advance to review
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
@@ -322,6 +337,11 @@ func TestAdvanceLIPStage_LastCallToVoting(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	ms := keeper.NewMsgServerImpl(k)
 
+	// Set review period to 0 for immediate advancement
+	params := k.GetParams(ctx)
+	params.ReviewPeriodBlocks = 0
+	k.SetParams(ctx, params)
+
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
 		Proposer:    testAddr("alice"),
 		Title:       "Test",
@@ -337,13 +357,16 @@ func TestAdvanceLIPStage_LastCallToVoting(t *testing.T) {
 		LipId:  "LIP-1",
 		Amount: "200000000",
 	})
-	ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{
+	_, err := ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{
 		Authority: testAddr("alice"),
 		LipId:     "LIP-1",
 	})
+	if err != nil {
+		t.Fatalf("advance review->last_call failed: %v", err)
+	}
 
 	// Advance last_call -> voting
-	_, err := ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{
+	_, err = ms.AdvanceLIPStage(ctx, &types.MsgAdvanceLIPStage{
 		Authority: testAddr("alice"),
 		LipId:     "LIP-1",
 	})
@@ -462,7 +485,7 @@ func TestCastVote(t *testing.T) {
 	// Create LIP and advance to voting
 	createAndAdvanceToVoting(t, k, ms, ctx)
 
-	// Cast vote with stake
+	// Cast vote with stake (ZD-E05: quadratic voting, power = sqrt(stake))
 	resp, err := ms.CastVote(ctx, &types.MsgCastVote{
 		Voter:      testAddr("voter1"),
 		ProposalId: "LIP-1",
@@ -472,14 +495,15 @@ func TestCastVote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.EffectiveVotingPower != "9000000" {
-		t.Errorf("expected effective_voting_power=9000000, got %s", resp.EffectiveVotingPower)
+	// sqrt(9000000) = 3000
+	if resp.EffectiveVotingPower != "3000" {
+		t.Errorf("expected effective_voting_power=3000 (sqrt(9000000)), got %s", resp.EffectiveVotingPower)
 	}
 
-	// Verify tally updated
+	// Verify tally updated with quadratic voting power
 	lip, _ := k.GetLIP(ctx, "LIP-1")
-	if lip.SupportWeight != "9000000" {
-		t.Errorf("expected support_weight=9000000, got %s", lip.SupportWeight)
+	if lip.SupportWeight != "3000" {
+		t.Errorf("expected support_weight=3000, got %s", lip.SupportWeight)
 	}
 	if lip.UniqueVoters != 1 {
 		t.Errorf("expected 1 unique voter, got %d", lip.UniqueVoters)
@@ -531,6 +555,8 @@ func TestCastVote_MultipleVoters(t *testing.T) {
 
 	createAndAdvanceToVoting(t, k, ms, ctx)
 
+	// ZD-E05: quadratic voting — power = sqrt(stake)
+	// sqrt(5)=2, sqrt(2)=1, sqrt(1)=1 (integer sqrt)
 	ms.CastVote(ctx, &types.MsgCastVote{
 		Voter: testAddr("voter1"), ProposalId: "LIP-1", Option: types.VoteOption_VOTE_OPTION_YES, Stake: "5",
 	})
@@ -542,14 +568,14 @@ func TestCastVote_MultipleVoters(t *testing.T) {
 	})
 
 	lip, _ := k.GetLIP(ctx, "LIP-1")
-	if lip.SupportWeight != "5" {
-		t.Errorf("expected support=5, got %s", lip.SupportWeight)
+	if lip.SupportWeight != "2" {
+		t.Errorf("expected support=2 (sqrt(5)), got %s", lip.SupportWeight)
 	}
-	if lip.OpposeWeight != "2" {
-		t.Errorf("expected oppose=2, got %s", lip.OpposeWeight)
+	if lip.OpposeWeight != "1" {
+		t.Errorf("expected oppose=1 (sqrt(2)), got %s", lip.OpposeWeight)
 	}
 	if lip.AbstainWeight != "1" {
-		t.Errorf("expected abstain=1, got %s", lip.AbstainWeight)
+		t.Errorf("expected abstain=1 (sqrt(1)), got %s", lip.AbstainWeight)
 	}
 	if lip.UniqueVoters != 3 {
 		t.Errorf("expected 3 voters, got %d", lip.UniqueVoters)
@@ -709,6 +735,7 @@ func TestCastVote_OnDisbursement(t *testing.T) {
 		Amount:      "10000000000",
 	})
 
+	// ZD-E05: quadratic voting — sqrt(100000000) = 10000
 	resp, err := ms.CastVote(ctx, &types.MsgCastVote{
 		Voter:      testAddr("voter1"),
 		ProposalId: "DISB-1",
@@ -718,13 +745,13 @@ func TestCastVote_OnDisbursement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.EffectiveVotingPower != "100000000" {
-		t.Errorf("expected effective_voting_power=100000000, got %s", resp.EffectiveVotingPower)
+	if resp.EffectiveVotingPower != "10000" {
+		t.Errorf("expected effective_voting_power=10000 (sqrt(100000000)), got %s", resp.EffectiveVotingPower)
 	}
 
 	disb, _ := k.GetDisbursement(ctx, "DISB-1")
-	if disb.SupportWeight != "100000000" {
-		t.Errorf("expected support=100000000, got %s", disb.SupportWeight)
+	if disb.SupportWeight != "10000" {
+		t.Errorf("expected support=10000, got %s", disb.SupportWeight)
 	}
 }
 

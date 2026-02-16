@@ -1,0 +1,41 @@
+# Multi-stage build for legbled (Legible Money Cosmos SDK chain)
+#
+# Build: docker build -f deployment/docker/Dockerfile.cosmos -t legbled .
+# Run:   docker run -v legbled-data:/root/.legbled -p 26657:26657 -p 1317:1317 -p 9090:9090 -p 26656:26656 legbled
+
+# ──── Stage 1: Builder ────
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache make git gcc musl-dev linux-headers
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN go build -o /usr/local/bin/legbled -ldflags="-s -w" ./cmd/legbled
+
+# ──── Stage 2: Runtime ────
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates curl jq bash
+
+COPY --from=builder /usr/local/bin/legbled /usr/local/bin/legbled
+
+# Default home directory for chain data
+ENV LGM_HOME=/root/.legbled
+ENV MONIKER=legible-node
+
+EXPOSE 26656 26657 9090 1317
+
+VOLUME ["/root/.legbled"]
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -sf http://localhost:26657/status || exit 1
+
+# Entrypoint: if node is already initialized, just start; otherwise init first
+COPY deployment/docker/entrypoint-cosmos.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["start"]

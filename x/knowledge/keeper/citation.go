@@ -19,6 +19,7 @@ func (k Keeper) IncrementCitationCount(ctx sdk.Context, factID string) error {
 
 	fact.CitationCount++
 	fact.LastCitedBlock = uint64(ctx.BlockHeight())
+	fact.LastUtilizedBlock = uint64(ctx.BlockHeight())
 	k.SetFact(ctx, fact)
 
 	ctx.EventManager().EmitEvent(

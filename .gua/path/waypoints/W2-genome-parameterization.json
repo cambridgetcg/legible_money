@@ -1,0 +1,16 @@
+{
+  "id": "W2",
+  "name": "Genome Parameterization",
+  "status": "complete",
+  "impl": 100,
+  "depth": "L2",
+  "gates_targeted": ["J2", "J5", "B4", "B5"],
+  "dimension_focus": "justice+beauty",
+  "est_sessions": 3,
+  "blockedBy": [],
+  "ref": "docs/INTEGRATED_GROWTH_ROADMAP.md Phase A",
+  "createdAt": "2026-02-15T22:00:00Z",
+  "updatedAt": "2026-02-16T03:12:00Z",
+  "completedAt": "2026-02-16T03:12:00Z",
+  "evidence": "All 7 priority modules have complete governance pipeline. Staking tier decimal bug fixed (Bonded 11.1→1,111 LGM, Guardian 111→11,111 LGM) in both Go and TS chains. Knowledge ExtendedParams: 40-field struct covering citation economics, confidence propagation, reverification, challenge tuning, maturity criteria, calibration, diversity detection, negative knowledge, and evidence. Wired with Get/Set/Default/Validate + MsgUpdateExtendedParams handler + gRPC registration. All Go tests passing, 59/59 TS tier tests passing. 12/12 decimal mismatches resolved."
+}

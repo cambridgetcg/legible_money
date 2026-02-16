@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legible Money (LGM) — Tokenomics Review</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: #12121a;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --muted: #888899;
+    --accent: #7c6cf0;
+    --accent2: #4ecdc4;
+    --warn: #f0a030;
+    --danger: #e05050;
+    --success: #50c878;
+    --blue: #5090e0;
+    --pink: #e070a0;
+    --gold: #d4a843;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2.2rem; color: var(--accent); margin-bottom: 0.5rem; letter-spacing: -1px; }
+  h2 { font-size: 1.5rem; color: var(--accent2); margin: 2.5rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  h3 { font-size: 1.15rem; color: var(--gold); margin: 1.5rem 0 0.75rem; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .stat { text-align: center; padding: 1rem; }
+  .stat-value { font-size: 2rem; font-weight: bold; }
+  .stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .tag-danger { background: rgba(224,80,80,0.2); color: var(--danger); border: 1px solid rgba(224,80,80,0.3); }
+  .tag-warn { background: rgba(240,160,48,0.2); color: var(--warn); border: 1px solid rgba(240,160,48,0.3); }
+  .tag-success { background: rgba(80,200,120,0.2); color: var(--success); border: 1px solid rgba(80,200,120,0.3); }
+  .tag-info { background: rgba(124,108,240,0.2); color: var(--accent); border: 1px solid rgba(124,108,240,0.3); }
+  canvas { width: 100%; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--accent2); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+  .bar-container { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .bar-label { width: 140px; font-size: 0.8rem; text-align: right; color: var(--muted); }
+  .bar-track { flex: 1; height: 22px; background: var(--border); border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 0.7rem; font-weight: bold; }
+  .flow-diagram { text-align: center; padding: 1rem 0; }
+  .flow-diagram svg { max-width: 100%; }
+  .score-ring { display: inline-flex; flex-direction: column; align-items: center; margin: 0.5rem; }
+  .score-ring canvas { width: 100px; height: 100px; }
+  .score-ring .label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+  .timeline { position: relative; padding-left: 30px; }
+  .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+  .timeline-item { position: relative; margin-bottom: 1rem; }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .callout { padding: 1rem; border-left: 3px solid var(--warn); background: rgba(240,160,48,0.05); margin: 1rem 0; border-radius: 0 8px 8px 0; }
+  .callout-danger { border-left-color: var(--danger); background: rgba(224,80,80,0.05); }
+  .callout-success { border-left-color: var(--success); background: rgba(80,200,120,0.05); }
+  .section-nav {
+    position: fixed;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 100;
+  }
+  .section-nav a {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    display: block;
+    transition: all 0.3s;
+  }
+  .section-nav a:hover, .section-nav a.active { background: var(--accent); transform: scale(1.5); }
+  @media (max-width: 800px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .section-nav { display: none; }
+    body { padding: 1rem; }
+  }
+  .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease-out; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- Navigation dots -->
+<nav class="section-nav" id="nav"></nav>
+
+<!-- ================================================================ -->
+<!-- HEADER -->
+<!-- ================================================================ -->
+<header>
+  <h1>LEGIBLE MONEY</h1>
+  <div class="subtitle">
+    Tokenomics Review &mdash; Proof of Truth (PoT) Consensus Economy<br>
+    <span style="color:var(--muted)">Generated 2026-02-16 from Go/Cosmos SDK source &middot; All values from code, not speculation</span>
+  </div>
+</header>
+
+<!-- ================================================================ -->
+<!-- SECTION 1: EXECUTIVE SUMMARY -->
+<!-- ================================================================ -->
+<section id="s1" class="fade-in">
+<h2>1. Executive Summary</h2>
+
+<div class="grid">
+  <div class="card stat">
+    <div class="stat-value" style="color:var(--accent)">LGM</div>
+    <div class="stat-label">Token Symbol</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value" style="color:var(--accent2)">2,521ms</div>
+    <div class="stat-label">Block Time</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value" style="color:var(--gold)">11 LGM</div>
+    <div class="stat-label">Base Block Reward</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value" style="color:var(--success)">22%</div>
+    <div class="stat-label">Research Tax</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Core Philosophy</h3>
+    <p style="font-size:0.9rem">Truth as consensus mechanism. Verifying knowledge <em>is</em> the useful work. No arbitrary computation &mdash; every LGM minted represents validated knowledge added to a global truth graph.</p>
+    <br>
+    <p style="font-size:0.85rem; color:var(--muted)">
+      <strong>Pure PoT Model:</strong> Zero genesis pre-mine. No pre-funded pool.<br>
+      Every token enters circulation through block rewards, scaled by validator participation.<br>
+      Empty blocks earn 0% reward (enforced PoT alignment).
+    </p>
+  </div>
+  <div class="card">
+    <h3>Key Constants</h3>
+    <table>
+      <tr><td style="color:var(--muted)">Blocks/Day</td><td>34,272</td></tr>
+      <tr><td style="color:var(--muted)">Blocks/Epoch</td><td>240,000 (~1 week)</td></tr>
+      <tr><td style="color:var(--muted)">Finality Depth</td><td>19 blocks</td></tr>
+      <tr><td style="color:var(--muted)">Block Gas Limit</td><td>33,333,333</td></tr>
+      <tr><td style="color:var(--muted)">Bootstrap Gas-Free</td><td>480,000 blocks (~14 days)</td></tr>
+      <tr><td style="color:var(--muted)">Decay Per Epoch</td><td>10% (0.9x multiplier)</td></tr>
+      <tr><td style="color:var(--muted)">Floor Reward</td><td>0.1 LGM</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="callout-danger callout">
+  <strong>3 Critical Implementation Issues:</strong><br>
+  <span class="tag tag-danger">P1-6</span> vesting_rewards module NOT WIRED &mdash; zero token emission currently<br>
+  <span class="tag tag-danger">P1-7</span> 2 tier MinStake decimals wrong &mdash; Bonded/Guardian tiers unreachable<br>
+  <span class="tag tag-danger">P1-3</span> ResearchTreasuryAddress empty &mdash; 22% tax flows to unconfigured account
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 2: TOKEN EMISSION -->
+<!-- ================================================================ -->
+<section id="s2" class="fade-in">
+<h2>2. Token Emission &amp; Inflation Model</h2>
+
+<div class="card">
+  <h3>Block Reward Decay Curve</h3>
+  <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem">
+    Base reward: 11 LGM/block, scaled by min(1, activeValidators/22).
+    Decays 10% per epoch (240,000 blocks = ~1 week). Floor: 0.1 LGM.
+  </p>
+  <canvas id="emissionChart" height="300"></canvas>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Emission Schedule</h3>
+    <table>
+      <tr><th>Period</th><th>Reward/Block</th><th>Daily (22 val)</th><th>Daily (3 val)</th></tr>
+      <tr><td>Week 1</td><td>11.00 LGM</td><td>376,992</td><td>51,408</td></tr>
+      <tr><td>Week 5</td><td>7.21 LGM</td><td>247,243</td><td>33,717</td></tr>
+      <tr><td>Week 10</td><td>4.26 LGM</td><td>145,998</td><td>19,909</td></tr>
+      <tr><td>Week 20</td><td>1.49 LGM</td><td>50,925</td><td>6,945</td></tr>
+      <tr><td>Week 30</td><td>0.52 LGM</td><td>17,749</td><td>2,420</td></tr>
+      <tr><td>Week 45+</td><td>0.10 LGM</td><td>3,427</td><td>467</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Cumulative Supply Projection</h3>
+    <canvas id="supplyChart" height="220"></canvas>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Validator Participation Scaling</h3>
+  <p style="font-size:0.8rem; color:var(--muted); margin-bottom:0.5rem">
+    effectiveReward = baseReward &times; min(1, activeValidators / 22)
+  </p>
+  <canvas id="scalingChart" height="200"></canvas>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 3: FEE DISTRIBUTION -->
+<!-- ================================================================ -->
+<section id="s3" class="fade-in">
+<h2>3. Fee Distribution &amp; Burn Mechanics</h2>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Primary Fee Split</h3>
+    <div id="feeWaterfall"></div>
+  </div>
+  <div class="card">
+    <h3>22% Research Tax Breakdown</h3>
+    <div id="taxBreakdown"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Gas Cost Tiers (sample of 281 tx types)</h3>
+  <table>
+    <tr><th>Transaction</th><th>Gas</th><th>~Cost (base price)</th><th>Category</th></tr>
+    <tr><td>transfer</td><td>21,000</td><td>~23.3 LGM</td><td style="color:var(--accent2)">Core</td></tr>
+    <tr><td>claim_submit</td><td>100,000</td><td>~111.1 LGM</td><td style="color:var(--gold)">Knowledge</td></tr>
+    <tr><td>verification_commit</td><td>30,000</td><td>~33.3 LGM</td><td style="color:var(--gold)">Knowledge</td></tr>
+    <tr><td>challenge_fact</td><td>80,000</td><td>~88.9 LGM</td><td style="color:var(--danger)">Challenge</td></tr>
+    <tr><td>deploy_contract</td><td>200,000</td><td>~222.2 LGM</td><td style="color:var(--pink)">BVM</td></tr>
+    <tr><td>register_validator</td><td>100,000</td><td>~111.1 LGM</td><td style="color:var(--accent)">Staking</td></tr>
+    <tr><td>submit_lip</td><td>100,000</td><td>~111.1 LGM</td><td style="color:var(--blue)">Governance</td></tr>
+    <tr><td>emergency_halt</td><td>0</td><td>Free</td><td style="color:var(--danger)">System</td></tr>
+  </table>
+  <p style="font-size:0.75rem; color:var(--muted); margin-top:0.5rem">
+    Costs at BaseGasPrice (1,111,111 ulgm/gas). MinGasPrice (1 ulgm/gas) reduces costs ~1,000,000x.
+    Bootstrap period (first 14 days): PoT txs are gas-free.
+  </p>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 4: VALIDATOR TIERS -->
+<!-- ================================================================ -->
+<section id="s4" class="fade-in">
+<h2>4. Graduated Validator Tier System</h2>
+
+<div class="card">
+  <h3>4-Tier Progression</h3>
+  <svg viewBox="0 0 1000 260" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+    <!-- Tier boxes -->
+    <rect x="20" y="40" width="210" height="180" rx="12" fill="#1a1a2e" stroke="#5050a0" stroke-width="2"/>
+    <rect x="270" y="40" width="210" height="180" rx="12" fill="#1a1a2e" stroke="#4ecdc4" stroke-width="2"/>
+    <rect x="520" y="40" width="210" height="180" rx="12" fill="#1a1a2e" stroke="#d4a843" stroke-width="2"/>
+    <rect x="770" y="40" width="210" height="180" rx="12" fill="#1a1a2e" stroke="#e05050" stroke-width="2"/>
+
+    <!-- Tier headers -->
+    <text x="125" y="30" text-anchor="middle" fill="#5050a0" font-size="13" font-weight="bold" font-family="monospace">TIER 0</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e0e0e8" font-size="16" font-weight="bold" font-family="monospace">Apprentice</text>
+    <text x="375" y="30" text-anchor="middle" fill="#4ecdc4" font-size="13" font-weight="bold" font-family="monospace">TIER 1</text>
+    <text x="375" y="68" text-anchor="middle" fill="#e0e0e8" font-size="16" font-weight="bold" font-family="monospace">Verified</text>
+    <text x="625" y="30" text-anchor="middle" fill="#d4a843" font-size="13" font-weight="bold" font-family="monospace">TIER 2</text>
+    <text x="625" y="68" text-anchor="middle" fill="#e0e0e8" font-size="16" font-weight="bold" font-family="monospace">Bonded</text>
+    <text x="875" y="30" text-anchor="middle" fill="#e05050" font-size="13" font-weight="bold" font-family="monospace">TIER 3</text>
+    <text x="875" y="68" text-anchor="middle" fill="#e0e0e8" font-size="16" font-weight="bold" font-family="monospace">Guardian</text>
+
+    <!-- Tier details -->
+    <text x="45" y="95" fill="#888899" font-size="11" font-family="monospace">Stake: 0.111 LGM</text>
+    <text x="45" y="113" fill="#888899" font-size="11" font-family="monospace">Verifs: 0</text>
+    <text x="45" y="131" fill="#888899" font-size="11" font-family="monospace">Accuracy: any</text>
+    <text x="45" y="149" fill="#888899" font-size="11" font-family="monospace">Reward: 0.1x</text>
+    <text x="45" y="167" fill="#888899" font-size="11" font-family="monospace">VRF Wt: 0.1x</text>
+    <text x="45" y="190" fill="#5050a0" font-size="10" font-family="monospace">protocol,formal,</text>
+    <text x="45" y="205" fill="#5050a0" font-size="10" font-family="monospace">computational</text>
+
+    <text x="295" y="95" fill="#888899" font-size="11" font-family="monospace">Stake: 1.11 LGM</text>
+    <text x="295" y="113" fill="#888899" font-size="11" font-family="monospace">Verifs: 22</text>
+    <text x="295" y="131" fill="#888899" font-size="11" font-family="monospace">Accuracy: 77%</text>
+    <text x="295" y="149" fill="#888899" font-size="11" font-family="monospace">Reward: 0.5x</text>
+    <text x="295" y="167" fill="#888899" font-size="11" font-family="monospace">VRF Wt: 0.5x</text>
+    <text x="295" y="190" fill="#4ecdc4" font-size="10" font-family="monospace">+empirical</text>
+
+    <text x="545" y="95" fill="#888899" font-size="11" font-family="monospace">Stake: 1,111 LGM</text>
+    <text x="545" y="113" fill="#888899" font-size="11" font-family="monospace">Verifs: 11</text>
+    <text x="545" y="131" fill="#888899" font-size="11" font-family="monospace">Accuracy: 50%</text>
+    <text x="545" y="149" fill="#888899" font-size="11" font-family="monospace">Reward: 1.0x</text>
+    <text x="545" y="167" fill="#888899" font-size="11" font-family="monospace">VRF Wt: 1.0x</text>
+    <text x="545" y="190" fill="#d4a843" font-size="10" font-family="monospace">+oracle,attestation</text>
+
+    <text x="795" y="95" fill="#888899" font-size="11" font-family="monospace">Stake: 11,111 LGM</text>
+    <text x="795" y="113" fill="#888899" font-size="11" font-family="monospace">Verifs: 333</text>
+    <text x="795" y="131" fill="#888899" font-size="11" font-family="monospace">Accuracy: 77%</text>
+    <text x="795" y="149" fill="#888899" font-size="11" font-family="monospace">Reward: 2.0x</text>
+    <text x="795" y="167" fill="#888899" font-size="11" font-family="monospace">VRF Wt: 1.5x</text>
+    <text x="795" y="190" fill="#e05050" font-size="10" font-family="monospace">ALL 9 categories</text>
+    <text x="795" y="205" fill="#e05050" font-size="10" font-family="monospace">0 slashes allowed</text>
+
+    <!-- Arrows -->
+    <line x1="230" y1="130" x2="270" y2="130" stroke="#4ecdc4" stroke-width="2" marker-end="url(#arrowG)"/>
+    <line x1="480" y1="130" x2="520" y2="130" stroke="#d4a843" stroke-width="2" marker-end="url(#arrowY)"/>
+    <line x1="730" y1="130" x2="770" y2="130" stroke="#e05050" stroke-width="2" marker-end="url(#arrowR)"/>
+
+    <defs>
+      <marker id="arrowG" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#4ecdc4"/></marker>
+      <marker id="arrowY" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#d4a843"/></marker>
+      <marker id="arrowR" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#e05050"/></marker>
+    </defs>
+  </svg>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Stake Requirements (log scale)</h3>
+    <canvas id="stakeChart" height="200"></canvas>
+  </div>
+  <div class="card">
+    <h3>Reward Multiplier vs Risk</h3>
+    <canvas id="riskRewardChart" height="200"></canvas>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Guardian Asymmetry:</strong> Tier 3 requires 11,111 LGM stake + 333 verifications + 77% accuracy + <em>zero slashes ever</em>.
+  Risk/reward ratio is ~1044:1 per verification (11,111 LGM at risk for ~1.17 LGM reward after 22% tax).
+  This extreme asymmetry may discourage Guardian participation.
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 5: VESTING CURVES -->
+<!-- ================================================================ -->
+<section id="s5" class="fade-in">
+<h2>5. Epistemic Vesting Curves</h2>
+
+<div class="card">
+  <h3>Release Curves by Knowledge Category</h3>
+  <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem">
+    Each knowledge category has a unique vesting half-life matched to scientometric citation data.
+    Axiomatic truths vest slowest (longest value); contested claims vest fastest (least durable).
+  </p>
+  <canvas id="vestingChart" height="350"></canvas>
+</div>
+
+<div class="card">
+  <h3>Category Parameters</h3>
+  <table>
+    <tr><th>Category</th><th>Half-Life</th><th>~Duration</th><th>Cliff</th><th>Max Release</th><th>Clawback</th></tr>
+    <tr><td style="color:var(--accent)">Axiomatic</td><td>1,111,111 blk</td><td>~13 months</td><td>11,111 blk</td><td>95%</td><td rowspan="10" style="vertical-align:middle; color:var(--danger)">33% of released<br>100% of unvested<br>on falsification</td></tr>
+    <tr><td style="color:var(--accent)">Formal Proof</td><td>555,555 blk</td><td>~6.5 months</td><td>5,555 blk</td><td>92%</td></tr>
+    <tr><td style="color:var(--accent2)">On-Chain</td><td>222,222 blk</td><td>~2.6 months</td><td>1,111 blk</td><td>90%</td></tr>
+    <tr><td style="color:var(--accent2)">Cryptographic</td><td>222,222 blk</td><td>~2.6 months</td><td>3,333 blk</td><td>90%</td></tr>
+    <tr><td style="color:var(--gold)">Computational</td><td>333,333 blk</td><td>~3.9 months</td><td>2,222 blk</td><td>88%</td></tr>
+    <tr><td style="color:var(--gold)">Peer Reviewed</td><td>111,111 blk</td><td>~5.4 weeks</td><td>5,555 blk</td><td>85%</td></tr>
+    <tr><td style="color:var(--gold)">Replicated</td><td>111,111 blk</td><td>~5.4 weeks</td><td>3,333 blk</td><td>88%</td></tr>
+    <tr><td style="color:var(--warn)">Attestation</td><td>77,777 blk</td><td>~3.8 weeks</td><td>2,222 blk</td><td>80%</td></tr>
+    <tr><td style="color:var(--warn)">Oracle Feed</td><td>55,555 blk</td><td>~2.7 weeks</td><td>555 blk</td><td>80%</td></tr>
+    <tr><td style="color:var(--danger)">Contested</td><td>22,222 blk</td><td>~1.1 weeks</td><td>1,111 blk</td><td>60%</td></tr>
+  </table>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 6: KNOWLEDGE ECONOMY -->
+<!-- ================================================================ -->
+<section id="s6" class="fade-in">
+<h2>6. Knowledge Verification Economy</h2>
+
+<div class="card">
+  <h3>Token Flow: Claim &rarr; Verification &rarr; Fact</h3>
+  <svg viewBox="0 0 1000 380" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+    <!-- Claim submission -->
+    <rect x="30" y="20" width="180" height="80" rx="10" fill="#1a1a2e" stroke="#7c6cf0" stroke-width="2"/>
+    <text x="120" y="50" text-anchor="middle" fill="#7c6cf0" font-size="13" font-weight="bold" font-family="monospace">SUBMIT CLAIM</text>
+    <text x="120" y="72" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">100K gas + stake</text>
+
+    <!-- VRF selection -->
+    <rect x="280" y="20" width="180" height="80" rx="10" fill="#1a1a2e" stroke="#4ecdc4" stroke-width="2"/>
+    <text x="370" y="50" text-anchor="middle" fill="#4ecdc4" font-size="13" font-weight="bold" font-family="monospace">VRF SELECT</text>
+    <text x="370" y="72" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">Stake-weighted random</text>
+
+    <!-- Commit-Reveal -->
+    <rect x="530" y="20" width="180" height="80" rx="10" fill="#1a1a2e" stroke="#d4a843" stroke-width="2"/>
+    <text x="620" y="45" text-anchor="middle" fill="#d4a843" font-size="13" font-weight="bold" font-family="monospace">COMMIT-REVEAL</text>
+    <text x="620" y="67" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">30K + 40K gas</text>
+    <text x="620" y="82" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">per validator</text>
+
+    <!-- Aggregation -->
+    <rect x="780" y="20" width="180" height="80" rx="10" fill="#1a1a2e" stroke="#50c878" stroke-width="2"/>
+    <text x="870" y="50" text-anchor="middle" fill="#50c878" font-size="13" font-weight="bold" font-family="monospace">AGGREGATE</text>
+    <text x="870" y="72" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">Stake-weighted conf.</text>
+
+    <!-- Arrows -->
+    <line x1="210" y1="60" x2="280" y2="60" stroke="#555" stroke-width="1.5" marker-end="url(#arrowW)"/>
+    <line x1="460" y1="60" x2="530" y2="60" stroke="#555" stroke-width="1.5" marker-end="url(#arrowW)"/>
+    <line x1="710" y1="60" x2="780" y2="60" stroke="#555" stroke-width="1.5" marker-end="url(#arrowW)"/>
+
+    <!-- Outcomes -->
+    <rect x="130" y="150" width="200" height="60" rx="8" fill="rgba(80,200,120,0.1)" stroke="#50c878" stroke-width="1.5"/>
+    <text x="230" y="178" text-anchor="middle" fill="#50c878" font-size="12" font-weight="bold" font-family="monospace">ACCEPTED</text>
+    <text x="230" y="198" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">Claim reward: 5 LGM</text>
+
+    <rect x="400" y="150" width="200" height="60" rx="8" fill="rgba(224,80,80,0.1)" stroke="#e05050" stroke-width="1.5"/>
+    <text x="500" y="178" text-anchor="middle" fill="#e05050" font-size="12" font-weight="bold" font-family="monospace">REJECTED</text>
+    <text x="500" y="198" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">Stake slashed</text>
+
+    <rect x="670" y="150" width="200" height="60" rx="8" fill="rgba(240,160,48,0.1)" stroke="#f0a030" stroke-width="1.5"/>
+    <text x="770" y="178" text-anchor="middle" fill="#f0a030" font-size="12" font-weight="bold" font-family="monospace">CONTESTED</text>
+    <text x="770" y="198" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">Challenge window</text>
+
+    <line x1="870" y1="100" x2="500" y2="150" stroke="#555" stroke-width="1" stroke-dasharray="5,5"/>
+    <line x1="870" y1="100" x2="230" y2="150" stroke="#555" stroke-width="1" stroke-dasharray="5,5"/>
+    <line x1="870" y1="100" x2="770" y2="150" stroke="#555" stroke-width="1" stroke-dasharray="5,5"/>
+
+    <!-- Reward distribution -->
+    <rect x="30" y="260" width="940" height="100" rx="10" fill="#0f0f18" stroke="#1e1e2e" stroke-width="1"/>
+    <text x="50" y="285" fill="#7c6cf0" font-size="12" font-weight="bold" font-family="monospace">REWARD DISTRIBUTION</text>
+
+    <!-- Verifier rewards -->
+    <rect x="50" y="300" width="160" height="45" rx="6" fill="rgba(78,205,196,0.1)" stroke="#4ecdc4" stroke-width="1"/>
+    <text x="130" y="318" text-anchor="middle" fill="#4ecdc4" font-size="10" font-weight="bold" font-family="monospace">Verifiers</text>
+    <text x="130" y="335" text-anchor="middle" fill="#888899" font-size="9" font-family="monospace">1 LGM x tier mult</text>
+
+    <!-- Citation pool -->
+    <rect x="230" y="300" width="160" height="45" rx="6" fill="rgba(212,168,67,0.1)" stroke="#d4a843" stroke-width="1"/>
+    <text x="310" y="318" text-anchor="middle" fill="#d4a843" font-size="10" font-weight="bold" font-family="monospace">Citations (15%)</text>
+    <text x="310" y="335" text-anchor="middle" fill="#888899" font-size="9" font-family="monospace">50% decay/level</text>
+
+    <!-- Research tax -->
+    <rect x="410" y="300" width="160" height="45" rx="6" fill="rgba(124,108,240,0.1)" stroke="#7c6cf0" stroke-width="1"/>
+    <text x="490" y="318" text-anchor="middle" fill="#7c6cf0" font-size="10" font-weight="bold" font-family="monospace">Research Tax (22%)</text>
+    <text x="490" y="335" text-anchor="middle" fill="#888899" font-size="9" font-family="monospace">Universal deduction</text>
+
+    <!-- Block producer -->
+    <rect x="590" y="300" width="160" height="45" rx="6" fill="rgba(80,144,224,0.1)" stroke="#5090e0" stroke-width="1"/>
+    <text x="670" y="318" text-anchor="middle" fill="#5090e0" font-size="10" font-weight="bold" font-family="monospace">Validator (78%)</text>
+    <text x="670" y="335" text-anchor="middle" fill="#888899" font-size="9" font-family="monospace">Block producer</text>
+
+    <!-- Burn -->
+    <rect x="770" y="300" width="160" height="45" rx="6" fill="rgba(224,80,80,0.1)" stroke="#e05050" stroke-width="1"/>
+    <text x="850" y="318" text-anchor="middle" fill="#e05050" font-size="10" font-weight="bold" font-family="monospace">Burn (5%)</text>
+    <text x="850" y="335" text-anchor="middle" fill="#888899" font-size="9" font-family="monospace">At penalty sites</text>
+
+    <defs>
+      <marker id="arrowW" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#555"/></marker>
+    </defs>
+  </svg>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Verification Rewards by Tier</h3>
+    <table>
+      <tr><th>Tier</th><th>Base</th><th>Multiplier</th><th>After 22% Tax</th><th>Effective/Verif</th></tr>
+      <tr><td style="color:#5050a0">Apprentice</td><td>1 LGM</td><td>0.1x</td><td>0.078 LGM</td><td style="color:var(--muted)">~0.08 LGM</td></tr>
+      <tr><td style="color:#4ecdc4">Verified</td><td>1 LGM</td><td>0.5x</td><td>0.39 LGM</td><td style="color:var(--muted)">~0.39 LGM</td></tr>
+      <tr><td style="color:#d4a843">Bonded</td><td>1 LGM</td><td>1.0x</td><td>0.78 LGM</td><td style="color:var(--muted)">~0.78 LGM</td></tr>
+      <tr><td style="color:#e05050">Guardian</td><td>1 LGM</td><td>2.0x</td><td>1.56 LGM</td><td style="color:var(--muted)">~1.56 LGM</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Challenge Economics</h3>
+    <table>
+      <tr><td style="color:var(--muted)">Min Challenge Stake</td><td>11 LGM</td></tr>
+      <tr><td style="color:var(--muted)">Failed Challenge Slash</td><td>22% of stake</td></tr>
+      <tr><td style="color:var(--muted)">Successful Reward</td><td>30% of submitter's slash</td></tr>
+      <tr><td style="color:var(--muted)">Max Concurrent</td><td>3 per claim</td></tr>
+      <tr><td style="color:var(--muted)">Break-even Success Rate</td><td style="color:var(--warn)">~9.1%</td></tr>
+      <tr><td style="color:var(--muted)">Max Return Multiple</td><td style="color:var(--warn)">7.7x</td></tr>
+    </table>
+    <p style="font-size:0.75rem; color:var(--danger); margin-top:0.5rem">
+      Warning: Low break-even rate may incentivize speculative challenges.
+    </p>
+  </div>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 7: CONFIDENCE DECAY -->
+<!-- ================================================================ -->
+<section id="s7" class="fade-in">
+<h2>7. Confidence Decay Profiles</h2>
+
+<div class="card">
+  <h3>Confidence Over Time by Category</h3>
+  <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem">
+    Each category has a unique decay half-life. Eternal categories (analytic, formal, protocol, computational) never decay.
+    Reverification triggered at 60% confidence; facts expire below 30%.
+  </p>
+  <canvas id="decayChart" height="320"></canvas>
+</div>
+
+<div class="card">
+  <h3>Decay Parameters</h3>
+  <table>
+    <tr><th>Category</th><th>Half-Life</th><th>Max Conf.</th><th>Min Conf.</th><th>Reverif Bonus</th><th>Type</th></tr>
+    <tr><td>analytic</td><td style="color:var(--success)">Eternal</td><td>100%</td><td>0%</td><td>0%</td><td><span class="tag tag-success">ETERNAL</span></td></tr>
+    <tr><td>formal</td><td style="color:var(--success)">Eternal</td><td>100%</td><td>0%</td><td>0%</td><td><span class="tag tag-success">ETERNAL</span></td></tr>
+    <tr><td>protocol</td><td style="color:var(--success)">Eternal</td><td>100%</td><td>0%</td><td>0%</td><td><span class="tag tag-success">ETERNAL</span></td></tr>
+    <tr><td>computational</td><td style="color:var(--success)">Eternal</td><td>100%</td><td>0%</td><td>0%</td><td><span class="tag tag-success">ETERNAL</span></td></tr>
+    <tr><td>replicated</td><td>~29 days</td><td>99.5%</td><td>30%</td><td>2%</td><td><span class="tag tag-info">SLOW</span></td></tr>
+    <tr><td>empirical</td><td>~29 days</td><td>99%</td><td>33%</td><td>11%</td><td><span class="tag tag-info">SLOW</span></td></tr>
+    <tr><td>historical</td><td>~14.5 days</td><td>95%</td><td>20%</td><td>3%</td><td><span class="tag tag-warn">MEDIUM</span></td></tr>
+    <tr><td>social</td><td>~4.4 days</td><td>85%</td><td>20%</td><td>4%</td><td><span class="tag tag-warn">MEDIUM</span></td></tr>
+    <tr><td>predictive</td><td>~14 hours</td><td>90%</td><td>10%</td><td>8%</td><td><span class="tag tag-danger">FAST</span></td></tr>
+  </table>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 8: GOVERNANCE -->
+<!-- ================================================================ -->
+<section id="s8" class="fade-in">
+<h2>8. Governance Economics</h2>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>LIP Category Stake Requirements</h3>
+    <canvas id="govStakeChart" height="200"></canvas>
+  </div>
+  <div class="card">
+    <h3>Quadratic Voting Cost Curve</h3>
+    <canvas id="quadraticChart" height="200"></canvas>
+    <p style="font-size:0.75rem; color:var(--muted); margin-top:0.5rem">
+      Cost = votes<sup>2</sup> &times; 1 LGM. Max 100 votes/voter = 10,000 LGM.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>LIP Lifecycle</h3>
+  <svg viewBox="0 0 900 100" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+    <rect x="10" y="30" width="100" height="40" rx="8" fill="#1a1a2e" stroke="#5050a0" stroke-width="1.5"/>
+    <text x="60" y="55" text-anchor="middle" fill="#5050a0" font-size="11" font-family="monospace">Draft</text>
+
+    <rect x="150" y="30" width="100" height="40" rx="8" fill="#1a1a2e" stroke="#4ecdc4" stroke-width="1.5"/>
+    <text x="200" y="55" text-anchor="middle" fill="#4ecdc4" font-size="11" font-family="monospace">Review</text>
+
+    <rect x="290" y="30" width="100" height="40" rx="8" fill="#1a1a2e" stroke="#d4a843" stroke-width="1.5"/>
+    <text x="340" y="55" text-anchor="middle" fill="#d4a843" font-size="11" font-family="monospace">Last Call</text>
+
+    <rect x="430" y="30" width="100" height="40" rx="8" fill="#1a1a2e" stroke="#7c6cf0" stroke-width="1.5"/>
+    <text x="480" y="55" text-anchor="middle" fill="#7c6cf0" font-size="11" font-family="monospace">Voting</text>
+
+    <rect x="580" y="15" width="110" height="35" rx="8" fill="rgba(80,200,120,0.1)" stroke="#50c878" stroke-width="1.5"/>
+    <text x="635" y="38" text-anchor="middle" fill="#50c878" font-size="11" font-family="monospace">Accepted</text>
+
+    <rect x="580" y="55" width="110" height="35" rx="8" fill="rgba(224,80,80,0.1)" stroke="#e05050" stroke-width="1.5"/>
+    <text x="635" y="78" text-anchor="middle" fill="#e05050" font-size="11" font-family="monospace">Rejected</text>
+
+    <rect x="740" y="30" width="110" height="40" rx="8" fill="rgba(136,136,153,0.1)" stroke="#888899" stroke-width="1"/>
+    <text x="795" y="55" text-anchor="middle" fill="#888899" font-size="11" font-family="monospace">Withdrawn</text>
+
+    <line x1="110" y1="50" x2="150" y2="50" stroke="#555" stroke-width="1" marker-end="url(#arrowW)"/>
+    <line x1="250" y1="50" x2="290" y2="50" stroke="#555" stroke-width="1" marker-end="url(#arrowW)"/>
+    <line x1="390" y1="50" x2="430" y2="50" stroke="#555" stroke-width="1" marker-end="url(#arrowW)"/>
+    <line x1="530" y1="45" x2="580" y2="32" stroke="#555" stroke-width="1" marker-end="url(#arrowW)"/>
+    <line x1="530" y1="55" x2="580" y2="68" stroke="#555" stroke-width="1" marker-end="url(#arrowW)"/>
+  </svg>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 9: TRUTH-ALIGNMENT SCORECARD -->
+<!-- ================================================================ -->
+<section id="s9" class="fade-in">
+<h2>9. Truth-Alignment Scorecard</h2>
+
+<div class="card">
+  <h3>Overall Score: 5.8 / 10</h3>
+  <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem">
+    "Philosophy is sound, but launch economics violate it."
+  </p>
+  <canvas id="alignmentChart" height="280"></canvas>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Strengths</h3>
+    <div class="callout-success callout">
+      <strong style="color:var(--success)">Epistemic vesting curves</strong> (9/10)<br>
+      Genuinely novel &mdash; half-lives matched to scientometric citation data.<br><br>
+      <strong style="color:var(--success)">22% universal research tax</strong> (9/10)<br>
+      Ensures all economic activity funds truth-seeking infrastructure.<br><br>
+      <strong style="color:var(--success)">Zero empty block reward</strong> (8/10)<br>
+      Blocks without PoT activity earn nothing &mdash; proper alignment.<br><br>
+      <strong style="color:var(--success)">Graduated validator system</strong> (8/10)<br>
+      Zero-stake entry allows inclusive participation while gatekeeping risky categories.
+    </div>
+  </div>
+  <div class="card">
+    <h3>Weaknesses</h3>
+    <div class="callout-danger callout">
+      <strong style="color:var(--danger)">Block reward : Verification reward = 11:1</strong> (3/10)<br>
+      "Truth IS the useful work" but block production pays 11x more.<br><br>
+      <strong style="color:var(--danger)">Guardian risk/reward = 1044:1</strong> (4/10)<br>
+      11,111 LGM stake for ~1.17 LGM reward discourages participation.<br><br>
+      <strong style="color:var(--danger)">Challenge break-even at 9%</strong> (5/10)<br>
+      May incentivize speculative/spam challenges rather than honest critique.<br><br>
+      <strong style="color:var(--warn)">Implementation gaps</strong> (3/10)<br>
+      vesting_rewards unwired, tier decimals broken, treasury unconfigured.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 10: TOKEN FLOW DIAGRAM -->
+<!-- ================================================================ -->
+<section id="s10" class="fade-in">
+<h2>10. Complete Token Flow</h2>
+
+<div class="card">
+  <svg viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg" style="width:100%">
+    <!-- Source: Minting -->
+    <rect x="400" y="10" width="200" height="50" rx="10" fill="#1a1a2e" stroke="#50c878" stroke-width="2.5"/>
+    <text x="500" y="42" text-anchor="middle" fill="#50c878" font-size="14" font-weight="bold" font-family="monospace">MINT (Block Reward)</text>
+
+    <!-- Flow to distribution -->
+    <line x1="500" y1="60" x2="500" y2="100" stroke="#50c878" stroke-width="2" marker-end="url(#arrowGn)"/>
+
+    <!-- Primary split -->
+    <rect x="320" y="100" width="360" height="40" rx="8" fill="#0f0f18" stroke="#1e1e2e" stroke-width="1"/>
+    <text x="500" y="125" text-anchor="middle" fill="#e0e0e8" font-size="12" font-family="monospace">Validator Participation Scaling</text>
+    <text x="500" y="125" text-anchor="middle" fill="#888899" font-size="9" font-family="monospace"></text>
+
+    <line x1="500" y1="140" x2="300" y2="185" stroke="#555" stroke-width="1.5"/>
+    <line x1="500" y1="140" x2="700" y2="185" stroke="#555" stroke-width="1.5"/>
+
+    <!-- 22% Research -->
+    <rect x="150" y="185" width="180" height="50" rx="8" fill="rgba(124,108,240,0.15)" stroke="#7c6cf0" stroke-width="2"/>
+    <text x="240" y="207" text-anchor="middle" fill="#7c6cf0" font-size="12" font-weight="bold" font-family="monospace">Research Fund</text>
+    <text x="240" y="225" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">22% of all rewards</text>
+
+    <!-- 78% Validator -->
+    <rect x="620" y="185" width="180" height="50" rx="8" fill="rgba(80,144,224,0.15)" stroke="#5090e0" stroke-width="2"/>
+    <text x="710" y="207" text-anchor="middle" fill="#5090e0" font-size="12" font-weight="bold" font-family="monospace">Block Producer</text>
+    <text x="710" y="225" text-anchor="middle" fill="#888899" font-size="10" font-family="monospace">78% of all rewards</text>
+
+    <!-- Research sub-split -->
+    <line x1="200" y1="235" x2="80" y2="280" stroke="#555" stroke-width="1"/>
+    <line x1="220" y1="235" x2="180" y2="280" stroke="#555" stroke-width="1"/>
+    <line x1="250" y1="235" x2="280" y2="280" stroke="#555" stroke-width="1"/>
+    <line x1="270" y1="235" x2="380" y2="280" stroke="#555" stroke-width="1"/>
+
+    <rect x="20" y="280" width="120" height="35" rx="6" fill="#0f0f18" stroke="#7c6cf0" stroke-width="1"/>
+    <text x="80" y="302" text-anchor="middle" fill="#7c6cf0" font-size="9" font-family="monospace">Research 77%</text>
+    <rect x="150" y="280" width="100" height="35" rx="6" fill="#0f0f18" stroke="#7c6cf0" stroke-width="1"/>
+    <text x="200" y="302" text-anchor="middle" fill="#7c6cf0" font-size="9" font-family="monospace">Foundation 7%</text>
+    <rect x="260" y="280" width="100" height="35" rx="6" fill="#0f0f18" stroke="#7c6cf0" stroke-width="1"/>
+    <text x="310" y="302" text-anchor="middle" fill="#7c6cf0" font-size="9" font-family="monospace">Community 7%</text>
+    <rect x="370" y="280" width="100" height="35" rx="6" fill="#0f0f18" stroke="#7c6cf0" stroke-width="1"/>
+    <text x="420" y="302" text-anchor="middle" fill="#7c6cf0" font-size="9" font-family="monospace">Dev 7% | Rsv 2%</text>
+
+    <!-- Circulation layer -->
+    <rect x="200" y="370" width="600" height="50" rx="10" fill="rgba(78,205,196,0.08)" stroke="#4ecdc4" stroke-width="1.5" stroke-dasharray="5,5"/>
+    <text x="500" y="400" text-anchor="middle" fill="#4ecdc4" font-size="14" font-family="monospace">CIRCULATION (Agent Economy)</text>
+
+    <line x1="710" y1="235" x2="600" y2="370" stroke="#555" stroke-width="1"/>
+
+    <!-- Activities in circulation -->
+    <rect x="200" y="440" width="130" height="40" rx="6" fill="#1a1a2e" stroke="#d4a843" stroke-width="1"/>
+    <text x="265" y="465" text-anchor="middle" fill="#d4a843" font-size="10" font-family="monospace">Staking</text>
+
+    <rect x="350" y="440" width="130" height="40" rx="6" fill="#1a1a2e" stroke="#7c6cf0" stroke-width="1"/>
+    <text x="415" y="465" text-anchor="middle" fill="#7c6cf0" font-size="10" font-family="monospace">Governance</text>
+
+    <rect x="500" y="440" width="130" height="40" rx="6" fill="#1a1a2e" stroke="#e070a0" stroke-width="1"/>
+    <text x="565" y="465" text-anchor="middle" fill="#e070a0" font-size="10" font-family="monospace">Gas Fees</text>
+
+    <rect x="650" y="440" width="130" height="40" rx="6" fill="#1a1a2e" stroke="#4ecdc4" stroke-width="1"/>
+    <text x="715" y="465" text-anchor="middle" fill="#4ecdc4" font-size="10" font-family="monospace">Challenges</text>
+
+    <!-- Sinks -->
+    <rect x="350" y="530" width="130" height="40" rx="8" fill="rgba(224,80,80,0.15)" stroke="#e05050" stroke-width="2"/>
+    <text x="415" y="555" text-anchor="middle" fill="#e05050" font-size="12" font-weight="bold" font-family="monospace">BURN (5%)</text>
+
+    <rect x="520" y="530" width="130" height="40" rx="8" fill="rgba(240,160,48,0.15)" stroke="#f0a030" stroke-width="2"/>
+    <text x="585" y="555" text-anchor="middle" fill="#f0a030" font-size="12" font-weight="bold" font-family="monospace">SLASHING</text>
+
+    <line x1="565" y1="480" x2="415" y2="530" stroke="#e05050" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="715" y1="480" x2="585" y2="530" stroke="#f0a030" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="265" y1="480" x2="585" y2="530" stroke="#f0a030" stroke-width="1" stroke-dasharray="3,3"/>
+
+    <defs>
+      <marker id="arrowGn" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#50c878"/></marker>
+    </defs>
+  </svg>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 11: IMPLEMENTATION STATUS -->
+<!-- ================================================================ -->
+<section id="s11" class="fade-in">
+<h2>11. Implementation Status Heatmap</h2>
+
+<div class="card">
+  <table>
+    <tr><th>Module</th><th>Economic Mechanism</th><th>Status</th><th>Issues</th></tr>
+    <tr>
+      <td>x/vesting_rewards</td>
+      <td>Block emission, vesting curves, clawback</td>
+      <td><span class="tag tag-danger">NOT WIRED</span></td>
+      <td style="color:var(--danger)">P1-6: Module implemented but not in app.go</td>
+    </tr>
+    <tr>
+      <td>x/staking</td>
+      <td>4-tier validators, stake/unstake, delegation</td>
+      <td><span class="tag tag-warn">2 BUGS</span></td>
+      <td style="color:var(--warn)">P1-7: Bonded/Guardian MinStake decimals wrong</td>
+    </tr>
+    <tr>
+      <td>x/knowledge</td>
+      <td>Verification rewards, citations, challenges, decay</td>
+      <td><span class="tag tag-success">COMPLETE</span></td>
+      <td style="color:var(--success)">Fully wired and tested</td>
+    </tr>
+    <tr>
+      <td>x/gov</td>
+      <td>LIP staking, quadratic voting, disbursements</td>
+      <td><span class="tag tag-success">COMPLETE</span></td>
+      <td style="color:var(--success)">37 tests passing</td>
+    </tr>
+    <tr>
+      <td>x/emergency</td>
+      <td>Guardian stake, BFT quorum, cooldowns</td>
+      <td><span class="tag tag-success">COMPLETE</span></td>
+      <td style="color:var(--success)">30 tests passing</td>
+    </tr>
+    <tr>
+      <td>x/research</td>
+      <td>Research stake, peer review, bounties</td>
+      <td><span class="tag tag-warn">PARTIAL</span></td>
+      <td style="color:var(--warn)">Handlers exist, treasury unconfigured</td>
+    </tr>
+    <tr>
+      <td>x/tokens</td>
+      <td>Token expiration, period overlay</td>
+      <td><span class="tag tag-info">MINIMAL</span></td>
+      <td style="color:var(--muted)">Period system removed in latest</td>
+    </tr>
+    <tr>
+      <td>app/gas</td>
+      <td>Fee routing (22% tax), burn rate, gas pricing</td>
+      <td><span class="tag tag-success">COMPLETE</span></td>
+      <td style="color:var(--success)">281 tx types defined</td>
+    </tr>
+    <tr>
+      <td>x/disputes</td>
+      <td>Arbitration stake, penalty distribution</td>
+      <td><span class="tag tag-info">STUB</span></td>
+      <td style="color:var(--muted)">Types only, no keeper logic</td>
+    </tr>
+    <tr>
+      <td>x/evidence_mgmt</td>
+      <td>Audit stake, oracle economics</td>
+      <td><span class="tag tag-info">STUB</span></td>
+      <td style="color:var(--muted)">Types only, no keeper logic</td>
+    </tr>
+  </table>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- SECTION 12: RECOMMENDATIONS -->
+<!-- ================================================================ -->
+<section id="s12" class="fade-in">
+<h2>12. Recommendations</h2>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 style="color:var(--danger)">Critical (Before DevNet)</h3>
+    <div class="timeline">
+      <div class="timeline-item">
+        <strong>Wire vesting_rewards into app.go</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">Without this, zero tokens are emitted. No validator has any incentive to participate.</p>
+      </div>
+      <div class="timeline-item">
+        <strong>Fix tier MinStake decimals</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">Bonded: "1111000000" (correct) and Guardian: "11111000000" (correct) &mdash; verify 6-decimal format.</p>
+      </div>
+      <div class="timeline-item">
+        <strong>Configure ResearchTreasuryAddress</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">22% of all rewards go to unconfigured account. Module account suffices for DevNet.</p>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="color:var(--warn)">High Priority (Before Testnet)</h3>
+    <div class="timeline">
+      <div class="timeline-item">
+        <strong>Rebalance block vs verification rewards</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">Current 11:1 ratio violates PoT philosophy. Target: 2:1 or 3:1.</p>
+      </div>
+      <div class="timeline-item">
+        <strong>Guardian risk/reward rebalancing</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">1044:1 ratio discourages participation. Consider increasing Guardian reward multiplier or adding governance rewards.</p>
+      </div>
+      <div class="timeline-item">
+        <strong>Challenge economics tuning</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">9% break-even may incentivize spam. Consider raising MinChallengeStake or reducing reward ratio.</p>
+      </div>
+      <div class="timeline-item">
+        <strong>Complete burn implementation</strong>
+        <p style="font-size:0.8rem; color:var(--muted)">5% burn rate declared but only implemented at 4 of 11+ penalty sites.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<!-- JAVASCRIPT: Charts -->
+<!-- ================================================================ -->
+<script>
+// Utility
+const $ = id => document.getElementById(id);
+const dpr = window.devicePixelRatio || 1;
+
+function setupCanvas(id) {
+  const c = $(id);
+  const rect = c.getBoundingClientRect();
+  c.width = rect.width * dpr;
+  c.height = rect.height * dpr;
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function drawAxes(ctx, w, h, pad, yLabel, xLabel) {
+  ctx.strokeStyle = '#2a2a3a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t);
+  ctx.lineTo(pad.l, h - pad.b);
+  ctx.lineTo(w - pad.r, h - pad.b);
+  ctx.stroke();
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  if (xLabel) ctx.fillText(xLabel, (pad.l + w - pad.r) / 2, h - 5);
+  ctx.save();
+  ctx.translate(12, (pad.t + h - pad.b) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  if (yLabel) ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+}
+
+// ---- Chart 1: Emission Decay ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('emissionChart');
+  const pad = { l: 60, r: 20, t: 20, b: 40 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  drawAxes(ctx, w, h, pad, 'LGM / Block', 'Weeks');
+
+  // Y axis labels
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= 11; y += 1) {
+    const py = pad.t + ph - (y / 11) * ph;
+    ctx.fillText(y.toString(), pad.l - 8, py + 3);
+    if (y > 0) {
+      ctx.strokeStyle = '#1a1a2a';
+      ctx.beginPath();
+      ctx.moveTo(pad.l, py);
+      ctx.lineTo(w - pad.r, py);
+      ctx.stroke();
+    }
+  }
+
+  // X axis labels
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= 60; x += 10) {
+    const px = pad.l + (x / 60) * pw;
+    ctx.fillText(x.toString(), px, h - pad.b + 15);
+  }
+
+  // Decay curve (22 validators)
+  ctx.strokeStyle = '#7c6cf0';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let week = 0; week <= 60; week += 0.5) {
+    const epoch = week; // 1 epoch = 1 week
+    let reward = 11 * Math.pow(0.9, epoch);
+    if (reward < 0.1) reward = 0.1;
+    const px = pad.l + (week / 60) * pw;
+    const py = pad.t + ph - (reward / 11) * ph;
+    week === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Decay curve (3 validators)
+  ctx.strokeStyle = '#4ecdc4';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 3]);
+  ctx.beginPath();
+  for (let week = 0; week <= 60; week += 0.5) {
+    let reward = 11 * Math.pow(0.9, week) * Math.min(1, 3 / 22);
+    if (reward < 0.1 * Math.min(1, 3/22)) reward = 0.1 * Math.min(1, 3/22);
+    const px = pad.l + (week / 60) * pw;
+    const py = pad.t + ph - (reward / 11) * ph;
+    week === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Floor line
+  ctx.strokeStyle = '#e05050';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  const floorY = pad.t + ph - (0.1 / 11) * ph;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, floorY);
+  ctx.lineTo(w - pad.r, floorY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#e05050';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('Floor: 0.1 LGM', pad.l + 5, floorY - 5);
+
+  // Legend
+  ctx.fillStyle = '#7c6cf0';
+  ctx.fillRect(w - 200, 15, 12, 3);
+  ctx.fillStyle = '#e0e0e8';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('22 validators (full)', w - 183, 19);
+
+  ctx.fillStyle = '#4ecdc4';
+  ctx.fillRect(w - 200, 30, 12, 3);
+  ctx.fillStyle = '#e0e0e8';
+  ctx.fillText('3 validators (launch)', w - 183, 34);
+}, 100);
+
+// ---- Chart 2: Cumulative Supply ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('supplyChart');
+  const pad = { l: 70, r: 20, t: 15, b: 35 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  drawAxes(ctx, w, h, pad, 'Million LGM', 'Weeks');
+
+  // Calculate cumulative supply
+  const blocksPerWeek = 240000;
+  let cumulative = 0;
+  const data = [];
+  for (let week = 0; week <= 60; week++) {
+    let reward = 11 * Math.pow(0.9, week);
+    if (reward < 0.1) reward = 0.1;
+    cumulative += reward * blocksPerWeek;
+    data.push({ week, supply: cumulative / 1e6 });
+  }
+  const maxSupply = data[data.length - 1].supply;
+
+  // Y axis
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= maxSupply; y += 5) {
+    const py = pad.t + ph - (y / maxSupply) * ph;
+    ctx.fillText(y.toFixed(0) + 'M', pad.l - 8, py + 3);
+  }
+
+  // X axis
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= 60; x += 15) {
+    ctx.fillText(x.toString(), pad.l + (x / 60) * pw, h - pad.b + 15);
+  }
+
+  // Area fill
+  ctx.fillStyle = 'rgba(124,108,240,0.1)';
+  ctx.beginPath();
+  ctx.moveTo(pad.l, h - pad.b);
+  data.forEach(d => {
+    ctx.lineTo(pad.l + (d.week / 60) * pw, pad.t + ph - (d.supply / maxSupply) * ph);
+  });
+  ctx.lineTo(pad.l + pw, h - pad.b);
+  ctx.fill();
+
+  // Line
+  ctx.strokeStyle = '#7c6cf0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const px = pad.l + (d.week / 60) * pw;
+    const py = pad.t + ph - (d.supply / maxSupply) * ph;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  });
+  ctx.stroke();
+
+  // Annotation
+  const lastD = data[data.length - 1];
+  ctx.fillStyle = '#7c6cf0';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(lastD.supply.toFixed(1) + 'M LGM (Year 1)', w - pad.r - 5, pad.t + 15);
+}, 200);
+
+// ---- Chart 3: Validator Scaling ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('scalingChart');
+  const pad = { l: 60, r: 20, t: 15, b: 35 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  drawAxes(ctx, w, h, pad, 'Effective Reward (LGM)', 'Active Validators');
+
+  // Y axis
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= 11; y += 2) {
+    const py = pad.t + ph - (y / 11) * ph;
+    ctx.fillText(y.toString(), pad.l - 8, py + 3);
+  }
+
+  // X axis
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= 30; x += 5) {
+    ctx.fillText(x.toString(), pad.l + (x / 30) * pw, h - pad.b + 15);
+  }
+
+  // Curve
+  ctx.strokeStyle = '#4ecdc4';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let v = 1; v <= 30; v++) {
+    const reward = 11 * Math.min(1, v / 22);
+    const px = pad.l + (v / 30) * pw;
+    const py = pad.t + ph - (reward / 11) * ph;
+    v === 1 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Target line
+  ctx.strokeStyle = '#d4a843';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  const targetX = pad.l + (22 / 30) * pw;
+  ctx.beginPath();
+  ctx.moveTo(targetX, pad.t);
+  ctx.lineTo(targetX, h - pad.b);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#d4a843';
+  ctx.font = '10px monospace';
+  ctx.fillText('Target: 22', targetX, pad.t + 12);
+}, 300);
+
+// ---- Fee Waterfall ----
+setTimeout(() => {
+  const container = $('feeWaterfall');
+  const items = [
+    { label: 'Transaction Fee', pct: 100, color: '#e0e0e8' },
+    { label: 'Research Tax', pct: 22, color: '#7c6cf0' },
+    { label: 'Block Producer', pct: 78, color: '#5090e0' },
+  ];
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'bar-container';
+    div.innerHTML = `
+      <span class="bar-label">${item.label}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${item.pct}%; background:${item.color}">${item.pct}%</div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}, 100);
+
+// ---- Tax Breakdown ----
+setTimeout(() => {
+  const container = $('taxBreakdown');
+  const items = [
+    { label: 'Research (77%)', pct: 77, color: '#7c6cf0' },
+    { label: 'Foundation (7%)', pct: 7, color: '#4ecdc4' },
+    { label: 'Community (7%)', pct: 7, color: '#d4a843' },
+    { label: 'Developers (7%)', pct: 7, color: '#5090e0' },
+    { label: 'Reserve (2%)', pct: 2, color: '#888899' },
+  ];
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'bar-container';
+    div.innerHTML = `
+      <span class="bar-label">${item.label}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${item.pct}%; background:${item.color}">${item.pct}%</div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}, 100);
+
+// ---- Chart: Stake Requirements (log scale) ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('stakeChart');
+  const pad = { l: 80, r: 20, t: 15, b: 55 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  const tiers = [
+    { name: 'Apprentice', stake: 0.111, color: '#5050a0' },
+    { name: 'Verified', stake: 1.11, color: '#4ecdc4' },
+    { name: 'Bonded', stake: 1111, color: '#d4a843' },
+    { name: 'Guardian', stake: 11111, color: '#e05050' },
+  ];
+
+  const maxLog = Math.log10(20000);
+  const minLog = Math.log10(0.05);
+
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  [0.1, 1, 10, 100, 1000, 10000].forEach(v => {
+    const py = pad.t + ph - ((Math.log10(v) - minLog) / (maxLog - minLog)) * ph;
+    ctx.fillText(v >= 1000 ? (v/1000)+'K' : v.toString(), pad.l - 8, py + 3);
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, py);
+    ctx.lineTo(w - pad.r, py);
+    ctx.stroke();
+  });
+
+  const barW = pw / 6;
+  tiers.forEach((tier, i) => {
+    const x = pad.l + (i + 0.5) * (pw / 4) - barW / 2;
+    const logStake = Math.log10(Math.max(tier.stake, 0.05));
+    const barH = ((logStake - minLog) / (maxLog - minLog)) * ph;
+    const y = pad.t + ph - barH;
+
+    ctx.fillStyle = tier.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH, 4);
+    ctx.fill();
+
+    ctx.fillStyle = '#e0e0e8';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(tier.stake >= 1000 ? (tier.stake/1000).toFixed(0)+'K' : tier.stake.toString(), x + barW/2, y - 5);
+
+    ctx.fillStyle = tier.color;
+    ctx.font = '9px monospace';
+    ctx.save();
+    ctx.translate(x + barW/2, h - pad.b + 12);
+    ctx.fillText(tier.name, 0, 0);
+    ctx.restore();
+  });
+
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('LGM (log scale)', w/2, h - 5);
+}, 400);
+
+// ---- Risk/Reward Chart ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('riskRewardChart');
+  const pad = { l: 60, r: 20, t: 15, b: 45 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  const tiers = [
+    { name: 'T0', reward: 0.1, risk: 0.111, color: '#5050a0' },
+    { name: 'T1', reward: 0.5, risk: 1.11, color: '#4ecdc4' },
+    { name: 'T2', reward: 1.0, risk: 1111, color: '#d4a843' },
+    { name: 'T3', reward: 2.0, risk: 11111, color: '#e05050' },
+  ];
+
+  drawAxes(ctx, w, h, pad, 'Reward Multiplier', 'Stake at Risk (LGM, log)');
+
+  const maxLog = Math.log10(20000);
+  const minLog = Math.log10(0.05);
+
+  tiers.forEach(tier => {
+    const px = pad.l + ((Math.log10(Math.max(tier.risk, 0.05)) - minLog) / (maxLog - minLog)) * pw;
+    const py = pad.t + ph - (tier.reward / 2.2) * ph;
+
+    ctx.fillStyle = tier.color;
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#e0e0e8';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(tier.name + ' (' + tier.reward + 'x)', px + 12, py + 4);
+  });
+}, 500);
+
+// ---- Vesting Chart ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('vestingChart');
+  const pad = { l: 60, r: 130, t: 15, b: 40 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  drawAxes(ctx, w, h, pad, 'Released (%)', 'Blocks (thousands)');
+
+  const categories = [
+    { name: 'Axiomatic', halfLife: 1111111, cliff: 11111, max: 0.95, color: '#7c6cf0' },
+    { name: 'Formal', halfLife: 555555, cliff: 5555, max: 0.92, color: '#5a5ae0' },
+    { name: 'On-Chain', halfLife: 222222, cliff: 1111, max: 0.90, color: '#4ecdc4' },
+    { name: 'Computational', halfLife: 333333, cliff: 2222, max: 0.88, color: '#50c878' },
+    { name: 'Peer Reviewed', halfLife: 111111, cliff: 5555, max: 0.85, color: '#d4a843' },
+    { name: 'Oracle Feed', halfLife: 55555, cliff: 555, max: 0.80, color: '#f0a030' },
+    { name: 'Contested', halfLife: 22222, cliff: 1111, max: 0.60, color: '#e05050' },
+  ];
+
+  const maxBlocks = 1500000;
+
+  // Y axis
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= 100; y += 20) {
+    const py = pad.t + ph - (y / 100) * ph;
+    ctx.fillText(y + '%', pad.l - 8, py + 3);
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, py);
+    ctx.lineTo(w - pad.r, py);
+    ctx.stroke();
+  }
+
+  // X axis
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= maxBlocks; x += 250000) {
+    ctx.fillText((x / 1000).toFixed(0) + 'K', pad.l + (x / maxBlocks) * pw, h - pad.b + 15);
+  }
+
+  // Draw curves
+  categories.forEach((cat, idx) => {
+    ctx.strokeStyle = cat.color;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    for (let b = 0; b <= maxBlocks; b += 5000) {
+      let released = 0;
+      if (b < cat.cliff) {
+        released = 0;
+      } else {
+        // Exponential release: max * (1 - 0.5^((b - cliff) / halfLife))
+        released = cat.max * (1 - Math.pow(0.5, (b - cat.cliff) / cat.halfLife));
+      }
+      const px = pad.l + (b / maxBlocks) * pw;
+      const py = pad.t + ph - released * ph;
+      b === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Legend
+    const ly = pad.t + 10 + idx * 16;
+    ctx.fillStyle = cat.color;
+    ctx.fillRect(w - pad.r + 10, ly, 12, 3);
+    ctx.fillStyle = '#e0e0e8';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(cat.name, w - pad.r + 28, ly + 4);
+  });
+}, 600);
+
+// ---- Confidence Decay Chart ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('decayChart');
+  const pad = { l: 60, r: 130, t: 15, b: 40 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  drawAxes(ctx, w, h, pad, 'Confidence (%)', 'Days');
+
+  const categories = [
+    { name: 'Eternal (4 types)', halfLife: 0, maxConf: 1.0, minConf: 0, color: '#50c878' },
+    { name: 'Replicated', halfLife: 1000000, maxConf: 0.995, minConf: 0.3, color: '#4ecdc4' },
+    { name: 'Empirical', halfLife: 1000000, maxConf: 0.99, minConf: 0.33, color: '#5090e0' },
+    { name: 'Historical', halfLife: 500000, maxConf: 0.95, minConf: 0.2, color: '#7c6cf0' },
+    { name: 'Social', halfLife: 150000, maxConf: 0.85, minConf: 0.2, color: '#d4a843' },
+    { name: 'Predictive', halfLife: 20000, maxConf: 0.9, minConf: 0.1, color: '#e05050' },
+  ];
+
+  const maxDays = 90;
+  const blocksPerDay = 34272;
+
+  // Y axis
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= 100; y += 20) {
+    const py = pad.t + ph - (y / 100) * ph;
+    ctx.fillText(y + '%', pad.l - 8, py + 3);
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, py);
+    ctx.lineTo(w - pad.r, py);
+    ctx.stroke();
+  }
+
+  // X axis
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= maxDays; x += 15) {
+    ctx.fillText(x.toString(), pad.l + (x / maxDays) * pw, h - pad.b + 15);
+  }
+
+  // Reverification threshold
+  ctx.strokeStyle = '#f0a030';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  const revY = pad.t + ph - 0.6 * ph;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, revY);
+  ctx.lineTo(w - pad.r, revY);
+  ctx.stroke();
+  ctx.fillStyle = '#f0a030';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('Reverification (60%)', pad.l + 5, revY - 5);
+
+  // Expiration threshold
+  const expY = pad.t + ph - 0.3 * ph;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, expY);
+  ctx.lineTo(w - pad.r, expY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#e05050';
+  ctx.fillText('Expiration (30%)', pad.l + 5, expY - 5);
+
+  // Draw curves
+  categories.forEach((cat, idx) => {
+    ctx.strokeStyle = cat.color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    for (let day = 0; day <= maxDays; day += 0.5) {
+      let conf;
+      if (cat.halfLife === 0) {
+        conf = cat.maxConf; // eternal
+      } else {
+        const blocks = day * blocksPerDay;
+        conf = cat.maxConf * Math.pow(0.5, blocks / cat.halfLife);
+        conf = Math.max(conf, cat.minConf);
+      }
+      const px = pad.l + (day / maxDays) * pw;
+      const py = pad.t + ph - conf * ph;
+      day === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Legend
+    const ly = pad.t + 10 + idx * 16;
+    ctx.fillStyle = cat.color;
+    ctx.fillRect(w - pad.r + 10, ly, 12, 3);
+    ctx.fillStyle = '#e0e0e8';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(cat.name, w - pad.r + 28, ly + 4);
+  });
+}, 700);
+
+// ---- Gov Stake Chart ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('govStakeChart');
+  const pad = { l: 60, r: 20, t: 15, b: 50 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  const cats = [
+    { name: 'Process', stake: 200, color: '#50c878' },
+    { name: 'Interface', stake: 400, color: '#4ecdc4' },
+    { name: 'Economics', stake: 800, color: '#d4a843' },
+    { name: 'Consensus', stake: 1000, color: '#e05050' },
+    { name: 'Disbursement', stake: 2000, color: '#7c6cf0' },
+  ];
+
+  const maxStake = 2200;
+  const barW = pw / 7;
+
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= 2000; y += 500) {
+    const py = pad.t + ph - (y / maxStake) * ph;
+    ctx.fillText(y.toString(), pad.l - 8, py + 3);
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, py);
+    ctx.lineTo(w - pad.r, py);
+    ctx.stroke();
+  }
+
+  cats.forEach((cat, i) => {
+    const x = pad.l + (i + 0.5) * (pw / cats.length) - barW / 2;
+    const barH = (cat.stake / maxStake) * ph;
+    const y = pad.t + ph - barH;
+
+    ctx.fillStyle = cat.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH, 4);
+    ctx.fill();
+
+    ctx.fillStyle = '#e0e0e8';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(cat.stake.toString(), x + barW / 2, y - 5);
+
+    ctx.fillStyle = cat.color;
+    ctx.font = '9px monospace';
+    ctx.fillText(cat.name, x + barW / 2, h - pad.b + 15);
+  });
+
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('LGM Required', w / 2, h - 5);
+}, 800);
+
+// ---- Quadratic Voting Chart ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('quadraticChart');
+  const pad = { l: 60, r: 20, t: 15, b: 35 };
+  const pw = w - pad.l - pad.r;
+  const ph = h - pad.t - pad.b;
+
+  drawAxes(ctx, w, h, pad, 'Cost (LGM)', 'Number of Votes');
+
+  const maxVotes = 100;
+  const maxCost = 10000;
+
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  [0, 2000, 4000, 6000, 8000, 10000].forEach(y => {
+    const py = pad.t + ph - (y / maxCost) * ph;
+    ctx.fillText((y / 1000).toFixed(0) + 'K', pad.l - 8, py + 3);
+  });
+
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= 100; x += 20) {
+    ctx.fillText(x.toString(), pad.l + (x / maxVotes) * pw, h - pad.b + 15);
+  }
+
+  // Quadratic curve
+  ctx.fillStyle = 'rgba(124,108,240,0.08)';
+  ctx.beginPath();
+  ctx.moveTo(pad.l, h - pad.b);
+  for (let v = 0; v <= maxVotes; v++) {
+    const cost = v * v;
+    const px = pad.l + (v / maxVotes) * pw;
+    const py = pad.t + ph - (cost / maxCost) * ph;
+    ctx.lineTo(px, py);
+  }
+  ctx.lineTo(pad.l + pw, h - pad.b);
+  ctx.fill();
+
+  ctx.strokeStyle = '#7c6cf0';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let v = 0; v <= maxVotes; v++) {
+    const cost = v * v;
+    const px = pad.l + (v / maxVotes) * pw;
+    const py = pad.t + ph - (cost / maxCost) * ph;
+    v === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Annotations
+  ctx.fillStyle = '#d4a843';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  const annotPx10 = pad.l + (10 / maxVotes) * pw;
+  const annotPy10 = pad.t + ph - (100 / maxCost) * ph;
+  ctx.beginPath();
+  ctx.arc(annotPx10, annotPy10, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillText('10 votes = 100 LGM', annotPx10 + 8, annotPy10 + 3);
+
+  const annotPx50 = pad.l + (50 / maxVotes) * pw;
+  const annotPy50 = pad.t + ph - (2500 / maxCost) * ph;
+  ctx.beginPath();
+  ctx.arc(annotPx50, annotPy50, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillText('50 votes = 2,500 LGM', annotPx50 + 8, annotPy50 + 3);
+}, 900);
+
+// ---- Truth-Alignment Radar Chart ----
+setTimeout(() => {
+  const { ctx, w, h } = setupCanvas('alignmentChart');
+  const cx = w / 2;
+  const cy = h / 2;
+  const r = Math.min(cx, cy) - 40;
+
+  const metrics = [
+    { name: 'Vesting Design', score: 9 },
+    { name: 'Research Tax', score: 9 },
+    { name: 'Empty Block = 0', score: 8 },
+    { name: 'Graduated Tiers', score: 8 },
+    { name: 'Challenge Econ.', score: 5 },
+    { name: 'Guardian Risk/Reward', score: 4 },
+    { name: 'Block:Verif Ratio', score: 3 },
+    { name: 'Implementation', score: 3 },
+  ];
+
+  const n = metrics.length;
+  const angleStep = (Math.PI * 2) / n;
+
+  // Grid rings
+  for (let ring = 2; ring <= 10; ring += 2) {
+    ctx.strokeStyle = '#1e1e2e';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const angle = i * angleStep - Math.PI / 2;
+      const x = cx + (ring / 10) * r * Math.cos(angle);
+      const y = cy + (ring / 10) * r * Math.sin(angle);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Ring label
+    ctx.fillStyle = '#333';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(ring.toString(), cx + 3, cy - (ring / 10) * r + 3);
+  }
+
+  // Axis lines
+  ctx.strokeStyle = '#1e1e2e';
+  for (let i = 0; i < n; i++) {
+    const angle = i * angleStep - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+    ctx.stroke();
+  }
+
+  // Data polygon
+  ctx.fillStyle = 'rgba(124,108,240,0.15)';
+  ctx.strokeStyle = '#7c6cf0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  metrics.forEach((m, i) => {
+    const angle = i * angleStep - Math.PI / 2;
+    const x = cx + (m.score / 10) * r * Math.cos(angle);
+    const y = cy + (m.score / 10) * r * Math.sin(angle);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Data points
+  metrics.forEach((m, i) => {
+    const angle = i * angleStep - Math.PI / 2;
+    const x = cx + (m.score / 10) * r * Math.cos(angle);
+    const y = cy + (m.score / 10) * r * Math.sin(angle);
+
+    ctx.fillStyle = m.score >= 7 ? '#50c878' : m.score >= 5 ? '#d4a843' : '#e05050';
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Labels
+    const lx = cx + (r + 20) * Math.cos(angle);
+    const ly = cy + (r + 20) * Math.sin(angle);
+    ctx.fillStyle = '#e0e0e8';
+    ctx.font = '10px monospace';
+    ctx.textAlign = angle > Math.PI / 2 || angle < -Math.PI / 2 ? 'right' : 'left';
+    if (Math.abs(angle + Math.PI / 2) < 0.1 || Math.abs(angle - Math.PI / 2) < 0.1) ctx.textAlign = 'center';
+    ctx.fillText(m.name + ' (' + m.score + ')', lx, ly + 4);
+  });
+
+  // Center score
+  ctx.fillStyle = '#7c6cf0';
+  ctx.font = 'bold 28px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('5.8', cx, cy + 8);
+  ctx.fillStyle = '#888899';
+  ctx.font = '10px monospace';
+  ctx.fillText('/ 10', cx, cy + 22);
+}, 1000);
+
+// ---- Intersection Observer for fade-in ----
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// ---- Navigation dots ----
+const nav = $('nav');
+document.querySelectorAll('section[id]').forEach(section => {
+  const a = document.createElement('a');
+  a.href = '#' + section.id;
+  a.title = section.querySelector('h2')?.textContent || '';
+  nav.appendChild(a);
+});
+</script>
+
+</body>
+</html>

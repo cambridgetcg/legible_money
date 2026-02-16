@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -24,7 +25,6 @@ type Keeper struct {
 	accountKeeper         types.AccountKeeper
 	bankKeeper            types.BankKeeper
 	stakingKeeper         types.StakingKeeper
-	tokensKeeper          types.TokensKeeper
 	qualificationKeeper   types.DomainQualificationKeeper
 	captureDefenseKeeper  types.CaptureDefenseKeeper
 	vestingRewardsKeeper  types.VestingRewardsKeeper
@@ -46,7 +46,6 @@ func NewKeeper(
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
 	sk types.StakingKeeper,
-	tk types.TokensKeeper,
 	qk types.DomainQualificationKeeper,
 	cdk types.CaptureDefenseKeeper,
 	vrk types.VestingRewardsKeeper,
@@ -60,7 +59,6 @@ func NewKeeper(
 		accountKeeper:         ak,
 		bankKeeper:            bk,
 		stakingKeeper:         sk,
-		tokensKeeper:          tk,
 		qualificationKeeper:   qk,
 		captureDefenseKeeper:  cdk,
 		vestingRewardsKeeper:  vrk,
@@ -113,6 +111,8 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 	if genState.Params != nil {
 		k.SetParams(ctx, *genState.Params)
 	}
+	// Initialize extended params with defaults if not already set
+	k.SetExtendedParams(ctx, types.DefaultExtendedParams())
 	for _, domain := range genState.Domains {
 		if domain != nil {
 			k.SetDomainInState(ctx, *domain)
@@ -206,6 +206,32 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	return params
+}
+
+// SetExtendedParams sets extended module parameters (JSON-encoded).
+func (k Keeper) SetExtendedParams(ctx sdk.Context, ep types.ExtendedParams) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(ep)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal extended params: %v", err))
+	}
+	if err := kvStore.Set(types.ExtendedParamsKey, bz); err != nil {
+		panic(fmt.Sprintf("failed to set extended params: %v", err))
+	}
+}
+
+// GetExtendedParams returns extended module parameters.
+func (k Keeper) GetExtendedParams(ctx sdk.Context) types.ExtendedParams {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.ExtendedParamsKey)
+	if err != nil || bz == nil {
+		return types.DefaultExtendedParams()
+	}
+	var ep types.ExtendedParams
+	if err := json.Unmarshal(bz, &ep); err != nil {
+		return types.DefaultExtendedParams()
+	}
+	return ep
 }
 
 // prefixEndBytes returns the end key for prefix iteration.

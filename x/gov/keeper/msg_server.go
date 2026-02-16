@@ -272,7 +272,7 @@ func (ms msgServer) AdvanceLIPStage(goCtx context.Context, msg *types.MsgAdvance
 	}
 
 	// ZD-E04 FIX: Authorization check — only proposer or governance authority can advance
-	if msg.Proposer != lip.Proposer {
+	if msg.Authority != lip.Proposer {
 		return nil, fmt.Errorf("%w: only LIP proposer can advance stages", types.ErrUnauthorized)
 	}
 
@@ -288,11 +288,13 @@ func (ms msgServer) AdvanceLIPStage(goCtx context.Context, msg *types.MsgAdvance
 		newStage = types.StageLastCall
 		protoStage = types.LIPStage_LIP_STAGE_VOTING // closest mapping
 	case types.StageLastCall:
-		// ZD-E04 FIX: Enforce quorum — must have minimum support weight relative to total stake
-		supportWeight := new(big.Int)
-		supportWeight.SetString(lip.SupportWeight, 10)
-		if supportWeight.Sign() <= 0 {
-			return nil, fmt.Errorf("%w: cannot advance to voting with zero support", types.ErrInvalidLIPStage)
+		// ZD-E04 FIX: Enforce minimum stake before opening voting
+		// Note: SupportWeight is set by CastVote (only available in voting stage),
+		// so we check StakedAmount to ensure the proposal has meaningful backing.
+		totalStaked := new(big.Int)
+		totalStaked.SetString(lip.StakedAmount, 10)
+		if totalStaked.Sign() <= 0 {
+			return nil, fmt.Errorf("%w: cannot advance to voting with zero stake", types.ErrInvalidLIPStage)
 		}
 		newStage = types.StageVoting
 		protoStage = types.LIPStage_LIP_STAGE_VOTING

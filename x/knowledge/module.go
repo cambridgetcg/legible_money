@@ -102,6 +102,11 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterExtendedMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to register %s migration: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis initializes the module from genesis.
@@ -172,6 +177,16 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 			am.keeper.Logger(sdkCtx).Info("cycle penalties applied",
 				"count", penalized,
 				"height", sdkCtx.BlockHeight())
+		}
+	}
+
+	// Prune unused knowledge (amortized, max 20 per block)
+	ep := am.keeper.GetExtendedParams(sdkCtx)
+	if ep.PruningEnabled {
+		pruned := am.keeper.PruneUnusedFactsInEndBlocker(sdkCtx, int(ep.MaxPruningPerBlock))
+		if pruned > 0 {
+			am.keeper.Logger(sdkCtx).Info("knowledge pruning",
+				"count", pruned, "height", sdkCtx.BlockHeight())
 		}
 	}
 

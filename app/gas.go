@@ -68,6 +68,9 @@ var TransactionGasCosts = map[string]uint64{
 	"challenge_recovery":    50_000,
 	"execute_recovery":      80_000,
 
+	// Knowledge pruning
+	"patronize_fact": 50_000,
+
 	// Ontology
 	"propose_domain":    80_000,
 	"endorse_domain":    30_000,
@@ -223,14 +226,83 @@ var TransactionGasCosts = map[string]uint64{
 	"submit_capture_challenge":  100_000,
 	"add_challenge_evidence":     50_000,
 	"resolve_capture_challenge":  80_000,
+
+	// Discovery
+	"register_agent":     60_000,
+	"update_profile":     30_000,
+	"add_capability":     25_000,
+	"remove_capability":  20_000,
+	"deregister_agent":   30_000,
+	"heartbeat":          15_000,
+
+	// Partnerships
+	"initiate_partnership":   100_000,
+	"accept_partnership":      40_000,
+	"deposit_to_pot":          50_000,
+	"distribute_reward":       60_000,
+	"propose_operation":       80_000,
+	"approve_operation":       30_000,
+	"reject_operation":        30_000,
+	"safety_freeze":           80_000,
+	"raise_coercion_signal":   60_000,
+	"initiate_exit":           50_000,
+
+	// Ontology (extended)
+	"vote_domain_proposal":        30_000,
+	"update_domain":               40_000,
+	"register_logic_zone":         60_000,
+	"acknowledge_incompleteness":  30_000,
+
+	// Schedule
+	"create_schedule":  80_000,
+	"pause_schedule":   20_000,
+	"resume_schedule":  20_000,
+	"cancel_schedule":  30_000,
+	"add_fee":          25_000,
+
+	// Billing
+	"register_provider":    80_000,
+	"deregister_provider":  30_000,
+	"request_quote":        20_000,
+	"execute_payment":      40_000,
+
+	// Governance (extended)
+	"amend_lip":             60_000,
+	"advance_lip_stage":     40_000,
+	"withdraw_lip":          30_000,
+	"stake_disbursement":    50_000,
+	"advance_disbursement":  40_000,
+	"cancel_disbursement":   30_000,
+	"register_operator":     80_000,
+	"add_agent":             30_000,
+	"remove_agent":          30_000,
+	"slash_operator":        80_000,
+	"create_deployment":     80_000,
+	"advance_deployment":    40_000,
+	"approve_deployment":    40_000,
+	"rollback_deployment":   60_000,
 }
 
 // Fee routing constants (basis points, 1000000 = 100%).
 const (
-	ResearchTaxBPS  uint64 = 220000  // 22% to research fund
-	ValidatorFeeBPS uint64 = 780000  // 78% to block producer / validators
+	ResearchTaxBPS  uint64 = 70000   // 7% to research fund
+	ValidatorFeeBPS uint64 = 930000  // 93% to block producer / validators
 	BurnRateBPS     uint64 = 50000   // 5% burn rate (applied at penalty sites)
 )
+
+// Bootstrap gas-free period: first 480,000 blocks (~14 days at 2521ms).
+// During bootstrap, essential PoT transactions are gas-free to allow the
+// network to begin verifying truth before any LGM is minted.
+const BootstrapEndBlock int64 = 480_000
+
+// BootstrapGasFreeTypes lists message type URLs exempt from gas during bootstrap.
+var BootstrapGasFreeTypes = map[string]bool{
+	"/legible.knowledge.v1.MsgSubmitClaim":       true,
+	"/legible.knowledge.v1.MsgSubmitCommitment":  true,
+	"/legible.knowledge.v1.MsgSubmitReveal":      true,
+	"/legible.staking.v1.MsgRegisterValidator":   true,
+	"/legible.auth.v1.MsgRegisterAccount":        true,
+}
 
 // Module account names for fee routing.
 const (

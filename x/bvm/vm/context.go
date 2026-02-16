@@ -117,6 +117,19 @@ type StateDB interface {
 	Exists(addr []byte) bool
 }
 
+// NonceDB is an optional interface for StateDB implementations that track
+// per-contract nonces (required by CREATE for address derivation).
+type NonceDB interface {
+	GetNonce(addr []byte) uint64
+	SetNonce(addr []byte, nonce uint64)
+}
+
+// CodeWriter is an optional interface for StateDB implementations that support
+// storing code at an address (required by CREATE/CREATE2 during execution).
+type CodeWriter interface {
+	SetCode(addr []byte, code []byte)
+}
+
 // StorageCounter is an optional interface for StateDB implementations that
 // can report per-contract storage slot counts (for MaxStorageSlotsPerContract enforcement).
 type StorageCounter interface {

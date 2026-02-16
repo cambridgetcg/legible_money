@@ -35,6 +35,15 @@ func (g *GasMeter) Used() uint64 {
 	return g.used
 }
 
+// Refund returns unused gas from a sub-call back to the parent meter.
+func (g *GasMeter) Refund(amount uint64) {
+	if amount > g.used {
+		g.used = 0
+		return
+	}
+	g.used -= amount
+}
+
 func (g *GasMeter) Limit() uint64 {
 	return g.limit
 }

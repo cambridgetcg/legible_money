@@ -1007,6 +1007,81 @@ func (k Keeper) GetCounterFactChallenge(ctx sdk.Context, challengeId string) (ty
 	return challenge, true
 }
 
+// ---------- Patronage Record Operations ----------
+
+func patronageRecordKey(factId, patron string) []byte {
+	return append(types.PatronageRecordPrefix, []byte(factId+":"+patron)...)
+}
+
+func patronageRecordByFactPrefix(factId string) []byte {
+	return append(types.PatronageRecordPrefix, []byte(factId+":")...)
+}
+
+// SetPatronageRecord stores a patronage record.
+func (k Keeper) SetPatronageRecord(ctx sdk.Context, record types.PatronageRecord) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(record)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal patronage record: %v", err))
+	}
+	_ = kvStore.Set(patronageRecordKey(record.FactId, record.Patron), bz)
+}
+
+// GetPatronageRecord retrieves a patronage record.
+func (k Keeper) GetPatronageRecord(ctx sdk.Context, factId, patron string) (types.PatronageRecord, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(patronageRecordKey(factId, patron))
+	if err != nil || bz == nil {
+		return types.PatronageRecord{}, false
+	}
+	var record types.PatronageRecord
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.PatronageRecord{}, false
+	}
+	return record, true
+}
+
+// GetPatronageRecordsByFact returns all patronage records for a fact.
+func (k Keeper) GetPatronageRecordsByFact(ctx sdk.Context, factId string) []types.PatronageRecord {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := patronageRecordByFactPrefix(factId)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var records []types.PatronageRecord
+	for ; iter.Valid(); iter.Next() {
+		var record types.PatronageRecord
+		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+			continue
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+// ---------- Pruning Queue Operations ----------
+
+func pruningQueueKey(graceEndBlock uint64, factId string) []byte {
+	// Zero-padded for lexicographic ordering
+	hBytes := fmt.Sprintf("%020d", graceEndBlock)
+	return append(types.PruningQueuePrefix, []byte(hBytes+":"+factId)...)
+}
+
+// SetPruningQueueEntry adds a fact to the pruning queue indexed by grace end block.
+func (k Keeper) SetPruningQueueEntry(ctx sdk.Context, graceEndBlock uint64, factId string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Set(pruningQueueKey(graceEndBlock, factId), []byte{1})
+}
+
+// DeletePruningQueueEntry removes a fact from the pruning queue.
+func (k Keeper) DeletePruningQueueEntry(ctx sdk.Context, graceEndBlock uint64, factId string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(pruningQueueKey(graceEndBlock, factId))
+}
+
 // IterateCounterFactChallenges iterates over all counter-fact challenges.
 func (k Keeper) IterateCounterFactChallenges(ctx sdk.Context, cb func(types.CounterFactChallenge) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)

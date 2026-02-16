@@ -239,6 +239,40 @@ func (m *MsgVoteResume) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 
+// --- MsgUpdateParams (hand-written, not in proto) ---
+
+// MsgUpdateParams updates module parameters (governance-gated).
+type MsgUpdateParams struct {
+	Authority string `json:"authority"` // gov module address
+	Params    Params `json:"params"`
+}
+
+func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams" }
+func (msg *MsgUpdateParams) ProtoMessage()  {}
+
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUpdateParams) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	return msg.Params.Validate()
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams.
+type MsgUpdateParamsResponse struct{}
+
+func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) String() string { return "" }
+func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
+
 // --- Query Server Interface ---
 // (No query_grpc.pb.go exists, so hand-written QueryServer is needed.)
 
@@ -307,6 +341,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgVoteRevert{}, "emergency/VoteRevert", nil)
 	cdc.RegisterConcrete(&MsgProposeResume{}, "emergency/ProposeResume", nil)
 	cdc.RegisterConcrete(&MsgVoteResume{}, "emergency/VoteResume", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "emergency/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the emergency module's interfaces.
@@ -318,6 +353,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgVoteRevert{},
 		&MsgProposeResume{},
 		&MsgVoteResume{},
+		&MsgUpdateParams{},
 	)
 }
 
@@ -394,4 +430,33 @@ func _Query_AuditLog_Handler(srv interface{}, ctx context.Context, dec func(inte
 // RegisterQueryServer registers the emergency query server.
 func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
+}
+
+// --- MsgUpdateParams gRPC handler (hand-written extension to proto-generated Msg service) ---
+
+// MsgServerUpdateParams extends the proto-generated MsgServer with UpdateParams.
+// Implementations that support governance param updates should implement this interface.
+type MsgServerUpdateParams interface {
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+}
+
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServerUpdateParams).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.emergency.v1.Msg/UpdateParams"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServerUpdateParams).UpdateParams(ctx, req.(*MsgUpdateParams))
+	})
+}
+
+func init() {
+	Msg_ServiceDesc.Methods = append(Msg_ServiceDesc.Methods, grpc.MethodDesc{
+		MethodName: "UpdateParams",
+		Handler:    _Msg_UpdateParams_Handler,
+	})
 }

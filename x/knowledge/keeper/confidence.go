@@ -218,7 +218,7 @@ func (k Keeper) calculateRewardsAndSlashes(
 	params := k.GetParams(ctx)
 	baseReward := params.VerificationRewardAmount
 	if baseReward == 0 {
-		baseReward = 100000 // fallback default: 0.1 LGM
+		baseReward = 1000000 // fallback default: 1.0 LGM
 	}
 
 	// Slash rates from params (basis points / 1,000,000), aligned with TS prototype:
@@ -290,7 +290,7 @@ func (k Keeper) ApplyRewardsAndSlashes(
 	params := k.GetParams(ctx)
 	researchTaxRate := params.ResearchTaxRate
 	if researchTaxRate == 0 {
-		researchTaxRate = 220000 // fallback: 22%
+		researchTaxRate = 70000 // fallback: 7%
 	}
 
 	// Apply rewards via BankKeeper (module → validator account)
@@ -303,17 +303,19 @@ func (k Keeper) ApplyRewardsAndSlashes(
 		}
 		// Transfer reward from module account to validator (after research tax)
 		if k.bankKeeper != nil && amount > 0 {
-			// Deduct research tax (22% default) and send to research fund
+			// Deduct research tax (7% default) and send to research fund
 			taxAmount := amount * researchTaxRate / 1_000_000
 			validatorAmount := amount - taxAmount
 
 			if taxAmount > 0 {
 				taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(taxAmount))))
-				if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research", taxCoins); err != nil {
-					k.Logger(ctx).Error("failed to send research tax",
-						"validator", validatorAddr, "tax", taxAmount, "error", err)
-					// On failure, give full reward to validator
-					validatorAmount = amount
+				if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins); err != nil {
+					// Research tax is a protocol invariant (7% of all verification rewards).
+					// Silent bypass would let validators receive full rewards, corrupting economics.
+					// Withhold entire reward — the module retains funds for retry next round.
+					k.Logger(ctx).Error("research tax transfer failed — reward withheld",
+						"validator", validatorAddr, "tax", taxAmount, "reward", amount, "error", err)
+					continue
 				}
 			}
 
@@ -462,7 +464,7 @@ func (k Keeper) computeEvidenceBonus(ctx sdk.Context, claimId string) uint64 {
 }
 
 // applyTierMultiplier scales a reward by the validator's tier.
-// Tier 0 (Apprentice): 10%, Tier 1 (Verified): 50%, Tier 2 (Bonded): 100%, Tier 3 (Guardian): 150%.
+// Tier 0 (Apprentice): 10%, Tier 1 (Verified): 50%, Tier 2 (Bonded): 100%, Tier 3 (Guardian): 200%.
 func applyTierMultiplier(baseReward uint64, tier uint32) uint64 {
 	switch tier {
 	case 0:
@@ -472,7 +474,7 @@ func applyTierMultiplier(baseReward uint64, tier uint32) uint64 {
 	case 2:
 		return baseReward // 1.0x
 	case 3:
-		return baseReward * 3 / 2 // 1.5x
+		return baseReward * 2 // 2.0x
 	default:
 		return baseReward
 	}

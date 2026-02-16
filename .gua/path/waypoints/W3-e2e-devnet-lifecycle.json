@@ -1,0 +1,15 @@
+{
+  "id": "W3",
+  "name": "E2E DevNet Lifecycle",
+  "status": "complete",
+  "impl": 100,
+  "depth": "L2",
+  "gates_targeted": ["T1", "T4", "T5"],
+  "dimension_focus": "truth",
+  "est_sessions": 2,
+  "blockedBy": [],
+  "createdAt": "2026-02-15T22:00:00Z",
+  "updatedAt": "2026-02-15T23:30:00Z",
+  "completedAt": "2026-02-15T23:30:00Z",
+  "evidence": "23/23 E2E tests passing against live Cosmos devnet (bank, staking, governance, auth errors, economic invariants)"
+}

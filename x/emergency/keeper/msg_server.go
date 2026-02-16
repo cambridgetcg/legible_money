@@ -21,6 +21,7 @@ func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 }
 
 var _ types.MsgServer = msgServer{}
+var _ types.MsgServerUpdateParams = msgServer{}
 
 // ProposeHalt handles a Guardian's proposal to halt the chain.
 func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt) (*types.MsgProposeHaltResponse, error) {
@@ -395,6 +396,25 @@ func (k msgServer) VoteResume(goCtx context.Context, msg *types.MsgVoteResume) (
 		QuorumReached: ceremony.Phase == string(types.PhasePrecommit) || ceremony.Phase == string(types.PhaseFinalized),
 		ChainResumed:  finalized,
 	}, nil
+}
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	k.SetParams(ctx, msg.Params)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"emergency_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+
+	return &types.MsgUpdateParamsResponse{}, nil
 }
 
 // --- Helpers ---
