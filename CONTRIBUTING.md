@@ -14,8 +14,8 @@ Before contributing, understand our core principles:
 
 ### Prerequisites
 
-- Node.js >= 20.0.0
-- npm >= 9.0.0
+- Go >= 1.22
+- [buf](https://buf.build/) (for protobuf)
 - Git
 
 ### Setup
@@ -25,31 +25,26 @@ Before contributing, understand our core principles:
 git clone https://github.com/legible-protocol/legible-money
 cd legible-money
 
-# Install dependencies
-npm install
+# Build
+go build ./...
 
 # Run tests
-npm test
+go test ./... -count=1 -race
 
-# Type check
-npm run typecheck
-
-# Lint
-npm run lint
+# Vet
+go vet ./...
 ```
 
 ### Development Commands
 
 ```bash
-npm run build          # Build with TypeScript
-npm run build:fast     # Fast build with tsup
-npm run test           # Run tests (interactive)
-npm run test:run       # Run tests once
-npm run test:coverage  # Run with coverage
-npm run lint:fix       # Auto-fix lint issues
-npm run format         # Format code
-npm run typecheck      # Type check only
-npm run devnet         # Start local devnet
+go build ./...                       # Build all packages
+go test ./... -count=1 -race         # Run tests with race detector
+go test ./x/knowledge/... -count=1   # Run specific module tests
+go vet ./...                         # Static analysis
+buf generate                         # Regenerate protobuf (from proto/)
+buf lint                             # Lint proto definitions
+govulncheck ./...                    # Security vulnerability scan
 ```
 
 ## How to Contribute
@@ -75,9 +70,9 @@ npm run devnet         # Start local devnet
 7. **Implement the change**
 8. **Ensure all checks pass**:
    ```bash
-   npm run lint
-   npm run typecheck
-   npm test
+   go vet ./...
+   go test ./... -count=1 -race
+   go build ./...
    ```
 9. **Submit a PR** using the template
 10. **Address review feedback**
@@ -118,6 +113,25 @@ Closes #123.
 - `refactor-description` - Refactoring
 - `docs-description` - Documentation
 
+## Project Structure
+
+```
+legible-money/
+├── app/                     # Cosmos SDK application wiring
+├── x/                       # Cosmos SDK modules (24 custom modules)
+│   ├── auth/                # Agent authentication & session keys
+│   ├── bvm/                 # Bytecode Virtual Machine
+│   ├── claiming_pot/        # Proof of Truth claim processing
+│   ├── knowledge/           # Knowledge graph & evaluation pipeline
+│   ├── staking/             # Validator staking & delegation
+│   ├── tokens/              # LGM token & expirable balances
+│   └── ...                  # See x/ for all modules
+├── proto/                   # Protobuf definitions
+│   └── legible/             # Per-module .proto files
+├── cmd/                     # CLI entrypoints
+└── docs/                    # Documentation
+```
+
 ## Agent Contribution Guide
 
 > For AI agents (Claude, GPT, etc.) contributing to this codebase.
@@ -131,21 +145,13 @@ Closes #123.
 4. Check .claude/memory/      → Project state
 ```
 
-### Navigation Files
-
-| File | Purpose |
-|------|---------|
-| `ARCHITECTURE.md` | Directory structure + common tasks |
-| `AGENT_INDEX.md` | "Where do I add..." decision trees |
-| `FILE_OWNERS.md` | Parallel work rules + claiming |
-
 ### Session Protocol
 
 ```
 Session Start:
 1. Read .claude/memory/CURRENT_STATE.md
 2. Read .claude/memory/BLOCKED.md
-3. Run: npm run typecheck
+3. Run: go build ./...
 
 During Session:
 - Update CURRENT_STATE.md on progress
@@ -160,83 +166,51 @@ Session End:
 
 **Safe zones** (no coordination):
 - Adding new test files
-- Adding new types (at END of types.ts)
+- Adding new types within a module
 - Creating new implementation files
 
 **Conflict zones** (claim first):
-- `consensus/pot/types.ts`
-- `state/transitions.ts`
-- Any `index.ts` reordering
+- `x/knowledge/keeper/` — evaluation pipeline
+- `app/app.go` — module wiring
+- Proto files affecting multiple modules
 
 **Claiming**: Add comment `// EDITING: {id} until {HH:MM UTC}`
 
 ### Agent-Specific Guidelines
 
 1. **Verify before modifying**: Always read the file first
-2. **Test your changes**: Run `npm test` before committing
+2. **Test your changes**: Run `go test ./... -count=1` before committing
 3. **Document decisions**: Add to `.claude/memory/DECISIONS.md`
 4. **Respect the hierarchy**: Follow layer dependency rules
-5. **Type safety**: Never use `any` without justification
-
-### Common Patterns
-
-```typescript
-// BigInt for money (never Number)
-const amount: bigint = 1000n;
-
-// Domain-separated hashing
-const hash = domainHash('LGM.purpose.v1', data);
-
-// Atomic state transitions
-state.beginTransaction();
-try {
-  // mutations
-  state.commitTransaction();
-} catch {
-  state.rollbackTransaction();
-}
-```
+5. **Type safety**: Use concrete types; avoid `interface{}` without justification
 
 ---
 
 ## Code Standards
 
-### TypeScript
+### Go
 
-- Strict mode enabled
-- No `any` types (unless justified with comment)
-- All public functions have TSDoc comments
-- Prefer `const` over `let`
-- Use meaningful variable names
+- Follow [Effective Go](https://go.dev/doc/effective_go) conventions
+- No `interface{}` / `any` without justification
+- All exported functions have Go doc comments
+- Use `errors.New` / `fmt.Errorf` with `%w` for wrapping
+- Prefer table-driven tests
 
 ### Testing
 
 - **80% minimum coverage** (95% for crypto)
-- Write property tests for invariants (fast-check)
+- Use `-race` flag for all test runs
+- Use `-count=1` to disable test caching
 - Test edge cases explicitly
-- Use the test harness for integration tests
 
-### Documentation
+### Protobuf
 
-```typescript
-/**
- * Brief description of what this function does.
- *
- * Longer description if needed, explaining the behavior,
- * constraints, and any important details.
- *
- * @param param1 - Description of parameter
- * @param param2 - Description of parameter
- * @returns Description of return value
- *
- * @invariant State any invariants this function maintains
- *
- * @example
- * ```typescript
- * const result = myFunction(arg1, arg2);
- * ```
- */
-```
+- All state and genesis types defined in `.proto` files
+- Run `buf generate` after proto changes
+- Run `buf lint` to validate proto definitions
+- Keep generated `.pb.go` files in version control
+
+---
 
 ## LIP Process
 
@@ -271,10 +245,11 @@ Include:
 ### Security-Sensitive Code
 
 Extra review required for:
-- `core/crypto/` - All cryptographic operations
-- `consensus/pot/` - Consensus mechanism
-- `state/transitions.ts` - State changes
-- `agents/identity/` - Key management
+- `x/knowledge/` - Evaluation pipeline and knowledge state
+- `x/claiming_pot/` - Proof of Truth consensus
+- `x/staking/` - Validator economics
+- `x/auth/` - Agent identity and session keys
+- `x/bvm/` - Virtual machine execution
 
 ## Review Process
 

@@ -39,26 +39,26 @@
 
 ### Invariants
 - [ ] Invariants are documented (in code or `invariants.md`)
-- [ ] Property tests cover invariants (fast-check)
+- [ ] Property tests cover invariants
 - [ ] Edge cases are tested
 
 ### Security (if touching crypto/consensus/state/identity)
 - [ ] No non-deterministic operations
-- [ ] No `Date.now()` or similar in state transitions
-- [ ] No unordered iterations
+- [ ] No `time.Now()` or similar in state transitions
+- [ ] No unordered map iterations in deterministic paths
 - [ ] Domain separation used for hashing
 - [ ] No hardcoded secrets
 - [ ] Security review requested (label: `security-review`)
 
 ### Quality
-- [ ] All tests pass locally (`npm test`)
-- [ ] Type check passes (`npm run typecheck`)
-- [ ] Lint passes (`npm run lint`)
-- [ ] Coverage meets threshold (80%+)
-- [ ] No new TypeScript `any` types (or justified in comments)
+- [ ] All tests pass locally (`go test ./... -count=1 -race`)
+- [ ] `go vet ./...` passes
+- [ ] `go build ./...` succeeds
+- [ ] No new `interface{}` / `any` types without justification
+- [ ] Protobuf changes regenerated (`buf generate`)
 
 ### Documentation
-- [ ] Code has TSDoc comments for public APIs
+- [ ] Public APIs have Go doc comments
 - [ ] README/docs updated if user-facing
 - [ ] CHANGELOG updated if user-facing
 
@@ -70,7 +70,7 @@
 
 ## Screenshots (if applicable)
 
-<!-- For UI changes or visual debugging output -->
+<!-- For visual debugging output -->
 
 ---
 
