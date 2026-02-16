@@ -305,7 +305,7 @@ var (
 		knowledgetypes.ModuleName:       nil,
 		legiblestakingtypes.ModuleName:  {authtypes.Burner, authtypes.Staking},
 		tokenstypes.ModuleName:          {authtypes.Burner},
-		ResearchFundName:                {authtypes.Burner},
+		ResearchFundName:                nil, // receives 7% research tax; no mint/burn needed
 		BurnModuleName:                  {authtypes.Burner},
 		disputestypes.ModuleName:        {authtypes.Burner},
 		evidencemgmttypes.ModuleName:    {authtypes.Burner},
@@ -1060,7 +1060,10 @@ func NewLegibleApp(
 	app.ModuleManager.SetOrderBeginBlockers(
 		// ── SDK infrastructure (must run first) ──
 		upgradetypes.ModuleName,        // MUST be first: halts chain at scheduled upgrade height
-		distrtypes.ModuleName,          // Distribution rewards calculation
+		vestingrewardstypes.ModuleName, // MUST run before x/distribution: RouteFees() intercepts
+		                                // 7% research tax from fee_collector before distribution
+		                                // sweeps remaining 93% to validators. Also mints block rewards.
+		distrtypes.ModuleName,          // Distribution rewards calculation (after fee routing)
 		slashingtypes.ModuleName,       // Validator jailing/unjailing
 		evidencetypes.ModuleName,       // SDK evidence processing
 		stakingtypes.ModuleName,        // SDK validator set updates
@@ -1078,8 +1081,6 @@ func NewLegibleApp(
 		                                // so halt status is known for reputation decay.
 
 		// ── LGM Tier 2: Economic foundation ──
-		vestingrewardstypes.ModuleName, // Mint vesting rewards. MUST run before staking so
-		                                // newly minted rewards are available for unbonding credits.
 		tokenstypes.ModuleName,         // Sweep expired periods, RAI distribution. MUST run
 		                                // before staking so period data is current for OriginPeriod.
 		legiblestakingtypes.ModuleName, // Process mature unbondings, credit with OriginPeriod.
@@ -1349,17 +1350,25 @@ func (app *LegibleApp) ensureNonEmptyStores(ctx sdk.Context) {
 // are stored in keeper state before the knowledge module's BeginBlocker
 // advances round phases.
 func (app *LegibleApp) PreBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+	// Count real transactions (excluding vote extension injection pseudo-txs)
+	realTxCount := 0
 	for _, tx := range req.Txs {
 		if isVoteExtInjectionTx(tx) {
 			app.ProcessVoteExtInjection(ctx, tx)
-			break // at most one injection tx per block
+		} else {
+			realTxCount++
 		}
 	}
+	// Store tx count for vesting_rewards BeginBlocker empty-block detection.
+	// CometBFT DataHash is always >0 bytes even for empty blocks, so we pass
+	// the actual count from the FinalizeBlock request.
+	app.VestingRewardsKeeper.SetBlockTxCount(realTxCount)
+
 	return &sdk.ResponsePreBlock{}, nil
 }
 
 // BeginBlocker runs begin-block logic for all modules.
-// Fee routing (22% research / 78% validators) is handled in x/vesting_rewards BeginBlocker.
+// Fee routing (7% research / 93% validators) is handled in x/vesting_rewards BeginBlocker.
 func (app *LegibleApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) {
 	return app.ModuleManager.BeginBlock(ctx)
 }
@@ -1374,6 +1383,9 @@ func (app *LegibleApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.AP
 	clientCtx := apiSvr.ClientCtx
 	authtypes.RegisterInterfaces(clientCtx.InterfaceRegistry)
 	ModuleBasics.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
+
+	// Register custom REST routes for hand-written module types.
+	registerCustomRESTRoutes(app, apiSvr.Router)
 }
 
 // LegacyAmino returns the legacy amino codec.
