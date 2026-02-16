@@ -138,7 +138,7 @@ func (m *mockBankKeeper) BurnCoins(_ context.Context, moduleName string, amt sdk
 
 type mockStakingKeeper struct{}
 
-func (m *mockStakingKeeper) GetValidatorStake(_ sdk.Context, _ string) (string, error) {
+func (m *mockStakingKeeper) GetValidatorStake(_ context.Context, _ string) (string, error) {
 	return "1000000000", nil // 1000 LGM
 }
 

@@ -35,7 +35,21 @@ var (
 
 	// UnbondingSeqKey stores the monotonic unbonding sequence counter
 	UnbondingSeqKey = []byte{0x07}
+
+	// RedelegationCooldownPrefix tracks last redelegation height per delegator
+	RedelegationCooldownPrefix = []byte{0x08}
 )
+
+// RedelegationCooldownBlocks is the minimum gap between redelegations for a
+// single delegator. Prevents rapid stake-shifting attacks that could
+// manipulate VRF selection probabilities within a single epoch.
+// 1,111 blocks ≈ 46 minutes at 2.521s/block.
+const RedelegationCooldownBlocks uint64 = 1111
+
+// RedelegationCooldownKey returns the store key for a delegator's last redelegation height
+func RedelegationCooldownKey(delegatorAddr string) []byte {
+	return append(RedelegationCooldownPrefix, []byte(delegatorAddr)...)
+}
 
 // ValidatorKey returns the store key for a validator by operator address
 func ValidatorKey(operatorAddr string) []byte {

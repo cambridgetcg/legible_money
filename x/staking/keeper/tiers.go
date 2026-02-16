@@ -36,7 +36,7 @@ func ComputeValidatorTier(
 	// Check tiers from highest to lowest (Guardian -> Apprentice)
 	tierConfigs := k.GetAllTierConfigs(ctx)
 
-	// Tier 3 (Guardian): 111 LGM, 333 verifications (33 contested), 77% accuracy,
+	// Tier 3 (Guardian): 11,111 LGM, 333 verifications (33 contested), 77% accuracy,
 	// 0 slashes in rolling 10-epoch window, contested verifications count 3x
 	guardianConfig := tierConfigs[3]
 	minStakeGuardian := new(big.Int)
@@ -53,12 +53,14 @@ func ComputeValidatorTier(
 		return types.TierGuardian
 	}
 
-	// Tier 2 (Bonded): 11.1 LGM stake only
+	// Tier 2 (Bonded): 1,111 LGM stake + 11 verifications at 50% accuracy
 	bondedConfig := tierConfigs[2]
 	minStakeBonded := new(big.Int)
 	minStakeBonded.SetString(bondedConfig.MinStake, 10)
 
-	if stakeInt.Cmp(minStakeBonded) >= 0 {
+	if stakeInt.Cmp(minStakeBonded) >= 0 &&
+		verifications >= bondedConfig.MinVerifications &&
+		(bondedConfig.MinAccuracy == 0 || accuracy >= bondedConfig.MinAccuracy) {
 		return types.TierBonded
 	}
 
@@ -140,7 +142,7 @@ func GetEffectiveSelectionStake(
 		}
 	}
 
-	// Tier 0 and 1: use virtual stake (111 LGM)
+	// Tier 0 and 1: use virtual stake (11 LGM)
 	if validator.Tier == types.ValidatorTierString(types.TierApprentice) || validator.Tier == types.ValidatorTierString(types.TierVerified) {
 		return params.VirtualStake
 	}

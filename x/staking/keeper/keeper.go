@@ -547,8 +547,11 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 		return nil // skip slash but don't error
 	}
 
-	// Apply tier-adjusted slash
-	adjustedAmount := k.CalculateTierSlash(ctx, types.ValidatorTierFromString(validator.Tier), amount)
+	// Use the caller-provided amount directly. The caller (e.g., knowledge module)
+	// already computed a stake-proportional slash using effective stake, which
+	// incorporates tier differentiation via virtual/real stake. Applying
+	// CalculateTierSlash here would double-count tier-based scaling.
+	adjustedAmount := amount
 
 	// Progressive escalation: adjustedAmount * (1M + slashCount * escalationBps) / 1M
 	if validator.SlashCount > 0 {
@@ -652,6 +655,26 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 	}
 
 	return k.SetValidator(ctx, validator)
+}
+
+// --- Redelegation Cooldown ---
+
+// SetLastRedelegationHeight records the height at which a delegator last redelegated.
+func (k Keeper) SetLastRedelegationHeight(ctx sdk.Context, delegatorAddr string, height uint64) error {
+	store := k.storeService.OpenKVStore(ctx)
+	bz := make([]byte, 8)
+	binary.BigEndian.PutUint64(bz, height)
+	return store.Set(types.RedelegationCooldownKey(delegatorAddr), bz)
+}
+
+// GetLastRedelegationHeight returns the height at which a delegator last redelegated.
+func (k Keeper) GetLastRedelegationHeight(ctx sdk.Context, delegatorAddr string) uint64 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.RedelegationCooldownKey(delegatorAddr))
+	if err != nil || bz == nil || len(bz) < 8 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(bz)
 }
 
 // --- Params ---

@@ -318,6 +318,13 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 
 // Redelegate moves delegation from one validator to another.
 func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
+	// Enforce redelegation cooldown to prevent rapid stake-shifting attacks
+	currentHeight := uint64(ctx.BlockHeight())
+	lastRedelHeight := k.GetLastRedelegationHeight(ctx, msg.Delegator)
+	if lastRedelHeight > 0 && currentHeight < lastRedelHeight+types.RedelegationCooldownBlocks {
+		return nil, types.ErrRedelegationCooldown
+	}
+
 	// Check source delegation exists
 	srcDelegation, found := k.GetDelegation(ctx, msg.Delegator, msg.SrcValidator)
 	if !found {
@@ -416,6 +423,11 @@ func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.Ms
 	}
 	if err := k.SetValidator(ctx, dstValidator); err != nil {
 		return nil, err
+	}
+
+	// Record redelegation height for cooldown enforcement
+	if err := k.SetLastRedelegationHeight(ctx, msg.Delegator, currentHeight); err != nil {
+		return nil, fmt.Errorf("failed to record redelegation cooldown: %w", err)
 	}
 
 	ctx.EventManager().EmitEvent(

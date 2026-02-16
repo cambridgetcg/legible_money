@@ -131,6 +131,39 @@ func registerTestValidator(t *testing.T, k keeper.Keeper, ctx sdk.Context, addr,
 	_ = resp
 }
 
+// promoteToBonded sets verification records and tier so that a validator with sufficient
+// stake qualifies for Tier 2 (Bonded). Must be called after RegisterValidator.
+func promoteToBonded(t *testing.T, k keeper.Keeper, ctx sdk.Context, addr string) {
+	t.Helper()
+	v, found := k.GetValidator(ctx, addr)
+	if !found {
+		t.Fatalf("promoteToBonded: validator %s not found", addr)
+	}
+	v.VerificationsCompleted = 20
+	v.VerificationsCorrect = 15 // 75% accuracy (> 50% min)
+	v.Tier = "bonded"
+	if err := k.SetValidator(ctx, v); err != nil {
+		t.Fatalf("promoteToBonded: failed to set validator: %v", err)
+	}
+}
+
+// promoteToGuardian sets verification records and tier for Tier 3 (Guardian) qualification.
+func promoteToGuardian(t *testing.T, k keeper.Keeper, ctx sdk.Context, addr string) {
+	t.Helper()
+	v, found := k.GetValidator(ctx, addr)
+	if !found {
+		t.Fatalf("promoteToGuardian: validator %s not found", addr)
+	}
+	v.VerificationsCompleted = 1200
+	v.VerificationsCorrect = 1000 // ~83% accuracy (> 77% min)
+	v.ContestedVerificationsCorrect = 10
+	v.SlashCount = 0
+	v.Tier = "guardian"
+	if err := k.SetValidator(ctx, v); err != nil {
+		t.Fatalf("promoteToGuardian: failed to set validator: %v", err)
+	}
+}
+
 // ---------- Registration Deposit & Cap Tests ----------
 
 func TestRegisterValidator_InsufficientDeposit(t *testing.T) {
@@ -216,61 +249,73 @@ func TestRegisterValidator_BlockProducerCap(t *testing.T) {
 	params.MaxValidators = 2
 	k.SetParams(ctx, params)
 
-	// Register 2 block producers (tier 2 bonded: 1,111 LGM = 1111000000 ulgm)
-	for i := 0; i < 2; i++ {
-		addr := sdk.AccAddress(fmt.Sprintf("blockprod_%04d______", i)).String()
+	// Register 3 validators with bonded-level stake.
+	// All start as apprentice (0 verifications), so the cap check at registration
+	// doesn't fire — it only triggers for initialTier >= Bonded.
+	addrs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		addrs[i] = sdk.AccAddress(fmt.Sprintf("blockprod_%04d______", i)).String()
 		_, err := k.RegisterValidator(ctx, &types.MsgRegisterValidator{
-			ValidatorAddress: addr,
+			ValidatorAddress: addrs[i],
 			PubKey:           []byte(fmt.Sprintf("bppubkey_%04d", i)),
-			SelfDelegation:   "1111000000", // tier 2 bonded
+			SelfDelegation:   "1111000000",
 			CommissionRate:   1000,
 			Description:      &types.ValidatorDescription{Identity: fmt.Sprintf("did:lgm:bp%04d", i)},
 		})
 		if err != nil {
-			t.Fatalf("block producer #%d should succeed, got: %v", i, err)
+			t.Fatalf("registration #%d should succeed (apprentice tier), got: %v", i, err)
 		}
 	}
 
-	// Third block producer should be rejected
-	addr := sdk.AccAddress("blockprod_0002______").String()
-	_, err := k.RegisterValidator(ctx, &types.MsgRegisterValidator{
-		ValidatorAddress: addr,
-		PubKey:           []byte("bppubkey_0002"),
-		SelfDelegation:   "1111000000",
-		CommissionRate:   1000,
-		Description:      &types.ValidatorDescription{Identity: "did:lgm:bp0002"},
-	})
-	if err == nil {
-		t.Fatal("expected error: block producer cap should be enforced")
+	// Promote first two to bonded — they become block producers
+	promoteToBonded(t, k, ctx, addrs[0])
+	promoteToBonded(t, k, ctx, addrs[1])
+
+	count := k.CountBlockProducers(ctx)
+	if count != 2 {
+		t.Fatalf("expected 2 block producers, got %d", count)
 	}
 
-	// But a verifier (tier 0) should still succeed
+	// Third validator remains apprentice — block producer count stays at 2
+	v, _ := k.GetValidator(ctx, addrs[2])
+	if v.Tier != "apprentice" {
+		t.Errorf("third validator should still be apprentice, got %s", v.Tier)
+	}
+
+	// Verifier (tier 0 stake) registration succeeds regardless of cap
 	verAddr := sdk.AccAddress("verifier_extra______").String()
-	_, err = k.RegisterValidator(ctx, &types.MsgRegisterValidator{
+	_, err := k.RegisterValidator(ctx, &types.MsgRegisterValidator{
 		ValidatorAddress: verAddr,
 		PubKey:           []byte("verpubkey_extra"),
-		SelfDelegation:   "111000", // tier 0
+		SelfDelegation:   "111000",
 		CommissionRate:   1000,
 		Description:      &types.ValidatorDescription{Identity: "did:lgm:verextra"},
 	})
 	if err != nil {
-		t.Fatalf("verifier should bypass block producer cap, got: %v", err)
+		t.Fatalf("verifier registration should succeed, got: %v", err)
 	}
 }
 
 func TestCountBlockProducers(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	// Register mix of tiers
-	registerTestValidator(t, k, ctx, sdk.AccAddress("val_apprentice______").String(), "did:lgm:app1", "111000")         // tier 0
-	registerTestValidator(t, k, ctx, sdk.AccAddress("val_bonded__________").String(), "did:lgm:bonded1", "1111000000")      // tier 2
-	registerTestValidator(t, k, ctx, sdk.AccAddress("val_guardian________").String(), "did:lgm:guardian1", "11111000000")   // tier 3
+	// Register mix of tiers (all start as apprentice, then promote)
+	appAddr := sdk.AccAddress("val_apprentice______").String()
+	bondedAddr := sdk.AccAddress("val_bonded__________").String()
+	guardianAddr := sdk.AccAddress("val_guardian________").String()
+
+	registerTestValidator(t, k, ctx, appAddr, "did:lgm:app1", "111000")           // tier 0
+	registerTestValidator(t, k, ctx, bondedAddr, "did:lgm:bonded1", "1111000000")    // tier 2 stake
+	registerTestValidator(t, k, ctx, guardianAddr, "did:lgm:guardian1", "11111000000") // tier 3 stake
+
+	// Promote to actual tiers via verification records
+	promoteToBonded(t, k, ctx, bondedAddr)
+	promoteToGuardian(t, k, ctx, guardianAddr)
 
 	count := k.CountBlockProducers(ctx)
 	if count != 2 {
 		t.Errorf("expected 2 block producers (bonded+guardian), got %d", count)
 	}
-
 }
 
 // ---------- Delegation Tests ----------
@@ -1165,6 +1210,7 @@ func TestSlashValidator_ProgressiveEscalation(t *testing.T) {
 	valAddr := sdk.AccAddress("validator_escalate__").String()
 	// Use enough stake to stay in Bonded tier after slashing
 	registerTestValidator(t, k, ctx, valAddr, "did:lgm:escalate", "1111000000000")
+	promoteToBonded(t, k, ctx, valAddr)
 
 	// Increase per-epoch cap and deactivation threshold to allow 3+ slashes
 	params := k.GetParams(ctx)

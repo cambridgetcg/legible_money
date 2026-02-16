@@ -17,5 +17,5 @@ type BankKeeper interface {
 // StakingKeeper defines the expected staking module keeper interface.
 // Used to query active validator count for block reward scaling.
 type StakingKeeper interface {
-	GetActiveValidatorCount(ctx sdk.Context) uint32
+	GetActiveValidatorCount(ctx context.Context) uint32
 }

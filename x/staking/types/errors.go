@@ -22,4 +22,5 @@ var (
 	ErrDuplicateDID                  = errors.Register(ModuleName, 19, "DID already registered")
 	ErrInsufficientRegistrationDeposit = errors.Register(ModuleName, 20, "initial stake below minimum registration deposit")
 	ErrMaxBlockProducersReached      = errors.Register(ModuleName, 21, "maximum block producers (tier 2+) reached")
+	ErrRedelegationCooldown          = errors.Register(ModuleName, 22, "redelegation cooldown not elapsed")
 )

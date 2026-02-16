@@ -83,8 +83,8 @@ func DefaultTierConfigs() []*TierConfig {
 		{
 			Tier:                            "bonded",
 			MinStake:                        "1111000000", // 1,111 LGM in ulgm (6 decimals)
-			MinVerifications:                0,
-			MinAccuracy:                     0,
+			MinVerifications:                11,
+			MinAccuracy:                     500000, // 50% — oracle/attestation access requires some epistemic track record
 			MaxSlashCount:                   -1,
 			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation"},
 			RewardMultiplier:                1000, // 1.0x
@@ -100,7 +100,7 @@ func DefaultTierConfigs() []*TierConfig {
 			MinAccuracy:                     770000, // 77%
 			MaxSlashCount:                   0,      // zero slashes in window
 			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation", "predictive", "social", "contested"},
-			RewardMultiplier:                1500, // 1.5x
+			RewardMultiplier:                2000, // 2.0x — compensates asymmetric risk (zero-slash tolerance + contested engagement)
 			SelectionWeight:                 1500, // 1.5x
 			SlashWindowEpochs:               10,   // Only slashes within last 10 epochs count
 			MinContestedVerifications:       33,   // Must engage hard claims

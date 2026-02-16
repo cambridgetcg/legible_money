@@ -8,7 +8,7 @@ import (
 
 // StakingKeeper defines the expected staking module keeper interface.
 type StakingKeeper interface {
-	GetValidatorStake(ctx sdk.Context, address string) (string, error)
+	GetValidatorStake(ctx context.Context, address string) (string, error)
 }
 
 // BankKeeper defines the expected bank module keeper interface for token transfers.

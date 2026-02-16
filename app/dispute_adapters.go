@@ -124,7 +124,7 @@ func (a *DisputeStakingAdapter) GetEffectiveStake(ctx context.Context, operatorA
 
 // ---------- StakeQuery Adapter ----------
 // Satisfies gov and research StakingKeeper interface:
-//   GetValidatorStake(ctx sdk.Context, address string) (string, error)
+//   GetValidatorStake(ctx context.Context, address string) (string, error)
 
 type StakeQueryAdapter struct {
 	keeper legiblestakingkeeper.Keeper
@@ -134,8 +134,9 @@ func NewStakeQueryAdapter(k legiblestakingkeeper.Keeper) *StakeQueryAdapter {
 	return &StakeQueryAdapter{keeper: k}
 }
 
-func (a *StakeQueryAdapter) GetValidatorStake(ctx sdk.Context, address string) (string, error) {
-	v, found := a.keeper.GetValidator(ctx, address)
+func (a *StakeQueryAdapter) GetValidatorStake(ctx context.Context, address string) (string, error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	v, found := a.keeper.GetValidator(sdkCtx, address)
 	if !found {
 		return "0", nil
 	}
