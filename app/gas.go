@@ -223,6 +223,61 @@ var TransactionGasCosts = map[string]uint64{
 	"submit_capture_challenge":  100_000,
 	"add_challenge_evidence":     50_000,
 	"resolve_capture_challenge":  80_000,
+
+	// Discovery
+	"register_agent":     60_000,
+	"update_profile":     30_000,
+	"add_capability":     25_000,
+	"remove_capability":  20_000,
+	"deregister_agent":   30_000,
+	"heartbeat":          15_000,
+
+	// Partnerships
+	"initiate_partnership":   100_000,
+	"accept_partnership":      40_000,
+	"deposit_to_pot":          50_000,
+	"distribute_reward":       60_000,
+	"propose_operation":       80_000,
+	"approve_operation":       30_000,
+	"reject_operation":        30_000,
+	"safety_freeze":           80_000,
+	"raise_coercion_signal":   60_000,
+	"initiate_exit":           50_000,
+
+	// Ontology (extended)
+	"vote_domain_proposal":        30_000,
+	"update_domain":               40_000,
+	"register_logic_zone":         60_000,
+	"acknowledge_incompleteness":  30_000,
+
+	// Schedule
+	"create_schedule":  80_000,
+	"pause_schedule":   20_000,
+	"resume_schedule":  20_000,
+	"cancel_schedule":  30_000,
+	"add_fee":          25_000,
+
+	// Billing
+	"register_provider":    80_000,
+	"deregister_provider":  30_000,
+	"request_quote":        20_000,
+	"execute_payment":      40_000,
+
+	// Governance (extended)
+	"amend_lip":             60_000,
+	"advance_lip_stage":     40_000,
+	"withdraw_lip":          30_000,
+	"stake_disbursement":    50_000,
+	"advance_disbursement":  40_000,
+	"cancel_disbursement":   30_000,
+	"register_operator":     80_000,
+	"add_agent":             30_000,
+	"remove_agent":          30_000,
+	"slash_operator":        80_000,
+	"create_deployment":     80_000,
+	"advance_deployment":    40_000,
+	"approve_deployment":    40_000,
+	"rollback_deployment":   60_000,
 }
 
 // Fee routing constants (basis points, 1000000 = 100%).

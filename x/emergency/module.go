@@ -3,6 +3,7 @@ package emergency
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
@@ -100,6 +101,11 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to register %s migration: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis initializes the module from genesis.
@@ -124,31 +130,34 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock checks ceremony progress and handles phase transitions.
+// BeginBlock checks ceremony progress, handles phase transitions, monitors
+// halt/revert status, and auto-resumes expired halts.
 func (am AppModule) BeginBlock(goCtx context.Context) error {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
+	// Process active ceremonies
 	ceremony, found := am.keeper.GetActiveCeremony(ctx)
-	if !found {
-		return nil
-	}
-
-	finalized, err := am.keeper.CheckCeremonyProgress(ctx, ceremony.Id)
-	if err != nil {
-		am.keeper.Logger(ctx).Error("failed to check ceremony progress",
-			"ceremony_id", ceremony.Id, "error", err)
-		return nil
-	}
-
-	if finalized {
-		am.keeper.HandleCeremonyFinalization(ctx, ceremony.Id)
-	} else {
-		// Re-read ceremony to check if it failed
-		ceremony, found = am.keeper.GetCeremony(ctx, ceremony.Id)
-		if found && ceremony.Phase == string(types.PhaseFailed) {
-			am.keeper.HandleCeremonyFailure(ctx, ceremony.Id)
+	if found {
+		finalized, err := am.keeper.CheckCeremonyProgress(ctx, ceremony.Id)
+		if err != nil {
+			am.keeper.Logger(ctx).Error("failed to check ceremony progress",
+				"ceremony_id", ceremony.Id, "error", err)
+		} else if finalized {
+			am.keeper.HandleCeremonyFinalization(ctx, ceremony.Id)
+		} else {
+			// Re-read ceremony to check if it failed
+			ceremony, found = am.keeper.GetCeremony(ctx, ceremony.Id)
+			if found && ceremony.Phase == string(types.PhaseFailed) {
+				am.keeper.HandleCeremonyFailure(ctx, ceremony.Id)
+			}
 		}
 	}
+
+	// Auto-resume expired halts (prevents permanent chain freeze)
+	am.keeper.CheckHaltExpiry(ctx)
+
+	// Monitor revert status — log ERROR every block to alert operators
+	am.keeper.MonitorRevertStatus(ctx)
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"fmt"
 	"testing"
 
 	"cosmossdk.io/log"
@@ -728,6 +729,703 @@ func TestParamsGenesis(t *testing.T) {
 	}
 	if len(exported.Homes) != 1 {
 		t.Errorf("expected 1 home, got %d", len(exported.Homes))
+	}
+}
+
+// ==================== Spending Limit Enforcement ====================
+
+func TestCheckAndDebitSpendingLimit_WithinLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "SpendLimit Home",
+	})
+
+	// Set a 10 LGM limit per day
+	_, _ = msgServer.SetSpendingLimit(ctx, &types.MsgSetSpendingLimit{
+		Owner: owner1, HomeId: homeResp.HomeId,
+		KeyType: "operator", MaxAmount: "10000000", PeriodBlocks: 34272,
+	})
+
+	// Spend 3 LGM — should succeed
+	err := k.CheckAndDebitSpendingLimit(ctx, homeResp.HomeId, "operator", "3000000")
+	if err != nil {
+		t.Fatalf("expected spend within limit to succeed: %v", err)
+	}
+
+	// Verify spent counter updated
+	limit, _ := k.GetSpendingLimit(ctx, homeResp.HomeId, "operator")
+	if limit.SpentInPeriod != "3000000" {
+		t.Errorf("expected spent 3000000, got %s", limit.SpentInPeriod)
+	}
+
+	// Spend another 5 LGM — should succeed (total 8)
+	err = k.CheckAndDebitSpendingLimit(ctx, homeResp.HomeId, "operator", "5000000")
+	if err != nil {
+		t.Fatalf("expected second spend to succeed: %v", err)
+	}
+
+	limit, _ = k.GetSpendingLimit(ctx, homeResp.HomeId, "operator")
+	if limit.SpentInPeriod != "8000000" {
+		t.Errorf("expected spent 8000000, got %s", limit.SpentInPeriod)
+	}
+}
+
+func TestCheckAndDebitSpendingLimit_ExceedsLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "SpendLimit Exceed Home",
+	})
+
+	_, _ = msgServer.SetSpendingLimit(ctx, &types.MsgSetSpendingLimit{
+		Owner: owner1, HomeId: homeResp.HomeId,
+		KeyType: "operator", MaxAmount: "5000000", PeriodBlocks: 34272,
+	})
+
+	// Spend 3 LGM — ok
+	_ = k.CheckAndDebitSpendingLimit(ctx, homeResp.HomeId, "operator", "3000000")
+
+	// Spend another 3 LGM — should fail (total 6 > 5)
+	err := k.CheckAndDebitSpendingLimit(ctx, homeResp.HomeId, "operator", "3000000")
+	if err == nil {
+		t.Fatal("expected error when exceeding spending limit")
+	}
+
+	// Verify spent counter was NOT updated (still 3)
+	limit, _ := k.GetSpendingLimit(ctx, homeResp.HomeId, "operator")
+	if limit.SpentInPeriod != "3000000" {
+		t.Errorf("expected spent still 3000000 after rejection, got %s", limit.SpentInPeriod)
+	}
+
+	// Verify alert was created
+	var alertCount uint32
+	k.IterateAlerts(ctx, homeResp.HomeId, func(alert types.Alert) bool {
+		if alert.Type == string(types.AlertSpendingLimitHit) {
+			alertCount++
+		}
+		return false
+	})
+	if alertCount != 1 {
+		t.Errorf("expected 1 spending limit alert, got %d", alertCount)
+	}
+}
+
+func TestCheckAndDebitSpendingLimit_PeriodReset(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	homeId := "home-period-reset"
+	k.SetHome(ctx, types.AgentHome{
+		HomeId: homeId, OwnerAddress: owner1, Name: "Period Reset",
+		Status: string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	})
+
+	// Set limit with period starting at block 50, period of 20 blocks
+	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+		KeyType: "operator", MaxAmount: "5000000",
+		PeriodBlocks: 20, SpentInPeriod: "4000000", PeriodStart: 50,
+	})
+
+	// Context is at block 100. Period was 50+20=70, so 100 >= 70: period should reset.
+	err := k.CheckAndDebitSpendingLimit(ctx, homeId, "operator", "3000000")
+	if err != nil {
+		t.Fatalf("expected spend after period reset to succeed: %v", err)
+	}
+
+	limit, _ := k.GetSpendingLimit(ctx, homeId, "operator")
+	if limit.SpentInPeriod != "3000000" {
+		t.Errorf("expected spent 3000000 after reset, got %s", limit.SpentInPeriod)
+	}
+	if limit.PeriodStart != 100 {
+		t.Errorf("expected period start reset to 100, got %d", limit.PeriodStart)
+	}
+}
+
+func TestCheckAndDebitSpendingLimit_NoLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	homeId := "home-no-limit"
+	k.SetHome(ctx, types.AgentHome{
+		HomeId: homeId, OwnerAddress: owner1, Name: "No Limit",
+		Status: string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	})
+
+	// No spending limit configured — should allow any amount
+	err := k.CheckAndDebitSpendingLimit(ctx, homeId, "operator", "999999999")
+	if err != nil {
+		t.Fatalf("expected no-limit spend to succeed: %v", err)
+	}
+}
+
+func TestCheckAndDebitSpendingLimit_InvalidAmount(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	homeId := "home-invalid-amt"
+	k.SetHome(ctx, types.AgentHome{
+		HomeId: homeId, OwnerAddress: owner1, Name: "Invalid Amt",
+		Status: string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	})
+
+	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+		KeyType: "operator", MaxAmount: "5000000",
+		PeriodBlocks: 34272, SpentInPeriod: "0", PeriodStart: 100,
+	})
+
+	// Zero amount
+	err := k.CheckAndDebitSpendingLimit(ctx, homeId, "operator", "0")
+	if err == nil {
+		t.Error("expected error for zero amount")
+	}
+
+	// Negative amount
+	err = k.CheckAndDebitSpendingLimit(ctx, homeId, "operator", "-100")
+	if err == nil {
+		t.Error("expected error for negative amount")
+	}
+
+	// Non-numeric
+	err = k.CheckAndDebitSpendingLimit(ctx, homeId, "operator", "abc")
+	if err == nil {
+		t.Error("expected error for non-numeric amount")
+	}
+}
+
+func TestGetRemainingSpendingLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	homeId := "home-remaining"
+	k.SetHome(ctx, types.AgentHome{
+		HomeId: homeId, OwnerAddress: owner1, Name: "Remaining",
+		Status: string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	})
+
+	// No limit — returns -1
+	remaining := k.GetRemainingSpendingLimit(ctx, homeId, "operator")
+	if remaining != "-1" {
+		t.Errorf("expected -1 for no limit, got %s", remaining)
+	}
+
+	// Set limit: max 10, spent 3, period still active
+	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+		KeyType: "operator", MaxAmount: "10000000",
+		PeriodBlocks: 34272, SpentInPeriod: "3000000", PeriodStart: 90,
+	})
+
+	remaining = k.GetRemainingSpendingLimit(ctx, homeId, "operator")
+	if remaining != "7000000" {
+		t.Errorf("expected remaining 7000000, got %s", remaining)
+	}
+
+	// Period expired — should return full max amount
+	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+		KeyType: "operator", MaxAmount: "10000000",
+		PeriodBlocks: 5, SpentInPeriod: "8000000", PeriodStart: 50,
+	})
+
+	remaining = k.GetRemainingSpendingLimit(ctx, homeId, "operator")
+	if remaining != "10000000" {
+		t.Errorf("expected full limit after period reset, got %s", remaining)
+	}
+}
+
+// ==================== Treasury Automation ====================
+
+func TestProcessTreasuryAutomation_AutoCompound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home with auto-compound enabled
+	home := types.AgentHome{
+		HomeId: "home-autocompound", OwnerAddress: owner1, Name: "AutoCompound",
+		Status: string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+		Treasury: &types.HomeTreasury{
+			ReservedBalance: "0",
+			Automation: &types.TreasuryAutomation{
+				AutoCompoundRewards: true,
+			},
+		},
+	}
+	k.SetHome(ctx, home)
+
+	// Run automation — should emit event (no bank keeper needed)
+	k.ProcessTreasuryAutomation(ctx)
+
+	// Verify event was emitted
+	events := ctx.EventManager().Events()
+	found := false
+	for _, ev := range events {
+		if ev.Type == "treasury_auto_compound" {
+			found = true
+			for _, attr := range ev.Attributes {
+				if attr.Key == "home_id" && attr.Value == "home-autocompound" {
+					break
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("expected treasury_auto_compound event to be emitted")
+	}
+}
+
+func TestProcessTreasuryAutomation_SkipsDormant(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create a dormant home with automation
+	home := types.AgentHome{
+		HomeId: "home-dormant-auto", OwnerAddress: owner1, Name: "DormantAuto",
+		Status: string(types.HomeStatusDormant),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+		Treasury: &types.HomeTreasury{
+			Automation: &types.TreasuryAutomation{AutoCompoundRewards: true},
+		},
+	}
+	k.SetHome(ctx, home)
+
+	k.ProcessTreasuryAutomation(ctx)
+
+	// No events should be emitted for dormant homes
+	events := ctx.EventManager().Events()
+	for _, ev := range events {
+		if ev.Type == "treasury_auto_compound" {
+			t.Error("should not emit auto-compound for dormant home")
+		}
+	}
+}
+
+func TestProcessTreasuryAutomation_NoAutomation(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Home without automation configured
+	home := types.AgentHome{
+		HomeId: "home-no-auto", OwnerAddress: owner1, Name: "NoAuto",
+		Status: string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+		Treasury: &types.HomeTreasury{ReservedBalance: "0"},
+	}
+	k.SetHome(ctx, home)
+
+	// Should not panic and not emit events
+	k.ProcessTreasuryAutomation(ctx)
+
+	events := ctx.EventManager().Events()
+	for _, ev := range events {
+		if ev.Type == "treasury_auto_compound" {
+			t.Error("should not emit events for home without automation")
+		}
+	}
+}
+
+// ==================== Aging / Maturity System ====================
+
+func TestComputeMaturityStage(t *testing.T) {
+	tests := []struct {
+		ageBlocks uint64
+		expected  string
+	}{
+		{0, keeper.MaturityFresh},
+		{1000, keeper.MaturityFresh},
+		{keeper.ThresholdEstablished - 1, keeper.MaturityFresh},
+		{keeper.ThresholdEstablished, keeper.MaturityEstablished},
+		{keeper.ThresholdEstablished + 1, keeper.MaturityEstablished},
+		{keeper.ThresholdMature - 1, keeper.MaturityEstablished},
+		{keeper.ThresholdMature, keeper.MaturityMature},
+		{keeper.ThresholdVenerable - 1, keeper.MaturityMature},
+		{keeper.ThresholdVenerable, keeper.MaturityVenerable},
+		{keeper.ThresholdAncient - 1, keeper.MaturityVenerable},
+		{keeper.ThresholdAncient, keeper.MaturityAncient},
+		{keeper.ThresholdAncient + 1000000, keeper.MaturityAncient},
+	}
+
+	for _, tc := range tests {
+		result := keeper.ComputeMaturityStage(tc.ageBlocks)
+		if result != tc.expected {
+			t.Errorf("ComputeMaturityStage(%d) = %s, want %s", tc.ageBlocks, result, tc.expected)
+		}
+	}
+}
+
+func TestGetRewardMultiplierBps(t *testing.T) {
+	tests := []struct {
+		stage    string
+		expected uint32
+	}{
+		{keeper.MaturityFresh, keeper.RewardMultiplierFresh},
+		{keeper.MaturityEstablished, keeper.RewardMultiplierEstablished},
+		{keeper.MaturityMature, keeper.RewardMultiplierMature},
+		{keeper.MaturityVenerable, keeper.RewardMultiplierVenerable},
+		{keeper.MaturityAncient, keeper.RewardMultiplierAncient},
+		{"unknown", keeper.RewardMultiplierFresh}, // default to fresh
+	}
+
+	for _, tc := range tests {
+		result := keeper.GetRewardMultiplierBps(tc.stage)
+		if result != tc.expected {
+			t.Errorf("GetRewardMultiplierBps(%s) = %d, want %d", tc.stage, result, tc.expected)
+		}
+	}
+}
+
+func TestComputePatina(t *testing.T) {
+	// Zero age/activity but stable (0 status changes) → stability factor = 20
+	patina := keeper.ComputePatina(0, 0, 0, 0)
+	if patina != 20 {
+		t.Errorf("expected patina 20 for zero-age stable home, got %d", patina)
+	}
+
+	// 1 day old, fully active, no status changes — mid-range
+	patina = keeper.ComputePatina(keeper.BlocksPerDay, keeper.BlocksPerDay, keeper.BlocksPerDay, 0)
+	if patina == 0 {
+		t.Error("expected non-zero patina for 1-day-old active home")
+	}
+
+	// Very old (365 days), fully active, no status changes — should be high
+	age365 := uint64(keeper.BlocksPerDay * 365)
+	patina = keeper.ComputePatina(age365, age365, age365, 0)
+	if patina < 80 {
+		t.Errorf("expected high patina for 365-day active home, got %d", patina)
+	}
+
+	// Old but lots of status changes — stability factor hurts
+	patina10changes := keeper.ComputePatina(age365, age365, age365, 10)
+	patinaStable := keeper.ComputePatina(age365, age365, age365, 0)
+	if patina10changes >= patinaStable {
+		t.Errorf("expected lower patina with 10 status changes: %d >= %d", patina10changes, patinaStable)
+	}
+
+	// Old but inactive — activity factor hurts
+	patinaInactive := keeper.ComputePatina(age365, 0, age365, 0)
+	patinaActive := keeper.ComputePatina(age365, age365, age365, 0)
+	if patinaInactive >= patinaActive {
+		t.Errorf("expected lower patina when inactive: %d >= %d", patinaInactive, patinaActive)
+	}
+
+	// Patina capped at 100
+	huge := uint64(keeper.BlocksPerDay * 10000)
+	patinaCapped := keeper.ComputePatina(huge, huge, huge, 0)
+	if patinaCapped > 100 {
+		t.Errorf("expected patina capped at 100, got %d", patinaCapped)
+	}
+}
+
+func TestUpdateHomeMaturity(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home at block 10. Context is at block 100, so age = 90.
+	// 90 blocks is well below ThresholdEstablished (34272), so stage = fresh.
+	home := types.AgentHome{
+		HomeId: "home-maturity", OwnerAddress: owner1, Name: "Maturity Test",
+		Status:         string(types.HomeStatusActive),
+		CreatedAtBlock: 10,
+		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	}
+	k.SetHome(ctx, home)
+
+	changed := k.UpdateHomeMaturity(ctx, &home)
+	// Stage is fresh, default is also fresh → no change
+	if changed {
+		t.Error("expected no change for fresh home at low age")
+	}
+
+	stage := k.GetHomeMaturity(ctx, "home-maturity")
+	if stage != keeper.MaturityFresh {
+		t.Errorf("expected fresh, got %s", stage)
+	}
+
+	// Now simulate an old home (created at block 0, current at block 100000)
+	oldCtx := ctx.WithBlockHeight(100000)
+	oldHome := types.AgentHome{
+		HomeId: "home-old", OwnerAddress: owner1, Name: "Old Home",
+		Status:         string(types.HomeStatusActive),
+		CreatedAtBlock: 0,
+		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	}
+	k.SetHome(oldCtx, oldHome)
+
+	changed = k.UpdateHomeMaturity(oldCtx, &oldHome)
+	if !changed {
+		t.Error("expected maturity change for old home")
+	}
+
+	stage = k.GetHomeMaturity(oldCtx, "home-old")
+	// 100000 blocks > ThresholdMature (342720)? No, 100000 < 342720.
+	// 100000 > ThresholdEstablished (34272)? Yes.
+	if stage != keeper.MaturityEstablished {
+		t.Errorf("expected established for 100000-block-old home, got %s", stage)
+	}
+}
+
+func TestUpdateHomeMaturity_AllStages(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	stages := []struct {
+		height   int64
+		created  uint64
+		expected string
+	}{
+		{100, 99, keeper.MaturityFresh},                                        // 1 block old
+		{keeper.ThresholdEstablished + 10, 10, keeper.MaturityEstablished},     // just past established
+		{int64(keeper.ThresholdMature) + 10, 10, keeper.MaturityMature},        // just past mature
+		{int64(keeper.ThresholdVenerable) + 10, 10, keeper.MaturityVenerable},  // just past venerable
+		{int64(keeper.ThresholdAncient) + 10, 10, keeper.MaturityAncient},      // just past ancient
+	}
+
+	for i, tc := range stages {
+		stageCtx := ctx.WithBlockHeight(tc.height)
+		homeId := fmt.Sprintf("home-stage-%d", i)
+		home := types.AgentHome{
+			HomeId: homeId, OwnerAddress: owner1, Name: "Stage Test",
+			Status:         string(types.HomeStatusActive),
+			CreatedAtBlock: tc.created,
+			Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+		}
+		k.SetHome(stageCtx, home)
+		k.UpdateHomeMaturity(stageCtx, &home)
+
+		got := k.GetHomeMaturity(stageCtx, homeId)
+		if got != tc.expected {
+			t.Errorf("stage %d: expected %s, got %s (height=%d, created=%d)", i, tc.expected, got, tc.height, tc.created)
+		}
+	}
+}
+
+func TestGetHomeRewardMultiplierBps(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	homeId := "home-reward-mult"
+	// Default (no maturity stored) — should be fresh multiplier
+	mult := k.GetHomeRewardMultiplierBps(ctx, homeId)
+	if mult != keeper.RewardMultiplierFresh {
+		t.Errorf("expected fresh multiplier %d, got %d", keeper.RewardMultiplierFresh, mult)
+	}
+
+	// Set to venerable
+	k.SetHomeMaturity(ctx, homeId, keeper.MaturityVenerable)
+	mult = k.GetHomeRewardMultiplierBps(ctx, homeId)
+	if mult != keeper.RewardMultiplierVenerable {
+		t.Errorf("expected venerable multiplier %d, got %d", keeper.RewardMultiplierVenerable, mult)
+	}
+}
+
+func TestProcessHomeAging_Periodic(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create an active home
+	home := types.AgentHome{
+		HomeId: "home-aging-periodic", OwnerAddress: owner1, Name: "Aging Test",
+		Status:         string(types.HomeStatusActive),
+		CreatedAtBlock: 0,
+		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	}
+	k.SetHome(ctx, home)
+
+	// Block 100 — 100 % 1428 != 0, so aging should NOT run
+	k.ProcessHomeAging(ctx)
+	stage := k.GetHomeMaturity(ctx, "home-aging-periodic")
+	if stage != keeper.MaturityFresh {
+		t.Errorf("expected fresh (aging should not run at non-periodic block), got %s", stage)
+	}
+
+	// Block 1428 — should run aging
+	periodicCtx := ctx.WithBlockHeight(1428)
+	k.ProcessHomeAging(periodicCtx)
+	stage = k.GetHomeMaturity(periodicCtx, "home-aging-periodic")
+	// Age at 1428 blocks is still below ThresholdEstablished (34272), so still fresh
+	if stage != keeper.MaturityFresh {
+		t.Errorf("expected fresh at 1428 blocks, got %s", stage)
+	}
+
+	// Block 1428 * 25 = 35700 — just past ThresholdEstablished (34272)
+	olderCtx := ctx.WithBlockHeight(35700)
+	// Need to reconfigure — block height 35700, home created at 0, age = 35700
+	k.ProcessHomeAging(olderCtx)
+	stage = k.GetHomeMaturity(olderCtx, "home-aging-periodic")
+	// 35700 >= 34272 → established
+	if stage != keeper.MaturityEstablished {
+		t.Errorf("expected established at 35700 blocks, got %s", stage)
+	}
+}
+
+func TestProcessHomeAging_SkipsArchived(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create an archived home that would otherwise be established by age
+	home := types.AgentHome{
+		HomeId: "home-archived-aging", OwnerAddress: owner1, Name: "Archived",
+		Status:         string(types.HomeStatusArchived),
+		CreatedAtBlock: 0,
+		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	}
+	archivedCtx := ctx.WithBlockHeight(int64(keeper.ThresholdEstablished) + 1428)
+	k.SetHome(archivedCtx, home)
+
+	// Run at periodic block
+	blockHeight := int64(keeper.ThresholdEstablished) + 1428
+	// Ensure it's divisible by 1428
+	blockHeight = (blockHeight / 1428) * 1428
+	periodicCtx := ctx.WithBlockHeight(blockHeight)
+	k.ProcessHomeAging(periodicCtx)
+
+	// Archived home should not have maturity updated
+	stage := k.GetHomeMaturity(periodicCtx, "home-archived-aging")
+	if stage != keeper.MaturityFresh {
+		t.Errorf("expected fresh for archived home (should be skipped), got %s", stage)
+	}
+}
+
+func TestMaturityKVStore(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Default returns fresh
+	stage := k.GetHomeMaturity(ctx, "nonexistent")
+	if stage != keeper.MaturityFresh {
+		t.Errorf("expected fresh for nonexistent home, got %s", stage)
+	}
+
+	// Set and get
+	k.SetHomeMaturity(ctx, "test-home", keeper.MaturityMature)
+	stage = k.GetHomeMaturity(ctx, "test-home")
+	if stage != keeper.MaturityMature {
+		t.Errorf("expected mature, got %s", stage)
+	}
+
+	// Override
+	k.SetHomeMaturity(ctx, "test-home", keeper.MaturityAncient)
+	stage = k.GetHomeMaturity(ctx, "test-home")
+	if stage != keeper.MaturityAncient {
+		t.Errorf("expected ancient after override, got %s", stage)
+	}
+}
+
+func TestMaturityConstants(t *testing.T) {
+	// Verify threshold ordering
+	if keeper.ThresholdEstablished >= keeper.ThresholdMature {
+		t.Error("established threshold should be less than mature")
+	}
+	if keeper.ThresholdMature >= keeper.ThresholdVenerable {
+		t.Error("mature threshold should be less than venerable")
+	}
+	if keeper.ThresholdVenerable >= keeper.ThresholdAncient {
+		t.Error("venerable threshold should be less than ancient")
+	}
+
+	// Verify reward multiplier ordering
+	if keeper.RewardMultiplierFresh >= keeper.RewardMultiplierEstablished {
+		t.Error("fresh multiplier should be less than established")
+	}
+	if keeper.RewardMultiplierEstablished >= keeper.RewardMultiplierMature {
+		t.Error("established multiplier should be less than mature")
+	}
+	if keeper.RewardMultiplierMature >= keeper.RewardMultiplierVenerable {
+		t.Error("mature multiplier should be less than venerable")
+	}
+	if keeper.RewardMultiplierVenerable >= keeper.RewardMultiplierAncient {
+		t.Error("venerable multiplier should be less than ancient")
+	}
+
+	// Verify BlocksPerDay matches protocol constant
+	if keeper.BlocksPerDay != 34272 {
+		t.Errorf("expected BlocksPerDay 34272, got %d", keeper.BlocksPerDay)
+	}
+}
+
+// ==================== Session Cleanup ====================
+
+func TestCleanupExpiredSessions(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	homeId := "home-session-cleanup"
+	k.SetHome(ctx, types.AgentHome{
+		HomeId: homeId, OwnerAddress: owner1, Name: "Session Cleanup",
+		Status:  string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	})
+
+	// Create an expired session (expires at block 50, current is 100)
+	k.SetSession(ctx, types.ActiveSession{
+		SessionId: "expired-1", HomeId: homeId,
+		StartedAt: 40, ExpiresAt: 50, KeyHash: "key1",
+	})
+
+	// Create a valid session (expires at block 200)
+	k.SetSession(ctx, types.ActiveSession{
+		SessionId: "valid-1", HomeId: homeId,
+		StartedAt: 90, ExpiresAt: 200, KeyHash: "key2",
+	})
+
+	k.CleanupExpiredSessions(ctx)
+
+	// Expired session should be deleted
+	_, found := k.GetSession(ctx, homeId, "expired-1")
+	if found {
+		t.Error("expired session should be deleted")
+	}
+
+	// Valid session should remain
+	_, found = k.GetSession(ctx, homeId, "valid-1")
+	if !found {
+		t.Error("valid session should remain")
+	}
+}
+
+// ==================== Alert Cleanup ====================
+
+func TestCleanupOldAlerts(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	params := types.DefaultParams()
+	params.AlertRetentionBlocks = 50
+	k.SetParams(ctx, params)
+
+	homeId := "home-alert-cleanup"
+	k.SetHome(ctx, types.AgentHome{
+		HomeId: homeId, OwnerAddress: owner1, Name: "Alert Cleanup",
+		Status:  string(types.HomeStatusActive),
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	})
+
+	// Old acknowledged alert (created at block 10, retention 50, current 100: 10+50=60 < 100)
+	k.SetAlert(ctx, types.Alert{
+		AlertId: "old-ack", HomeId: homeId, Type: string(types.AlertDefenseActivated),
+		Priority: string(types.AlertPriorityLow), CreatedAt: 10, Acknowledged: true,
+	})
+
+	// Recent acknowledged alert (created at block 80, 80+50=130 > 100)
+	k.SetAlert(ctx, types.Alert{
+		AlertId: "recent-ack", HomeId: homeId, Type: string(types.AlertDefenseActivated),
+		Priority: string(types.AlertPriorityLow), CreatedAt: 80, Acknowledged: true,
+	})
+
+	// Old unacknowledged alert — should NOT be cleaned up
+	k.SetAlert(ctx, types.Alert{
+		AlertId: "old-unack", HomeId: homeId, Type: string(types.AlertDefenseActivated),
+		Priority: string(types.AlertPriorityHigh), CreatedAt: 10, Acknowledged: false,
+	})
+
+	k.CleanupOldAlerts(ctx)
+
+	// Old acknowledged should be deleted
+	_, found := k.GetAlert(ctx, homeId, "old-ack")
+	if found {
+		t.Error("old acknowledged alert should be cleaned up")
+	}
+
+	// Recent acknowledged should remain
+	_, found = k.GetAlert(ctx, homeId, "recent-ack")
+	if !found {
+		t.Error("recent acknowledged alert should remain")
+	}
+
+	// Old unacknowledged should remain
+	_, found = k.GetAlert(ctx, homeId, "old-unack")
+	if !found {
+		t.Error("old unacknowledged alert should remain")
 	}
 }
 

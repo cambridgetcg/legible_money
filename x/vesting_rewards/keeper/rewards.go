@@ -8,6 +8,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"github.com/legible-money/legible/x/vesting_rewards/types"
 )
@@ -58,6 +59,51 @@ func (k Keeper) RouteReward(
 	}
 
 	return routing, nil
+}
+
+// RouteFees sweeps 22% of accumulated transaction fees from fee_collector to research_fund.
+// Called in BeginBlock before x/distribution sweeps the remaining 78% to validators.
+//
+// The standard Cosmos SDK fee flow is: tx fees → fee_collector → x/distribution → validators.
+// This intercept pulls the research share out before distribution gets it.
+func (k Keeper) RouteFees(ctx sdk.Context) error {
+	if k.bankKeeper == nil {
+		return nil
+	}
+
+	params := k.GetParams(ctx)
+	researchBps := params.ResearchShareBps
+	if researchBps == 0 {
+		return nil // research share disabled
+	}
+
+	// fee_collector is the standard Cosmos SDK module that receives all tx fees
+	feeCollectorAddr := k.bankKeeper.GetAllBalances(ctx, authtypes.NewModuleAddress(authtypes.FeeCollectorName))
+
+	if feeCollectorAddr.IsZero() {
+		return nil
+	}
+
+	for _, coin := range feeCollectorAddr {
+		if coin.Denom != "ulgm" {
+			continue
+		}
+
+		totalAmount := coin.Amount
+		researchAmount := totalAmount.MulRaw(int64(researchBps)).QuoRaw(1000000)
+
+		if researchAmount.IsPositive() {
+			researchCoins := sdk.NewCoins(sdk.NewCoin("ulgm", researchAmount))
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, authtypes.FeeCollectorName, ResearchFundModuleName, researchCoins); err != nil {
+				k.Logger(ctx).Warn("failed to route fees to research fund",
+					"amount", researchAmount.String(),
+					"err", err,
+				)
+			}
+		}
+	}
+
+	return nil
 }
 
 // applyDecay computes: amount * (decayBps/1000000)^epochs using integer exponentiation by squaring.

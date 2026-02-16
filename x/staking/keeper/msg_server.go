@@ -609,3 +609,23 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 		NewTier:  types.ValidatorTierFromString(validator.Tier),
 	}, nil
 }
+
+// UpdateParams handles MsgUpdateParams — governance-gated parameter update.
+func (k Keeper) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+
+	if err := k.SetParams(ctx, msg.Params); err != nil {
+		return nil, fmt.Errorf("failed to set params: %w", err)
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"staking_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}

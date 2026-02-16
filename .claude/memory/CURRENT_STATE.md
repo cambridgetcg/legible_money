@@ -1,8 +1,120 @@
 # Legible Money — Current State
 
-> Last updated: 2026-02-13
+> Last updated: 2026-02-16
 
 ## Session Summary
+- **W5/Phase F: Cross-Stack Golden Vectors** — Complete (2026-02-16)
+  - **Ed25519 golden vectors**: Keypair, sign, verify — identical across TS + Go
+  - **VRF golden vectors**: Output + gamma match cross-stack; proof encoding differs (D4: endianness)
+  - **Validator tier golden vectors**: Tier computation, reward multipliers, effective selection stake
+  - **Economic vectors**: Confidence decay at half-life, eternal categories, validator selection formula
+  - **D2 divergence FIXED**: Go empirical HalfLifeBlocks 100K→1M, MinConfidence 300K→330K, ReverificationBonus 50K→110K
+  - **5 divergences documented**: D1 (claim content hash), D2 (FIXED), D3 (confidence precision), D4 (VRF proof endianness), D5 (stake decimals)
+  - **Tests**: 50/50 TS + 29/29 Go cross-stack vectors passing, all Go module tests passing
+  - Files: `tests/cross_stack/golden_vectors.test.ts`, `tests/cross_stack/golden_vectors_test.go`, `x/knowledge/types/types.go`, `x/knowledge/keeper/keeper_test.go`
+
+- **W4: First Living Hormone (SSI / x/autopoiesis)** — Complete (2026-02-16)
+  - `x/autopoiesis/types/` (types.go, keys.go, expected_keepers.go): SSI constants, weights, safety bounds, Params, GenesisState, ComputeSSI, ComputeSSIAdaptation
+  - `x/autopoiesis/keeper/keeper.go`: Full OBSERVE→COMPUTE→ADAPT epoch cycle with metric collection from staking+knowledge keepers
+  - `x/autopoiesis/module.go`: EndBlocker runs CollectAndAdapt at epoch boundaries
+  - `app/app.go`: Full wiring (store key, keeper init, module manager, begin/end/init ordering)
+  - **Consumer integration**: x/staking SlashValidator applies SSI multiplier (autopoiesisKeeper.GetMultiplier)
+    - `x/staking/types/expected_keepers.go`: AutopoiesisKeeper interface
+    - `x/staking/keeper/keeper.go`: SetAutopoiesisKeeper + SSI multiplier in slash path
+    - `app/app.go`: Cross-module wiring via SetAutopoiesisKeeper
+  - **Tests**: 28 tests in `x/autopoiesis/keeper/keeper_test.go` — all passing
+    - SSI computation (6), Adaptation (7), Keeper state (5), Integration (6), Params validation (2), Multiplier entry (2)
+  - All Go module tests passing (`go test ./x/...` clean)
+  - GUA Path: W1-W4 complete, W5 next
+
+- **Recursive Growth Framework + Module Upgrade Plans** — Complete (2026-02-15)
+  - **Rigidity Audit Verified**: 3 parallel agents confirmed 89 frozen sapwood parameters
+    - Agent 1: 7/8 Go modules have NO working MsgUpdateParams (stub handlers)
+    - Agent 2: Autopoiesis 40-50% in TS (engine works), 0% in Go. CRITICAL: multipliers computed but never consumed
+    - Agent 3: Pattern A (`as const`) active in VALIDATOR_TIER_CONFIG; Pattern B (constants outside params) CRITICAL; Pattern C (unwired governance) partially resolved
+  - **Recursive Growth Framework** (`docs/RECURSIVE_GROWTH_FRAMEWORK.md`):
+    - Three-layer architecture: DNA (immutable ~15) / Genome (governance ~89) / Phenotype (auto-adaptive ~20 multipliers)
+    - x/autopoiesis module design: keeper, observer, hormones, adaptation, BeginBlocker
+    - Consumer pattern: `effective_value = params × multiplier` with nil-safe access
+    - 5 hormones ported from TS spec: CRI/DVI/VCF/SSI/GRM
+    - Safety: bounds, ±5%/epoch rate limit, quadratic damping, emergency freeze
+    - 6 phased implementation: Foundation → Observation → SSI → Full Loop → Meta → Morphogenic
+  - **Per-Module Upgrade Plans** (`docs/MODULE_UPGRADE_PLANS.md`):
+    - P0: x/knowledge (25+ fields to Params), x/billing (verify + events), x/gov (bounds)
+    - P1: x/staking (refactor DefaultTierConfigs), x/vesting_rewards (consolidate 22%), x/emergency (add MsgUpdateParams)
+    - P2: x/tokens (minor), P3: x/home (aging constants)
+    - ~3,900 LOC total across params migration + autopoiesis module + consumer wiring + tests
+  - **Integrated Growth Roadmap** (`docs/INTEGRATED_GROWTH_ROADMAP.md`):
+    - 7 phases (A-G) over ~10 weeks, with go/no-go decision points
+    - Phase A (wk 1-2): Parameterize 89 constants
+    - Phase B (wk 3): x/autopoiesis observation only
+    - Phase C (wk 4): SSI hormone live (first feedback loop)
+    - Phase D (wk 5-6): All 5 hormones with conflict resolution
+    - Phase E (wk 7): Level 3 meta-adaptation
+    - Phase F (wk 7): Cross-stack golden vector validation
+    - Phase G (wk 8-10): Morphogenic (domain budding/senescence)
+    - Success metrics: 0→89 governance-mutable params, 0→5 active hormones, 0→11 multiplier paths
+  - Go build: clean | No files modified (design-only session)
+
+- **Deployment Infrastructure + Provider Research** — Complete (2026-02-14)
+  - **Provider research**: Comprehensive analysis of Cosmos SDK infra ecosystem
+    - Insights document: `.claude/memory/INFRA_PROVIDER_INSIGHTS.md`
+    - Key decisions: Akash (validators), Lava (RPC), Ping.pub (explorer), Numia (indexing)
+  - **Go binary Dockerfile** (`deployment/docker/Dockerfile.cosmos`):
+    - Multi-stage: golang:1.22-alpine builder → alpine:3.20 runtime
+    - Healthcheck, volume mount, configurable entrypoint
+    - Entrypoint script (`entrypoint-cosmos.sh`): auto-init, genesis download, peer config, API/gRPC enable
+  - **Cosmos docker-compose** (`deployment/docker/docker-compose.cosmos.yml`):
+    - 3-validator network on shared Docker bridge
+    - Per-node port mapping (26656-26676 P2P, 26657-26677 RPC, 1317-1319 REST, 9090-9092 gRPC)
+    - Persistent volumes, Ping.pub explorer profile
+  - **Docker devnet init** (`deployment/docker/init-cosmos-docker.sh`):
+    - Generates keys for 3 validators + faucet + test accounts
+    - Creates shared genesis with vote extensions, PoT params, fast governance
+    - Collects gentxs from all 3 validators, configures persistent peers
+    - Populates Docker volumes, creates Ping.pub explorer config
+  - **Bare-metal deployment** (`deployment/systemd/`):
+    - `legbled.service`: systemd unit with security hardening, Cosmovisor comments
+    - `setup-node.sh`: Full VPS provisioner (deps, user, Go, binary, init, firewall, systemd)
+  - **Solo Agent Onboarding** — Complete (previous session, carried forward):
+    - FaucetManager, `lgm_onboard`, `lgm_request_faucet` tools
+    - Human + Agent onboarding paths, 21/21 E2E tests passing
+  - Go build: clean | TS tests: 84/84 passing
+
+### Previous Session (2026-02-13)
+- **LGM MCP Server — Phase 1+2 Implementation** — Complete (2026-02-13)
+  - Dependencies installed: @modelcontextprotocol/sdk ^1.26.0, @cosmjs/stargate ^0.38.1, CosmJS suite
+  - **Chain Client Layer** (3 new files):
+    - `protocol/mcp/chain/config.ts` — ChainClientConfig with env var + override resolution
+    - `protocol/mcp/chain/client.ts` — ChainClient: StargateClient + ModuleQueryClient bridge
+    - `protocol/mcp/chain/query.ts` — ModuleQueryClient: ABCI + REST fallback for custom modules
+  - **MCP SDK Server** (rewritten):
+    - `protocol/mcp/server/index.ts` — Full rewrite using @modelcontextprotocol/sdk McpServer
+    - 20 tools registered: 3 discovery, 4 knowledge, 3 identity, 4 development, 2 staking, 2 governance
+    - All query tools wired to real chain data via ChainClient
+    - Mutation tools return Phase 3 stub errors (need session key auth)
+    - stdio transport ready, CLI entry point with --rpc/--rest/--chain-id/--key args
+    - Legacy API preserved (createMCPServer, getAllTools deprecated)
+  - `protocol/mcp/index.ts` — Updated module entry with new + legacy exports
+  - **Tests**: 25 tests across 2 files, all passing
+    - `tests/unit/protocol/mcp/chain_client.test.ts` — Config, ChainClient, ModuleQueryClient (17 tests)
+    - `tests/unit/protocol/mcp/server.test.ts` — Server factory, config, legacy API, exports (8 tests)
+  - `tsc --noEmit` clean, all tests passing
+  - **Phase 3 (mutations) and Phase 4 (resources/prompts) remain** as future work
+  - Old tool files (discovery.ts, knowledge.ts, identity.ts, development.ts) still in `protocol/mcp/tools/` — legacy, no longer imported
+
+### Previous Session (2026-02-13)
+- **LGM MCP Server Architecture Design** — PP-orchestrated, complete (2026-02-13)
+  - Architecture document: `docs/LGM_MCP_SERVER_ARCHITECTURE.md`
+  - AI Provider Integration review: `docs/AI_PROVIDER_INTEGRATION.md` (10 providers analyzed)
+  - **Decision**: TypeScript MCP Server → Chain gRPC (Option A)
+  - 4-phase implementation plan: Foundation → Query Tools → Mutation Tools → Resources+Prompts
+  - 24 total tools across 7 categories
+  - Security model: 3-tier auth (anonymous→session key→operational key), capability-scoped mutations
+  - **Module Upgradability P0 Actions** — All 3 complete (2026-02-13)
+    - 24 migrator.go files, migration test harness, BeginBlocker ordering docs
+
+### Previous Session (2026-02-13)
 - **Zero-Day Vulnerability Audit & Remediation** — All 4 phases complete (2026-02-13)
   - 38 findings across 8 attack surfaces (8 CRITICAL, 10 HIGH, 13 MEDIUM, 7 LOW)
   - **19/20 actionable findings remediated** (ZD-I01 deferred to mainnet migration)

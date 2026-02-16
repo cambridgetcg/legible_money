@@ -984,52 +984,307 @@ func (interp *Interpreter) executeOpcode(
 	// leave the stack in a well-defined state (0 = failure).
 	case CALL, CALLCODE:
 		// Pop 7 args: gas, addr, value, argsOff, argsLen, retOff, retLen
-		for i := 0; i < 7; i++ {
-			if _, ok := pop(); !ok {
+		gasArg, ok1 := pop()
+		addrArg, ok2 := pop()
+		valueArg, ok3 := pop()
+		argsOffArg, ok4 := pop()
+		argsLenArg, ok5 := pop()
+		retOffArg, ok6 := pop()
+		retLenArg, ok7 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
+			return actionError
+		}
+
+		// Expand memory for input and output regions
+		argsOff := int(argsOffArg.Uint64())
+		argsLen := int(argsLenArg.Uint64())
+		retOff := int(retOffArg.Uint64())
+		retLen := int(retLenArg.Uint64())
+		maxEnd := argsOff + argsLen
+		if retOff+retLen > maxEnd {
+			maxEnd = retOff + retLen
+		}
+		if maxEnd > 0 {
+			if gasCost, err := interp.memory.Expand(maxEnd); err != nil {
+				return actionError
+			} else if gasCost > 0 {
+				if err := interp.gas.Consume(gasCost); err != nil {
+					return actionError
+				}
+			}
+		}
+
+		// Gas: base cost already charged by OpcodeTable. Forward gas per 63/64 rule.
+		gasForward := CalculateForwardGas(interp.gas.Remaining(), gasArg.Uint64())
+		if err := interp.gas.Consume(gasForward); err != nil {
+			return actionError
+		}
+
+		// Extra gas for value transfer
+		if valueArg.Sign() > 0 {
+			if err := interp.gas.Consume(GasCallValue); err != nil {
 				return actionError
 			}
 		}
-		// Consume base call gas to prevent free probing
-		if err := interp.gas.Consume(700); err != nil {
-			return actionError
+
+		// Prepare call
+		callData := interp.memory.Read(argsOff, argsLen)
+		targetAddr := WordToBytes20(addrArg)
+
+		mode := ModeCall
+		if opcode == CALLCODE {
+			mode = ModeCall // CALLCODE uses caller's storage (similar to DELEGATECALL without msg.sender preservation)
 		}
-		push(new(big.Int)) // 0 = call failed (not implemented)
+
+		// STATICCALL inheritance: if parent is static, sub-calls must also be static
+		if ctx.Mode == ModeStaticCall {
+			mode = ModeStaticCall
+		}
+
+		// Create snapshot for REVERT rollback
+		snapshot := NewSnapshot(state)
+
+		result := ExecuteCall(mode, ctx, targetAddr, callData, gasForward, valueArg, snapshot, host, interp.callDepth)
+
+		// Refund unused gas
+		if result.GasUsed < gasForward {
+			interp.gas.Refund(gasForward - result.GasUsed)
+		}
+
+		if result.Success {
+			snapshot.Commit()
+			push(big.NewInt(1))
+		} else {
+			// Snapshot discarded — state rolled back
+			push(new(big.Int)) // 0 = failure
+		}
+
+		// Copy return data to memory
+		interp.returnData = result.ReturnData
+		if result.ReturnData != nil && retLen > 0 {
+			copyLen := retLen
+			if len(result.ReturnData) < copyLen {
+				copyLen = len(result.ReturnData)
+			}
+			interp.memory.Write(retOff, result.ReturnData[:copyLen])
+		}
+
+		// Collect logs from sub-call
+		if result.Success && result.Logs != nil {
+			interp.logs = append(interp.logs, result.Logs...)
+		}
 
 	case DELEGATECALL, STATICCALL:
-		// Pop 6 args: gas, addr, argsOff, argsLen, retOff, retLen
-		for i := 0; i < 6; i++ {
-			if _, ok := pop(); !ok {
-				return actionError
-			}
-		}
-		if err := interp.gas.Consume(700); err != nil {
+		// Pop 6 args: gas, addr, argsOff, argsLen, retOff, retLen (no value)
+		gasArg, ok1 := pop()
+		addrArg, ok2 := pop()
+		argsOffArg, ok3 := pop()
+		argsLenArg, ok4 := pop()
+		retOffArg, ok5 := pop()
+		retLenArg, ok6 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 {
 			return actionError
 		}
-		push(new(big.Int)) // 0 = call failed (not implemented)
+
+		argsOff := int(argsOffArg.Uint64())
+		argsLen := int(argsLenArg.Uint64())
+		retOff := int(retOffArg.Uint64())
+		retLen := int(retLenArg.Uint64())
+		maxEnd := argsOff + argsLen
+		if retOff+retLen > maxEnd {
+			maxEnd = retOff + retLen
+		}
+		if maxEnd > 0 {
+			if gasCost, err := interp.memory.Expand(maxEnd); err != nil {
+				return actionError
+			} else if gasCost > 0 {
+				if err := interp.gas.Consume(gasCost); err != nil {
+					return actionError
+				}
+			}
+		}
+
+		gasForward := CalculateForwardGas(interp.gas.Remaining(), gasArg.Uint64())
+		if err := interp.gas.Consume(gasForward); err != nil {
+			return actionError
+		}
+
+		callData := interp.memory.Read(argsOff, argsLen)
+		targetAddr := WordToBytes20(addrArg)
+
+		mode := ModeDelegateCall
+		if opcode == STATICCALL {
+			mode = ModeStaticCall
+		}
+		// Static inheritance
+		if ctx.Mode == ModeStaticCall {
+			mode = ModeStaticCall
+		}
+
+		snapshot := NewSnapshot(state)
+		result := ExecuteCall(mode, ctx, targetAddr, callData, gasForward, new(big.Int), snapshot, host, interp.callDepth)
+
+		if result.GasUsed < gasForward {
+			interp.gas.Refund(gasForward - result.GasUsed)
+		}
+
+		if result.Success {
+			snapshot.Commit()
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
+
+		interp.returnData = result.ReturnData
+		if result.ReturnData != nil && retLen > 0 {
+			copyLen := retLen
+			if len(result.ReturnData) < copyLen {
+				copyLen = len(result.ReturnData)
+			}
+			interp.memory.Write(retOff, result.ReturnData[:copyLen])
+		}
+
+		if result.Success && result.Logs != nil {
+			interp.logs = append(interp.logs, result.Logs...)
+		}
 
 	case CREATE:
 		// Pop 3 args: value, offset, length
-		for i := 0; i < 3; i++ {
-			if _, ok := pop(); !ok {
-				return actionError
-			}
-		}
-		if err := interp.gas.Consume(32000); err != nil {
+		valueArg, ok1 := pop()
+		offsetArg, ok2 := pop()
+		lengthArg, ok3 := pop()
+		if !ok1 || !ok2 || !ok3 {
 			return actionError
 		}
-		push(new(big.Int)) // 0 = create failed (not implemented)
+
+		off := int(offsetArg.Uint64())
+		ln := int(lengthArg.Uint64())
+		if ln > 0 {
+			if gasCost, err := interp.memory.Expand(off + ln); err != nil {
+				return actionError
+			} else if gasCost > 0 {
+				if err := interp.gas.Consume(gasCost); err != nil {
+					return actionError
+				}
+			}
+		}
+
+		// Read init code from memory
+		initCode := interp.memory.Read(off, ln)
+
+		// Derive address: keccak256(sender || nonce)
+		var nonce uint64
+		if nb, ok := state.(NonceDB); ok {
+			nonce = nb.GetNonce(ctx.CurrentContract)
+			nb.SetNonce(ctx.CurrentContract, nonce+1)
+		}
+		newAddr := CreateAddress(ctx.CurrentContract, nonce)
+
+		// Gas forwarding for init code execution
+		gasForward := CalculateForwardGas(interp.gas.Remaining(), interp.gas.Remaining())
+		if err := interp.gas.Consume(gasForward); err != nil {
+			return actionError
+		}
+
+		// Execute init code in snapshot
+		snapshot := NewSnapshot(state)
+		result := ExecuteCall(ModeCreate, ctx, newAddr, initCode, gasForward, valueArg, snapshot, host, interp.callDepth)
+
+		if result.GasUsed < gasForward {
+			interp.gas.Refund(gasForward - result.GasUsed)
+		}
+
+		if result.Success && len(result.ReturnData) > 0 {
+			// Enforce EIP-170: deployed code max 24KB
+			if len(result.ReturnData) > MaxBytecodeSize {
+				push(new(big.Int)) // 0 = failure
+			} else {
+				// Store deployed code
+				snapshot.SetCode(newAddr, result.ReturnData)
+				snapshot.Commit()
+				push(new(big.Int).SetBytes(newAddr))
+			}
+		} else if result.Success {
+			// Empty code deployment (valid)
+			snapshot.Commit()
+			push(new(big.Int).SetBytes(newAddr))
+		} else {
+			// CREATE failed — snapshot discarded
+			push(new(big.Int)) // 0 = failure
+		}
+
+		interp.returnData = result.ReturnData
+		if result.Success && result.Logs != nil {
+			interp.logs = append(interp.logs, result.Logs...)
+		}
 
 	case CREATE2:
 		// Pop 4 args: value, offset, length, salt
-		for i := 0; i < 4; i++ {
-			if _, ok := pop(); !ok {
-				return actionError
-			}
-		}
-		if err := interp.gas.Consume(32000); err != nil {
+		valueArg, ok1 := pop()
+		offsetArg, ok2 := pop()
+		lengthArg, ok3 := pop()
+		saltArg, ok4 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 {
 			return actionError
 		}
-		push(new(big.Int)) // 0 = create failed (not implemented)
+
+		off := int(offsetArg.Uint64())
+		ln := int(lengthArg.Uint64())
+		if ln > 0 {
+			if gasCost, err := interp.memory.Expand(off + ln); err != nil {
+				return actionError
+			} else if gasCost > 0 {
+				if err := interp.gas.Consume(gasCost); err != nil {
+					return actionError
+				}
+			}
+		}
+
+		initCode := interp.memory.Read(off, ln)
+
+		// Derive address: keccak256(0xff || sender || salt || keccak256(initCode))
+		var saltBytes [32]byte
+		saltB32 := WordToBytes32(saltArg)
+		copy(saltBytes[:], saltB32[:])
+		newAddr := Create2Address(ctx.CurrentContract, saltBytes, initCode)
+
+		// Gas: charge for keccak256 of init code
+		wordSize := uint64((ln + 31) / 32)
+		if err := interp.gas.Consume(GasSHA3PerWord * wordSize); err != nil {
+			return actionError
+		}
+
+		gasForward := CalculateForwardGas(interp.gas.Remaining(), interp.gas.Remaining())
+		if err := interp.gas.Consume(gasForward); err != nil {
+			return actionError
+		}
+
+		snapshot := NewSnapshot(state)
+		result := ExecuteCall(ModeCreate, ctx, newAddr, initCode, gasForward, valueArg, snapshot, host, interp.callDepth)
+
+		if result.GasUsed < gasForward {
+			interp.gas.Refund(gasForward - result.GasUsed)
+		}
+
+		if result.Success && len(result.ReturnData) > 0 {
+			if len(result.ReturnData) > MaxBytecodeSize {
+				push(new(big.Int))
+			} else {
+				snapshot.SetCode(newAddr, result.ReturnData)
+				snapshot.Commit()
+				push(new(big.Int).SetBytes(newAddr))
+			}
+		} else if result.Success {
+			snapshot.Commit()
+			push(new(big.Int).SetBytes(newAddr))
+		} else {
+			push(new(big.Int))
+		}
+
+		interp.returnData = result.ReturnData
+		if result.Success && result.Logs != nil {
+			interp.logs = append(interp.logs, result.Logs...)
+		}
 
 	default:
 		// PUSH1-PUSH32

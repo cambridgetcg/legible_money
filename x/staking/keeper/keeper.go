@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
@@ -17,13 +18,14 @@ import (
 )
 
 type Keeper struct {
-	cdc           codec.Codec
-	storeService  store.KVStoreService
-	accountKeeper types.AccountKeeper
-	bankKeeper    types.BankKeeper
-	authKeeper    types.LegibleAuthKeeper
-	tokensKeeper  types.TokensKeeper
-	authority     string // module authority (gov module)
+	cdc               codec.Codec
+	storeService      store.KVStoreService
+	accountKeeper     types.AccountKeeper
+	bankKeeper        types.BankKeeper
+	authKeeper        types.LegibleAuthKeeper
+	tokensKeeper      types.TokensKeeper
+	autopoiesisKeeper types.AutopoiesisKeeper
+	authority         string // module authority (gov module)
 }
 
 func NewKeeper(
@@ -46,8 +48,18 @@ func NewKeeper(
 	}
 }
 
+// SetAutopoiesisKeeper sets the autopoiesis keeper after init (avoids circular dep).
+func (k *Keeper) SetAutopoiesisKeeper(ak types.AutopoiesisKeeper) {
+	k.autopoiesisKeeper = ak
+}
+
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", types.ModuleName)
+}
+
+// GetAuthority returns the module's governance authority address.
+func (k Keeper) GetAuthority() string {
+	return k.authority
 }
 
 // prefixEndBytes returns the end key for prefix iteration.
@@ -552,6 +564,18 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 		adjustedAmount = adjInt.String()
 	}
 
+	// Apply autopoiesis SSI multiplier (1.0x default, up to 3.0x under stress)
+	if k.autopoiesisKeeper != nil {
+		ssiMult := k.autopoiesisKeeper.GetMultiplier(ctx, "system.slash")
+		if ssiMult != 0 && ssiMult != 1_000_000 { // skip if default 1.0x
+			adjInt := new(big.Int)
+			adjInt.SetString(adjustedAmount, 10)
+			adjInt.Mul(adjInt, new(big.Int).SetUint64(ssiMult))
+			adjInt.Div(adjInt, big.NewInt(1_000_000))
+			adjustedAmount = adjInt.String()
+		}
+	}
+
 	// Parse stake fields
 	ownStake := new(big.Int)
 	ownStake.SetString(validator.Stake, 10)
@@ -585,11 +609,12 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 	newStake := new(big.Int).Sub(totalStake, slashInt)
 	validator.TotalStake = newStake.String()
 
-	// Explicitly burn slashed tokens from the staking module account
+	// Explicitly burn slashed tokens from the staking module account.
+	// If burn fails, abort the slash entirely to prevent state/supply discrepancy.
 	if slashInt.Sign() > 0 {
 		burnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(slashInt)))
 		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, burnCoins); err != nil {
-			k.Logger(ctx).Error("failed to burn slashed tokens", "err", err, "amount", slashInt.String())
+			return fmt.Errorf("slash aborted: failed to burn %s ulgm from staking module: %w", slashInt.String(), err)
 		}
 	}
 
@@ -787,6 +812,10 @@ func (k msgServer) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types
 
 func (k msgServer) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
 	return k.Keeper.Redelegate(ctx, msg)
+}
+
+func (k msgServer) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	return k.Keeper.UpdateParams(ctx, msg)
 }
 
 // --- Block Processing ---

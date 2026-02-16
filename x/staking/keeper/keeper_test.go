@@ -230,13 +230,13 @@ func TestRegisterValidator_BlockProducerCap(t *testing.T) {
 	params.MaxValidators = 2
 	k.SetParams(ctx, params)
 
-	// Register 2 block producers (tier 2 bonded: 11.1 LGM = 11100000 ulgm)
+	// Register 2 block producers (tier 2 bonded: 1,111 LGM = 1111000000 ulgm)
 	for i := 0; i < 2; i++ {
 		addr := sdk.AccAddress(fmt.Sprintf("blockprod_%04d______", i)).String()
 		_, err := k.RegisterValidator(ctx, &types.MsgRegisterValidator{
 			ValidatorAddress: addr,
 			PubKey:           []byte(fmt.Sprintf("bppubkey_%04d", i)),
-			SelfDelegation:   "11100000", // tier 2 bonded
+			SelfDelegation:   "1111000000", // tier 2 bonded
 			CommissionRate:   1000,
 			Description:      &types.ValidatorDescription{Identity: fmt.Sprintf("did:lgm:bp%04d", i)},
 		})
@@ -250,7 +250,7 @@ func TestRegisterValidator_BlockProducerCap(t *testing.T) {
 	_, err := k.RegisterValidator(ctx, &types.MsgRegisterValidator{
 		ValidatorAddress: addr,
 		PubKey:           []byte("bppubkey_0002"),
-		SelfDelegation:   "11100000",
+		SelfDelegation:   "1111000000",
 		CommissionRate:   1000,
 		Description:      &types.ValidatorDescription{Identity: "did:lgm:bp0002"},
 	})
@@ -277,8 +277,8 @@ func TestCountBlockProducers(t *testing.T) {
 
 	// Register mix of tiers
 	registerTestValidator(t, k, ctx, sdk.AccAddress("val_apprentice______").String(), "did:lgm:app1", "111000")         // tier 0
-	registerTestValidator(t, k, ctx, sdk.AccAddress("val_bonded__________").String(), "did:lgm:bonded1", "11100000")     // tier 2
-	registerTestValidator(t, k, ctx, sdk.AccAddress("val_guardian________").String(), "did:lgm:guardian1", "111000000")   // tier 3
+	registerTestValidator(t, k, ctx, sdk.AccAddress("val_bonded__________").String(), "did:lgm:bonded1", "1111000000")      // tier 2
+	registerTestValidator(t, k, ctx, sdk.AccAddress("val_guardian________").String(), "did:lgm:guardian1", "11111000000")   // tier 3
 
 	count := k.CountBlockProducers(ctx)
 	if count != 2 {

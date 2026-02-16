@@ -29,6 +29,12 @@ type BankKeeper interface {
 // Currently unused by staking keeper; reserved for future cross-module calls.
 type LegibleAuthKeeper interface{}
 
+// AutopoiesisKeeper defines the expected autopoiesis module keeper.
+// The staking module reads the SSI slash multiplier from it.
+type AutopoiesisKeeper interface {
+	GetMultiplier(ctx sdk.Context, path string) uint64
+}
+
 // TokensKeeper defines the expected tokens module keeper for period-based balance tracking.
 // The staking module calls this to maintain the period overlay alongside BankKeeper transfers.
 type TokensKeeper interface {

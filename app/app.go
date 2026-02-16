@@ -199,6 +199,10 @@ import (
 	billingkeeper "github.com/legible-money/legible/x/billing/keeper"
 	billingtypes "github.com/legible-money/legible/x/billing/types"
 
+	autopoiesismodule "github.com/legible-money/legible/x/autopoiesis"
+	autopoiesiskeeper "github.com/legible-money/legible/x/autopoiesis/keeper"
+	autopoiesistypes "github.com/legible-money/legible/x/autopoiesis/types"
+
 	discoverymodule "github.com/legible-money/legible/x/discovery"
 	discoverykeeper "github.com/legible-money/legible/x/discovery/keeper"
 	discoverytypes "github.com/legible-money/legible/x/discovery/types"
@@ -278,6 +282,7 @@ var (
 		capturedefensemodule.AppModuleBasic{},
 		capturechallengemodule.AppModuleBasic{},
 		billingmodule.AppModuleBasic{},
+		autopoiesismodule.AppModuleBasic{},
 		discoverymodule.AppModuleBasic{},
 		partnershipsmodule.AppModuleBasic{},
 		icaauthmodule.AppModuleBasic{},
@@ -393,6 +398,7 @@ type LegibleApp struct {
 	CaptureChallengeKeeper capturechallengekeeper.Keeper
 	VestingRewardsKeeper   vestingrewardskeeper.Keeper
 	BillingKeeper          billingkeeper.Keeper
+	AutopoiesisKeeper      autopoiesiskeeper.Keeper
 	DiscoveryKeeper        discoverykeeper.Keeper
 	PartnershipsKeeper     partnershipskeeper.Keeper
 	ICAAuthKeeper          icaauthkeeper.Keeper
@@ -488,6 +494,7 @@ func NewLegibleApp(
 		capturedefensetypes.StoreKey,
 		capturechallengetypes.StoreKey,
 		billingtypes.StoreKey,
+		autopoiesistypes.StoreKey,
 		discoverytypes.StoreKey,
 		partnershipstypes.StoreKey,
 		icaauthtypes.StoreKey,
@@ -833,6 +840,15 @@ func NewLegibleApp(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	app.AutopoiesisKeeper = autopoiesiskeeper.NewKeeper(
+		runtime.NewKVStoreService(keys[autopoiesistypes.StoreKey]),
+		logger,
+		nil, // stakingKeeper — set after staking keeper init (nil-safe)
+		nil, // knowledgeKeeper — set after knowledge keeper init (nil-safe)
+		nil, // emergencyKeeper — set after emergency keeper init (nil-safe)
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	app.DiscoveryKeeper = discoverykeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[discoverytypes.StoreKey]),
@@ -898,6 +914,9 @@ func NewLegibleApp(
 	app.BVMKeeper.SetKnowledgeKeeper(NewBVMKnowledgeAdapter(app.KnowledgeKeeper))
 	app.BVMKeeper.SetStakingKeeper(NewBVMStakingAdapter(app.LegibleStakingKeeper))
 	app.BVMKeeper.SetAuthKeeper(NewBVMAuthAdapter(app.LegibleAuthKeeper))
+
+	// Wire autopoiesis → staking for SSI slash multiplier
+	app.LegibleStakingKeeper.SetAutopoiesisKeeper(app.AutopoiesisKeeper)
 
 	app.DisputesKeeper = disputeskeeper.NewKeeper(
 		appCodec,
@@ -1013,54 +1032,114 @@ func NewLegibleApp(
 		capturedefensemodule.NewAppModule(appCodec, app.CaptureDefenseKeeper),
 		capturechallengemodule.NewAppModule(appCodec, app.CaptureChallengeKeeper),
 		billingmodule.NewAppModule(appCodec, app.BillingKeeper),
+		autopoiesismodule.NewAppModule(appCodec, app.AutopoiesisKeeper),
 		discoverymodule.NewAppModule(appCodec, app.DiscoveryKeeper),
 		partnershipsmodule.NewAppModule(appCodec, app.PartnershipsKeeper),
 		icaauthmodule.NewAppModule(appCodec, app.ICAAuthKeeper),
 		ibcratelimitmodule.NewAppModule(appCodec, app.IBCRateLimitKeeper),
 	)
 
-	// Module init order — standard Cosmos SDK ordering.
+	// =======================================================================
+	// BeginBlocker Ordering
+	//
+	// CRITICAL: Do not reorder without verifying all dependency chains.
+	// Each module's position is justified by its dependencies on state
+	// that earlier modules produce. Mis-ordering can cause silent state
+	// corruption or consensus failures.
+	//
+	// Dependency chains (A → B means A must run before B):
+	//   upgrade → ALL            (halts chain at upgrade height before any module touches state)
+	//   SDK staking → SDK slashing (jailing depends on validator set)
+	//   auth → staking           (session cleanup before stake operations)
+	//   emergency → capture_defense (halt status must be known for reputation decay)
+	//   vesting_rewards → staking (minted rewards before unbonding credits)
+	//   tokens → staking         (period sweep before OriginPeriod credits)
+	//   staking → knowledge      (validator set must be current for round phases)
+	//   ontology → qualification (domain structure before qualification checks)
+	//   qualification → knowledge (validator eligibility before round selection)
+	//   knowledge → LAST         (depends on most other modules' state being current)
+	// =======================================================================
 	app.ModuleManager.SetOrderBeginBlockers(
-		upgradetypes.ModuleName,
-		distrtypes.ModuleName,
-		slashingtypes.ModuleName,
-		evidencetypes.ModuleName,
-		stakingtypes.ModuleName,
-		ibcexported.ModuleName,
-		ibctransfertypes.ModuleName,
-		ibcfeetypes.ModuleName,
-		icatypes.ModuleName,
-		govtypes.ModuleName,
-		feegrant.ModuleName,
-		// Custom Legible Money modules
-		legibleauthtypes.ModuleName,    // Agent identity (no-op BeginBlock, registered for ordering)
-		emergencytypes.ModuleName,      // Emergency ceremony progress (must run before knowledge)
-		vestingrewardstypes.ModuleName, // Vesting reward minting (before staking unbondings)
-		tokenstypes.ModuleName,         // Sweep expired tokens before unbonding returns
-		legiblestakingtypes.ModuleName, // Process mature unbondings
-		lgmgovtypes.ModuleName,         // Check voting deadlines
-		researchtypes.ModuleName,       // Expire bounties past deadline
-		ontologytypes.ModuleName,       // Process expired domain proposals
-		disputestypes.ModuleName,           // Process expired disputes
-		evidencemgmttypes.ModuleName,       // Expire stale evidence + prune oracles
-		claimingpottypes.ModuleName,        // Expire old pots
-		channelstypes.ModuleName,           // Resolve expired disputes
-		scheduletypes.ModuleName,           // Schedule module (no-op BeginBlock, registered for ordering)
-		treetypes.ModuleName,               // Expire seeds, check task deadlines
-		bvmtypes.ModuleName,                // Execute pending contract schedules
-		hometypes.ModuleName,               // Deadman switches, session cleanup
-		qualificationtypes.ModuleName,      // Promote probationary, expire stale qualifications
-		capturedefensetypes.ModuleName,     // Expire qualifications, decay reputations
-		capturechallengetypes.ModuleName,   // Advance challenge phases
-		billingtypes.ModuleName,            // No-op BeginBlock (registered for ordering)
-		discoverytypes.ModuleName,          // Expire stale agent profiles
-		partnershipstypes.ModuleName,       // Expire formations, lift freezes, expire coercion signals
-		icaauthtypes.ModuleName,            // No-op BeginBlock (registered for ordering)
-		ibcratelimittypes.ModuleName,       // Reset expired flow records at epoch boundaries
-		knowledgetypes.ModuleName,
+		// ── SDK infrastructure (must run first) ──
+		upgradetypes.ModuleName,        // MUST be first: halts chain at scheduled upgrade height
+		distrtypes.ModuleName,          // Distribution rewards calculation
+		slashingtypes.ModuleName,       // Validator jailing/unjailing
+		evidencetypes.ModuleName,       // SDK evidence processing
+		stakingtypes.ModuleName,        // SDK validator set updates
+		ibcexported.ModuleName,         // IBC client updates
+		ibctransfertypes.ModuleName,    // IBC transfer timeouts
+		ibcfeetypes.ModuleName,         // IBC fee processing
+		icatypes.ModuleName,            // Interchain accounts
+		govtypes.ModuleName,            // SDK governance
+		feegrant.ModuleName,            // Fee grant expiration
+
+		// ── LGM Tier 1: Identity & safety (no cross-module deps) ──
+		legibleauthtypes.ModuleName,    // Session cleanup, recovery timeouts. Runs early so auth
+		                                // state is current before staking/knowledge use it.
+		emergencytypes.ModuleName,      // Ceremony progress. MUST run before capture_defense
+		                                // so halt status is known for reputation decay.
+
+		// ── LGM Tier 2: Economic foundation ──
+		vestingrewardstypes.ModuleName, // Mint vesting rewards. MUST run before staking so
+		                                // newly minted rewards are available for unbonding credits.
+		tokenstypes.ModuleName,         // Sweep expired periods, RAI distribution. MUST run
+		                                // before staking so period data is current for OriginPeriod.
+		legiblestakingtypes.ModuleName, // Process mature unbondings, credit with OriginPeriod.
+		                                // MUST run before knowledge so validator set is current.
+
+		// ── LGM Tier 3: Governance & research (independent of each other) ──
+		lgmgovtypes.ModuleName,         // Check voting deadlines, advance expired proposals.
+		researchtypes.ModuleName,       // Expire bounties past deadline.
+
+		// ── LGM Tier 4: Domain & evidence (independent of each other) ──
+		ontologytypes.ModuleName,       // Process domain proposals. MUST run before qualification
+		                                // so domain structure is current for qualification checks.
+		disputestypes.ModuleName,       // Process expired disputes.
+		evidencemgmttypes.ModuleName,   // Expire stale evidence, prune oracles.
+		claimingpottypes.ModuleName,    // Expire old claiming pots.
+		channelstypes.ModuleName,       // Resolve expired channel disputes.
+
+		// ── LGM Tier 5: Execution & agent infrastructure ──
+		scheduletypes.ModuleName,       // No-op BeginBlock (processes in EndBlock).
+		treetypes.ModuleName,           // Expire seeds, check task deadlines.
+		bvmtypes.ModuleName,            // Execute pending contract schedules.
+		hometypes.ModuleName,           // Deadman switches, session cleanup, treasury, aging.
+
+		// ── LGM Tier 6: Qualification & safety (depends on Tier 4) ──
+		qualificationtypes.ModuleName,  // Promote/expire qualifications. MUST run after ontology
+		                                // so domain structure is current.
+		capturedefensetypes.ModuleName, // Reputation decay, qualification expiry. MUST run
+		                                // after emergency (halt awareness).
+		capturechallengetypes.ModuleName, // Advance challenge phases.
+
+		// ── LGM Tier 7: Leaf modules (no dependents) ──
+		autopoiesistypes.ModuleName,    // Autopoiesis: no-op BeginBlock (observe in EndBlock).
+		billingtypes.ModuleName,        // No-op BeginBlock.
+		discoverytypes.ModuleName,      // Expire stale agent profiles.
+		partnershipstypes.ModuleName,   // Expire formations, lift freezes.
+		icaauthtypes.ModuleName,        // No-op BeginBlock.
+		ibcratelimittypes.ModuleName,   // Reset expired flow records at epoch boundaries.
+
+		// ── LGM LAST: Knowledge (central hub, depends on most modules) ──
+		knowledgetypes.ModuleName,      // Adversarial BeginBlocker, round phase transitions.
+		                                // Runs LAST because it depends on: staking (validator set),
+		                                // tokens (period data), qualification (eligibility),
+		                                // capture_defense (reputation), emergency (halt status).
 	)
 
+	// Machine-checked: panics at startup if declared dependency edges are violated.
+	ValidateBlockerOrder(app.ModuleManager.OrderBeginBlockers, beginBlockerDeps)
+
+	// =======================================================================
+	// EndBlocker Ordering
+	//
+	// EndBlockers finalize state for the block. Less ordering-sensitive than
+	// BeginBlockers because they process completions rather than preparations.
+	// Key constraint: knowledge should run early so fact expirations are
+	// visible to later modules (disputes, evidence) in the same block.
+	// =======================================================================
 	app.ModuleManager.SetOrderEndBlockers(
+		// ── SDK infrastructure ──
 		upgradetypes.ModuleName,
 		distrtypes.ModuleName,
 		slashingtypes.ModuleName,
@@ -1072,32 +1151,45 @@ func NewLegibleApp(
 		ibcfeetypes.ModuleName,
 		icatypes.ModuleName,
 		feegrant.ModuleName,
-		// Custom Legible Money modules
-		legibleauthtypes.ModuleName,    // No-op EndBlock (registered for ordering)
-		legiblestakingtypes.ModuleName, // Tier transition safety checks
-		knowledgetypes.ModuleName,
-		tokenstypes.ModuleName,         // Post-block period accounting
-		emergencytypes.ModuleName,      // Reset epoch counters
-		lgmgovtypes.ModuleName,         // Finalize governance
-		researchtypes.ModuleName,
-		vestingrewardstypes.ModuleName, // Process vesting schedule releases
-		ontologytypes.ModuleName,       // Finalize domain proposals
-		disputestypes.ModuleName,           // Finalize disputes
-		evidencemgmttypes.ModuleName,       // Evidence end-block cleanup
-		claimingpottypes.ModuleName,
-		channelstypes.ModuleName,
-		scheduletypes.ModuleName,           // Process due schedules + cleanup expired
-		treetypes.ModuleName,
-		bvmtypes.ModuleName,
-		hometypes.ModuleName,               // Cleanup old alerts
-		qualificationtypes.ModuleName,
-		capturedefensetypes.ModuleName,     // Periodic capture detection
-		capturechallengetypes.ModuleName,   // Auto-fund bounty pools
-		billingtypes.ModuleName,            // Expire old quotes
-		discoverytypes.ModuleName,          // Expire stale agent profiles
-		partnershipstypes.ModuleName,       // Settle cooling partnerships
-		icaauthtypes.ModuleName,            // No-op EndBlock
-		ibcratelimittypes.ModuleName,       // No-op EndBlock
+
+		// ── LGM: Core state finalization ──
+		legibleauthtypes.ModuleName,    // No-op EndBlock.
+		legiblestakingtypes.ModuleName, // Tier transition safety checks.
+		knowledgetypes.ModuleName,      // Expire stale facts. Runs early so expired facts
+		                                // are visible to disputes/evidence in same block.
+		tokenstypes.ModuleName,         // Post-block period accounting.
+		emergencytypes.ModuleName,      // Reset per-epoch proposal counts.
+
+		// ── LGM: Governance & economics ──
+		lgmgovtypes.ModuleName,         // Finalize governance tallies.
+		researchtypes.ModuleName,       // No-op EndBlock.
+		vestingrewardstypes.ModuleName, // Process vesting schedule releases.
+
+		// ── LGM: Domain & evidence ──
+		ontologytypes.ModuleName,       // Compute dynamic stratum ceilings.
+		disputestypes.ModuleName,       // Finalize dispute resolutions.
+		evidencemgmttypes.ModuleName,   // Reliability scoring, evidence cleanup.
+		claimingpottypes.ModuleName,    // No-op EndBlock.
+		channelstypes.ModuleName,       // No-op EndBlock.
+
+		// ── LGM: Execution & agent ──
+		scheduletypes.ModuleName,       // Process due schedules, cleanup expired.
+		treetypes.ModuleName,           // No-op EndBlock.
+		bvmtypes.ModuleName,            // No-op EndBlock.
+		hometypes.ModuleName,           // Cleanup old acknowledged alerts.
+
+		// ── LGM: Safety ──
+		qualificationtypes.ModuleName,  // No-op EndBlock.
+		capturedefensetypes.ModuleName, // Periodic capture detection analysis.
+		capturechallengetypes.ModuleName, // Auto-fund bounty pools for high-risk domains.
+
+		// ── LGM: Leaf modules ──
+		autopoiesistypes.ModuleName,    // Autopoiesis: OBSERVE → COMPUTE → ADAPT at epoch boundaries.
+		billingtypes.ModuleName,        // Expire old API quotes.
+		discoverytypes.ModuleName,      // Expire stale agent profiles.
+		partnershipstypes.ModuleName,   // Settle cooling partnerships.
+		icaauthtypes.ModuleName,        // No-op EndBlock.
+		ibcratelimittypes.ModuleName,   // No-op EndBlock.
 	)
 
 	app.ModuleManager.SetOrderInitGenesis(
@@ -1116,32 +1208,37 @@ func NewLegibleApp(
 		feegrant.ModuleName,
 		upgradetypes.ModuleName,
 		vestingtypes.ModuleName,
-		// Custom Legible Money modules (init after standard modules)
-		legibleauthtypes.ModuleName,
-		legiblestakingtypes.ModuleName,
-		vestingrewardstypes.ModuleName,
-		tokenstypes.ModuleName,
-		emergencytypes.ModuleName,
-		lgmgovtypes.ModuleName,
-		researchtypes.ModuleName,
-		ontologytypes.ModuleName,
-		disputestypes.ModuleName,
-		evidencemgmttypes.ModuleName,
-		claimingpottypes.ModuleName,
-		channelstypes.ModuleName,
-		scheduletypes.ModuleName,
-		treetypes.ModuleName,
-		bvmtypes.ModuleName,
-		hometypes.ModuleName,
-		qualificationtypes.ModuleName,
-		capturedefensetypes.ModuleName,
-		capturechallengetypes.ModuleName,
-		billingtypes.ModuleName,
-		discoverytypes.ModuleName,
-		partnershipstypes.ModuleName,
-		icaauthtypes.ModuleName,
-		ibcratelimittypes.ModuleName,
-		knowledgetypes.ModuleName,
+		// ── Custom Legible Money modules ──
+		// InitGenesis order mirrors keeper construction order in app.go.
+		// auth → staking → tokens must init first (other modules depend on them).
+		// knowledge inits LAST because it queries staking/qualification/ontology.
+		legibleauthtypes.ModuleName,        // Auth: accounts, DIDs, session keys.
+		legiblestakingtypes.ModuleName,     // Staking: validators, tiers (needs auth).
+		vestingrewardstypes.ModuleName,     // Vesting: reward schedules (needs staking).
+		tokenstypes.ModuleName,             // Tokens: period ledger (needs bank).
+		emergencytypes.ModuleName,          // Emergency: genesis council, params.
+		lgmgovtypes.ModuleName,             // Governance: LIPs, disbursements.
+		researchtypes.ModuleName,           // Research: bounties.
+		ontologytypes.ModuleName,           // Ontology: domains, strata (before qualification).
+		disputestypes.ModuleName,           // Disputes: params.
+		evidencemgmttypes.ModuleName,       // Evidence: params.
+		claimingpottypes.ModuleName,        // Claiming pot: params.
+		channelstypes.ModuleName,           // Channels: params.
+		scheduletypes.ModuleName,           // Schedule: params.
+		treetypes.ModuleName,               // Tree: seeds.
+		bvmtypes.ModuleName,                // BVM: deployed contracts.
+		hometypes.ModuleName,               // Home: agent homes.
+		qualificationtypes.ModuleName,      // Qualification: domain qualifications (needs ontology).
+		capturedefensetypes.ModuleName,     // Capture defense: reputation scores.
+		capturechallengetypes.ModuleName,   // Capture challenge: active challenges.
+		autopoiesistypes.ModuleName,        // Autopoiesis: multipliers, SSI state.
+		billingtypes.ModuleName,            // Billing: providers, quotes.
+		discoverytypes.ModuleName,          // Discovery: agent profiles.
+		partnershipstypes.ModuleName,       // Partnerships: formation records.
+		icaauthtypes.ModuleName,            // ICA auth: ICA entries.
+		ibcratelimittypes.ModuleName,       // IBC rate limit: flow records.
+		knowledgetypes.ModuleName,          // Knowledge: facts, claims, domains. LAST because
+		                                    // it depends on staking, ontology, qualification.
 	)
 
 	// Use a safe configurator that recovers from panics in RegisterService for
@@ -1182,8 +1279,15 @@ func NewLegibleApp(
 	// ValidatorAddress and ValidatorPrivateKey are set by the node operator at
 	// startup (via environment or config). Until configured, ExtendVote returns
 	// empty extensions (non-validator nodes or unconfigured validators).
+	// Resolve data directory for PoT commitment persistence.
+	// Commitments survive node restarts so validators don't forfeit reveals.
+	homeDir := cast.ToString(appOpts.Get("home"))
+	if homeDir == "" {
+		homeDir = DefaultNodeHome
+	}
+	potDataDir := filepath.Join(homeDir, "data")
 	app.VoteExtConfig = &VoteExtensionConfig{
-		LocalStore: NewLocalCommitmentStore(),
+		LocalStore: NewLocalCommitmentStore(potDataDir),
 	}
 	app.SetExtendVoteHandler(ExtendVoteHandler(app.KnowledgeKeeper, app.VoteExtConfig))
 	app.SetVerifyVoteExtensionHandler(VerifyVoteExtensionHandler(app.KnowledgeKeeper))
@@ -1222,6 +1326,16 @@ func (app *LegibleApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) 
 // ensureNonEmptyStores writes a sentinel key to any KV store that would
 // otherwise be empty after genesis. This prevents the GoLevelDB empty-value
 // bug in IAVL from making stores unqueryable.
+//
+// Root cause: cosmos/cosmos-db GoLevelDB adapter returns nil from Get() for
+// keys with empty-byte values ([]byte{}), but IAVL SaveEmptyRoot writes
+// []byte{} as the root. IAVL's GetRoot nil-check then reports the version
+// as nonexistent. This affects ANY Cosmos SDK chain using GoLevelDB with
+// modules that write no keys during InitGenesis.
+//
+// REMOVE THIS when cosmos/cosmos-db GoLevelDB Get() is patched to return
+// []byte{} (not nil) for empty-value keys, or when switching to PebbleDB/
+// RocksDB which do not exhibit this behavior.
 func (app *LegibleApp) ensureNonEmptyStores(ctx sdk.Context) {
 	sentinel := []byte("__store_initialized")
 	for _, key := range app.keys {
@@ -1247,13 +1361,8 @@ func (app *LegibleApp) PreBlocker(ctx sdk.Context, req *abci.RequestFinalizeBloc
 }
 
 // BeginBlocker runs begin-block logic for all modules.
+// Fee routing (22% research / 78% validators) is handled in x/vesting_rewards BeginBlocker.
 func (app *LegibleApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) {
-	// Route accumulated fees: 22% to research fund, 78% stays in fee_collector
-	// for standard Cosmos distribution to validators.
-	if err := RouteFees(ctx, app.BankKeeper); err != nil {
-		ctx.Logger().Error("fee routing failed", "err", err)
-	}
-
 	return app.ModuleManager.BeginBlock(ctx)
 }
 
@@ -1514,15 +1623,20 @@ func MakeEncodingConfig() EncodingConfig {
 // caused by unregistered proto type URLs. This allows modules with hand-written
 // (non-proto-generated) message types to skip gRPC registration gracefully
 // instead of crashing the node at startup.
+//
+// TODO: Remove once all modules have proto-generated .pb.go files. Track
+// progress by checking FailedServices after RegisterServices completes.
 type SafeServiceRegistrar struct {
-	inner  grpc.ServiceRegistrar
-	logger log.Logger
+	inner          grpc.ServiceRegistrar
+	logger         log.Logger
+	FailedServices []string // Services that failed registration (for diagnostics)
 }
 
 func (s *SafeServiceRegistrar) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.logger.Warn("skipped gRPC service registration (proto types not generated)",
+			s.FailedServices = append(s.FailedServices, desc.ServiceName)
+			s.logger.Error("gRPC service registration FAILED — module has no gRPC endpoints",
 				"service", desc.ServiceName, "reason", fmt.Sprintf("%v", r))
 		}
 	}()

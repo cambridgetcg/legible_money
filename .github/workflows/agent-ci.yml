@@ -1,0 +1,112 @@
+name: Agent CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+
+jobs:
+  detect-agent:
+    name: "Detect Agent Author"
+    if: contains(github.event.pull_request.labels.*.name, 'agent-contribution')
+    runs-on: ubuntu-latest
+    outputs:
+      is_agent: ${{ steps.check.outputs.is_agent }}
+      agent_tier: ${{ steps.check.outputs.agent_tier }}
+    steps:
+      - id: check
+        run: |
+          # Check Co-Authored-By for Claude signature
+          BODY="${{ github.event.pull_request.body }}"
+          if echo "$BODY" | grep -q "Co-Authored-By: Claude"; then
+            echo "is_agent=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_agent=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Determine tier from labels (default: Tier 0)
+          LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
+          if echo "$LABELS" | grep -q "agent-tier-3"; then
+            echo "agent_tier=3" >> $GITHUB_OUTPUT
+          elif echo "$LABELS" | grep -q "agent-tier-2"; then
+            echo "agent_tier=2" >> $GITHUB_OUTPUT
+          elif echo "$LABELS" | grep -q "agent-tier-1"; then
+            echo "agent_tier=1" >> $GITHUB_OUTPUT
+          else
+            echo "agent_tier=0" >> $GITHUB_OUTPUT
+          fi
+
+  validate-scope:
+    name: "Validate Agent Scope"
+    needs: detect-agent
+    if: needs.detect-agent.outputs.is_agent == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check tier permissions
+        env:
+          TIER: ${{ needs.detect-agent.outputs.agent_tier }}
+        run: |
+          echo "Agent Tier: $TIER"
+
+          # Get changed files
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Tier 0: docs and tests only
+          if [ "$TIER" = "0" ]; then
+            NON_ALLOWED=$(echo "$CHANGED" | grep -vE '\.(test\.|spec\.|_test\.go|\.md$)' | grep -vE '^(docs/|tests/|\.claude/)' || true)
+            if [ -n "$NON_ALLOWED" ]; then
+              echo "::error::Tier 0 agents may only modify docs and tests. Disallowed files:"
+              echo "$NON_ALLOWED"
+              exit 1
+            fi
+          fi
+
+          # Tier 0-1: no security-critical paths
+          if [ "$TIER" = "0" ] || [ "$TIER" = "1" ]; then
+            SECURITY=$(echo "$CHANGED" | grep -E '^(app/ante|app/app\.go|app/vote_extensions\.go|x/auth/|x/emergency/|x/knowledge/crypto/|\.github/workflows/)' || true)
+            if [ -n "$SECURITY" ]; then
+              echo "::error::Tier $TIER agents may not modify security-critical paths:"
+              echo "$SECURITY"
+              exit 1
+            fi
+          fi
+
+          # Count changed modules
+          MODULES=$(echo "$CHANGED" | grep -oP '^[^/]+/[^/]+' | sort -u | wc -l)
+          echo "Modules touched: $MODULES"
+
+          # Tier 0: single file scope
+          FILE_COUNT=$(echo "$CHANGED" | wc -l)
+          if [ "$TIER" = "0" ] && [ "$FILE_COUNT" -gt 5 ]; then
+            echo "::warning::Tier 0 agents should keep PRs to ~1-2 source files + tests. Files: $FILE_COUNT"
+          fi
+
+          # Tier 1: single module scope
+          if [ "$TIER" = "1" ] && [ "$MODULES" -gt 2 ]; then
+            echo "::warning::Tier 1 agents should stay within a single module. Modules: $MODULES"
+          fi
+
+      - name: Check for secrets
+        run: |
+          DIFF=$(git diff origin/main...HEAD -- . ':(exclude)*.md')
+          PATTERNS='(PRIVATE_KEY|SECRET_KEY|API_KEY|PASSWORD|TOKEN|aws_access_key|aws_secret)'
+          FOUND=$(echo "$DIFF" | grep -iP "$PATTERNS" | grep '^+' | grep -v '^+++' || true)
+          if [ -n "$FOUND" ]; then
+            echo "::error::Potential secrets in diff:"
+            echo "$FOUND" | head -5
+            exit 1
+          fi
+
+      - name: Check no binary files
+        run: |
+          BINARIES=$(git diff --name-only origin/main...HEAD | xargs file 2>/dev/null | grep -v text | grep -v empty || true)
+          if [ -n "$BINARIES" ]; then
+            echo "::error::Binary files not allowed in agent PRs"
+            echo "$BINARIES"
+            exit 1
+          fi

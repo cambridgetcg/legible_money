@@ -1,0 +1,32 @@
+{
+  "id": "W4",
+  "name": "First Living Hormone (SSI)",
+  "status": "complete",
+  "impl": 100,
+  "depth": "L1",
+  "gates_targeted": ["X3", "X5", "B4", "B6"],
+  "dimension_focus": "creativity+beauty",
+  "est_sessions": 4,
+  "actual_sessions": 1,
+  "blockedBy": ["W2"],
+  "ref": "docs/INTEGRATED_GROWTH_ROADMAP.md Phase B+C",
+  "createdAt": "2026-02-15T22:00:00Z",
+  "updatedAt": "2026-02-15T23:30:00Z",
+  "deliverables": {
+    "types": "x/autopoiesis/types/ (types.go, keys.go, expected_keepers.go)",
+    "keeper": "x/autopoiesis/keeper/keeper.go — full OBSERVE→COMPUTE→ADAPT cycle",
+    "module": "x/autopoiesis/module.go — EndBlocker runs epoch adaptation",
+    "app_wiring": "app/app.go — store key, keeper init, module manager, begin/end/init ordering",
+    "consumer": "x/staking/keeper/keeper.go — SSI slash multiplier applied in SlashValidator",
+    "tests": "x/autopoiesis/keeper/keeper_test.go — 28 tests (SSI computation, adaptation, rate limiting, bounds, emergency freeze, epoch lifecycle)"
+  },
+  "success_criteria_met": {
+    "observer_collects_metrics": true,
+    "hormones_computed": true,
+    "adaptation_with_bounds": true,
+    "rate_limiting": true,
+    "emergency_freeze": true,
+    "consumer_integration": true,
+    "tests_20_plus": true
+  }
+}

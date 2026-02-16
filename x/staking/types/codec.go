@@ -17,6 +17,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgDelegate{}, "legible_staking/Delegate", nil)
 	cdc.RegisterConcrete(&MsgUndelegate{}, "legible_staking/Undelegate", nil)
 	cdc.RegisterConcrete(&MsgRedelegate{}, "legible_staking/Redelegate", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "legible_staking/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry

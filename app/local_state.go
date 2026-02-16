@@ -1,40 +1,56 @@
 package app
 
-import "sync"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
+)
 
 // LocalCommitment holds a validator's local commitment data (salt and verdict)
 // that must be retained between the commit and reveal phases.
 //
-// This is in-memory only for Phase 2. If the validator restarts between commit
-// and reveal phases, they forfeit pending rewards. File-based persistence
-// will be added in Phase 3.
+// Persisted to disk so node restarts between commit and reveal phases do not
+// cause missed reveal slashes.
 type LocalCommitment struct {
-	RoundID    string
-	Verdict    string // "accept", "reject", "abstain"
-	Confidence uint64 // 0-1000000
-	Salt       string // random salt used in commitment hash
-	Height     uint64 // block height when committed
+	RoundID    string `json:"round_id"`
+	Verdict    string `json:"verdict"`    // "accept", "reject", "abstain"
+	Confidence uint64 `json:"confidence"` // 0-1000000
+	Salt       string `json:"salt"`       // random salt used in commitment hash
+	Height     uint64 `json:"height"`     // block height when committed
 }
+
+const commitmentFileName = "pot_commitments.json"
 
 // LocalCommitmentStore manages validator-local commitment data.
 // Thread-safe for concurrent access from ExtendVote calls.
+// Write-through persistence: every mutation flushes to disk.
 type LocalCommitmentStore struct {
 	mu          sync.RWMutex
 	commitments map[string]LocalCommitment // roundID → commitment
+	filePath    string                     // path to persistence file (empty = in-memory only)
 }
 
-// NewLocalCommitmentStore creates a new in-memory commitment store.
-func NewLocalCommitmentStore() *LocalCommitmentStore {
-	return &LocalCommitmentStore{
+// NewLocalCommitmentStore creates a persistent commitment store.
+// dataDir is the node's data directory (e.g., ~/.legbled/data).
+// Existing commitments are loaded from disk on creation.
+func NewLocalCommitmentStore(dataDir string) *LocalCommitmentStore {
+	s := &LocalCommitmentStore{
 		commitments: make(map[string]LocalCommitment),
 	}
+	if dataDir != "" {
+		s.filePath = filepath.Join(dataDir, commitmentFileName)
+		s.loadFromDisk()
+	}
+	return s
 }
 
-// Store saves a local commitment for a round.
+// Store saves a local commitment for a round and persists to disk.
 func (s *LocalCommitmentStore) Store(commitment LocalCommitment) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.commitments[commitment.RoundID] = commitment
+	s.flushLocked()
 }
 
 // Get retrieves a local commitment for a round.
@@ -50,6 +66,7 @@ func (s *LocalCommitmentStore) Delete(roundID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.commitments, roundID)
+	s.flushLocked()
 }
 
 // CleanupExpired removes commitments for rounds older than the given height.
@@ -62,10 +79,15 @@ func (s *LocalCommitmentStore) CleanupExpired(currentHeight uint64, maxAge uint6
 	}
 	cutoff := currentHeight - maxAge
 
+	changed := false
 	for id, c := range s.commitments {
 		if c.Height < cutoff {
 			delete(s.commitments, id)
+			changed = true
 		}
+	}
+	if changed {
+		s.flushLocked()
 	}
 }
 
@@ -74,4 +96,48 @@ func (s *LocalCommitmentStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.commitments)
+}
+
+// flushLocked writes the current commitments map to disk.
+// Must be called with s.mu held (write lock).
+func (s *LocalCommitmentStore) flushLocked() {
+	if s.filePath == "" {
+		return
+	}
+
+	data, err := json.Marshal(s.commitments)
+	if err != nil {
+		// Best-effort: log would be ideal but we don't have a logger here.
+		// The commitment is still in memory; worst case is lost on restart.
+		return
+	}
+
+	// Atomic write: write to temp file then rename to prevent corruption
+	// if the node crashes mid-write.
+	tmpPath := s.filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		return
+	}
+	_ = os.Rename(tmpPath, s.filePath)
+}
+
+// loadFromDisk loads commitments from the persistence file.
+// Called once during construction.
+func (s *LocalCommitmentStore) loadFromDisk() {
+	if s.filePath == "" {
+		return
+	}
+
+	data, err := os.ReadFile(s.filePath)
+	if err != nil {
+		// File doesn't exist or unreadable — start with empty map.
+		return
+	}
+
+	var loaded map[string]LocalCommitment
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		// Corrupted file — start fresh rather than panic.
+		return
+	}
+	s.commitments = loaded
 }

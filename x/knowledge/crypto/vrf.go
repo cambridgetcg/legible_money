@@ -272,7 +272,12 @@ func deriveScalarFromSeed(seed []byte) *edwards25519.Scalar {
 // then multiplies by cofactor (8) to ensure prime-order subgroup.
 func hashToCurve(input []byte) (*edwards25519.Point, error) {
 	for attempt := 0; attempt < 256; attempt++ {
-		h := sha512.Sum512(append(input, byte(attempt)))
+		// Defensive copy: must NOT use append(input, ...) because input may
+		// have cap > len, and append would silently overwrite the caller's memory.
+		buf := make([]byte, len(input)+1)
+		copy(buf, input)
+		buf[len(input)] = byte(attempt)
+		h := sha512.Sum512(buf)
 		point, err := new(edwards25519.Point).SetBytes(h[:32])
 		if err != nil {
 			continue
@@ -292,8 +297,12 @@ func hashToCurve(input []byte) (*edwards25519.Point, error) {
 	return nil, ErrHashToCurveFailed
 }
 
-// computeChallenge computes c = SHA-512(H || pk || Gamma || U || V) mod ℓ,
-// taking only the first 24 bytes of the hash to reduce bias.
+// computeChallenge computes c = SHA-512(H || pk || Gamma || U || V) mod ℓ.
+// Uses first 24 bytes (192 bits). Since 2^192 < ℓ (≈2^252), Mod() never wraps,
+// producing a uniform scalar in [0, 2^192). This is unpredictable with 192 bits
+// of entropy — well above the 128-bit security target. Values in [2^192, ℓ) are
+// unreachable but this does not affect VRF security (only challenge unpredictability
+// matters, not uniformity over the full scalar field).
 func computeChallenge(h, pk, gamma, u, v []byte) *edwards25519.Scalar {
 	combined := make([]byte, 0, len(h)+len(pk)+len(gamma)+len(u)+len(v))
 	combined = append(combined, h...)

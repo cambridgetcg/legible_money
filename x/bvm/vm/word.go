@@ -36,6 +36,14 @@ func WordToBytes32(w *big.Int) [32]byte {
 	return result
 }
 
+// WordToBytes20 returns the low 20 bytes (EVM address) from a 256-bit word.
+func WordToBytes20(w *big.Int) []byte {
+	b32 := WordToBytes32(w)
+	result := make([]byte, 20)
+	copy(result, b32[12:]) // last 20 bytes
+	return result
+}
+
 // ToSigned interprets a 256-bit unsigned value as two's complement signed.
 func ToSigned(w *big.Int) *big.Int {
 	if w.Bit(255) == 0 {

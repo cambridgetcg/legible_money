@@ -359,10 +359,22 @@ func TestRevertCeremony_AfterHalt(t *testing.T) {
 		})
 	}
 
-	// After revert finalized, status should be halted (resume still required)
+	// After revert finalized, status should be reverting (operator action required)
 	status := k.GetEmergencyStatus(ctx)
-	if status != types.StatusHalted {
-		t.Errorf("expected status %s after revert, got %s", types.StatusHalted, status)
+	if status != types.StatusReverting {
+		t.Errorf("expected status %s after revert, got %s", types.StatusReverting, status)
+	}
+
+	// Verify revert target is stored and queryable
+	target, found := k.GetRevertTarget(ctx)
+	if !found {
+		t.Fatal("expected revert target to be set after revert finalization")
+	}
+	if target.Height != 50 {
+		t.Errorf("expected revert target height 50, got %d", target.Height)
+	}
+	if target.CeremonyId != revertResp.ProposalId {
+		t.Errorf("expected ceremony id %s, got %s", revertResp.ProposalId, target.CeremonyId)
 	}
 }
 

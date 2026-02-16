@@ -292,6 +292,55 @@ func (k Keeper) ResetEpochCounters(ctx sdk.Context) {
 	}
 }
 
+// --- Revert Target ---
+
+// RevertTarget holds the guardian-agreed state rollback target.
+type RevertTarget struct {
+	Height     uint64 `json:"height"`
+	BlockHash  string `json:"block_hash"`
+	CeremonyId string `json:"ceremony_id"`
+}
+
+// SetRevertTarget stores the revert target (height, hash, ceremony) agreed upon
+// by guardians. This is queryable by node operators and tooling.
+func (k Keeper) SetRevertTarget(ctx sdk.Context, height uint64, blockHash string, ceremonyId string) {
+	store := k.storeService.OpenKVStore(ctx)
+
+	heightBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(heightBz, height)
+	_ = store.Set(types.RevertTargetHeightKey, heightBz)
+	_ = store.Set(types.RevertTargetHashKey, []byte(blockHash))
+	_ = store.Set(types.RevertCeremonyIdKey, []byte(ceremonyId))
+}
+
+// GetRevertTarget returns the current revert target, if set.
+func (k Keeper) GetRevertTarget(ctx sdk.Context) (RevertTarget, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+
+	heightBz, err := store.Get(types.RevertTargetHeightKey)
+	if err != nil || heightBz == nil {
+		return RevertTarget{}, false
+	}
+	height := binary.BigEndian.Uint64(heightBz)
+
+	hashBz, _ := store.Get(types.RevertTargetHashKey)
+	ceremonyBz, _ := store.Get(types.RevertCeremonyIdKey)
+
+	return RevertTarget{
+		Height:     height,
+		BlockHash:  string(hashBz),
+		CeremonyId: string(ceremonyBz),
+	}, true
+}
+
+// ClearRevertTarget removes the revert target (called on resume after rollback).
+func (k Keeper) ClearRevertTarget(ctx sdk.Context) {
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Delete(types.RevertTargetHeightKey)
+	_ = store.Delete(types.RevertTargetHashKey)
+	_ = store.Delete(types.RevertCeremonyIdKey)
+}
+
 // --- Params ---
 
 // GetParams returns the emergency module parameters.

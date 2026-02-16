@@ -1090,7 +1090,7 @@ func TestCalculateDecayedConfidence_Eternal(t *testing.T) {
 }
 
 func TestCalculateDecayedConfidence_Empirical(t *testing.T) {
-	// Empirical half-life: 100,000 blocks
+	// Empirical half-life: 1,000,000 blocks, min: 330,000
 	base := uint64(900_000)
 
 	// At 0 blocks: no decay
@@ -1099,23 +1099,23 @@ func TestCalculateDecayedConfidence_Empirical(t *testing.T) {
 		t.Errorf("at 0 blocks: expected %d, got %d", base, result)
 	}
 
-	// At 1 half-life (100,000 blocks): should be ~halfway between base and min
-	// min=300,000, so midpoint = 300,000 + (900,000-300,000)*0.5 = 600,000
-	result = keeper.CalculateDecayedConfidence(base, 100_000, "empirical")
-	if result < 550_000 || result > 650_000 {
-		t.Errorf("at 1 half-life: expected ~600000, got %d", result)
-	}
-
-	// At 2 half-lives: should be ~450,000
-	result = keeper.CalculateDecayedConfidence(base, 200_000, "empirical")
-	if result < 400_000 || result > 500_000 {
-		t.Errorf("at 2 half-lives: expected ~450000, got %d", result)
-	}
-
-	// At 10 half-lives: should be near min (300,000)
+	// At 1 half-life (1,000,000 blocks): should be ~halfway between base and min
+	// min=330,000, so midpoint = 330,000 + (900,000-330,000)*0.5 = 615,000
 	result = keeper.CalculateDecayedConfidence(base, 1_000_000, "empirical")
-	if result < 300_000 || result > 310_000 {
-		t.Errorf("at 10 half-lives: expected ~300000, got %d", result)
+	if result < 565_000 || result > 665_000 {
+		t.Errorf("at 1 half-life: expected ~615000, got %d", result)
+	}
+
+	// At 2 half-lives: should be ~472,500
+	result = keeper.CalculateDecayedConfidence(base, 2_000_000, "empirical")
+	if result < 420_000 || result > 520_000 {
+		t.Errorf("at 2 half-lives: expected ~472500, got %d", result)
+	}
+
+	// At 10 half-lives: should be near min (330,000)
+	result = keeper.CalculateDecayedConfidence(base, 10_000_000, "empirical")
+	if result < 330_000 || result > 340_000 {
+		t.Errorf("at 10 half-lives: expected ~330000, got %d", result)
 	}
 }
 
@@ -1163,14 +1163,14 @@ func TestGetFactWithDecay(t *testing.T) {
 		t.Errorf("at same height: expected 900000, got %d", decayed.Confidence)
 	}
 
-	// Query at height 100,010 (100,000 blocks later = 1 half-life)
-	ctx = ctx.WithBlockHeight(100_010)
+	// Query at height 1,000,010 (1,000,000 blocks later = 1 half-life)
+	ctx = ctx.WithBlockHeight(1_000_010)
 	decayed, _ = k.GetFactWithDecay(ctx, "decay-test-1")
 	if decayed.Confidence >= 900_000 {
 		t.Errorf("expected decay after 1 half-life, got %d", decayed.Confidence)
 	}
-	if decayed.Confidence < 550_000 || decayed.Confidence > 650_000 {
-		t.Errorf("expected ~600000 after 1 half-life, got %d", decayed.Confidence)
+	if decayed.Confidence < 565_000 || decayed.Confidence > 665_000 {
+		t.Errorf("expected ~615000 after 1 half-life, got %d", decayed.Confidence)
 	}
 
 	// Original fact should be unchanged (lazy evaluation)
@@ -1228,9 +1228,9 @@ func TestNeedsReverification(t *testing.T) {
 		t.Error("empirical fact below threshold should need reverification")
 	}
 
-	// Empirical fact stale: age > 2× half-life (200,000 blocks)
+	// Empirical fact stale: age > 2× half-life (2,000,000 blocks)
 	empiricalFact.Confidence = 800_000
-	if !keeper.NeedsReverification(empiricalFact, 200_011) {
+	if !keeper.NeedsReverification(empiricalFact, 2_000_011) {
 		t.Error("stale empirical fact should need reverification")
 	}
 }
@@ -1242,13 +1242,13 @@ func TestApplyReverificationBonus(t *testing.T) {
 		Confidence:        600_000,
 	}
 
-	// Empirical bonus = 50,000
+	// Empirical bonus = 110,000
 	result := keeper.ApplyReverificationBonus(fact)
-	if result.BaseConfidence != 750_000 {
-		t.Errorf("expected base 750000 after bonus, got %d", result.BaseConfidence)
+	if result.BaseConfidence != 810_000 {
+		t.Errorf("expected base 810000 after bonus, got %d", result.BaseConfidence)
 	}
-	if result.Confidence != 750_000 {
-		t.Errorf("expected confidence 750000, got %d", result.Confidence)
+	if result.Confidence != 810_000 {
+		t.Errorf("expected confidence 810000, got %d", result.Confidence)
 	}
 
 	// Bonus capped at max
@@ -1633,8 +1633,8 @@ func TestIsFactExpired_ReverificationStaleness(t *testing.T) {
 		LastVerifiedHeight: 10,
 	}
 
-	// Staleness threshold: 2 × 100,000 = 200,000 blocks
-	expired, reason := keeper.IsFactExpired(fact, 200_011)
+	// Staleness threshold: 2 × 1,000,000 = 2,000,000 blocks
+	expired, reason := keeper.IsFactExpired(fact, 2_000_011)
 	if !expired || reason != "reverification_staleness" {
 		t.Errorf("expected reverification_staleness, got expired=%v reason=%s", expired, reason)
 	}
@@ -1677,11 +1677,11 @@ func TestExpireStaleFactsInEndBlocker(t *testing.T) {
 		t.Errorf("expected 0 expired at height 10, got %d", expired)
 	}
 
-	// At height 200,011: staleness threshold exceeded (2 × 100,000)
-	ctx = ctx.WithBlockHeight(200_011)
+	// At height 2,000,011: staleness threshold exceeded (2 × 1,000,000)
+	ctx = ctx.WithBlockHeight(2_000_011)
 	expired = k.ExpireStaleFactsInEndBlocker(ctx, 50)
 	if expired != 1 {
-		t.Errorf("expected 1 expired at height 200011, got %d", expired)
+		t.Errorf("expected 1 expired at height 2000011, got %d", expired)
 	}
 
 	// Verify fact is now expired
@@ -2228,15 +2228,15 @@ func TestFactLifecycle_SubmitVerifyDecayExpire(t *testing.T) {
 		t.Fatal("fact should have been created")
 	}
 
-	// 3. Verify decay at half-life
-	ctx = ctx.WithBlockHeight(100_010)
+	// 3. Verify decay at half-life (empirical: 1,000,000 blocks)
+	ctx = ctx.WithBlockHeight(1_000_010)
 	decayed, _ := k.GetFactWithDecay(ctx, factID)
 	if decayed.Confidence >= 900_000 {
 		t.Errorf("expected decay after half-life, got %d", decayed.Confidence)
 	}
 
-	// 4. Expire via EndBlocker at staleness threshold
-	ctx = ctx.WithBlockHeight(200_011)
+	// 4. Expire via EndBlocker at staleness threshold (2 × 1,000,000)
+	ctx = ctx.WithBlockHeight(2_000_011)
 	expired := k.ExpireStaleFactsInEndBlocker(ctx, 50)
 	if expired != 1 {
 		t.Errorf("expected 1 fact expired, got %d", expired)

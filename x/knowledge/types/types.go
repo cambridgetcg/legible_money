@@ -59,7 +59,7 @@ var CATEGORY_DECAY = map[string]CategoryDecayProfile{
 	"analytic":      {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
 	"formal":        {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
 	"protocol":      {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
-	"empirical":     {HalfLifeBlocks: 100_000, MaxConfidence: 990_000, MinConfidence: 300_000, ReverificationBonus: 50_000, RequiresReverification: true},
+	"empirical":     {HalfLifeBlocks: 1_000_000, MaxConfidence: 990_000, MinConfidence: 330_000, ReverificationBonus: 110_000, RequiresReverification: true},
 	"historical":    {HalfLifeBlocks: 500_000, MaxConfidence: 950_000, MinConfidence: 200_000, ReverificationBonus: 30_000, RequiresReverification: true},
 	"predictive":    {HalfLifeBlocks: 20_000, MaxConfidence: 900_000, MinConfidence: 100_000, ReverificationBonus: 80_000, RequiresReverification: true},
 	"social":        {HalfLifeBlocks: 150_000, MaxConfidence: 850_000, MinConfidence: 200_000, ReverificationBonus: 40_000, RequiresReverification: true},
@@ -696,5 +696,196 @@ type CounterFactChallenge struct {
 	CreatedAtHeight  uint64   `json:"created_at_height"`
 	ResolvedAtHeight uint64   `json:"resolved_at_height,omitempty"`
 }
+
+// ExtendedParams holds governance-tunable constants that are not in the
+// proto-generated Params struct. Stored as JSON under ExtendedParamsKey.
+// These were previously hardcoded constants in this file.
+type ExtendedParams struct {
+	// Citation economics
+	CitationShareBps         uint64 `json:"citation_share_bps"`          // share of verification rewards to citation pool (default 150000 = 15%)
+	CitationDecayPerLevel    uint64 `json:"citation_decay_per_level"`    // decay per ancestor level (default 500000 = 50%)
+	CitationProtocolFloorBps uint64 `json:"citation_protocol_floor_bps"` // protocol floor (default 20000 = 2%)
+	CrossDomainBonusRate     uint64 `json:"cross_domain_bonus_rate"`     // cross-domain bonus (default 200000 = 20%)
+	MaxCrossDomainBonus      uint64 `json:"max_cross_domain_bonus"`      // max bonus multiplier (default 2000000 = 2.0x)
+
+	// Confidence propagation
+	PropagationThreshold uint64 `json:"propagation_threshold"` // min change to trigger (default 10000 = 1%)
+	MaxPropagationDepth  uint32 `json:"max_propagation_depth"` // max BFS hops (default 10)
+	CyclePenaltyFactor   uint64 `json:"cycle_penalty_factor"`  // penalty for cycle members (default 400000 = 0.4x)
+
+	// Reverification
+	ReverificationThreshold uint64 `json:"reverification_threshold"` // confidence floor (default 600000 = 60%)
+	StalenessMultiplier     uint32 `json:"staleness_multiplier"`     // age multiplier (default 2)
+	MinConfidenceThreshold  uint64 `json:"min_confidence_threshold"` // below this, fact expires (default 300000 = 30%)
+
+	// Challenge tuning
+	RejectThreshold              uint64 `json:"reject_threshold"`                // below this, claim rejected (default 300000 = 30%)
+	MaxConcurrentChallenges      uint32 `json:"max_concurrent_challenges"`       // per claim (default 3)
+	SurvivedChallengeConfCap     uint64 `json:"survived_challenge_conf_cap"`     // cap after surviving (default 880000 = 88%)
+	ConfidenceGrowthEpochBlocks  uint64 `json:"confidence_growth_epoch_blocks"`  // growth interval (default 1111 blocks)
+	BaseCooldownBlocks           uint64 `json:"base_cooldown_blocks"`            // anti-spam cooldown (default 17136 = ~0.5 day)
+	MaxCooldownBlocks            uint64 `json:"max_cooldown_blocks"`             // max exponential cooldown (default 171360 = ~5 days)
+	MaxReverificationsPerBlock   uint32 `json:"max_reverifications_per_block"`   // EndBlocker cap (default 5)
+
+	// Maturity criteria
+	MaturityEstablishedMinConf  uint64 `json:"maturity_established_min_conf"`  // default 800000 = 80%
+	MaturityEstablishedMinAge   uint64 `json:"maturity_established_min_age"`   // default 34272 = ~1 day
+	MaturityEstablishedMinVerif uint32 `json:"maturity_established_min_verif"` // default 3
+	MaturityCanonicalMinConf    uint64 `json:"maturity_canonical_min_conf"`    // default 900000 = 90%
+	MaturityCanonicalMinAge     uint64 `json:"maturity_canonical_min_age"`     // default 342720 = ~10 days
+	MaturityCanonicalMinVerif   uint32 `json:"maturity_canonical_min_verif"`   // default 10
+
+	// Calibration
+	MinCalibrationSamples  uint32 `json:"min_calibration_samples"`  // default 5
+	CalibrationNeutralRate uint64 `json:"calibration_neutral_rate"` // default 700000 = 70%
+	MaxCalibrationBonus    uint64 `json:"max_calibration_bonus"`    // default 50000 = 5%
+	MaxCalibrationPenalty  uint64 `json:"max_calibration_penalty"`  // default 150000 = 15%
+
+	// Diversity detection
+	MinDiversityParticipants uint32 `json:"min_diversity_participants"` // default 3
+	UniformityPenaltyBps     uint64 `json:"uniformity_penalty_bps"`     // default 100000 = 10%
+	SingleMethodPenaltyBps   uint64 `json:"single_method_penalty_bps"`  // default 50000 = 5%
+	DiversityBonusBps        uint64 `json:"diversity_bonus_bps"`        // default 30000 = 3%
+
+	// Negative knowledge
+	MaxContradictionsPerAgentPerEpoch uint32 `json:"max_contradictions_per_agent_per_epoch"` // default 3
+	MinContradictionStakeRatio       uint64 `json:"min_contradiction_stake_ratio"`           // default 500000 = 50%
+	FailedContradictionSlashBps      uint64 `json:"failed_contradiction_slash_bps"`          // default 330000 = 33%
+	FalsificationRewardCapBps        uint64 `json:"falsification_reward_cap_bps"`            // default 3000000 = 3x
+	FalsificationPoolShareBps        uint64 `json:"falsification_pool_share_bps"`            // default 150000 = 15%
+	CounterFactChallengeWindowBlocks uint64 `json:"counter_fact_challenge_window_blocks"`    // default 34272 = ~1 day
+	CounterFactChallengeMinStake     uint64 `json:"counter_fact_challenge_min_stake"`        // default 50000 ulgm
+	CounterFactChallengeSlashBps     uint64 `json:"counter_fact_challenge_slash_bps"`        // default 220000 = 22%
+
+	// Evidence
+	MaxEvidenceBonus uint64 `json:"max_evidence_bonus"` // default 150000 = 15%
+}
+
+// DefaultExtendedParams returns the default extended parameters.
+// Values match the hardcoded constants defined above.
+func DefaultExtendedParams() ExtendedParams {
+	return ExtendedParams{
+		CitationShareBps:         CitationShareBPS,
+		CitationDecayPerLevel:    CitationDecayPerLevel,
+		CitationProtocolFloorBps: CitationProtocolFloorBPS,
+		CrossDomainBonusRate:     CrossDomainBonusRate,
+		MaxCrossDomainBonus:      MaxCrossDomainBonus,
+
+		PropagationThreshold: PropagationThreshold,
+		MaxPropagationDepth:  MaxPropagationDepth,
+		CyclePenaltyFactor:   CyclePenaltyFactor,
+
+		ReverificationThreshold: ReverificationThreshold,
+		StalenessMultiplier:     StalenessMultiplier,
+		MinConfidenceThreshold:  MinConfidenceThreshold,
+
+		RejectThreshold:             RejectThresholdDefault,
+		MaxConcurrentChallenges:     MaxConcurrentChallenges,
+		SurvivedChallengeConfCap:    SurvivedChallengeConfidenceCap,
+		ConfidenceGrowthEpochBlocks: ConfidenceGrowthEpoch,
+		BaseCooldownBlocks:          BaseCooldownBlocks,
+		MaxCooldownBlocks:           MaxCooldownBlocks,
+		MaxReverificationsPerBlock:  MaxReverificationsPerBlock,
+
+		MaturityEstablishedMinConf:  MaturityEstablishedMinConf,
+		MaturityEstablishedMinAge:   MaturityEstablishedMinAge,
+		MaturityEstablishedMinVerif: MaturityEstablishedMinVerifications,
+		MaturityCanonicalMinConf:    MaturityCanonicalMinConf,
+		MaturityCanonicalMinAge:     MaturityCanonicalMinAge,
+		MaturityCanonicalMinVerif:   MaturityCanonicalMinVerifications,
+
+		MinCalibrationSamples:  MinCalibrationSamples,
+		CalibrationNeutralRate: CalibrationNeutralRate,
+		MaxCalibrationBonus:    MaxCalibrationBonus,
+		MaxCalibrationPenalty:  MaxCalibrationPenalty,
+
+		MinDiversityParticipants: MinDiversityParticipants,
+		UniformityPenaltyBps:     uint64(UniformityPenaltyBps),
+		SingleMethodPenaltyBps:   uint64(SingleMethodPenaltyBps),
+		DiversityBonusBps:        uint64(DiversityBonusBps),
+
+		MaxContradictionsPerAgentPerEpoch: MaxContradictionsPerAgentPerEpoch,
+		MinContradictionStakeRatio:        MinContradictionStakeRatio,
+		FailedContradictionSlashBps:       FailedContradictionSlashBps,
+		FalsificationRewardCapBps:         FalsificationRewardCapBps,
+		FalsificationPoolShareBps:         FalsificationPoolShareBps,
+		CounterFactChallengeWindowBlocks:  CounterFactChallengeWindowBlocks,
+		CounterFactChallengeMinStake:      CounterFactChallengeMinStake,
+		CounterFactChallengeSlashBps:      CounterFactChallengeSlashBps,
+
+		MaxEvidenceBonus: MaxEvidenceBonus,
+	}
+}
+
+// ValidateExtendedParams performs basic validation on extended parameters.
+func (ep ExtendedParams) ValidateExtendedParams() error {
+	if ep.CitationShareBps > 1_000_000 {
+		return fmt.Errorf("citation_share_bps must be <= 1000000")
+	}
+	if ep.CitationDecayPerLevel > 1_000_000 {
+		return fmt.Errorf("citation_decay_per_level must be <= 1000000")
+	}
+	if ep.MaxPropagationDepth == 0 || ep.MaxPropagationDepth > 100 {
+		return fmt.Errorf("max_propagation_depth must be 1-100")
+	}
+	if ep.ReverificationThreshold > 1_000_000 {
+		return fmt.Errorf("reverification_threshold must be <= 1000000")
+	}
+	if ep.MinConfidenceThreshold > ep.ReverificationThreshold {
+		return fmt.Errorf("min_confidence_threshold must be <= reverification_threshold")
+	}
+	if ep.RejectThreshold > 1_000_000 {
+		return fmt.Errorf("reject_threshold must be <= 1000000")
+	}
+	if ep.MaxConcurrentChallenges == 0 {
+		return fmt.Errorf("max_concurrent_challenges must be positive")
+	}
+	if ep.SurvivedChallengeConfCap > 1_000_000 {
+		return fmt.Errorf("survived_challenge_conf_cap must be <= 1000000")
+	}
+	if ep.MaturityEstablishedMinConf > ep.MaturityCanonicalMinConf {
+		return fmt.Errorf("established min confidence must be <= canonical min confidence")
+	}
+	if ep.FailedContradictionSlashBps > 1_000_000 {
+		return fmt.Errorf("failed_contradiction_slash_bps must be <= 1000000")
+	}
+	if ep.MaxEvidenceBonus > 1_000_000 {
+		return fmt.Errorf("max_evidence_bonus must be <= 1000000")
+	}
+	return nil
+}
+
+// MsgUpdateExtendedParams updates the extended (non-proto) module parameters.
+// Governance-gated: only the gov module authority can call this.
+type MsgUpdateExtendedParams struct {
+	Authority      string         `json:"authority"`
+	ExtendedParams ExtendedParams `json:"extended_params"`
+}
+
+func (msg *MsgUpdateExtendedParams) Reset()        {}
+func (msg *MsgUpdateExtendedParams) String() string { return "MsgUpdateExtendedParams" }
+func (msg *MsgUpdateExtendedParams) ProtoMessage()  {}
+
+func (msg *MsgUpdateExtendedParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUpdateExtendedParams) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	return msg.ExtendedParams.ValidateExtendedParams()
+}
+
+// MsgUpdateExtendedParamsResponse is the response for MsgUpdateExtendedParams.
+type MsgUpdateExtendedParamsResponse struct{}
+
+func (msg *MsgUpdateExtendedParamsResponse) Reset()        {}
+func (msg *MsgUpdateExtendedParamsResponse) String() string { return "" }
+func (msg *MsgUpdateExtendedParamsResponse) ProtoMessage()  {}
 
 // Note: RegisterCodec and RegisterInterfaces are in codec.go

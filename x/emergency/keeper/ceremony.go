@@ -372,27 +372,52 @@ func (k Keeper) HandleCeremonyFinalization(ctx sdk.Context, ceremonyId string) {
 		})
 
 	case types.CeremonyRevert:
-		// Revert returns to halted state — resume still required.
-		// NOTE: This is a GOVERNANCE SIGNAL, not an automated state rollback.
-		// The TargetBlockNumber/TargetBlockHash/TargetStateRoot fields from the
-		// proposal record the guardians' consensus on what block to revert to,
-		// but actual state reversion requires out-of-band validator coordination
-		// (stop nodes → rollback → restart). A module message handler cannot roll
-		// back committed IAVL/CometBFT state.
-		k.SetEmergencyStatus(ctx, types.StatusHalted)
+		// Revert moves to StatusReverting — distinct from Halted.
+		// The chain remains halted, but the revert target is stored in queryable
+		// state so operator tooling can detect and execute the rollback.
+		//
+		// A module handler cannot roll back committed IAVL/CometBFT state, so
+		// actual rollback requires: (1) operators query GetRevertTarget(),
+		// (2) stop nodes, (3) run `legbled rollback-state --to-height N`,
+		// (4) restart. The REVERT_REQUIRED sentinel file and ERROR-level
+		// BeginBlocker logs make this detectable by automation.
+		k.SetEmergencyStatus(ctx, types.StatusReverting)
+
+		// Extract target from proposal data
+		var revertHeight uint64
+		var revertHash string
+		var proposal types.EmergencyRevertProposal
+		if err := unmarshalProposal(ceremony.ProposalData, &proposal); err == nil {
+			revertHeight = proposal.TargetBlockNumber
+			revertHash = proposal.TargetBlockHash
+		}
+		k.SetRevertTarget(ctx, revertHeight, revertHash, ceremony.Id)
+
+		// Emit event for operator tooling
+		ctx.EventManager().EmitEvent(
+			sdk.NewEvent(
+				"emergency_revert_required",
+				sdk.NewAttribute("ceremony_id", ceremony.Id),
+				sdk.NewAttribute("target_height", fmt.Sprintf("%d", revertHeight)),
+				sdk.NewAttribute("target_hash", revertHash),
+				sdk.NewAttribute("action", "STOP nodes → rollback to target height → RESTART"),
+			),
+		)
+
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
 			Action:      string(types.AuditRevertExecuted),
 			Actor:       "system",
 			CeremonyId:  ceremony.Id,
-			Details:     "revert ceremony finalized (governance signal — manual validator coordination required for state rollback)",
+			Details:     fmt.Sprintf("revert ceremony finalized — rollback to height %d required (operator action needed)", revertHeight),
 		})
 
 	case types.CeremonyResume:
 		k.SetEmergencyStatus(ctx, types.StatusNormal)
 		k.SetActiveHaltCeremonyId(ctx, "")
 		k.ClearHaltStartBlock(ctx)
+		k.ClearRevertTarget(ctx)
 		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
 			Timestamp:   ctx.BlockTime().Unix(),
 			BlockNumber: uint64(ctx.BlockHeight()),
@@ -418,6 +443,7 @@ func (k Keeper) HandleCeremonyFailure(ctx sdk.Context, ceremonyId string) {
 		auditAction = types.AuditHaltFailed
 	case types.CeremonyRevert:
 		k.SetEmergencyStatus(ctx, types.StatusHalted)
+		k.ClearRevertTarget(ctx)
 		auditAction = types.AuditRevertFailed
 	case types.CeremonyResume:
 		k.SetEmergencyStatus(ctx, types.StatusHalted)
@@ -487,6 +513,62 @@ func (k Keeper) CheckHaltExpiry(ctx sdk.Context) {
 	})
 }
 
+// MonitorRevertStatus logs ERROR-level alerts every block while the chain is
+// in StatusReverting. This ensures operator monitoring catches the revert
+// requirement even if events are missed. Also auto-resumes if the revert
+// has been pending longer than MaxHaltDurationBlocks.
+func (k Keeper) MonitorRevertStatus(ctx sdk.Context) {
+	status := k.GetEmergencyStatus(ctx)
+	if status != types.StatusReverting {
+		return
+	}
+
+	target, found := k.GetRevertTarget(ctx)
+	if !found {
+		return
+	}
+
+	currentHeight := uint64(ctx.BlockHeight())
+	k.Logger(ctx).Error("REVERT REQUIRED — chain is in reverting state",
+		"target_height", target.Height,
+		"target_hash", target.BlockHash,
+		"ceremony_id", target.CeremonyId,
+		"current_height", currentHeight,
+		"action", "STOP nodes → run 'legbled rollback-state --to-height N' → RESTART",
+	)
+
+	// Safety valve: auto-resume if operators haven't acted within MaxHaltDurationBlocks.
+	// The chain continues from current state (revert was not executed).
+	haltStart := k.GetHaltStartBlock(ctx)
+	if haltStart == 0 {
+		return
+	}
+	params := k.GetParams(ctx)
+	if params.MaxHaltDurationBlocks > 0 && currentHeight >= haltStart+params.MaxHaltDurationBlocks {
+		k.Logger(ctx).Error("REVERT EXPIRED — auto-resuming without rollback",
+			"target_height", target.Height,
+			"halt_started", haltStart,
+			"max_duration", params.MaxHaltDurationBlocks,
+		)
+		k.SetEmergencyStatus(ctx, types.StatusNormal)
+		k.SetActiveHaltCeremonyId(ctx, "")
+		k.ClearHaltStartBlock(ctx)
+		k.ClearRevertTarget(ctx)
+		k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+			Timestamp:   ctx.BlockTime().Unix(),
+			BlockNumber: currentHeight,
+			Action:      string(types.AuditResumeExecuted),
+			Actor:       "system",
+			CeremonyId:  target.CeremonyId,
+			Details:     fmt.Sprintf("auto-resume: revert to height %d expired after %d blocks without operator action", target.Height, params.MaxHaltDurationBlocks),
+		})
+	}
+}
+
 func marshalProposal(proposal proto.Message) ([]byte, error) {
 	return proto.Marshal(proposal)
+}
+
+func unmarshalProposal(data []byte, proposal proto.Message) error {
+	return proto.Unmarshal(data, proposal)
 }

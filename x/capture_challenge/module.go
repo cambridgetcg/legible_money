@@ -3,6 +3,7 @@ package capture_challenge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
@@ -100,6 +101,11 @@ func (am AppModule) IsAppModule() {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), am.keeper)
 	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to register %s migration: %v", types.ModuleName, err))
+	}
 }
 
 // InitGenesis initializes the module from genesis.

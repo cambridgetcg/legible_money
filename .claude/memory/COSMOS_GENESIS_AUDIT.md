@@ -62,12 +62,12 @@ auto-generated genesis is incomplete.
 
 ### ~~P0-1: Decimal Mismatch~~ → Downgraded to P1-7 (2 remaining fields)
 
-**10 of 12 original fields FIXED** since Rev 1. Only 2 remain wrong:
+**12 of 12 original fields FIXED**. All decimal mismatches resolved.
 
-| Module | Field | Current Value (WRONG) | Correct (6-dec) | Line |
-|--------|-------|----------------------|------------------|------|
-| `x/staking` | `DefaultTierConfigs[TierBonded].MinStake` | `"1111000000000000000000"` | `"1111000000"` | :73 |
-| `x/staking` | `DefaultTierConfigs[TierGuardian].MinStake` | `"11111000000000000000000"` | `"11111000000"` | :83 |
+| Module | Field | Status |
+|--------|-------|--------|
+| `x/staking` | `DefaultTierConfigs[TierBonded].MinStake` | **FIXED** → `"1111000000"` (1,111 LGM) |
+| `x/staking` | `DefaultTierConfigs[TierGuardian].MinStake` | **FIXED** → `"11111000000"` (11,111 LGM) |
 
 **Fixed fields** (verified via direct file read):
 - `x/emergency/types/types.go:218` — MinGuardianStake: `"111111000000"` (6-dec) ✅

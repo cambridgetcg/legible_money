@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-02-13: Go-Only Development — TS Chain is Reference Only
+
+**Decision**: All new development targets Go/Cosmos SDK exclusively. TS chain is frozen as reference specification.
+
+**Context**: BVM analysis revealed Go chain is more complete than previously assessed (85% BVM with full interpreter vs TS BVM stubs). Agent Home Go is 40% and progressing. Maintaining two active chains doubles effort for diminishing returns.
+
+**Implications**:
+- No new TS features, fixes, or tests
+- TS remains readable as spec/reference for porting logic to Go
+- Cross-stack golden vector tests validate Go matches TS semantics
+- All roadmap items target `x/` Go modules only
+- Binary: `legbled` (Cosmos SDK chain)
+
+---
+
 ## 2026-02-03: Confidence Quantification Framework
 
 **Decision**: Implement multidimensional confidence with epistemic categories

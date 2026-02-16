@@ -306,7 +306,7 @@ func TestVoteExtension_EmptyJSON(t *testing.T) {
 // ---- LocalCommitmentStore tests ----
 
 func TestLocalCommitmentStore_StoreAndGet(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	commitment := LocalCommitment{
 		RoundID:    "round-1",
@@ -334,7 +334,7 @@ func TestLocalCommitmentStore_StoreAndGet(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_GetNotFound(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	_, found := store.Get("nonexistent")
 	if found {
@@ -343,7 +343,7 @@ func TestLocalCommitmentStore_GetNotFound(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_Delete(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	store.Store(LocalCommitment{RoundID: "round-1", Verdict: "accept"})
 	store.Delete("round-1")
@@ -355,13 +355,13 @@ func TestLocalCommitmentStore_Delete(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_DeleteNonexistent(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 	// Should not panic
 	store.Delete("nonexistent")
 }
 
 func TestLocalCommitmentStore_Overwrite(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	store.Store(LocalCommitment{RoundID: "round-1", Verdict: "accept"})
 	store.Store(LocalCommitment{RoundID: "round-1", Verdict: "reject"})
@@ -376,7 +376,7 @@ func TestLocalCommitmentStore_Overwrite(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_Count(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	if store.Count() != 0 {
 		t.Fatalf("empty store should have count 0, got %d", store.Count())
@@ -397,7 +397,7 @@ func TestLocalCommitmentStore_Count(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_CleanupExpired(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	store.Store(LocalCommitment{RoundID: "old", Height: 10})
 	store.Store(LocalCommitment{RoundID: "recent", Height: 90})
@@ -430,7 +430,7 @@ func TestLocalCommitmentStore_CleanupExpired(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_CleanupExpired_LowHeight(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	store.Store(LocalCommitment{RoundID: "r1", Height: 5})
 
@@ -443,7 +443,7 @@ func TestLocalCommitmentStore_CleanupExpired_LowHeight(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_CleanupAll(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 
 	store.Store(LocalCommitment{RoundID: "r1", Height: 1})
 	store.Store(LocalCommitment{RoundID: "r2", Height: 2})
@@ -458,7 +458,7 @@ func TestLocalCommitmentStore_CleanupAll(t *testing.T) {
 }
 
 func TestLocalCommitmentStore_ThreadSafety(t *testing.T) {
-	store := NewLocalCommitmentStore()
+	store := NewLocalCommitmentStore("")
 	var wg sync.WaitGroup
 
 	// Concurrent writes

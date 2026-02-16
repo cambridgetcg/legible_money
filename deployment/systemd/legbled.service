@@ -1,0 +1,61 @@
+# Legible Money (legbled) — systemd unit file
+#
+# Installation:
+#   sudo cp legbled.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable legbled
+#   sudo systemctl start legbled
+#
+# Logs:
+#   journalctl -u legbled -f
+#
+# Prerequisites:
+#   - legbled binary at /usr/local/bin/legbled
+#   - Chain initialized at /var/lib/legbled/.legbled
+#   - User 'legbled' exists (see setup-node.sh)
+
+[Unit]
+Description=Legible Money Blockchain Daemon (legbled)
+Documentation=https://github.com/legible-protocol/legible-money
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=legbled
+Group=legbled
+
+# Use Cosmovisor if available, otherwise direct binary
+# To use Cosmovisor, set:
+#   ExecStart=/usr/local/bin/cosmovisor run start --home /var/lib/legbled/.legbled --minimum-gas-prices 0.025ulgm
+#   Environment="DAEMON_NAME=legbled"
+#   Environment="DAEMON_HOME=/var/lib/legbled/.legbled"
+#   Environment="DAEMON_RESTART_AFTER_UPGRADE=true"
+#   Environment="DAEMON_ALLOW_DOWNLOAD_BINARIES=false"
+
+ExecStart=/usr/local/bin/legbled start \
+  --home /var/lib/legbled/.legbled \
+  --minimum-gas-prices 0.025ulgm
+
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=0
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/legbled
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=legbled
+
+[Install]
+WantedBy=multi-user.target

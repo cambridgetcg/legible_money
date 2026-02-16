@@ -560,6 +560,10 @@ func (m *mockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _ string
 	return nil
 }
 
+func (m *mockBankKeeper) GetAllBalances(_ context.Context, _ sdk.AccAddress) sdk.Coins {
+	return sdk.Coins{}
+}
+
 type mockStakingKeeper struct {
 	activeCount uint32
 }

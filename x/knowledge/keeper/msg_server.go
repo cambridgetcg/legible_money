@@ -637,6 +637,21 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	return &types.MsgUpdateParamsResponse{}, nil
 }
 
+// UpdateExtendedParams handles MsgUpdateExtendedParams.
+func (k msgServer) UpdateExtendedParams(goCtx context.Context, msg *types.MsgUpdateExtendedParams) (*types.MsgUpdateExtendedParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	k.SetExtendedParams(ctx, msg.ExtendedParams)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("knowledge_extended_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateExtendedParamsResponse{}, nil
+}
+
 // SubmitContradiction handles MsgSubmitContradiction — submits an explicit counter-claim
 // asserting that an existing fact is false (Path B: explicit contradiction).
 //

@@ -1,40 +1,38 @@
 # CODEOWNERS - Default reviewers for pull requests
-# Replace @yournameisai with your GitHub username
 
 # Default: All files require owner review
 *                                   @yournameisai
 
 # ============ Security-Critical Paths ============
-# These require owner review (add security team when available)
 
-# Cryptographic operations
-/core/crypto/                       @yournameisai
+# Application wiring (ABCI, ante handlers)
+/app/                               @yournameisai
 
-# Consensus engine
-/consensus/pot/                     @yournameisai
+# Chain binary
+/cmd/legbled/                       @yournameisai
 
-# State transitions
-/state/transitions.ts               @yournameisai
+# Knowledge module (consensus-critical)
+/x/knowledge/                       @yournameisai
 
-# Agent identity and keys
-/core/agents/identity/              @yournameisai
+# Auth module (identity, keys)
+/x/auth/                            @yournameisai
 
-# Network-exposed interfaces
-/protocol/rpc/                      @yournameisai
+# Staking module (validator management)
+/x/staking/                         @yournameisai
+
+# Emergency kill switch
+/x/emergency/                       @yournameisai
+
+# Governance
+/x/gov/                             @yournameisai
 
 # ============ High-Sensitivity Paths ============
 
-# State management
-/state/                             @yournameisai
+# All custom modules
+/x/                                 @yournameisai
 
-# Network layer
-/network/                           @yournameisai
-
-# Rewards and economics
-/core/rewards/                      @yournameisai
-
-# Dispute resolution
-/core/dispute/                      @yournameisai
+# Protobuf definitions
+/proto/                             @yournameisai
 
 # ============ Governance ============
 
@@ -46,6 +44,3 @@
 
 # GitHub configuration
 /.github/                           @yournameisai
-
-# LIPs (Legible Improvement Proposals)
-/docs/lips/                         @yournameisai

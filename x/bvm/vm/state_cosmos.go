@@ -129,3 +129,56 @@ func (s *CosmosStateDB) Exists(addr []byte) bool {
 	contractKey = append(contractKey, addr...)
 	return s.store.Has(contractKey)
 }
+
+// --- NonceDB interface ---
+
+var noncePrefix = []byte{0x04}
+
+func (s *CosmosStateDB) GetNonce(addr []byte) uint64 {
+	key := append([]byte{}, noncePrefix...)
+	key = append(key, addr...)
+	bz := s.store.Get(key)
+	if bz == nil || len(bz) < 8 {
+		return 0
+	}
+	var n uint64
+	for i := 0; i < 8; i++ {
+		n = (n << 8) | uint64(bz[i])
+	}
+	return n
+}
+
+func (s *CosmosStateDB) SetNonce(addr []byte, nonce uint64) {
+	key := append([]byte{}, noncePrefix...)
+	key = append(key, addr...)
+	bz := make([]byte, 8)
+	for i := 7; i >= 0; i-- {
+		bz[i] = byte(nonce)
+		nonce >>= 8
+	}
+	s.store.Set(key, bz)
+}
+
+// --- CodeWriter interface ---
+
+func (s *CosmosStateDB) SetCode(addr []byte, bytecode []byte) {
+	// Store code under code prefix with SHA256 hash
+	codeHash := sha256.Sum256(bytecode)
+	codeHashHex := hex.EncodeToString(codeHash[:])
+
+	// Store bytecode by hash (deduplication)
+	codeKey := append([]byte{}, s.codePrefix...)
+	codeKey = append(codeKey, []byte(codeHashHex)...)
+	codeBz, _ := json.Marshal(struct {
+		Bytecode []byte `json:"bytecode"`
+	}{Bytecode: bytecode})
+	s.store.Set(codeKey, codeBz)
+
+	// Store/update contract record pointing to code hash
+	contractKey := append([]byte{}, s.contractPrefix...)
+	contractKey = append(contractKey, addr...)
+	contractBz, _ := json.Marshal(struct {
+		CodeHash string `json:"code_hash"`
+	}{CodeHash: codeHashHex})
+	s.store.Set(contractKey, contractBz)
+}

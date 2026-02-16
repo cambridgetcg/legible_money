@@ -1,11 +1,15 @@
-# Dependencies
-node_modules/
-
 # Build output
-dist/
+build/
+vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
 # IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
@@ -24,9 +28,14 @@ devnet/secrets/*.key
 devnet/secrets/*.pem
 devnet/secrets/*.secret
 
-# Storage
+# DevNet data
 devnet/data/
-*.ldb
 
 # Debug
-npm-debug.log*
+*.log
+
+# Test binary
+*.test
+
+# Coverage
+coverage/
