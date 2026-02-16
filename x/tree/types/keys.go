@@ -24,22 +24,25 @@ var (
 	ProjectKeyPrefix  = []byte{0x01}
 	ServiceKeyPrefix  = []byte{0x02}
 	TaskKeyPrefix     = []byte{0x03}
-	SeedKeyPrefix     = []byte{0x04}
-	ParamsKey         = []byte{0x05}
+	SeedKeyPrefix         = []byte{0x04}
+	ParamsKey             = []byte{0x05}
+	SubscriptionKeyPrefix = []byte{0x06}
 
 	// Index prefixes for lookups.
-	ProjectFounderIndexPrefix = []byte{0x10} // 0x10 | founderAddr | projectId -> nil
-	ProjectDomainIndexPrefix  = []byte{0x11} // 0x11 | domain | projectId -> nil
-	TaskProjectIndexPrefix    = []byte{0x12} // 0x12 | projectId | taskId -> nil
-	TaskAssigneeIndexPrefix   = []byte{0x13} // 0x13 | assigneeAddr | taskId -> nil
-	ServiceProjectIndexPrefix = []byte{0x14} // 0x14 | projectId | serviceId -> nil
-	SeedDomainIndexPrefix     = []byte{0x15} // 0x15 | domain | seedId -> nil
+	ProjectFounderIndexPrefix      = []byte{0x10} // 0x10 | founderAddr | projectId -> nil
+	ProjectDomainIndexPrefix       = []byte{0x11} // 0x11 | domain | projectId -> nil
+	TaskProjectIndexPrefix         = []byte{0x12} // 0x12 | projectId | taskId -> nil
+	TaskAssigneeIndexPrefix        = []byte{0x13} // 0x13 | assigneeAddr | taskId -> nil
+	ServiceProjectIndexPrefix      = []byte{0x14} // 0x14 | projectId | serviceId -> nil
+	SeedDomainIndexPrefix          = []byte{0x15} // 0x15 | domain | seedId -> nil
+	SubscriptionServiceIndexPrefix = []byte{0x16} // 0x16 | serviceId | subscriptionId -> nil
 
 	// Counters
-	projectCounterKey = []byte{0x20}
-	taskCounterKey    = []byte{0x21}
-	serviceCounterKey = []byte{0x22}
-	seedCounterKey    = []byte{0x23}
+	projectCounterKey      = []byte{0x20}
+	taskCounterKey         = []byte{0x21}
+	serviceCounterKey      = []byte{0x22}
+	seedCounterKey         = []byte{0x23}
+	subscriptionCounterKey = []byte{0x24}
 )
 
 // ProjectKey returns the store key for a project.
@@ -119,6 +122,30 @@ func SeedDomainIndexKey(domain, seedId string) []byte {
 	key = append(key, []byte(domain)...)
 	key = append(key, '/')
 	key = append(key, []byte(seedId)...)
+	return key
+}
+
+// SubscriptionKey returns the store key for a subscription.
+func SubscriptionKey(subscriptionId string) []byte {
+	return append(SubscriptionKeyPrefix, []byte(subscriptionId)...)
+}
+
+// SubscriptionServicePrefix returns the prefix for all subscriptions of a service.
+func SubscriptionServicePrefix(serviceId string) []byte {
+	key := make([]byte, 0, len(SubscriptionServiceIndexPrefix)+len(serviceId)+1)
+	key = append(key, SubscriptionServiceIndexPrefix...)
+	key = append(key, []byte(serviceId)...)
+	key = append(key, '/')
+	return key
+}
+
+// SubscriptionServiceIndexKey returns the index key for a subscription by service.
+func SubscriptionServiceIndexKey(serviceId, subscriptionId string) []byte {
+	key := make([]byte, 0, len(SubscriptionServiceIndexPrefix)+len(serviceId)+1+len(subscriptionId))
+	key = append(key, SubscriptionServiceIndexPrefix...)
+	key = append(key, []byte(serviceId)...)
+	key = append(key, '/')
+	key = append(key, []byte(subscriptionId)...)
 	return key
 }
 

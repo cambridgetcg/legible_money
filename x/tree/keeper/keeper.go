@@ -18,7 +18,8 @@ type Keeper struct {
 	cdc          codec.Codec
 	storeService store.KVStoreService
 
-	bankKeeper types.BankKeeper
+	bankKeeper     types.BankKeeper
+	channelsKeeper types.ChannelsKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -54,6 +55,11 @@ func prefixEndBytes(prefix []byte) []byte {
 		}
 	}
 	return nil
+}
+
+// SetChannelsKeeper sets the channels keeper for channel-gated service calls.
+func (k *Keeper) SetChannelsKeeper(ck types.ChannelsKeeper) {
+	k.channelsKeeper = ck
 }
 
 // Logger returns a module-specific logger.

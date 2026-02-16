@@ -1375,3 +1375,835 @@ func TestBountyPayout_ZeroBounty(t *testing.T) {
 		t.Errorf("agent1 should have no balance for zero bounty, got %d", mockBK.balances[agent1]["ulgm"])
 	}
 }
+
+// ==================== AddContributor Tests ====================
+
+func TestAddContributor(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Create project
+	resp, err := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Contributor Test", Domain: "math", Budget: "1000000",
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	// Add contributor
+	_, err = srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority:   founder1,
+		ProjectId:   resp.ProjectId,
+		Contributor: agent1,
+		Role:        "developer",
+	})
+	if err != nil {
+		t.Fatalf("add contributor: %v", err)
+	}
+
+	// Verify contributor was added
+	project, found := k.GetProject(ctx, resp.ProjectId)
+	if !found {
+		t.Fatal("project not found")
+	}
+	if len(project.Contributors) != 2 { // founder + agent1
+		t.Fatalf("expected 2 contributors, got %d", len(project.Contributors))
+	}
+	if project.Contributors[1].Did != agent1 {
+		t.Errorf("expected contributor %s, got %s", agent1, project.Contributors[1].Did)
+	}
+	if project.Contributors[1].Role != "developer" {
+		t.Errorf("expected role 'developer', got '%s'", project.Contributors[1].Role)
+	}
+}
+
+func TestAddContributor_NotFounder(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Auth Test", Domain: "math", Budget: "1000000",
+	})
+
+	// Non-founder tries to add contributor
+	_, err := srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority:   agent1,
+		ProjectId:   resp.ProjectId,
+		Contributor: agent2,
+		Role:        "developer",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-founder")
+	}
+}
+
+func TestAddContributor_Duplicate(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Dup Test", Domain: "math", Budget: "1000000",
+	})
+
+	srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority: founder1, ProjectId: resp.ProjectId, Contributor: agent1, Role: "developer",
+	})
+
+	// Adding same contributor again should fail
+	_, err := srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority: founder1, ProjectId: resp.ProjectId, Contributor: agent1, Role: "tester",
+	})
+	if err == nil {
+		t.Fatal("expected error for duplicate contributor")
+	}
+}
+
+func TestAddContributor_MaxContributors(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Set max contributors to 2
+	params := k.GetParams(ctx)
+	params.MaxContributors = 2
+	k.SetParams(ctx, params)
+
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Max Test", Domain: "math", Budget: "1000000",
+	})
+
+	// Founder is already a contributor (1/2), add one more (2/2)
+	srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority: founder1, ProjectId: resp.ProjectId, Contributor: agent1, Role: "developer",
+	})
+
+	// Third should fail (over max)
+	_, err := srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority: founder1, ProjectId: resp.ProjectId, Contributor: agent2, Role: "tester",
+	})
+	if err == nil {
+		t.Fatal("expected error for max contributors exceeded")
+	}
+}
+
+// ==================== SubscribeService Tests ====================
+
+func TestSubscribeService(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Deploy and activate a service
+	deployResp, err := srv.DeployService(ctx, &types.MsgDeployService{
+		Deployer: founder1, Name: "Sub Test Service", Description: "test", PricePerCall: "100",
+	})
+	if err != nil {
+		t.Fatalf("deploy: %v", err)
+	}
+
+	// Activate the service
+	service, _ := k.GetService(ctx, deployResp.ServiceId)
+	service.Status = string(types.ServiceActive)
+	k.SetService(ctx, service)
+
+	// Subscribe
+	subResp, err := srv.SubscribeService(ctx, &types.MsgSubscribeService{
+		Subscriber:     agent1,
+		ServiceId:      deployResp.ServiceId,
+		DurationBlocks: 1000,
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	if subResp.SubscriptionId == "" {
+		t.Fatal("expected subscription ID")
+	}
+
+	// Verify subscription was stored
+	sub, found := k.GetSubscription(ctx, subResp.SubscriptionId)
+	if !found {
+		t.Fatal("subscription not found")
+	}
+	if sub.ServiceId != deployResp.ServiceId {
+		t.Errorf("expected service %s, got %s", deployResp.ServiceId, sub.ServiceId)
+	}
+	if sub.Subscriber != agent1 {
+		t.Errorf("expected subscriber %s, got %s", agent1, sub.Subscriber)
+	}
+	if sub.DurationBlocks != 1000 {
+		t.Errorf("expected duration 1000, got %d", sub.DurationBlocks)
+	}
+	if sub.ExpiresAtBlock != 1100 { // block 100 + 1000
+		t.Errorf("expected expires at 1100, got %d", sub.ExpiresAtBlock)
+	}
+}
+
+func TestSubscribeService_NotActive(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	deployResp, _ := srv.DeployService(ctx, &types.MsgDeployService{
+		Deployer: founder1, Name: "Inactive Service", Description: "test",
+	})
+
+	// Service is in "deploying" status, not active
+	_, err := srv.SubscribeService(ctx, &types.MsgSubscribeService{
+		Subscriber: agent1, ServiceId: deployResp.ServiceId, DurationBlocks: 100,
+	})
+	if err == nil {
+		t.Fatal("expected error for non-active service")
+	}
+}
+
+func TestSubscribeService_NotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	_, err := srv.SubscribeService(ctx, &types.MsgSubscribeService{
+		Subscriber: agent1, ServiceId: "nonexistent", DurationBlocks: 100,
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent service")
+	}
+}
+
+// ==================== BeginSeeding Tests ====================
+
+func TestBeginSeeding(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Create project and advance to fruiting phase
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Seeding Test", Domain: "physics", Budget: "1000000",
+	})
+	project, _ := k.GetProject(ctx, resp.ProjectId)
+	project.Phase = string(types.PhaseFruiting)
+	project.PreviousPhase = string(types.PhaseMature)
+	k.SetProject(ctx, project)
+
+	// Begin seeding
+	_, err := srv.BeginSeeding(ctx, &types.MsgBeginSeeding{
+		Seeder:    founder1,
+		ProjectId: resp.ProjectId,
+		Domain:    "quantum_physics",
+	})
+	if err != nil {
+		t.Fatalf("begin seeding: %v", err)
+	}
+
+	// Verify project transitioned to seeding
+	updated, _ := k.GetProject(ctx, resp.ProjectId)
+	if updated.Phase != string(types.PhaseSeeding) {
+		t.Errorf("expected phase 'seeding', got '%s'", updated.Phase)
+	}
+	if updated.PreviousPhase != string(types.PhaseFruiting) {
+		t.Errorf("expected previous phase 'fruiting', got '%s'", updated.PreviousPhase)
+	}
+
+	// Verify an opportunity seed was created
+	var seeds []types.OpportunitySeed
+	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
+		seeds = append(seeds, s)
+		return false
+	})
+	if len(seeds) != 1 {
+		t.Fatalf("expected 1 seed, got %d", len(seeds))
+	}
+	if seeds[0].KnowledgeDomain != "quantum_physics" {
+		t.Errorf("expected domain 'quantum_physics', got '%s'", seeds[0].KnowledgeDomain)
+	}
+	if seeds[0].ProjectId != resp.ProjectId {
+		t.Errorf("expected project %s, got %s", resp.ProjectId, seeds[0].ProjectId)
+	}
+	if seeds[0].Status != string(types.SeedDetected) {
+		t.Errorf("expected status 'detected', got '%s'", seeds[0].Status)
+	}
+}
+
+func TestBeginSeeding_DefaultDomain(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Default Domain", Domain: "chemistry", Budget: "1000000",
+	})
+	project, _ := k.GetProject(ctx, resp.ProjectId)
+	project.Phase = string(types.PhaseFruiting)
+	k.SetProject(ctx, project)
+
+	// Empty domain should fall back to project's domain
+	_, err := srv.BeginSeeding(ctx, &types.MsgBeginSeeding{
+		Seeder: founder1, ProjectId: resp.ProjectId, Domain: "",
+	})
+	if err != nil {
+		t.Fatalf("begin seeding: %v", err)
+	}
+
+	var seeds []types.OpportunitySeed
+	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
+		seeds = append(seeds, s)
+		return false
+	})
+	if seeds[0].KnowledgeDomain != "chemistry" {
+		t.Errorf("expected domain 'chemistry', got '%s'", seeds[0].KnowledgeDomain)
+	}
+}
+
+func TestBeginSeeding_InvalidPhase(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Phase Test", Domain: "math", Budget: "1000000",
+	})
+
+	// Project is in seed phase, can't begin seeding
+	_, err := srv.BeginSeeding(ctx, &types.MsgBeginSeeding{
+		Seeder: founder1, ProjectId: resp.ProjectId, Domain: "math",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid phase transition")
+	}
+}
+
+func TestBeginSeeding_NotContributor(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Auth Test", Domain: "math", Budget: "1000000",
+	})
+	project, _ := k.GetProject(ctx, resp.ProjectId)
+	project.Phase = string(types.PhaseFruiting)
+	k.SetProject(ctx, project)
+
+	// Non-contributor tries to begin seeding
+	_, err := srv.BeginSeeding(ctx, &types.MsgBeginSeeding{
+		Seeder: agent2, ProjectId: resp.ProjectId, Domain: "math",
+	})
+	if err == nil {
+		t.Fatal("expected error for non-contributor")
+	}
+}
+
+// ==================== DetectOpportunity Tests ====================
+
+func TestDetectOpportunity(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, err := srv.DetectOpportunity(ctx, &types.MsgDetectOpportunity{
+		Detector:     agent1,
+		Domain:       "computer_science",
+		Description:  "Emerging need for quantum-resistant cryptography",
+		RelatedFacts: []string{"fact-001", "fact-002"},
+	})
+	if err != nil {
+		t.Fatalf("detect opportunity: %v", err)
+	}
+	if resp.OpportunityId == "" {
+		t.Fatal("expected opportunity ID")
+	}
+
+	// Verify seed was created
+	seed, found := k.GetSeed(ctx, resp.OpportunityId)
+	if !found {
+		t.Fatal("seed not found")
+	}
+	if seed.KnowledgeDomain != "computer_science" {
+		t.Errorf("expected domain 'computer_science', got '%s'", seed.KnowledgeDomain)
+	}
+	if seed.Status != string(types.SeedDetected) {
+		t.Errorf("expected status 'detected', got '%s'", seed.Status)
+	}
+	if seed.Confidence != "0.5" {
+		t.Errorf("expected confidence '0.5', got '%s'", seed.Confidence)
+	}
+	if seed.Signal == nil {
+		t.Fatal("expected demand signal")
+	}
+	if seed.Signal.Type != "agent_detection" {
+		t.Errorf("expected signal type 'agent_detection', got '%s'", seed.Signal.Type)
+	}
+	if seed.Signal.Evidence["description"] != "Emerging need for quantum-resistant cryptography" {
+		t.Error("expected description in signal evidence")
+	}
+}
+
+func TestDetectOpportunity_NoRelatedFacts(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	resp, err := srv.DetectOpportunity(ctx, &types.MsgDetectOpportunity{
+		Detector:    agent1,
+		Domain:      "biology",
+		Description: "Protein folding insights",
+	})
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+
+	seed, _ := k.GetSeed(ctx, resp.OpportunityId)
+	if seed.Signal == nil {
+		t.Fatal("expected signal even with no related facts")
+	}
+}
+
+// ==================== ClaimOpportunity Tests ====================
+
+func TestClaimOpportunity(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Fund the claimer
+	mockBK.balances[agent1] = map[string]int64{"ulgm": 10000}
+
+	// Detect an opportunity first
+	detectResp, _ := srv.DetectOpportunity(ctx, &types.MsgDetectOpportunity{
+		Detector: agent2, Domain: "math", Description: "New optimization technique",
+	})
+
+	// Claim it
+	_, err := srv.ClaimOpportunity(ctx, &types.MsgClaimOpportunity{
+		Claimer:       agent1,
+		OpportunityId: detectResp.OpportunityId,
+		Stake:         "5000",
+	})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+
+	// Verify seed was updated
+	seed, _ := k.GetSeed(ctx, detectResp.OpportunityId)
+	if seed.Status != string(types.SeedClaimed) {
+		t.Errorf("expected status 'claimed', got '%s'", seed.Status)
+	}
+	if seed.ClaimedBy != agent1 {
+		t.Errorf("expected claimedBy %s, got %s", agent1, seed.ClaimedBy)
+	}
+
+	// Verify stake was escrowed
+	if mockBK.balances[agent1]["ulgm"] != 5000 {
+		t.Errorf("expected remaining balance 5000, got %d", mockBK.balances[agent1]["ulgm"])
+	}
+	if mockBK.moduleBalances["tree"]["ulgm"] != 5000 {
+		t.Errorf("expected module balance 5000, got %d", mockBK.moduleBalances["tree"]["ulgm"])
+	}
+}
+
+func TestClaimOpportunity_AlreadyClaimed(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	detectResp, _ := srv.DetectOpportunity(ctx, &types.MsgDetectOpportunity{
+		Detector: agent2, Domain: "math", Description: "test",
+	})
+
+	// First claim
+	srv.ClaimOpportunity(ctx, &types.MsgClaimOpportunity{
+		Claimer: agent1, OpportunityId: detectResp.OpportunityId, Stake: "0",
+	})
+
+	// Second claim should fail
+	_, err := srv.ClaimOpportunity(ctx, &types.MsgClaimOpportunity{
+		Claimer: agent2, OpportunityId: detectResp.OpportunityId, Stake: "0",
+	})
+	if err == nil {
+		t.Fatal("expected error for already claimed seed")
+	}
+}
+
+func TestClaimOpportunity_Expired(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	detectResp, _ := srv.DetectOpportunity(ctx, &types.MsgDetectOpportunity{
+		Detector: agent2, Domain: "math", Description: "test",
+	})
+
+	// Manually set seed to expired
+	seed, _ := k.GetSeed(ctx, detectResp.OpportunityId)
+	seed.ExpiresAtBlock = 50 // Already expired at block 100
+	k.SetSeed(ctx, seed)
+
+	_, err := srv.ClaimOpportunity(ctx, &types.MsgClaimOpportunity{
+		Claimer: agent1, OpportunityId: detectResp.OpportunityId, Stake: "0",
+	})
+	if err == nil {
+		t.Fatal("expected error for expired seed")
+	}
+}
+
+func TestClaimOpportunity_NotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	_, err := srv.ClaimOpportunity(ctx, &types.MsgClaimOpportunity{
+		Claimer: agent1, OpportunityId: "nonexistent", Stake: "0",
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent seed")
+	}
+}
+
+func TestClaimOpportunity_ZeroStake(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	detectResp, _ := srv.DetectOpportunity(ctx, &types.MsgDetectOpportunity{
+		Detector: agent2, Domain: "math", Description: "free claim",
+	})
+
+	_, err := srv.ClaimOpportunity(ctx, &types.MsgClaimOpportunity{
+		Claimer: agent1, OpportunityId: detectResp.OpportunityId, Stake: "0",
+	})
+	if err != nil {
+		t.Fatalf("claim with zero stake: %v", err)
+	}
+
+	// No tokens should have moved
+	if mockBK.moduleBalances["tree"] != nil && mockBK.moduleBalances["tree"]["ulgm"] != 0 {
+		t.Errorf("expected no module balance for zero stake, got %d", mockBK.moduleBalances["tree"]["ulgm"])
+	}
+}
+
+// ======================== Mock ChannelsKeeper ========================
+
+type mockChannelsKeeper struct {
+	channels map[string]struct {
+		payer, provider, available, status string
+	}
+	spentLog []struct {
+		channelId, amount, recipientModule string
+	}
+}
+
+func newMockChannelsKeeper() *mockChannelsKeeper {
+	return &mockChannelsKeeper{
+		channels: make(map[string]struct {
+			payer, provider, available, status string
+		}),
+	}
+}
+
+func (m *mockChannelsKeeper) GetChannelInfo(_ context.Context, channelId string) (payer, provider, available, status string, found bool) {
+	ch, ok := m.channels[channelId]
+	if !ok {
+		return "", "", "", "", false
+	}
+	return ch.payer, ch.provider, ch.available, ch.status, true
+}
+
+func (m *mockChannelsKeeper) SpendFromChannel(_ context.Context, channelId string, amount string, recipientModule string) error {
+	m.spentLog = append(m.spentLog, struct {
+		channelId, amount, recipientModule string
+	}{channelId, amount, recipientModule})
+	return nil
+}
+
+// ======================== Integration: Subscription Enforcement ========================
+
+func TestCallService_SubscriptionSkipsPayment(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+
+	// Deploy a paid service
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, err := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "paid-api",
+		Description:  "A paid API",
+		PricePerCall: "1000",
+	})
+	if err != nil {
+		t.Fatalf("deploy service: %v", err)
+	}
+	serviceId := resp.ServiceId
+
+	// Activate service
+	svc, _ := k.GetService(ctx, serviceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	// Give caller some funds
+	mockBK.balances[agent1] = map[string]int64{"ulgm": 100000}
+
+	// Call WITHOUT subscription — should deduct
+	_, err = msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: serviceId,
+	})
+	if err != nil {
+		t.Fatalf("call service without subscription: %v", err)
+	}
+	if mockBK.balances[agent1]["ulgm"] != 99000 {
+		t.Errorf("expected 99000 after direct call, got %d", mockBK.balances[agent1]["ulgm"])
+	}
+
+	// Create subscription for agent1
+	_, err = msgServer.SubscribeService(ctx, &types.MsgSubscribeService{
+		Subscriber:     agent1,
+		ServiceId:      serviceId,
+		DurationBlocks: 1000,
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	// Call WITH subscription — should NOT deduct
+	balanceBefore := mockBK.balances[agent1]["ulgm"]
+	_, err = msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: serviceId,
+	})
+	if err != nil {
+		t.Fatalf("call service with subscription: %v", err)
+	}
+	if mockBK.balances[agent1]["ulgm"] != balanceBefore {
+		t.Errorf("expected no deduction with subscription, balance changed from %d to %d", balanceBefore, mockBK.balances[agent1]["ulgm"])
+	}
+}
+
+func TestCallService_ExpiredSubscriptionStillCharges(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+
+	// Deploy + activate a paid service
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, _ := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "paid-api",
+		PricePerCall: "500",
+	})
+	svc, _ := k.GetService(ctx, resp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	// Create subscription with short duration (10 blocks)
+	_, _ = msgServer.SubscribeService(ctx, &types.MsgSubscribeService{
+		Subscriber:     agent1,
+		ServiceId:      resp.ServiceId,
+		DurationBlocks: 10,
+	})
+
+	// Advance past expiry (current block is 100, sub expires at 110)
+	ctx = ctx.WithBlockHeight(120)
+	mockBK.balances[agent1] = map[string]int64{"ulgm": 50000}
+
+	// Call after subscription expired — should charge
+	_, err := msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: resp.ServiceId,
+	})
+	if err != nil {
+		t.Fatalf("call service: %v", err)
+	}
+	if mockBK.balances[agent1]["ulgm"] != 49500 {
+		t.Errorf("expected 49500 after expired subscription call, got %d", mockBK.balances[agent1]["ulgm"])
+	}
+}
+
+func TestCallService_FreeServiceIgnoresSubscription(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+
+	// Deploy a free service (PricePerCall = 0)
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, _ := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "free-api",
+		PricePerCall: "0",
+	})
+	svc, _ := k.GetService(ctx, resp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	mockBK.balances[agent1] = map[string]int64{"ulgm": 10000}
+
+	// Call free service — no charge regardless of subscription
+	_, err := msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: resp.ServiceId,
+	})
+	if err != nil {
+		t.Fatalf("call free service: %v", err)
+	}
+	if mockBK.balances[agent1]["ulgm"] != 10000 {
+		t.Errorf("expected no charge for free service, got %d", mockBK.balances[agent1]["ulgm"])
+	}
+}
+
+// ======================== Integration: Channel-Gated Calls ========================
+
+func TestCallService_ChannelPayment(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	mockCK := newMockChannelsKeeper()
+	k.SetChannelsKeeper(mockCK)
+
+	// Setup a channel
+	mockCK.channels["pc-1-1"] = struct {
+		payer, provider, available, status string
+	}{agent1, founder1, "50000", "open"}
+
+	// Deploy + activate paid service
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, _ := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "channel-api",
+		PricePerCall: "2000",
+	})
+	svc, _ := k.GetService(ctx, resp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	// Call with channel payment
+	_, err := msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: resp.ServiceId,
+		MaxFee:    "channel:pc-1-1",
+	})
+	if err != nil {
+		t.Fatalf("channel call: %v", err)
+	}
+
+	// Verify channel was debited
+	if len(mockCK.spentLog) != 1 {
+		t.Fatalf("expected 1 spend, got %d", len(mockCK.spentLog))
+	}
+	if mockCK.spentLog[0].channelId != "pc-1-1" {
+		t.Errorf("expected channel pc-1-1, got %s", mockCK.spentLog[0].channelId)
+	}
+	if mockCK.spentLog[0].amount != "2000" {
+		t.Errorf("expected amount 2000, got %s", mockCK.spentLog[0].amount)
+	}
+	if mockCK.spentLog[0].recipientModule != "tree" {
+		t.Errorf("expected recipient tree, got %s", mockCK.spentLog[0].recipientModule)
+	}
+}
+
+func TestCallService_ChannelNotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	mockCK := newMockChannelsKeeper()
+	k.SetChannelsKeeper(mockCK)
+
+	// Deploy + activate service
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, _ := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "test-api",
+		PricePerCall: "1000",
+	})
+	svc, _ := k.GetService(ctx, resp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	// Call with non-existent channel
+	_, err := msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: resp.ServiceId,
+		MaxFee:    "channel:nonexistent",
+	})
+	if err == nil {
+		t.Error("expected error for non-existent channel")
+	}
+}
+
+func TestCallService_ChannelWrongPayer(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	mockCK := newMockChannelsKeeper()
+	k.SetChannelsKeeper(mockCK)
+
+	// Channel owned by agent2, not agent1
+	mockCK.channels["pc-2-1"] = struct {
+		payer, provider, available, status string
+	}{agent2, founder1, "50000", "open"}
+
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, _ := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "test-api",
+		PricePerCall: "1000",
+	})
+	svc, _ := k.GetService(ctx, resp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	// Agent1 tries to use agent2's channel
+	_, err := msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: resp.ServiceId,
+		MaxFee:    "channel:pc-2-1",
+	})
+	if err == nil {
+		t.Error("expected error for wrong payer on channel")
+	}
+}
+
+func TestCallService_ChannelClosed(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	mockCK := newMockChannelsKeeper()
+	k.SetChannelsKeeper(mockCK)
+
+	// Channel is closed
+	mockCK.channels["pc-3-1"] = struct {
+		payer, provider, available, status string
+	}{agent1, founder1, "50000", "closed"}
+
+	msgServer := keeper.NewMsgServerImpl(k)
+	resp, _ := msgServer.DeployService(ctx, &types.MsgDeployService{
+		Deployer:     founder1,
+		Name:         "test-api",
+		PricePerCall: "1000",
+	})
+	svc, _ := k.GetService(ctx, resp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	k.SetService(ctx, svc)
+
+	_, err := msgServer.CallService(ctx, &types.MsgCallService{
+		Caller:    agent1,
+		ServiceId: resp.ServiceId,
+		MaxFee:    "channel:pc-3-1",
+	})
+	if err == nil {
+		t.Error("expected error for closed channel")
+	}
+}
+
+// ======================== Integration: HasActiveSubscription ========================
+
+func TestHasActiveSubscription(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	serviceId := "svc-test"
+
+	// No subscriptions yet
+	if k.HasActiveSubscription(ctx, serviceId, agent1) {
+		t.Error("expected no subscription")
+	}
+
+	// Add subscription
+	k.SetSubscription(ctx, types.ServiceSubscription{
+		Id:             "sub-1",
+		ServiceId:      serviceId,
+		Subscriber:     agent1,
+		StartBlock:     100,
+		DurationBlocks: 200,
+		ExpiresAtBlock: 300,
+	})
+
+	// Should find it at block 100
+	if !k.HasActiveSubscription(ctx, serviceId, agent1) {
+		t.Error("expected active subscription at block 100")
+	}
+
+	// Different subscriber should not find it
+	if k.HasActiveSubscription(ctx, serviceId, agent2) {
+		t.Error("expected no subscription for agent2")
+	}
+
+	// After expiry should not find it
+	expiredCtx := ctx.WithBlockHeight(300)
+	if k.HasActiveSubscription(expiredCtx, serviceId, agent1) {
+		t.Error("expected expired subscription at block 300")
+	}
+}

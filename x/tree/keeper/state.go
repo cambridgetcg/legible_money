@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"encoding/json"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/protobuf/proto"
 
@@ -414,6 +416,88 @@ func (k Keeper) GetExpiredSeeds(ctx sdk.Context, currentBlock uint64) []types.Op
 		return false
 	})
 	return expired
+}
+
+// ======================== Subscription CRUD ========================
+
+// SetSubscription stores a service subscription (JSON-serialized, no proto type).
+func (k Keeper) SetSubscription(ctx sdk.Context, sub types.ServiceSubscription) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(sub)
+	if err != nil {
+		panic(err)
+	}
+	if err := store.Set(types.SubscriptionKey(sub.Id), bz); err != nil {
+		panic(err)
+	}
+
+	if sub.ServiceId != "" {
+		if err := store.Set(types.SubscriptionServiceIndexKey(sub.ServiceId, sub.Id), []byte{0x01}); err != nil {
+			panic(err)
+		}
+	}
+}
+
+// GetSubscription retrieves a subscription by ID.
+func (k Keeper) GetSubscription(ctx sdk.Context, subId string) (types.ServiceSubscription, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.SubscriptionKey(subId))
+	if err != nil {
+		panic(err)
+	}
+	if bz == nil {
+		return types.ServiceSubscription{}, false
+	}
+	var sub types.ServiceSubscription
+	if err := json.Unmarshal(bz, &sub); err != nil {
+		panic(err)
+	}
+	return sub, true
+}
+
+// GetNextSubscriptionId returns and increments the subscription ID counter.
+func (k Keeper) GetNextSubscriptionId(ctx sdk.Context) uint64 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.Uint64ToBytes(0x24))
+	if err != nil {
+		panic(err)
+	}
+	var counter uint64
+	if bz != nil {
+		counter = types.BytesToUint64(bz)
+	}
+	counter++
+	if err := store.Set(types.Uint64ToBytes(0x24), types.Uint64ToBytes(counter)); err != nil {
+		panic(err)
+	}
+	return counter
+}
+
+// HasActiveSubscription checks if a subscriber has an active (non-expired) subscription to a service.
+func (k Keeper) HasActiveSubscription(ctx sdk.Context, serviceId, subscriber string) bool {
+	store := k.storeService.OpenKVStore(ctx)
+	prefix := types.SubscriptionServicePrefix(serviceId)
+	end := prefixEndBytes(prefix)
+	iter, err := store.Iterator(prefix, end)
+	if err != nil {
+		return false
+	}
+	defer iter.Close()
+
+	currentBlock := uint64(ctx.BlockHeight())
+	for ; iter.Valid(); iter.Next() {
+		// Extract subscription ID from key: prefix + subscriptionId
+		key := iter.Key()
+		subId := string(key[len(prefix):])
+		sub, found := k.GetSubscription(ctx, subId)
+		if !found {
+			continue
+		}
+		if sub.Subscriber == subscriber && currentBlock < sub.ExpiresAtBlock {
+			return true
+		}
+	}
+	return false
 }
 
 // ======================== Params ========================

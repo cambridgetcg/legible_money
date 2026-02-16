@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"cosmossdk.io/math"
 
@@ -886,32 +887,61 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 		return nil, types.ErrServiceNotActive
 	}
 
-	// 2. Parse price
+	// 2. Check for active subscription — subscribers skip per-call payment
+	hasSubscription := m.Keeper.HasActiveSubscription(ctx, msg.ServiceId, msg.Caller)
+
+	// 3. Parse price
 	price, ok := math.NewIntFromString(service.PricePerCall)
 	if !ok {
 		price = math.ZeroInt()
 	}
 
-	// 3. If paid service, do revenue distribution
-	if price.IsPositive() {
-		callerAddr, err := sdk.AccAddressFromBech32(msg.Caller)
-		if err != nil {
-			return nil, fmt.Errorf("invalid caller address: %w", err)
+	// 4. Determine payment method: subscription, channel, or direct
+	channelPayment := false
+	if price.IsPositive() && !hasSubscription {
+		// Check if MaxFee specifies a payment channel (format: "channel:<channelId>")
+		if strings.HasPrefix(msg.MaxFee, "channel:") && m.Keeper.channelsKeeper != nil {
+			channelId := strings.TrimPrefix(msg.MaxFee, "channel:")
+
+			// Verify channel: caller must be payer, channel must be open
+			payer, _, _, status, chFound := m.Keeper.channelsKeeper.GetChannelInfo(ctx, channelId)
+			if !chFound {
+				return nil, fmt.Errorf("payment channel %s not found", channelId)
+			}
+			if status != "open" {
+				return nil, fmt.Errorf("payment channel %s is not open (status: %s)", channelId, status)
+			}
+			if payer != msg.Caller {
+				return nil, fmt.Errorf("caller %s is not the payer of channel %s", msg.Caller, channelId)
+			}
+
+			// Debit the channel — transfers funds from channels module to tree module
+			if err := m.Keeper.channelsKeeper.SpendFromChannel(ctx, channelId, price.String(), types.ModuleName); err != nil {
+				return nil, types.ErrInsufficientPayment.Wrap(err.Error())
+			}
+			channelPayment = true
 		}
 
-		// Look up project for contributors
-		project, projFound := m.Keeper.GetProject(ctx, service.ProjectId)
-		if !projFound {
-			// Service not linked to project — just charge caller, no distribution
+		if !channelPayment {
+			// Direct payment from caller's account
+			callerAddr, err := sdk.AccAddressFromBech32(msg.Caller)
+			if err != nil {
+				return nil, fmt.Errorf("invalid caller address: %w", err)
+			}
+
 			paymentCoins := sdk.NewCoins(sdk.NewCoin("ulgm", price))
 			err = m.Keeper.bankKeeper.SendCoinsFromAccountToModule(ctx, callerAddr, types.ModuleName, paymentCoins)
 			if err != nil {
 				return nil, types.ErrInsufficientPayment.Wrap(err.Error())
 			}
-		} else {
+		}
+
+		// Revenue distribution (same path for both channel and direct payments —
+		// funds are now in the tree module account either way)
+		project, projFound := m.Keeper.GetProject(ctx, service.ProjectId)
+		if projFound {
 			params := m.Keeper.GetParams(ctx)
 
-			// Calculate revenue distribution
 			dist := CalculateRevenue(
 				price.Int64(),
 				params.EvidenceTaxBp,
@@ -921,14 +951,6 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 				project.Contributors,
 			)
 
-			// Transfer from caller to module account
-			paymentCoins := sdk.NewCoins(sdk.NewCoin("ulgm", price))
-			err = m.Keeper.bankKeeper.SendCoinsFromAccountToModule(ctx, callerAddr, types.ModuleName, paymentCoins)
-			if err != nil {
-				return nil, types.ErrInsufficientPayment.Wrap(err.Error())
-			}
-
-			// Distribute from module account to recipients
 			taxRecipients := []struct {
 				addr   string
 				amount int64
@@ -950,7 +972,6 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 				}
 			}
 
-			// Contributor shares
 			for _, share := range dist.ContributorShares {
 				if share.Amount > 0 {
 					addr, addrErr := sdk.AccAddressFromBech32(share.Address)
@@ -961,7 +982,6 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 				}
 			}
 
-			// Research fund
 			if dist.ResearchFund > 0 && params.ResearchFundAddr != "" {
 				addr, addrErr := sdk.AccAddressFromBech32(params.ResearchFundAddr)
 				if addrErr == nil {
@@ -970,7 +990,6 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 				}
 			}
 
-			// Protocol treasury
 			if dist.ProtocolTreasury > 0 && params.ProtocolTreasuryAddr != "" {
 				addr, addrErr := sdk.AccAddressFromBech32(params.ProtocolTreasuryAddr)
 				if addrErr == nil {
@@ -979,28 +998,38 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 				}
 			}
 
-			// Update project revenue
 			existingRevenue, _ := strconv.ParseInt(project.RevenueGenerated, 10, 64)
 			project.RevenueGenerated = strconv.FormatInt(existingRevenue+price.Int64(), 10)
 			m.Keeper.SetProject(ctx, project)
 		}
 	}
 
-	// 4. Update service metrics
+	// 5. Update service metrics
 	existingCalls, _ := strconv.ParseInt(service.TotalCalls, 10, 64)
 	service.TotalCalls = strconv.FormatInt(existingCalls+1, 10)
 
-	existingRevenue, _ := strconv.ParseInt(service.TotalRevenue, 10, 64)
-	service.TotalRevenue = strconv.FormatInt(existingRevenue+price.Int64(), 10)
+	// Revenue only counted when actually paid (not subscription-covered)
+	if !hasSubscription {
+		existingRevenue, _ := strconv.ParseInt(service.TotalRevenue, 10, 64)
+		service.TotalRevenue = strconv.FormatInt(existingRevenue+price.Int64(), 10)
+	}
 
 	service.LastCalledBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetService(ctx, service)
+
+	paymentMethod := "direct"
+	if hasSubscription {
+		paymentMethod = "subscription"
+	} else if channelPayment {
+		paymentMethod = "channel"
+	}
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_call_service",
 		sdk.NewAttribute("service_id", msg.ServiceId),
 		sdk.NewAttribute("caller", msg.Caller),
 		sdk.NewAttribute("amount", price.String()),
+		sdk.NewAttribute("payment_method", paymentMethod),
 	))
 
 	return &types.MsgCallServiceResponse{
@@ -1008,5 +1037,244 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 	}, nil
 }
 
-// Proto MsgServer also requires: SubscribeService, BeginSeeding, DetectOpportunity, ClaimOpportunity, AddContributor.
-// These are provided by the embedded UnimplementedMsgServer and will return "unimplemented" errors.
+// ======================== Contributor Messages ========================
+
+// AddContributor directly adds a contributor to a project (founder-only, bypasses application).
+// Proto fields: Authority, ProjectId, Contributor, Role
+func (m msgServer) AddContributor(goCtx context.Context, msg *types.MsgAddContributor) (*types.MsgAddContributorResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	project, found := m.Keeper.GetProject(ctx, msg.ProjectId)
+	if !found {
+		return nil, types.ErrProjectNotFound
+	}
+	if project.Founder != msg.Authority {
+		return nil, types.ErrNotFounder
+	}
+
+	params := m.Keeper.GetParams(ctx)
+	if uint32(len(project.Contributors)) >= params.MaxContributors {
+		return nil, types.ErrMaxContributorsReached
+	}
+
+	// Check for duplicate contributor
+	for _, c := range project.Contributors {
+		if c.Did == msg.Contributor {
+			return nil, types.ErrAlreadyApplied.Wrap("address is already a contributor")
+		}
+	}
+
+	project.Contributors = append(project.Contributors, &types.ContributorRecord{
+		Did:           msg.Contributor,
+		Role:          msg.Role,
+		JoinedAtBlock: uint64(ctx.BlockHeight()),
+	})
+	m.Keeper.SetProject(ctx, project)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tree_add_contributor",
+		sdk.NewAttribute("project_id", msg.ProjectId),
+		sdk.NewAttribute("contributor", msg.Contributor),
+		sdk.NewAttribute("role", msg.Role),
+	))
+
+	return &types.MsgAddContributorResponse{}, nil
+}
+
+// ======================== Subscription Messages ========================
+
+// SubscribeService creates a time-bounded subscription to an active service.
+// Proto fields: Subscriber, ServiceId, DurationBlocks
+func (m msgServer) SubscribeService(goCtx context.Context, msg *types.MsgSubscribeService) (*types.MsgSubscribeServiceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	service, found := m.Keeper.GetService(ctx, msg.ServiceId)
+	if !found {
+		return nil, types.ErrServiceNotFound
+	}
+	if service.Status != string(types.ServiceActive) {
+		return nil, types.ErrServiceNotActive
+	}
+
+	currentBlock := uint64(ctx.BlockHeight())
+	counter := m.Keeper.GetNextSubscriptionId(ctx)
+	subId := fmt.Sprintf("sub-%d-%d", currentBlock, counter)
+
+	sub := types.ServiceSubscription{
+		Id:             subId,
+		ServiceId:      msg.ServiceId,
+		Subscriber:     msg.Subscriber,
+		StartBlock:     currentBlock,
+		DurationBlocks: msg.DurationBlocks,
+		ExpiresAtBlock: currentBlock + msg.DurationBlocks,
+	}
+
+	m.Keeper.SetSubscription(ctx, sub)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tree_subscribe_service",
+		sdk.NewAttribute("subscription_id", subId),
+		sdk.NewAttribute("service_id", msg.ServiceId),
+		sdk.NewAttribute("subscriber", msg.Subscriber),
+		sdk.NewAttribute("duration_blocks", strconv.FormatUint(msg.DurationBlocks, 10)),
+	))
+
+	return &types.MsgSubscribeServiceResponse{SubscriptionId: subId}, nil
+}
+
+// ======================== Seeding Messages ========================
+
+// BeginSeeding transitions a fruiting project to seeding phase and creates an opportunity seed.
+// Proto fields: Seeder, ProjectId, Domain
+func (m msgServer) BeginSeeding(goCtx context.Context, msg *types.MsgBeginSeeding) (*types.MsgBeginSeedingResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	project, found := m.Keeper.GetProject(ctx, msg.ProjectId)
+	if !found {
+		return nil, types.ErrProjectNotFound
+	}
+	if !IsFounderOrContributor(project, msg.Seeder) {
+		return nil, types.ErrNotContributor
+	}
+	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseSeeding) {
+		return nil, types.ErrInvalidPhaseTransition
+	}
+
+	currentBlock := uint64(ctx.BlockHeight())
+
+	// Transition project to seeding phase
+	project.PreviousPhase = project.Phase
+	project.Phase = string(types.PhaseSeeding)
+	project.PhaseChangedAtBlock = currentBlock
+	m.Keeper.SetProject(ctx, project)
+
+	// Create an opportunity seed in the specified domain
+	params := m.Keeper.GetParams(ctx)
+	seedCounter := m.Keeper.GetNextSeedId(ctx)
+	seedId := fmt.Sprintf("seed-%d-%d", currentBlock, seedCounter)
+
+	domain := msg.Domain
+	if domain == "" {
+		domain = project.KnowledgeDomain
+	}
+
+	seed := types.OpportunitySeed{
+		Id:              seedId,
+		DetectedAtBlock: currentBlock,
+		KnowledgeDomain: domain,
+		Status:          string(types.SeedDetected),
+		ProjectId:       msg.ProjectId,
+		ExpiresAtBlock:  currentBlock + params.SeedExpiryBlocks,
+	}
+	m.Keeper.SetSeed(ctx, seed)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tree_begin_seeding",
+		sdk.NewAttribute("project_id", msg.ProjectId),
+		sdk.NewAttribute("seed_id", seedId),
+		sdk.NewAttribute("domain", domain),
+	))
+
+	return &types.MsgBeginSeedingResponse{}, nil
+}
+
+// ======================== Opportunity Messages ========================
+
+// DetectOpportunity records a new opportunity seed detected by an agent.
+// Proto fields: Detector, Domain, Description, RelatedFacts
+func (m msgServer) DetectOpportunity(goCtx context.Context, msg *types.MsgDetectOpportunity) (*types.MsgDetectOpportunityResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	currentBlock := uint64(ctx.BlockHeight())
+	params := m.Keeper.GetParams(ctx)
+	counter := m.Keeper.GetNextSeedId(ctx)
+	seedId := fmt.Sprintf("seed-%d-%d", currentBlock, counter)
+
+	seed := types.OpportunitySeed{
+		Id:              seedId,
+		DetectedAtBlock: currentBlock,
+		KnowledgeDomain: msg.Domain,
+		Confidence:      "0.5",
+		Status:          string(types.SeedDetected),
+		ExpiresAtBlock:  currentBlock + params.SeedExpiryBlocks,
+	}
+
+	// Store demand signal with description and related facts
+	if msg.Description != "" || len(msg.RelatedFacts) > 0 {
+		evidence := make(map[string]string)
+		evidence["description"] = msg.Description
+		for i, fact := range msg.RelatedFacts {
+			evidence[fmt.Sprintf("related_fact_%d", i)] = fact
+		}
+		seed.Signal = &types.DemandSignal{
+			Type:     "agent_detection",
+			Evidence: evidence,
+			Strength: "0.5",
+		}
+	}
+
+	m.Keeper.SetSeed(ctx, seed)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tree_detect_opportunity",
+		sdk.NewAttribute("opportunity_id", seedId),
+		sdk.NewAttribute("detector", msg.Detector),
+		sdk.NewAttribute("domain", msg.Domain),
+	))
+
+	return &types.MsgDetectOpportunityResponse{OpportunityId: seedId}, nil
+}
+
+// ClaimOpportunity claims a detected opportunity seed by staking on it.
+// Proto fields: Claimer, OpportunityId, Stake
+func (m msgServer) ClaimOpportunity(goCtx context.Context, msg *types.MsgClaimOpportunity) (*types.MsgClaimOpportunityResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	seed, found := m.Keeper.GetSeed(ctx, msg.OpportunityId)
+	if !found {
+		return nil, types.ErrSeedNotFound
+	}
+	if seed.Status == string(types.SeedClaimed) {
+		return nil, types.ErrSeedAlreadyClaimed
+	}
+	if seed.Status == string(types.SeedExpired) {
+		return nil, types.ErrSeedExpired
+	}
+
+	currentBlock := uint64(ctx.BlockHeight())
+	if seed.ExpiresAtBlock > 0 && currentBlock >= seed.ExpiresAtBlock {
+		// Seed has expired — update status and reject
+		seed.Status = string(types.SeedExpired)
+		m.Keeper.SetSeed(ctx, seed)
+		return nil, types.ErrSeedExpired
+	}
+
+	// Escrow stake if provided
+	if msg.Stake != "" && msg.Stake != "0" {
+		stakeAmount, ok := math.NewIntFromString(msg.Stake)
+		if ok && stakeAmount.IsPositive() {
+			claimerAddr, err := sdk.AccAddressFromBech32(msg.Claimer)
+			if err != nil {
+				return nil, fmt.Errorf("invalid claimer address: %w", err)
+			}
+			coins := sdk.NewCoins(sdk.NewCoin("ulgm", stakeAmount))
+			err = m.Keeper.bankKeeper.SendCoinsFromAccountToModule(ctx, claimerAddr, types.ModuleName, coins)
+			if err != nil {
+				return nil, types.ErrInsufficientPayment.Wrap(err.Error())
+			}
+		}
+	}
+
+	seed.Status = string(types.SeedClaimed)
+	seed.ClaimedBy = msg.Claimer
+	m.Keeper.SetSeed(ctx, seed)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tree_claim_opportunity",
+		sdk.NewAttribute("opportunity_id", msg.OpportunityId),
+		sdk.NewAttribute("claimer", msg.Claimer),
+		sdk.NewAttribute("stake", msg.Stake),
+	))
+
+	return &types.MsgClaimOpportunityResponse{}, nil
+}
