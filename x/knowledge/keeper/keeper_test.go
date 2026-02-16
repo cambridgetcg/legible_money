@@ -135,18 +135,6 @@ func (m mockAccountKeeper) GetModuleAddress(_ string) sdk.AccAddress {
 	return nil
 }
 
-// ---------- Mock TokensKeeper ----------
-
-type mockTokensKeeper struct{}
-
-func (m mockTokensKeeper) DebitBalance(_ sdk.Context, _, _ string) error {
-	return nil
-}
-
-func (m mockTokensKeeper) CreditBalance(_ sdk.Context, _, _ string, _ uint64) error {
-	return nil
-}
-
 // ---------- Test Setup ----------
 
 func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) {
@@ -179,7 +167,6 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 		mockAccountKeeper{},
 		mockBankKeeper{},
 		mockSK,
-		mockTokensKeeper{},
 		nil, // qualificationKeeper — nil-safe, wire when needed
 		nil, // captureDefenseKeeper — nil-safe, wire when needed
 		nil, // vestingRewardsKeeper — nil-safe, wire when needed
@@ -2353,7 +2340,6 @@ func setupKeeperWithTracking(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 		mockAccountKeeper{},
 		tbk,
 		mockSK,
-		mockTokensKeeper{},
 		nil, // qualificationKeeper
 		nil, // captureDefenseKeeper
 		mvk,
@@ -2779,7 +2765,6 @@ func setupKeeperWithEvidence(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 		mockAccountKeeper{},
 		mockBankKeeper{},
 		mockSK,
-		mockTokensKeeper{},
 		nil,    // qualificationKeeper
 		nil,    // captureDefenseKeeper
 		nil,    // vestingRewardsKeeper

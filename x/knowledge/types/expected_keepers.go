@@ -20,13 +20,6 @@ type BankKeeper interface {
 	BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 }
 
-// TokensKeeper defines the expected tokens module keeper for period-based balance tracking.
-// The knowledge module calls this to maintain the period overlay alongside BankKeeper transfers.
-type TokensKeeper interface {
-	DebitBalance(ctx sdk.Context, address, amount string) error
-	CreditBalance(ctx sdk.Context, address, amount string, blockHeight uint64) error
-}
-
 // OntologyKeeper defines the expected ontology keeper interface.
 // The knowledge module uses this to look up stratum-based confidence ceilings for domains
 // and to enforce Gödelian logic zone constraints on claims.

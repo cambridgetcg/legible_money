@@ -25,7 +25,6 @@ type Keeper struct {
 	accountKeeper         types.AccountKeeper
 	bankKeeper            types.BankKeeper
 	stakingKeeper         types.StakingKeeper
-	tokensKeeper          types.TokensKeeper
 	qualificationKeeper   types.DomainQualificationKeeper
 	captureDefenseKeeper  types.CaptureDefenseKeeper
 	vestingRewardsKeeper  types.VestingRewardsKeeper
@@ -47,7 +46,6 @@ func NewKeeper(
 	ak types.AccountKeeper,
 	bk types.BankKeeper,
 	sk types.StakingKeeper,
-	tk types.TokensKeeper,
 	qk types.DomainQualificationKeeper,
 	cdk types.CaptureDefenseKeeper,
 	vrk types.VestingRewardsKeeper,
@@ -61,7 +59,6 @@ func NewKeeper(
 		accountKeeper:         ak,
 		bankKeeper:            bk,
 		stakingKeeper:         sk,
-		tokensKeeper:          tk,
 		qualificationKeeper:   qk,
 		captureDefenseKeeper:  cdk,
 		vestingRewardsKeeper:  vrk,

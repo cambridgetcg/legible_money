@@ -93,14 +93,6 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 			return nil, fmt.Errorf("failed to transfer initial stake: %w", err)
 		}
 
-		// Debit from period overlay (FIFO from oldest periods)
-		if k.tokensKeeper != nil {
-			if err := k.tokensKeeper.DebitBalance(ctx, msg.ValidatorAddress, initialStake.String()); err != nil {
-				k.Logger(ctx).Error("failed to debit period balance for initial stake",
-					"validator", msg.ValidatorAddress, "error", err)
-			}
-		}
-
 		// Create self-delegation
 		delegation := types.Delegation{
 			DelegatorAddress:  msg.ValidatorAddress,
@@ -159,14 +151,6 @@ func (k Keeper) Delegate(ctx sdk.Context, msg *types.MsgDelegate) (*types.MsgDel
 	coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(amountInt)))
 	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, delegatorAddr, types.ModuleName, coins); err != nil {
 		return nil, fmt.Errorf("failed to transfer delegation: %w", err)
-	}
-
-	// Debit from period overlay
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.DebitBalance(ctx, msg.Delegator, amountInt.String()); err != nil {
-			k.Logger(ctx).Error("failed to debit period balance for delegation",
-				"delegator", msg.Delegator, "error", err)
-		}
 	}
 
 	// Update or create delegation
@@ -273,11 +257,6 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 	seq := k.NextUnbondingSeq(ctx)
 	unbondingId := fmt.Sprintf("%s_%s_%d_%d", msg.Delegator, msg.Validator, currentHeight, seq)
 
-	var originPeriod uint64
-	if k.tokensKeeper != nil {
-		originPeriod = k.tokensKeeper.GetCurrentPeriod(ctx)
-	}
-
 	unbonding := types.UnbondingEntry{
 		Id:                unbondingId,
 		DelegatorAddress:  msg.Delegator,
@@ -286,7 +265,6 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 		InitiatedAtHeight: currentHeight,
 		CompletesAtHeight: currentHeight + params.UnbondingPeriod,
 		Status:            "pending",
-		OriginPeriod:      originPeriod,
 	}
 	if err := k.SetUnbonding(ctx, unbonding); err != nil {
 		return nil, err
@@ -484,14 +462,6 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 			return nil, fmt.Errorf("failed to transfer stake: %w", err)
 		}
 
-		// Debit from period overlay (FIFO from oldest periods)
-		if k.tokensKeeper != nil {
-			if err := k.tokensKeeper.DebitBalance(ctx, msg.Validator, amountInt.String()); err != nil {
-				k.Logger(ctx).Error("failed to debit period balance for stake increase",
-					"validator", msg.Validator, "error", err)
-			}
-		}
-
 		newStake = new(big.Int).Add(stakeInt, amountInt)
 
 		// Update self-delegation
@@ -523,15 +493,10 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 
 		newStake = new(big.Int).Sub(stakeInt, amountInt)
 
-		// Create unbonding entry with period preservation
+		// Create unbonding entry
 		params := k.GetParams(ctx)
 		seq := k.NextUnbondingSeq(ctx)
 		unbondingId := fmt.Sprintf("%s_%d_%d", msg.Validator, ctx.BlockHeight(), seq)
-
-		var originPeriod uint64
-		if k.tokensKeeper != nil {
-			originPeriod = k.tokensKeeper.GetCurrentPeriod(ctx)
-		}
 
 		unbonding := types.UnbondingEntry{
 			Id:                unbondingId,
@@ -541,7 +506,6 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 			InitiatedAtHeight: uint64(ctx.BlockHeight()),
 			CompletesAtHeight: uint64(ctx.BlockHeight()) + params.UnbondingPeriod,
 			Status:            "pending",
-			OriginPeriod:      originPeriod,
 		}
 		if err := k.SetUnbonding(ctx, unbonding); err != nil {
 			return nil, err

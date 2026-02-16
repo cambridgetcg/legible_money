@@ -720,7 +720,6 @@ func NewLegibleApp(
 		app.AccountKeeper,
 		app.BankKeeper,
 		app.LegibleAuthKeeper,
-		app.TokensKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
@@ -797,6 +796,7 @@ func NewLegibleApp(
 		app.BankKeeper,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.TreeKeeper.SetChannelsKeeper(app.ChannelsKeeper)
 
 	app.BVMKeeper = bvmkeeper.NewKeeper(
 		appCodec,
@@ -879,7 +879,6 @@ func NewLegibleApp(
 		app.AccountKeeper,
 		app.BankKeeper,
 		NewStakingKeeperAdapter(app.LegibleStakingKeeper),
-		app.TokensKeeper,
 		app.QualificationKeeper,
 		app.CaptureDefenseKeeper,
 		app.VestingRewardsKeeper,

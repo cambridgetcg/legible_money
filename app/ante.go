@@ -29,6 +29,9 @@ func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
 		// --- Gas Meter Init (must be before any gas consumption) ---
 		ante.NewSetUpContextDecorator(),
 
+		// --- Bootstrap Gas-Free (waives gas for PoT txs during first ~14 days) ---
+		NewBootstrapGasFreeDecorator(),
+
 		// --- Emergency Halt Gate (blocks non-emergency txs when chain is halted) ---
 		NewEmergencyHaltDecorator(app.EmergencyKeeper),
 

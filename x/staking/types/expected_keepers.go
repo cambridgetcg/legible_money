@@ -35,11 +35,3 @@ type AutopoiesisKeeper interface {
 	GetMultiplier(ctx sdk.Context, path string) uint64
 }
 
-// TokensKeeper defines the expected tokens module keeper for period-based balance tracking.
-// The staking module calls this to maintain the period overlay alongside BankKeeper transfers.
-type TokensKeeper interface {
-	DebitBalance(ctx sdk.Context, address, amount string) error
-	CreditBalance(ctx sdk.Context, address, amount string, blockHeight uint64) error
-	CreditBalanceToSpecificPeriod(ctx sdk.Context, address, amount string, period uint64) error
-	GetCurrentPeriod(ctx sdk.Context) uint64
-}

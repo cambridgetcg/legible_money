@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 
+	storetypes "cosmossdk.io/store/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	legibleauthkeeper "github.com/legible-money/legible/x/auth/keeper"
@@ -15,6 +17,43 @@ import (
 // msgWithSigners is implemented by hand-written Legible message types.
 type msgWithSigners interface {
 	GetSigners() []sdk.AccAddress
+}
+
+// ---------- BootstrapGasFreeDecorator ----------
+
+// BootstrapGasFreeDecorator waives gas and fees for essential PoT transactions
+// during the bootstrap period (first 480,000 blocks ≈ 14 days).
+// This allows the network to begin verifying truth before any LGM is minted.
+type BootstrapGasFreeDecorator struct{}
+
+// NewBootstrapGasFreeDecorator creates a new BootstrapGasFreeDecorator.
+func NewBootstrapGasFreeDecorator() BootstrapGasFreeDecorator {
+	return BootstrapGasFreeDecorator{}
+}
+
+func (bgd BootstrapGasFreeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
+	if ctx.BlockHeight() > BootstrapEndBlock {
+		return next(ctx, tx, simulate)
+	}
+
+	// Check if ALL messages in the tx are bootstrap-eligible
+	msgs := tx.GetMsgs()
+	allEligible := len(msgs) > 0
+	for _, msg := range msgs {
+		if !BootstrapGasFreeTypes[sdk.MsgTypeURL(msg)] {
+			allEligible = false
+			break
+		}
+	}
+
+	if !allEligible {
+		return next(ctx, tx, simulate)
+	}
+
+	// Set infinite gas meter — bootstrap tx pays no gas
+	ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
+
+	return next(ctx, tx, simulate)
 }
 
 // ---------- EmergencyHaltDecorator ----------

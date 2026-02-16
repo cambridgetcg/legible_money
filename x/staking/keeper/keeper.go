@@ -23,7 +23,6 @@ type Keeper struct {
 	accountKeeper     types.AccountKeeper
 	bankKeeper        types.BankKeeper
 	authKeeper        types.LegibleAuthKeeper
-	tokensKeeper      types.TokensKeeper
 	autopoiesisKeeper types.AutopoiesisKeeper
 	authority         string // module authority (gov module)
 }
@@ -34,7 +33,6 @@ func NewKeeper(
 	accountKeeper types.AccountKeeper,
 	bankKeeper types.BankKeeper,
 	authKeeper types.LegibleAuthKeeper,
-	tokensKeeper types.TokensKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
@@ -43,7 +41,6 @@ func NewKeeper(
 		accountKeeper: accountKeeper,
 		bankKeeper:    bankKeeper,
 		authKeeper:    authKeeper,
-		tokensKeeper:  tokensKeeper,
 		authority:     authority,
 	}
 }
@@ -889,21 +886,6 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 				"error", err,
 			)
 			continue
-		}
-
-		// Credit tokens in period overlay, preserving the original period
-		if k.tokensKeeper != nil {
-			if unbonding.OriginPeriod > 0 {
-				if err := k.tokensKeeper.CreditBalanceToSpecificPeriod(ctx, unbonding.DelegatorAddress, unbonding.Amount, unbonding.OriginPeriod); err != nil {
-					k.Logger(ctx).Error("failed to credit period balance for unbonding",
-						"id", unbonding.Id, "error", err)
-				}
-			} else {
-				if err := k.tokensKeeper.CreditBalance(ctx, unbonding.DelegatorAddress, unbonding.Amount, uint64(ctx.BlockHeight())); err != nil {
-					k.Logger(ctx).Error("failed to credit period balance for unbonding",
-						"id", unbonding.Id, "error", err)
-				}
-			}
 		}
 
 		// Mark as completed

@@ -2,7 +2,6 @@ package types
 
 import (
 	"fmt"
-	"math/big"
 )
 
 // DefaultParams returns default module parameters
@@ -15,11 +14,11 @@ func DefaultParams() *Params {
 		MinValidatorsForFullReward: 22,            // target validator count
 		VestingEnabled:             true,
 		ReleasedClawbackRate:       3300,          // 33% of released clawed back on falsification
-		InitialFundBalance:        "133333333200000", // 133,333,333.2 LGM in ulgm (60% of 222,222,222)
+		InitialFundBalance:        "0",               // Pure PoT: no pre-minted fund
 		BlocksPerEpoch:            240000,            // ~1 week at 2521ms blocks
 		DecayFactorBps:            900000,            // 0.9 per epoch (bps on 1,000,000 scale)
 		FloorReward:               "100000",          // 0.1 LGM in ulgm
-		FundHealthThresholdBps:    100000,            // 10% (bps on 1,000,000 scale)
+		FundHealthThresholdBps:    100000,            // 10% (bps on 1,000,000 scale) [unused in pure PoT]
 		ApiSuppressionExponent:    2,                  // quadratic (deferred)
 	}
 }
@@ -74,18 +73,8 @@ func (gs *GenesisState) Validate() error {
 	return nil
 }
 
-// validateFundParams validates the block reward fund parameters.
+// validateFundParams validates the block reward parameters.
 func validateFundParams(p *Params) error {
-	if p.InitialFundBalance == "" || p.InitialFundBalance == "0" {
-		return fmt.Errorf("initial_fund_balance is required (no infinite mint)")
-	}
-	fund := new(big.Int)
-	if _, ok := fund.SetString(p.InitialFundBalance, 10); !ok {
-		return fmt.Errorf("initial_fund_balance is not a valid integer: %s", p.InitialFundBalance)
-	}
-	if fund.Sign() < 0 {
-		return fmt.Errorf("initial_fund_balance must be non-negative")
-	}
 	if p.BlocksPerEpoch == 0 {
 		return fmt.Errorf("blocks_per_epoch must be positive")
 	}

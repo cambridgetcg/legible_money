@@ -135,10 +135,10 @@ func applyDecay(amount *big.Int, decayBps uint64, epochs uint64) *big.Int {
 	return out
 }
 
-// calculateFiniteFundReward computes the block reward under finite fund mode.
-// 3-factor formula: R = max(initialReward * timeDecay * fundHealth, floorReward)
-// Hard stop: R = 0 when fund is exhausted.
-func (k Keeper) calculateFiniteFundReward(ctx sdk.Context, params *types.Params) *big.Int {
+// calculateBlockReward computes the per-block reward under pure PoT minting.
+// Formula: R = max(initialReward * decayFactor^epoch, floorReward)
+// Supply cap is enforced by MintWithCap, not here.
+func calculateBlockReward(ctx sdk.Context, params *types.Params) *big.Int {
 	height := uint64(ctx.BlockHeight())
 
 	// Parse initial per-block reward (BlockRewardAmount)
@@ -153,39 +153,13 @@ func (k Keeper) calculateFiniteFundReward(ctx sdk.Context, params *types.Params)
 	// Time decay: initialReward * decayFactor^epoch
 	reward := applyDecay(initialReward, params.DecayFactorBps, epoch)
 
-	// Fund health factor
-	currentBalance := k.GetFundBalance(ctx)
-	if currentBalance.Sign() <= 0 {
-		return new(big.Int) // Hard stop: fund exhausted
-	}
-
-	initialFund := new(big.Int)
-	if _, ok := initialFund.SetString(params.InitialFundBalance, 10); !ok || initialFund.Sign() <= 0 {
-		return new(big.Int)
-	}
-
-	// Health floor = initialFund * thresholdBps / 1000000
-	healthFloor := new(big.Int).Mul(initialFund, big.NewInt(int64(params.FundHealthThresholdBps)))
-	healthFloor.Div(healthFloor, big.NewInt(1000000))
-
-	if healthFloor.Sign() > 0 && currentBalance.Cmp(healthFloor) < 0 {
-		// Linear taper: reward *= currentBalance / healthFloor
-		reward.Mul(reward, currentBalance)
-		reward.Div(reward, healthFloor)
-	}
-
-	// Apply floor reward (only while fund has balance)
+	// Apply floor reward
 	floorReward := new(big.Int)
 	if params.FloorReward != "" {
 		floorReward.SetString(params.FloorReward, 10)
 	}
 	if floorReward.Sign() > 0 && reward.Cmp(floorReward) < 0 {
 		reward.Set(floorReward)
-	}
-
-	// Cap reward to available fund balance
-	if reward.Cmp(currentBalance) > 0 {
-		reward.Set(currentBalance)
 	}
 
 	return reward
@@ -216,9 +190,9 @@ func (k Keeper) GetEpochBlockRewardPool(ctx sdk.Context, epoch uint64) uint64 {
 	return pool.Uint64()
 }
 
-// DistributeBlockReward distributes the block production reward from the finite fund.
+// DistributeBlockReward mints and distributes block production rewards via pure PoT.
 //
-// The fund is pre-minted at genesis and depletes over time with exponential decay.
+// All LGM is minted per-block through PoT consensus, capped at 222,222,222 LGM.
 // The reward is scaled by validator participation:
 //
 //	reward = baseReward * min(1, activeValidators / targetValidators)
@@ -242,8 +216,8 @@ func (k Keeper) DistributeBlockReward(
 		}, nil
 	}
 
-	// Calculate reward from finite fund (decay + health taper + floor + cap)
-	effectiveReward := k.calculateFiniteFundReward(ctx, params)
+	// Calculate reward (decay + floor)
+	effectiveReward := calculateBlockReward(ctx, params)
 
 	if effectiveReward == nil || effectiveReward.Sign() <= 0 {
 		dist := &types.BlockRewardDistribution{
@@ -281,8 +255,36 @@ func (k Keeper) DistributeBlockReward(
 		return dist, nil
 	}
 
-	// Route through research share
-	routing, err := k.RouteReward(ctx, types.SourceBlockProduction, effectiveReward.String(), producer, "")
+	// Mint new tokens (supply-cap enforced)
+	actualMinted, err := k.MintWithCap(ctx, effectiveReward)
+	if err != nil {
+		k.Logger(ctx).Error("failed to mint block reward", "error", err)
+		dist := &types.BlockRewardDistribution{
+			BlockHeight:    height,
+			ProducerReward: "0",
+			ResearchShare:  "0",
+			TotalMinted:    "0",
+			ValidatorCount: activeValidatorCount,
+		}
+		k.SetBlockRewardDistribution(ctx, dist)
+		return dist, nil
+	}
+
+	if actualMinted.Sign() <= 0 {
+		// Supply exhausted
+		dist := &types.BlockRewardDistribution{
+			BlockHeight:    height,
+			ProducerReward: "0",
+			ResearchShare:  "0",
+			TotalMinted:    "0",
+			ValidatorCount: activeValidatorCount,
+		}
+		k.SetBlockRewardDistribution(ctx, dist)
+		return dist, nil
+	}
+
+	// Route through research share (using actual minted amount)
+	routing, err := k.RouteReward(ctx, types.SourceBlockProduction, actualMinted.String(), producer, "")
 	if err != nil {
 		dist := &types.BlockRewardDistribution{
 			BlockHeight:    height,
@@ -303,49 +305,34 @@ func (k Keeper) DistributeBlockReward(
 		ValidatorCount: activeValidatorCount,
 	}
 
-	// Distribute coins via bank keeper (nil-safe for tests/devnet)
+	// Distribute minted coins via bank keeper (nil-safe for tests)
 	if k.bankKeeper != nil {
-		totalRewardBig := new(big.Int)
-		totalRewardBig.SetString(routing.OriginalAmount, 10)
-
-		if totalRewardBig.Sign() > 0 {
-			// Deduct from fund (no minting — fund was pre-minted at genesis)
-			if !k.DeductFromFund(ctx, totalRewardBig) {
-				// Fund exhausted — zero reward
-				dist.ProducerReward = "0"
-				dist.ResearchShare = "0"
-				dist.TotalMinted = "0"
-				k.SetBlockRewardDistribution(ctx, dist)
-				return dist, nil
-			}
-
-			// Send producer share (78%) to block producer
-			producerBig := new(big.Int)
-			producerBig.SetString(routing.RecipientAmount, 10)
-			if producerBig.Sign() > 0 {
-				producerAddr, addrErr := sdk.AccAddressFromBech32(producer)
-				if addrErr == nil {
-					producerCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(producerBig)))
-					if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, producerAddr, producerCoins); err != nil {
-						k.Logger(ctx).Error("failed to send producer reward", "error", err)
-					}
+		// Send producer share (78%) to block producer
+		producerBig := new(big.Int)
+		producerBig.SetString(routing.RecipientAmount, 10)
+		if producerBig.Sign() > 0 {
+			producerAddr, addrErr := sdk.AccAddressFromBech32(producer)
+			if addrErr == nil {
+				producerCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(producerBig)))
+				if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, producerAddr, producerCoins); err != nil {
+					k.Logger(ctx).Error("failed to send producer reward", "error", err)
 				}
 			}
+		}
 
-			// Send research share (22%) to research fund
-			researchBig := new(big.Int)
-			researchBig.SetString(routing.ResearchShare, 10)
-			if researchBig.Sign() > 0 {
-				researchCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(researchBig)))
-				if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, ResearchFundModuleName, researchCoins); err != nil {
-					k.Logger(ctx).Error("failed to send research share", "error", err)
-				}
+		// Send research share (22%) to research fund
+		researchBig := new(big.Int)
+		researchBig.SetString(routing.ResearchShare, 10)
+		if researchBig.Sign() > 0 {
+			researchCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(researchBig)))
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, ResearchFundModuleName, researchCoins); err != nil {
+				k.Logger(ctx).Error("failed to send research share", "error", err)
 			}
 		}
 	}
 
-	// Record fund balance after distribution
-	dist.FundBalanceAfter = k.GetFundBalance(ctx).String()
+	// Record total minted after distribution
+	dist.FundBalanceAfter = k.GetTotalMinted(ctx).String()
 
 	k.SetBlockRewardDistribution(ctx, dist)
 
@@ -354,6 +341,7 @@ func (k Keeper) DistributeBlockReward(
 		"producer", producer,
 		"reward", routing.RecipientAmount,
 		"research", routing.ResearchShare,
+		"total_minted", dist.FundBalanceAfter,
 	)
 
 	return dist, nil

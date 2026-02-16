@@ -83,19 +83,6 @@ func (m *mockAccountKeeper) NewAccountWithAddress(_ context.Context, _ sdk.AccAd
 	return nil
 }
 
-type mockTokensKeeper struct {
-	period uint64
-}
-
-func (m *mockTokensKeeper) DebitBalance(_ sdk.Context, _, _ string) error { return nil }
-func (m *mockTokensKeeper) CreditBalance(_ sdk.Context, _, _ string, _ uint64) error {
-	return nil
-}
-func (m *mockTokensKeeper) CreditBalanceToSpecificPeriod(_ sdk.Context, _, _ string, _ uint64) error {
-	return nil
-}
-func (m *mockTokensKeeper) GetCurrentPeriod(_ sdk.Context) uint64 { return m.period }
-
 // ---------- Test Setup ----------
 
 func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
@@ -116,9 +103,8 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	storeService := runtime.NewKVStoreService(storeKey)
 	bk := newMockBankKeeper()
 	ak := &mockAccountKeeper{}
-	tk := &mockTokensKeeper{period: 1}
 
-	k := keeper.NewKeeper(cdc, storeService, ak, bk, nil, tk, "authority")
+	k := keeper.NewKeeper(cdc, storeService, ak, bk, nil, "authority")
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
 	// Init genesis

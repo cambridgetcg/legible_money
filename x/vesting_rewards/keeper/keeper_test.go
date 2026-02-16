@@ -573,7 +573,7 @@ func (m *mockStakingKeeper) GetActiveValidatorCount(_ sdk.Context) uint32 {
 }
 
 // setupKeeperWithBank sets up a keeper with mock bank and staking keepers.
-// Uses default genesis which includes finite fund mode.
+// Uses default genesis (pure PoT: no pre-minted fund).
 func setupKeeperWithBank(t *testing.T, bk *mockBankKeeper, sk *mockStakingKeeper) (keeper.Keeper, sdk.Context) {
 	t.Helper()
 	return setupKeeperWithBankAndGenesis(t, bk, sk, types.DefaultGenesis())
@@ -610,8 +610,11 @@ func TestDistributeBlockReward_MintAndDistribute(t *testing.T) {
 	sk := &mockStakingKeeper{activeCount: 22} // Full reward (target = 22)
 	k, ctx := setupKeeperWithBank(t, bk, sk)
 
-	// Record fund balance before distribution
-	fundBefore := k.GetFundBalance(ctx)
+	// Total minted should start at 0 (pure PoT: no genesis mint)
+	mintedBefore := k.GetTotalMinted(ctx)
+	if mintedBefore.Sign() != 0 {
+		t.Fatalf("expected 0 total minted at genesis, got %s", mintedBefore.String())
+	}
 
 	producer := sdk.AccAddress("producer____________").String()
 
@@ -630,10 +633,14 @@ func TestDistributeBlockReward_MintAndDistribute(t *testing.T) {
 		t.Fatal("expected non-zero research share")
 	}
 
-	// Verify fund balance decreased (finite fund deduction, not per-block mint)
-	fundAfter := k.GetFundBalance(ctx)
-	if fundAfter.Cmp(fundBefore) >= 0 {
-		t.Fatal("expected fund balance to decrease after block reward distribution")
+	// Verify total minted increased (per-block mint)
+	mintedAfter := k.GetTotalMinted(ctx)
+	if mintedAfter.Cmp(mintedBefore) <= 0 {
+		t.Fatal("expected total minted to increase after block reward distribution")
+	}
+	// Verify bank keeper was called for minting
+	if bk.mintedCoins.IsZero() {
+		t.Fatal("expected MintCoins to be called")
 	}
 	if len(bk.sentToAccount) == 0 {
 		t.Fatal("expected SendCoinsFromModuleToAccount to be called for producer")
@@ -674,8 +681,8 @@ func TestDistributeBlockReward_EmptyBlock(t *testing.T) {
 	sk := &mockStakingKeeper{activeCount: 22}
 	k, ctx := setupKeeperWithBank(t, bk, sk)
 
-	// Record fund balance before
-	fundBefore := k.GetFundBalance(ctx)
+	// Record total minted before
+	mintedBefore := k.GetTotalMinted(ctx)
 
 	producer := sdk.AccAddress("producer____________").String()
 
@@ -688,15 +695,15 @@ func TestDistributeBlockReward_EmptyBlock(t *testing.T) {
 	if dist.TotalMinted != "0" {
 		t.Errorf("expected 0 minted for empty block, got %s", dist.TotalMinted)
 	}
-	// Fund balance should be unchanged for empty block
-	fundAfter := k.GetFundBalance(ctx)
-	if fundAfter.Cmp(fundBefore) != 0 {
-		t.Errorf("expected fund balance unchanged for empty block, before=%s after=%s", fundBefore.String(), fundAfter.String())
+	// Total minted should be unchanged for empty block
+	mintedAfter := k.GetTotalMinted(ctx)
+	if mintedAfter.Cmp(mintedBefore) != 0 {
+		t.Errorf("expected total minted unchanged for empty block, before=%s after=%s", mintedBefore.String(), mintedAfter.String())
 	}
 }
 
 func TestDistributeBlockReward_NilBankKeeper(t *testing.T) {
-	// Keeper with nil bank (original behavior)
+	// Keeper with nil bank (MintWithCap skips actual mint but still tracks total)
 	k, ctx := setupKeeper(t)
 
 	producer := sdk.AccAddress("producer____________").String()
@@ -709,6 +716,11 @@ func TestDistributeBlockReward_NilBankKeeper(t *testing.T) {
 	// Should still calculate and record distribution even without bank
 	if dist.TotalMinted == "0" {
 		t.Fatal("expected non-zero distribution record even without bank")
+	}
+	// Total minted should be tracked
+	total := k.GetTotalMinted(ctx)
+	if total.Sign() <= 0 {
+		t.Fatal("expected total minted to increase even with nil bank")
 	}
 }
 
@@ -936,18 +948,19 @@ func TestVestingFullLifecycle(t *testing.T) {
 	}
 }
 
-// ==================== Finite Fund Tests ====================
+// ==================== Pure PoT Mint Tests ====================
 
-// setupFiniteFundKeeper creates a keeper with finite fund mode enabled using custom params.
-func setupFiniteFundKeeper(t *testing.T, bk *mockBankKeeper, initialFund string, blockHeight int64) (keeper.Keeper, sdk.Context) {
+// setupMintKeeper creates a keeper for pure PoT testing at a given block height.
+// totalMinted allows testing near the supply cap.
+func setupMintKeeper(t *testing.T, bk *mockBankKeeper, totalMinted string, blockHeight int64) (keeper.Keeper, sdk.Context) {
 	t.Helper()
 	gs := types.DefaultGenesis()
-	gs.Params.InitialFundBalance = initialFund
-	gs.Params.BlockRewardAmount = "11000000"    // 11 LGM initial reward
+	gs.Params.InitialFundBalance = totalMinted // InitialFundBalance stores TotalMinted on export/import
+	gs.Params.BlockRewardAmount = "11000000"   // 11 LGM initial reward
 	gs.Params.BlocksPerEpoch = 240000
-	gs.Params.DecayFactorBps = 900000            // 0.9 per epoch
-	gs.Params.FloorReward = "100000"              // 0.1 LGM floor
-	gs.Params.FundHealthThresholdBps = 100000     // 10%
+	gs.Params.DecayFactorBps = 900000           // 0.9 per epoch
+	gs.Params.FloorReward = "100000"             // 0.1 LGM floor
+	gs.Params.FundHealthThresholdBps = 100000    // 10% (unused in pure PoT)
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 	db := dbm.NewMemDB()
@@ -969,9 +982,9 @@ func setupFiniteFundKeeper(t *testing.T, bk *mockBankKeeper, initialFund string,
 	return k, ctx
 }
 
-func TestFiniteFundReward_Epoch0(t *testing.T) {
+func TestBlockReward_Epoch0(t *testing.T) {
 	bk := newMockBankKeeper()
-	k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", 0)
+	k, ctx := setupMintKeeper(t, bk, "0", 0)
 
 	producer := sdk.AccAddress("producer____________").String()
 	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
@@ -983,12 +996,16 @@ func TestFiniteFundReward_Epoch0(t *testing.T) {
 	if dist.TotalMinted != "11000000" {
 		t.Errorf("expected full reward 11000000 at epoch 0, got %s", dist.TotalMinted)
 	}
+	// Verify tokens were minted
+	if bk.mintedCoins.AmountOf("ulgm").Int64() != 11000000 {
+		t.Errorf("expected 11000000 ulgm minted, got %s", bk.mintedCoins.AmountOf("ulgm").String())
+	}
 }
 
-func TestFiniteFundReward_Epoch1(t *testing.T) {
+func TestBlockReward_Epoch1(t *testing.T) {
 	bk := newMockBankKeeper()
 	// Block 240000 = start of epoch 1
-	k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", 240000)
+	k, ctx := setupMintKeeper(t, bk, "0", 240000)
 
 	producer := sdk.AccAddress("producer____________").String()
 	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
@@ -1002,10 +1019,10 @@ func TestFiniteFundReward_Epoch1(t *testing.T) {
 	}
 }
 
-func TestFiniteFundReward_Epoch10(t *testing.T) {
+func TestBlockReward_Epoch10(t *testing.T) {
 	bk := newMockBankKeeper()
 	// Block 2400000 = start of epoch 10
-	k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", 2400000)
+	k, ctx := setupMintKeeper(t, bk, "0", 2400000)
 
 	producer := sdk.AccAddress("producer____________").String()
 	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
@@ -1025,9 +1042,9 @@ func TestFiniteFundReward_Epoch10(t *testing.T) {
 	}
 }
 
-func TestFiniteFundReward_FloorReward(t *testing.T) {
+func TestBlockReward_FloorReward(t *testing.T) {
 	bk := newMockBankKeeper()
-	k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", 200*240000)
+	k, ctx := setupMintKeeper(t, bk, "0", 200*240000)
 
 	producer := sdk.AccAddress("producer____________").String()
 	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
@@ -1041,80 +1058,80 @@ func TestFiniteFundReward_FloorReward(t *testing.T) {
 	}
 }
 
-func TestFiniteFundReward_FundExhausted(t *testing.T) {
+func TestMintWithCap_SupplyExhausted(t *testing.T) {
 	bk := newMockBankKeeper()
-	// Tiny fund that will be exhausted
-	k, ctx := setupFiniteFundKeeper(t, bk, "100", 0)
+	// Set TotalMinted to just under the cap
+	maxSupply := "222222222000000"
+	nearCap := "222222221999900" // 100 ulgm remaining
+	k, ctx := setupMintKeeper(t, bk, nearCap, 0)
 
 	producer := sdk.AccAddress("producer____________").String()
 
-	// First call: reward would be 11000000 but fund is only 100 -- capped to 100
+	// First call: reward would be 11000000 but only 100 remaining under cap
 	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if dist.TotalMinted != "100" {
-		t.Errorf("expected reward capped to fund balance 100, got %s", dist.TotalMinted)
+		t.Errorf("expected reward capped to remaining supply 100, got %s", dist.TotalMinted)
 	}
 
-	// Second call: fund should be exhausted (0 left)
+	// Total minted should now equal max supply
+	totalNow := k.GetTotalMinted(ctx)
+	expected := new(big.Int)
+	expected.SetString(maxSupply, 10)
+	if totalNow.Cmp(expected) != 0 {
+		t.Errorf("expected total minted to be %s, got %s", maxSupply, totalNow.String())
+	}
+
+	// Second call: supply fully exhausted
+	bk2 := newMockBankKeeper() // fresh mock
+	_ = bk2
 	dist2, err := k.DistributeBlockReward(ctx, producer, 22, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if dist2.TotalMinted != "0" {
-		t.Errorf("expected 0 reward when fund exhausted, got %s", dist2.TotalMinted)
+		t.Errorf("expected 0 reward when supply exhausted, got %s", dist2.TotalMinted)
 	}
 }
 
-func TestFiniteFundReward_HealthTaper(t *testing.T) {
+func TestMintWithCap_EnforcesSupplyLimit(t *testing.T) {
 	bk := newMockBankKeeper()
-	k, ctx := setupFiniteFundKeeper(t, bk, "1000000", 0)
+	k, ctx := setupMintKeeper(t, bk, "0", 0)
 
-	// Manually set fund balance to 50000 (simulating depletion)
-	k.SetFundBalance(ctx, big.NewInt(50000))
+	// Try to mint more than max supply
+	maxSupply := new(big.Int)
+	maxSupply.SetString(types.MaxSupplyUlgm, 10)
+	overMax := new(big.Int).Add(maxSupply, big.NewInt(1))
 
-	producer := sdk.AccAddress("producer____________").String()
-	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
+	actual, err := k.MintWithCap(ctx, overMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if dist.TotalMinted == "0" {
-		t.Error("expected non-zero reward when fund has balance")
+	// Should be capped to max supply
+	if actual.Cmp(maxSupply) != 0 {
+		t.Errorf("expected mint capped to %s, got %s", maxSupply.String(), actual.String())
 	}
-	minted := new(big.Int)
-	minted.SetString(dist.TotalMinted, 10)
-	if minted.Cmp(big.NewInt(50000)) > 0 {
-		t.Errorf("expected reward capped to fund balance 50000, got %s", dist.TotalMinted)
+
+	// Total minted should equal max supply
+	totalMinted := k.GetTotalMinted(ctx)
+	if totalMinted.Cmp(maxSupply) != 0 {
+		t.Errorf("expected total minted %s, got %s", maxSupply.String(), totalMinted.String())
 	}
-}
 
-func TestFiniteFundReward_CappedToBalance(t *testing.T) {
-	bk := newMockBankKeeper()
-	k, ctx := setupFiniteFundKeeper(t, bk, "5000000", 0)
-
-	producer := sdk.AccAddress("producer____________").String()
-	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
+	// Further mint should return 0
+	actual2, err := k.MintWithCap(ctx, big.NewInt(1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// Reward should be capped to fund balance
-	if dist.TotalMinted != "5000000" {
-		t.Errorf("expected reward capped to 5000000, got %s", dist.TotalMinted)
-	}
-
-	// Fund should now be 0
-	remaining := k.GetFundBalance(ctx)
-	if remaining.Sign() != 0 {
-		t.Errorf("expected 0 fund balance after full deduction, got %s", remaining.String())
+	if actual2.Sign() != 0 {
+		t.Errorf("expected 0 mint when supply exhausted, got %s", actual2.String())
 	}
 }
 
 func TestApplyDecay(t *testing.T) {
-	bk := newMockBankKeeper()
-
 	tests := []struct {
 		name      string
 		epoch     int64
@@ -1131,7 +1148,7 @@ func TestApplyDecay(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bk := newMockBankKeeper()
-			k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", tt.epoch)
+			k, ctx := setupMintKeeper(t, bk, "0", tt.epoch)
 
 			producer := sdk.AccAddress("producer____________").String()
 			dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
@@ -1146,63 +1163,49 @@ func TestApplyDecay(t *testing.T) {
 			}
 		})
 	}
-	_ = bk // suppress unused
 }
 
-func TestFundBalanceGetSet(t *testing.T) {
+func TestTotalMintedGetSet(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetFundBalance(ctx, big.NewInt(999999))
-	bal := k.GetFundBalance(ctx)
-	if bal.Int64() != 999999 {
-		t.Errorf("expected 999999, got %s", bal.String())
+	k.SetTotalMinted(ctx, big.NewInt(999999))
+	total := k.GetTotalMinted(ctx)
+	if total.Int64() != 999999 {
+		t.Errorf("expected 999999, got %s", total.String())
 	}
 
-	// Deduct
-	ok := k.DeductFromFund(ctx, big.NewInt(500000))
-	if !ok {
-		t.Fatal("expected successful deduction")
-	}
-	bal = k.GetFundBalance(ctx)
-	if bal.Int64() != 499999 {
-		t.Errorf("expected 499999 after deduction, got %s", bal.String())
-	}
-
-	// Deduct more than balance -- should fail
-	ok = k.DeductFromFund(ctx, big.NewInt(999999))
-	if ok {
-		t.Fatal("expected failed deduction (insufficient balance)")
-	}
-	// Balance should be unchanged
-	bal = k.GetFundBalance(ctx)
-	if bal.Int64() != 499999 {
-		t.Errorf("expected balance unchanged at 499999 after failed deduction, got %s", bal.String())
+	// Update total minted
+	k.SetTotalMinted(ctx, big.NewInt(1999999))
+	total = k.GetTotalMinted(ctx)
+	if total.Int64() != 1999999 {
+		t.Errorf("expected 1999999, got %s", total.String())
 	}
 }
 
-func TestExportGenesis_PreservesFundBalance(t *testing.T) {
+func TestExportGenesis_PreservesTotalMinted(t *testing.T) {
 	bk := newMockBankKeeper()
-	k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", 0)
+	k, ctx := setupMintKeeper(t, bk, "0", 0)
 
 	producer := sdk.AccAddress("producer____________").String()
-	// Distribute one block reward to reduce fund
+	// Distribute one block reward to increase total minted
 	k.DistributeBlockReward(ctx, producer, 22, true)
 
 	// Export genesis
 	exported := k.ExportGenesis(ctx)
 
-	// InitialFundBalance should be current balance (less than original)
-	if exported.Params.InitialFundBalance == "133333333200000" {
-		t.Error("expected exported fund balance to be less than initial after distributing rewards")
-	}
+	// InitialFundBalance stores TotalMinted for chain restart continuity
 	if exported.Params.InitialFundBalance == "0" || exported.Params.InitialFundBalance == "" {
-		t.Error("expected non-zero exported fund balance")
+		t.Error("expected non-zero exported total minted after distributing rewards")
+	}
+	// Should be 11000000 (one block reward at epoch 0)
+	if exported.Params.InitialFundBalance != "11000000" {
+		t.Errorf("expected exported total minted 11000000, got %s", exported.Params.InitialFundBalance)
 	}
 }
 
-func TestFiniteFundReward_FundBalanceAfterField(t *testing.T) {
+func TestBlockReward_TotalMintedAfterField(t *testing.T) {
 	bk := newMockBankKeeper()
-	k, ctx := setupFiniteFundKeeper(t, bk, "133333333200000", 0)
+	k, ctx := setupMintKeeper(t, bk, "0", 0)
 
 	producer := sdk.AccAddress("producer____________").String()
 	dist, err := k.DistributeBlockReward(ctx, producer, 22, true)
@@ -1210,18 +1213,12 @@ func TestFiniteFundReward_FundBalanceAfterField(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// FundBalanceAfter should be set in finite fund mode
+	// FundBalanceAfter now stores cumulative TotalMinted
 	if dist.FundBalanceAfter == "" {
-		t.Error("expected FundBalanceAfter to be set in finite fund mode")
+		t.Error("expected FundBalanceAfter (TotalMinted) to be set")
 	}
-	// Should be initial - totalMinted
-	expected := new(big.Int)
-	expected.SetString("133333333200000", 10)
-	minted := new(big.Int)
-	minted.SetString(dist.TotalMinted, 10)
-	expected.Sub(expected, minted)
-
-	if dist.FundBalanceAfter != expected.String() {
-		t.Errorf("expected FundBalanceAfter %s, got %s", expected.String(), dist.FundBalanceAfter)
+	// Should equal the minted amount (starting from 0)
+	if dist.FundBalanceAfter != dist.TotalMinted {
+		t.Errorf("expected FundBalanceAfter %s to equal TotalMinted %s", dist.FundBalanceAfter, dist.TotalMinted)
 	}
 }

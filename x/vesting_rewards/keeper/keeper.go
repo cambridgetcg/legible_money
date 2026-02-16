@@ -143,41 +143,64 @@ func (k Keeper) SetCategoryConfig(ctx sdk.Context, cfg *types.CategoryConfig) {
 	}
 }
 
-// GetFundBalance returns the current block reward fund balance.
-func (k Keeper) GetFundBalance(ctx sdk.Context) *big.Int {
+// GetTotalMinted returns the total LGM minted so far (in ulgm).
+func (k Keeper) GetTotalMinted(ctx sdk.Context) *big.Int {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := store.Get(types.BlockRewardFundBalanceKey)
+	bz, err := store.Get(types.TotalMintedKey)
 	if err != nil || bz == nil {
 		return new(big.Int)
 	}
-	balance := new(big.Int)
-	if _, ok := balance.SetString(string(bz), 10); !ok {
+	total := new(big.Int)
+	if _, ok := total.SetString(string(bz), 10); !ok {
 		return new(big.Int)
 	}
-	return balance
+	return total
 }
 
-// SetFundBalance stores the current block reward fund balance.
-func (k Keeper) SetFundBalance(ctx sdk.Context, balance *big.Int) {
+// SetTotalMinted stores the total LGM minted so far (in ulgm).
+func (k Keeper) SetTotalMinted(ctx sdk.Context, amount *big.Int) {
 	store := k.storeService.OpenKVStore(ctx)
-	if err := store.Set(types.BlockRewardFundBalanceKey, []byte(balance.String())); err != nil {
-		panic(fmt.Sprintf("failed to set fund balance: %v", err))
+	if err := store.Set(types.TotalMintedKey, []byte(amount.String())); err != nil {
+		panic(fmt.Sprintf("failed to set total minted: %v", err))
 	}
 }
 
-// DeductFromFund atomically deducts an amount from the fund balance.
-// Returns false if insufficient balance (fund exhausted).
-func (k Keeper) DeductFromFund(ctx sdk.Context, amount *big.Int) bool {
+// MintWithCap mints new LGM tokens up to the supply cap (222,222,222 LGM).
+// Returns the actual amount minted (may be less than requested if near cap).
+func (k Keeper) MintWithCap(ctx sdk.Context, amount *big.Int) (*big.Int, error) {
 	if amount.Sign() <= 0 {
-		return true
+		return new(big.Int), nil
 	}
-	balance := k.GetFundBalance(ctx)
-	if balance.Cmp(amount) < 0 {
-		return false
+
+	maxSupply := new(big.Int)
+	maxSupply.SetString(types.MaxSupplyUlgm, 10)
+
+	totalMinted := k.GetTotalMinted(ctx)
+	remaining := new(big.Int).Sub(maxSupply, totalMinted)
+
+	if remaining.Sign() <= 0 {
+		return new(big.Int), nil // supply exhausted
 	}
-	balance.Sub(balance, amount)
-	k.SetFundBalance(ctx, balance)
-	return true
+
+	// Mint min(amount, remaining)
+	actual := new(big.Int).Set(amount)
+	if actual.Cmp(remaining) > 0 {
+		actual.Set(remaining)
+	}
+
+	// Mint via bank keeper
+	if k.bankKeeper != nil {
+		mintCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(actual)))
+		if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, mintCoins); err != nil {
+			return nil, fmt.Errorf("failed to mint block reward: %w", err)
+		}
+	}
+
+	// Update total minted
+	newTotal := new(big.Int).Add(totalMinted, actual)
+	k.SetTotalMinted(ctx, newTotal)
+
+	return actual, nil
 }
 
 // InitGenesis initializes the module's state from genesis.
@@ -198,28 +221,24 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 		}
 	}
 
-	// Initialize fund balance and mint into module account
-	if gs.Params != nil && gs.Params.InitialFundBalance != "" {
-		initialFund := new(big.Int)
-		if _, ok := initialFund.SetString(gs.Params.InitialFundBalance, 10); ok && initialFund.Sign() > 0 {
-			k.SetFundBalance(ctx, initialFund)
-			// Mint initial fund into module account so it can be distributed
-			if k.bankKeeper != nil {
-				mintCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(initialFund)))
-				if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, mintCoins); err != nil {
-					panic(fmt.Sprintf("failed to mint initial block reward fund: %v", err))
-				}
-			}
+	// Pure PoT: genesis supply = 0. All LGM is minted per-block through PoT consensus.
+	// Restore TotalMinted from InitialFundBalance (used for chain export/restart continuity).
+	totalMinted := new(big.Int)
+	if gs.Params != nil && gs.Params.InitialFundBalance != "" && gs.Params.InitialFundBalance != "0" {
+		if _, ok := totalMinted.SetString(gs.Params.InitialFundBalance, 10); !ok {
+			totalMinted = new(big.Int)
 		}
 	}
+	k.SetTotalMinted(ctx, totalMinted)
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
-	// Overwrite InitialFundBalance with current balance so chain restart preserves remaining fund
-	currentBalance := k.GetFundBalance(ctx)
-	params.InitialFundBalance = currentBalance.String()
+	// Store TotalMinted in InitialFundBalance for chain restart continuity.
+	// On re-import, InitGenesis reads this back into TotalMinted.
+	totalMinted := k.GetTotalMinted(ctx)
+	params.InitialFundBalance = totalMinted.String()
 	return &types.GenesisState{
 		Params:           params,
 		CategoryConfigs:  k.GetAllCategoryConfigPtrs(ctx),

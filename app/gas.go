@@ -287,6 +287,20 @@ const (
 	BurnRateBPS     uint64 = 50000   // 5% burn rate (applied at penalty sites)
 )
 
+// Bootstrap gas-free period: first 480,000 blocks (~14 days at 2521ms).
+// During bootstrap, essential PoT transactions are gas-free to allow the
+// network to begin verifying truth before any LGM is minted.
+const BootstrapEndBlock int64 = 480_000
+
+// BootstrapGasFreeTypes lists message type URLs exempt from gas during bootstrap.
+var BootstrapGasFreeTypes = map[string]bool{
+	"/legible.knowledge.v1.MsgSubmitClaim":       true,
+	"/legible.knowledge.v1.MsgSubmitCommitment":  true,
+	"/legible.knowledge.v1.MsgSubmitReveal":      true,
+	"/legible.staking.v1.MsgRegisterValidator":   true,
+	"/legible.auth.v1.MsgRegisterAccount":        true,
+}
+
 // Module account names for fee routing.
 const (
 	ResearchFundName = "research_fund"

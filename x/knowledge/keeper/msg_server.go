@@ -89,13 +89,6 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
 
-	// Debit from period overlay (FIFO from oldest periods)
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.DebitBalance(ctx, msg.Submitter, msg.StakeAmount); err != nil {
-			k.Logger(ctx).Error("failed to debit period balance for claim stake",
-				"submitter", msg.Submitter, "error", err)
-		}
-	}
 
 	// Generate deterministic IDs
 	height := uint64(ctx.BlockHeight())
@@ -360,13 +353,6 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
 
-	// Debit from period overlay (FIFO from oldest periods)
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.DebitBalance(ctx, msg.Challenger, msg.Stake); err != nil {
-			k.Logger(ctx).Error("failed to debit period balance for challenge stake",
-				"challenger", msg.Challenger, "error", err)
-		}
-	}
 
 	// Mark fact as contested
 	fact.Status = "contested"
@@ -521,13 +507,6 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
 
-	// Debit from period overlay (FIFO from oldest periods)
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.DebitBalance(ctx, msg.Proposer, msg.Stake); err != nil {
-			k.Logger(ctx).Error("failed to debit period balance for domain proposal stake",
-				"proposer", msg.Proposer, "error", err)
-		}
-	}
 
 	domain := types.OntologicalDomain{
 		Name:            msg.Name,
@@ -737,13 +716,6 @@ func (k msgServer) SubmitContradiction(goCtx context.Context, msg *types.MsgSubm
 		return nil, fmt.Errorf("%w: %v", types.ErrContradictionStakeTooLow, err)
 	}
 
-	// Debit from period overlay
-	if k.tokensKeeper != nil {
-		if err := k.tokensKeeper.DebitBalance(ctx, msg.Submitter, msg.Stake); err != nil {
-			k.Logger(ctx).Error("failed to debit period balance for contradiction stake",
-				"submitter", msg.Submitter, "error", err)
-		}
-	}
 
 	// 6. Create counter-fact
 	cfID := GenerateCounterFactID(msg.TargetFactId, "", msg.Submitter, height)
