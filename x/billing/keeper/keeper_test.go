@@ -269,8 +269,8 @@ func TestParamsDefault(t *testing.T) {
 	if params.BaseCostPerFact != "1000000" {
 		t.Errorf("expected BaseCostPerFact 1000000, got %s", params.BaseCostPerFact)
 	}
-	if params.ResearchShareBps != 220000 {
-		t.Errorf("expected ResearchShareBps 220000, got %d", params.ResearchShareBps)
+	if params.ResearchShareBps != 70000 {
+		t.Errorf("expected ResearchShareBps 70000, got %d", params.ResearchShareBps)
 	}
 	if params.QuoteValidityBlocks != 100 {
 		t.Errorf("expected QuoteValidityBlocks 100, got %d", params.QuoteValidityBlocks)
@@ -373,7 +373,7 @@ func TestCalculateDistribution(t *testing.T) {
 	k, ctx, _, kk := setupKeeper(t)
 
 	// Use block height past the research share ramp period (default ~90 days)
-	// so that the full 22% research share rate applies.
+	// so that the full 7% research share rate applies.
 	ctx = ctx.WithBlockHeight(4_000_000)
 
 	// Set up facts
@@ -385,17 +385,17 @@ func TestCalculateDistribution(t *testing.T) {
 	totalPayment := big.NewInt(10000000) // 10 LGM
 	distribution := k.CalculateDistribution(ctx, totalPayment, []string{"fact-1", "fact-2"})
 
-	// Verify research share = 22%
+	// Verify research share = 7%
 	researchShare := new(big.Int)
 	researchShare.SetString(distribution.ResearchShare, 10)
-	expectedResearch := big.NewInt(2200000) // 10M * 220000 / 1000000 = 2.2M
+	expectedResearch := big.NewInt(700000) // 10M * 70000 / 1000000 = 0.7M
 	if researchShare.Cmp(expectedResearch) != 0 {
 		t.Errorf("expected research share %s, got %s", expectedResearch.String(), researchShare.String())
 	}
 
-	// Verify remaining = 78%
+	// Verify remaining = 93%
 	remaining := new(big.Int).Sub(totalPayment, researchShare)
-	expectedRemaining := big.NewInt(7800000) // 7.8M
+	expectedRemaining := big.NewInt(9300000) // 9.3M
 	if remaining.Cmp(expectedRemaining) != 0 {
 		t.Errorf("expected remaining %s, got %s", expectedRemaining.String(), remaining.String())
 	}
@@ -403,7 +403,7 @@ func TestCalculateDistribution(t *testing.T) {
 	// Verify provider share = 60% of remaining
 	providerShare := new(big.Int)
 	providerShare.SetString(distribution.ProviderShare, 10)
-	expectedProvider := big.NewInt(4680000) // 7.8M * 60% = 4.68M
+	expectedProvider := big.NewInt(5580000) // 9.3M * 60% = 5.58M
 	if providerShare.Cmp(expectedProvider) != 0 {
 		t.Errorf("expected provider share %s, got %s", expectedProvider.String(), providerShare.String())
 	}

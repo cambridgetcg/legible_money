@@ -254,3 +254,340 @@ func TestHeartbeatReactivation(t *testing.T) {
 		t.Errorf("expected last_active_block 100, got %d", profile.LastActiveBlock)
 	}
 }
+
+// ---------- UpdateProfile Tests ----------
+
+func TestUpdateProfile(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	// Register first
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address:     testAgent1,
+		Did:         "did:lgm:test",
+		DisplayName: "Original Name",
+		Domains:     []string{"mathematics"},
+		Stake:       "100000000",
+	})
+
+	// Update profile
+	_, err := msgServer.UpdateProfile(ctx, &types.MsgUpdateProfile{
+		Address:     testAgent1,
+		DisplayName: "Updated Name",
+		Description: "New description",
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile failed: %v", err)
+	}
+
+	profile, _ := k.GetProfile(ctx, testAgent1)
+	if profile.DisplayName != "Updated Name" {
+		t.Errorf("expected 'Updated Name', got '%s'", profile.DisplayName)
+	}
+	if profile.Description != "New description" {
+		t.Errorf("expected 'New description', got '%s'", profile.Description)
+	}
+}
+
+func TestUpdateProfile_NotFound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	_, err := msgServer.UpdateProfile(ctx, &types.MsgUpdateProfile{
+		Address:     testAgent2,
+		DisplayName: "New Name",
+	})
+	if err == nil {
+		t.Fatal("expected error for unregistered agent")
+	}
+}
+
+func TestUpdateProfile_EmptyFieldsPreserved(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address:     testAgent1,
+		Did:         "did:lgm:test",
+		DisplayName: "Original",
+		Domains:     []string{"mathematics"},
+		Stake:       "100000000",
+	})
+
+	// Update with only metadata (empty display name should be preserved)
+	_, err := msgServer.UpdateProfile(ctx, &types.MsgUpdateProfile{
+		Address:  testAgent1,
+		Metadata: "some_metadata",
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	profile, _ := k.GetProfile(ctx, testAgent1)
+	if profile.DisplayName != "Original" {
+		t.Errorf("expected display name preserved as 'Original', got '%s'", profile.DisplayName)
+	}
+	if profile.Metadata != "some_metadata" {
+		t.Errorf("expected metadata 'some_metadata', got '%s'", profile.Metadata)
+	}
+}
+
+// ---------- AddCapability Tests ----------
+
+func TestAddCapability(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
+		Capabilities: []types.AgentCapability{
+			{CapabilityType: "verification", ConfidenceBps: 8000},
+		},
+	})
+
+	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
+		Address: testAgent1,
+		Capability: types.AgentCapability{
+			CapabilityType: "research",
+			ConfidenceBps:  7000,
+		},
+	})
+	if err != nil {
+		t.Fatalf("AddCapability failed: %v", err)
+	}
+
+	profile, _ := k.GetProfile(ctx, testAgent1)
+	if len(profile.Capabilities) != 2 {
+		t.Fatalf("expected 2 capabilities, got %d", len(profile.Capabilities))
+	}
+}
+
+func TestAddCapability_Duplicate(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
+		Capabilities: []types.AgentCapability{
+			{CapabilityType: "verification"},
+		},
+	})
+
+	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
+		Address:    testAgent1,
+		Capability: types.AgentCapability{CapabilityType: "verification"},
+	})
+	if err == nil {
+		t.Fatal("expected error for duplicate capability")
+	}
+}
+
+func TestAddCapability_InactiveAgent(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	// Set profile as expired
+	k.SetProfile(ctx, types.AgentProfile{
+		Address: testAgent1,
+		Status:  "expired",
+		Stake:   "100000000",
+	})
+
+	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
+		Address:    testAgent1,
+		Capability: types.AgentCapability{CapabilityType: "verification"},
+	})
+	if err == nil {
+		t.Fatal("expected error for inactive agent")
+	}
+}
+
+// ---------- RemoveCapability Tests ----------
+
+func TestRemoveCapability(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
+		Capabilities: []types.AgentCapability{
+			{CapabilityType: "verification"},
+			{CapabilityType: "research"},
+		},
+	})
+
+	_, err := msgServer.RemoveCapability(ctx, &types.MsgRemoveCapability{
+		Address:        testAgent1,
+		CapabilityType: "verification",
+	})
+	if err != nil {
+		t.Fatalf("RemoveCapability failed: %v", err)
+	}
+
+	profile, _ := k.GetProfile(ctx, testAgent1)
+	if len(profile.Capabilities) != 1 {
+		t.Fatalf("expected 1 capability after removal, got %d", len(profile.Capabilities))
+	}
+	if profile.Capabilities[0].CapabilityType != "research" {
+		t.Errorf("expected remaining capability 'research', got '%s'", profile.Capabilities[0].CapabilityType)
+	}
+}
+
+func TestRemoveCapability_NotFound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
+	})
+
+	_, err := msgServer.RemoveCapability(ctx, &types.MsgRemoveCapability{
+		Address:        testAgent1,
+		CapabilityType: "nonexistent",
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent capability")
+	}
+}
+
+// ---------- DeregisterAgent Tests ----------
+
+func TestDeregisterAgent(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
+	})
+
+	resp, err := msgServer.DeregisterAgent(ctx, &types.MsgDeregisterAgent{
+		Address: testAgent1,
+	})
+	if err != nil {
+		t.Fatalf("DeregisterAgent failed: %v", err)
+	}
+	if resp.RefundedStake != "100000000" {
+		t.Errorf("expected refund of 100000000, got %s", resp.RefundedStake)
+	}
+
+	_, found := k.GetProfile(ctx, testAgent1)
+	if found {
+		t.Fatal("expected profile to be deleted after deregistration")
+	}
+}
+
+func TestDeregisterAgent_NotFound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	_, err := msgServer.DeregisterAgent(ctx, &types.MsgDeregisterAgent{
+		Address: testAgent2,
+	})
+	if err == nil {
+		t.Fatal("expected error for unregistered agent")
+	}
+}
+
+// ---------- RegisterAgent Error Tests ----------
+
+func TestRegisterAgent_DuplicateRegistration(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msg := &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
+	}
+
+	_, err := msgServer.RegisterAgent(ctx, msg)
+	if err != nil {
+		t.Fatalf("first registration failed: %v", err)
+	}
+
+	_, err = msgServer.RegisterAgent(ctx, msg)
+	if err == nil {
+		t.Fatal("expected error for duplicate registration")
+	}
+}
+
+func TestRegisterAgent_InsufficientStake(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	_, err := msgServer.RegisterAgent(ctx, &types.MsgRegisterAgent{
+		Address: testAgent1,
+		Did:     "did:lgm:test",
+		Domains: []string{"mathematics"},
+		Stake:   "50000000", // 50 LGM, below 100 LGM default minimum
+	})
+	if err == nil {
+		t.Fatal("expected error for insufficient stake")
+	}
+}
+
+// ---------- UpdateParams Tests ----------
+
+func TestUpdateParams(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	newParams := types.DefaultParams()
+	newParams.MaxCapabilitiesPerAgent = 100
+
+	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: testAgent1, // matches setupKeeper authority
+		Params:    newParams,
+	})
+	if err != nil {
+		t.Fatalf("UpdateParams failed: %v", err)
+	}
+
+	params := k.GetParams(ctx)
+	if params.MaxCapabilitiesPerAgent != 100 {
+		t.Errorf("expected MaxCapabilitiesPerAgent=100, got %d", params.MaxCapabilitiesPerAgent)
+	}
+}
+
+func TestUpdateParams_Unauthorized(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: testAgent2, // wrong authority
+		Params:    types.DefaultParams(),
+	})
+	if err == nil {
+		t.Fatal("expected error for unauthorized UpdateParams")
+	}
+}
+
+// ---------- Heartbeat Error Tests ----------
+
+func TestHeartbeat_NotRegistered(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	_, err := msgServer.Heartbeat(ctx, &types.MsgHeartbeat{
+		Address: testAgent2,
+	})
+	if err == nil {
+		t.Fatal("expected error for unregistered agent heartbeat")
+	}
+}

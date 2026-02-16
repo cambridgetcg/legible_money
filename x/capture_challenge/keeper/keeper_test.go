@@ -500,3 +500,269 @@ func TestAutoFundBountyPools(t *testing.T) {
 		t.Errorf("expected LastAnalyzedBlock=0 for low-risk domain, got %d", lowPool.LastAnalyzedBlock)
 	}
 }
+
+// ---------- Tests: AddEvidence ----------
+
+func TestAddEvidenceSuccess(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	// Submit a challenge first
+	submitResp, err := k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	// Add evidence
+	resp, err := k.AddEvidence(ctx, &types.MsgAddEvidence{
+		ChallengeId: submitResp.ChallengeId,
+		Challenger:  testAuthority,
+		Evidence: &types.CaptureEvidence{
+			Id:          "ev-new",
+			Type:        string(types.EvidenceCoordinatedVoting),
+			Description: "Additional evidence",
+			DataHash:    "hash_new",
+			SubmittedAt: 10,
+			SubmittedBy: testAuthority,
+		},
+	})
+	if err != nil {
+		t.Fatalf("add evidence: %v", err)
+	}
+	if resp.EvidenceCount != 4 { // 3 original + 1 new
+		t.Errorf("expected evidence count 4, got %d", resp.EvidenceCount)
+	}
+
+	// Verify in store
+	ch, _ := k.GetChallenge(ctx, submitResp.ChallengeId)
+	if len(ch.Evidence) != 4 {
+		t.Errorf("expected 4 evidence pieces, got %d", len(ch.Evidence))
+	}
+}
+
+func TestAddEvidence_WrongChallenger(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	submitResp, _ := k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+
+	otherAddr := sdk.AccAddress([]byte("other_test_address__")).String()
+	_, err := k.AddEvidence(ctx, &types.MsgAddEvidence{
+		ChallengeId: submitResp.ChallengeId,
+		Challenger:  otherAddr,
+		Evidence: &types.CaptureEvidence{
+			Id: "ev-other", Type: "test", Description: "test",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for wrong challenger")
+	}
+}
+
+func TestAddEvidence_DeadlinePassed(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	submitResp, _ := k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+
+	// Advance past evidence deadline
+	ch, _ := k.GetChallenge(ctx, submitResp.ChallengeId)
+	laterCtx := ctx.WithBlockHeight(int64(ch.EvidenceDeadline + 1))
+
+	_, err := k.AddEvidence(laterCtx, &types.MsgAddEvidence{
+		ChallengeId: submitResp.ChallengeId,
+		Challenger:  testAuthority,
+		Evidence: &types.CaptureEvidence{
+			Id: "ev-late", Type: "test", Description: "late evidence",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for evidence after deadline")
+	}
+}
+
+func TestAddEvidence_ChallengeNotFound(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	_, err := k.AddEvidence(ctx, &types.MsgAddEvidence{
+		ChallengeId: "nonexistent",
+		Challenger:  testAuthority,
+		Evidence: &types.CaptureEvidence{
+			Id: "ev-x", Type: "test", Description: "test",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent challenge")
+	}
+}
+
+func TestAddEvidence_WrongStatus(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	// Submit and advance past evidence period
+	submitResp, _ := k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+
+	// Manually set to under_review
+	ch, _ := k.GetChallenge(ctx, submitResp.ChallengeId)
+	ch.Status = string(types.ChallengeUnderReview)
+	k.SetChallenge(ctx, ch)
+
+	_, err := k.AddEvidence(ctx, &types.MsgAddEvidence{
+		ChallengeId: submitResp.ChallengeId,
+		Challenger:  testAuthority,
+		Evidence: &types.CaptureEvidence{
+			Id: "ev-late", Type: "test", Description: "test",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for challenge not in evidence period")
+	}
+}
+
+// ---------- Tests: Resolve Error Paths ----------
+
+func TestResolveChallenge_Unauthorized(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	submitResp, _ := k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+
+	otherAddr := sdk.AccAddress([]byte("unauthorized_addr___")).String()
+	_, err := k.ResolveChallenge(ctx, &types.MsgResolveChallenge{
+		Resolver:      otherAddr,
+		ChallengeId:   submitResp.ChallengeId,
+		Outcome:       "upheld",
+		Justification: "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for unauthorized resolver")
+	}
+}
+
+func TestResolveChallenge_NotFound(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	_, err := k.ResolveChallenge(ctx, &types.MsgResolveChallenge{
+		Resolver:      testAuthority,
+		ChallengeId:   "nonexistent",
+		Outcome:       "upheld",
+		Justification: "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for nonexistent challenge")
+	}
+}
+
+func TestResolveChallenge_AlreadyResolved(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	submitResp, _ := k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+
+	// Resolve once
+	k.ResolveChallenge(ctx, &types.MsgResolveChallenge{
+		Resolver:      testAuthority,
+		ChallengeId:   submitResp.ChallengeId,
+		Outcome:       "rejected",
+		Justification: "test",
+	})
+
+	// Try to resolve again
+	_, err := k.ResolveChallenge(ctx, &types.MsgResolveChallenge{
+		Resolver:      testAuthority,
+		ChallengeId:   submitResp.ChallengeId,
+		Outcome:       "upheld",
+		Justification: "second attempt",
+	})
+	if err == nil {
+		t.Fatal("expected error for already-resolved challenge")
+	}
+}
+
+// ---------- Tests: Genesis Roundtrip ----------
+
+func TestGenesisRoundtrip(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	// Submit a challenge
+	k.SubmitChallenge(ctx, &types.MsgSubmitChallenge{
+		Challenger:        testAuthority,
+		Domain:            "physics",
+		Evidence:          makeEvidence(3),
+		Stake:             "77000000",
+		AccusedValidators: []string{"lgmvaloper1abc"},
+	})
+
+	// Create a bounty pool
+	k.SetBountyPool(ctx, types.DomainBountyPool{
+		Domain:  "physics",
+		Balance: "5000000",
+	})
+
+	// Export
+	gs := k.ExportGenesis(ctx)
+
+	// Verify export contents
+	if gs.Params == nil {
+		t.Fatal("expected non-nil params in genesis")
+	}
+	if len(gs.Challenges) != 1 {
+		t.Errorf("expected 1 challenge in genesis, got %d", len(gs.Challenges))
+	}
+	if len(gs.BountyPools) != 1 {
+		t.Errorf("expected 1 bounty pool in genesis, got %d", len(gs.BountyPools))
+	}
+
+	// Create fresh keeper and import
+	k2, ctx2, _, _ := setupKeeper(t)
+	k2.InitGenesis(ctx2, gs)
+
+	// Verify re-imported
+	var challengeCount int
+	k2.IterateChallenges(ctx2, func(_ types.CaptureChallenge) bool {
+		challengeCount++
+		return false
+	})
+	if challengeCount != 1 {
+		t.Errorf("expected 1 challenge after genesis import, got %d", challengeCount)
+	}
+
+	pool, found := k2.GetBountyPool(ctx2, "physics")
+	if !found {
+		t.Fatal("expected bounty pool after genesis import")
+	}
+	if pool.Balance != "5000000" {
+		t.Errorf("expected pool balance '5000000', got '%s'", pool.Balance)
+	}
+}

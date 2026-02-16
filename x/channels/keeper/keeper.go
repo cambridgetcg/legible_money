@@ -1,11 +1,14 @@
 package keeper
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -97,6 +100,64 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		Disputes: disputes,
 	}
 	return gs
+}
+
+// GetChannelInfo returns channel details for cross-module queries.
+// Returns payer, provider, available balance, status, and found.
+// Accepts context.Context for cross-module interface compatibility.
+func (k Keeper) GetChannelInfo(goCtx context.Context, channelId string) (payer, provider, available, status string, found bool) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	ch, ok := k.GetChannel(ctx, channelId)
+	if !ok {
+		return "", "", "", "", false
+	}
+	return ch.Payer, ch.Provider, ch.Available, ch.Status, true
+}
+
+// SpendFromChannel debits amount from a channel's available balance and transfers
+// the funds from the channels module account to the specified recipient module account.
+// Accepts context.Context for cross-module interface compatibility.
+func (k Keeper) SpendFromChannel(goCtx context.Context, channelId string, amount string, recipientModule string) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	ch, found := k.GetChannel(ctx, channelId)
+	if !found {
+		return types.ErrChannelNotFound
+	}
+	if ch.Status != types.ChannelStatusOpen {
+		return types.ErrChannelNotOpen
+	}
+
+	spendAmt, ok := new(big.Int).SetString(amount, 10)
+	if !ok || spendAmt.Sign() <= 0 {
+		return fmt.Errorf("invalid spend amount")
+	}
+
+	avail, _ := new(big.Int).SetString(ch.Available, 10)
+	if avail == nil || spendAmt.Cmp(avail) > 0 {
+		return types.ErrSpentExceedsDeposit.Wrap("insufficient channel balance")
+	}
+
+	// Update channel accounting
+	spent, _ := new(big.Int).SetString(ch.Spent, 10)
+	if spent == nil {
+		spent = new(big.Int)
+	}
+	spent.Add(spent, spendAmt)
+	avail.Sub(avail, spendAmt)
+	ch.Spent = spent.String()
+	ch.Available = avail.String()
+	ch.Nonce++
+	k.SetChannel(ctx, ch)
+
+	// Transfer from channels module to recipient module
+	if k.bankKeeper != nil {
+		coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(spendAmt)))
+		if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, recipientModule, coins); err != nil {
+			return fmt.Errorf("failed to transfer from channel: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // ExportGenesisJSON exports genesis as raw JSON.

@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"cosmossdk.io/log"
@@ -64,6 +65,42 @@ func (m *mockBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddress, deno
 		}
 	}
 	return sdk.NewCoin(denom, sdkmath.ZeroInt())
+}
+
+func (m *mockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error {
+	for _, coin := range amt {
+		from := senderAddr.String()
+		if m.balances[from] == nil {
+			m.balances[from] = make(map[string]int64)
+		}
+		if m.balances[from][coin.Denom] < coin.Amount.Int64() {
+			return fmt.Errorf("insufficient funds")
+		}
+		m.balances[from][coin.Denom] -= coin.Amount.Int64()
+		// Track module balance using module name as key
+		modKey := "module:" + recipientModule
+		if m.balances[modKey] == nil {
+			m.balances[modKey] = make(map[string]int64)
+		}
+		m.balances[modKey][coin.Denom] += coin.Amount.Int64()
+	}
+	return nil
+}
+
+func (m *mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
+	modKey := "module:" + senderModule
+	to := recipientAddr.String()
+	for _, coin := range amt {
+		if m.balances[modKey] == nil {
+			m.balances[modKey] = make(map[string]int64)
+		}
+		if m.balances[to] == nil {
+			m.balances[to] = make(map[string]int64)
+		}
+		m.balances[modKey][coin.Denom] -= coin.Amount.Int64()
+		m.balances[to][coin.Denom] += coin.Amount.Int64()
+	}
+	return nil
 }
 
 // ---------- Mock AuthKeeper ----------
@@ -1278,4 +1315,129 @@ func TestCallContract_SessionCaps_FullAccess(t *testing.T) {
 		t.Fatalf("unexpected call error: %v", err)
 	}
 	_ = resp // STOP returns no data; success is indicated by no error
+}
+
+// ======================== Integration: BVM Payable Contracts ========================
+
+func TestCallContract_PayableValue(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	// Deploy STOP contract (simplest possible)
+	bytecode := []byte{0x00} // STOP
+	deployResp, _ := msgServer.DeployContract(ctx, &types.MsgDeployContract{
+		Deployer: creator1,
+		Bytecode: bytecode,
+	})
+
+	// Give caller funds
+	mockBK.balances[caller1] = map[string]int64{"ulgm": 100000}
+
+	// Call with Value — should transfer from caller to BVM module
+	_, err := msgServer.CallContract(ctx, &types.MsgCallContract{
+		Caller:          caller1,
+		ContractAddress: deployResp.ContractAddress,
+		InputData:       []byte{},
+		GasLimit:        100_000,
+		Value:           "5000",
+	})
+	if err != nil {
+		t.Fatalf("payable call: %v", err)
+	}
+
+	// Verify caller was debited
+	if mockBK.balances[caller1]["ulgm"] != 95000 {
+		t.Errorf("expected caller balance 95000, got %d", mockBK.balances[caller1]["ulgm"])
+	}
+
+	// Verify module received funds
+	modKey := "module:bvm"
+	if mockBK.balances[modKey]["ulgm"] != 5000 {
+		t.Errorf("expected BVM module balance 5000, got %d", mockBK.balances[modKey]["ulgm"])
+	}
+}
+
+func TestCallContract_ZeroValueNoTransfer(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	bytecode := []byte{0x00} // STOP
+	deployResp, _ := msgServer.DeployContract(ctx, &types.MsgDeployContract{
+		Deployer: creator1,
+		Bytecode: bytecode,
+	})
+
+	mockBK.balances[caller1] = map[string]int64{"ulgm": 50000}
+
+	// Call with zero Value — no transfer
+	_, err := msgServer.CallContract(ctx, &types.MsgCallContract{
+		Caller:          caller1,
+		ContractAddress: deployResp.ContractAddress,
+		InputData:       []byte{},
+		GasLimit:        100_000,
+		Value:           "0",
+	})
+	if err != nil {
+		t.Fatalf("zero value call: %v", err)
+	}
+
+	// Balance unchanged
+	if mockBK.balances[caller1]["ulgm"] != 50000 {
+		t.Errorf("expected no change in balance, got %d", mockBK.balances[caller1]["ulgm"])
+	}
+}
+
+func TestCallContract_InsufficientFundsForValue(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	bytecode := []byte{0x00} // STOP
+	deployResp, _ := msgServer.DeployContract(ctx, &types.MsgDeployContract{
+		Deployer: creator1,
+		Bytecode: bytecode,
+	})
+
+	// Caller has only 100 ulgm
+	mockBK.balances[caller1] = map[string]int64{"ulgm": 100}
+
+	// Try to send 5000 — should fail
+	_, err := msgServer.CallContract(ctx, &types.MsgCallContract{
+		Caller:          caller1,
+		ContractAddress: deployResp.ContractAddress,
+		InputData:       []byte{},
+		GasLimit:        100_000,
+		Value:           "5000",
+	})
+	if err == nil {
+		t.Error("expected insufficient funds error")
+	}
+}
+
+func TestCallContract_EmptyValueNoTransfer(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	bytecode := []byte{0x00} // STOP
+	deployResp, _ := msgServer.DeployContract(ctx, &types.MsgDeployContract{
+		Deployer: creator1,
+		Bytecode: bytecode,
+	})
+
+	mockBK.balances[caller1] = map[string]int64{"ulgm": 50000}
+
+	// Call with empty Value field — should not transfer
+	_, err := msgServer.CallContract(ctx, &types.MsgCallContract{
+		Caller:          caller1,
+		ContractAddress: deployResp.ContractAddress,
+		InputData:       []byte{},
+		GasLimit:        100_000,
+		Value:           "",
+	})
+	if err != nil {
+		t.Fatalf("empty value call: %v", err)
+	}
+
+	if mockBK.balances[caller1]["ulgm"] != 50000 {
+		t.Errorf("expected no change in balance, got %d", mockBK.balances[caller1]["ulgm"])
+	}
 }

@@ -115,6 +115,20 @@ func (m *mockBankKeeper) BurnCoins(_ context.Context, moduleName string, amt sdk
 	return nil
 }
 
+func (m *mockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderModule, recipientModule string, amt sdk.Coins) error {
+	for _, coin := range amt {
+		if m.moduleBalances[senderModule] == nil {
+			m.moduleBalances[senderModule] = make(map[string]int64)
+		}
+		if m.moduleBalances[recipientModule] == nil {
+			m.moduleBalances[recipientModule] = make(map[string]int64)
+		}
+		m.moduleBalances[senderModule][coin.Denom] -= coin.Amount.Int64()
+		m.moduleBalances[recipientModule][coin.Denom] += coin.Amount.Int64()
+	}
+	return nil
+}
+
 // ---------- Test Setup ----------
 
 func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
@@ -1087,5 +1101,152 @@ func TestBeginBlock_ResolvesExpiredDisputes(t *testing.T) {
 	updatedD, _ := k.GetDispute(ctx, "pc-bb-1")
 	if !updatedD.Resolved {
 		t.Error("expected dispute to be resolved")
+	}
+}
+
+// ======================== Integration: SpendFromChannel ========================
+
+func TestSpendFromChannel_Success(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+
+	// Fund the channels module account so it can transfer
+	mockBK.moduleBalances["channels"] = map[string]int64{"ulgm": 100000}
+
+	// Create a channel
+	ch := types.PaymentChannel{
+		ChannelId:      "pc-spend-1",
+		Payer:          payer1,
+		Provider:       provider1,
+		Deposited:      "10000",
+		Spent:          "0",
+		Available:      "10000",
+		Status:         types.ChannelStatusOpen,
+		OpenedAtBlock:  100,
+		ExpiresAtBlock: 200,
+	}
+	k.SetChannel(ctx, ch)
+
+	// Spend from channel
+	err := k.SpendFromChannel(ctx, "pc-spend-1", "3000", "tree")
+	if err != nil {
+		t.Fatalf("spend from channel: %v", err)
+	}
+
+	// Verify channel state updated
+	updated, found := k.GetChannel(ctx, "pc-spend-1")
+	if !found {
+		t.Fatal("channel not found after spend")
+	}
+	if updated.Spent != "3000" {
+		t.Errorf("expected spent 3000, got %s", updated.Spent)
+	}
+	if updated.Available != "7000" {
+		t.Errorf("expected available 7000, got %s", updated.Available)
+	}
+	if updated.Nonce != 1 {
+		t.Errorf("expected nonce 1, got %d", updated.Nonce)
+	}
+
+	// Verify module balance transfer
+	if mockBK.moduleBalances["channels"]["ulgm"] != 97000 {
+		t.Errorf("expected channels module balance 97000, got %d", mockBK.moduleBalances["channels"]["ulgm"])
+	}
+	if mockBK.moduleBalances["tree"]["ulgm"] != 3000 {
+		t.Errorf("expected tree module balance 3000, got %d", mockBK.moduleBalances["tree"]["ulgm"])
+	}
+}
+
+func TestSpendFromChannel_InsufficientBalance(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	ch := types.PaymentChannel{
+		ChannelId:      "pc-spend-2",
+		Payer:          payer1,
+		Provider:       provider1,
+		Deposited:      "1000",
+		Spent:          "800",
+		Available:      "200",
+		Status:         types.ChannelStatusOpen,
+		OpenedAtBlock:  100,
+		ExpiresAtBlock: 200,
+	}
+	k.SetChannel(ctx, ch)
+
+	// Try to spend more than available
+	err := k.SpendFromChannel(ctx, "pc-spend-2", "500", "tree")
+	if err == nil {
+		t.Error("expected error for insufficient channel balance")
+	}
+}
+
+func TestSpendFromChannel_ClosedChannel(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	ch := types.PaymentChannel{
+		ChannelId:      "pc-spend-3",
+		Payer:          payer1,
+		Provider:       provider1,
+		Deposited:      "10000",
+		Spent:          "0",
+		Available:      "10000",
+		Status:         types.ChannelStatusClosed,
+		OpenedAtBlock:  100,
+		ExpiresAtBlock: 200,
+	}
+	k.SetChannel(ctx, ch)
+
+	err := k.SpendFromChannel(ctx, "pc-spend-3", "1000", "tree")
+	if err == nil {
+		t.Error("expected error for closed channel")
+	}
+}
+
+func TestSpendFromChannel_NotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	err := k.SpendFromChannel(ctx, "nonexistent", "1000", "tree")
+	if err == nil {
+		t.Error("expected error for non-existent channel")
+	}
+}
+
+func TestGetChannelInfo_Success(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	ch := types.PaymentChannel{
+		ChannelId: "pc-info-1",
+		Payer:     payer1,
+		Provider:  provider1,
+		Deposited: "5000",
+		Spent:     "2000",
+		Available: "3000",
+		Status:    types.ChannelStatusOpen,
+	}
+	k.SetChannel(ctx, ch)
+
+	payer, provider, available, status, found := k.GetChannelInfo(ctx, "pc-info-1")
+	if !found {
+		t.Fatal("expected channel to be found")
+	}
+	if payer != payer1 {
+		t.Errorf("expected payer %s, got %s", payer1, payer)
+	}
+	if provider != provider1 {
+		t.Errorf("expected provider %s, got %s", provider1, provider)
+	}
+	if available != "3000" {
+		t.Errorf("expected available 3000, got %s", available)
+	}
+	if status != "open" {
+		t.Errorf("expected status open, got %s", status)
+	}
+}
+
+func TestGetChannelInfo_NotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	_, _, _, _, found := k.GetChannelInfo(ctx, "nonexistent")
+	if found {
+		t.Error("expected channel not found")
 	}
 }
