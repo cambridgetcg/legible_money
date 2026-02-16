@@ -836,7 +836,6 @@ func NewLegibleApp(
 		appCodec,
 		runtime.NewKVStoreService(keys[hometypes.StoreKey]),
 		app.BankKeeper,
-		nil, // tokensKeeper — nil-safe, wire when needed
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 

@@ -18,7 +18,6 @@ type Keeper struct {
 	cdc          codec.Codec
 	storeService store.KVStoreService
 	bankKeeper   types.BankKeeper
-	tokensKeeper types.TokensKeeper // nil-safe
 
 	// Module authority (typically governance module address)
 	authority string
@@ -29,14 +28,12 @@ func NewKeeper(
 	cdc codec.Codec,
 	storeService store.KVStoreService,
 	bankKeeper types.BankKeeper,
-	tokensKeeper types.TokensKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
 		cdc:          cdc,
 		storeService: storeService,
 		bankKeeper:   bankKeeper,
-		tokensKeeper: tokensKeeper,
 		authority:    authority,
 	}
 }
