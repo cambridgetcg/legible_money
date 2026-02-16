@@ -55,4 +55,6 @@ var (
 	CounterFactChallengeKeyPrefix    = []byte{0x18} // counterFactChallengeId → CounterFactChallenge
 	CounterFactChallengeWindowPrefix = []byte{0x19} // counterFactId → challenge window end height
 	ExtendedParamsKey                = []byte{0x1a} // ExtendedParams (hand-written, JSON-encoded)
+	PatronageRecordPrefix            = []byte{0x1b} // factId:patron → PatronageRecord
+	PruningQueuePrefix               = []byte{0x1c} // graceEndBlock:factId → index for batch pruning
 )

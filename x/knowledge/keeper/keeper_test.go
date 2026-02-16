@@ -2305,6 +2305,10 @@ func (m *mockVestingRewardsKeeper) GetEpochBlockRewardPool(_ sdk.Context, epoch 
 	return 100_000_000_000
 }
 
+func (m *mockVestingRewardsKeeper) PauseVestingByClaimId(_ sdk.Context, claimId string) error {
+	return nil
+}
+
 // ---------- Setup with tracking keepers ----------
 
 func setupKeeperWithTracking(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper, *trackingBankKeeper, *mockVestingRewardsKeeper) {
@@ -2693,8 +2697,8 @@ func TestDefaultParamsIncludeNewFields(t *testing.T) {
 	if params.InvalidClaimSlashBps != 220000 {
 		t.Errorf("expected InvalidClaimSlashBps=220000, got %d", params.InvalidClaimSlashBps)
 	}
-	if params.VerificationRewardAmount != 100000 {
-		t.Errorf("expected VerificationRewardAmount=100000, got %d", params.VerificationRewardAmount)
+	if params.VerificationRewardAmount != 3000000 {
+		t.Errorf("expected VerificationRewardAmount=3000000, got %d", params.VerificationRewardAmount)
 	}
 }
 

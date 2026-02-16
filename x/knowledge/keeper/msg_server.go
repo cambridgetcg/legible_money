@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"math/big"
 
 	sdkmath "cosmossdk.io/math"
@@ -784,6 +785,107 @@ func (k msgServer) SubmitContradiction(goCtx context.Context, msg *types.MsgSubm
 	return &types.MsgSubmitContradictionResponse{
 		CounterFactId: cfID,
 		RoundId:       roundID,
+	}, nil
+}
+
+// PatronizeFact handles MsgPatronizeFact — stakes LGM to rescue a fact at risk of pruning.
+func (k msgServer) PatronizeFact(goCtx context.Context, msg *types.MsgPatronizeFact) (*types.MsgPatronizeFactResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Validate fact exists
+	fact, found := k.GetFact(ctx, msg.FactId)
+	if !found {
+		return nil, fmt.Errorf("%w: fact %s not found", types.ErrFactNotFound, msg.FactId)
+	}
+
+	// Must be at_risk to patronize
+	if fact.Status != types.FactStatusAtRisk {
+		return nil, fmt.Errorf("%w: fact %s is %s, must be at_risk",
+			types.ErrFactNotAtRisk, msg.FactId, fact.Status)
+	}
+
+	// Validate amount
+	stakeAmount := new(big.Int)
+	if _, ok := stakeAmount.SetString(msg.Amount, 10); !ok || stakeAmount.Sign() <= 0 {
+		return nil, fmt.Errorf("%w: invalid amount", types.ErrInsufficientPatronage)
+	}
+
+	// Check minimum patronage stake
+	ep := k.GetExtendedParams(ctx)
+	minStake := ep.MinPatronageStake
+	if minStake == 0 {
+		minStake = 1_000_000 // 1 LGM default
+	}
+	if stakeAmount.Uint64() < minStake {
+		return nil, fmt.Errorf("%w: minimum patronage is %d ulgm", types.ErrInsufficientPatronage, minStake)
+	}
+
+	// Transfer stake from patron to knowledge module account
+	patronAddr, err := sdk.AccAddressFromBech32(msg.Patron)
+	if err != nil {
+		return nil, fmt.Errorf("invalid patron address: %w", err)
+	}
+
+	stakeCoin := sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(stakeAmount))
+	if err := k.bankKeeper.SendCoinsFromAccountToModule(
+		ctx, patronAddr, types.ModuleName, sdk.NewCoins(stakeCoin),
+	); err != nil {
+		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientPatronage, err)
+	}
+
+	// Create patronage record
+	height := uint64(ctx.BlockHeight())
+	gracePeriod := k.Keeper.GetGracePeriod(ctx, fact.EpistemicCategory)
+
+	record := types.PatronageRecord{
+		FactId:    msg.FactId,
+		Patron:    msg.Patron,
+		Amount:    msg.Amount,
+		CreatedAt: height,
+		ExpiresAt: height + gracePeriod,
+		Settled:   false,
+	}
+	k.SetPatronageRecord(ctx, record)
+
+	// Calculate patronage bonus: sqrt scaling, capped at 300,000 bps
+	// bonus = min(300,000, sqrt(amount_in_lgm) * 30,000)
+	amountLGM := stakeAmount.Uint64() / 1_000_000 // convert ulgm to LGM
+	if amountLGM == 0 {
+		amountLGM = 1
+	}
+	sqrtAmount := uint64(math.Sqrt(float64(amountLGM)))
+	bonusAdd := sqrtAmount * 30_000
+	newBonus := fact.PatronageBonus + bonusAdd
+	if newBonus > 300_000 {
+		newBonus = 300_000
+	}
+	fact.PatronageBonus = newBonus
+
+	// Check if KMS + patronage_bonus now exceeds threshold → rescue
+	kms := k.Keeper.CalculateKMS(ctx, fact)
+	if kms >= ep.PruningThresholdBps {
+		k.Keeper.RescueFact(ctx, &fact, "patronage")
+		k.Keeper.SettlePatronageOnRescue(ctx, msg.FactId)
+	} else {
+		k.SetFact(ctx, fact)
+	}
+
+	// Generate patronage ID
+	patronageID := fmt.Sprintf("pat-%s-%s-%d", msg.FactId[:8], msg.Patron[:8], height)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("fact_patronized",
+			sdk.NewAttribute("fact_id", msg.FactId),
+			sdk.NewAttribute("patron", msg.Patron),
+			sdk.NewAttribute("amount", msg.Amount),
+			sdk.NewAttribute("new_bonus", fmt.Sprintf("%d", newBonus)),
+			sdk.NewAttribute("patronage_id", patronageID),
+		),
+	)
+
+	return &types.MsgPatronizeFactResponse{
+		PatronageId: patronageID,
+		NewKmsBonus: newBonus,
 	}, nil
 }
 

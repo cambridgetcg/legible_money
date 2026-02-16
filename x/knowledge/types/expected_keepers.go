@@ -71,6 +71,9 @@ type VestingRewardsKeeper interface {
 	// GetEpochBlockRewardPool returns the total block rewards distributed in the given epoch (ulgm).
 	// Used by the knowledge module to cap falsification rewards at FalsificationPoolShareBps.
 	GetEpochBlockRewardPool(ctx sdk.Context, epoch uint64) uint64
+	// PauseVestingByClaimId pauses the vesting schedule associated with a claim.
+	// Used when a fact is archived (pruned) to stop further reward vesting.
+	PauseVestingByClaimId(ctx sdk.Context, claimId string) error
 }
 
 // EvidenceMgmtKeeper defines the expected evidence management keeper interface.

@@ -60,7 +60,7 @@ func DefaultParams() Params {
 		QuorumThreshold:                660000,  // 66% participation required
 		MaxValidatorsPerRound:          22,
 		InvalidClaimSlashBps:           220000, // 22% slash on rejected claims
-		VerificationRewardAmount:       100000, // base reward per correct verification (ulgm)
+		VerificationRewardAmount:       3000000, // 3 LGM base reward per correct verification (ulgm)
 	}
 }
 

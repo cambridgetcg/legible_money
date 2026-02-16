@@ -97,6 +97,8 @@ const (
 	FactStatus_FACT_STATUS_CONTESTED   FactStatus = 2
 	FactStatus_FACT_STATUS_FALSIFIED   FactStatus = 3
 	FactStatus_FACT_STATUS_EXPIRED     FactStatus = 4
+	FactStatus_FACT_STATUS_AT_RISK     FactStatus = 5 // below KMS threshold, in grace period
+	FactStatus_FACT_STATUS_PRUNED      FactStatus = 6 // archived, awaiting hard delete
 )
 
 // Enum value maps for FactStatus.
@@ -107,6 +109,8 @@ var (
 		2: "FACT_STATUS_CONTESTED",
 		3: "FACT_STATUS_FALSIFIED",
 		4: "FACT_STATUS_EXPIRED",
+		5: "FACT_STATUS_AT_RISK",
+		6: "FACT_STATUS_PRUNED",
 	}
 	FactStatus_value = map[string]int32{
 		"FACT_STATUS_UNSPECIFIED": 0,
@@ -114,6 +118,8 @@ var (
 		"FACT_STATUS_CONTESTED":   2,
 		"FACT_STATUS_FALSIFIED":   3,
 		"FACT_STATUS_EXPIRED":     4,
+		"FACT_STATUS_AT_RISK":     5,
+		"FACT_STATUS_PRUNED":      6,
 	}
 )
 
@@ -560,8 +566,12 @@ type Fact struct {
 	ChallengeWindowEnd   uint64                 `protobuf:"varint,30,opt,name=challenge_window_end,json=challengeWindowEnd,proto3" json:"challenge_window_end,omitempty"`       // block when challenge window closes
 	OriginalClaimId      string                 `protobuf:"bytes,31,opt,name=original_claim_id,json=originalClaimId,proto3" json:"original_claim_id,omitempty"`                 // claim that created this fact
 	SurvivedChallenges   uint32                 `protobuf:"varint,32,opt,name=survived_challenges,json=survivedChallenges,proto3" json:"survived_challenges,omitempty"`         // number of challenges survived
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// Knowledge pruning fields
+	LastUtilizedBlock uint64 `protobuf:"varint,33,opt,name=last_utilized_block,json=lastUtilizedBlock,proto3" json:"last_utilized_block,omitempty"` // last block where fact was used in a write-path operation
+	PruningGraceStart uint64 `protobuf:"varint,34,opt,name=pruning_grace_start,json=pruningGraceStart,proto3" json:"pruning_grace_start,omitempty"` // block when grace period began (0 = not at risk)
+	PatronageBonus    uint64 `protobuf:"varint,35,opt,name=patronage_bonus,json=patronageBonus,proto3" json:"patronage_bonus,omitempty"`            // accumulated patronage KMS bonus (basis points)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Fact) Reset() {
@@ -814,6 +824,27 @@ func (x *Fact) GetOriginalClaimId() string {
 func (x *Fact) GetSurvivedChallenges() uint32 {
 	if x != nil {
 		return x.SurvivedChallenges
+	}
+	return 0
+}
+
+func (x *Fact) GetLastUtilizedBlock() uint64 {
+	if x != nil {
+		return x.LastUtilizedBlock
+	}
+	return 0
+}
+
+func (x *Fact) GetPruningGraceStart() uint64 {
+	if x != nil {
+		return x.PruningGraceStart
+	}
+	return 0
+}
+
+func (x *Fact) GetPatronageBonus() uint64 {
+	if x != nil {
+		return x.PatronageBonus
 	}
 	return 0
 }
@@ -2653,7 +2684,7 @@ type Params struct {
 	WrongVerificationSlashBps uint64 `protobuf:"varint,20,opt,name=wrong_verification_slash_bps,json=wrongVerificationSlashBps,proto3" json:"wrong_verification_slash_bps,omitempty"` // slash on wrong verification (default 60000 = 6%)
 	MissedRevealSlashBps      uint64 `protobuf:"varint,21,opt,name=missed_reveal_slash_bps,json=missedRevealSlashBps,proto3" json:"missed_reveal_slash_bps,omitempty"`                // slash on missed reveal (default 100 = 0.01%)
 	VerificationRewardAmount  uint64 `protobuf:"varint,22,opt,name=verification_reward_amount,json=verificationRewardAmount,proto3" json:"verification_reward_amount,omitempty"`      // base reward per correct verification (ulgm)
-	ResearchTaxRate           uint64 `protobuf:"varint,23,opt,name=research_tax_rate,json=researchTaxRate,proto3" json:"research_tax_rate,omitempty"`                                 // research fund tax rate (default 220000 = 22%)
+	ResearchTaxRate           uint64 `protobuf:"varint,23,opt,name=research_tax_rate,json=researchTaxRate,proto3" json:"research_tax_rate,omitempty"`                                 // research fund tax rate (default 70000 = 7%)
 	EquivocationSlashBps      uint64 `protobuf:"varint,24,opt,name=equivocation_slash_bps,json=equivocationSlashBps,proto3" json:"equivocation_slash_bps,omitempty"`                  // slash for equivocation (100% = 1000000)
 	// Adversarial verification parameters
 	ProvisionalThreshold           uint64 `protobuf:"varint,25,opt,name=provisional_threshold,json=provisionalThreshold,proto3" json:"provisional_threshold,omitempty"`                                 // min score to create provisional fact (default 500000)
@@ -3023,6 +3054,119 @@ func (x *OntologicalDomain) GetCreatedAtHeight() uint64 {
 	return 0
 }
 
+// MsgPatronizeFact stakes LGM to rescue a fact that is at risk of pruning.
+type MsgPatronizeFact struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Patron        string                 `protobuf:"bytes,1,opt,name=patron,proto3" json:"patron,omitempty"`               // bech32 address
+	FactId        string                 `protobuf:"bytes,2,opt,name=fact_id,json=factId,proto3" json:"fact_id,omitempty"` // fact to patronize
+	Amount        string                 `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`               // ulgm to stake
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgPatronizeFact) Reset() {
+	*x = MsgPatronizeFact{}
+	mi := &file_legible_knowledge_v1_claim_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgPatronizeFact) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgPatronizeFact) ProtoMessage() {}
+
+func (x *MsgPatronizeFact) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_knowledge_v1_claim_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgPatronizeFact.ProtoReflect.Descriptor instead.
+func (*MsgPatronizeFact) Descriptor() ([]byte, []int) {
+	return file_legible_knowledge_v1_claim_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *MsgPatronizeFact) GetPatron() string {
+	if x != nil {
+		return x.Patron
+	}
+	return ""
+}
+
+func (x *MsgPatronizeFact) GetFactId() string {
+	if x != nil {
+		return x.FactId
+	}
+	return ""
+}
+
+func (x *MsgPatronizeFact) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+type MsgPatronizeFactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PatronageId   string                 `protobuf:"bytes,1,opt,name=patronage_id,json=patronageId,proto3" json:"patronage_id,omitempty"`
+	NewKmsBonus   uint64                 `protobuf:"varint,2,opt,name=new_kms_bonus,json=newKmsBonus,proto3" json:"new_kms_bonus,omitempty"` // updated patronage bonus (basis points)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgPatronizeFactResponse) Reset() {
+	*x = MsgPatronizeFactResponse{}
+	mi := &file_legible_knowledge_v1_claim_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgPatronizeFactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgPatronizeFactResponse) ProtoMessage() {}
+
+func (x *MsgPatronizeFactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_knowledge_v1_claim_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgPatronizeFactResponse.ProtoReflect.Descriptor instead.
+func (*MsgPatronizeFactResponse) Descriptor() ([]byte, []int) {
+	return file_legible_knowledge_v1_claim_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *MsgPatronizeFactResponse) GetPatronageId() string {
+	if x != nil {
+		return x.PatronageId
+	}
+	return ""
+}
+
+func (x *MsgPatronizeFactResponse) GetNewKmsBonus() uint64 {
+	if x != nil {
+		return x.NewKmsBonus
+	}
+	return 0
+}
+
 var File_legible_knowledge_v1_claim_proto protoreflect.FileDescriptor
 
 const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
@@ -3061,8 +3205,7 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\x14challenge_window_end\x18\x11 \x01(\x04R\x12challengeWindowEnd\x12.\n" +
 	"\x13provisional_fact_id\x18\x12 \x01(\tR\x11provisionalFactId\x124\n" +
 	"\x16active_challenge_count\x18\x13 \x01(\rR\x14activeChallengeCount\x124\n" +
-	"\x16reverification_fact_id\x18\x14 \x01(\tR\x14reverificationFactId\"\x9c\n" +
-	"\n" +
+	"\x16reverification_fact_id\x18\x14 \x01(\tR\x14reverificationFactId\"\xa5\v\n" +
 	"\x04Fact\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -3102,7 +3245,10 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\x0eis_provisional\x18\x1d \x01(\bR\risProvisional\x120\n" +
 	"\x14challenge_window_end\x18\x1e \x01(\x04R\x12challengeWindowEnd\x12*\n" +
 	"\x11original_claim_id\x18\x1f \x01(\tR\x0foriginalClaimId\x12/\n" +
-	"\x13survived_challenges\x18  \x01(\rR\x12survivedChallenges\"\xa2\x01\n" +
+	"\x13survived_challenges\x18  \x01(\rR\x12survivedChallenges\x12.\n" +
+	"\x13last_utilized_block\x18! \x01(\x04R\x11lastUtilizedBlock\x12.\n" +
+	"\x13pruning_grace_start\x18\" \x01(\x04R\x11pruningGraceStart\x12'\n" +
+	"\x0fpatronage_bonus\x18# \x01(\x04R\x0epatronageBonus\"\xa2\x01\n" +
 	"\x13FactEvidenceSummary\x12\x1f\n" +
 	"\vevidence_id\x18\x01 \x01(\tR\n" +
 	"evidenceId\x12#\n" +
@@ -3323,7 +3469,14 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\n" +
 	"challenges\x18\x06 \x01(\rR\n" +
 	"challenges\x12*\n" +
-	"\x11created_at_height\x18\a \x01(\x04R\x0fcreatedAtHeight*\x8f\x02\n" +
+	"\x11created_at_height\x18\a \x01(\x04R\x0fcreatedAtHeight\"h\n" +
+	"\x10MsgPatronizeFact\x12\x16\n" +
+	"\x06patron\x18\x01 \x01(\tR\x06patron\x12\x17\n" +
+	"\afact_id\x18\x02 \x01(\tR\x06factId\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\tR\x06amount:\v\x82\xe7\xb0*\x06patron\"a\n" +
+	"\x18MsgPatronizeFactResponse\x12!\n" +
+	"\fpatronage_id\x18\x01 \x01(\tR\vpatronageId\x12\"\n" +
+	"\rnew_kms_bonus\x18\x02 \x01(\x04R\vnewKmsBonus*\x8f\x02\n" +
 	"\vClaimStatus\x12\x1c\n" +
 	"\x18CLAIM_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CLAIM_STATUS_PENDING\x10\x01\x12 \n" +
@@ -3333,14 +3486,16 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\x17CLAIM_STATUS_CHALLENGED\x10\x05\x12\x1a\n" +
 	"\x16CLAIM_STATUS_CONTESTED\x10\x06\x12\x1d\n" +
 	"\x19CLAIM_STATUS_INSUFFICIENT\x10\a\x12\x18\n" +
-	"\x14CLAIM_STATUS_EXPIRED\x10\b*\x92\x01\n" +
+	"\x14CLAIM_STATUS_EXPIRED\x10\b*\xc3\x01\n" +
 	"\n" +
 	"FactStatus\x12\x1b\n" +
 	"\x17FACT_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14FACT_STATUS_VERIFIED\x10\x01\x12\x19\n" +
 	"\x15FACT_STATUS_CONTESTED\x10\x02\x12\x19\n" +
 	"\x15FACT_STATUS_FALSIFIED\x10\x03\x12\x17\n" +
-	"\x13FACT_STATUS_EXPIRED\x10\x04*\xda\x01\n" +
+	"\x13FACT_STATUS_EXPIRED\x10\x04\x12\x17\n" +
+	"\x13FACT_STATUS_AT_RISK\x10\x05\x12\x16\n" +
+	"\x12FACT_STATUS_PRUNED\x10\x06*\xda\x01\n" +
 	"\x11VerificationPhase\x12\"\n" +
 	"\x1eVERIFICATION_PHASE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19VERIFICATION_PHASE_COMMIT\x10\x01\x12\x1d\n" +
@@ -3367,7 +3522,7 @@ func file_legible_knowledge_v1_claim_proto_rawDescGZIP() []byte {
 }
 
 var file_legible_knowledge_v1_claim_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_legible_knowledge_v1_claim_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_legible_knowledge_v1_claim_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_legible_knowledge_v1_claim_proto_goTypes = []any{
 	(ClaimStatus)(0),                           // 0: legible.knowledge.v1.ClaimStatus
 	(FactStatus)(0),                            // 1: legible.knowledge.v1.FactStatus
@@ -3405,20 +3560,22 @@ var file_legible_knowledge_v1_claim_proto_goTypes = []any{
 	(*MsgUpdateParamsResponse)(nil),            // 33: legible.knowledge.v1.MsgUpdateParamsResponse
 	(*Params)(nil),                             // 34: legible.knowledge.v1.Params
 	(*OntologicalDomain)(nil),                  // 35: legible.knowledge.v1.OntologicalDomain
-	nil,                                        // 36: legible.knowledge.v1.ClaimEvidence.MetadataEntry
-	nil,                                        // 37: legible.knowledge.v1.VerificationRound.CommitmentsEntry
-	nil,                                        // 38: legible.knowledge.v1.VerificationRound.RevealsEntry
-	nil,                                        // 39: legible.knowledge.v1.VerificationResult.RewardsEntry
-	nil,                                        // 40: legible.knowledge.v1.VerificationResult.SlashesEntry
+	(*MsgPatronizeFact)(nil),                   // 36: legible.knowledge.v1.MsgPatronizeFact
+	(*MsgPatronizeFactResponse)(nil),           // 37: legible.knowledge.v1.MsgPatronizeFactResponse
+	nil,                                        // 38: legible.knowledge.v1.ClaimEvidence.MetadataEntry
+	nil,                                        // 39: legible.knowledge.v1.VerificationRound.CommitmentsEntry
+	nil,                                        // 40: legible.knowledge.v1.VerificationRound.RevealsEntry
+	nil,                                        // 41: legible.knowledge.v1.VerificationResult.RewardsEntry
+	nil,                                        // 42: legible.knowledge.v1.VerificationResult.SlashesEntry
 }
 var file_legible_knowledge_v1_claim_proto_depIdxs = []int32{
-	36, // 0: legible.knowledge.v1.ClaimEvidence.metadata:type_name -> legible.knowledge.v1.ClaimEvidence.MetadataEntry
+	38, // 0: legible.knowledge.v1.ClaimEvidence.metadata:type_name -> legible.knowledge.v1.ClaimEvidence.MetadataEntry
 	4,  // 1: legible.knowledge.v1.Claim.evidence:type_name -> legible.knowledge.v1.ClaimEvidence
 	7,  // 2: legible.knowledge.v1.Fact.evidence_summaries:type_name -> legible.knowledge.v1.FactEvidenceSummary
-	37, // 3: legible.knowledge.v1.VerificationRound.commitments:type_name -> legible.knowledge.v1.VerificationRound.CommitmentsEntry
-	38, // 4: legible.knowledge.v1.VerificationRound.reveals:type_name -> legible.knowledge.v1.VerificationRound.RevealsEntry
-	39, // 5: legible.knowledge.v1.VerificationResult.rewards:type_name -> legible.knowledge.v1.VerificationResult.RewardsEntry
-	40, // 6: legible.knowledge.v1.VerificationResult.slashes:type_name -> legible.knowledge.v1.VerificationResult.SlashesEntry
+	39, // 3: legible.knowledge.v1.VerificationRound.commitments:type_name -> legible.knowledge.v1.VerificationRound.CommitmentsEntry
+	40, // 4: legible.knowledge.v1.VerificationRound.reveals:type_name -> legible.knowledge.v1.VerificationRound.RevealsEntry
+	41, // 5: legible.knowledge.v1.VerificationResult.rewards:type_name -> legible.knowledge.v1.VerificationResult.RewardsEntry
+	42, // 6: legible.knowledge.v1.VerificationResult.slashes:type_name -> legible.knowledge.v1.VerificationResult.SlashesEntry
 	4,  // 7: legible.knowledge.v1.MsgSubmitClaim.evidence:type_name -> legible.knowledge.v1.ClaimEvidence
 	34, // 8: legible.knowledge.v1.MsgUpdateParams.params:type_name -> legible.knowledge.v1.Params
 	10, // 9: legible.knowledge.v1.VerificationRound.CommitmentsEntry.value:type_name -> legible.knowledge.v1.VerificationCommitment
@@ -3441,7 +3598,7 @@ func file_legible_knowledge_v1_claim_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_knowledge_v1_claim_proto_rawDesc), len(file_legible_knowledge_v1_claim_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   37,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

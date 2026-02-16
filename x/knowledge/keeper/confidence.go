@@ -290,7 +290,7 @@ func (k Keeper) ApplyRewardsAndSlashes(
 	params := k.GetParams(ctx)
 	researchTaxRate := params.ResearchTaxRate
 	if researchTaxRate == 0 {
-		researchTaxRate = 220000 // fallback: 22%
+		researchTaxRate = 70000 // fallback: 7%
 	}
 
 	// Apply rewards via BankKeeper (module → validator account)
@@ -303,14 +303,14 @@ func (k Keeper) ApplyRewardsAndSlashes(
 		}
 		// Transfer reward from module account to validator (after research tax)
 		if k.bankKeeper != nil && amount > 0 {
-			// Deduct research tax (22% default) and send to research fund
+			// Deduct research tax (7% default) and send to research fund
 			taxAmount := amount * researchTaxRate / 1_000_000
 			validatorAmount := amount - taxAmount
 
 			if taxAmount > 0 {
 				taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(taxAmount))))
 				if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins); err != nil {
-					// Research tax is a protocol invariant (22% of all verification rewards).
+					// Research tax is a protocol invariant (7% of all verification rewards).
 					// Silent bypass would let validators receive full rewards, corrupting economics.
 					// Withhold entire reward — the module retains funds for retry next round.
 					k.Logger(ctx).Error("research tax transfer failed — reward withheld",

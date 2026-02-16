@@ -180,5 +180,15 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 		}
 	}
 
+	// Prune unused knowledge (amortized, max 20 per block)
+	ep := am.keeper.GetExtendedParams(sdkCtx)
+	if ep.PruningEnabled {
+		pruned := am.keeper.PruneUnusedFactsInEndBlocker(sdkCtx, int(ep.MaxPruningPerBlock))
+		if pruned > 0 {
+			am.keeper.Logger(sdkCtx).Info("knowledge pruning",
+				"count", pruned, "height", sdkCtx.BlockHeight())
+		}
+	}
+
 	return nil
 }

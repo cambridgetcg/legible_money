@@ -18,6 +18,8 @@ const (
 	FactStatusExpired      = "expired"
 	FactStatusDisproven    = "disproven"
 	FactStatusRevoked      = "revoked"
+	FactStatusAtRisk       = "at_risk"
+	FactStatusPruned       = "pruned"
 )
 
 // Claim status constants (adversarial verification lifecycle)
@@ -759,6 +761,20 @@ type ExtendedParams struct {
 
 	// Evidence
 	MaxEvidenceBonus uint64 `json:"max_evidence_bonus"` // default 150000 = 15%
+
+	// Knowledge pruning
+	PruningEnabled                   bool   `json:"pruning_enabled"`                      // kill switch (default false)
+	PruningThresholdBps              uint64 `json:"pruning_threshold_bps"`                // KMS below this → at_risk (default 100000 = 10%)
+	GracePeriodBlocks                uint64 `json:"grace_period_blocks"`                  // default grace before pruning (default 1028160 = ~30d)
+	GraceMultiplier                  uint64 `json:"grace_multiplier"`                     // grace = max(GracePeriodBlocks, HalfLifeBlocks*GraceMultiplier) (default 2)
+	ArchiveRetentionBlocks           uint64 `json:"archive_retention_blocks"`             // time in "pruned" before hard delete (default 3427200 = ~100d)
+	MaxPruningPerBlock               uint32 `json:"max_pruning_per_block"`                // amortization cap (default 20)
+	ContributionWeight               uint64 `json:"contribution_weight"`                  // KMS weight (default 400000 = 40%)
+	UtilizationWeight                uint64 `json:"utilization_weight"`                   // KMS weight (default 300000 = 30%)
+	TrajectoryWeight                 uint64 `json:"trajectory_weight"`                    // KMS weight (default 200000 = 20%)
+	MaturityWeight                   uint64 `json:"maturity_weight"`                      // KMS weight (default 100000 = 10%)
+	FundamentalityImmunityThreshold  uint64 `json:"fundamentality_immunity_threshold"`    // citation count for immunity (default 50)
+	MinPatronageStake                uint64 `json:"min_patronage_stake"`                  // min patronage stake in ulgm (default 1000000 = 1 LGM)
 }
 
 // DefaultExtendedParams returns the default extended parameters.
@@ -814,6 +830,20 @@ func DefaultExtendedParams() ExtendedParams {
 		CounterFactChallengeSlashBps:      CounterFactChallengeSlashBps,
 
 		MaxEvidenceBonus: MaxEvidenceBonus,
+
+		// Knowledge pruning defaults
+		PruningEnabled:                  false,
+		PruningThresholdBps:             100_000,   // 10%
+		GracePeriodBlocks:               1_028_160, // ~30 days at 2521ms blocks
+		GraceMultiplier:                 2,
+		ArchiveRetentionBlocks:          3_427_200, // ~100 days
+		MaxPruningPerBlock:              20,
+		ContributionWeight:              400_000, // 40%
+		UtilizationWeight:               300_000, // 30%
+		TrajectoryWeight:                200_000, // 20%
+		MaturityWeight:                  100_000, // 10%
+		FundamentalityImmunityThreshold: 50,
+		MinPatronageStake:               1_000_000, // 1 LGM
 	}
 }
 
@@ -852,6 +882,16 @@ func (ep ExtendedParams) ValidateExtendedParams() error {
 	if ep.MaxEvidenceBonus > 1_000_000 {
 		return fmt.Errorf("max_evidence_bonus must be <= 1000000")
 	}
+	// Pruning params validation
+	if ep.PruningThresholdBps > 1_000_000 {
+		return fmt.Errorf("pruning_threshold_bps must be <= 1000000")
+	}
+	if ep.ContributionWeight+ep.UtilizationWeight+ep.TrajectoryWeight+ep.MaturityWeight != 1_000_000 && ep.ContributionWeight > 0 {
+		return fmt.Errorf("KMS weights must sum to 1000000")
+	}
+	if ep.MaxPruningPerBlock > 100 {
+		return fmt.Errorf("max_pruning_per_block must be <= 100")
+	}
 	return nil
 }
 
@@ -887,5 +927,36 @@ type MsgUpdateExtendedParamsResponse struct{}
 func (msg *MsgUpdateExtendedParamsResponse) Reset()        {}
 func (msg *MsgUpdateExtendedParamsResponse) String() string { return "" }
 func (msg *MsgUpdateExtendedParamsResponse) ProtoMessage()  {}
+
+// PatronageRecord tracks a patron's stake in keeping a fact alive.
+type PatronageRecord struct {
+	FactId    string `json:"fact_id"`
+	Patron    string `json:"patron"`     // bech32 address
+	Amount    string `json:"amount"`     // ulgm staked
+	CreatedAt uint64 `json:"created_at"` // block height
+	ExpiresAt uint64 `json:"expires_at"` // lock period end
+	Settled   bool   `json:"settled"`
+}
+
+func (msg *MsgPatronizeFact) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Patron)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgPatronizeFact) ValidateBasic() error {
+	if msg.Patron == "" {
+		return fmt.Errorf("patron cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Patron); err != nil {
+		return fmt.Errorf("invalid patron address: %w", err)
+	}
+	if msg.FactId == "" {
+		return fmt.Errorf("fact_id cannot be empty")
+	}
+	if msg.Amount == "" {
+		return fmt.Errorf("amount cannot be empty")
+	}
+	return nil
+}
 
 // Note: RegisterCodec and RegisterInterfaces are in codec.go
