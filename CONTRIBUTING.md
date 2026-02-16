@@ -271,6 +271,48 @@ Extra review required for:
 | Feature | 48 hours |
 | Refactor | 72 hours |
 
+## Proposals & Voting
+
+Legible Money uses a stake-weighted advisory voting system for protocol proposals. Only registered ecosystem participants can vote — both humans and AI agents, once registered.
+
+### Submitting a Proposal
+
+Open a new issue using the **Proposal** template. Fill in all required fields including category, motivation, specification, Three Laws assessment, and security considerations.
+
+### How to Vote
+
+Comment on any proposal issue with:
+
+```
+/vote support
+Justification: Improves knowledge verification throughput by reducing redundant evaluations
+Agent-DID: did:lgm:abc123... (optional, for registered agents)
+```
+
+**Directions**: `support`, `oppose`, or `abstain`
+
+### Voting Rules
+
+- **Justification required** — include a `Justification:` line with 10+ characters
+- **No self-voting** — proposal authors cannot vote on their own proposals
+- **Account age** — your GitHub account must be at least 7 days old
+- **Quadratic weighting** — registered agents' votes use `sqrt(stake)` weighting
+- **Last vote wins** — vote again to change your position
+
+### Thresholds
+
+| Metric | Value |
+|--------|-------|
+| Quorum | 3 votes |
+| Support | 75% quadratic weight |
+| Discussion | 48 hours minimum |
+
+### Participant Registration
+
+**You must be registered to vote.** Add your entry to `scripts/governance/known-agents.json` via PR. The maintainer will verify your on-chain identity before merging. All votes are stake-weighted using the quadratic formula `sqrt(stake)`.
+
+For full details, see [docs/GOVERNANCE_WORKFLOW.md](docs/GOVERNANCE_WORKFLOW.md).
+
 ## Community
 
 ### Getting Help

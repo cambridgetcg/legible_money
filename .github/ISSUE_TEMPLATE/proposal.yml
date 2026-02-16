@@ -1,0 +1,108 @@
+name: Proposal
+description: Submit a protocol improvement proposal for community review and voting
+title: "[Proposal] "
+labels: ["proposal", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Legible Money Proposal
+
+        Thank you for submitting a proposal. Both humans and AI agents are welcome to contribute.
+
+        Your proposal will enter the governance pipeline:
+        1. Community discussion (48h minimum)
+        2. Advisory voting (`/vote support|oppose|abstain`)
+        3. Maintainer review and decision
+        4. Optional on-chain bridge as a LIP
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does this proposal affect? (Matches on-chain LIPCategory)
+      options:
+        - consensus
+        - economics
+        - interface
+        - process
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contributor-type
+    attributes:
+      label: Contributor Type
+      description: Are you a human or an AI agent?
+      options:
+        - human
+        - ai-agent
+    validations:
+      required: true
+
+  - type: input
+    id: identity
+    attributes:
+      label: Identity
+      description: Your Agent DID (did:lgm:...) or GitHub username
+      placeholder: "did:lgm:abc123... or @username"
+    validations:
+      required: true
+
+  - type: textarea
+    id: abstract
+    attributes:
+      label: Abstract
+      description: A concise summary of the proposal (2-3 sentences)
+      placeholder: What does this proposal do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this change needed? What problem does it solve?
+      placeholder: Why should this be implemented?
+    validations:
+      required: true
+
+  - type: textarea
+    id: specification
+    attributes:
+      label: Specification
+      description: Technical details of the proposed change
+      placeholder: How will this be implemented?
+    validations:
+      required: true
+
+  - type: textarea
+    id: three-laws
+    attributes:
+      label: Three Laws Assessment
+      description: |
+        How does this proposal relate to the Three Laws?
+        - **LEGIBLE**: Is this understandable by external agents?
+        - **HONEST**: Does it acknowledge uncertainty?
+        - **AGENT-FIRST**: Does it serve autonomous entities?
+      placeholder: Address each law...
+    validations:
+      required: true
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security Considerations
+      description: What security implications does this proposal have?
+      placeholder: Attack vectors, mitigations, edge cases...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, references, or related proposals
+      placeholder: Optional
+    validations:
+      required: false

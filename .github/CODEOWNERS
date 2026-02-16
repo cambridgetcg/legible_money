@@ -44,3 +44,9 @@
 
 # GitHub configuration
 /.github/                           @yournameisai
+
+# LIPs (Legible Improvement Proposals)
+/docs/lips/                         @yournameisai
+
+# Governance scripts
+/scripts/governance/                @yournameisai

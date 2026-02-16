@@ -31,6 +31,18 @@ devnet/secrets/*.secret
 # DevNet data
 devnet/data/
 
+# Go build output
+build/
+legbled
+coverage.out
+
+# Test output
+test-results/
+
+# Node
+node_modules/
+dist/
+
 # Debug
 *.log
 

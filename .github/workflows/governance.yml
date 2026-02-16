@@ -1,0 +1,155 @@
+name: Governance
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created, edited, deleted]
+  pull_request:
+    types: [opened, labeled, synchronize]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  # Job 1: Auto-label proposals when issues are opened
+  label-proposal:
+    name: Label Proposal
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if proposal template
+        id: check
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            // Detect proposal template by checking for required sections
+            const isProposal = body.includes('### Category') &&
+                               body.includes('### Contributor Type') &&
+                               body.includes('### Abstract') &&
+                               body.includes('### Three Laws Assessment');
+
+            if (!isProposal) {
+              console.log('Not a proposal template, skipping');
+              return;
+            }
+
+            // Check if agent-submitted
+            const isAgent = body.includes('ai-agent');
+            const labels = ['proposal'];
+            if (isAgent) labels.push('agent-submitted');
+
+            // Add vote:open label
+            labels.push('vote:open');
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labels,
+            });
+
+            console.log(`Labeled issue #${context.issue.number} with: ${labels.join(', ')}`);
+
+  # Job 2: Tally votes on /vote comments
+  tally-votes:
+    name: Tally Votes
+    if: >
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '/vote')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          sparse-checkout: scripts/governance
+
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @actions/github @actions/core
+        working-directory: scripts/governance
+
+      - name: Run vote tally
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/governance/tally-votes.js
+
+  # Job 3: Governance check for proposal PRs
+  governance-check:
+    name: Governance Check
+    if: >
+      github.event_name == 'pull_request' &&
+      contains(toJSON(github.event.pull_request.labels), 'proposal')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate proposal structure
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const errors = [];
+
+            // Check required sections
+            const requiredSections = [
+              'Three Laws',
+              'Security'
+            ];
+
+            for (const section of requiredSections) {
+              const pattern = new RegExp(`##.*${section}`, 'i');
+              if (!pattern.test(body)) {
+                errors.push(`Missing required section: "${section}"`);
+              }
+            }
+
+            if (errors.length > 0) {
+              const msg = '### Governance Check Failed\n\n' +
+                errors.map(e => `- ${e}`).join('\n') +
+                '\n\nPlease update your PR description to include all required sections.';
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: msg,
+              });
+
+              core.setFailed(`Proposal validation failed: ${errors.join('; ')}`);
+              return;
+            }
+
+            console.log('Proposal structure is valid');
+
+      - name: Check discussion period
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const createdAt = new Date(pr.created_at);
+            const now = new Date();
+            const hoursElapsed = (now - createdAt) / (1000 * 60 * 60);
+
+            if (hoursElapsed < 48) {
+              const remaining = Math.ceil(48 - hoursElapsed);
+              core.info(`Discussion period: ${Math.floor(hoursElapsed)}h elapsed, ${remaining}h remaining`);
+              core.setFailed(`Minimum 48h discussion period not met (${remaining}h remaining)`);
+              return;
+            }
+
+            console.log(`Discussion period met: ${Math.floor(hoursElapsed)}h elapsed`);
+
+            // Add ready-for-review if all checks pass
+            const labels = pr.labels.map(l => l.name);
+            if (!labels.includes('ready-for-review')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['ready-for-review'],
+              });
+            }

@@ -1,0 +1,74 @@
+# golangci-lint configuration for Legible Money
+# Run: golangci-lint run ./...
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Security
+    - gosec
+    # Static analysis
+    - staticcheck
+    # Bug detection
+    - govet
+    - ineffassign
+    - typecheck
+    # Style
+    - gofmt
+    - goimports
+    # Error handling
+    - errcheck
+    # Unused code
+    - unused
+    # Simplification
+    - gosimple
+
+linters-settings:
+  gosec:
+    excludes:
+      # Allow math/rand in non-crypto contexts (VRF uses crypto/rand)
+      - G404
+    severity: medium
+    confidence: medium
+  staticcheck:
+    checks:
+      - "all"
+      - "-SA1019" # Allow deprecated usage during migration
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment # Too noisy for protobuf-generated structs
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+  goimports:
+    local-prefixes: github.com/legible-money/legible
+
+issues:
+  exclude-rules:
+    # Test files can be more relaxed
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+    # Generated protobuf files
+    - path: \.pb\.go$
+      linters:
+        - all
+    # Generated protobuf gateway files
+    - path: \.pb\.gw\.go$
+      linters:
+        - all
+  max-issues-per-linter: 50
+  max-same-issues: 5
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true
+  sort-order:
+    - linter
+    - severity
+    - file

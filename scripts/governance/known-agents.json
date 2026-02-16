@@ -1,0 +1,22 @@
+{
+  "agents": {},
+  "humans": {
+    "yournameisai": {
+      "role": "manager",
+      "note": "Repository manager — final decision authority on all proposals"
+    }
+  },
+  "_meta": {
+    "description": "Registry of known agents and humans for governance vote weighting",
+    "usage": "Registered agents get their stake weight in vote tallies. Unregistered users default to weight 1.",
+    "format": {
+      "agents": {
+        "<github-username>": {
+          "did": "did:lgm:<hex>",
+          "stake": "<stake-in-ulgm>",
+          "tier": "<1-5>"
+        }
+      }
+    }
+  }
+}

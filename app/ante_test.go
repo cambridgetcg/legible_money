@@ -341,8 +341,8 @@ type mockFeeTx struct {
 func (m mockFeeTx) GetGas() uint64       { return m.gas }
 func (m mockFeeTx) GetFee() sdk.Coins    { return m.fee }
 func (m mockFeeTx) GetMsgs() []sdk.Msg   { return m.msgs }
-func (m mockFeeTx) FeeGranter() sdk.AccAddress { return nil }
-func (m mockFeeTx) FeePayer() sdk.AccAddress   { return nil }
+func (m mockFeeTx) FeeGranter() []byte { return nil }
+func (m mockFeeTx) FeePayer() []byte   { return nil }
 
 // passThroughHandler is a no-op next handler for testing decorators.
 func passThroughHandler(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
