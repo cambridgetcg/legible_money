@@ -196,8 +196,9 @@ func TestTreeEvaluatorCounterFactPenalty(t *testing.T) {
 }
 
 func TestTreeEvaluatorCounterFactPenaltyFloor(t *testing.T) {
-	// Many counter-facts should not go below 0
-	counterFacts := make([]agentsdk.CounterFactInfo, 100)
+	// Many counter-facts should not underflow below 0.
+	// social base 400k × 0.8 = 320k. 500 counter-facts × 1000 = 500k penalty > 320k → floors at 0.
+	counterFacts := make([]agentsdk.CounterFactInfo, 500)
 	for i := range counterFacts {
 		counterFacts[i] = agentsdk.CounterFactInfo{ID: "cf", Confidence: 500_000}
 	}
@@ -221,9 +222,9 @@ func TestTreeEvaluatorCounterFactPenaltyFloor(t *testing.T) {
 		t.Fatalf("Evaluate: %v", err)
 	}
 
-	// Should be 0 or very low (False verdict)
-	if conf > 10_000 {
-		t.Fatalf("expected near-zero confidence with 100 counter-facts, got %d", conf)
+	// Penalty 500k > base 320k → confidence floors at 0 → False
+	if conf != 0 {
+		t.Fatalf("expected 0 confidence with overwhelming counter-facts, got %d", conf)
 	}
 	if verdict != agentsdk.VerdictFalse {
 		t.Fatalf("expected False with massive counter-facts, got %s", verdict)
