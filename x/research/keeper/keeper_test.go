@@ -1282,6 +1282,120 @@ func TestDeleteResearch(t *testing.T) {
 	}
 }
 
+// ---------- ExpireBounties Tests ----------
+
+func TestExpireBountiesOpen(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	ms := newMsgServer(k)
+
+	creator := testAddr("alice")
+	bk.fundAccount(creator, "ulgm", largeBalance)
+	bk.fundModule(types.ModuleName, "ulgm", largeBalance)
+
+	ms.CreateBounty(ctx, &types.MsgCreateBounty{
+		Creator: creator, Title: "Will Expire", Description: "Desc",
+		Reward:         "1000000000",
+		DeadlineHeight: 100 + 34272 + 1,
+	})
+
+	// Advance past deadline
+	ctx = ctx.WithBlockHeight(100 + 34272 + 2)
+	k.ExpireBounties(ctx)
+
+	b, _ := k.GetBounty(ctx, "BOUNTY-1")
+	if b.Status != string(types.BountyStatusExpired) {
+		t.Errorf("expected status=expired, got %s", b.Status)
+	}
+}
+
+func TestExpireBountiesClaimedReopens(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	ms := newMsgServer(k)
+
+	creator := testAddr("alice")
+	claimer := testAddr("bob")
+	bk.fundAccount(creator, "ulgm", largeBalance)
+
+	ms.CreateBounty(ctx, &types.MsgCreateBounty{
+		Creator: creator, Title: "Claimed Expire", Description: "Desc",
+		Reward:         "1000000000",
+		DeadlineHeight: 100 + 34272 + 1,
+	})
+
+	ms.ClaimBounty(ctx, &types.MsgClaimBounty{
+		Claimer: claimer, BountyId: "BOUNTY-1",
+	})
+
+	// Advance past deadline
+	ctx = ctx.WithBlockHeight(100 + 34272 + 2)
+	k.ExpireBounties(ctx)
+
+	b, _ := k.GetBounty(ctx, "BOUNTY-1")
+	if b.Status != string(types.BountyStatusOpen) {
+		t.Errorf("expected status=open (reopened), got %s", b.Status)
+	}
+	if b.ClaimedBy != "" {
+		t.Errorf("expected claimed_by cleared, got %s", b.ClaimedBy)
+	}
+}
+
+func TestExpireBountiesNotExpiredYet(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	ms := newMsgServer(k)
+
+	creator := testAddr("alice")
+	bk.fundAccount(creator, "ulgm", largeBalance)
+
+	ms.CreateBounty(ctx, &types.MsgCreateBounty{
+		Creator: creator, Title: "Not Yet", Description: "Desc",
+		Reward:         "1000000000",
+		DeadlineHeight: 100 + 34272 + 1,
+	})
+
+	// Don't advance past deadline
+	k.ExpireBounties(ctx)
+
+	b, _ := k.GetBounty(ctx, "BOUNTY-1")
+	if b.Status != string(types.BountyStatusOpen) {
+		t.Errorf("expected status=open (not expired yet), got %s", b.Status)
+	}
+}
+
+// ---------- Genesis PeerReview Round-Trip Test ----------
+
+func TestGenesisWithPeerReviews(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	ms := newMsgServer(k)
+
+	submitter := testAddr("alice")
+	bk.fundAccount(submitter, "ulgm", largeBalance)
+
+	ms.SubmitResearch(ctx, &types.MsgSubmitResearch{
+		Submitter: submitter, Title: "Genesis Review Test", Description: "Desc",
+		Domain: "physics", Stake: "100000000",
+	})
+	ms.ReviewResearch(ctx, &types.MsgReviewResearch{
+		Reviewer: testAddr("rev1"), ResearchId: "RES-1",
+		Verdict: types.ReviewVerdict_REVIEW_VERDICT_APPROVE, QualityScore: 75, Reasoning: "Good",
+	})
+
+	// Export
+	gs := k.ExportGenesis(ctx)
+	if len(gs.PeerReviews) != 1 {
+		t.Fatalf("expected 1 peer review in export, got %d", len(gs.PeerReviews))
+	}
+
+	// Re-init into fresh keeper
+	k2, ctx2, _ := setupKeeper(t)
+	k2.InitGenesis(ctx2, *gs)
+
+	// Verify review survived round-trip
+	reviews := k2.GetReviewsForResearch(ctx2, "RES-1")
+	if len(reviews) != 1 {
+		t.Errorf("expected 1 review after re-init, got %d", len(reviews))
+	}
+}
+
 func TestTreasuryBalance(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
