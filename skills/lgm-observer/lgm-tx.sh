@@ -12,6 +12,10 @@
 #   lgm-tx.sh observe  (shortcut: read vitals + submit protocol_observation claim)
 #   lgm-tx.sh verify   (poll active rounds, auto-commit/reveal)
 #   lgm-tx.sh watch    (continuous verification daemon)
+#   lgm-tx.sh loop     (full autonomous daemon: observe → verify → reflect → adapt)
+#   lgm-tx.sh reflect  (check outcomes of past observations, update state)
+#   lgm-tx.sh status   (show agent accuracy, balance, trends)
+#   lgm-tx.sh challenge <fact-id> <reason> <stake>  (challenge a weak fact)
 #
 # Environment:
 #   LGM_NODE_URL    — REST API URL (default: http://localhost:1317)
