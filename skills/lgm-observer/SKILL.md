@@ -1,6 +1,6 @@
 ---
 name: lgm-observer
-description: Monitor the vital signs of Legible Money — autopoiesis hormones, alignment scores, life force, multiplier adaptations, and meta-learning state. The protocol's nervous system, visible.
+description: Monitor and participate in Legible Money's self-regulating systems — observe hormones, submit protocol observations, verify claims, and close the recursive improvement loop.
 metadata: {"openclaw": {"emoji": "\ud83e\uddec", "requires": {"env": ["LGM_NODE_URL"]}, "os": ["darwin", "linux"]}}
 ---
 
