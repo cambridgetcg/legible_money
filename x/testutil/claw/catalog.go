@@ -58,10 +58,10 @@ var Catalog = []Probe{
 		Defense:  "No reward for abstaining; zero-cost participation risk remains",
 	},
 	{
-		ID: "OC-4", Name: "Minimum Stake Spam", Variant: NanoClaw, Severity: Critical,
+		ID: "OC-4", Name: "Minimum Stake Spam", Variant: NanoClaw, Severity: High,
 		Status: Loophole, Module: "knowledge", File: "x/knowledge/keeper/openclaw_test.go",
 		TestFunc: "TestOC4_MinimumStakeSpam",
-		Defense:  "Gas fees per tx; needs minimum claim stake floor",
+		Defense:  "Gas fees per tx provide primary defense; minimum claim stake floor recommended",
 	},
 	{
 		ID: "OC-5", Name: "Tier 0 Reward Viability", Variant: OpenClaw, Severity: Medium,
