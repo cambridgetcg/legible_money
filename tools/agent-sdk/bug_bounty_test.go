@@ -89,6 +89,57 @@ func (m *bbMockTxClient) CreateVesting(_ context.Context, req CreateVestingReque
 	m.vestings = append(m.vestings, req)
 	return fmt.Sprintf("vesting-tx-%d", len(m.vestings)), nil
 }
+func (m *bbMockTxClient) InitiateDispute(_ context.Context, _ InitiateDisputeRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) CommitDisputeEvidence(_ context.Context, _, _ string) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) RevealDisputeEvidence(_ context.Context, _ RevealDisputeEvidenceRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) ArbiterVote(_ context.Context, _ ArbiterVoteRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) EscalateDispute(_ context.Context, _ string, _ uint64) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) SubmitEvidence(_ context.Context, _ SubmitEvidenceRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) AuditEvidence(_ context.Context, _ AuditEvidenceRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) RegisterOracle(_ context.Context, _ RegisterOracleRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) SubmitOracleData(_ context.Context, _ SubmitOracleDataRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) SubmitResearch(_ context.Context, _ SubmitResearchRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) ReviewResearch(_ context.Context, _ ReviewResearchRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) CreateResearchBounty(_ context.Context, _ CreateResearchBountyRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) ClaimResearchBounty(_ context.Context, _ string) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) FundResearch(_ context.Context, _ uint64) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) ProposeOntologyDomain(_ context.Context, _ ProposeOntologyDomainRequest) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) VoteDomainProposal(_ context.Context, _ string, _ bool) (string, error) {
+	return "mock-tx", nil
+}
+func (m *bbMockTxClient) AcknowledgeIncompleteness(_ context.Context, _, _, _ string) (string, error) {
+	return "mock-tx", nil
+}
 
 // bbMockQueryClient provides canned responses for bug bounty queries.
 type bbMockQueryClient struct {
