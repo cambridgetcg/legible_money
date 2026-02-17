@@ -62,7 +62,7 @@ func TestOC_ON2_DuplicateDomainProposal(t *testing.T) {
 	proposer := testAddr("propdup_")
 	bk.fundAccount(proposer, largeBalance)
 
-	k.SetStratum(ctx, types.Stratum{Level: 1, Name: "Foundation", Description: "test"})
+	k.SetStratum(ctx, types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
 
 	// First proposal
 	_, err := ms.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
