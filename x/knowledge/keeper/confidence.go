@@ -142,7 +142,7 @@ func (k Keeper) AggregateVerificationResult(
 		majorVerdict = "inconclusive"
 	}
 
-	agreementRatio := (majorWeight * 1_000_000) / totalWeight
+	agreementRatio := safeMulDiv(majorWeight, 1_000_000, totalWeight)
 	result.AgreementRatio = agreementRatio
 	result.TotalWeight = totalWeight
 
