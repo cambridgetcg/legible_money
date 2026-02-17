@@ -29,3 +29,10 @@ type KnowledgeKeeper interface {
 type EmergencyKeeper interface {
 	IsHalted(ctx context.Context) bool
 }
+
+// GovKeeper provides governance metrics for auto-proposal rate limiting.
+// The autopoiesis module emits proposal suggestions as events — it does NOT
+// submit proposals directly. This interface provides observability only.
+type GovKeeper interface {
+	GetActiveProposalCount(ctx context.Context) uint64
+}

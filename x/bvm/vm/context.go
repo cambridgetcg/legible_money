@@ -42,6 +42,7 @@ type ExecutionContext struct {
 	BaseFee            *big.Int
 	Capabilities       *SessionCapabilities // nil = deny all agent opcodes (C-1 secure default)
 	InHostCall         bool                 // H-1: reentrancy guard — true during host function execution
+	IsCommitPhase      bool                 // FARM-4: true during commit phase — restricts COMPARE_BELIEF to prevent herding
 	ContractBvmVersion uint32               // BVM version the contract was deployed under
 	GasSchedule        *GasSchedule         // Governance gas overrides (nil = use defaults)
 }

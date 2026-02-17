@@ -483,6 +483,23 @@ roundFinalize:
 		"confidence", result.Confidence,
 	)
 
+	// FARM-1: Track verifier conformity for rubber-stamp detection.
+	// FARM-8: Track validator participation for passive staking detection.
+	if result.Verdict != "insufficient" && result.Verdict != "inconclusive" {
+		// Track assignment for all selected validators (FARM-8)
+		for _, validatorAddr := range round.SelectedValidators {
+			k.IncrementRoundsAssigned(ctx, validatorAddr)
+		}
+		// Track participation (FARM-8) and conformity (FARM-1) for revealing validators
+		for _, validatorAddr := range sortedMapKeys(round.Reveals) {
+			k.IncrementRoundsParticipated(ctx, validatorAddr)
+			reveal := round.Reveals[validatorAddr]
+			votedWithOutcome := (result.Verdict == "accepted" && reveal.Verdict == "accept") ||
+				(result.Verdict == "rejected" && reveal.Verdict == "reject")
+			k.UpdateVerifierConformity(ctx, validatorAddr, votedWithOutcome)
+		}
+	}
+
 	// Notify home module of verification results for epistemic stats.
 	// Each validator who revealed gets a RecordVerification call with whether
 	// their verdict matched consensus.

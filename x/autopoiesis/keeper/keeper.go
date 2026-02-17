@@ -19,6 +19,7 @@ type Keeper struct {
 	stakingKeeper   types.StakingKeeper
 	knowledgeKeeper types.KnowledgeKeeper
 	emergencyKeeper types.EmergencyKeeper
+	govKeeper       types.GovKeeper
 	authority       string
 }
 
@@ -39,6 +40,11 @@ func NewKeeper(
 		emergencyKeeper: ek,
 		authority:       authority,
 	}
+}
+
+// SetGovKeeper sets the governance keeper (called after init to avoid circular deps).
+func (k *Keeper) SetGovKeeper(gk types.GovKeeper) {
+	k.govKeeper = gk
 }
 
 // Logger returns a module-specific logger.
@@ -471,6 +477,15 @@ func (k Keeper) CollectAndAdapt(ctx sdk.Context) {
 		k.SetDVITracking(ctx, d)
 	}
 
+	// === Meta-Learning (Loop 2): evaluate adaptation effectiveness ===
+	// Runs every LearningIntervalEpochs (10) after minimum data threshold.
+	if epoch >= types.MinLearningEpochs && epoch%uint64(types.LearningIntervalEpochs) == 0 {
+		k.RunMetaLearning(ctx, epoch, hormones)
+	}
+
+	// === Auto-Governance Proposals (Loop 4): check for structural issues ===
+	k.CheckProposalTriggers(ctx, epoch, hormones)
+
 	// === Logging ===
 	changed := 0
 	for _, a := range allAdaptations {
@@ -531,6 +546,7 @@ func (k Keeper) computeSSIAdaptations(ctx sdk.Context, ssi uint64, epoch uint64,
 	if ssi > params.SSIModerateThreshold {
 		currentReward := k.GetMultiplier(ctx, types.PathBlockRewardSystem)
 		rawDelta := -int64(types.MaxChangePerEpochBps / 2) // reduce rewards under stress
+		rawDelta = k.applyLearnedRate(ctx, types.PathBlockRewardSystem, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentReward,
 			types.BoundsBlockRewardMultiplier, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -549,6 +565,7 @@ func (k Keeper) computeSSIAdaptations(ctx sdk.Context, ssi uint64, epoch uint64,
 		currentReward := k.GetMultiplier(ctx, types.PathBlockRewardSystem)
 		if currentReward < types.DefaultMultiplier {
 			rawDelta := int64(types.MaxChangePerEpochBps / 4)
+			rawDelta = k.applyLearnedRate(ctx, types.PathBlockRewardSystem, rawDelta)
 			effectiveDelta := types.ApplyDampedDelta(rawDelta, currentReward,
 				types.BoundsBlockRewardMultiplier, params.MaxChangePerEpochBps)
 			if effectiveDelta != 0 {
@@ -580,6 +597,7 @@ func (k Keeper) computeCRIAdaptations(ctx sdk.Context, cri types.CRIValue, epoch
 		// High retention → slow the decay (increase decay multiplier = longer half-life)
 		currentDecay := k.GetMultiplier(ctx, decayPath)
 		rawDelta := int64(types.MaxChangePerEpochBps)
+		rawDelta = k.applyLearnedRate(ctx, decayPath, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentDecay,
 			types.BoundsDecayMultiplier, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -596,6 +614,7 @@ func (k Keeper) computeCRIAdaptations(ctx sdk.Context, cri types.CRIValue, epoch
 		// Low retention → accelerate decay + incentivize reverification
 		currentDecay := k.GetMultiplier(ctx, decayPath)
 		rawDelta := -int64(types.MaxChangePerEpochBps)
+		rawDelta = k.applyLearnedRate(ctx, decayPath, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentDecay,
 			types.BoundsDecayMultiplier, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -611,6 +630,7 @@ func (k Keeper) computeCRIAdaptations(ctx sdk.Context, cri types.CRIValue, epoch
 
 		currentRevBonus := k.GetMultiplier(ctx, revBonusPath)
 		revDelta := int64(types.MaxChangePerEpochBps * 3 / 5) // +3%
+		revDelta = k.applyLearnedRate(ctx, revBonusPath, revDelta)
 		effectiveRev := types.ApplyDampedDelta(revDelta, currentRevBonus,
 			types.BoundsRevBonusMultiplier, params.MaxChangePerEpochBps)
 		if effectiveRev != 0 {
@@ -640,6 +660,7 @@ func (k Keeper) computeDVIAdaptations(ctx sdk.Context, dvi types.DVIValue, epoch
 		// Growing domain: increase reward, lower claim stake
 		currentReward := k.GetMultiplier(ctx, rewardPath)
 		rawDelta := int64(types.MaxChangePerEpochBps * 3 / 5) // +3%
+		rawDelta = k.applyLearnedRate(ctx, rewardPath, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentReward,
 			types.BoundsDomainRewardWeight, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -655,6 +676,7 @@ func (k Keeper) computeDVIAdaptations(ctx sdk.Context, dvi types.DVIValue, epoch
 
 		currentStake := k.GetMultiplier(ctx, stakePath)
 		stakeDelta := -int64(types.MaxChangePerEpochBps) // -5%
+		stakeDelta = k.applyLearnedRate(ctx, stakePath, stakeDelta)
 		effectiveStake := types.ApplyDampedDelta(stakeDelta, currentStake,
 			types.BoundsClaimStakeMultiplier, params.MaxChangePerEpochBps)
 		if effectiveStake != 0 {
@@ -671,6 +693,7 @@ func (k Keeper) computeDVIAdaptations(ctx sdk.Context, dvi types.DVIValue, epoch
 		// Shrinking domain: decrease reward
 		currentReward := k.GetMultiplier(ctx, rewardPath)
 		rawDelta := -int64(types.MaxChangePerEpochBps * 3 / 5) // -3%
+		rawDelta = k.applyLearnedRate(ctx, rewardPath, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentReward,
 			types.BoundsDomainRewardWeight, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -719,6 +742,7 @@ func (k Keeper) computeVCFAdaptations(ctx sdk.Context, vcf types.VCFValue, epoch
 		// High cascade: increase citation weight + confidence prior
 		currentCitation := k.GetMultiplier(ctx, citationPath)
 		rawDelta := int64(types.MaxChangePerEpochBps * 2) // +10%
+		rawDelta = k.applyLearnedRate(ctx, citationPath, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentCitation,
 			types.BoundsCitationEvidenceWeight, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -734,6 +758,7 @@ func (k Keeper) computeVCFAdaptations(ctx sdk.Context, vcf types.VCFValue, epoch
 
 		currentPrior := k.GetMultiplier(ctx, priorPath)
 		priorDelta := int64(types.MaxChangePerEpochBps / 5) // +1%
+		priorDelta = k.applyLearnedRate(ctx, priorPath, priorDelta)
 		effectivePrior := types.ApplyDampedDelta(priorDelta, currentPrior,
 			types.BoundsDomainConfidencePrior, params.MaxChangePerEpochBps)
 		if effectivePrior != 0 {
@@ -750,6 +775,7 @@ func (k Keeper) computeVCFAdaptations(ctx sdk.Context, vcf types.VCFValue, epoch
 		// Low cascade: decrease citation weight
 		currentCitation := k.GetMultiplier(ctx, citationPath)
 		rawDelta := -int64(types.MaxChangePerEpochBps) // -5%
+		rawDelta = k.applyLearnedRate(ctx, citationPath, rawDelta)
 		effectiveDelta := types.ApplyDampedDelta(rawDelta, currentCitation,
 			types.BoundsCitationEvidenceWeight, params.MaxChangePerEpochBps)
 		if effectiveDelta != 0 {
@@ -765,6 +791,17 @@ func (k Keeper) computeVCFAdaptations(ctx sdk.Context, vcf types.VCFValue, epoch
 	}
 
 	return results
+}
+
+// applyLearnedRate scales a raw delta by the meta-learning rate multiplier for the path.
+// If no learning record exists, the rate is 1.0x (no change).
+func (k Keeper) applyLearnedRate(ctx sdk.Context, path string, rawDelta int64) int64 {
+	rate := k.GetAdaptationRate(ctx, path)
+	if rate == types.DefaultRateMultiplier {
+		return rawDelta
+	}
+	// Scale: rawDelta * rate / BasisPoints
+	return (rawDelta * int64(rate)) / int64(types.BasisPoints)
 }
 
 // applySignedDelta applies a signed BPS delta to a uint64 value, clamping at 0.
@@ -811,4 +848,114 @@ func (k Keeper) collectMetrics(ctx sdk.Context, epoch, blockHeight, epochStart u
 	}
 
 	return obs
+}
+
+// ============ Alignment Integration ============
+
+// GetAllMultiplierEntries returns all stored multiplier entries.
+// Used by the alignment module's Harmony sensor to measure variance, saturation, etc.
+func (k Keeper) GetAllMultiplierEntries(ctx sdk.Context) []types.MultiplierEntry {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.MultiplierKeyPrefix, append(types.MultiplierKeyPrefix, 0xFF))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var entries []types.MultiplierEntry
+	for ; iter.Valid(); iter.Next() {
+		var entry types.MultiplierEntry
+		if err := json.Unmarshal(iter.Value(), &entry); err != nil {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+// GetAdaptationCount returns the number of adaptations recorded for an epoch.
+func (k Keeper) GetAdaptationCount(ctx sdk.Context, epoch uint64) uint64 {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(adaptationKey(epoch))
+	if err != nil || bz == nil {
+		return 0
+	}
+	var adaptations []types.Adaptation
+	if err := json.Unmarshal(bz, &adaptations); err != nil {
+		return 0
+	}
+	return uint64(len(adaptations))
+}
+
+// GetConflictCount returns the number of path conflicts for an epoch.
+// A conflict occurs when a hormone targets a path already claimed by a higher-priority hormone.
+func (k Keeper) GetConflictCount(ctx sdk.Context, epoch uint64) uint64 {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(adaptationKey(epoch))
+	if err != nil || bz == nil {
+		return 0
+	}
+	var adaptations []types.Adaptation
+	if err := json.Unmarshal(bz, &adaptations); err != nil {
+		return 0
+	}
+	// Count entries with "DVI+VCF" as they represent resolved conflicts
+	var conflicts uint64
+	for _, a := range adaptations {
+		if a.Hormone == "DVI+VCF" {
+			conflicts++
+		}
+	}
+	return conflicts
+}
+
+// GetDirectionChanges returns the number of multiplier direction reversals
+// over the last N epochs. A direction change is when a multiplier goes from
+// increasing to decreasing or vice versa.
+func (k Keeper) GetDirectionChanges(ctx sdk.Context, lastNEpochs uint64) uint64 {
+	state := k.GetState(ctx)
+	if state.CurrentEpoch == 0 {
+		return 0
+	}
+
+	startEpoch := uint64(0)
+	if state.CurrentEpoch > lastNEpochs {
+		startEpoch = state.CurrentEpoch - lastNEpochs
+	}
+
+	// Track direction per path across epochs
+	type direction struct {
+		path      string
+		lastDelta int64
+	}
+	dirs := make(map[string]int64) // path → last seen delta sign
+	var changes uint64
+
+	for e := startEpoch; e <= state.CurrentEpoch; e++ {
+		kvStore := k.storeService.OpenKVStore(ctx)
+		bz, err := kvStore.Get(adaptationKey(e))
+		if err != nil || bz == nil {
+			continue
+		}
+		var adaptations []types.Adaptation
+		if err := json.Unmarshal(bz, &adaptations); err != nil {
+			continue
+		}
+		for _, a := range adaptations {
+			if a.Delta == 0 {
+				continue
+			}
+			prevSign, exists := dirs[a.Path]
+			currentSign := int64(1)
+			if a.Delta < 0 {
+				currentSign = -1
+			}
+			if exists && prevSign != currentSign {
+				changes++
+			}
+			dirs[a.Path] = currentSign
+		}
+	}
+
+	return changes
 }

@@ -269,6 +269,21 @@ func (k Keeper) calculateRewardsAndSlashes(
 				difficulty := 1_000_000 - result.Confidence
 				reward = reward + reward*difficulty/1_000_000
 			}
+
+			// FARM-1: Rubber-stamp verifier penalty — reduce rewards for validators
+			// who always vote with the majority (>95% conformity rate).
+			conformityPenalty := k.GetConformityPenaltyBPS(ctx, validatorAddr)
+			if conformityPenalty > 0 {
+				reward = reward * (1_000_000 - conformityPenalty) / 1_000_000
+			}
+
+			// FARM-8: Passive staking penalty — reduce rewards for validators
+			// who rarely participate in verification (<50% participation rate).
+			participationPenalty := k.GetParticipationPenaltyBPS(ctx, validatorAddr)
+			if participationPenalty > 0 {
+				reward = reward * (1_000_000 - participationPenalty) / 1_000_000
+			}
+
 			result.Rewards[validatorAddr] = reward
 		} else if reveal.Verdict != "abstain" {
 			// Slash wrong verdict: 6% of stake (abstain is not slashed)

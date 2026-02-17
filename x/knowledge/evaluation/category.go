@@ -6,8 +6,9 @@ var categoryBaseConfidence = map[string]uint64{
 	"protocol":      800_000, // blockchain-verifiable, highest innate certainty
 	"analytic":      700_000, // truth-table decidable
 	"formal":        700_000, // proof-based
-	"computational": 650_000, // deterministic computation
-	"replicated":    550_000, // reproducible observation
+	"computational":        650_000, // deterministic computation
+	"protocol_observation": 750_000, // on-chain protocol observations (OpenClaw probes, autopoiesis findings)
+	"replicated":           550_000, // reproducible observation
 	"empirical":     500_000, // requires strong evidence
 	"historical":    450_000, // requires document/attestation
 	"social":        400_000, // trust-weighted, inherently soft

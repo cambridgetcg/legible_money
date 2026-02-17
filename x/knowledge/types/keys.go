@@ -57,4 +57,6 @@ var (
 	ExtendedParamsKey                = []byte{0x1a} // ExtendedParams (hand-written, JSON-encoded)
 	PatronageRecordPrefix            = []byte{0x1b} // factId:patron → PatronageRecord
 	PruningQueuePrefix               = []byte{0x1c} // graceEndBlock:factId → index for batch pruning
+	VerifierConformityPrefix         = []byte{0x1d} // validatorAddr → VerifierConformityRecord (FARM-1)
+	ValidatorParticipationPrefix     = []byte{0x1e} // validatorAddr → ValidatorParticipationRecord (FARM-8)
 )

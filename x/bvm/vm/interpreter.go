@@ -1664,9 +1664,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		if !ok {
 			return actionError
 		}
-		b := WordToBytes32(factId)
-		diff := host.CompareBelief(ctx.CallerDID, b[:])
-		push(FromSigned(big.NewInt(diff)))
+		// FARM-4: During commit phase, COMPARE_BELIEF returns 0 to prevent
+		// confidence herding — agents cannot peek at network consensus before voting.
+		if ctx.IsCommitPhase {
+			push(FromSigned(big.NewInt(0)))
+		} else {
+			b := WordToBytes32(factId)
+			diff := host.CompareBelief(ctx.CallerDID, b[:])
+			push(FromSigned(big.NewInt(diff)))
+		}
 
 	case BELIEF_COUNT:
 		domain, ok := pop()

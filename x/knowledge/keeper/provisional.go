@@ -308,6 +308,11 @@ func (k Keeper) BuildEvaluationContext() *evaluation.EvaluationContext {
 	evalCtx.GetCounterFactsByFact = k.GetCounterFactsByFact
 	evalCtx.GetBidirectionalConfidence = k.GetBidirectionalConfidence
 
+	// Wire novelty assessment lookups (Stage 5.5)
+	evalCtx.GetFactCountByDomain = k.GetFactCountByDomain
+	evalCtx.GetDomainCount = k.GetDomainCount
+	evalCtx.GetDomainUniqueContributors = k.GetDomainUniqueContributors // FARM-7
+
 	return evalCtx
 }
 
