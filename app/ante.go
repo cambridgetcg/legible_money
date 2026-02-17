@@ -52,6 +52,9 @@ func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
 		ante.NewSigVerificationDecorator(app.AccountKeeper, app.txConfig.SignModeHandler()),
 		ante.NewIncrementSequenceDecorator(app.AccountKeeper),
 
+		// --- Sybil Funding Tracker (records MsgSend sender→recipient for vote decay) ---
+		NewSybilFundingDecorator(&app.LegibleGovKeeper),
+
 		// --- Legible Money Post-Auth (signer authenticated) ---
 		NewLegibleDIDDecorator(app.LegibleAuthKeeper),
 		NewLegibleAccountDecorator(app.LegibleAuthKeeper),
