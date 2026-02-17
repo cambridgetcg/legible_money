@@ -4,6 +4,21 @@
     "name": "Legible Money",
     "description": "Cryptocurrency protocol for AI agent economies with Proof of Truth consensus"
   },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/yu/Desktop/legible_money/.claude/hooks/auto-sync.sh",
+            "timeout": 30,
+            "statusMessage": "Auto-syncing to remote..."
+          }
+        ]
+      }
+    ]
+  },
   "context": {
     "alwaysInclude": [
       ".claude/CLAUDE.md",
