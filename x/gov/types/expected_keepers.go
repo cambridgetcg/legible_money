@@ -17,6 +17,12 @@ type BankKeeper interface {
 	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
 }
 
+// FundingRecorder is the interface used by the SybilFundingDecorator to record
+// sender→recipient funding relationships for sybil vote-weight decay.
+type FundingRecorder interface {
+	RecordFunding(ctx context.Context, sender, recipient, amount string, blockHeight uint64)
+}
+
 // UpgradePlan mirrors cosmossdk.io/x/upgrade/types.Plan to avoid a direct
 // module-level import in the types package.
 type UpgradePlan struct {
