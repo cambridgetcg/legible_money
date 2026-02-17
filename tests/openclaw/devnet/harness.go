@@ -153,21 +153,18 @@ func (h *Harness) Start(ctx context.Context) error {
 	h.Cmd = cmd
 
 	// 10a. Quick check: did the process exit immediately?
-	earlyExit := make(chan error, 1)
-	go func() { earlyExit <- cmd.Wait() }()
-	select {
-	case waitErr := <-earlyExit:
-		// Process exited before we even started polling
+	//       Give it a few seconds to start, then verify it's still running.
+	time.Sleep(3 * time.Second)
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		// Process is gone — collect exit status and dump logs
+		_ = cmd.Wait()
 		if h.logFile != nil {
 			h.logFile.Sync()
 		}
 		h.dumpFullLogs()
 		h.T.Logf("Node binary: %s", h.Binary)
 		h.T.Logf("Node home: %s", h.NodeHome)
-		h.T.Logf("Start args: start --home %s --minimum-gas-prices 0.025ulgm", h.NodeHome)
-		return fmt.Errorf("node exited immediately: %w", waitErr)
-	case <-time.After(5 * time.Second):
-		// Process still running — good
+		return fmt.Errorf("node exited immediately (process not found)")
 	}
 
 	// 11. Wait for height >= 2
