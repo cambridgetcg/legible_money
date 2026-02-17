@@ -423,26 +423,22 @@ func TestOC_EM10_CeremonyTimeoutEnforcement(t *testing.T) {
 		Voter: "guardian2", ProposalId: resp.ProposalId, Approve: true,
 	})
 
-	// Just before timeout (100 + 44 - 1 = 143) — should still be active
-	ctx143 := ctx.WithBlockHeight(143)
-	k.CheckCeremonyProgress(ctx143, resp.ProposalId)
-	ceremony, _ := k.GetCeremony(ctx143, resp.ProposalId)
+	// PrevoteDeadline = startBlock(100) + HaltPrevoteBlocks(11) = 111
+	// CheckCeremonyProgress checks currentBlock > PrevoteDeadline for prevote phase timeout.
+	// At the deadline boundary (block 111): 111 > 111 is false — still active
+	ctx111 := ctx.WithBlockHeight(111)
+	k.CheckCeremonyProgress(ctx111, resp.ProposalId)
+	ceremony, _ := k.GetCeremony(ctx111, resp.ProposalId)
 	if ceremony.Phase == string(types.PhaseFailed) {
-		t.Error("OC-EM-10: ceremony should not timeout at boundary-1")
+		t.Error("OC-EM-10: ceremony should not timeout at prevote deadline boundary (block 111)")
 	}
 
-	// At timeout (100 + 44 = 144) — should fail
-	ctx144 := ctx.WithBlockHeight(144)
-	k.CheckCeremonyProgress(ctx144, resp.ProposalId)
-	ceremony, _ = k.GetCeremony(ctx144, resp.ProposalId)
+	// Just past prevote deadline (block 112): 112 > 111 is true — should fail
+	ctx112 := ctx.WithBlockHeight(112)
+	k.CheckCeremonyProgress(ctx112, resp.ProposalId)
+	ceremony, _ = k.GetCeremony(ctx112, resp.ProposalId)
 	if ceremony.Phase != string(types.PhaseFailed) {
-		// Try at 200 (well past timeout)
-		ctx200 := ctx.WithBlockHeight(200)
-		k.CheckCeremonyProgress(ctx200, resp.ProposalId)
-		ceremony, _ = k.GetCeremony(ctx200, resp.ProposalId)
-		if ceremony.Phase != string(types.PhaseFailed) {
-			t.Errorf("OC-EM-10: ceremony should be failed after timeout, got %s — attacker can keep ceremony open indefinitely", ceremony.Phase)
-		}
+		t.Errorf("OC-EM-10: ceremony should fail after prevote deadline, got %s — attacker can keep ceremony open past deadline", ceremony.Phase)
 	}
 
 	// Status should revert to normal (or at least not halted)
