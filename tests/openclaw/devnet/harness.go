@@ -376,10 +376,10 @@ func (h *Harness) dumpFullLogs() {
 	}
 	lines := strings.Split(string(data), "\n")
 	h.T.Logf("=== Node log (%d lines total) ===", len(lines))
-	if len(lines) <= 120 {
-		h.T.Logf("%s", string(data))
-	} else {
-		h.T.Logf("=== FIRST 100 lines ===\n%s", strings.Join(lines[:100], "\n"))
-		h.T.Logf("=== LAST 20 lines ===\n%s", strings.Join(lines[len(lines)-20:], "\n"))
+	// Print all lines (truncate at 200 lines to avoid excessive output)
+	maxLines := len(lines)
+	if maxLines > 200 {
+		maxLines = 200
 	}
+	h.T.Logf("%s", strings.Join(lines[:maxLines], "\n"))
 }

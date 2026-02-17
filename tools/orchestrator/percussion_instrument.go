@@ -96,9 +96,10 @@ func (d *DefaultChallengeDetector) DetectChallenges(_ context.Context, facts []a
 
 // PercussionInstrument implements challenge detection (the "percussion" section).
 type PercussionInstrument struct {
-	detector ChallengeDetector
-	scanner  FactScanner
-	domains  []string
+	detector  ChallengeDetector
+	scanner   FactScanner
+	domains   []string
+	navigator KnowledgeNavigator // optional: enables reference chain analysis
 }
 
 // NewPercussionInstrument creates a challenger instrument.
@@ -108,6 +109,11 @@ func NewPercussionInstrument(detector ChallengeDetector, scanner FactScanner, do
 		scanner:  scanner,
 		domains:  domains,
 	}
+}
+
+// SetNavigator sets the optional knowledge navigator for enhanced challenge detection.
+func (p *PercussionInstrument) SetNavigator(nav KnowledgeNavigator) {
+	p.navigator = nav
 }
 
 // Name returns the instrument name.
