@@ -1247,6 +1247,7 @@ func NewLegibleApp(
 		partnershipstypes.ModuleName, // Settle cooling partnerships.
 		icaauthtypes.ModuleName,      // No-op EndBlock.
 		ibcratelimittypes.ModuleName, // No-op EndBlock.
+		computepooltypes.ModuleName,  // No-op EndBlock.
 	)
 
 	app.ModuleManager.SetOrderInitGenesis(
