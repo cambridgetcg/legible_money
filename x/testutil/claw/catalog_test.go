@@ -132,34 +132,26 @@ func TestCatalog_CoverageSummary(t *testing.T) {
 }
 
 func TestByModule(t *testing.T) {
-	knowledge := ByModule("knowledge")
-	if len(knowledge) != 15 {
-		t.Errorf("expected 15 knowledge probes, got %d", len(knowledge))
+	checks := map[string]int{
+		"knowledge":       15,
+		"auth":            12,
+		"bvm":             18,
+		"gov":             12,
+		"staking":         12,
+		"emergency":       10,
+		"disputes":        8,
+		"ontology":        3,
+		"evidence_mgmt":   3,
+		"vesting_rewards": 6,
+		"partnerships":    6,
+		"home":            4,
+		"capture_defense": 4,
 	}
-
-	auth := ByModule("auth")
-	if len(auth) != 12 {
-		t.Errorf("expected 12 auth probes, got %d", len(auth))
-	}
-
-	bvm := ByModule("bvm")
-	if len(bvm) != 18 {
-		t.Errorf("expected 18 bvm probes, got %d", len(bvm))
-	}
-
-	gov := ByModule("gov")
-	if len(gov) != 12 {
-		t.Errorf("expected 12 gov probes, got %d", len(gov))
-	}
-
-	staking := ByModule("staking")
-	if len(staking) != 12 {
-		t.Errorf("expected 12 staking probes, got %d", len(staking))
-	}
-
-	emergency := ByModule("emergency")
-	if len(emergency) != 10 {
-		t.Errorf("expected 10 emergency probes, got %d", len(emergency))
+	for module, expected := range checks {
+		got := ByModule(module)
+		if len(got) != expected {
+			t.Errorf("expected %d %s probes, got %d", expected, module, len(got))
+		}
 	}
 }
 
