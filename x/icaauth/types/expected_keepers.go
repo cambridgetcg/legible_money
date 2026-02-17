@@ -8,8 +8,8 @@ import (
 
 // LegibleAuthKeeper defines the expected interface for the x/auth (Legible) keeper.
 type LegibleAuthKeeper interface {
-	GetAccount(ctx sdk.Context, address string) (legibleauthtypes.LegibleAccount, bool)
-	GetAccountByDID(ctx sdk.Context, did string) (legibleauthtypes.LegibleAccount, bool)
+	GetAccount(ctx sdk.Context, address string) (*legibleauthtypes.LegibleAccount, bool)
+	GetAccountByDID(ctx sdk.Context, did string) (*legibleauthtypes.LegibleAccount, bool)
 	GetAddressForDID(ctx sdk.Context, did string) (string, bool)
 }
 
