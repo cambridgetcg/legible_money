@@ -83,6 +83,20 @@ func (k Keeper) OpenChallenge(
 			types.ErrInsufficientStake, params.MinChallengeStake, stake)
 	}
 
+	// FARM-9: Proportional stake requirement — challenger must stake ≥50% of target claim's stake.
+	// This prevents asymmetric challenge spam where low-stake challengers target high-stake facts.
+	if claim.StakeAmount != "" {
+		claimStake := new(big.Int)
+		if _, ok := claimStake.SetString(claim.StakeAmount, 10); ok && claimStake.Sign() > 0 {
+			minPropStake := new(big.Int).Mul(claimStake, big.NewInt(int64(types.ChallengeStakeRatioMinBPS)))
+			minPropStake.Div(minPropStake, big.NewInt(1_000_000))
+			if stakeAmount.Cmp(minPropStake) < 0 {
+				return types.ProvisionalChallenge{}, fmt.Errorf("%w: must stake at least 50%% of claim stake (%s), got %s",
+					types.ErrInsufficientStake, minPropStake.String(), stake)
+			}
+		}
+	}
+
 	// Check evidence requirement
 	if params.ChallengeEvidenceRequired && len(evidenceIds) == 0 {
 		return types.ProvisionalChallenge{}, types.ErrEvidenceRequired
@@ -446,6 +460,16 @@ func (k Keeper) slashSubmitterAndRewardChallenger(
 	}
 	rewardAmount := new(big.Int).Mul(slashAmount, big.NewInt(int64(rewardBps)))
 	rewardAmount.Div(rewardAmount, big.NewInt(1_000_000))
+
+	// FARM-9: Cap reward at 100% of challenger's own stake to prevent asymmetric payoffs.
+	challengerStake := new(big.Int)
+	if _, ok := challengerStake.SetString(challenge.Stake, 10); ok && challengerStake.Sign() > 0 {
+		maxReward := new(big.Int).Mul(challengerStake, big.NewInt(int64(types.ChallengeRewardCapBPS)))
+		maxReward.Div(maxReward, big.NewInt(1_000_000))
+		if rewardAmount.Cmp(maxReward) > 0 {
+			rewardAmount.Set(maxReward)
+		}
+	}
 
 	burnAmount := new(big.Int).Sub(slashAmount, rewardAmount)
 	returnToSubmitter := new(big.Int).Sub(claimStake, slashAmount)

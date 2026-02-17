@@ -598,8 +598,11 @@ func ComputeCRI(retentions []CategoryRetention) []CRIValue {
 }
 
 // IsEternalCategory returns true for categories immune to CRI hormone.
+// Eternal categories have no confidence decay: analytic, formal, protocol,
+// computational, and protocol_observation (OpenClaw findings).
 func IsEternalCategory(category string) bool {
-	return category == "analytic" || category == "formal" || category == "protocol"
+	return category == "analytic" || category == "formal" || category == "protocol" ||
+		category == "computational" || category == "protocol_observation"
 }
 
 // ============ DVI Computation ============

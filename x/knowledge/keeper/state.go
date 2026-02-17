@@ -1125,3 +1125,174 @@ func (k Keeper) IterateCounterFactChallenges(ctx sdk.Context, cb func(types.Coun
 		}
 	}
 }
+
+// ---------- Domain Unique Contributors (FARM-7) ----------
+
+// GetDomainUniqueContributors counts the number of unique fact submitters in a domain.
+// Used to gate novelty bonuses — domains with fewer than MinDomainContributorsForNovelty
+// unique contributors get proportionally reduced novelty bonuses.
+func (k Keeper) GetDomainUniqueContributors(ctx sdk.Context, domain string) uint64 {
+	facts := k.GetFactsByDomain(ctx, domain)
+	submitters := make(map[string]struct{}, len(facts))
+	for _, fact := range facts {
+		if fact.Submitter != "" {
+			submitters[fact.Submitter] = struct{}{}
+		}
+	}
+	return uint64(len(submitters))
+}
+
+// GetFactCountByDomain returns the number of facts in a domain.
+func (k Keeper) GetFactCountByDomain(ctx sdk.Context, domain string) uint64 {
+	return uint64(len(k.GetFactsByDomain(ctx, domain)))
+}
+
+// GetDomainCount returns the total number of registered domains.
+func (k Keeper) GetDomainCount(ctx sdk.Context) uint64 {
+	var count uint64
+	k.IterateDomains(ctx, func(_ types.OntologicalDomain) bool {
+		count++
+		return false
+	})
+	return count
+}
+
+// ---------- Verifier Conformity (FARM-1) ----------
+
+func verifierConformityKey(validatorAddr string) []byte {
+	return append(types.VerifierConformityPrefix, []byte(validatorAddr)...)
+}
+
+// GetVerifierConformity retrieves a verifier's conformity tracking record.
+func (k Keeper) GetVerifierConformity(ctx sdk.Context, validatorAddr string) (types.VerifierConformityRecord, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(verifierConformityKey(validatorAddr))
+	if err != nil || bz == nil {
+		return types.VerifierConformityRecord{}, false
+	}
+	var record types.VerifierConformityRecord
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.VerifierConformityRecord{}, false
+	}
+	return record, true
+}
+
+// SetVerifierConformity stores a verifier's conformity record.
+func (k Keeper) SetVerifierConformity(ctx sdk.Context, record types.VerifierConformityRecord) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(record)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal verifier conformity record: %v", err))
+	}
+	_ = kvStore.Set(verifierConformityKey(record.ValidatorAddr), bz)
+}
+
+// UpdateVerifierConformity records whether a validator voted with the round outcome.
+func (k Keeper) UpdateVerifierConformity(ctx sdk.Context, validatorAddr string, votedWithOutcome bool) {
+	record, found := k.GetVerifierConformity(ctx, validatorAddr)
+	if !found {
+		record = types.VerifierConformityRecord{
+			ValidatorAddr: validatorAddr,
+		}
+	}
+	record.TotalVotes++
+	if votedWithOutcome {
+		record.ConformingVotes++
+	}
+	record.LastUpdateHeight = uint64(ctx.BlockHeight())
+	k.SetVerifierConformity(ctx, record)
+}
+
+// GetConformityPenaltyBPS returns the reward penalty for a rubber-stamp verifier.
+// Returns 0 if the validator has insufficient samples or is below the conformity threshold.
+func (k Keeper) GetConformityPenaltyBPS(ctx sdk.Context, validatorAddr string) uint64 {
+	record, found := k.GetVerifierConformity(ctx, validatorAddr)
+	if !found || record.TotalVotes < types.ConformityMinSamples {
+		return 0
+	}
+	// conformityRate = conformingVotes * 1_000_000 / totalVotes
+	conformityRate := (record.ConformingVotes * 1_000_000) / record.TotalVotes
+	if conformityRate <= types.ConformityThresholdBPS {
+		return 0
+	}
+	// Linear penalty: scales from 0 at threshold to ConformityPenaltyMaxBPS at 100%
+	excess := conformityRate - types.ConformityThresholdBPS
+	penaltyRange := uint64(1_000_000) - types.ConformityThresholdBPS
+	if penaltyRange == 0 {
+		return types.ConformityPenaltyMaxBPS
+	}
+	penalty := (excess * types.ConformityPenaltyMaxBPS) / penaltyRange
+	return penalty
+}
+
+// ---------- Validator Participation (FARM-8) ----------
+
+func validatorParticipationKey(validatorAddr string) []byte {
+	return append(types.ValidatorParticipationPrefix, []byte(validatorAddr)...)
+}
+
+// GetValidatorParticipation retrieves a validator's participation tracking record.
+func (k Keeper) GetValidatorParticipation(ctx sdk.Context, validatorAddr string) (types.ValidatorParticipationRecord, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(validatorParticipationKey(validatorAddr))
+	if err != nil || bz == nil {
+		return types.ValidatorParticipationRecord{}, false
+	}
+	var record types.ValidatorParticipationRecord
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.ValidatorParticipationRecord{}, false
+	}
+	return record, true
+}
+
+// SetValidatorParticipation stores a validator's participation record.
+func (k Keeper) SetValidatorParticipation(ctx sdk.Context, record types.ValidatorParticipationRecord) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(record)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal validator participation record: %v", err))
+	}
+	_ = kvStore.Set(validatorParticipationKey(record.ValidatorAddr), bz)
+}
+
+// IncrementRoundsAssigned increments the assigned round count for a validator.
+func (k Keeper) IncrementRoundsAssigned(ctx sdk.Context, validatorAddr string) {
+	record, found := k.GetValidatorParticipation(ctx, validatorAddr)
+	if !found {
+		record = types.ValidatorParticipationRecord{
+			ValidatorAddr: validatorAddr,
+		}
+	}
+	record.RoundsAssigned++
+	record.LastUpdateHeight = uint64(ctx.BlockHeight())
+	k.SetValidatorParticipation(ctx, record)
+}
+
+// IncrementRoundsParticipated increments the participated round count for a validator.
+func (k Keeper) IncrementRoundsParticipated(ctx sdk.Context, validatorAddr string) {
+	record, found := k.GetValidatorParticipation(ctx, validatorAddr)
+	if !found {
+		record = types.ValidatorParticipationRecord{
+			ValidatorAddr: validatorAddr,
+		}
+	}
+	record.RoundsParticipated++
+	record.LastUpdateHeight = uint64(ctx.BlockHeight())
+	k.SetValidatorParticipation(ctx, record)
+}
+
+// GetParticipationPenaltyBPS returns the reward penalty for a passive staking validator.
+// Returns 0 if the validator has insufficient samples or meets the participation threshold.
+func (k Keeper) GetParticipationPenaltyBPS(ctx sdk.Context, validatorAddr string) uint64 {
+	record, found := k.GetValidatorParticipation(ctx, validatorAddr)
+	if !found || record.RoundsAssigned < types.ParticipationMinSamples {
+		return 0
+	}
+	// participationRate = roundsParticipated * 1_000_000 / roundsAssigned
+	participationRate := (record.RoundsParticipated * 1_000_000) / record.RoundsAssigned
+	if participationRate >= types.MinParticipationRateBPS {
+		return 0
+	}
+	// Below threshold: apply flat PassiveStakingPenaltyBPS
+	return types.PassiveStakingPenaltyBPS
+}

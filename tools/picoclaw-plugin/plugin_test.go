@@ -15,8 +15,8 @@ func TestPluginToolCount(t *testing.T) {
 	plugin := NewPlugin(agent, cfg)
 
 	tools := plugin.Tools()
-	if len(tools) != 10 {
-		t.Fatalf("Expected 10 tools, got %d", len(tools))
+	if len(tools) != 17 {
+		t.Fatalf("Expected 17 tools, got %d", len(tools))
 	}
 
 	// Verify all tool names are unique
@@ -41,10 +41,17 @@ func TestToolNames(t *testing.T) {
 		"chain_challenge",
 		"chain_heartbeat",
 		"chain_balance",
+		"chain_discover",
 		"chain_stake",
 		"chain_vote",
+		"chain_deploy_contract",
+		"chain_call_contract",
+		"chain_schedule",
+		"chain_home_create",
 		"chain_home_sync",
-		"chain_discover",
+		"chain_home_guardian",
+		"chain_home_session",
+		"chain_home_spending",
 	}
 
 	tools := plugin.Tools()
@@ -136,8 +143,8 @@ func TestComputeMemoryCID(t *testing.T) {
 	if len(cid) < 10 {
 		t.Fatalf("CID too short: %s", cid)
 	}
-	if cid[:4] != "bafk" {
-		t.Fatalf("CID wrong prefix: %s", cid)
+	if cid[:8] != "lgmhash:" {
+		t.Fatalf("CID wrong prefix: %s (expected lgmhash:)", cid)
 	}
 
 	// Deterministic: same content -> same CID

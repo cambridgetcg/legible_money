@@ -441,7 +441,7 @@ func init() {
 	// Agent Belief
 	reg(GET_BELIEF, "GET_BELIEF", 1, 1, 50, false)
 	reg(SET_BELIEF, "SET_BELIEF", 3, 0, 500, true)
-	reg(COMPARE_BELIEF, "COMPARE_BELIEF", 1, 1, 30, false)
+	reg(COMPARE_BELIEF, "COMPARE_BELIEF", 1, 1, 500, false) // FARM-4: raised from 30 to deter herding
 	reg(BELIEF_COUNT, "BELIEF_COUNT", 1, 1, 50, false)
 
 	// Agent Relationship

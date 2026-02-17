@@ -8,7 +8,7 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m
 
-.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e
+.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c
 
 # Default target
 all: build test
@@ -62,6 +62,21 @@ test-tx-lifecycle: ## Run tx lifecycle tests against live devnet
 	@bash devnet/scripts/test-tx-lifecycle.sh
 
 test-e2e: devnet devnet-health test-tx-lifecycle devnet-stop ## Full E2E: start devnet, test, stop
+
+# === OpenClaw Agent Tests ===
+
+test-openclaw: build ## Run all OpenClaw agent integration tests
+	@echo "$(GREEN)Running OpenClaw agent tests...$(NC)"
+	@go test ./tests/openclaw/... -tags openclaw -v -count=1 -timeout 600s
+
+test-openclaw-phase-a: build ## Run OpenClaw Phase A (lifecycle) only
+	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseA -v -count=1 -timeout 300s
+
+test-openclaw-phase-b: build ## Run OpenClaw Phase B (adversarial) only
+	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseB -v -count=1 -timeout 300s
+
+test-openclaw-phase-c: build ## Run OpenClaw Phase C (coordination) only
+	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseC -v -count=1 -timeout 300s
 
 # === PR Validation ===
 

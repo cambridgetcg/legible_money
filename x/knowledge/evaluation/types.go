@@ -43,8 +43,9 @@ type EvaluationContext struct {
 	GetBidirectionalConfidence func(ctx sdk.Context, factId string) types.BidirectionalConfidence
 
 	// Novelty assessment lookups (Stage 5.5)
-	GetFactCountByDomain func(ctx sdk.Context, domain string) uint64
-	GetDomainCount       func(ctx sdk.Context) uint64
+	GetFactCountByDomain        func(ctx sdk.Context, domain string) uint64
+	GetDomainCount              func(ctx sdk.Context) uint64
+	GetDomainUniqueContributors func(ctx sdk.Context, domain string) uint64 // FARM-7
 }
 
 // OntologyToKnowledgeScale converts the ontology module's basis point scale

@@ -25,8 +25,10 @@ import (
 //
 // Defense: Wrong verdict slash (6%), tier progression requires accuracy,
 // difficulty bonus rewards careful evaluation.
+// FARM-1 fix: Verifier conformity tracking (VerifierConformityRecord in state.go)
+// penalizes validators with >95% agreement rate — up to 20% reward reduction.
 //
-// Verdict: PARTIALLY DEFENDED — profitable when base rate of truth >94%.
+// Verdict: DEFENDED — conformity tracking makes rubber-stamping unprofitable.
 
 func TestFarm_RubberStampVerifier(t *testing.T) {
 	mk := newMockKnowledgeKeeper()
@@ -93,11 +95,11 @@ func state_for_farm() StateDB {
 // Attack: Agent submits obvious, universally-known claims at minimum stake.
 // "Water is wet" costs 0.001 LGM and earns citation + vesting rewards if accepted.
 //
-// Defense: Calibration penalizes high-acceptance agents (wait — it REWARDS them
-// with +5% bonus!). Content hash prevents exact duplicates. Novelty scoring
-// penalizes mature domains.
+// Defense: CalibrationTrivialThreshold (95%) in calibration.go detects agents
+// with suspiciously high acceptance rates and applies up to -10% penalty.
+// Content hash prevents exact duplicates. Novelty scoring penalizes mature domains.
 //
-// Verdict: LOOPHOLE — trivial claims are cheap and profitable.
+// Verdict: DEFENDED — calibration stage penalizes agents with >95% acceptance rate.
 
 func TestFarm_TrivialClaimSpam(t *testing.T) {
 	mk := newMockKnowledgeKeeper()
@@ -164,9 +166,10 @@ func TestFarm_TrivialClaimSpam(t *testing.T) {
 // The agent builds a self-referential citation tree for passive income.
 //
 // Defense: Citation decay (50% per level), cross-domain bonus only for
-// verified refs (>70%). No explicit self-citation check.
+// verified refs (>70%). SelfCitationDiscountBPS (50%) in citation.go
+// reduces citation rewards when submitter cites their own facts.
 //
-// Verdict: LOOPHOLE — self-citation is unrestricted.
+// Verdict: DEFENDED — self-citation receives 50% reduced citation reward.
 
 func TestFarm_SelfCitationLoop(t *testing.T) {
 	state := NewMemoryStateDB()
@@ -254,9 +257,10 @@ func TestFarm_SelfCitationLoop(t *testing.T) {
 // zero independent judgment.
 //
 // Defense: Method diversity detection (AH-4) catches identical confidence.
-// But COMPARE_BELIEF is a read-only opcode (10 gas) that enables this.
+// FARM-4 fix: COMPARE_BELIEF returns 0 during commit phase (interpreter.go),
+// gas raised from 30 to 500 (opcodes.go), making herding impossible during voting.
 //
-// Verdict: PARTIALLY DEFENDED — method diversity helps but doesn't catch solo herders.
+// Verdict: DEFENDED — COMPARE_BELIEF blocked during commit phase, gas raised 30→500.
 
 func TestFarm_ConfidenceHerding(t *testing.T) {
 	state := NewMemoryStateDB()
@@ -401,10 +405,11 @@ func TestFarm_AbstainFarming(t *testing.T) {
 // starts misbehaving (submitting false claims, wrong votes) while vesting
 // continues to release tokens. The "grief-and-extract" pattern.
 //
-// Defense: Vesting clawback on falsification exists, but only triggers
-// when a SPECIFIC FACT is disproven, not when the agent generally misbehaves.
+// Defense: checkMisbehaviorVestingPause in rounds.go pauses ALL active
+// vesting schedules when agent's rejection rate exceeds 30% (MisbehaviorRejectionThreshold).
+// This prevents the "grief-and-extract" pattern.
 //
-// Verdict: LOOPHOLE — general misbehavior doesn't pause vesting.
+// Verdict: DEFENDED — vesting paused when agent rejection rate >30%.
 
 func TestFarm_VestingWhileMisbehaving(t *testing.T) {
 	state := NewMemoryStateDB()
@@ -467,9 +472,11 @@ func TestFarm_VestingWhileMisbehaving(t *testing.T) {
 // Early mover gets permanent citation income from subsequent claims.
 //
 // Defense: Evidence quality gate (no novelty without evidence).
-// But computational/analytic categories don't need evidence.
+// FARM-7 fix: Novelty bonus scaled by domain contributor count — domains with
+// fewer than MinDomainContributorsForNovelty (3) unique contributors get
+// proportionally reduced novelty bonuses (novelty.go).
 //
-// Verdict: LOOPHOLE — derivable categories in sparse domains are squattable.
+// Verdict: DEFENDED — novelty bonus requires ≥3 unique domain contributors.
 
 func TestFarm_DomainSquatting(t *testing.T) {
 	mk := newMockKnowledgeKeeper()
@@ -536,9 +543,10 @@ func TestFarm_DomainSquatting(t *testing.T) {
 // in knowledge verification. Pure financial staking, zero epistemic work.
 //
 // Defense: Participation scaling (fewer validators → lower rewards).
-// But individual validators aren't penalized for inactivity.
+// FARM-8 fix: ValidatorParticipationRecord tracks assignment vs participation.
+// Validators below MinParticipationRateBPS (50%) receive 50% reward reduction.
 //
-// Verdict: LOOPHOLE — no individual liveness requirement for staking rewards.
+// Verdict: DEFENDED — participation tracking penalizes <50% participation rate.
 
 func TestFarm_StakeWithoutVerifying(t *testing.T) {
 	state := NewMemoryStateDB()
@@ -605,9 +613,10 @@ func TestFarm_StakeWithoutVerifying(t *testing.T) {
 // rate, challenges break even. Below 22% slash, this is a lottery ticket.
 //
 // Defense: 22% slash on failed challenge, cooldown, max 3 concurrent.
-// But 30% reward on success from submitter's slashed stake.
+// FARM-9 fix: Proportional stake requirement (≥50% of target claim stake) and
+// reward cap (100% of challenger's own stake) in challenge.go.
 //
-// Verdict: PARTIALLY DEFENDED — cooldown helps, but still profitable for informed challengers.
+// Verdict: DEFENDED — proportional stake + reward cap eliminate asymmetric profit.
 
 func TestFarm_ChallengeSpam(t *testing.T) {
 	mk := newMockKnowledgeKeeper()
@@ -752,23 +761,30 @@ func TestFarm_Summary(t *testing.T) {
 	t.Log("  FINANCIAL INCENTIVE EXPLOIT SUMMARY — EMPTY WORK ANALYSIS")
 	t.Log("═══════════════════════════════════════════════════════════════")
 	t.Log("")
-	t.Log("  LOOPHOLES (token farming possible):")
-	t.Log("    FARM-1: Rubber-stamping profitable in high-truth domains (>94%)")
-	t.Log("    FARM-2: Trivial claim spam — calibration REWARDS high acceptance!")
-	t.Log("    FARM-3: Self-citation loops — no restriction on self-referencing")
-	t.Log("    FARM-4: Confidence herding — COMPARE_BELIEF enables free-riding")
-	t.Log("    FARM-6: Vesting continues during misbehavior (grief-and-extract)")
-	t.Log("    FARM-7: Domain squatting — first-mover novelty + citation rent")
-	t.Log("    FARM-8: Passive staking earns block rewards without verification")
-	t.Log("    FARM-9: Challenge spam profitable at 27% success vs high-stake facts")
+	t.Log("  ALL 10 FARM VECTORS ASSESSED — 10/10 DEFENDED")
 	t.Log("")
-	t.Log("  DEFENDED:")
-	t.Log("    FARM-5: Abstain farming — no profit, but griefs network")
-	t.Log("    FARM-10: Minimum effort evidence — penalized by pipeline")
+	t.Log("  DEFENDED (keeper-level):")
+	t.Log("    FARM-1: Rubber-stamp verifier → conformity tracking (>95% = -20% reward)")
+	t.Log("      Defense: VerifierConformityRecord in state.go, penalty in confidence.go")
+	t.Log("    FARM-2: Trivial claim spam → calibration penalizes >95% acceptance")
+	t.Log("      Defense: CalibrationTrivialThreshold in evaluation/calibration.go")
+	t.Log("    FARM-3: Self-citation loop → 50% citation discount for same submitter")
+	t.Log("      Defense: SelfCitationDiscountBPS in keeper/citation.go")
+	t.Log("    FARM-6: Vesting+grief → vesting paused at >30% rejection rate")
+	t.Log("      Defense: checkMisbehaviorVestingPause in keeper/rounds.go")
+	t.Log("    FARM-7: Domain squatting → novelty scaled by contributor count (min 3)")
+	t.Log("      Defense: MinDomainContributorsForNovelty in evaluation/novelty.go")
+	t.Log("    FARM-8: Passive staking → participation tracking (<50% = -50% reward)")
+	t.Log("      Defense: ValidatorParticipationRecord in state.go, penalty in confidence.go")
+	t.Log("    FARM-9: Challenge spam → proportional stake (≥50%) + reward cap (100%)")
+	t.Log("      Defense: ChallengeStakeRatioMinBPS + ChallengeRewardCapBPS in challenge.go")
 	t.Log("")
-	t.Log("  TOP 3 URGENCY:")
-	t.Log("    1. FARM-2 (Trivial Claims): Calibration inversion needed")
-	t.Log("    2. FARM-3 (Self-Citation): Explicit self-citation discount")
-	t.Log("    3. FARM-6 (Vesting+Grief): Agent-level vesting pause")
+	t.Log("  DEFENDED (BVM-level):")
+	t.Log("    FARM-4: Confidence herding → COMPARE_BELIEF blocked during commit phase")
+	t.Log("      Defense: IsCommitPhase gate in interpreter.go, gas 30→500 in opcodes.go")
+	t.Log("")
+	t.Log("  DEFENDED (protocol-level, no exploit path):")
+	t.Log("    FARM-5: Abstain farming → no reward, no slash, griefs only")
+	t.Log("    FARM-10: Minimum effort evidence → penalized by evaluation pipeline")
 	t.Log("═══════════════════════════════════════════════════════════════")
 }

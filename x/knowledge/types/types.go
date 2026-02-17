@@ -66,7 +66,8 @@ var CATEGORY_DECAY = map[string]CategoryDecayProfile{
 	"predictive":    {HalfLifeBlocks: 20_000, MaxConfidence: 900_000, MinConfidence: 100_000, ReverificationBonus: 80_000, RequiresReverification: true},
 	"social":        {HalfLifeBlocks: 150_000, MaxConfidence: 850_000, MinConfidence: 200_000, ReverificationBonus: 40_000, RequiresReverification: true},
 	"replicated":    {HalfLifeBlocks: 1_000_000, MaxConfidence: 995_000, MinConfidence: 300_000, ReverificationBonus: 20_000, RequiresReverification: true},
-	"computational": {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	"computational":          {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	"protocol_observation":   {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
 }
 
 // Stratum confidence ceilings (from TS ontology/types.ts STRATUM_CONFIDENCE_CEILING)
@@ -170,8 +171,9 @@ var ChallengeWindowProfile = map[string]uint64{
 	"analytic":      EternalChallengeMultiplier,
 	"formal":        EternalChallengeMultiplier,
 	"protocol":      EternalChallengeMultiplier,
-	"computational": EternalChallengeMultiplier,
-	"historical":    SlowDecayChallengeMultiplier,
+	"computational":          EternalChallengeMultiplier,
+	"protocol_observation":   EternalChallengeMultiplier,
+	"historical":             SlowDecayChallengeMultiplier,
 	"replicated":    SlowDecayChallengeMultiplier,
 	"empirical":     FastDecayChallengeMultiplier,
 	"social":        FastDecayChallengeMultiplier,
@@ -657,7 +659,46 @@ const (
 	// MisbehaviorMinSamples is the minimum number of finalized claims before
 	// misbehavior vesting pause is evaluated. Prevents false positives on new agents.
 	MisbehaviorMinSamples = 10
+
+	// FARM-9: Proportional challenge economics.
+	// Challengers must risk proportionally to what they're challenging.
+	ChallengeStakeRatioMinBPS = uint64(500_000) // Must stake ≥50% of target claim's stake
+	ChallengeRewardCapBPS     = uint64(1_000_000) // Reward capped at 100% of challenger's own stake
+
+	// FARM-7: Domain squatting prevention.
+	// Require minimum unique contributors before granting full novelty bonus.
+	MinDomainContributorsForNovelty = uint64(3) // Need ≥3 unique contributors for full novelty bonus
+
+	// FARM-1: Rubber-stamp verifier detection.
+	// Track conformity rate per validator and penalize high-conformity verifiers.
+	ConformityThresholdBPS  = uint64(950_000) // >95% conformity triggers penalty
+	ConformityMinSamples    = uint64(20)      // Need 20+ votes before tracking
+	ConformityPenaltyMaxBPS = uint64(200_000) // Up to 20% reward reduction
+
+	// FARM-8: Passive staking prevention.
+	// Validators must participate in assigned verification rounds.
+	MinParticipationRateBPS  = uint64(500_000) // Must participate in ≥50% of assigned rounds
+	ParticipationMinSamples  = uint64(10)      // Need 10+ assigned rounds before tracking
+	PassiveStakingPenaltyBPS = uint64(500_000) // 50% reward reduction for non-participants
 )
+
+// VerifierConformityRecord tracks a validator's tendency to always vote with the majority.
+// Used by FARM-1 detection: verifiers who always agree provide no epistemic value.
+type VerifierConformityRecord struct {
+	ValidatorAddr    string `json:"validator_addr"`
+	TotalVotes       uint64 `json:"total_votes"`
+	ConformingVotes  uint64 `json:"conforming_votes"` // Voted with final outcome
+	LastUpdateHeight uint64 `json:"last_update_height"`
+}
+
+// ValidatorParticipationRecord tracks whether a validator participates in assigned rounds.
+// Used by FARM-8 detection: validators who stake but never verify earn unearned rewards.
+type ValidatorParticipationRecord struct {
+	ValidatorAddr      string `json:"validator_addr"`
+	RoundsAssigned     uint64 `json:"rounds_assigned"`
+	RoundsParticipated uint64 `json:"rounds_participated"`
+	LastUpdateHeight   uint64 `json:"last_update_height"`
+}
 
 // AH-4: Verifier method diversity constants.
 // These detect and penalize suspiciously uniform verification results,

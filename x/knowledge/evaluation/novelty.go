@@ -66,6 +66,16 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Cl
 		combined = types.NoveltyMaxBonusBps
 	}
 
+	// FARM-7: Scale novelty bonus by domain contributor count.
+	// Domains with fewer than MinDomainContributorsForNovelty unique contributors
+	// get proportionally reduced novelty bonuses to prevent domain squatting.
+	if evalCtx.GetDomainUniqueContributors != nil && claim.Domain != "" {
+		contributors := evalCtx.GetDomainUniqueContributors(ctx, claim.Domain)
+		if contributors < types.MinDomainContributorsForNovelty {
+			combined = (combined * contributors) / types.MinDomainContributorsForNovelty
+		}
+	}
+
 	totalBonus = int64(combined)
 
 	result.Adjustment = totalBonus

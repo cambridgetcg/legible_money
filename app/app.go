@@ -218,6 +218,10 @@ import (
 	ibcratelimitmodule "github.com/legible-money/legible/x/ibcratelimit"
 	ibcratelimitkeeper "github.com/legible-money/legible/x/ibcratelimit/keeper"
 	ibcratelimittypes "github.com/legible-money/legible/x/ibcratelimit/types"
+
+	alignmentmodule "github.com/legible-money/legible/x/alignment"
+	alignmentkeeper "github.com/legible-money/legible/x/alignment/keeper"
+	alignmenttypes "github.com/legible-money/legible/x/alignment/types"
 )
 
 const (
@@ -287,6 +291,7 @@ var (
 		partnershipsmodule.AppModuleBasic{},
 		icaauthmodule.AppModuleBasic{},
 		ibcratelimitmodule.AppModuleBasic{},
+		alignmentmodule.AppModuleBasic{},
 	)
 
 	// Module account permissions.
@@ -403,6 +408,7 @@ type LegibleApp struct {
 	PartnershipsKeeper     partnershipskeeper.Keeper
 	ICAAuthKeeper          icaauthkeeper.Keeper
 	IBCRateLimitKeeper     ibcratelimitkeeper.Keeper
+	AlignmentKeeper        alignmentkeeper.Keeper
 
 	// Vote extension config for PoT consensus (node-local, set at startup)
 	VoteExtConfig *VoteExtensionConfig
@@ -499,6 +505,7 @@ func NewLegibleApp(
 		partnershipstypes.StoreKey,
 		icaauthtypes.StoreKey,
 		ibcratelimittypes.StoreKey,
+		alignmenttypes.StoreKey,
 	)
 	tkeys := storetypes.NewTransientStoreKeys()
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
@@ -920,8 +927,20 @@ func NewLegibleApp(
 	app.BVMKeeper.SetStakingKeeper(NewBVMStakingAdapter(app.LegibleStakingKeeper))
 	app.BVMKeeper.SetAuthKeeper(NewBVMAuthAdapter(app.LegibleAuthKeeper))
 
+	// ---- Alignment Keeper (philosophical alignment feedback loop) ----
+	app.AlignmentKeeper = alignmentkeeper.NewKeeper(
+		runtime.NewKVStoreService(keys[alignmenttypes.StoreKey]),
+		logger,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+	// Cross-module wiring for alignment sensors (nil-safe: stubs return defaults)
+	app.AlignmentKeeper.SetAutopoiesisKeeper(NewAlignmentAutopoiesisAdapter(app.AutopoiesisKeeper))
+
 	// Wire autopoiesis → staking for SSI slash multiplier
 	app.LegibleStakingKeeper.SetAutopoiesisKeeper(app.AutopoiesisKeeper)
+
+	// Wire governance → autopoiesis for auto-proposal rate limiting (Loop 4)
+	app.AutopoiesisKeeper.SetGovKeeper(NewAutopoiesisGovAdapter(app.LegibleGovKeeper))
 
 	app.DisputesKeeper = disputeskeeper.NewKeeper(
 		appCodec,
@@ -1042,6 +1061,7 @@ func NewLegibleApp(
 		partnershipsmodule.NewAppModule(appCodec, app.PartnershipsKeeper),
 		icaauthmodule.NewAppModule(appCodec, app.ICAAuthKeeper),
 		ibcratelimitmodule.NewAppModule(appCodec, app.IBCRateLimitKeeper),
+		alignmentmodule.NewAppModule(appCodec, app.AlignmentKeeper),
 	)
 
 	// =======================================================================
@@ -1120,6 +1140,7 @@ func NewLegibleApp(
 
 		// ── LGM Tier 7: Leaf modules (no dependents) ──
 		autopoiesistypes.ModuleName,  // Autopoiesis: no-op BeginBlock (observe in EndBlock).
+		alignmenttypes.ModuleName,    // Alignment: no-op BeginBlock (sense in EndBlock).
 		billingtypes.ModuleName,      // No-op BeginBlock.
 		discoverytypes.ModuleName,    // Expire stale agent profiles.
 		partnershipstypes.ModuleName, // Expire formations, lift freezes.
@@ -1191,6 +1212,8 @@ func NewLegibleApp(
 
 		// ── LGM: Leaf modules ──
 		autopoiesistypes.ModuleName,  // Autopoiesis: OBSERVE → COMPUTE → ADAPT at epoch boundaries.
+		alignmenttypes.ModuleName,    // Alignment: SENSE → JUDGE → CORRECT → REFLECT. MUST run
+		// AFTER autopoiesis so it can override multiplier paths at priority 5.
 		billingtypes.ModuleName,      // Expire old API quotes.
 		discoverytypes.ModuleName,    // Expire stale agent profiles.
 		partnershipstypes.ModuleName, // Settle cooling partnerships.
@@ -1238,6 +1261,7 @@ func NewLegibleApp(
 		capturedefensetypes.ModuleName,   // Capture defense: reputation scores.
 		capturechallengetypes.ModuleName, // Capture challenge: active challenges.
 		autopoiesistypes.ModuleName,      // Autopoiesis: multipliers, SSI state.
+		alignmenttypes.ModuleName,        // Alignment: philosophical feedback loop params.
 		billingtypes.ModuleName,          // Billing: providers, quotes.
 		discoverytypes.ModuleName,        // Discovery: agent profiles.
 		partnershipstypes.ModuleName,     // Partnerships: formation records.
