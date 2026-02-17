@@ -1088,6 +1088,7 @@ func NewLegibleApp(
 		icaauthmodule.NewAppModule(appCodec, app.ICAAuthKeeper),
 		ibcratelimitmodule.NewAppModule(appCodec, app.IBCRateLimitKeeper),
 		alignmentmodule.NewAppModule(appCodec, app.AlignmentKeeper),
+		computepoolmodule.NewAppModule(appCodec, app.ComputePoolKeeper),
 	)
 
 	// =======================================================================
