@@ -221,7 +221,7 @@ func TestFindCitationChainSimple(t *testing.T) {
 
 func TestFindCitationChainFoundation(t *testing.T) {
 	qc := newNavigatorTestQC()
-	// a -> b -> c (foundation)
+	// a -> b -> c (foundation: c has no outgoing supporting refs)
 	qc.refs["fact-a"] = []agentsdk.FactReference{
 		{FromFactID: "fact-a", ToFactID: "fact-b", Type: "supports", Weight: 800_000},
 	}
@@ -236,13 +236,18 @@ func TestFindCitationChainFoundation(t *testing.T) {
 		t.Fatalf("FindCitationChain: %v", err)
 	}
 
-	// Foundation should include fact-b (no further supporting from c) and fact-c
+	// fact-c is the leaf foundation (no outgoing supporting refs)
 	foundationMap := make(map[string]bool)
 	for _, f := range chain.Foundation {
 		foundationMap[f] = true
 	}
-	if !foundationMap["fact-b"] {
-		t.Fatal("expected fact-b in foundation (no supporting refs out of fact-c)")
+	if !foundationMap["fact-c"] {
+		t.Fatalf("expected fact-c in foundation (leaf with no supporting refs), got %v", chain.Foundation)
+	}
+
+	// Should have 2 ancestor levels: [fact-b] at level 0, [fact-c] at level 1
+	if len(chain.Ancestors) != 2 {
+		t.Fatalf("expected 2 ancestor levels, got %d", len(chain.Ancestors))
 	}
 }
 
