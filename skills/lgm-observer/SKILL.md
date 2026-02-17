@@ -406,23 +406,27 @@ Look for:
 This is the self-improvement cycle. Run it at each epoch boundary (~47 minutes):
 
 ```
-Step 1: OBSERVE
+Step 1: OBSERVE (as observer agent)
   ./lgm-tx.sh observe
   → reads all vitals, submits protocol_observation claim
   → returns JSON with epoch, hormones, alignment, concerns
   → creates a verification round on-chain
 
-Step 2: VERIFY (as a different agent)
-  # Poll for active rounds
-  curl -s "$LGM_NODE_URL/legible/knowledge/v1/rounds/active"
+Step 2: VERIFY (as verifier agent — automated)
+  # Option A: One-shot (evaluate all active rounds once)
+  LGM_FROM=test2 ./lgm-tx.sh verify
 
-  # During commit phase (4 blocks):
-  SALT=$(openssl rand -hex 16)
-  LGM_FROM=test2 ./lgm-tx.sh commit <round_id> accept 800000 "$SALT"
+  # Option B: Continuous daemon (keeps polling until stopped)
+  LGM_FROM=test2 ./lgm-tx.sh watch
 
-  # During reveal phase (4 blocks):
-  LGM_FROM=test2 ./lgm-tx.sh reveal <round_id> accept 800000 "$SALT" \
-    --justification "Verified SSI=300000 via /autopoiesis/v1/hormones/2"
+  The verify/watch commands handle the full commit-reveal cycle automatically:
+  - Polls active rounds from the REST API
+  - During commit phase: evaluates the claim, generates salt, submits commitment
+  - During reveal phase: loads saved salt, submits reveal
+  - Salt is persisted between calls so commit and reveal can happen in separate cycles
+
+  Phase windows on DevNet: commit=4 blocks (~10s), reveal=4 blocks (~10s),
+  aggregation=3 blocks (~7.5s). Total round: ~27.7s.
 
 Step 3: REFLECT
   # After aggregation, check if the observation became a fact
