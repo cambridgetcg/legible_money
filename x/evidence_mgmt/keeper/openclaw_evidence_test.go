@@ -97,10 +97,11 @@ func TestOC_EV2_AuditScoreBounds(t *testing.T) {
 
 // OC-EV-3: Oracle Registration — Verify operator-only registration with required fields.
 func TestOC_EV3_OracleRegistrationValidation(t *testing.T) {
-	k, ctx, _ := setupKeeper(t)
+	k, ctx, bk := setupKeeper(t)
 	ms := keeper.NewMsgServerImpl(k)
 
 	operator := testAddr(10)
+	bk.fundAccount(operator, sdkmath.NewInt(500000000))
 
 	// Register oracle with valid data types and sufficient stake
 	_, err := ms.RegisterOracle(sdk.WrapSDKContext(ctx), &types.MsgRegisterOracle{
@@ -114,9 +115,11 @@ func TestOC_EV3_OracleRegistrationValidation(t *testing.T) {
 		t.Fatalf("OC-EV-3: valid registration failed: %v", err)
 	}
 
-	// Register oracle with invalid data type
+	// Register oracle with invalid data type (fund this operator too)
+	badOp := testAddr(11)
+	bk.fundAccount(badOp, sdkmath.NewInt(500000000))
 	_, err = ms.RegisterOracle(sdk.WrapSDKContext(ctx), &types.MsgRegisterOracle{
-		Operator:    testAddr(11),
+		Operator:    badOp,
 		Name:        "bad-oracle",
 		Description: "Bad type",
 		DataTypes:   []string{"invalid_type"},
