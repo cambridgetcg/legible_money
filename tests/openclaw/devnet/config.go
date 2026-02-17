@@ -17,8 +17,9 @@ func PatchCometConfig(configPath string, rpcPort, p2pPort, pprofPort int) error 
 	}
 	content := string(data)
 
-	// Replace default ports with dynamic ones
-	content = strings.ReplaceAll(content, "tcp://0.0.0.0:26657", fmt.Sprintf("tcp://0.0.0.0:%d", rpcPort))
+	// Replace default ports with dynamic ones.
+	// CometBFT defaults: RPC=tcp://127.0.0.1:26657, P2P=tcp://0.0.0.0:26656
+	content = strings.ReplaceAll(content, "tcp://127.0.0.1:26657", fmt.Sprintf("tcp://0.0.0.0:%d", rpcPort))
 	content = strings.ReplaceAll(content, "tcp://0.0.0.0:26656", fmt.Sprintf("tcp://0.0.0.0:%d", p2pPort))
 	content = strings.ReplaceAll(content, "localhost:6060", fmt.Sprintf("localhost:%d", pprofPort))
 
