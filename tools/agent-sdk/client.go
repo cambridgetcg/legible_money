@@ -206,6 +206,58 @@ type SubmitClaimRequest struct {
 	Stake    uint64 `json:"stake"` // in ulgm
 }
 
+// SubmitLIPRequest contains fields for governance proposal (LIP) submission.
+type SubmitLIPRequest struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	BugFactIDs  []string `json:"bug_fact_ids"`  // References to verified bug facts
+	FixClaimID  string   `json:"fix_claim_id"`  // The fix claim
+	Deposit     uint64   `json:"deposit"`        // in ulgm
+}
+
+// CreateVestingRequest contains fields for vesting reward creation.
+type CreateVestingRequest struct {
+	Beneficiary string `json:"beneficiary"` // Recipient address
+	Amount      uint64 `json:"amount"`      // in ulgm
+	Source      string `json:"source"`      // e.g. "bounty_fulfillment"
+	Category    string `json:"category"`    // e.g. "protocol_observation"
+	Description string `json:"description"` // Human-readable description
+}
+
+// ProposalInfo holds governance proposal data.
+type ProposalInfo struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Status      string `json:"status"` // "voting", "passed", "rejected", "deposit"
+	TriggerType string `json:"trigger_type,omitempty"`
+	SubmittedBy string `json:"submitted_by"`
+}
+
+// BugFixRequest contains fields for submitting a bug fix.
+type BugFixRequest struct {
+	Title          string   `json:"title"`
+	FixDescription string   `json:"fix_description"`
+	BugFactIDs     []string `json:"bug_fact_ids"` // Verified bug facts this fix addresses
+	Stake          uint64   `json:"stake"`         // in ulgm
+	Deposit        uint64   `json:"deposit"`       // LIP deposit in ulgm
+}
+
+// BountyFinder holds the address and share for a bug finder.
+type BountyFinder struct {
+	Address string `json:"address"`
+	Share   uint64 `json:"share"` // in ulgm
+}
+
+// BountyDistribution contains fields for distributing bug bounty payouts.
+type BountyDistribution struct {
+	BugFinders []BountyFinder `json:"bug_finders"`
+	FixAuthor  string         `json:"fix_author"`
+	FixShare   uint64         `json:"fix_share"`  // in ulgm
+	BugFactIDs []string       `json:"bug_fact_ids"`
+	LIPID      string         `json:"lip_id"`
+}
+
 // --- CLI Client Implementation ---
 
 // CLIClient implements QueryClient and TxClient by shelling out to legbled.
