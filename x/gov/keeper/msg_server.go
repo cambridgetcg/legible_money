@@ -211,7 +211,16 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 	// ZD-E05 FIX: Apply quadratic voting — voting power = sqrt(stake).
 	// Prevents governance capture by wealthy participants.
 	// The stake is escrowed (cost = votes^2), but voting weight = sqrt(stake).
-	effectiveVotingPower := new(big.Int).Sqrt(stakeInt).String()
+	quadraticPower := new(big.Int).Sqrt(stakeInt)
+
+	// Apply sybil vote-weight decay: reduce power for accounts with shared funding sources
+	sybilDecayBPS := ms.ComputeSybilDecayBPS(ctx, msg.Voter, msg.ProposalId)
+	effectivePower := new(big.Int).Mul(quadraticPower, new(big.Int).SetUint64(sybilDecayBPS))
+	effectivePower.Div(effectivePower, new(big.Int).SetUint64(10000))
+	if effectivePower.Sign() <= 0 && stakeInt.Sign() > 0 {
+		effectivePower.SetUint64(1) // minimum 1 voting power
+	}
+	effectiveVotingPower := effectivePower.String()
 
 	// Create vote record
 	voteId := fmt.Sprintf("%s/%s", msg.ProposalId, msg.Voter)
