@@ -64,38 +64,15 @@ func TestOC_ON2_DuplicateDomainProposal(t *testing.T) {
 
 	k.SetStratum(ctx, types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
 
-	// First proposal
+	// Use a domain name that already exists in genesis (e.g., "mathematics")
+	// which was seeded by InitGenesis
+
+	// Proposal for existing domain — should fail
 	_, err := ms.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
 		Proposer:    proposer,
 		Name:        "mathematics",
-		DisplayName: "Mathematics",
-		Description: "Math domain",
-		Stratum:     1,
-		Stake:       "1000000",
-	})
-	if err != nil {
-		t.Fatalf("OC-ON-2: first proposal failed: %v", err)
-	}
-
-	// Manually accept the domain to make it exist in the domain registry
-	k.SetDomain(ctx, types.Domain{
-		Name:        "mathematics",
-		DisplayName: "Mathematics",
-		Description: "Math domain",
-		Stratum:     1,
-		Status:      "active",
-		ProposedBy:  proposer,
-	})
-
-	// Second proposal for same domain — should fail
-	proposer2 := testAddr("propdup2")
-	bk.fundAccount(proposer2, largeBalance)
-
-	_, err = ms.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
-		Proposer:    proposer2,
-		Name:        "mathematics",
-		DisplayName: "Mathematics 2",
-		Description: "Duplicate",
+		DisplayName: "Mathematics Dup",
+		Description: "Duplicate attempt",
 		Stratum:     1,
 		Stake:       "1000000",
 	})
