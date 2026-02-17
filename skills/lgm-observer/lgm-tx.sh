@@ -125,6 +125,159 @@ for r in data.get('rounds', []):
     done
 }
 
+# --- Agent State Persistence ---
+# State file tracks observations, outcomes, trends for the recursive loop.
+STATE_DIR="${HOME_DIR}/agent-state/${FROM}"
+STATE_FILE="${STATE_DIR}/state.json"
+
+# Initialize empty state JSON
+empty_state() {
+    echo '{"observations":[],"trends":{"ssi_history":[],"accuracy":{"submitted":0,"accepted":0,"rejected":0,"expired":0}},"last_observe_epoch":0,"last_reflect_height":0}'
+}
+
+load_state() {
+    mkdir -p "$STATE_DIR"
+    if [ -f "$STATE_FILE" ]; then
+        cat "$STATE_FILE"
+    else
+        empty_state
+    fi
+}
+
+save_state() {
+    local state_json="$1"
+    mkdir -p "$STATE_DIR"
+    echo "$state_json" > "${STATE_FILE}.tmp"
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+}
+
+# Add an observation to state. Prints updated state JSON.
+add_observation() {
+    local state="$1" claim_id="$2" epoch="$3" height="$4" ssi="$5" concern="$6" stake="$7"
+    echo "$state" | python3 -c "
+import sys, json
+state = json.load(sys.stdin)
+state['observations'].append({
+    'claim_id': '$claim_id',
+    'epoch': int('$epoch'),
+    'height': int('$height'),
+    'ssi': int('$ssi'),
+    'concern': '$concern',
+    'stake': int('$stake'),
+    'status': 'pending',
+    'outcome': None
+})
+state['last_observe_epoch'] = int('$epoch')
+print(json.dumps(state))
+"
+}
+
+# Update an observation's status/outcome. Prints updated state JSON.
+update_observation() {
+    local state="$1" claim_id="$2" new_status="$3"
+    echo "$state" | python3 -c "
+import sys, json
+state = json.load(sys.stdin)
+for obs in state['observations']:
+    if obs['claim_id'] == '$claim_id':
+        obs['status'] = '$new_status'
+        obs['outcome'] = '$new_status'
+        break
+# Update accuracy counts
+acc = state['trends']['accuracy']
+if '$new_status' == 'accepted':
+    acc['accepted'] = acc.get('accepted', 0) + 1
+elif '$new_status' == 'rejected':
+    acc['rejected'] = acc.get('rejected', 0) + 1
+elif '$new_status' == 'expired':
+    acc['expired'] = acc.get('expired', 0) + 1
+print(json.dumps(state))
+"
+}
+
+# Prune observations older than max_keep (default 50) entries.
+prune_observations() {
+    local state="$1" max_keep="${2:-50}"
+    echo "$state" | python3 -c "
+import sys, json
+state = json.load(sys.stdin)
+obs = state['observations']
+if len(obs) > $max_keep:
+    state['observations'] = obs[-$max_keep:]
+print(json.dumps(state))
+"
+}
+
+# Compute adaptive stake based on accuracy (returns ulgm amount)
+compute_adaptive_stake() {
+    local state="$1"
+    echo "$state" | python3 -c "
+import sys, json
+state = json.load(sys.stdin)
+acc = state['trends']['accuracy']
+submitted = acc.get('submitted', 0)
+accepted = acc.get('accepted', 0)
+# Learning period: first 5 observations, always 1 LGM
+if submitted < 5:
+    print(1000000)
+    sys.exit()
+accuracy = (accepted * 100) // submitted if submitted > 0 else 0
+if accuracy >= 80:
+    print(2000000)   # 2 LGM — high confidence
+elif accuracy >= 50:
+    print(1000000)   # 1 LGM — default
+else:
+    print(500000)    # 0.5 LGM — reduce risk
+"
+}
+
+# Determine SSI trend direction from history: "rising", "falling", "stable"
+compute_ssi_trend() {
+    local state="$1"
+    echo "$state" | python3 -c "
+import sys, json
+state = json.load(sys.stdin)
+hist = state['trends'].get('ssi_history', [])
+if len(hist) < 3:
+    print('stable')
+    sys.exit()
+last3 = hist[-3:]
+if last3[2] > last3[0] and last3[2] > last3[1]:
+    print('rising')
+elif last3[2] < last3[0] and last3[2] < last3[1]:
+    print('falling')
+else:
+    print('stable')
+"
+}
+
+# Get agent balance in ulgm from REST API
+get_balance() {
+    local addr
+    addr=$("$LEGBLED" keys show "$FROM" --home "$HOME_DIR" --keyring-backend test -a 2>/dev/null || echo "")
+    if [ -z "$addr" ]; then
+        echo "0"
+        return
+    fi
+    local bal_json
+    bal_json=$(curl -s "$NODE_URL/cosmos/bank/v1beta1/balances/$addr" 2>/dev/null || echo '{}')
+    echo "$bal_json" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for b in data.get('balances', []):
+    if b.get('denom') == 'ulgm':
+        print(b['amount'])
+        sys.exit()
+print('0')
+" 2>/dev/null || echo "0"
+}
+
+# Get current block height from REST API
+get_current_height() {
+    curl -s "$NODE_URL/cosmos/base/tendermint/v1beta1/blocks/latest" 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['block']['header']['height'])" 2>/dev/null || echo "0"
+}
+
 # --- Commands ---
 
 cmd_submit_claim() {
