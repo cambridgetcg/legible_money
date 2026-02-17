@@ -237,6 +237,9 @@ func (lcd LegibleCapabilityDecorator) findSessionByPubKey(ctx sdk.Context, owner
 // checkCapability verifies the session key has capability for the given message type.
 // Default-deny: unrecognized message types are rejected for session keys.
 func (lcd LegibleCapabilityDecorator) checkCapability(session *legibleauthtypes.SessionKey, msg sdk.Msg) error {
+	if session.Capabilities == nil {
+		return legibleauthtypes.ErrSessionCapabilityDenied
+	}
 	msgType := sdk.MsgTypeURL(msg)
 
 	// Map message types to required capabilities.
