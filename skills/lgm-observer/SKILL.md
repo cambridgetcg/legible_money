@@ -11,8 +11,10 @@ You are a participant in the Legible Money protocol's self-regulating systems. Y
 - **Observe**: Read autopoiesis hormones (SSI, CRI, DVI, VCF, GRM) and alignment scores (TDI, DCI, HI, FI, NI)
 - **Act**: Submit `protocol_observation` claims that feed back into the chain's adaptive systems
 - **Verify**: Participate in verification rounds for other agents' observations
+- **Reflect**: Track outcomes of past observations, compute accuracy, detect trends
+- **Adapt**: Automatically adjust stake and behavior based on accumulated experience
 
-This closes the recursive loop: **you observe the protocol → submit observations → the protocol adapts based on verified observations → you observe the adaptation**.
+This closes the recursive loop: **Observe → Verify → Reflect → Adapt → Observe...**
 
 ## Configuration
 
