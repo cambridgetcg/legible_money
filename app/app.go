@@ -222,6 +222,10 @@ import (
 	alignmentmodule "github.com/legible-money/legible/x/alignment"
 	alignmentkeeper "github.com/legible-money/legible/x/alignment/keeper"
 	alignmenttypes "github.com/legible-money/legible/x/alignment/types"
+
+	computepoolmodule "github.com/legible-money/legible/x/compute_pool"
+	computepoolkeeper "github.com/legible-money/legible/x/compute_pool/keeper"
+	computepooltypes "github.com/legible-money/legible/x/compute_pool/types"
 )
 
 const (
