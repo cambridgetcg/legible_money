@@ -507,6 +507,222 @@ var Catalog = []Probe{
 	},
 
 	// ====================================================================
+	// gov module — OC-GOV-1 through OC-GOV-12
+	// ====================================================================
+	{
+		ID: "OC-GOV-1", Name: "Quadratic Vote Sqrt Edge Cases", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV1_QuadraticVoteSqrtEdgeCases",
+		Defense:  "BigInt integer sqrt verified at 0, 1, 4, 5, 9M, 10^18 boundaries",
+	},
+	{
+		ID: "OC-GOV-2", Name: "Double Vote Prevention", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV2_DoubleVotePrevention",
+		Defense:  "Duplicate vote (same or different option) rejected; different voter succeeds",
+	},
+	{
+		ID: "OC-GOV-3", Name: "Stage Skip Attack", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV3_StageSkipAttack",
+		Defense:  "AdvanceLIPStage enforces stake threshold before stage transition",
+	},
+	{
+		ID: "OC-GOV-4", Name: "Proposal Spam by Min Stake", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV4_ProposalSpamByMinStake",
+		Defense:  "LIP counter increments monotonically; no ID collision after 20 submissions",
+	},
+	{
+		ID: "OC-GOV-5", Name: "Vote After Period Ends", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV5_VoteAfterPeriodEnds",
+		Defense:  "CastVote rejects votes after VotingEndsAt block",
+	},
+	{
+		ID: "OC-GOV-6", Name: "Withdraw by Non-Proposer", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV6_WithdrawByNonProposer",
+		Defense:  "WithdrawLIP checks msg.Proposer == lip.Proposer; non-proposer rejected",
+	},
+	{
+		ID: "OC-GOV-7", Name: "Disbursement Timelock Race", Variant: NanoClaw, Severity: Critical,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV7_DisbursementTimelockRace",
+		Defense:  "ExecuteDisbursement checks blockHeight >= TimelockExpiry; off-by-one verified",
+	},
+	{
+		ID: "OC-GOV-8", Name: "Category Stake Thresholds", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV8_CategoryStakeThresholds",
+		Defense:  "Each LIP category has correct stake threshold: Consensus(1000), Economics(800), Interface(400), Process(200) LGM",
+	},
+	{
+		ID: "OC-GOV-9", Name: "Terminal State Immutability", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV9_TerminalStateImmutability",
+		Defense:  "Accepted LIP rejects advance, vote, and withdraw operations",
+	},
+	{
+		ID: "OC-GOV-10", Name: "Upgrade Plan on Non-Consensus", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV10_UpgradePlanOnNonConsensus",
+		Defense:  "AttachUpgradePlan rejects non-consensus category LIPs",
+	},
+	{
+		ID: "OC-GOV-11", Name: "Vote on Non-Voting LIP", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV11_VoteOnNonVotingLIP",
+		Defense:  "CastVote checks LIP stage == voting; rejects draft and review stage votes",
+	},
+	{
+		ID: "OC-GOV-12", Name: "Disbursement Double Execution", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "gov", File: "x/gov/keeper/openclaw_gov_test.go",
+		TestFunc: "TestOC_GOV12_DisbursementDoubleExecution",
+		Defense:  "ExecuteDisbursement checks stage != executed; terminal state prevents replay",
+	},
+
+	// ====================================================================
+	// staking module — OC-SK-1 through OC-SK-12
+	// ====================================================================
+	{
+		ID: "OC-SK-1", Name: "Whale Stake Concentration", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK1_WhaleStakeConcentration",
+		Defense:  "Tier 0/1 use virtual stake for VRF selection; whale has no selection advantage until bonded",
+	},
+	{
+		ID: "OC-SK-2", Name: "Slash Escalation Arithmetic", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK2_SlashEscalationArithmetic",
+		Defense:  "BigInt slash escalation: base * (1M + count*escalationBps) / 1M; no truncation across 5 slashes",
+	},
+	{
+		ID: "OC-SK-3", Name: "Slash Per-Epoch Cap", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK3_SlashPerEpochCap_R2",
+		Defense:  "3rd slash silently skipped when MaxSlashesPerEpoch=2; resets at epoch boundary",
+	},
+	{
+		ID: "OC-SK-4", Name: "Slash Decay Recovery", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK4_SlashDecayRecovery_R1",
+		Defense:  "SlashCount decays by 1 per clean epoch; 2 slashes recover to 0 after 2 clean epochs",
+	},
+	{
+		ID: "OC-SK-5", Name: "Slash Floor Zero Amount", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK5_SlashFloorZeroAmount_R4",
+		Defense:  "Zero-amount slash and zero-stake validator slash don't increment slashCount",
+	},
+	{
+		ID: "OC-SK-6", Name: "Sybil Registration Spam", Variant: ZeroClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK6_SybilRegistrationSpam",
+		Defense:  "100 min-stake sybils all tier 0 apprentice; 0 block producers; no VRF advantage",
+	},
+	{
+		ID: "OC-SK-7", Name: "Redelegation Cooldown Bypass", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK7_RedelegationCooldownBypass",
+		Defense:  "Redelegate within cooldown (1111 blocks) rejected; off-by-one at exact boundary verified",
+	},
+	{
+		ID: "OC-SK-8", Name: "Tier Demotion on Slash", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK8_TierDemotionOnSlash",
+		Defense:  "Guardian has MaxSlashCount=0; single slash disqualifies (slashCount=1 > 0)",
+	},
+	{
+		ID: "OC-SK-9", Name: "Slash Own Before Delegated", Variant: NanoClaw, Severity: Critical,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK9_SlashOwnBeforeDelegated",
+		Defense:  "Own stake consumed first; delegated absorbs overflow; boundary at exact own stake verified",
+	},
+	{
+		ID: "OC-SK-10", Name: "Unbonding ID Collision", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK10_UnbondingIdCollision",
+		Defense:  "5 undelegations in same block all get unique IDs; all retrievable by ID",
+	},
+	{
+		ID: "OC-SK-11", Name: "Block Producer Cap Enforcement", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK11_BlockProducerCapEnforcement",
+		Defense:  "MaxValidators limits block producers (tier 2+); verifiers (tier 0/1) unlimited",
+	},
+	{
+		ID: "OC-SK-12", Name: "Accuracy Rate Precision", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "staking", File: "x/staking/keeper/openclaw_staking_test.go",
+		TestFunc: "TestOC_SK12_AccuracyRatePrecision",
+		Defense:  "GetAccuracyRate returns BPS; boundary at guardian 77% (770000 BPS) verified with off-by-one",
+	},
+
+	// ====================================================================
+	// emergency module — OC-EM-1 through OC-EM-10
+	// ====================================================================
+	{
+		ID: "OC-EM-1", Name: "Non-Guardian Halt Attempt", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM1_NonGuardianHaltAttempt",
+		Defense:  "ProposeHalt rejects non-guardian and unknown addresses",
+	},
+	{
+		ID: "OC-EM-2", Name: "Cooldown Bypass", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM2_CooldownBypass",
+		Defense:  "CooldownBlocks=111 enforced; proposal at boundary-1 rejected; succeeds after elapsed",
+	},
+	{
+		ID: "OC-EM-3", Name: "Proposal Spam Per Epoch", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM3_ProposalSpamPerEpoch",
+		Defense:  "MaxProposalsPerGuardianPerEpoch=1; same guardian blocked; different guardian succeeds",
+	},
+	{
+		ID: "OC-EM-4", Name: "Precommit Without Prevote", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM4_PrecommitWithoutPrevote",
+		Defense:  "Precommit requires prior prevote YES; guardian5 (no prevote) rejected",
+	},
+	{
+		ID: "OC-EM-5", Name: "Duplicate Vote in Phase", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM5_DuplicateVoteInPhase",
+		Defense:  "Duplicate prevote and vote-flip (YES->NO) both rejected",
+	},
+	{
+		ID: "OC-EM-6", Name: "Halt from Wrong Status", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM6_HaltFromWrongStatus",
+		Defense:  "ProposeHalt rejected when status is halted, resume_voting, or revert_voting",
+	},
+	{
+		ID: "OC-EM-7", Name: "Revert Depth Exceeded", Variant: NanoClaw, Severity: Critical,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM7_RevertDepthExceeded",
+		Defense:  "MaxRevertDepth enforced; block 0 revert rejected; within-bound revert succeeds",
+	},
+	{
+		ID: "OC-EM-8", Name: "Resume from Normal State", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM8_ResumeFromNormalState",
+		Defense:  "ProposeResume and ProposeRevert rejected when status is normal",
+	},
+	{
+		ID: "OC-EM-9", Name: "Quorum Manipulation", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM9_QuorumManipulation",
+		Defense:  "75% stake quorum enforced; 40% and 60% stay prevote; 80% advances; precommit→halt",
+	},
+	{
+		ID: "OC-EM-10", Name: "Ceremony Timeout Enforcement", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "emergency", File: "x/emergency/keeper/openclaw_emergency_test.go",
+		TestFunc: "TestOC_EM10_CeremonyTimeoutEnforcement",
+		Defense:  "Prevote deadline boundary: block 111 active, block 112 fails; status reverts to normal",
+	},
+
+	// ====================================================================
 	// Cross-module probes (planned, not yet implemented)
 	// ====================================================================
 	{
