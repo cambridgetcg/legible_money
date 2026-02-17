@@ -62,7 +62,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v6
         with:
           version: v1.62
-          args: --timeout=5m
+          args: --timeout=10m
 
   # === E2E: Cosmos DevNet (manual trigger only) ===
 

@@ -2,7 +2,7 @@
 # Run: golangci-lint run ./...
 
 run:
-  timeout: 5m
+  timeout: 10m
   modules-download-mode: readonly
 
 linters:
