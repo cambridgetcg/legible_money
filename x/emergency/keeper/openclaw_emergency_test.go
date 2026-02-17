@@ -300,7 +300,7 @@ func TestOC_EM7_RevertDepthExceeded(t *testing.T) {
 	if safeTarget > 0 {
 		_, err = msgServer.ProposeRevert(sdk.WrapSDKContext(ctx), &types.MsgProposeRevert{
 			Proposer:       "guardian3",
-			RevertToHeight: safeTarget,
+			RevertToHeight: uint64(safeTarget),
 			Justification:  "within bounds",
 		})
 		if err != nil {
