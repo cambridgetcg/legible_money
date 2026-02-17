@@ -40,10 +40,11 @@ func PatchAppConfig(appPath string, restPort, grpcPort, grpcWebPort int) error {
 	}
 	content := string(data)
 
-	// Replace default ports with dynamic ones
-	content = strings.ReplaceAll(content, "tcp://0.0.0.0:1317", fmt.Sprintf("tcp://0.0.0.0:%d", restPort))
-	content = strings.ReplaceAll(content, "0.0.0.0:9090", fmt.Sprintf("0.0.0.0:%d", grpcPort))
-	content = strings.ReplaceAll(content, "0.0.0.0:9091", fmt.Sprintf("0.0.0.0:%d", grpcWebPort))
+	// Replace default ports with dynamic ones.
+	// App defaults: REST=tcp://localhost:1317, gRPC=localhost:9090
+	// gRPC-web has no separate address (shares with API).
+	content = strings.ReplaceAll(content, "tcp://localhost:1317", fmt.Sprintf("tcp://localhost:%d", restPort))
+	content = strings.ReplaceAll(content, "localhost:9090", fmt.Sprintf("localhost:%d", grpcPort))
 
 	// Enable unsafe CORS (API is already enabled by default in initAppConfig)
 	// NOTE: Do NOT flip gRPC enable — it panics without proto codegen.
