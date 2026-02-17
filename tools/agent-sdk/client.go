@@ -153,6 +153,65 @@ type TxClient interface {
 
 	// CreateVesting creates a vesting reward entry for bounty payouts (x/vesting_rewards).
 	CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error)
+
+	// --- Dispute Transactions (x/disputes) ---
+
+	// InitiateDispute opens a dispute against a fact or claim.
+	InitiateDispute(ctx context.Context, req InitiateDisputeRequest) (string, error)
+
+	// CommitDisputeEvidence commits evidence hash (phase 1 of commit-reveal).
+	CommitDisputeEvidence(ctx context.Context, disputeID, commitmentHash string) (string, error)
+
+	// RevealDisputeEvidence reveals evidence content (phase 2 of commit-reveal).
+	RevealDisputeEvidence(ctx context.Context, req RevealDisputeEvidenceRequest) (string, error)
+
+	// ArbiterVote casts an arbiter vote on a dispute.
+	ArbiterVote(ctx context.Context, req ArbiterVoteRequest) (string, error)
+
+	// EscalateDispute escalates to a higher tier with additional stake.
+	EscalateDispute(ctx context.Context, disputeID string, additionalStake uint64) (string, error)
+
+	// --- Evidence Transactions (x/evidence_mgmt) ---
+
+	// SubmitEvidence submits evidence supporting a claim.
+	SubmitEvidence(ctx context.Context, req SubmitEvidenceRequest) (string, error)
+
+	// AuditEvidence stakes on evidence quality assessment.
+	AuditEvidence(ctx context.Context, req AuditEvidenceRequest) (string, error)
+
+	// RegisterOracle registers a new oracle feed with stake.
+	RegisterOracle(ctx context.Context, req RegisterOracleRequest) (string, error)
+
+	// SubmitOracleData submits oracle data for a claim.
+	SubmitOracleData(ctx context.Context, req SubmitOracleDataRequest) (string, error)
+
+	// --- Research Transactions (x/research) ---
+
+	// SubmitResearch submits a new research entry.
+	SubmitResearch(ctx context.Context, req SubmitResearchRequest) (string, error)
+
+	// ReviewResearch submits a peer review.
+	ReviewResearch(ctx context.Context, req ReviewResearchRequest) (string, error)
+
+	// CreateResearchBounty creates a research bounty with reward.
+	CreateResearchBounty(ctx context.Context, req CreateResearchBountyRequest) (string, error)
+
+	// ClaimResearchBounty claims an open research bounty.
+	ClaimResearchBounty(ctx context.Context, bountyID string) (string, error)
+
+	// FundResearch adds funds to the research treasury.
+	FundResearch(ctx context.Context, amount uint64) (string, error)
+
+	// --- Ontology Transactions (x/ontology) ---
+
+	// ProposeOntologyDomain proposes a new domain in a stratum.
+	ProposeOntologyDomain(ctx context.Context, req ProposeOntologyDomainRequest) (string, error)
+
+	// VoteDomainProposal votes on an ontology domain proposal.
+	VoteDomainProposal(ctx context.Context, proposalID string, approve bool) (string, error)
+
+	// AcknowledgeIncompleteness records a Gödelian acknowledgment for a fact.
+	AcknowledgeIncompleteness(ctx context.Context, factID, zone, reason string) (string, error)
 }
 
 // --- Response Types ---
