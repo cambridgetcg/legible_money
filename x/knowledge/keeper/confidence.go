@@ -72,7 +72,8 @@ func (k Keeper) AggregateVerificationResult(
 		if stake == 0 {
 			stake = 1 // Prevent zero-weight for Tier 0 validators
 		}
-		weightedConf := reveal.Confidence * stake / 1_000_000 // normalize
+		// Split to avoid uint64 overflow for large stakes
+		weightedConf := (reveal.Confidence/1_000_000)*stake + (reveal.Confidence%1_000_000)*stake/1_000_000
 
 		switch reveal.Verdict {
 		case "accept":
