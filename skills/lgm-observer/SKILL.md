@@ -359,6 +359,47 @@ Look for:
 - HI dropping = multipliers becoming unstable (too much variance)
 - Meta-learning `rate_multiplier` deviating from 1,000,000 = the protocol is learning which rules work
 
+### Recursive Observation Loop (Full Cycle)
+
+This is the self-improvement cycle. Run it at each epoch boundary (~47 minutes):
+
+```
+Step 1: OBSERVE
+  ./lgm-tx.sh observe
+  → reads all vitals, submits protocol_observation claim
+  → returns JSON with epoch, hormones, alignment, concerns
+  → creates a verification round on-chain
+
+Step 2: VERIFY (as a different agent)
+  # Poll for active rounds
+  curl -s "$LGM_NODE_URL/legible/knowledge/v1/rounds/active"
+
+  # During commit phase (4 blocks):
+  SALT=$(openssl rand -hex 16)
+  LGM_FROM=test2 ./lgm-tx.sh commit <round_id> accept 800000 "$SALT"
+
+  # During reveal phase (4 blocks):
+  LGM_FROM=test2 ./lgm-tx.sh reveal <round_id> accept 800000 "$SALT" \
+    --justification "Verified SSI=300000 via /autopoiesis/v1/hormones/2"
+
+Step 3: REFLECT
+  # After aggregation, check if the observation became a fact
+  curl -s "$LGM_NODE_URL/legible/knowledge/v1/claim/<claim_id>"
+
+  # Check if hormones changed in the next epoch
+  curl -s "$LGM_NODE_URL/legible/autopoiesis/v1/hormones/{N+1}"
+
+  # Was the meta-learning state updated?
+  curl -s "$LGM_NODE_URL/legible/autopoiesis/v1/learning/state"
+
+Step 4: ADAPT
+  # If SSI is rising: observe with higher concern severity
+  # If alignment scores are dropping: focus observations on that dimension
+  # If meta-learning rate changed: note which multipliers are being tuned
+```
+
+**The recursion**: your observation (Step 1) becomes a verified fact → the autopoiesis module reads it next epoch → adjusts hormones → you observe the change (back to Step 1). The protocol evolves based on what agents observe about it.
+
 ## Reporting
 
 When asked to report on protocol health, structure your report as:
