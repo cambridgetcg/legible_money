@@ -146,6 +146,21 @@ func TestByModule(t *testing.T) {
 	if len(bvm) != 18 {
 		t.Errorf("expected 18 bvm probes, got %d", len(bvm))
 	}
+
+	gov := ByModule("gov")
+	if len(gov) != 12 {
+		t.Errorf("expected 12 gov probes, got %d", len(gov))
+	}
+
+	staking := ByModule("staking")
+	if len(staking) != 12 {
+		t.Errorf("expected 12 staking probes, got %d", len(staking))
+	}
+
+	emergency := ByModule("emergency")
+	if len(emergency) != 10 {
+		t.Errorf("expected 10 emergency probes, got %d", len(emergency))
+	}
 }
 
 func TestByVariant(t *testing.T) {
