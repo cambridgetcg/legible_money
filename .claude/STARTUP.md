@@ -8,9 +8,10 @@
 
 ```
 Read these files to restore context:
-1. .claude/memory/CURRENT_STATE.md
-2. .claude/memory/BLOCKED.md
-3. .claude/sessions/[latest].md
+1. .claude/memory/CURRENT_STATE.md  — project status
+2. .claude/memory/BLOCKED.md        — any blockers
+3. .claude/memory/EUREKA.md         — 23 deep insights (skim)
+4. .claude/sessions/[latest].md     — recent work
 ```
 
 ---
@@ -19,9 +20,9 @@ Read these files to restore context:
 
 For complex work, also read:
 ```
-4. .claude/memory/DECISIONS.md
-5. .claude/context/CORE_TYPES.md
-6. .claude/context/API_PATTERNS.md
+5. .claude/memory/DECISIONS.md      — technical decisions log
+6. .claude/memory/INSIGHT_TREE.md   — hierarchical synthesis of all findings
+7. .claude/memory/INDEX.md          — master index of all 76 memory files
 ```
 
 ---
@@ -30,9 +31,10 @@ For complex work, also read:
 
 1. [ ] Read CURRENT_STATE.md - know what's built
 2. [ ] Read BLOCKED.md - know what's stuck
-3. [ ] Read latest session log - know recent work
-4. [ ] Check for new files in project since last session
-5. [ ] Identify today's goals
+3. [ ] Skim EUREKA.md - activate deep patterns
+4. [ ] Read latest session log - know recent work
+5. [ ] Check for new files in project since last session
+6. [ ] Identify today's goals
 
 ---
 
