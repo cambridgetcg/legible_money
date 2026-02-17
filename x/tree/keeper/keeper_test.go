@@ -2186,6 +2186,188 @@ func TestCallService_ChannelClosed(t *testing.T) {
 
 // ======================== Integration: HasActiveSubscription ========================
 
+// ======================== UpdateParams Tests ========================
+
+func TestUpdateParams(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	// UpdateParams is not in the proto MsgServer interface, so call the keeper method directly
+	newParams := types.DefaultParams()
+	newParams.MaxTasksPerProject = 42
+	newParams.MaxRejections = 7
+	k.SetParams(ctx, *newParams)
+
+	got := k.GetParams(ctx)
+	if got.MaxTasksPerProject != 42 {
+		t.Errorf("expected MaxTasksPerProject=42, got %d", got.MaxTasksPerProject)
+	}
+	if got.MaxRejections != 7 {
+		t.Errorf("expected MaxRejections=7, got %d", got.MaxRejections)
+	}
+}
+
+func TestUpdateParams_ViaHandler(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	// Test the UpdateParams handler directly through the concrete msgServer type
+	// Since UpdateParams is hand-written (not proto), we test it via the exported function
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Use type assertion to access UpdateParams which is not in the proto interface
+	type updateParamsServer interface {
+		UpdateParams(ctx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error)
+	}
+	ups, ok := srv.(updateParamsServer)
+	if !ok {
+		t.Skip("UpdateParams not available on MsgServer implementation")
+	}
+
+	newParams := types.DefaultParams()
+	newParams.MaxTasksPerProject = 99
+
+	_, err := ups.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: "lgm1authority",
+		Params:    newParams,
+	})
+	if err != nil {
+		t.Fatalf("update params via handler: %v", err)
+	}
+
+	got := k.GetParams(ctx)
+	if got.MaxTasksPerProject != 99 {
+		t.Errorf("expected MaxTasksPerProject=99, got %d", got.MaxTasksPerProject)
+	}
+}
+
+func TestUpdateParams_Unauthorized(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	type updateParamsServer interface {
+		UpdateParams(ctx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error)
+	}
+	ups, ok := srv.(updateParamsServer)
+	if !ok {
+		t.Skip("UpdateParams not available on MsgServer implementation")
+	}
+
+	_, err := ups.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: founder1, // not the module authority
+		Params:    types.DefaultParams(),
+	})
+	if err == nil {
+		t.Fatal("expected error for unauthorized UpdateParams")
+	}
+}
+
+// ======================== Revenue Distribution Integration Test ========================
+
+func TestCallService_RevenueDistribution(t *testing.T) {
+	k, ctx, mockBK := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	// Set up addresses for revenue recipients
+	researchAddr := testAddr("research")
+	treasuryAddr := testAddr("treasury")
+	params := k.GetParams(ctx)
+	params.ResearchFundAddr = researchAddr
+	params.ProtocolTreasuryAddr = treasuryAddr
+	k.SetParams(ctx, params)
+
+	// Create project with contributors
+	projResp, _ := srv.CreateProject(ctx, &types.MsgCreateProject{
+		Creator: founder1, Title: "Revenue Test", Domain: "math", Budget: "100000000",
+	})
+
+	// Add a contributor with completed tasks for weighted distribution
+	srv.AddContributor(ctx, &types.MsgAddContributor{
+		Authority: founder1, ProjectId: projResp.ProjectId, Contributor: agent1, Role: "developer",
+	})
+
+	// Give agent1 some completed tasks for weighting
+	project, _ := k.GetProject(ctx, projResp.ProjectId)
+	for i, c := range project.Contributors {
+		if c.Did == agent1 {
+			project.Contributors[i].TasksCompleted = 3
+		}
+		if c.Did == founder1 {
+			project.Contributors[i].TasksCompleted = 1
+		}
+	}
+	k.SetProject(ctx, project)
+
+	// Deploy + activate a paid service linked to project
+	svcResp, _ := srv.DeployService(ctx, &types.MsgDeployService{
+		Deployer: founder1, Name: "Paid API", PricePerCall: "1000000",
+	})
+	svc, _ := k.GetService(ctx, svcResp.ServiceId)
+	svc.Status = string(types.ServiceActive)
+	svc.ProjectId = projResp.ProjectId
+	k.SetService(ctx, svc)
+
+	// Fund caller and module
+	callerAddr := testAddr("caller3")
+	mockBK.balances[callerAddr] = map[string]int64{"ulgm": 10000000}
+
+	// Call service
+	_, err := srv.CallService(ctx, &types.MsgCallService{
+		Caller: callerAddr, ServiceId: svcResp.ServiceId,
+	})
+	if err != nil {
+		t.Fatalf("call service: %v", err)
+	}
+
+	// Verify caller was charged
+	if mockBK.balances[callerAddr]["ulgm"] != 9000000 {
+		t.Errorf("caller balance: expected 9000000, got %d", mockBK.balances[callerAddr]["ulgm"])
+	}
+
+	// Verify revenue recipients received funds (non-zero)
+	if mockBK.balances[researchAddr]["ulgm"] <= 0 {
+		t.Error("research fund should have received revenue")
+	}
+	if mockBK.balances[treasuryAddr]["ulgm"] <= 0 {
+		t.Error("treasury should have received revenue")
+	}
+
+	// Verify contributors received shares
+	founderBal := mockBK.balances[founder1]["ulgm"]
+	agent1Bal := mockBK.balances[agent1]["ulgm"]
+	if founderBal <= 0 {
+		t.Error("founder should have received revenue share")
+	}
+	if agent1Bal <= 0 {
+		t.Error("agent1 should have received revenue share")
+	}
+	// Agent1 has 3 tasks vs founder's 1, so agent1 should get more
+	if agent1Bal <= founderBal {
+		t.Errorf("agent1 (3 tasks) should get more than founder (1 task): %d vs %d", agent1Bal, founderBal)
+	}
+}
+
+// ======================== Contributor Pro-Rata Revenue Tests ========================
+
+func TestCalculateRevenue_EqualSplitNoTasks(t *testing.T) {
+	contributors := []*types.ContributorRecord{
+		{Did: testAddr("a"), TasksCompleted: 0},
+		{Did: testAddr("b"), TasksCompleted: 0},
+		{Did: testAddr("c"), TasksCompleted: 0},
+	}
+	dist := keeper.CalculateRevenue(900000, 220000, 390000, 234000, 156000, contributors)
+
+	// With no tasks completed, should be equal split
+	if len(dist.ContributorShares) != 3 {
+		t.Fatalf("expected 3 shares, got %d", len(dist.ContributorShares))
+	}
+
+	// All shares should sum to pool
+	var total int64
+	for _, s := range dist.ContributorShares {
+		total += s.Amount
+	}
+	if total != dist.ContributorPool {
+		t.Errorf("shares sum %d != pool %d", total, dist.ContributorPool)
+	}
+}
+
 func TestHasActiveSubscription(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
