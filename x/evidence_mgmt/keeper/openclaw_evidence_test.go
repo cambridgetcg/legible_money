@@ -37,8 +37,8 @@ func TestOC_EV1_DuplicateEvidenceSubmission(t *testing.T) {
 		t.Fatal("OC-EV-1: expected evidence ID in response")
 	}
 
-	// Second submission with same content hash — should produce different ID
-	resp2, err := ms.SubmitEvidence(sdk.WrapSDKContext(ctx), &types.MsgSubmitEvidence{
+	// Second submission with same content hash — keeper should reject duplicate
+	_, err = ms.SubmitEvidence(sdk.WrapSDKContext(ctx), &types.MsgSubmitEvidence{
 		Submitter:    submitter,
 		ClaimId:      "claim-1",
 		EvidenceType: string(types.EvidenceTypeDocument),
@@ -46,12 +46,10 @@ func TestOC_EV1_DuplicateEvidenceSubmission(t *testing.T) {
 		Description:  "Duplicate evidence",
 		SourceUri:    "https://example.com/evidence2",
 	})
-	if err != nil {
-		t.Fatalf("OC-EV-1: second submission failed: %v", err)
+	if err == nil {
+		t.Error("OC-EV-1: duplicate content hash should be rejected — attacker can spam duplicate evidence")
 	}
-	if resp2.EvidenceId == resp1.EvidenceId {
-		t.Error("OC-EV-1: duplicate evidence got same ID — attacker can overwrite evidence records")
-	}
+	// DEFENDED: Keeper rejects duplicate content hashes per claim
 }
 
 // OC-EV-2: Audit Score Bounds — Submit audit with out-of-range score.
