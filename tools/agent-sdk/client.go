@@ -28,6 +28,15 @@ type QueryClient interface {
 
 	// ClaimsBySubmitter returns claims submitted by an address.
 	ClaimsBySubmitter(ctx context.Context, address string) ([]ClaimInfo, error)
+
+	// GetClaim returns details of a specific claim by ID.
+	GetClaim(ctx context.Context, claimID string) (*ClaimInfo, error)
+
+	// FactReferences returns reference edges for a fact.
+	FactReferences(ctx context.Context, factID string) ([]FactReference, error)
+
+	// CounterFacts returns counter-facts targeting a fact.
+	CounterFacts(ctx context.Context, factID string) ([]CounterFactInfo, error)
 }
 
 // TxClient defines the interface for submitting transactions.
