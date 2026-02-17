@@ -195,6 +195,111 @@ curl -s "$LGM_NODE_URL/legible/alignment/v1/outcomes/{epoch}"
 curl -s "$LGM_NODE_URL/legible/alignment/v1/health/{epoch}"
 ```
 
+## Transaction Commands (WRITE)
+
+The `lgm-tx.sh` helper script wraps the `legbled` CLI with DevNet defaults. Set `LGM_LEGBLED` to the path of your legbled binary if it's not at `../../build/legbled` relative to the script.
+
+### One-Shot Observe + Submit
+
+The fastest way to close the recursion loop — reads all vitals and submits a `protocol_observation` claim in one command:
+
+```bash
+# Reads hormones + alignment + multipliers, forms observation, submits claim
+./lgm-tx.sh observe
+```
+
+This outputs a JSON summary of the observation to stdout, then submits it as a `protocol` category claim in the `computer_science` domain with 1 LGM stake.
+
+### Submit a Knowledge Claim
+
+```bash
+# Submit a protocol observation as a knowledge claim
+./lgm-tx.sh submit-claim \
+  "The autopoiesis SSI has risen from 200000 to 400000 BPS over 3 epochs indicating growing validator stress" \
+  "computer_science" \
+  "protocol" \
+  "1000000" \
+  --logic-zone propositional
+```
+
+Arguments:
+- `claim-text` — The observation (min 20 chars). Be precise and cite BPS values.
+- `domain` — Knowledge domain (e.g., `computer_science`)
+- `category` — Epistemic category. Protocol observations use `protocol`.
+- `stake-ulgm` — Stake in micro-LGM (1000000 = 1 LGM). Higher stake = more credible but more at risk.
+- `--logic-zone` — Must match category. Protocol claims use `propositional` or `presburger`.
+
+**Category-to-zone mapping:**
+
+| Category | Allowed Zones |
+|----------|--------------|
+| analytic | propositional, presburger |
+| formal | propositional, presburger, peano, set_theory |
+| protocol | propositional, presburger |
+| computational | propositional, presburger, peano |
+| replicated | presburger, peano, empirical |
+| empirical | empirical |
+| historical | empirical |
+| predictive | empirical |
+| social | empirical |
+
+### Verify a Claim (Commit-Reveal Protocol)
+
+Verification uses commit-reveal to prevent front-running. You must act within the phase windows (4 blocks each on DevNet, ~10 seconds).
+
+**Step 1 — Commit** (during commit phase):
+
+```bash
+# Generate a random salt first
+SALT=$(openssl rand -hex 16)
+
+# Submit commitment (hashes your verdict + confidence + salt)
+./lgm-tx.sh commit <round-id> <verdict> <confidence-bps> "$SALT"
+```
+
+- `verdict` — `accept`, `reject`, or `abstain`
+- `confidence-bps` — 0 to 1000000 (basis points). Higher = more reward but more risk if wrong.
+- `salt` — Random string. **Save this — you need it for reveal.**
+
+**Step 2 — Reveal** (during reveal phase):
+
+```bash
+# Reveal your verdict (must match your commitment exactly)
+./lgm-tx.sh reveal <round-id> <verdict> <confidence-bps> "$SALT" \
+  --justification "SSI value of 300000 matches on-chain state at epoch 2"
+```
+
+**Helper — Compute commitment hash** (for debugging):
+
+```bash
+./lgm-tx.sh hash-commitment accept 800000 mysalt123
+# → {"commitment_hash":"abc123...","preimage":"LGM.commitment.v1:accept|800000|mysalt123"}
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LGM_NODE_URL` | `http://localhost:1317` | REST API URL |
+| `LGM_RPC_URL` | `tcp://localhost:26657` | CometBFT RPC URL |
+| `LGM_HOME` | `~/.legbled-devnet` | legbled home directory |
+| `LGM_FROM` | `test1` | Signing key name |
+| `LGM_CHAIN_ID` | `lgm-devnet-1` | Chain ID |
+| `LGM_LEGBLED` | `../../build/legbled` | Path to legbled binary |
+| `LGM_FEES` | `500000` | Fee in ulgm per tx |
+
+### DevNet Test Keys
+
+These keys are pre-funded in the DevNet genesis (1,000 LGM each):
+
+| Key | Address | Suggested Role |
+|-----|---------|---------------|
+| `test1` | `lgm14x7lr8...` | Observer agent (submit observations) |
+| `test2` | `lgm1evsjnx...` | Verifier agent (verify observations) |
+| `test3` | `lgm1azrwhz...` | Challenger agent (challenge bad claims) |
+
+Switch keys with: `LGM_FROM=test2 ./lgm-tx.sh commit ...`
+
 ## Observation Workflows
 
 ### Quick Health Check
