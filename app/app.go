@@ -415,6 +415,7 @@ type LegibleApp struct {
 	ICAAuthKeeper          icaauthkeeper.Keeper
 	IBCRateLimitKeeper     ibcratelimitkeeper.Keeper
 	AlignmentKeeper        alignmentkeeper.Keeper
+	ComputePoolKeeper      computepoolkeeper.Keeper
 
 	// Vote extension config for PoT consensus (node-local, set at startup)
 	VoteExtConfig *VoteExtensionConfig
