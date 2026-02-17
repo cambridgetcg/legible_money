@@ -185,6 +185,41 @@ func (m *bbMockQueryClient) BugFacts(_ context.Context, _ string) ([]FactInfo, e
 func (m *bbMockQueryClient) ProposalsByTrigger(_ context.Context, _ string) ([]ProposalInfo, error) {
 	return m.proposals, m.propErr
 }
+func (m *bbMockQueryClient) GetDispute(_ context.Context, _ string) (*DisputeInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) DisputesByFact(_ context.Context, _ string) ([]DisputeInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) ActiveDisputes(_ context.Context) ([]DisputeInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) DisputeVotes(_ context.Context, _ string) ([]DisputeVoteInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) EvidenceByClaimID(_ context.Context, _ string) ([]EvidenceInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) ActiveOracles(_ context.Context) ([]OracleInfo, error) { return nil, nil }
+func (m *bbMockQueryClient) GetResearch(_ context.Context, _ string) (*ResearchInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) ResearchSubmissions(_ context.Context, _, _ string) ([]ResearchInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) GetBounty(_ context.Context, _ string) (*ResearchBountyInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) AllDomains(_ context.Context) ([]DomainInfo, error) { return nil, nil }
+func (m *bbMockQueryClient) DomainsByStratum(_ context.Context, _ uint32) ([]DomainInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) ConfidenceCeiling(_ context.Context, _ string) (*ConfidenceCeilingInfo, error) {
+	return nil, nil
+}
+func (m *bbMockQueryClient) AllLogicZones(_ context.Context) ([]LogicZoneInfo, error) {
+	return nil, nil
+}
 
 // --- Tests ---
 
