@@ -37,6 +37,12 @@ type QueryClient interface {
 
 	// CounterFacts returns counter-facts targeting a fact.
 	CounterFacts(ctx context.Context, factID string) ([]CounterFactInfo, error)
+
+	// BugFacts returns verified protocol_observation facts for a domain.
+	BugFacts(ctx context.Context, domain string) ([]FactInfo, error)
+
+	// ProposalsByTrigger returns governance proposals by trigger type.
+	ProposalsByTrigger(ctx context.Context, triggerType string) ([]ProposalInfo, error)
 }
 
 // TxClient defines the interface for submitting transactions.
