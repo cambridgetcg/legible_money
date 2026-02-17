@@ -99,6 +99,18 @@ func (s *StringInstrument) PrepareAction(ctx context.Context, agent *agentsdk.Ag
 		result := copyParams(params)
 		result["verdict"] = string(verdict)
 		result["confidence"] = fmt.Sprintf("%d", confidence)
+
+		// Enrich with knowledge context summary if provider is available
+		if s.ctxProvider != nil {
+			kctx, err := s.ctxProvider.BuildContext(ctx, claimID)
+			if err == nil {
+				result["domain_density"] = fmt.Sprintf("%d", kctx.DomainDensity)
+				result["stratum_ceiling"] = fmt.Sprintf("%d", kctx.StratumCeiling)
+				result["reference_count"] = fmt.Sprintf("%d", len(kctx.ReferenceChain))
+				result["counter_fact_count"] = fmt.Sprintf("%d", len(kctx.CounterFacts))
+			}
+		}
+
 		return result, nil
 	}
 
