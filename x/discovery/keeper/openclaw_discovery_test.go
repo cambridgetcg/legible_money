@@ -23,7 +23,7 @@ import (
 )
 
 // -----------------------------------------------------------------------
-// OC-DS-1: Insufficient stake registration boundary test.
+// OC-DISC-1: Insufficient stake registration boundary test.
 // Attack: Register with stake just below the minimum (99999999 < 100 LGM).
 // Must be rejected. Then register with exactly the minimum — must succeed.
 // -----------------------------------------------------------------------
@@ -48,7 +48,7 @@ func TestOC_DS1_InsufficientStakeRegistration(t *testing.T) {
 	// Verify no profile stored.
 	_, found := k.GetProfile(ctx, testAgent1)
 	if found {
-		t.Error("OC-DS-1 FAIL: profile persisted despite insufficient stake rejection")
+		t.Error("OC-DISC-1 FAIL: profile persisted despite insufficient stake rejection")
 	}
 
 	// Register with exactly the minimum — should succeed.
@@ -65,7 +65,7 @@ func TestOC_DS1_InsufficientStakeRegistration(t *testing.T) {
 
 	_, found = k.GetProfile(ctx, testAgent1)
 	if !found {
-		t.Error("OC-DS-1 FAIL: profile not found after valid registration")
+		t.Error("OC-DISC-1 FAIL: profile not found after valid registration")
 	}
 }
 
@@ -428,7 +428,7 @@ func TestOC_DS9_ExpiredAgentNotInQueries(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-10: Deregister non-existent agent.
+// OC-DISC-10: Deregister non-existent agent.
 // Attack: Try to deregister an address that was never registered.
 // Verify error, no panic.
 // -----------------------------------------------------------------------
@@ -448,7 +448,7 @@ func TestOC_DS10_DeregisterNonExistent(t *testing.T) {
 	// Verify no profile was created as a side effect.
 	_, found := k.GetProfile(ctx, testAgent2)
 	if found {
-		t.Error("OC-DS-10 FAIL: profile appeared after failed deregister")
+		t.Error("OC-DISC-10 FAIL: profile appeared after failed deregister")
 	}
 
 	_ = k // Suppress unused
