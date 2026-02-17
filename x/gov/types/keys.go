@@ -26,6 +26,8 @@ var (
 	ParamsKey             = []byte{0x05}
 	LIPCounterKey         = []byte{0x06}
 	DisbCounterKey        = []byte{0x07}
-	VoteDedupeKeyPrefix   = []byte{0x08}
-	UpgradePlanKeyPrefix  = []byte{0x09}
+	VoteDedupeKeyPrefix      = []byte{0x08}
+	UpgradePlanKeyPrefix     = []byte{0x09}
+	FundingRecordKeyPrefix   = []byte{0x0A} // funding source → recipient records (sybil detection)
+	SybilParamsKey           = []byte{0x0B} // hand-written sybil params (separate from proto Params)
 )
