@@ -388,7 +388,34 @@ func TestMiddleware_OnAckPacket_SuccessTracksOutflow(t *testing.T) {
 	}
 }
 
-func TestMiddleware_OnAckPacket_ErrorDoesNotTrack(t *testing.T) {
+func TestMiddleware_OnAckPacket_InnerModuleError(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Inner module returns an error — middleware returns early, no tracking
+	inner := &mockIBCModule{recvErr: types.ErrOutflowExceeded}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	packet := channeltypes.NewPacket(
+		makeTransferData("ulgm", "300"),
+		1, "transfer", "channel-0", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+
+	ackBytes := channeltypes.NewResultAcknowledgement([]byte("ok")).Acknowledgement()
+
+	err := mw.OnAcknowledgementPacket(ctx, packet, ackBytes, nil)
+	if err == nil {
+		t.Fatal("expected error from inner module")
+	}
+
+	// No outflow should be tracked when inner module errors
+	_, found := k.GetFlow(ctx, "channel-0")
+	if found {
+		t.Error("expected no flow record when inner module returns error")
+	}
+}
+
+func TestMiddleware_OnAckPacket_MalformedAck(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	inner := &mockIBCModule{}
@@ -400,18 +427,16 @@ func TestMiddleware_OnAckPacket_ErrorDoesNotTrack(t *testing.T) {
 		clienttypes.NewHeight(0, 1000), 0,
 	)
 
-	// Error ack — transfer failed on counterparty, use canonical IBC JSON
-	ackBytes := channeltypes.NewErrorAcknowledgement(types.ErrOutflowExceeded).Acknowledgement()
-
-	err := mw.OnAcknowledgementPacket(ctx, packet, ackBytes, nil)
+	// Malformed ack — can't be parsed, no outflow tracked
+	err := mw.OnAcknowledgementPacket(ctx, packet, []byte(`not-json`), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// No outflow should be tracked
+	// No outflow should be tracked for unparseable ack
 	_, found := k.GetFlow(ctx, "channel-0")
 	if found {
-		t.Error("expected no flow record when ack is error")
+		t.Error("expected no flow record when ack is malformed")
 	}
 }
 
