@@ -20,7 +20,7 @@ type BankKeeper interface {
 // FundingRecorder is the interface used by the SybilFundingDecorator to record
 // sender→recipient funding relationships for sybil vote-weight decay.
 type FundingRecorder interface {
-	RecordFunding(ctx context.Context, sender, recipient, amount string, blockHeight uint64)
+	RecordFunding(ctx sdk.Context, sender, recipient, amount string, blockHeight uint64)
 }
 
 // UpgradePlan mirrors cosmossdk.io/x/upgrade/types.Plan to avoid a direct
