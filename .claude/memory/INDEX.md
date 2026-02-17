@@ -153,9 +153,9 @@
 | Security & Adversarial | 8 | ~144K |
 | Deep Technical Reviews | 27 | ~617K |
 | DevNet Testing | 8 | ~156K |
-| **Total** | **60** | **~1.15MB** |
+| **Total** | **76** | **~1.35MB** |
 
-> Note: 17 files from the original 77 were consolidated (3 TOKEN_EXPIRATION files → 1) or are superseded but retained as historical record.
+> Note: TOKEN_EXPIRATION_TIERS.md was merged into TOKEN_EXPIRATION_SCENARIOS.md (2026-02-17). All other files retained.
 
 ---
 
