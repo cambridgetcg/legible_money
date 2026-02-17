@@ -3,8 +3,6 @@ package keeper_test
 import (
 	"testing"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-
 	"github.com/legible-money/legible/x/gov/keeper"
 	"github.com/legible-money/legible/x/gov/types"
 )
