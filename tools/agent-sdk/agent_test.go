@@ -131,20 +131,21 @@ func TestSaltPersistence(t *testing.T) {
 }
 
 func TestComputeCommitment(t *testing.T) {
+	roundID := "test-round-1"
 	// Deterministic: same inputs should produce same hash
-	c1 := ComputeCommitment(VerdictTrue, 800000, "abc123")
-	c2 := ComputeCommitment(VerdictTrue, 800000, "abc123")
+	c1 := ComputeCommitment(roundID, VerdictTrue, 800000, "abc123")
+	c2 := ComputeCommitment(roundID, VerdictTrue, 800000, "abc123")
 	if c1 != c2 {
 		t.Fatal("Commitment not deterministic")
 	}
 
 	// Different inputs should produce different hashes
-	c3 := ComputeCommitment(VerdictFalse, 800000, "abc123")
+	c3 := ComputeCommitment(roundID, VerdictFalse, 800000, "abc123")
 	if c1 == c3 {
 		t.Fatal("Different verdicts produced same commitment")
 	}
 
-	c4 := ComputeCommitment(VerdictTrue, 800000, "def456")
+	c4 := ComputeCommitment(roundID, VerdictTrue, 800000, "def456")
 	if c1 == c4 {
 		t.Fatal("Different salts produced same commitment")
 	}

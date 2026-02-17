@@ -23,6 +23,9 @@ type KnowledgeKeeper interface {
 	GetActiveDomains(ctx context.Context) []string
 	GetDomainObservation(ctx context.Context, domain string, startHeight, endHeight uint64) DomainObservation
 	GetCategoryRetentions(ctx context.Context, startHeight, endHeight uint64) []CategoryRetention
+
+	// OpenClaw critical trigger: count verified protocol_observation facts since a given block.
+	GetVerifiedProtocolObservationCount(ctx context.Context, sinceBlock uint64) uint64
 }
 
 // EmergencyKeeper checks whether the chain is in emergency halt.

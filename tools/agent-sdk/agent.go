@@ -51,9 +51,9 @@ const (
 type Verdict string
 
 const (
-	VerdictTrue      Verdict = "true"
-	VerdictFalse     Verdict = "false"
-	VerdictUncertain Verdict = "uncertain"
+	VerdictTrue      Verdict = "accept"
+	VerdictFalse     Verdict = "reject"
+	VerdictUncertain Verdict = "abstain"
 )
 
 // AgentConfig holds configuration for an agent instance.
@@ -262,9 +262,29 @@ func (a *Agent) ClearSalt(roundID string) {
 	_ = os.Remove(filepath.Join(saltDir, roundID+".salt"))
 }
 
-// ComputeCommitment computes SHA256(verdict || confidence || salt) for commit phase.
-func ComputeCommitment(verdict Verdict, confidence uint32, salt string) string {
-	data := fmt.Sprintf("%s%d%s", verdict, confidence, salt)
-	h := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(h[:])
+// ComputeCommitment computes the commitment hash matching the chain's ComputeCommitmentHash.
+// Format: SHA-256("LGM.commitment.v1:" || LP(roundID) || LP(verdict) || confidence_le64 || LP(salt))
+// where LP = 4-byte big-endian length prefix + data.
+func ComputeCommitment(roundID string, verdict Verdict, confidence uint32, salt string) string {
+	h := sha256.New()
+	h.Write([]byte("LGM.commitment.v1:"))
+	writeLP(h, []byte(roundID))
+	writeLP(h, []byte(string(verdict)))
+	// Fixed-width 8-byte little-endian for confidence (matching chain's uint64)
+	conf := uint64(confidence)
+	confBytes := []byte{
+		byte(conf), byte(conf >> 8), byte(conf >> 16), byte(conf >> 24),
+		byte(conf >> 32), byte(conf >> 40), byte(conf >> 48), byte(conf >> 56),
+	}
+	h.Write(confBytes)
+	writeLP(h, []byte(salt))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// writeLP writes a length-prefixed byte slice: 4-byte big-endian length + data.
+func writeLP(h interface{ Write([]byte) (int, error) }, data []byte) {
+	l := uint32(len(data))
+	lenBytes := []byte{byte(l >> 24), byte(l >> 16), byte(l >> 8), byte(l)}
+	h.Write(lenBytes)
+	h.Write(data)
 }

@@ -87,7 +87,7 @@ func (a *Agent) Verify(ctx context.Context, roundID string, verdict Verdict, con
 		return "", fmt.Errorf("generating salt: %w", err)
 	}
 
-	commitment := ComputeCommitment(verdict, confidence, salt)
+	commitment := ComputeCommitment(roundID, verdict, confidence, salt)
 	txHash, err := a.txClient.SubmitCommitment(ctx, roundID, commitment)
 	if err != nil {
 		a.ClearSalt(roundID) // Clean up on failure

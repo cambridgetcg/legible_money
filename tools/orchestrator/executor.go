@@ -47,6 +47,8 @@ func (e *StandardExecutor) Execute(ctx context.Context, agent *agentsdk.Agent, a
 		return e.doStake(ctx, agent, params)
 	case ActionHeartbeat:
 		return e.doHeartbeat(ctx, agent)
+	case ActionChallenge:
+		return e.doChallenge(ctx, agent, params)
 	case ActionCustom:
 		return e.doCustom(ctx, agent, params)
 	default:
@@ -189,6 +191,26 @@ func (e *StandardExecutor) doHeartbeat(ctx context.Context, agent *agentsdk.Agen
 		return &PartResult{Success: false, Error: err.Error()}, nil
 	}
 	return &PartResult{Success: true, TxHash: txHash}, nil
+}
+
+func (e *StandardExecutor) doChallenge(ctx context.Context, agent *agentsdk.Agent, params map[string]string) (*PartResult, error) {
+	factID := params["fact_id"]
+	reason := params["reason"]
+	stake := parseUint64(params["stake"])
+
+	tc := agent.TxClient()
+	if tc == nil {
+		return &PartResult{Success: false, Error: "no tx client configured"}, nil
+	}
+	txHash, err := tc.ChallengeFact(ctx, factID, reason, stake)
+	if err != nil {
+		return &PartResult{Success: false, Error: err.Error()}, nil
+	}
+	return &PartResult{
+		Success: true,
+		TxHash:  txHash,
+		Data:    map[string]string{"fact_id": factID},
+	}, nil
 }
 
 func (e *StandardExecutor) doCustom(ctx context.Context, agent *agentsdk.Agent, params map[string]string) (*PartResult, error) {

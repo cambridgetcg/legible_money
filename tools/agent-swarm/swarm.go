@@ -259,6 +259,13 @@ func (s *Swarm) RegisterAll(ctx context.Context) error {
 	return nil
 }
 
+// AddAgent adds a pre-configured managed agent to the swarm.
+func (s *Swarm) AddAgent(ma *ManagedAgent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.agents[ma.Spec.Name] = ma
+}
+
 // GetAgent returns a managed agent by name.
 func (s *Swarm) GetAgent(name string) (*ManagedAgent, bool) {
 	s.mu.RLock()

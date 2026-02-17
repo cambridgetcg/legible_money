@@ -267,6 +267,7 @@ func (h *Harness) NewCLIClient(keyName string) *agentsdk.CLIClient {
 		Keyring:  keyring,
 		Home:     h.NodeHome,
 		Node:     h.RPCAddr,
+		RESTAddr: h.RESTAddr,
 		ChainID:  h.ChainID,
 		GasPrice: 1,
 	}

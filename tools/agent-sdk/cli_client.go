@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -66,11 +67,39 @@ func (c *CLIClient) runTx(ctx context.Context, args ...string) (string, error) {
 // --- QueryClient Implementation ---
 
 func (c *CLIClient) ChainStatus(ctx context.Context) (*ChainStatus, error) {
-	cmd := exec.CommandContext(ctx, c.Binary, "status", "--node", c.Node)
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
+	// Try CLI status command first (may be "status" or "comet status")
+	var out []byte
+	var err error
+
+	for _, args := range [][]string{
+		{"status", "--node", c.Node, "--output", "json"},
+		{"comet", "status", "--node", c.Node, "--output", "json"},
+	} {
+		cmd := exec.CommandContext(ctx, c.Binary, args...)
+		cmd.Env = os.Environ()
+		out, err = cmd.CombinedOutput()
+		if err == nil {
+			break
+		}
+	}
+
+	// If CLI fails, fall back to direct HTTP RPC query
 	if err != nil {
-		return nil, fmt.Errorf("status query failed: %w", err)
+		rpcHost := strings.TrimPrefix(c.Node, "tcp://")
+		url := fmt.Sprintf("http://%s/status", rpcHost)
+		resp, httpErr := http.Get(url)
+		if httpErr != nil {
+			return nil, fmt.Errorf("status query failed (CLI: %w, HTTP: %v)", err, httpErr)
+		}
+		defer resp.Body.Close()
+
+		var rpcResp struct {
+			Result json.RawMessage `json:"result"`
+		}
+		if decErr := json.NewDecoder(resp.Body).Decode(&rpcResp); decErr != nil {
+			return nil, fmt.Errorf("parsing RPC status: %w", decErr)
+		}
+		out = rpcResp.Result
 	}
 
 	var raw struct {
@@ -83,7 +112,6 @@ func (c *CLIClient) ChainStatus(ctx context.Context) (*ChainStatus, error) {
 			Network string `json:"network"`
 		} `json:"node_info"`
 	}
-	// Try both formats (CometBFT uses different casing)
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, fmt.Errorf("parsing status: %w", err)
 	}
@@ -98,21 +126,32 @@ func (c *CLIClient) ChainStatus(ctx context.Context) (*ChainStatus, error) {
 }
 
 func (c *CLIClient) Balance(ctx context.Context, address string) (uint64, error) {
-	out, err := c.runQuery(ctx, "query", "bank", "balances", address)
-	if err != nil {
-		return 0, err
+	// Bank query CLI doesn't exist in SDK v0.50 (uses autocli).
+	// Use REST API (gRPC-gateway) instead.
+	if c.RESTAddr == "" {
+		return 0, fmt.Errorf("RESTAddr not set on CLIClient — cannot query balance")
 	}
+	url := fmt.Sprintf("%s/cosmos/bank/v1beta1/balances/%s", c.RESTAddr, address)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("creating balance request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("balance query failed: %w", err)
+	}
+	defer resp.Body.Close()
 
-	var resp struct {
+	var result struct {
 		Balances []struct {
 			Denom  string `json:"denom"`
 			Amount string `json:"amount"`
 		} `json:"balances"`
 	}
-	if err := json.Unmarshal(out, &resp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return 0, fmt.Errorf("parsing balance: %w", err)
 	}
-	for _, b := range resp.Balances {
+	for _, b := range result.Balances {
 		if b.Denom == Denom {
 			amt, _ := strconv.ParseUint(b.Amount, 10, 64)
 			return amt, nil
@@ -182,24 +221,17 @@ func (c *CLIClient) FactsByDomain(ctx context.Context, domain string) ([]FactInf
 }
 
 func (c *CLIClient) ClaimsBySubmitter(ctx context.Context, address string) ([]ClaimInfo, error) {
-	out, err := c.runQuery(ctx, "query", "knowledge", "claims-by-submitter", address)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp struct {
-		Claims []ClaimInfo `json:"claims"`
-	}
-	if err := json.Unmarshal(out, &resp); err != nil {
-		return nil, fmt.Errorf("parsing claims: %w", err)
-	}
-	return resp.Claims, nil
+	// Knowledge module CLI doesn't have a claims-by-submitter query yet.
+	// Return empty for now — claims can be queried by domain instead.
+	return nil, fmt.Errorf("ClaimsBySubmitter: query not implemented in knowledge CLI")
 }
 
 // --- TxClient Implementation ---
 
 func (c *CLIClient) RegisterAccount(ctx context.Context, pubKeyHex string) (string, error) {
-	return c.runTx(ctx, "tx", "legible-auth", "register-account")
+	// legible_auth module has no CLI commands yet.
+	// Accounts are implicitly created by the SDK when they receive funds.
+	return "", fmt.Errorf("RegisterAccount: no CLI command available (accounts auto-created on first fund)")
 }
 
 func (c *CLIClient) RegisterAgent(ctx context.Context, req RegisterAgentRequest) (string, error) {
@@ -224,31 +256,29 @@ func (c *CLIClient) SubmitClaim(ctx context.Context, req SubmitClaimRequest) (st
 	if len(req.Text) < MinClaimLen {
 		return "", fmt.Errorf("claim text must be at least %d characters", MinClaimLen)
 	}
-	args := []string{
-		"tx", "knowledge", "submit-claim", req.Text,
-		"--domain", req.Domain,
-		"--category", req.Category,
-		"--stake", fmt.Sprintf("%d%s", req.Stake, Denom),
-	}
-	return c.runTx(ctx, args...)
+	// CLI: submit-claim [claim-text] [domain] [category] [stake-amount]
+	// StakeAmount is a plain integer (parsed via big.Int.SetString base 10), no denom suffix.
+	return c.runTx(ctx, "tx", "knowledge", "submit-claim",
+		req.Text, req.Domain, req.Category,
+		fmt.Sprintf("%d", req.Stake))
 }
 
 func (c *CLIClient) SubmitCommitment(ctx context.Context, roundID, commitment string) (string, error) {
-	return c.runTx(ctx, "tx", "knowledge", "submit-commitment", roundID,
-		"--commitment", commitment)
+	// CLI: submit-commitment [round-id] [commitment-hash]
+	return c.runTx(ctx, "tx", "knowledge", "submit-commitment", roundID, commitment)
 }
 
 func (c *CLIClient) SubmitReveal(ctx context.Context, roundID string, verdict Verdict, confidence uint32, salt string) (string, error) {
-	return c.runTx(ctx, "tx", "knowledge", "submit-reveal", roundID,
-		"--verdict", string(verdict),
-		"--confidence", fmt.Sprintf("%d", confidence),
-		"--salt", salt)
+	// CLI: submit-reveal [round-id] [verdict] [confidence] [salt]
+	return c.runTx(ctx, "tx", "knowledge", "submit-reveal",
+		roundID, string(verdict), fmt.Sprintf("%d", confidence), salt)
 }
 
 func (c *CLIClient) ChallengeFact(ctx context.Context, factID, reason string, stake uint64) (string, error) {
-	return c.runTx(ctx, "tx", "knowledge", "challenge-fact", factID,
-		"--reason", reason,
-		"--stake", fmt.Sprintf("%d%s", stake, Denom))
+	// CLI: challenge-fact [fact-id] [reason] [stake]
+	// Stake is a plain integer (parsed via big.Int.SetString base 10), no denom suffix.
+	return c.runTx(ctx, "tx", "knowledge", "challenge-fact",
+		factID, reason, fmt.Sprintf("%d", stake))
 }
 
 func (c *CLIClient) CreateHome(ctx context.Context, name string) (string, error) {

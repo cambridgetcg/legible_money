@@ -47,6 +47,11 @@ func (k *Keeper) SetGovKeeper(gk types.GovKeeper) {
 	k.govKeeper = gk
 }
 
+// SetKnowledgeKeeper sets the knowledge keeper after construction (for init ordering).
+func (k *Keeper) SetKnowledgeKeeper(kk types.KnowledgeKeeper) {
+	k.knowledgeKeeper = kk
+}
+
 // Logger returns a module-specific logger.
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return k.logger.With("module", "x/"+types.ModuleName)

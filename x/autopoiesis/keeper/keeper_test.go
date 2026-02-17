@@ -49,6 +49,7 @@ type mockKnowledgeKeeper struct {
 	domains            []string
 	domainObservations map[string]types.DomainObservation
 	retentions         []types.CategoryRetention
+	protocolObsCount   uint64
 }
 
 func (m *mockKnowledgeKeeper) GetActiveFactCount(_ context.Context) uint64 {
@@ -76,6 +77,9 @@ func (m *mockKnowledgeKeeper) GetDomainObservation(_ context.Context, domain str
 }
 func (m *mockKnowledgeKeeper) GetCategoryRetentions(_ context.Context, _, _ uint64) []types.CategoryRetention {
 	return m.retentions
+}
+func (m *mockKnowledgeKeeper) GetVerifiedProtocolObservationCount(_ context.Context, _ uint64) uint64 {
+	return m.protocolObsCount
 }
 
 type mockEmergencyKeeper struct {

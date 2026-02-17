@@ -169,7 +169,8 @@ type CLIClient struct {
 	KeyName  string // Keyring key name
 	Keyring  string // Keyring backend (test, file, os)
 	Home     string // legbled home directory
-	Node     string // RPC endpoint
+	Node     string // RPC endpoint (tcp://host:port)
+	RESTAddr string // REST/gRPC-gateway endpoint (http://host:port)
 	ChainID  string // Chain ID
 	GasPrice uint64 // Gas price in ulgm
 }

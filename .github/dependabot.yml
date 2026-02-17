@@ -9,12 +9,22 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     reviewers:
-      - "legible-money/core"
+      - "yournameisai"
     labels:
       - "dependencies"
       - "go"
     commit-message:
       prefix: "deps(go):"
+    ignore:
+      # Cosmos SDK major version bumps require planned migration
+      - dependency-name: "github.com/cosmos/cosmos-sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "cosmossdk.io/x/tx"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "cosmossdk.io/errors"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "cosmossdk.io/collections"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -24,7 +34,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     reviewers:
-      - "legible-money/core"
+      - "yournameisai"
     labels:
       - "dependencies"
       - "ci"
@@ -39,7 +49,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     reviewers:
-      - "legible-money/core"
+      - "yournameisai"
     labels:
       - "dependencies"
       - "npm"

@@ -78,6 +78,7 @@ const (
 	ActionSchedule       ActionType = "schedule"
 	ActionStake          ActionType = "stake"
 	ActionHeartbeat      ActionType = "heartbeat"
+	ActionChallenge      ActionType = "challenge"
 	ActionCustom         ActionType = "custom"
 )
 

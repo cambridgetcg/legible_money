@@ -922,6 +922,9 @@ func NewLegibleApp(
 		),
 	)
 
+	// Wire knowledge keeper into autopoiesis for openclaw_critical trigger
+	app.AutopoiesisKeeper.SetKnowledgeKeeper(NewAutopoiesisKnowledgeAdapter(app.KnowledgeKeeper))
+
 	// Wire cross-module keepers into BVM for opcode host functions
 	app.BVMKeeper.SetKnowledgeKeeper(NewBVMKnowledgeAdapter(app.KnowledgeKeeper))
 	app.BVMKeeper.SetStakingKeeper(NewBVMStakingAdapter(app.LegibleStakingKeeper))

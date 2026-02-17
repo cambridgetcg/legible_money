@@ -131,7 +131,7 @@ func TestPhaseA(t *testing.T) {
 		}
 
 		// Validator commits: verdict=true, confidence=80%
-		commitment := agentsdk.ComputeCommitment(agentsdk.VerdictTrue, 800000, "testsalt123")
+		commitment := agentsdk.ComputeCommitment(round.ID, agentsdk.VerdictTrue, 800000, "testsalt123")
 		txHash, err := valClient.SubmitCommitment(ctx, round.ID, commitment)
 		if err != nil {
 			t.Fatalf("SubmitCommitment: %v", err)

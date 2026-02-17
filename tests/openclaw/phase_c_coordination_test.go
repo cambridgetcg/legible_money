@@ -42,7 +42,7 @@ func TestPhaseC(t *testing.T) {
 		}
 	}
 
-	if err := pool.FundAll(ctx, 50_000_000_000); err != nil { // 50K LGM each
+	if err := pool.FundAll(ctx, 1_000_000_000); err != nil { // 1K LGM each (agents already have 10K from genesis)
 		t.Fatalf("FundAll: %v", err)
 	}
 

@@ -44,7 +44,8 @@ func PatchAppConfig(appPath string, restPort, grpcPort, grpcWebPort int) error {
 	content = strings.ReplaceAll(content, "0.0.0.0:9090", fmt.Sprintf("0.0.0.0:%d", grpcPort))
 	content = strings.ReplaceAll(content, "0.0.0.0:9091", fmt.Sprintf("0.0.0.0:%d", grpcWebPort))
 
-	// Enable unsafe CORS
+	// Enable unsafe CORS (API is already enabled by default in initAppConfig)
+	// NOTE: Do NOT flip gRPC enable — it panics without proto codegen.
 	content = strings.ReplaceAll(content, "enabled-unsafe-cors = false", "enabled-unsafe-cors = true")
 
 	return os.WriteFile(appPath, []byte(content), 0644)

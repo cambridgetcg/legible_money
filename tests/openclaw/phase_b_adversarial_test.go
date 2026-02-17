@@ -37,7 +37,7 @@ func TestPhaseB(t *testing.T) {
 			t.Fatalf("pool.Add(%s): %v", name, err)
 		}
 	}
-	if err := pool.FundAll(ctx, 50_000_000_000); err != nil { // 50K LGM each
+	if err := pool.FundAll(ctx, 1_000_000_000); err != nil { // 1K LGM each (agents already have 10K from genesis)
 		t.Fatalf("FundAll: %v", err)
 	}
 
@@ -136,7 +136,7 @@ func TestPhaseB(t *testing.T) {
 		}
 
 		round := rounds[0]
-		commitment := agentsdk.ComputeCommitment(agentsdk.VerdictTrue, 800000, "equivocation-salt")
+		commitment := agentsdk.ComputeCommitment(round.ID, agentsdk.VerdictTrue, 800000, "equivocation-salt")
 
 		// First commitment
 		_, err = valClient.SubmitCommitment(ctx, round.ID, commitment)
