@@ -83,7 +83,7 @@ func TestPhaseA(t *testing.T) {
 		txHash, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     claimText,
 			Domain:   "general",
-			Category: "computational",
+			Category: "empirical",
 			Stake:    stakeUlgm,
 		})
 		if err != nil {
