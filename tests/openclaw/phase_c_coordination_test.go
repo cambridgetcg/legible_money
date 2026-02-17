@@ -57,7 +57,7 @@ func TestPhaseC(t *testing.T) {
 			_, err := claimer.Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 				Text:     text,
 				Domain:   "general",
-				Category: "computational",
+				Category: "empirical",
 				Stake:    1_000_000,
 			})
 			if err != nil {
@@ -82,7 +82,7 @@ func TestPhaseC(t *testing.T) {
 		txHash, err := claimer.Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     claimText,
 			Domain:   "general",
-			Category: "computational",
+			Category: "empirical",
 			Stake:    1_000_000,
 		})
 		if err != nil {
