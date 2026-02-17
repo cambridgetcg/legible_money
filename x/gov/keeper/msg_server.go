@@ -257,6 +257,7 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 			sdk.NewAttribute("direction", string(direction)),
 			sdk.NewAttribute("stake", msg.Stake),
 			sdk.NewAttribute("effective_power", effectiveVotingPower),
+			sdk.NewAttribute("sybil_decay_bps", fmt.Sprintf("%d", sybilDecayBPS)),
 		),
 	)
 
