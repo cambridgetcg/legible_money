@@ -324,11 +324,12 @@ The watch daemon:
 |----------|---------|-------------|
 | `LGM_NODE_URL` | `http://localhost:1317` | REST API URL |
 | `LGM_RPC_URL` | `tcp://localhost:26657` | CometBFT RPC URL |
-| `LGM_HOME` | `~/.legbled-devnet` | legbled home directory |
-| `LGM_FROM` | `test1` | Signing key name |
+| `LGM_HOME` | `~/.legbled-devnet` | legbled home directory (also stores salts) |
+| `LGM_FROM` | `test1` | Signing key name (salts stored per-key) |
 | `LGM_CHAIN_ID` | `lgm-devnet-1` | Chain ID |
 | `LGM_LEGBLED` | `../../build/legbled` | Path to legbled binary |
 | `LGM_FEES` | `500000` | Fee in ulgm per tx |
+| `LGM_GAS` | `500000` | Gas limit per tx |
 
 ### DevNet Test Keys
 
