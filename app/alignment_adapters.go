@@ -321,7 +321,7 @@ func (a *AlignmentStakingAdapter) GetValidatorRewardDistribution(ctx context.Con
 	// Use total stake as a proxy for reward distribution (actual per-epoch
 	// reward tracking not yet available).
 	var rewards []alignmenttypes.ValidatorReward
-	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingkeeper.ValidatorRef) bool {
+	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingtypes.LegibleValidator) bool {
 		stake, ok := new(big.Int).SetString(v.TotalStake, 10)
 		if !ok || stake.Sign() <= 0 {
 			return false
@@ -349,7 +349,7 @@ func (a *AlignmentStakingAdapter) GetTop10StakeRatio(ctx context.Context) uint64
 		stake *big.Int
 	}
 	var vals []valStake
-	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingkeeper.ValidatorRef) bool {
+	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingtypes.LegibleValidator) bool {
 		s, ok := new(big.Int).SetString(v.TotalStake, 10)
 		if ok && s.Sign() > 0 {
 			vals = append(vals, valStake{stake: s})
@@ -392,7 +392,7 @@ func (a *AlignmentStakingAdapter) GetTop10StakeRatio(ctx context.Context) uint64
 func (a *AlignmentStakingAdapter) GetTotalStake(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	total := new(big.Int)
-	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingkeeper.ValidatorRef) bool {
+	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingtypes.LegibleValidator) bool {
 		s, ok := new(big.Int).SetString(v.TotalStake, 10)
 		if ok && s.Sign() > 0 {
 			total.Add(total, s)
