@@ -210,6 +210,14 @@ func (r *RehearsalTxClient) SetSpendingLimit(_ context.Context, _, _ string, _, 
 	return r.nextHash(), nil
 }
 
+func (r *RehearsalTxClient) SubmitLIP(_ context.Context, _ agentsdk.SubmitLIPRequest) (string, error) {
+	return r.nextHash(), nil
+}
+
+func (r *RehearsalTxClient) CreateVesting(_ context.Context, _ agentsdk.CreateVestingRequest) (string, error) {
+	return r.nextHash(), nil
+}
+
 // RehearsalExecutor always succeeds for dry-run mode.
 type RehearsalExecutor struct{}
 
