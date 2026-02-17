@@ -54,7 +54,8 @@ func (k Keeper) AggregateVerificationResult(
 			repScore := k.captureDefenseKeeper.GetReputationScore(ctx, validatorAddr, roundDomain)
 			if repScore > 0 {
 				// Reputation-weighted: stake * repScore / 1_000_000
-				stake = (stake * repScore) / 1_000_000
+				// Split to avoid uint64 overflow for large stakes (>18.4M LGM)
+				stake = (stake/1_000_000)*repScore + (stake%1_000_000)*repScore/1_000_000
 				if stake == 0 {
 					stake = 1
 				}
