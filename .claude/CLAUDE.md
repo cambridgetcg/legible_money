@@ -55,13 +55,14 @@ legible-money/
 │   ├── vesting_rewards/    # PARTIAL: Block reward emission
 │   ├── bvm/                # PARTIAL: Belief Virtual Machine
 │   ├── home/               # PARTIAL: Agent Home
-│   ├── disputes/           # STUB
-│   ├── evidence_mgmt/      # STUB
-│   ├── research/           # STUB
-│   ├── ontology/           # STUB
+│   ├── disputes/           # COMPLETE: 3-tier escalation, commit-reveal evidence, cascade confidence
+│   ├── evidence_mgmt/      # COMPLETE: Oracle integration, stake-weighted reliability scoring
+│   ├── research/           # COMPLETE: Peer review, bounty distribution, project funding
+│   ├── ontology/           # COMPLETE: Domain trees, logic zones, cross-module knowledge API
 │   ├── channels/           # STUB
-│   ├── tree/               # STUB
-│   └── ... (more stubs)
+│   ├── tree/               # COMPLETE: Full project lifecycle, service deployment, seeding
+│   ├── autopoiesis/        # COMPLETE: Proposal triggers, 5-hormone system, Loop 4
+│   └── ... (channels stub)
 │
 ├── proto/                  # Protobuf definitions
 ├── devnet/scripts/         # DevNet management scripts
