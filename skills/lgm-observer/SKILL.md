@@ -320,6 +320,103 @@ The watch daemon:
 - **Protocol observations**: Cross-checks epoch recency (within 5 epochs) and SSI values against on-chain state. Returns `accept 800000` if values match, `reject 700000` if mismatched.
 - **Other categories**: Returns `abstain 0` (no evaluation capability yet — future phases will integrate LLM evaluation via the agent-sdk Claude evaluator).
 
+### Autonomous Loop (P3)
+
+The `loop` command runs the full recursive cycle — observe, verify, reflect, adapt — in a single daemon:
+
+```bash
+# Start the autonomous loop (default 30s cycle):
+./lgm-tx.sh loop
+
+# Custom cycle interval:
+./lgm-tx.sh loop 60
+```
+
+Each cycle:
+1. **Balance guard** — Pauses observations below 10 LGM, pauses all activity below 5 LGM
+2. **Observe** — If a new epoch has started since last observation, reads vitals and submits a `protocol_observation` claim with adaptive stake
+3. **Verify** — Processes all active verification rounds (commit/reveal)
+4. **Reflect** (every 5 cycles) — Checks outcomes of past observations, updates accuracy stats
+
+**Adaptive stake**: Based on accumulated accuracy:
+- Accuracy >= 80%: stakes 2 LGM (high confidence)
+- Accuracy 50-79%: stakes 1 LGM (default)
+- Accuracy < 50%: stakes 0.5 LGM (cautious)
+- First 5 observations: always 1 LGM (learning period)
+
+The 30s default interval catches most verification phase transitions (~27.7s round) while submitting observations once per epoch (~46.7 min).
+
+### Reflect — Outcome Tracking
+
+```bash
+# Check outcomes of past observations:
+./lgm-tx.sh reflect
+```
+
+For each pending observation in agent state:
+- Queries `/legible/knowledge/v1/claim/{claim_id}` for status
+- Marks observations as `accepted`, `rejected`, or `expired`
+- Updates accuracy counters in trends
+- Prunes state to last 50 observations
+
+Output: JSON with updated count, still-pending count, and accuracy breakdown.
+
+### Status — Agent Dashboard
+
+```bash
+./lgm-tx.sh status
+```
+
+Shows:
+- Balance (LGM + ulgm) with low-balance warnings
+- Observation counts (submitted, accepted, rejected, pending)
+- Accuracy percentage
+- Current adaptive stake tier
+- SSI trend (rising/falling/stable with recent values)
+- Last observation epoch and current epoch
+
+### Challenge — Dispute a Fact
+
+```bash
+# Challenge a fact with reason and stake:
+./lgm-tx.sh challenge <fact-id> "SSI value was incorrect at epoch 42" 2000000
+```
+
+Not auto-triggered by the loop daemon. Use this manually when you detect a suspicious or incorrect fact during observation.
+
+### Agent State File
+
+State is persisted at `$LGM_HOME/agent-state/$LGM_FROM/state.json`:
+
+```json
+{
+  "observations": [
+    {
+      "claim_id": "claim:abc123",
+      "epoch": 42,
+      "height": 46752,
+      "ssi": 300000,
+      "concern": "moderate_stress",
+      "stake": 1000000,
+      "status": "pending",
+      "outcome": null
+    }
+  ],
+  "trends": {
+    "ssi_history": [300000, 320000, 350000],
+    "accuracy": {"submitted": 10, "accepted": 8, "rejected": 1, "expired": 0}
+  },
+  "last_observe_epoch": 42,
+  "last_reflect_height": 46900
+}
+```
+
+- `observations[]` — Rolling window of last 50 observations with claim IDs, outcomes, and on-chain metadata
+- `trends.ssi_history` — Last 20 SSI values for trend detection
+- `trends.accuracy` — Cumulative accuracy counters driving adaptive stake
+- `last_observe_epoch` — Prevents duplicate observations within the same epoch
+- `last_reflect_height` — Block height of last reflection pass
+
 ### Environment Variables
 
 | Variable | Default | Description |
