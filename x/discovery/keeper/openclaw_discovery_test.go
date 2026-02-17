@@ -139,7 +139,7 @@ func TestOC_DS2_CapabilitySpam(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-3: Duplicate capability addition.
+// OC-DISC-3: Duplicate capability addition.
 // Attack: Register agent with "verification", then add "verification"
 // again. Must be rejected (idempotent or error).
 // -----------------------------------------------------------------------
