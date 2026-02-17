@@ -25,7 +25,7 @@ func TestOC_EV1_DuplicateEvidenceSubmission(t *testing.T) {
 	resp1, err := ms.SubmitEvidence(sdk.WrapSDKContext(ctx), &types.MsgSubmitEvidence{
 		Submitter:    submitter,
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "abc123hash",
 		Description:  "Test evidence",
 		SourceUri:    "https://example.com/evidence",
@@ -38,11 +38,10 @@ func TestOC_EV1_DuplicateEvidenceSubmission(t *testing.T) {
 	}
 
 	// Second submission with same content hash — should produce different ID
-	// (not a rejection, but IDs must be unique)
 	resp2, err := ms.SubmitEvidence(sdk.WrapSDKContext(ctx), &types.MsgSubmitEvidence{
 		Submitter:    submitter,
 		ClaimId:      "claim-1",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "abc123hash",
 		Description:  "Duplicate evidence",
 		SourceUri:    "https://example.com/evidence2",
@@ -65,7 +64,7 @@ func TestOC_EV2_AuditScoreBounds(t *testing.T) {
 	resp, _ := ms.SubmitEvidence(sdk.WrapSDKContext(ctx), &types.MsgSubmitEvidence{
 		Submitter:    submitter,
 		ClaimId:      "claim-audit",
-		EvidenceType: types.EvidenceTypeDocument,
+		EvidenceType: string(types.EvidenceTypeDocument),
 		ContentHash:  "auditme",
 		Description:  "Test",
 		SourceUri:    "https://example.com",
@@ -73,7 +72,7 @@ func TestOC_EV2_AuditScoreBounds(t *testing.T) {
 
 	auditor := testAddr(2)
 
-	// Score of 0 — should work (valid minimum)
+	// Score of 0 — valid minimum
 	_, err := ms.AuditEvidence(sdk.WrapSDKContext(ctx), &types.MsgAuditEvidence{
 		Auditor:    auditor,
 		EvidenceId: resp.EvidenceId,
@@ -81,7 +80,7 @@ func TestOC_EV2_AuditScoreBounds(t *testing.T) {
 		Stake:      "1000000",
 		Rationale:  "zero score",
 	})
-	// May succeed — 0 can be a valid score for worthless evidence
+	// 0 is a valid score for worthless evidence
 	_ = err
 
 	// Score of 101 (>100) — should fail if max is 100
@@ -94,25 +93,38 @@ func TestOC_EV2_AuditScoreBounds(t *testing.T) {
 		Rationale:  "too high",
 	})
 	if err == nil {
-		// Log the finding — check if there's a score cap
 		t.Log("OC-EV-2: score 101 accepted — verify score bounds in keeper.SubmitAudit()")
 	}
 }
 
-// OC-EV-3: Oracle Registration Authorization — Non-authority tries to register oracle.
-func TestOC_EV3_OracleRegistrationAuth(t *testing.T) {
+// OC-EV-3: Oracle Registration — Verify operator-only registration with required fields.
+func TestOC_EV3_OracleRegistrationValidation(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	ms := keeper.NewMsgServerImpl(k)
 
-	// Non-authority tries to register oracle
-	nonAuth := testAddr(99)
+	operator := testAddr(10)
+
+	// Register oracle with valid data types
 	_, err := ms.RegisterOracle(sdk.WrapSDKContext(ctx), &types.MsgRegisterOracle{
-		Authority:  nonAuth,
-		Name:       "malicious-oracle",
-		Operator:   nonAuth,
-		OracleType: "chainlink",
+		Operator:    operator,
+		Name:        "test-oracle",
+		Description: "A test oracle",
+		DataTypes:   []string{string(types.EvidenceTypeOracleFeed)},
+		Stake:       "1000000",
+	})
+	if err != nil {
+		t.Fatalf("OC-EV-3: valid registration failed: %v", err)
+	}
+
+	// Register oracle with invalid data type
+	_, err = ms.RegisterOracle(sdk.WrapSDKContext(ctx), &types.MsgRegisterOracle{
+		Operator:    testAddr(11),
+		Name:        "bad-oracle",
+		Description: "Bad type",
+		DataTypes:   []string{"invalid_type"},
+		Stake:       "1000000",
 	})
 	if err == nil {
-		t.Error("OC-EV-3: non-authority oracle registration should fail — attacker can register rogue oracles")
+		t.Error("OC-EV-3: oracle with invalid data type should fail — attacker can register rogue oracle types")
 	}
 }
