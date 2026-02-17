@@ -1,7 +1,7 @@
 package keeper_test
 
 // ==================================================================================
-// OpenClaw Discovery Module Adversarial Probe Suite (OC-DS-1 through OC-DS-10)
+// OpenClaw Discovery Module Adversarial Probe Suite (OC-DISC-1 through OC-DISC-10)
 //
 // These probes systematically test the discovery module's attack surface:
 // - Stake boundary enforcement (insufficient stake registration)
