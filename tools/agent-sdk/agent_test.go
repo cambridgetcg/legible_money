@@ -240,3 +240,54 @@ func (m *mockTxClient) SubmitLIP(ctx context.Context, req SubmitLIPRequest) (str
 func (m *mockTxClient) CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error) {
 	return "mock-tx-hash", nil
 }
+func (m *mockTxClient) InitiateDispute(_ context.Context, _ InitiateDisputeRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CommitDisputeEvidence(_ context.Context, _, _ string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) RevealDisputeEvidence(_ context.Context, _ RevealDisputeEvidenceRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ArbiterVote(_ context.Context, _ ArbiterVoteRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) EscalateDispute(_ context.Context, _ string, _ uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitEvidence(_ context.Context, _ SubmitEvidenceRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) AuditEvidence(_ context.Context, _ AuditEvidenceRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) RegisterOracle(_ context.Context, _ RegisterOracleRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitOracleData(_ context.Context, _ SubmitOracleDataRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitResearch(_ context.Context, _ SubmitResearchRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ReviewResearch(_ context.Context, _ ReviewResearchRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CreateResearchBounty(_ context.Context, _ CreateResearchBountyRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ClaimResearchBounty(_ context.Context, _ string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) FundResearch(_ context.Context, _ uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ProposeOntologyDomain(_ context.Context, _ ProposeOntologyDomainRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) VoteDomainProposal(_ context.Context, _ string, _ bool) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) AcknowledgeIncompleteness(_ context.Context, _, _, _ string) (string, error) {
+	return "mock-tx-hash", nil
+}
