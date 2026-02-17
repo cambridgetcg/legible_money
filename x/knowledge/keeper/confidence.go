@@ -84,8 +84,8 @@ func (k Keeper) AggregateVerificationResult(
 		if stake == 0 {
 			stake = 1 // Prevent zero-weight for Tier 0 validators
 		}
-		// Split to avoid uint64 overflow for large stakes
-		weightedConf := (reveal.Confidence/1_000_000)*stake + (reveal.Confidence%1_000_000)*stake/1_000_000
+		// Use safeMulDiv to avoid uint64 overflow for large stakes
+		weightedConf := safeMulDiv(reveal.Confidence, stake, 1_000_000)
 
 		switch reveal.Verdict {
 		case "accept":
