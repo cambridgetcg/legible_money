@@ -282,7 +282,7 @@ func TestOC_DS5_HeartbeatReactivation(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-6: Ghost domain query — no panic on empty results.
+// OC-DISC-6: Ghost domain query — no panic on empty results.
 // Attack: Query agents by a domain that has no registered agents.
 // Verify empty result, no panic.
 // -----------------------------------------------------------------------
@@ -293,13 +293,13 @@ func TestOC_DS6_GhostDomainQuery(t *testing.T) {
 	profiles := k.GetProfilesByDomain(ctx, "nonexistent_domain_xyz")
 	// Note: Go idiom returns nil slice for empty result; nil slice has len=0 and is safe to iterate.
 	if len(profiles) != 0 {
-		t.Errorf("OC-DS-6 FAIL: expected 0 profiles, got %d", len(profiles))
+		t.Errorf("OC-DISC-6 FAIL: expected 0 profiles, got %d", len(profiles))
 	}
 
 	// Also test capability query on empty.
 	profiles = k.GetProfilesByCapability(ctx, "nonexistent_capability")
 	if len(profiles) != 0 {
-		t.Errorf("OC-DS-6 FAIL: expected 0 profiles by capability, got %d", len(profiles))
+		t.Errorf("OC-DISC-6 FAIL: expected 0 profiles by capability, got %d", len(profiles))
 	}
 }
 
