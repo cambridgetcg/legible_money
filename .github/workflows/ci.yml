@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  merge_group:
   workflow_dispatch:
     inputs:
       run_e2e:
@@ -108,6 +109,52 @@ jobs:
       - name: Stop devnet
         if: always()
         run: bash devnet/scripts/cosmos-devnet.sh stop || true
+
+  # === Test Monotonicity Check ===
+
+  test-monotonicity:
+    name: "Test Count Monotonicity"
+    if: github.event_name == 'pull_request'
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Count tests on PR branch
+        id: pr-tests
+        run: |
+          COUNT=$(go test ./x/... -count=1 -v 2>&1 | grep -c '^--- PASS' || echo "0")
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "PR branch test count: $COUNT"
+
+      - name: Count tests on main
+        id: main-tests
+        run: |
+          git stash || true
+          git checkout origin/main -- . 2>/dev/null || true
+          COUNT=$(go test ./x/... -count=1 -v 2>&1 | grep -c '^--- PASS' || echo "0")
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Main branch test count: $COUNT"
+          git checkout - -- . 2>/dev/null || true
+          git stash pop 2>/dev/null || true
+
+      - name: Check monotonicity
+        run: |
+          PR=${{ steps.pr-tests.outputs.count }}
+          MAIN=${{ steps.main-tests.outputs.count }}
+          echo "Tests: main=$MAIN → PR=$PR"
+          if [ "$PR" -lt "$MAIN" ]; then
+            echo "::error::Test count decreased: $MAIN → $PR. PRs must not remove tests without replacement."
+            exit 1
+          fi
+          echo "Test count maintained or increased."
 
   # === Agent Contribution Checks (conditional) ===
 

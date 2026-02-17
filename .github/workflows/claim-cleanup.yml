@@ -1,0 +1,101 @@
+name: Claim Cleanup
+
+on:
+  schedule:
+    # Run every hour to expire stale claims
+    - cron: '0 * * * *'
+  # Also run when a PR is merged (claim fulfilled)
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-claims:
+    name: "Expire Stale Claims"
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Expire claims
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'scripts/ci/work-claims.json';
+
+            let data;
+            try {
+              data = JSON.parse(fs.readFileSync(path, 'utf8'));
+            } catch (e) {
+              console.log('No claims file found');
+              return;
+            }
+
+            if (!data.claims || data.claims.length === 0) {
+              console.log('No claims to process');
+              return;
+            }
+
+            const now = new Date();
+            let changed = false;
+
+            for (const claim of data.claims) {
+              if (claim.status !== 'active') continue;
+
+              // Expire by TTL
+              const expires = new Date(claim.expires_at);
+              if (now > expires) {
+                console.log(`Expiring claim ${claim.id} by ${claim.agent} (expired ${claim.expires_at})`);
+                claim.status = 'expired';
+                changed = true;
+              }
+            }
+
+            // If this was triggered by a merged PR, mark matching claims as completed
+            if (context.eventName === 'pull_request') {
+              const author = context.payload.pull_request.user.login;
+              for (const claim of data.claims) {
+                if (claim.status === 'active' && claim.agent === author) {
+                  console.log(`Completing claim ${claim.id} by ${author} (PR merged)`);
+                  claim.status = 'completed';
+                  changed = true;
+                }
+              }
+            }
+
+            // Prune completed/expired claims older than 7 days
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+            const before = data.claims.length;
+            data.claims = data.claims.filter(c => {
+              if (c.status === 'active') return true;
+              return new Date(c.created_at) > weekAgo;
+            });
+            if (data.claims.length !== before) {
+              console.log(`Pruned ${before - data.claims.length} old claims`);
+              changed = true;
+            }
+
+            if (changed) {
+              fs.writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+              console.log('Claims file updated');
+            } else {
+              console.log('No changes needed');
+            }
+
+      - name: Commit changes
+        run: |
+          cd /Users/yournameisai/Desktop/legible-money 2>/dev/null || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scripts/ci/work-claims.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(ci): expire stale work claims"
+          git push

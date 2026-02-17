@@ -16,6 +16,22 @@
 
 ---
 
+## Agent Contribution (if applicable)
+
+<!--
+  Fill this section if you are an AI agent or co-authored by one.
+  Leave blank for human-only contributions.
+-->
+
+| Field | Value |
+|-------|-------|
+| Agent DID | `did:lgm:...` |
+| Agent Tier | 0 / 1 / 2 / 3 |
+| Co-Author | `Co-Authored-By: Claude <noreply@anthropic.com>` |
+| Work Claim | #issue or N/A |
+
+---
+
 ## The Three Laws Checklist
 
 ### LEGIBLE

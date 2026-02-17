@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.22'
+  BINARY: legbled
+
+jobs:
+  build:
+    name: "Build ${{ matrix.os }}/${{ matrix.arch }}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          - os: linux
+            arch: arm64
+          - os: darwin
+            arch: amd64
+          - os: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+
+          mkdir -p dist
+          go build -ldflags "$LDFLAGS" -o dist/${BINARY}-${VERSION}-${{ matrix.os }}-${{ matrix.arch }} ./cmd/legbled
+          cd dist && sha256sum ${BINARY}-${VERSION}-${{ matrix.os }}-${{ matrix.arch }} > ${BINARY}-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.BINARY }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/
+
+  test:
+    name: "Pre-release Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: true
+      - run: go test ./x/... -count=1
+      - run: go test ./app/... -count=1
+      - run: go vet ./...
+
+  release:
+    name: "Create Release"
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find the previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "$(git describe --tags --exact-match 2>/dev/null || echo '')" | head -1)
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog from $PREV_TAG to ${GITHUB_REF_NAME}..."
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" | head -50)
+          else
+            echo "First release, generating full changelog..."
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" | head -50)
+          fi
+
+          # Write to file for the release body
+          cat > changelog.md << 'HEADER'
+          ## What's Changed
+          HEADER
+          echo "$CHANGELOG" >> changelog.md
+          echo "" >> changelog.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG:-initial}...${GITHUB_REF_NAME}" >> changelog.md
+
+      - name: Determine pre-release
+        id: prerelease
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if echo "$TAG" | grep -qE '(rc|nightly|alpha|beta)'; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: changelog.md
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: true

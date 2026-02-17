@@ -8,7 +8,7 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m
 
-.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c test-claw test-claw-oc test-claw-nc test-claw-zc test-claw-catalog
+.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c test-claw test-claw-oc test-claw-nc test-claw-zc test-claw-catalog release changelog classify-pr sync-teams
 
 # Default target
 all: build test
@@ -100,6 +100,45 @@ test-claw-catalog: ## Run Claw catalog validation
 
 pr-check: build-all test vet ## Run full PR validation
 	@echo "$(GREEN)All PR checks passed!$(NC)"
+
+classify-pr: ## Classify PR risk tier (R0-R3)
+	@bash scripts/ci/classify-pr.sh
+
+# === Release ===
+
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
+
+release: ## Build release binaries for all platforms
+	@echo "$(GREEN)Building release $(VERSION)...$(NC)"
+	@mkdir -p $(BUILD_DIR)/release
+	@GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/release/$(BINARY)-$(VERSION)-linux-amd64 ./cmd/legbled
+	@GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/release/$(BINARY)-$(VERSION)-linux-arm64 ./cmd/legbled
+	@GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/release/$(BINARY)-$(VERSION)-darwin-amd64 ./cmd/legbled
+	@GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/release/$(BINARY)-$(VERSION)-darwin-arm64 ./cmd/legbled
+	@cd $(BUILD_DIR)/release && for f in $(BINARY)-*; do shasum -a 256 "$$f" > "$$f.sha256"; done
+	@echo "$(GREEN)Release binaries in $(BUILD_DIR)/release/$(NC)"
+
+changelog: ## Generate changelog from git history
+	@echo "## Changelog"
+	@echo ""
+	@PREV_TAG=$$(git tag --sort=-version:refname | head -1); \
+	if [ -n "$$PREV_TAG" ]; then \
+		echo "Changes since $$PREV_TAG:"; \
+		echo ""; \
+		git log --pretty=format:"- %s (%h)" "$$PREV_TAG..HEAD"; \
+	else \
+		echo "All changes:"; \
+		echo ""; \
+		git log --pretty=format:"- %s (%h)" | head -50; \
+	fi
+
+# === Governance ===
+
+sync-teams: ## Sync known-agents.json to GitHub teams
+	@bash scripts/governance/sync-teams.sh
 
 # === Cleanup ===
 
