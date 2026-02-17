@@ -181,7 +181,7 @@ func TestOC_DS3_DuplicateCapability(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-4: Deregistration state cleanup and stake refund.
+// OC-DISC-4: Deregistration state cleanup and stake refund.
 // Attack: Register agent, verify all indexes populated. Deregister.
 // Verify profile deleted, domain/capability indexes cleaned, stake refunded.
 // -----------------------------------------------------------------------
@@ -221,14 +221,14 @@ func TestOC_DS4_DeregisterStakeRefund(t *testing.T) {
 	// Verify profile deleted.
 	_, found := k.GetProfile(ctx, testAgent1)
 	if found {
-		t.Error("OC-DS-4 FAIL: profile still exists after deregistration")
+		t.Error("OC-DISC-4 FAIL: profile still exists after deregistration")
 	}
 
 	// Verify domain index cleaned (profile should not appear in domain queries).
 	byDomain = k.GetProfilesByDomain(ctx, "mathematics")
 	for _, p := range byDomain {
 		if p.Address == testAgent1 {
-			t.Error("OC-DS-4 FAIL: deregistered agent still appears in domain index; " +
+			t.Error("OC-DISC-4 FAIL: deregistered agent still appears in domain index; " +
 				"ghost entries corrupt discovery queries")
 		}
 	}
