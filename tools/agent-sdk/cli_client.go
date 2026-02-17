@@ -226,6 +226,21 @@ func (c *CLIClient) ClaimsBySubmitter(ctx context.Context, address string) ([]Cl
 	return nil, fmt.Errorf("ClaimsBySubmitter: query not implemented in knowledge CLI")
 }
 
+func (c *CLIClient) GetClaim(ctx context.Context, claimID string) (*ClaimInfo, error) {
+	// Not yet implemented in knowledge CLI — will be wired via gRPC.
+	return nil, fmt.Errorf("GetClaim: query not implemented in knowledge CLI")
+}
+
+func (c *CLIClient) FactReferences(ctx context.Context, factID string) ([]FactReference, error) {
+	// Not yet implemented in knowledge CLI — will be wired via gRPC.
+	return nil, fmt.Errorf("FactReferences: query not implemented in knowledge CLI")
+}
+
+func (c *CLIClient) CounterFacts(ctx context.Context, factID string) ([]CounterFactInfo, error) {
+	// Not yet implemented in knowledge CLI — will be wired via gRPC.
+	return nil, fmt.Errorf("CounterFacts: query not implemented in knowledge CLI")
+}
+
 // --- TxClient Implementation ---
 
 func (c *CLIClient) RegisterAccount(ctx context.Context, pubKeyHex string) (string, error) {
