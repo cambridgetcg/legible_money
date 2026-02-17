@@ -3,6 +3,7 @@ module github.com/legible-money/legible
 go 1.23
 
 require (
+	github.com/legible-money/legible/tools/agent-sdk v0.0.0
 	cosmossdk.io/core v0.11.1
 	cosmossdk.io/errors v1.0.1
 	cosmossdk.io/log v1.4.1
@@ -196,3 +197,5 @@ require (
 	pgregory.net/rapid v1.1.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace github.com/legible-money/legible/tools/agent-sdk => ./tools/agent-sdk

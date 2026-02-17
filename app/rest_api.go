@@ -49,6 +49,8 @@ func registerCustomRESTRoutes(app *LegibleApp, router *mux.Router) {
 	registerScheduleRoutes(app, router)
 	registerIBCRateLimitRoutes(app, router)
 	registerICAAuthRoutes(app, router)
+	registerAutopoiesisRoutes(app, router)
+	registerAlignmentRoutes(app, router)
 }
 
 // --- Helpers ---
@@ -1807,5 +1809,229 @@ func registerICAAuthRoutes(app *LegibleApp, router *mux.Router) {
 			return
 		}
 		writeJSON(w, map[string]interface{}{"accounts": app.ICAAuthKeeper.GetRemoteAccountsForDID(ctx, mux.Vars(r)["did"])})
+	}).Methods("GET")
+}
+
+func parseUint64(r *http.Request, key string, def uint64) uint64 {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseUint(v, 10, 64)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+// --- x/autopoiesis routes (10 endpoints) ---
+
+func registerAutopoiesisRoutes(app *LegibleApp, router *mux.Router) {
+	router.HandleFunc("/legible/autopoiesis/v1/params", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"params": app.AutopoiesisKeeper.GetParams(ctx)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/state", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{
+			"state":  app.AutopoiesisKeeper.GetState(ctx),
+			"active": app.AutopoiesisKeeper.IsActive(ctx),
+		})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/hormones/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"hormones": app.AutopoiesisKeeper.GetHormoneValues(ctx, epoch)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/observation/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"observation": app.AutopoiesisKeeper.GetObservation(ctx, epoch)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/multipliers", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"multipliers": app.AutopoiesisKeeper.GetAllMultiplierEntries(ctx)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/multiplier/{path}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		entry := app.AutopoiesisKeeper.GetMultiplierEntry(ctx, mux.Vars(r)["path"])
+		writeJSON(w, map[string]interface{}{"multiplier": entry})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/adaptations/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{
+			"adaptations": app.AutopoiesisKeeper.GetAdaptations(ctx, epoch),
+			"count":       app.AutopoiesisKeeper.GetAdaptationCount(ctx, epoch),
+			"conflicts":   app.AutopoiesisKeeper.GetConflictCount(ctx, epoch),
+		})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/learning/state", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"meta_learning": app.AutopoiesisKeeper.GetMetaLearningState(ctx)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/learning/record/{path}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"record": app.AutopoiesisKeeper.GetLearningRecord(ctx, mux.Vars(r)["path"])})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/autopoiesis/v1/proposals/state", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"proposal_state": app.AutopoiesisKeeper.GetAutoProposalState(ctx)})
+	}).Methods("GET")
+}
+
+// --- x/alignment routes (7 endpoints) ---
+
+func registerAlignmentRoutes(app *LegibleApp, router *mux.Router) {
+	router.HandleFunc("/legible/alignment/v1/params", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"params": app.AlignmentKeeper.GetParams(ctx)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/alignment/v1/state", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		writeJSON(w, map[string]interface{}{
+			"state":  app.AlignmentKeeper.GetState(ctx),
+			"active": app.AlignmentKeeper.IsActive(ctx),
+		})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/alignment/v1/observation/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"observation": app.AlignmentKeeper.GetObservation(ctx, epoch)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/alignment/v1/scores/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"scores": app.AlignmentKeeper.GetScores(ctx, epoch)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/alignment/v1/corrections/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"corrections": app.AlignmentKeeper.GetCorrections(ctx, epoch)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/alignment/v1/outcomes/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"outcomes": app.AlignmentKeeper.GetCorrectionOutcomes(ctx, epoch)})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/alignment/v1/health/{epoch}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		epoch, parseErr := strconv.ParseUint(mux.Vars(r)["epoch"], 10, 64)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid epoch")
+			return
+		}
+		writeJSON(w, map[string]interface{}{"health": app.AlignmentKeeper.GetMetaHealth(ctx, epoch)})
 	}).Methods("GET")
 }
