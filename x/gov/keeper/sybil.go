@@ -226,8 +226,8 @@ func (k Keeper) ComputeSybilDecayBPS(ctx sdk.Context, voter string, proposalId s
 
 	// Find maximum shared source count between new voter and any existing voter
 	var maxShared uint64
-	for _, vote := range existingVotes {
-		otherSources := k.GetFundingSources(ctx, vote.Voter, currentBlock, params.CorrelationWindow)
+	for i := range existingVotes {
+		otherSources := k.GetFundingSources(ctx, existingVotes[i].Voter, currentBlock, params.CorrelationWindow)
 		var shared uint64
 		for _, src := range otherSources {
 			if _, ok := voterSourceSet[src.Sender]; ok {
