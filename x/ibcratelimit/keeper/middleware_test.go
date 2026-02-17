@@ -370,8 +370,8 @@ func TestMiddleware_OnAckPacket_SuccessTracksOutflow(t *testing.T) {
 		clienttypes.NewHeight(0, 1000), 0,
 	)
 
-	// Successful ack
-	ackBytes, _ := json.Marshal(channeltypes.NewResultAcknowledgement([]byte("ok")))
+	// Successful ack — use the canonical IBC JSON format
+	ackBytes := channeltypes.NewResultAcknowledgement([]byte("ok")).Acknowledgement()
 
 	err := mw.OnAcknowledgementPacket(ctx, packet, ackBytes, nil)
 	if err != nil {
