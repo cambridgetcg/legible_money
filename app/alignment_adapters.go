@@ -2,12 +2,20 @@ package app
 
 import (
 	"context"
+	"math/big"
+	"sort"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	alignmenttypes "github.com/legible-money/legible/x/alignment/types"
 	autopoiesiskeeper "github.com/legible-money/legible/x/autopoiesis/keeper"
 	autopoiesistypes "github.com/legible-money/legible/x/autopoiesis/types"
+	emergencykeeper "github.com/legible-money/legible/x/emergency/keeper"
+	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
+	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
+	ontologykeeper "github.com/legible-money/legible/x/ontology/keeper"
+	legiblestakingkeeper "github.com/legible-money/legible/x/staking/keeper"
+	vestingrewardskeeper "github.com/legible-money/legible/x/vesting_rewards/keeper"
 )
 
 // AlignmentAutopoiesisAdapter bridges the alignment module's AutopoiesisKeeper
