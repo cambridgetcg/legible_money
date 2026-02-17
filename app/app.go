@@ -512,6 +512,7 @@ func NewLegibleApp(
 		icaauthtypes.StoreKey,
 		ibcratelimittypes.StoreKey,
 		alignmenttypes.StoreKey,
+		computepooltypes.StoreKey,
 	)
 	tkeys := storetypes.NewTransientStoreKeys()
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
