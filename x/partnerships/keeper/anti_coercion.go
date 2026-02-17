@@ -149,22 +149,45 @@ func (k Keeper) HandleCoercionSignal(ctx sdk.Context, partnershipId string, rais
 }
 
 // LiftExpiredFreezes clears freezes that have expired and restores partnership status.
+//
+// Fix: Instead of deleting the freeze record (which loses FreezeCountThisEpoch),
+// we zero out ExpiresAt to mark it as lifted while preserving the epoch counter.
+// Also checks for active coercion signals before restoring partnership to active.
 func (k Keeper) LiftExpiredFreezes(ctx sdk.Context) {
 	currentBlock := uint64(ctx.BlockHeight())
 	freezes := k.GetAllSafetyFreezes(ctx)
 
 	for _, sf := range freezes {
-		if sf.ExpiresAt <= currentBlock {
-			// Restore partnership to active if it was only suspended by freeze
+		// Only process active (non-lifted) freezes that have expired.
+		if sf.ExpiresAt > 0 && sf.ExpiresAt <= currentBlock {
+			// Restore partnership to active ONLY if no other active suspension cause.
 			if partnership, found := k.GetPartnership(ctx, sf.PartnershipId); found {
 				if partnership.Status == types.StatusSuspended {
-					partnership.Status = types.StatusActive
-					k.SetPartnership(ctx, partnership)
+					// Check for active coercion signals before restoring.
+					if !k.hasActiveCoercionSignal(ctx, sf.PartnershipId, currentBlock) {
+						partnership.Status = types.StatusActive
+						k.SetPartnership(ctx, partnership)
+					}
 				}
 			}
-			k.DeleteSafetyFreeze(ctx, sf.PartnershipId)
+			// Preserve the record (keeps FreezeCountThisEpoch) but mark as lifted.
+			sf.ExpiresAt = 0
+			sf.FrozenAt = 0
+			k.SetSafetyFreeze(ctx, sf)
 		}
 	}
+}
+
+// hasActiveCoercionSignal returns true if any unresolved, non-expired coercion
+// signal exists for the given partnership.
+func (k Keeper) hasActiveCoercionSignal(ctx sdk.Context, partnershipId string, currentBlock uint64) bool {
+	signals := k.GetAllCoercionSignals(ctx)
+	for _, s := range signals {
+		if s.PartnershipId == partnershipId && !s.Resolved && s.ExpiresAt > currentBlock {
+			return true
+		}
+	}
+	return false
 }
 
 // ExpireCoercionSignals marks expired coercion signals as resolved.
