@@ -70,7 +70,7 @@ func TestOC_DS1_InsufficientStakeRegistration(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-2: Capability spam — saturate MaxCapabilitiesPerAgent.
+// OC-DISC-2: Capability spam — saturate MaxCapabilitiesPerAgent.
 // Attack: Add 50 capabilities (the max). Try to add 51st.
 // Must be rejected to prevent state bloat.
 // -----------------------------------------------------------------------
@@ -134,7 +134,7 @@ func TestOC_DS2_CapabilitySpam(t *testing.T) {
 	// Verify count didn't increase.
 	profile, _ = k.GetProfile(ctx, testAgent1)
 	if len(profile.Capabilities) > 3 {
-		t.Errorf("OC-DS-2 FAIL: capability count grew beyond max: %d", len(profile.Capabilities))
+		t.Errorf("OC-DISC-2 FAIL: capability count grew beyond max: %d", len(profile.Capabilities))
 	}
 }
 
