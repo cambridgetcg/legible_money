@@ -12,6 +12,10 @@ package keeper_test
 import (
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
 	"github.com/legible-money/legible/x/compute_pool/keeper"
 	"github.com/legible-money/legible/x/compute_pool/types"
 )
@@ -26,18 +30,19 @@ import (
 // ==================================================================================
 
 func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
-	k, ctx, bk := setupKeeper(t)
-	addr := testAddr(1)
-	bk.setBalance(addr, "ulgm", 500000000)
+	k, ctx, bk, _ := setupKeeper(t)
+	addr := providerAddr1.String()
+	bk.setBalance(addr, "ulgm", sdkmath.NewInt(500000000))
 
 	srv := keeper.NewMsgServerImpl(k)
 
 	// First registration
 	_, err := srv.RegisterComputeProvider(ctx, &types.MsgRegisterComputeProvider{
 		Sender:      addr,
-		ServiceType: "inference",
+		ServiceType: "ai_inference",
+		Endpoint:    "https://api.example.com",
 		PricePerCU:  "1000",
-		Stake:       "100000000",
+		StakeAmount: "100000000",
 	})
 	if err != nil {
 		t.Fatalf("first registration: %v", err)
@@ -46,9 +51,10 @@ func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
 	// ATTACK: Second registration (duplicate)
 	_, err = srv.RegisterComputeProvider(ctx, &types.MsgRegisterComputeProvider{
 		Sender:      addr,
-		ServiceType: "training",
+		ServiceType: "gpu_compute",
+		Endpoint:    "https://api2.example.com",
 		PricePerCU:  "2000",
-		Stake:       "100000000",
+		StakeAmount: "100000000",
 	})
 	if err == nil {
 		t.Fatal("OC-COMP-1 FAIL: duplicate provider registration allowed!")
@@ -67,12 +73,12 @@ func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
 // ==================================================================================
 
 func TestOC_COMP2_UnregisteredHeartbeat(t *testing.T) {
-	k, ctx, _ := setupKeeper(t)
+	k, ctx, _, _ := setupKeeper(t)
 
 	srv := keeper.NewMsgServerImpl(k)
 
 	// ATTACK: Unregistered address sends heartbeat
-	ghostAddr := testAddr(99)
+	ghostAddr := sdk.AccAddress([]byte("ghost_provider______")).String()
 	_, err := srv.ProviderHeartbeat(ctx, &types.MsgProviderHeartbeat{
 		Sender: ghostAddr,
 	})
@@ -92,13 +98,14 @@ func TestOC_COMP2_UnregisteredHeartbeat(t *testing.T) {
 // ==================================================================================
 
 func TestOC_COMP3_UpdateParamsAuthBypass(t *testing.T) {
-	k, ctx, _ := setupKeeper(t)
+	k, ctx, _, _ := setupKeeper(t)
 
 	srv := keeper.NewMsgServerImpl(k)
 
 	// ATTACK: Random user tries to update params
+	attackerAddr := sdk.AccAddress([]byte("attacker____________")).String()
 	_, err := srv.UpdateComputeParams(ctx, &types.MsgUpdateComputeParams{
-		Authority: testAddr(99),
+		Authority: attackerAddr,
 		Params:    types.DefaultParams(),
 	})
 	if err == nil {
