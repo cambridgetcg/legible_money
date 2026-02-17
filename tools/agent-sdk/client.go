@@ -100,6 +100,12 @@ type TxClient interface {
 
 	// SetSpendingLimit sets a spending limit on an Agent Home key type (x/home).
 	SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error)
+
+	// SubmitLIP submits a governance proposal linking a fix to bug facts (x/gov).
+	SubmitLIP(ctx context.Context, req SubmitLIPRequest) (string, error)
+
+	// CreateVesting creates a vesting reward entry for bounty payouts (x/vesting_rewards).
+	CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error)
 }
 
 // --- Response Types ---
