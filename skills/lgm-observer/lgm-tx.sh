@@ -641,6 +641,22 @@ for r in data.get('rounds', []):
     echo "{\"status\":\"verified\",\"active_rounds\":$round_count}"
 }
 
+cmd_challenge() {
+    local fact_id="$1"
+    local reason="$2"
+    local stake="$3"
+
+    if [ -z "$fact_id" ] || [ -z "$reason" ] || [ -z "$stake" ]; then
+        echo '{"error":"Usage: lgm-tx.sh challenge <fact-id> <reason> <stake-ulgm>"}' >&2
+        exit 1
+    fi
+
+    echo "Challenging fact $fact_id (stake: $stake ulgm)..." >&2
+    "$LEGBLED" tx knowledge challenge-fact \
+        "$fact_id" "$reason" "$stake" \
+        "${TX_FLAGS[@]}" 2>&1
+}
+
 cmd_status() {
     local state
     state=$(load_state)
