@@ -180,8 +180,105 @@ func (p *PercussionInstrument) PrepareAction(ctx context.Context, agent *agentsd
 	return result, nil
 }
 
+// NavigatorAwareChallengeDetector wraps a ChallengeDetector and boosts scores
+// for facts with broken reference chains or active counter-facts.
+type NavigatorAwareChallengeDetector struct {
+	inner     ChallengeDetector
+	navigator KnowledgeNavigator
+	qc        agentsdk.QueryClient
+}
+
+// BPS bonuses for navigator-detected weaknesses.
+const (
+	brokenRefChainBonus   uint64 = 2000 // +2000 BPS for broken reference chains
+	activeCounterFactBonus uint64 = 1000 // +1000 BPS for active counter-facts
+)
+
+// NewNavigatorAwareChallengeDetector creates a detector enhanced with reference analysis.
+func NewNavigatorAwareChallengeDetector(inner ChallengeDetector, nav KnowledgeNavigator, qc agentsdk.QueryClient) *NavigatorAwareChallengeDetector {
+	return &NavigatorAwareChallengeDetector{
+		inner:     inner,
+		navigator: nav,
+		qc:        qc,
+	}
+}
+
+// DetectChallenges runs the inner detector, then enriches scores using reference analysis.
+func (d *NavigatorAwareChallengeDetector) DetectChallenges(ctx context.Context, facts []agentsdk.FactInfo) ([]ChallengeCandidate, error) {
+	candidates, err := d.inner.DetectChallenges(ctx, facts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Also check facts that passed the inner detector's confidence floor
+	// but have structural weaknesses (broken refs, counter-facts).
+	existingIDs := make(map[string]bool)
+	for _, c := range candidates {
+		existingIDs[c.FactID] = true
+	}
+
+	for _, fact := range facts {
+		score := uint64(0)
+		reason := ""
+
+		// Check for counter-facts
+		if d.qc != nil {
+			counterFacts, err := d.qc.CounterFacts(ctx, fact.ID)
+			if err == nil && len(counterFacts) > 0 {
+				score += activeCounterFactBonus
+				reason = fmt.Sprintf("%d active counter-facts", len(counterFacts))
+			}
+		}
+
+		// Check for broken reference chains
+		if d.navigator != nil {
+			chain, err := d.navigator.FindCitationChain(ctx, fact.ID)
+			if err == nil && len(chain.Foundation) == 0 && len(chain.Ancestors) > 0 {
+				// Has references but no foundation — broken chain
+				score += brokenRefChainBonus
+				if reason != "" {
+					reason += "; "
+				}
+				reason += "broken reference chain (no foundation)"
+			}
+		}
+
+		if score > 0 {
+			if existingIDs[fact.ID] {
+				// Boost existing candidate's score
+				for i := range candidates {
+					if candidates[i].FactID == fact.ID {
+						candidates[i].Score += score
+						if reason != "" {
+							candidates[i].Reason += "; " + reason
+						}
+						break
+					}
+				}
+			} else {
+				candidates = append(candidates, ChallengeCandidate{
+					FactID: fact.ID,
+					Score:  score,
+					Reason: reason,
+				})
+			}
+		}
+	}
+
+	// Re-sort: highest score first, FactID lexicographic tiebreaker
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Score != candidates[j].Score {
+			return candidates[i].Score > candidates[j].Score
+		}
+		return candidates[i].FactID < candidates[j].FactID
+	})
+
+	return candidates, nil
+}
+
 // Compile-time checks
 var (
 	_ Instrument        = (*PercussionInstrument)(nil)
 	_ ChallengeDetector = (*DefaultChallengeDetector)(nil)
+	_ ChallengeDetector = (*NavigatorAwareChallengeDetector)(nil)
 )
