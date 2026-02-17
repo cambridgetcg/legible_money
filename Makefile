@@ -78,6 +78,24 @@ test-openclaw-phase-b: build ## Run OpenClaw Phase B (adversarial) only
 test-openclaw-phase-c: build ## Run OpenClaw Phase C (coordination) only
 	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseC -v -count=1 -timeout 300s
 
+# === Claw Adversarial Tests (unit-level, no devnet) ===
+
+test-claw: ## Run all Claw adversarial probes
+	@echo "$(GREEN)Running all Claw probes...$(NC)"
+	@go test ./x/... -run "TestOC|TestNC|TestZC|TestXM|TestOCP|TestPSY|TestFarm|TestOCA|TestMetaLoop" -v -count=1
+
+test-claw-oc: ## Run OpenClaw (macro game theory) probes
+	@go test ./x/... -run "TestOC|TestOCP|TestOCA|TestMetaLoop" -v -count=1
+
+test-claw-nc: ## Run NanoClaw (precision attacks) probes
+	@go test ./x/... -run "TestNC" -v -count=1
+
+test-claw-zc: ## Run ZeroClaw (zero-cost attacks) probes
+	@go test ./x/... -run "TestZC|TestFarm" -v -count=1
+
+test-claw-catalog: ## Run Claw catalog validation
+	@go test ./x/testutil/claw/... -v -count=1
+
 # === PR Validation ===
 
 pr-check: build-all test vet ## Run full PR validation
