@@ -151,6 +151,45 @@ func (k Keeper) checkDomainStressTrigger(ctx sdk.Context, epoch uint64, hormones
 	return nil
 }
 
+// checkOpenClawCriticalTrigger checks if 3+ verified protocol_observation facts
+// have accumulated since the last time this trigger fired. Unlike the epoch-based
+// triggers, this is count-based: it queries the knowledge module for facts verified
+// after the last acknowledged block height.
+func (k Keeper) checkOpenClawCriticalTrigger(ctx sdk.Context) *types.ProposalTrigger {
+	if k.knowledgeKeeper == nil {
+		return nil
+	}
+
+	// Load trigger state to find the block since which to count new facts.
+	state := k.GetTriggerState(ctx, types.TriggerOpenClawCritical, "", "")
+	var sinceBlock uint64
+	if state != nil {
+		sinceBlock = state.AcknowledgedAtBlock
+	}
+
+	count := k.knowledgeKeeper.GetVerifiedProtocolObservationCount(ctx, sinceBlock)
+	if count < types.OpenClawCriticalThreshold {
+		return nil
+	}
+
+	// Threshold met — update acknowledged block so the same facts don't re-trigger.
+	blockHeight := uint64(ctx.BlockHeight())
+	if state == nil {
+		state = &types.ProposalTriggerState{
+			Type: types.TriggerOpenClawCritical,
+		}
+	}
+	state.AcknowledgedAtBlock = blockHeight
+	state.LastCheckedEpoch = blockHeight / k.GetParams(ctx).EpochLengthBlocks
+	k.SetTriggerState(ctx, *state)
+
+	return &types.ProposalTrigger{
+		Type:         types.TriggerOpenClawCritical,
+		Threshold:    types.OpenClawCriticalThreshold,
+		CurrentValue: count,
+	}
+}
+
 // emitProposalSuggestion drafts a proposal and emits an event.
 func (k Keeper) emitProposalSuggestion(ctx sdk.Context, epoch uint64, trigger *types.ProposalTrigger, state *types.AutoProposalState) {
 	proposal := k.draftAutoProposal(epoch, trigger)
