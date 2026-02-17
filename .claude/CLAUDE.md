@@ -175,3 +175,6 @@ When context is limited, prioritize reading:
 - Architecture: `docs/BLOCKCHAIN_ARCHITECTURE.md`
 - Cosmos Migration: `docs/COSMOS_MIGRATION.md`
 - Agent accounts: `docs/AGENT_ACCOUNTS.md`
+- Eureka moments: `.claude/memory/EUREKA.md` (23 deep insights)
+- Memory index: `.claude/memory/INDEX.md` (all 76 files cataloged)
+- Insight tree: `.claude/memory/INSIGHT_TREE.md` (hierarchical synthesis)
