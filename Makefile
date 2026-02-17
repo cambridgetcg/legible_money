@@ -8,7 +8,7 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m
 
-.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c
+.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c test-claw test-claw-oc test-claw-nc test-claw-zc test-claw-catalog
 
 # Default target
 all: build test
