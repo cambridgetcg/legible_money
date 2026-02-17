@@ -304,7 +304,7 @@ func TestOC_DS6_GhostDomainQuery(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-7: Profile update preservation (no clobber).
+// OC-DISC-7: Profile update preservation (no clobber).
 // Attack: Register with capabilities and domains. Update only
 // DisplayName. Verify capabilities and domains unchanged.
 // -----------------------------------------------------------------------
@@ -341,13 +341,13 @@ func TestOC_DS7_ProfileUpdatePreservation(t *testing.T) {
 
 	// Verify domains NOT clobbered.
 	if len(profile.Domains) != 2 {
-		t.Errorf("OC-DS-7 FAIL: domains clobbered by display name update; expected 2, got %d",
+		t.Errorf("OC-DISC-7 FAIL: domains clobbered by display name update; expected 2, got %d",
 			len(profile.Domains))
 	}
 
 	// Verify capabilities NOT clobbered.
 	if len(profile.Capabilities) != 2 {
-		t.Errorf("OC-DS-7 FAIL: capabilities clobbered by display name update; expected 2, got %d",
+		t.Errorf("OC-DISC-7 FAIL: capabilities clobbered by display name update; expected 2, got %d",
 			len(profile.Capabilities))
 	}
 }
