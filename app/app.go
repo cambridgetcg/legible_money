@@ -915,6 +915,16 @@ func NewLegibleApp(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	// Wire compute pool keeper (depends on bank, staking, knowledge)
+	app.ComputePoolKeeper = computepoolkeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[computepooltypes.StoreKey]),
+		app.BankKeeper,
+		NewComputePoolStakingAdapter(app.LegibleStakingKeeper),
+		NewComputePoolKnowledgeAdapter(app.KnowledgeKeeper),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	// Wire ontology keeper into knowledge for dynamic stratum ceilings
 	app.KnowledgeKeeper.SetOntologyKeeper(app.OntologyKeeper)
 
