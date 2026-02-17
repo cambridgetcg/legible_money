@@ -187,17 +187,13 @@ func TestUncoveredModules(t *testing.T) {
 		t.Error("expected some uncovered modules")
 	}
 
-	// Spot-check: staking should be uncovered (only in XM cross-module, not standalone)
-	found := false
-	for _, m := range uncovered {
-		if m == "staking" {
-			found = true
-			break
+	// Spot-check: staking, gov, emergency should now be COVERED
+	for _, covered := range []string{"staking", "gov", "emergency"} {
+		for _, m := range uncovered {
+			if m == covered {
+				t.Errorf("%s should be covered (has probes), but appears in uncovered list", covered)
+			}
 		}
-	}
-	if !found {
-		// staking has no standalone probes, only XM entries which use "staking+knowledge"
-		t.Log("Note: staking not in uncovered list (may have cross-module entries)")
 	}
 
 	t.Logf("Uncovered modules: %v", uncovered)
