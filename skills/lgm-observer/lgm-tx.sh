@@ -995,19 +995,30 @@ case "${1:-help}" in
     observe)         shift; cmd_observe "$@" ;;
     verify)          shift; cmd_verify "$@" ;;
     watch)           shift; cmd_watch "$@" ;;
+    loop)            shift; cmd_loop "$@" ;;
+    reflect)         shift; cmd_reflect "$@" ;;
+    status)          shift; cmd_status "$@" ;;
+    challenge)       shift; cmd_challenge "$@" ;;
     help|--help|-h)
         echo "Usage: lgm-tx.sh <command> [args...]"
         echo ""
-        echo "Commands:"
+        echo "Transaction Commands:"
         echo "  submit-claim <text> <domain> <category> <stake-ulgm> [flags]"
         echo "  commit <round-id> <verdict> <confidence-bps> <salt>"
         echo "  reveal <round-id> <verdict> <confidence-bps> <salt> [flags]"
         echo "  hash-commitment <round-id> <verdict> <confidence-bps> <salt>"
-        echo "  observe  — read vitals and submit a protocol_observation claim"
-        echo "  verify   — poll active rounds and auto-commit/reveal"
-        echo "  watch [interval] — continuous verification daemon (default: 3s)"
+        echo "  challenge <fact-id> <reason> <stake-ulgm>"
+        echo ""
+        echo "Automation Commands:"
+        echo "  observe     — read vitals and submit a protocol_observation claim"
+        echo "  verify      — poll active rounds and auto-commit/reveal"
+        echo "  watch [N]   — continuous verification daemon (default: 3s)"
+        echo "  loop [N]    — full autonomous daemon: observe+verify+reflect (default: 30s)"
+        echo "  reflect     — check outcomes of past observations, update state"
+        echo "  status      — show agent accuracy, balance, trends, pending claims"
         echo ""
         echo "Environment: LGM_NODE_URL, LGM_HOME, LGM_FROM, LGM_CHAIN_ID"
+        echo "State file:  \$LGM_HOME/agent-state/\$LGM_FROM/state.json"
         ;;
     *)
         echo "Unknown command: $1" >&2
