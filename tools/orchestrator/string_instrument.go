@@ -62,6 +62,16 @@ func NewStringInstrument(strategy VerificationStrategy, domains []string, resolv
 	}
 }
 
+// SetNavigator sets the optional knowledge navigator for tree-aware evaluation.
+func (s *StringInstrument) SetNavigator(nav KnowledgeNavigator) {
+	s.navigator = nav
+}
+
+// SetContextProvider sets the optional knowledge context provider.
+func (s *StringInstrument) SetContextProvider(cp KnowledgeContextProvider) {
+	s.ctxProvider = cp
+}
+
 // Name returns the instrument name.
 func (s *StringInstrument) Name() string { return "string" }
 
