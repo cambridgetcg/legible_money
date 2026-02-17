@@ -216,7 +216,7 @@ jobs:
           cat ci-metrics.json
 
       - name: Upload metrics artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ci-metrics-${{ github.run_id }}
           path: ci-metrics.json
