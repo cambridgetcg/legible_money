@@ -15,6 +15,7 @@ import (
 	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 	ontologykeeper "github.com/legible-money/legible/x/ontology/keeper"
 	legiblestakingkeeper "github.com/legible-money/legible/x/staking/keeper"
+	legiblestakingtypes "github.com/legible-money/legible/x/staking/types"
 	vestingrewardskeeper "github.com/legible-money/legible/x/vesting_rewards/keeper"
 )
 
