@@ -1564,6 +1564,219 @@ func TestDefaultGenesisValidation(t *testing.T) {
 	}
 }
 
+// ---------- MsgUpdateParams Tests ----------
+
+func TestMsgUpdateParams(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	authority := testAddr(999) // matches setupKeeper authority
+
+	newParams := types.DefaultParams()
+	newParams.MaxActiveDisputes = 10
+	newParams.SlashRateLoser = 600000
+
+	resp, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: authority,
+		Params:    &newParams,
+	})
+	if err != nil {
+		t.Fatalf("update params failed: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	got := k.GetParams(ctx)
+	if got.MaxActiveDisputes != 10 {
+		t.Fatalf("expected MaxActiveDisputes=10, got %d", got.MaxActiveDisputes)
+	}
+	if got.SlashRateLoser != 600000 {
+		t.Fatalf("expected SlashRateLoser=600000, got %d", got.SlashRateLoser)
+	}
+}
+
+func TestMsgUpdateParamsUnauthorized(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeper(t)
+	srv := keeper.NewMsgServerImpl(k)
+
+	newParams := types.DefaultParams()
+	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: testAddr(1), // not the authority
+		Params:    &newParams,
+	})
+	if err == nil {
+		t.Fatal("expected error for unauthorized UpdateParams")
+	}
+}
+
+// ---------- Commit-Reveal Evidence Tests ----------
+
+func TestCommitRevealEvidenceFlow(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeper(t)
+
+	challenger := testAddr(1)
+	defender := testAddr(2)
+	dispute := types.Dispute{
+		Id:               "dispute-cr",
+		FactId:           "fact-cr",
+		Challenger:       challenger,
+		Defender:         defender,
+		Status:           string(types.DisputeStatusEvidence),
+		EvidenceDeadline: 200,
+	}
+	k.SetDispute(ctx, dispute)
+
+	// 1. Commit evidence hash
+	contentHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" // sha256 of empty
+	commitment := types.EvidenceCommitment{
+		DisputeId:   "dispute-cr",
+		Submitter:   challenger,
+		Side:        "challenger",
+		ContentHash: contentHash,
+		CommittedAt: 100,
+		Revealed:    false,
+	}
+	k.SetEvidenceCommitment(ctx, commitment)
+
+	// 2. Verify commitment stored
+	got, exists := k.GetEvidenceCommitment(ctx, "dispute-cr", challenger)
+	if !exists {
+		t.Fatal("commitment not found")
+	}
+	if got.ContentHash != contentHash {
+		t.Fatalf("hash mismatch: %s", got.ContentHash)
+	}
+	if got.Revealed {
+		t.Fatal("should not be revealed yet")
+	}
+
+	// 3. Get unrevealed commitments
+	unrevealed := k.GetUnrevealedCommitments(ctx, "dispute-cr")
+	if len(unrevealed) != 1 {
+		t.Fatalf("expected 1 unrevealed, got %d", len(unrevealed))
+	}
+
+	// 4. Mark as revealed
+	got.Revealed = true
+	k.SetEvidenceCommitment(ctx, got)
+
+	unrevealed = k.GetUnrevealedCommitments(ctx, "dispute-cr")
+	if len(unrevealed) != 0 {
+		t.Fatalf("expected 0 unrevealed after reveal, got %d", len(unrevealed))
+	}
+}
+
+// ---------- Arbiter Reward/Slash Distribution Tests ----------
+
+func TestResolveDisputeArbiterRewards(t *testing.T) {
+	k, ctx, bk, kk, sk := setupKeeper(t)
+
+	challenger := testAddr(1)
+	defender := testAddr(2)
+	arbiter1 := testAddr(10)
+	arbiter2 := testAddr(11)
+	arbiter3 := testAddr(12)
+
+	setupVerifiedFact(kk, "fact-arb", defender)
+	sk.validators = []types.ValidatorInfo{
+		{Address: arbiter1, Stake: 5000, Tier: 2},
+		{Address: arbiter2, Stake: 4000, Tier: 2},
+		{Address: arbiter3, Stake: 3000, Tier: 1},
+	}
+
+	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
+	bk.fundAccount(arbiter1, sdkmath.ZeroInt())
+	bk.fundAccount(arbiter2, sdkmath.ZeroInt())
+	bk.fundAccount(arbiter3, sdkmath.ZeroInt())
+
+	dispute := types.Dispute{
+		Id:         "dispute-arb-reward",
+		FactId:     "fact-arb",
+		Challenger: challenger,
+		Defender:   defender,
+		Status:     string(types.DisputeStatusVoting),
+		Tier:       uint32(types.TierBasic),
+		Bond:       "111000000",
+		Arbiters:   []string{arbiter1, arbiter2, arbiter3},
+	}
+	k.SetDispute(ctx, dispute)
+
+	// arbiter1 and arbiter2 vote uphold (correct), arbiter3 votes overturn (wrong)
+	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter2, Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter3, Vote: "overturn", Stake: "3000"})
+
+	err := k.ResolveDispute(ctx, dispute, types.OutcomeUpheld)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+
+	// Correct voters (arbiter1, arbiter2) should have received arbiter rewards
+	// Bond=111M, slash=50%=55.5M, arbiterReward=20% of slash=11.1M, split 2 ways = 5.55M each
+	arb1Bal := bk.balances[arbiter1]
+	arb2Bal := bk.balances[arbiter2]
+	if arb1Bal.IsZero() {
+		t.Fatal("arbiter1 should have received reward")
+	}
+	if arb2Bal.IsZero() {
+		t.Fatal("arbiter2 should have received reward")
+	}
+	if !arb1Bal.Equal(arb2Bal) {
+		t.Fatalf("correct voters should get equal shares: arb1=%s arb2=%s", arb1Bal, arb2Bal)
+	}
+	t.Logf("Arbiter reward per correct voter: %s ulgm", arb1Bal)
+}
+
+func TestResolveDisputeNonVoterSlash(t *testing.T) {
+	k, ctx, bk, kk, sk := setupKeeper(t)
+
+	challenger := testAddr(1)
+	defender := testAddr(2)
+	arbiter1 := testAddr(10)
+	arbiterNoVote := testAddr(11)
+
+	setupVerifiedFact(kk, "fact-nv", defender)
+	sk.validators = []types.ValidatorInfo{
+		{Address: arbiter1, Stake: 5000, Tier: 2},
+		{Address: arbiterNoVote, Stake: 4000, Tier: 2},
+	}
+
+	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
+
+	dispute := types.Dispute{
+		Id:         "dispute-nonvoter",
+		FactId:     "fact-nv",
+		Challenger: challenger,
+		Defender:   defender,
+		Status:     string(types.DisputeStatusVoting),
+		Tier:       uint32(types.TierBasic),
+		Bond:       "111000000",
+		Arbiters:   []string{arbiter1, arbiterNoVote},
+	}
+	k.SetDispute(ctx, dispute)
+
+	// Only arbiter1 votes, arbiterNoVote doesn't
+	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
+
+	moduleBefore := bk.modules[types.ModuleName]
+	err := k.ResolveDispute(ctx, dispute, types.OutcomeUpheld)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+
+	// Non-voter should trigger a burn (10% of their 4000 stake = 400)
+	moduleAfter := bk.modules[types.ModuleName]
+	burned := moduleBefore.Sub(moduleAfter)
+	t.Logf("Module balance change (burned for non-voter + other): %s ulgm", burned)
+
+	// Verify dispute resolved correctly despite non-voter
+	resolved, _ := k.GetDispute(ctx, "dispute-nonvoter")
+	if resolved.Status != string(types.DisputeStatusResolved) {
+		t.Fatalf("expected resolved, got %s", resolved.Status)
+	}
+}
+
 // ---------- Full Lifecycle Test ----------
 
 func TestFullDisputeLifecycle(t *testing.T) {

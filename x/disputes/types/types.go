@@ -307,6 +307,7 @@ type LegacyMsgServer interface {
 	OpenDispute(context.Context, *MsgOpenDispute) (*MsgOpenDisputeResponse, error)
 	SubmitEvidence(context.Context, *MsgSubmitEvidence) (*MsgSubmitEvidenceResponse, error)
 	VoteDispute(context.Context, *MsgVoteDispute) (*MsgVoteDisputeResponse, error)
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 
 
