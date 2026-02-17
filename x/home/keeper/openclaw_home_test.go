@@ -11,6 +11,7 @@ package keeper_test
 // ==================================================================================
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/legible-money/legible/x/home/keeper"
