@@ -299,10 +299,12 @@ func (msg *MsgSetRecoveryConfig) Reset() {}
 func (msg *MsgSetRecoveryConfig) String() string {
 	return fmt.Sprintf("MsgSetRecoveryConfig{%s}", msg.Sender)
 }
-func (msg *MsgSetRecoveryConfig) ProtoMessage()          {}
-func (msg MsgSetRecoveryConfigResponse) Reset()         {}
-func (msg MsgSetRecoveryConfigResponse) String() string { return "MsgSetRecoveryConfigResponse{}" }
-func (msg MsgSetRecoveryConfigResponse) ProtoMessage()  {}
+func (msg *MsgSetRecoveryConfig) ProtoMessage() {}
+func (msg MsgSetRecoveryConfigResponse) Reset()  {}
+func (msg MsgSetRecoveryConfigResponse) String() string {
+	return "MsgSetRecoveryConfigResponse{}"
+}
+func (msg MsgSetRecoveryConfigResponse) ProtoMessage() {}
 
 // MsgInitiateRecovery begins account recovery
 type MsgInitiateRecovery struct {
