@@ -429,6 +429,8 @@ for r in data.get('rounds', []):
 
                 local result
                 result=$(cmd_reveal "$round_id" "$verdict" "$confidence" "$salt" 2>&1) || true
+                # Always clear salt after reveal attempt (even if tx failed)
+                clear_salt "$round_id"
                 echo "  Round $round_id: revealed" >&2
                 ;;
 
