@@ -201,9 +201,11 @@ func (msg MsgRegisterAccount) String() string {
 }
 func (msg MsgRegisterAccount) ProtoMessage() {}
 
-func (msg MsgRegisterAccountResponse) Reset()         {}
-func (msg MsgRegisterAccountResponse) String() string { return "MsgRegisterAccountResponse{}" }
-func (msg MsgRegisterAccountResponse) ProtoMessage()  {}
+func (msg MsgRegisterAccountResponse) Reset() {}
+func (msg MsgRegisterAccountResponse) String() string {
+	return "MsgRegisterAccountResponse{}"
+}
+func (msg MsgRegisterAccountResponse) ProtoMessage() {}
 
 var _ sdk.Msg = (*MsgRegisterAccount)(nil)
 var _ proto.Message = (*MsgRegisterAccount)(nil)
@@ -230,12 +232,16 @@ func (msg MsgFreezeAccount) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgFreezeAccount) Reset()                 {}
-func (msg MsgFreezeAccount) String() string         { return fmt.Sprintf("MsgFreezeAccount{%s}", msg.Address) }
-func (msg MsgFreezeAccount) ProtoMessage()          {}
-func (msg MsgFreezeAccountResponse) Reset()         {}
-func (msg MsgFreezeAccountResponse) String() string { return "MsgFreezeAccountResponse{}" }
-func (msg MsgFreezeAccountResponse) ProtoMessage()  {}
+func (msg MsgFreezeAccount) Reset() {}
+func (msg MsgFreezeAccount) String() string {
+	return fmt.Sprintf("MsgFreezeAccount{%s}", msg.Address)
+}
+func (msg MsgFreezeAccount) ProtoMessage()  {}
+func (msg MsgFreezeAccountResponse) Reset() {}
+func (msg MsgFreezeAccountResponse) String() string {
+	return "MsgFreezeAccountResponse{}"
+}
+func (msg MsgFreezeAccountResponse) ProtoMessage() {}
 
 // MsgUnfreezeAccount unfreezes a frozen account (authority only)
 type MsgUnfreezeAccount struct {
@@ -261,10 +267,12 @@ func (msg MsgUnfreezeAccount) Reset() {}
 func (msg MsgUnfreezeAccount) String() string {
 	return fmt.Sprintf("MsgUnfreezeAccount{%s}", msg.Address)
 }
-func (msg MsgUnfreezeAccount) ProtoMessage()          {}
-func (msg MsgUnfreezeAccountResponse) Reset()         {}
-func (msg MsgUnfreezeAccountResponse) String() string { return "MsgUnfreezeAccountResponse{}" }
-func (msg MsgUnfreezeAccountResponse) ProtoMessage()  {}
+func (msg MsgUnfreezeAccount) ProtoMessage()  {}
+func (msg MsgUnfreezeAccountResponse) Reset() {}
+func (msg MsgUnfreezeAccountResponse) String() string {
+	return "MsgUnfreezeAccountResponse{}"
+}
+func (msg MsgUnfreezeAccountResponse) ProtoMessage() {}
 
 // MsgSetRecoveryConfig sets recovery configuration for an account
 type MsgSetRecoveryConfig struct {
@@ -300,7 +308,7 @@ func (msg *MsgSetRecoveryConfig) String() string {
 	return fmt.Sprintf("MsgSetRecoveryConfig{%s}", msg.Sender)
 }
 func (msg *MsgSetRecoveryConfig) ProtoMessage() {}
-func (msg MsgSetRecoveryConfigResponse) Reset()  {}
+func (msg MsgSetRecoveryConfigResponse) Reset() {}
 func (msg MsgSetRecoveryConfigResponse) String() string {
 	return "MsgSetRecoveryConfigResponse{}"
 }
@@ -334,10 +342,12 @@ func (msg MsgInitiateRecovery) Reset() {}
 func (msg MsgInitiateRecovery) String() string {
 	return fmt.Sprintf("MsgInitiateRecovery{%s}", msg.AccountAddress)
 }
-func (msg MsgInitiateRecovery) ProtoMessage()          {}
-func (msg MsgInitiateRecoveryResponse) Reset()         {}
-func (msg MsgInitiateRecoveryResponse) String() string { return "MsgInitiateRecoveryResponse{}" }
-func (msg MsgInitiateRecoveryResponse) ProtoMessage()  {}
+func (msg MsgInitiateRecovery) ProtoMessage()  {}
+func (msg MsgInitiateRecoveryResponse) Reset() {}
+func (msg MsgInitiateRecoveryResponse) String() string {
+	return "MsgInitiateRecoveryResponse{}"
+}
+func (msg MsgInitiateRecoveryResponse) ProtoMessage() {}
 
 // MsgSubmitRecoveryShard provides a shard to an active recovery request
 type MsgSubmitRecoveryShard struct {
@@ -368,10 +378,12 @@ func (msg MsgSubmitRecoveryShard) Reset() {}
 func (msg MsgSubmitRecoveryShard) String() string {
 	return fmt.Sprintf("MsgSubmitRecoveryShard{shard=%d}", msg.ShardIndex)
 }
-func (msg MsgSubmitRecoveryShard) ProtoMessage()          {}
-func (msg MsgSubmitRecoveryShardResponse) Reset()         {}
-func (msg MsgSubmitRecoveryShardResponse) String() string { return "MsgSubmitRecoveryShardResponse{}" }
-func (msg MsgSubmitRecoveryShardResponse) ProtoMessage()  {}
+func (msg MsgSubmitRecoveryShard) ProtoMessage()  {}
+func (msg MsgSubmitRecoveryShardResponse) Reset() {}
+func (msg MsgSubmitRecoveryShardResponse) String() string {
+	return "MsgSubmitRecoveryShardResponse{}"
+}
+func (msg MsgSubmitRecoveryShardResponse) ProtoMessage() {}
 
 // MsgChallengeRecovery challenges an active recovery request
 type MsgChallengeRecovery struct {
@@ -401,10 +413,12 @@ func (msg MsgChallengeRecovery) Reset() {}
 func (msg MsgChallengeRecovery) String() string {
 	return fmt.Sprintf("MsgChallengeRecovery{%s}", msg.AccountAddress)
 }
-func (msg MsgChallengeRecovery) ProtoMessage()          {}
-func (msg MsgChallengeRecoveryResponse) Reset()         {}
-func (msg MsgChallengeRecoveryResponse) String() string { return "MsgChallengeRecoveryResponse{}" }
-func (msg MsgChallengeRecoveryResponse) ProtoMessage()  {}
+func (msg MsgChallengeRecovery) ProtoMessage()  {}
+func (msg MsgChallengeRecoveryResponse) Reset() {}
+func (msg MsgChallengeRecoveryResponse) String() string {
+	return "MsgChallengeRecoveryResponse{}"
+}
+func (msg MsgChallengeRecoveryResponse) ProtoMessage() {}
 
 // MsgExecuteRecovery completes a recovery after delay + challenge period
 type MsgExecuteRecovery struct {
@@ -430,10 +444,12 @@ func (msg MsgExecuteRecovery) Reset() {}
 func (msg MsgExecuteRecovery) String() string {
 	return fmt.Sprintf("MsgExecuteRecovery{%s}", msg.AccountAddress)
 }
-func (msg MsgExecuteRecovery) ProtoMessage()          {}
-func (msg MsgExecuteRecoveryResponse) Reset()         {}
-func (msg MsgExecuteRecoveryResponse) String() string { return "MsgExecuteRecoveryResponse{}" }
-func (msg MsgExecuteRecoveryResponse) ProtoMessage()  {}
+func (msg MsgExecuteRecovery) ProtoMessage()  {}
+func (msg MsgExecuteRecoveryResponse) Reset() {}
+func (msg MsgExecuteRecoveryResponse) String() string {
+	return "MsgExecuteRecoveryResponse{}"
+}
+func (msg MsgExecuteRecoveryResponse) ProtoMessage() {}
 
 // ============================================================
 // Recovery shard storage (H-2: on-chain encrypted shard data)
