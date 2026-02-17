@@ -219,6 +219,107 @@ func TestAutoProposalEvent_EmittedOnSustainedStress(t *testing.T) {
 	}
 }
 
+// ---------- OpenClaw Critical Trigger Tests ----------
+
+func TestCheckProposalTriggers_OpenClawCritical(t *testing.T) {
+	k, ctx, _, kk, _ := setupKeeper(t)
+
+	// 3 verified protocol_observation facts → should trigger
+	kk.protocolObsCount = 3
+
+	hormones := types.HormoneValues{Epoch: 200, SSI: 100_000}
+	k.CheckProposalTriggers(ctx, 200, hormones)
+
+	state := k.GetAutoProposalState(ctx)
+	if state.LastProposalEpoch != 200 {
+		t.Errorf("expected proposal at epoch 200, got %d", state.LastProposalEpoch)
+	}
+
+	// Verify the event was emitted with correct trigger type
+	events := ctx.EventManager().Events()
+	found := false
+	for _, event := range events {
+		if event.Type == "autopoiesis_proposal_suggested" {
+			for _, attr := range event.Attributes {
+				if attr.Key == "trigger_type" && attr.Value == "openclaw_critical" {
+					found = true
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("expected autopoiesis_proposal_suggested event with trigger_type=openclaw_critical")
+	}
+}
+
+func TestCheckProposalTriggers_OpenClawCritical_BelowThreshold(t *testing.T) {
+	k, ctx, _, kk, _ := setupKeeper(t)
+
+	// 2 findings — below threshold of 3
+	kk.protocolObsCount = 2
+
+	hormones := types.HormoneValues{Epoch: 200, SSI: 100_000}
+	k.CheckProposalTriggers(ctx, 200, hormones)
+
+	state := k.GetAutoProposalState(ctx)
+	if state.LastProposalEpoch != 0 {
+		t.Errorf("expected no proposal with only 2 findings, got epoch %d", state.LastProposalEpoch)
+	}
+}
+
+func TestCheckProposalTriggers_OpenClawCritical_ResetAfterTrigger(t *testing.T) {
+	k, ctx, _, kk, _ := setupKeeper(t)
+
+	// First trigger: 3 findings
+	kk.protocolObsCount = 3
+	ctx = ctx.WithBlockHeight(5000)
+	k.CheckProposalTriggers(ctx, 200, types.HormoneValues{Epoch: 200, SSI: 100_000})
+
+	state := k.GetAutoProposalState(ctx)
+	if state.LastProposalEpoch != 200 {
+		t.Fatalf("expected first trigger at epoch 200, got %d", state.LastProposalEpoch)
+	}
+
+	// After trigger fires, acknowledged block is set → same count should not re-trigger
+	// (the mock always returns the same count, but in production the sinceBlock filter
+	// would exclude already-counted facts). Simulate this by resetting count to 0.
+	kk.protocolObsCount = 0
+
+	// Fast-forward past cooldown (100 epochs)
+	ctx = ctx.WithBlockHeight(50000)
+	k.CheckProposalTriggers(ctx, 400, types.HormoneValues{Epoch: 400, SSI: 100_000})
+
+	state = k.GetAutoProposalState(ctx)
+	if state.LastProposalEpoch != 200 {
+		t.Errorf("expected no new proposal with 0 findings after reset, got epoch %d", state.LastProposalEpoch)
+	}
+
+	// Trigger state should have the acknowledged block from the first firing
+	trigState := k.GetTriggerState(ctx, types.TriggerOpenClawCritical, "", "")
+	if trigState == nil {
+		t.Fatal("expected trigger state to be stored")
+	}
+	if trigState.AcknowledgedAtBlock != 5000 {
+		t.Errorf("expected AcknowledgedAtBlock=5000, got %d", trigState.AcknowledgedAtBlock)
+	}
+}
+
+func TestCheckProposalTriggers_OpenClawCritical_NilKnowledgeKeeper(t *testing.T) {
+	k, ctx, _, _, _ := setupKeeper(t)
+
+	// Replace keeper with nil knowledge keeper
+	k.SetKnowledgeKeeper(nil)
+
+	// Should not panic
+	hormones := types.HormoneValues{Epoch: 200, SSI: 100_000}
+	k.CheckProposalTriggers(ctx, 200, hormones)
+
+	state := k.GetAutoProposalState(ctx)
+	if state.LastProposalEpoch != 0 {
+		t.Error("expected no proposal with nil knowledge keeper")
+	}
+}
+
 // ---------- Integration: Proposals via CollectAndAdapt ----------
 
 func TestCollectAndAdapt_ProposalTriggersRun(t *testing.T) {
