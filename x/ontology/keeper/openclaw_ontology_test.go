@@ -25,7 +25,7 @@ func TestOC_ON1_ZeroStakeDomainProposal(t *testing.T) {
 	bk.fundAccount(proposer, largeBalance)
 
 	// Ensure stratum 1 exists
-	k.SetStratum(ctx, types.Stratum{Level: 1, Name: "Foundation", Description: "test"})
+	k.SetStratum(ctx, types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
 
 	// Try zero stake — should fail
 	_, err := ms.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
