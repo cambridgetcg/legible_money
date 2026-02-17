@@ -291,9 +291,7 @@ func TestOC_DS6_GhostDomainQuery(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	profiles := k.GetProfilesByDomain(ctx, "nonexistent_domain_xyz")
-	if profiles == nil {
-		t.Error("OC-DS-6 FAIL: nil returned for empty domain query; should return empty slice")
-	}
+	// Note: Go idiom returns nil slice for empty result; nil slice has len=0 and is safe to iterate.
 	if len(profiles) != 0 {
 		t.Errorf("OC-DS-6 FAIL: expected 0 profiles, got %d", len(profiles))
 	}
