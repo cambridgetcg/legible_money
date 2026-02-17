@@ -96,8 +96,18 @@ func (a *AutopoiesisKnowledgeAdapter) GetCategoryRetentions(_ context.Context, _
 	return nil
 }
 
-func (a *AutopoiesisKnowledgeAdapter) GetVerifiedProtocolObservationCount(_ context.Context, _ uint64) uint64 {
-	return 0
+func (a *AutopoiesisKnowledgeAdapter) GetVerifiedProtocolObservationCount(ctx context.Context, sinceBlock uint64) uint64 {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	facts := a.keeper.GetFactsByDomain(sdkCtx, "protocol")
+	var count uint64
+	for i := range facts {
+		if facts[i].EpistemicCategory == "protocol_observation" &&
+			facts[i].Status == "verified" &&
+			facts[i].VerifiedAtHeight > sinceBlock {
+			count++
+		}
+	}
+	return count
 }
 
 // Compile-time interface check.
