@@ -190,7 +190,7 @@ func TestUncoveredModules(t *testing.T) {
 	}
 
 	// Spot-check: these modules should all be COVERED now
-	for _, covered := range []string{"staking", "gov", "emergency", "disputes", "ontology", "evidence_mgmt", "vesting_rewards", "partnerships", "home", "capture_defense"} {
+	for _, covered := range []string{"staking", "gov", "emergency", "disputes", "ontology", "evidence_mgmt", "vesting_rewards", "partnerships", "home", "capture_defense", "billing", "capture_challenge", "channels", "claiming_pot", "compute_pool", "discovery", "qualification", "research", "schedule", "tree"} {
 		for _, m := range uncovered {
 			if m == covered {
 				t.Errorf("%s should be covered (has probes), but appears in uncovered list", covered)
