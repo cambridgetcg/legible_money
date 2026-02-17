@@ -5,6 +5,7 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	agentsdk "github.com/legible-money/legible/tools/agent-sdk"
@@ -68,4 +69,29 @@ func WaitForRoundPhase(ctx context.Context, client agentsdk.QueryClient, roundID
 // Since we use -y (broadcast immediately), we just wait a few blocks.
 func WaitForTx(ctx context.Context, client agentsdk.QueryClient) error {
 	return WaitForBlocks(ctx, client, 2)
+}
+
+// WaitForFact polls until a fact appears in the given domain containing
+// claimSubstring. Returns nil on success, context error on timeout.
+func WaitForFact(ctx context.Context, client agentsdk.QueryClient, domain, claimSubstring string) error {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for fact containing %q in domain %q: %w",
+				claimSubstring, domain, ctx.Err())
+		case <-ticker.C:
+			facts, err := client.FactsByDomain(ctx, domain)
+			if err != nil {
+				continue
+			}
+			for _, f := range facts {
+				if strings.Contains(f.ClaimText, claimSubstring) {
+					return nil
+				}
+			}
+		}
+	}
 }

@@ -20,10 +20,3 @@ type BankKeeper interface {
 type StakingKeeper interface {
 	GetActiveValidatorCount(ctx context.Context) uint32
 }
-
-// AutopoiesisKeeper defines the expected autopoiesis keeper interface.
-// The vesting_rewards module reads the blockreward multiplier to scale emissions.
-type AutopoiesisKeeper interface {
-	// GetMultiplier returns the current multiplier value for a path (BPS, 1M = 1.0x).
-	GetMultiplier(ctx sdk.Context, path string) uint64
-}

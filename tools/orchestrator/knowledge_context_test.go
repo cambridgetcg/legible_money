@@ -54,11 +54,11 @@ func (q *contextTestQC) FactReferences(_ context.Context, factID string) ([]agen
 func (q *contextTestQC) CounterFacts(_ context.Context, factID string) ([]agentsdk.CounterFactInfo, error) {
 	return q.counterFacts[factID], nil
 }
-func (q *contextTestQC) ContractState(_ context.Context, _, _ string) (string, bool, error) {
-	return "", false, nil
+func (q *contextTestQC) BugFacts(_ context.Context, _ string) ([]agentsdk.FactInfo, error) {
+	return nil, nil
 }
-func (q *contextTestQC) ContractInfo(_ context.Context, addr string) (*agentsdk.ContractInfoResult, error) {
-	return &agentsdk.ContractInfoResult{Address: addr}, nil
+func (q *contextTestQC) ProposalsByTrigger(_ context.Context, _ string) ([]agentsdk.ProposalInfo, error) {
+	return nil, nil
 }
 
 // --- Tests ---

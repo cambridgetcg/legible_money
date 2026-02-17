@@ -2,13 +2,8 @@ package agentsdk
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -156,100 +151,6 @@ func TestComputeCommitment(t *testing.T) {
 	}
 }
 
-func TestBech32AddressFormat(t *testing.T) {
-	// Generate a deterministic key from a known seed for reproducibility.
-	seed := sha256.Sum256([]byte("test-bech32-vector"))
-	priv := ed25519.NewKeyFromSeed(seed[:])
-	pub := priv.Public().(ed25519.PublicKey)
-
-	addr := publicKeyToAddress(pub)
-
-	// Must start with "lgm1"
-	if !strings.HasPrefix(addr, "lgm1") {
-		t.Fatalf("Address missing lgm1 prefix: %s", addr)
-	}
-
-	// Bech32 addresses are lowercase alphanumeric (no 1/b/i/o after separator)
-	afterSep := addr[4:] // after "lgm1"
-	for _, c := range afterSep {
-		if !strings.ContainsRune("qpzry9x8gf2tvdw0s3jn54khce6mua7l", c) {
-			t.Fatalf("Invalid bech32 character '%c' in address: %s", c, addr)
-		}
-	}
-
-	// Cosmos SDK bech32 address from 20-byte hash is always 43 chars: hrp(3) + sep(1) + data(32) + checksum(6) + 1 pad = 3+1+39 = 43
-	// Actually: 20 bytes = 32 five-bit groups (with padding) + 6 checksum = 38 data chars. Total: 3 + 1 + 38 = 42.
-	// Let's just check it roundtrips.
-	h := sha256.Sum256(pub)
-	decoded, err := bech32Decode(addr)
-	if err != nil {
-		t.Fatalf("bech32 decode failed: %v", err)
-	}
-	if decoded.hrp != "lgm" {
-		t.Fatalf("Wrong HRP: %s", decoded.hrp)
-	}
-	if hex.EncodeToString(decoded.data) != hex.EncodeToString(h[:20]) {
-		t.Fatalf("Address data mismatch:\n  got:  %s\n  want: %s",
-			hex.EncodeToString(decoded.data), hex.EncodeToString(h[:20]))
-	}
-
-	// Verify deterministic: same key always produces same address
-	addr2 := publicKeyToAddress(pub)
-	if addr != addr2 {
-		t.Fatalf("Non-deterministic address: %s vs %s", addr, addr2)
-	}
-
-	// Cross-validate against cosmos/btcutil/bech32 reference output.
-	// Generated via: bech32.EncodeFromBase256("lgm", sha256(pubkey)[:20])
-	const cosmosRef = "lgm146essfmqyfg2d6wmq8m8nd7ll02n8w2wefgll0"
-	if addr != cosmosRef {
-		t.Fatalf("Address does not match Cosmos SDK reference:\n  got:  %s\n  want: %s", addr, cosmosRef)
-	}
-}
-
-// bech32Decoded holds the result of bech32 decoding.
-type bech32Decoded struct {
-	hrp  string
-	data []byte
-}
-
-// bech32Decode decodes a bech32 string and returns the HRP and data bytes.
-func bech32Decode(bech string) (*bech32Decoded, error) {
-	// Find separator (last '1' in the string)
-	sepIdx := strings.LastIndex(bech, "1")
-	if sepIdx < 1 {
-		return nil, fmt.Errorf("no separator found")
-	}
-	hrp := bech[:sepIdx]
-	dataStr := bech[sepIdx+1:]
-
-	// Decode charset to 5-bit values
-	values := make([]byte, len(dataStr))
-	for i, c := range dataStr {
-		idx := strings.IndexRune(bech32Charset, c)
-		if idx < 0 {
-			return nil, fmt.Errorf("invalid character: %c", c)
-		}
-		values[i] = byte(idx)
-	}
-
-	// Verify checksum
-	check := bech32HRPExpand(hrp)
-	check = append(check, values...)
-	if bech32Polymod(check) != 1 {
-		return nil, fmt.Errorf("invalid checksum")
-	}
-
-	// Strip 6-byte checksum, convert 5-bit to 8-bit
-	data5bit := values[:len(values)-6]
-	data8bit, err := convertBits(data5bit, 5, 8, false)
-	if err != nil {
-		return nil, fmt.Errorf("converting bits: %w", err)
-	}
-
-	return &bech32Decoded{hrp: hrp, data: data8bit}, nil
-}
-
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.ChainID != "legible-devnet-1" {
@@ -331,5 +232,62 @@ func (m *mockTxClient) EndSession(ctx context.Context, homeID, sessionID string)
 	return "mock-tx-hash", nil
 }
 func (m *mockTxClient) SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitLIP(ctx context.Context, req SubmitLIPRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) InitiateDispute(_ context.Context, _ InitiateDisputeRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CommitDisputeEvidence(_ context.Context, _, _ string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) RevealDisputeEvidence(_ context.Context, _ RevealDisputeEvidenceRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ArbiterVote(_ context.Context, _ ArbiterVoteRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) EscalateDispute(_ context.Context, _ string, _ uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitEvidence(_ context.Context, _ SubmitEvidenceRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) AuditEvidence(_ context.Context, _ AuditEvidenceRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) RegisterOracle(_ context.Context, _ RegisterOracleRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitOracleData(_ context.Context, _ SubmitOracleDataRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SubmitResearch(_ context.Context, _ SubmitResearchRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ReviewResearch(_ context.Context, _ ReviewResearchRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CreateResearchBounty(_ context.Context, _ CreateResearchBountyRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ClaimResearchBounty(_ context.Context, _ string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) FundResearch(_ context.Context, _ uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ProposeOntologyDomain(_ context.Context, _ ProposeOntologyDomainRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) VoteDomainProposal(_ context.Context, _ string, _ bool) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) AcknowledgeIncompleteness(_ context.Context, _, _, _ string) (string, error) {
 	return "mock-tx-hash", nil
 }

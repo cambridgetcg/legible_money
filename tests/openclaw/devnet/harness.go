@@ -181,6 +181,133 @@ func (h *Harness) Start(ctx context.Context) error {
 	return nil
 }
 
+// GenesisPatcher is a function that modifies genesis.json before chain start.
+type GenesisPatcher func(genesisPath string) error
+
+// StartWithGenesisPatcher boots the devnet using a custom genesis patcher
+// instead of the default PatchGenesis. This allows Phase D tests to extend
+// phase windows for AI agent reasoning time.
+func (h *Harness) StartWithGenesisPatcher(ctx context.Context, patcher GenesisPatcher) error {
+	h.T.Helper()
+
+	// 1. Allocate 6 ports: RPC, P2P, pprof, REST, gRPC, gRPC-web
+	ports, err := AllocatePorts(6)
+	if err != nil {
+		return fmt.Errorf("allocating ports: %w", err)
+	}
+	h.rpcPort = ports[0]
+	p2pPort := ports[1]
+	pprofPort := ports[2]
+	restPort := ports[3]
+	grpcPort := ports[4]
+	grpcWebPort := ports[5]
+
+	h.RPCAddr = fmt.Sprintf("tcp://localhost:%d", h.rpcPort)
+	h.RESTAddr = fmt.Sprintf("http://localhost:%d", restPort)
+	h.GRPCAddr = fmt.Sprintf("localhost:%d", grpcPort)
+
+	// 2. Init chain
+	if err := h.run(ctx, "init", moniker, "--chain-id", h.ChainID, "--default-denom", "ulgm"); err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+
+	// 3. Create keys: validator + 10 test agents
+	keyNames := []string{"validator"}
+	for i := 1; i <= 10; i++ {
+		keyNames = append(keyNames, fmt.Sprintf("test%d", i))
+	}
+	for _, name := range keyNames {
+		if err := h.addKey(name); err != nil {
+			return fmt.Errorf("adding key %s: %w", name, err)
+		}
+	}
+
+	// 4. Add genesis accounts
+	if err := h.run(ctx, "add-genesis-account", h.keyAddresses["validator"], validatorBalance); err != nil {
+		return fmt.Errorf("add-genesis-account validator: %w", err)
+	}
+	for i := 1; i <= 10; i++ {
+		name := fmt.Sprintf("test%d", i)
+		if err := h.run(ctx, "add-genesis-account", h.keyAddresses[name], testBalance); err != nil {
+			return fmt.Errorf("add-genesis-account %s: %w", name, err)
+		}
+	}
+
+	// 5. Patch genesis with CUSTOM patcher
+	genesisPath := filepath.Join(h.NodeHome, "config", "genesis.json")
+	if err := patcher(genesisPath); err != nil {
+		return fmt.Errorf("patching genesis: %w", err)
+	}
+
+	// 6. Patch configs with dynamic ports
+	configPath := filepath.Join(h.NodeHome, "config", "config.toml")
+	appPath := filepath.Join(h.NodeHome, "config", "app.toml")
+	if err := PatchCometConfig(configPath, h.rpcPort, p2pPort, pprofPort); err != nil {
+		return fmt.Errorf("patching config.toml: %w", err)
+	}
+	if err := PatchAppConfig(appPath, restPort, grpcPort, grpcWebPort); err != nil {
+		return fmt.Errorf("patching app.toml: %w", err)
+	}
+
+	// 7. Gentx
+	if err := h.run(ctx, "gentx", "validator", selfDelegation,
+		"--chain-id", h.ChainID,
+		"--keyring-backend", keyring); err != nil {
+		return fmt.Errorf("gentx: %w", err)
+	}
+
+	// 8. Collect gentxs
+	if err := h.run(ctx, "collect-gentxs"); err != nil {
+		return fmt.Errorf("collect-gentxs: %w", err)
+	}
+
+	// 9. Validate genesis
+	if err := h.run(ctx, "validate-genesis"); err != nil {
+		return fmt.Errorf("validate-genesis: %w", err)
+	}
+
+	// 10. Start node as background process
+	logPath := filepath.Join(h.NodeHome, "node.log")
+	h.logFile, _ = os.Create(logPath)
+
+	cmd := exec.Command(h.Binary, "start",
+		"--home", h.NodeHome,
+		"--minimum-gas-prices", "0.025ulgm")
+	if h.logFile != nil {
+		cmd.Stdout = h.logFile
+		cmd.Stderr = h.logFile
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting node: %w", err)
+	}
+	h.Cmd = cmd
+
+	// 10a. Quick check: did the process exit immediately?
+	time.Sleep(3 * time.Second)
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		_ = cmd.Wait()
+		if h.logFile != nil {
+			h.logFile.Sync()
+		}
+		h.dumpFullLogs()
+		h.T.Logf("Node binary: %s", h.Binary)
+		h.T.Logf("Node home: %s", h.NodeHome)
+		return fmt.Errorf("node exited immediately (process not found)")
+	}
+
+	// 11. Wait for height >= 2
+	if err := h.WaitForBlock(ctx, 2); err != nil {
+		h.dumpFullLogs()
+		return fmt.Errorf("waiting for blocks: %w", err)
+	}
+
+	// 12. Register cleanup
+	h.T.Cleanup(func() { h.Stop() })
+
+	h.T.Logf("Devnet started: chain_id=%s rpc=:%d rest=:%d", h.ChainID, h.rpcPort, restPort)
+	return nil
+}
+
 // Stop sends SIGTERM to the node, waits briefly, then SIGKILL if needed.
 func (h *Harness) Stop() {
 	if h.Cmd == nil || h.Cmd.Process == nil {

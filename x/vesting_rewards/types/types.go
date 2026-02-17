@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -61,7 +62,14 @@ func (m *MsgCreateVesting) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Beneficiary); err != nil {
 		return fmt.Errorf("invalid beneficiary address: %w", err)
 	}
-	if m.Amount == "" || m.Amount == "0" {
+	if m.Amount == "" {
+		return fmt.Errorf("amount must be positive")
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(m.Amount, 10); !ok {
+		return fmt.Errorf("invalid amount: not a valid integer")
+	}
+	if amt.Sign() <= 0 {
 		return fmt.Errorf("amount must be positive")
 	}
 	return nil

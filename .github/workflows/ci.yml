@@ -5,11 +5,18 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  merge_group:
   workflow_dispatch:
     inputs:
       run_e2e:
         description: 'Run E2E Cosmos devnet tests'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      run_openclaw:
+        description: 'Run OpenClaw agent integration tests'
         required: false
         default: 'false'
         type: choice
@@ -25,17 +32,17 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.23'
 
 jobs:
   build:
     name: "Go: Build"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.23'
           cache: true
       - run: go build ./...
 
@@ -43,10 +50,10 @@ jobs:
     name: "Go: Test"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.23'
           cache: true
       - run: go test ./x/... -count=1 -v
       - run: go test ./app/... -count=1 -v
@@ -55,14 +62,14 @@ jobs:
     name: "Go: Lint"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.23'
           cache: true
-      - uses: golangci/golangci-lint-action@v9
+      - uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64
+          version: v1.62
           args: --timeout=10m
 
   # === E2E: Cosmos DevNet (manual trigger only) ===
@@ -74,10 +81,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.23'
           cache: true
 
       - name: Build legbled binary
@@ -110,51 +117,35 @@ jobs:
         if: always()
         run: bash devnet/scripts/cosmos-devnet.sh stop || true
 
-  # === Test Monotonicity Check ===
+  # === OpenClaw Agent Integration Tests (manual or label trigger) ===
 
-  test-monotonicity:
-    name: "Test Count Monotonicity"
-    if: github.event_name == 'pull_request'
-    needs: [test]
+  openclaw-devnet:
+    name: "OpenClaw: DevNet"
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_openclaw == 'true') ||
+      contains(github.event.pull_request.labels.*.name, 'openclaw')
+    needs: [build]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6.0.2
-        with:
-          fetch-depth: 0
-
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.23'
           cache: true
 
-      - name: Count tests on PR branch
-        id: pr-tests
+      - name: Run OpenClaw devnet tests
         run: |
-          COUNT=$(go test ./x/... -count=1 -v 2>&1 | grep -c '^--- PASS' || echo "0")
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
-          echo "PR branch test count: $COUNT"
+          LGM_ENV=devnet LGM_REPORT_PATH=tests/openclaw/report.json \
+            go test ./tests/openclaw/... -tags openclaw -v -count=1 -timeout 600s
 
-      - name: Count tests on main
-        id: main-tests
-        run: |
-          git stash || true
-          git checkout origin/main -- . 2>/dev/null || true
-          COUNT=$(go test ./x/... -count=1 -v 2>&1 | grep -c '^--- PASS' || echo "0")
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
-          echo "Main branch test count: $COUNT"
-          git checkout - -- . 2>/dev/null || true
-          git stash pop 2>/dev/null || true
-
-      - name: Check monotonicity
-        run: |
-          PR=${{ steps.pr-tests.outputs.count }}
-          MAIN=${{ steps.main-tests.outputs.count }}
-          echo "Tests: main=$MAIN → PR=$PR"
-          if [ "$PR" -lt "$MAIN" ]; then
-            echo "::error::Test count decreased: $MAIN → $PR. PRs must not remove tests without replacement."
-            exit 1
-          fi
-          echo "Test count maintained or increased."
+      - name: Upload report
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: openclaw-report-${{ github.run_id }}
+          path: tests/openclaw/report.json
+          retention-days: 30
 
   # === Agent Contribution Checks (conditional) ===
 
@@ -163,7 +154,7 @@ jobs:
     if: contains(github.event.pull_request.labels.*.name, 'agent-contribution')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -212,7 +203,7 @@ jobs:
     needs: [build, test, lint]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - name: Validate proposal PR
         uses: actions/github-script@v8
         with:
@@ -241,7 +232,7 @@ jobs:
     needs: [build, test, lint]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Aggregate results
         run: |

@@ -233,7 +233,7 @@ cmd_setup() {
     local name="${VALIDATOR_NAMES[$i]}"
     local val_home="${DEVNET_BASE}/${name}"
     local node_id
-    node_id=$(${BINARY} comet show-node-id --home "${val_home}")
+    node_id=$(${BINARY} comet show-node-id --home "${val_home}" 2>&1)
     local p2p_port="${P2P_PORTS[$i]}"
 
     if [ -n "${peers}" ]; then
@@ -272,15 +272,24 @@ cmd_setup() {
     # Configure app.toml for REST API
     local app_config="${val_home}/config/app.toml"
     if [ -f "${app_config}" ]; then
-      # Enable API
-      sed -i.bak "s|enable = false|enable = true|g" "${app_config}"
-      # Set API address
-      sed -i.bak "s|address = \"tcp://localhost:1317\"|address = \"tcp://localhost:${api_port}\"|" "${app_config}"
-      sed -i.bak "s|address = \"tcp://0.0.0.0:1317\"|address = \"tcp://localhost:${api_port}\"|" "${app_config}"
-      # Set gRPC port (disable to avoid conflicts with hand-written types)
-      local grpc_port=$((9090 + i))
-      sed -i.bak "s|address = \"0.0.0.0:9090\"|address = \"0.0.0.0:${grpc_port}\"|" "${app_config}"
-      rm -f "${app_config}.bak"
+      # Enable REST API (targeted — only the [api] section)
+      # Use python3 for section-aware TOML editing
+      python3 -c "
+import re
+with open('${app_config}') as f:
+    content = f.read()
+# Enable API section: find [api] and set enable = true
+content = re.sub(r'(\[api\][^\[]*?)enable = false', r'\1enable = true', content, count=1, flags=re.DOTALL)
+# Disable gRPC to avoid proto reflection crash with hand-written types
+content = re.sub(r'(\[grpc\][^\[]*?)enable = true', r'\1enable = false', content, count=1, flags=re.DOTALL)
+# Disable gRPC-web too
+content = re.sub(r'(\[grpc-web\][^\[]*?)enable = true', r'\1enable = false', content, count=1, flags=re.DOTALL)
+# Set API address
+content = content.replace('address = \"tcp://localhost:1317\"', 'address = \"tcp://localhost:${api_port}\"')
+content = content.replace('address = \"tcp://0.0.0.0:1317\"', 'address = \"tcp://localhost:${api_port}\"')
+with open('${app_config}', 'w') as f:
+    f.write(content)
+" || die "Failed to configure app.toml for ${name}"
     fi
   done
 

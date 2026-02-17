@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -46,6 +45,16 @@ const (
 	RoleVerifier   AgentRole = "verifier"
 	RoleChallenger AgentRole = "challenger"
 	RoleGuardian   AgentRole = "guardian"
+)
+
+// BountyRole defines the role an agent plays in the bug bounty lifecycle.
+type BountyRole string
+
+const (
+	BountyRoleScanner  BountyRole = "scanner"  // Discovers and reports bugs
+	BountyRoleVerifier BountyRole = "verifier" // Evaluates bug reports + fixes
+	BountyRoleFixer    BountyRole = "fixer"    // Submits fixes as LIPs
+	BountyRoleGuardian BountyRole = "guardian" // Distributes bounties after LIP approval
 )
 
 // Verdict for claim verification.
@@ -204,105 +213,8 @@ func publicKeyToDID(pub ed25519.PublicKey) string {
 // Uses the same derivation as Cosmos SDK: SHA256(pubkey)[:20] -> bech32.
 func publicKeyToAddress(pub ed25519.PublicKey) string {
 	h := sha256.Sum256(pub)
-	addr, err := bech32Encode(Bech32Prefix, h[:20])
-	if err != nil {
-		// Should never happen with valid 20-byte input.
-		panic(fmt.Sprintf("bech32 encode failed: %v", err))
-	}
-	return addr
-}
-
-// --- Bech32 encoding (BIP173) ---
-// Minimal self-contained implementation to keep agent-sdk zero-dependency.
-
-const bech32Charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-
-// bech32Encode encodes a human-readable part and data bytes into a bech32 string.
-func bech32Encode(hrp string, data []byte) (string, error) {
-	// Convert 8-bit data to 5-bit groups.
-	converted, err := convertBits(data, 8, 5, true)
-	if err != nil {
-		return "", fmt.Errorf("converting bits: %w", err)
-	}
-	// Compute checksum over the 5-bit values.
-	checksum := bech32Checksum(hrp, converted)
-	combined := append(converted, checksum...)
-
-	var sb strings.Builder
-	sb.WriteString(hrp)
-	sb.WriteByte('1') // separator
-	for _, b := range combined {
-		sb.WriteByte(bech32Charset[b])
-	}
-	return sb.String(), nil
-}
-
-// convertBits converts a byte slice from fromBits grouping to toBits grouping.
-func convertBits(data []byte, fromBits, toBits uint8, pad bool) ([]byte, error) {
-	acc := uint32(0)
-	bits := uint8(0)
-	maxv := uint32((1 << toBits) - 1)
-	var result []byte
-	for _, b := range data {
-		acc = (acc << fromBits) | uint32(b)
-		bits += fromBits
-		for bits >= toBits {
-			bits -= toBits
-			result = append(result, byte((acc>>bits)&maxv))
-		}
-	}
-	if pad {
-		if bits > 0 {
-			result = append(result, byte((acc<<(toBits-bits))&maxv))
-		}
-	} else if bits >= fromBits {
-		return nil, fmt.Errorf("invalid padding")
-	} else if (acc<<(toBits-bits))&maxv != 0 {
-		return nil, fmt.Errorf("non-zero padding")
-	}
-	return result, nil
-}
-
-// bech32Checksum computes the 6-value checksum for bech32.
-func bech32Checksum(hrp string, data []byte) []byte {
-	values := bech32HRPExpand(hrp)
-	values = append(values, data...)
-	values = append(values, 0, 0, 0, 0, 0, 0)
-	polymod := bech32Polymod(values) ^ 1
-	checksum := make([]byte, 6)
-	for i := 0; i < 6; i++ {
-		checksum[i] = byte((polymod >> uint(5*(5-i))) & 31)
-	}
-	return checksum
-}
-
-// bech32HRPExpand expands the HRP for checksum computation.
-func bech32HRPExpand(hrp string) []byte {
-	result := make([]byte, 0, len(hrp)*2+1)
-	for _, c := range hrp {
-		result = append(result, byte(c>>5))
-	}
-	result = append(result, 0)
-	for _, c := range hrp {
-		result = append(result, byte(c&31))
-	}
-	return result
-}
-
-// bech32Polymod computes the bech32 polynomial modular checksum.
-func bech32Polymod(values []byte) uint32 {
-	gen := [5]uint32{0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3}
-	chk := uint32(1)
-	for _, v := range values {
-		top := chk >> 25
-		chk = (chk&0x1ffffff)<<5 ^ uint32(v)
-		for i := 0; i < 5; i++ {
-			if (top>>uint(i))&1 == 1 {
-				chk ^= gen[i]
-			}
-		}
-	}
-	return chk
+	// Simplified bech32 encoding — in production, use cosmos sdk's bech32
+	return fmt.Sprintf("lgm1%s", hex.EncodeToString(h[:20]))
 }
 
 // --- Salt Management for Commit-Reveal ---

@@ -7,10 +7,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/legible-money/legible/tests/openclaw/helpers"
 )
 
 // binaryPath holds the path to the compiled legbled binary, built once in TestMain.
 var binaryPath string
+
+// reporter holds the test reporter, initialized from $LGM_REPORT_PATH.
+var reporter *helpers.Reporter
 
 func TestMain(m *testing.M) {
 	tmpDir, err := os.MkdirTemp("", "openclaw-bin-")
@@ -35,7 +40,27 @@ func TestMain(m *testing.M) {
 		panic("building legbled binary: " + err.Error())
 	}
 
-	os.Exit(m.Run())
+	// Initialize reporter if $LGM_REPORT_PATH is set
+	if reportPath := os.Getenv("LGM_REPORT_PATH"); reportPath != "" {
+		envKind := os.Getenv("LGM_ENV")
+		if envKind == "" {
+			envKind = "devnet"
+		}
+		reporter = helpers.NewReporter(envKind, "", 0)
+	}
+
+	code := m.Run()
+
+	// Write report if configured
+	if reporter != nil {
+		reportPath := os.Getenv("LGM_REPORT_PATH")
+		if err := reporter.Finalize(reportPath); err != nil {
+			// Don't fail the tests over a reporting error
+			os.Stderr.WriteString("warning: failed to write report: " + err.Error() + "\n")
+		}
+	}
+
+	os.Exit(code)
 }
 
 // findModuleRoot walks up from the working directory to find go.mod.
