@@ -84,7 +84,8 @@ func TestOC_HM2_SessionLimitExceeded(t *testing.T) {
 	params.MaxSessionsPerHome = 2
 	k.SetParams(ctx, params)
 
-	// Create home and register a key
+	// Create home and register multiple keys (each key at different block
+	// heights produces a unique session ID: ses-{keyHash[:8]}-{blockHeight})
 	homeResp, err := msgServer.CreateHome(ctx, &types.MsgCreateHome{
 		Owner: owner1,
 		Name:  "Session Limit Home",
@@ -102,19 +103,38 @@ func TestOC_HM2_SessionLimitExceeded(t *testing.T) {
 		Permissions: []string{string(types.PermReadMemory)},
 	})
 	if err != nil {
-		t.Fatalf("setup: register key failed: %v", err)
+		t.Fatalf("setup: register key 1 failed: %v", err)
 	}
 
-	// Fill sessions up to the limit
-	for i := 0; i < 2; i++ {
-		_, err := msgServer.StartSession(ctx, &types.MsgStartSession{
-			Signer:  user1,
-			HomeId:  homeResp.HomeId,
-			KeyHash: "session_key_01",
-		})
-		if err != nil {
-			t.Fatalf("setup: start session %d failed: %v", i+1, err)
-		}
+	_, err = msgServer.RegisterKey(ctx, &types.MsgRegisterKey{
+		Owner:       owner1,
+		HomeId:      homeResp.HomeId,
+		KeyHash:     "session_key_02",
+		KeyType:     "ed25519",
+		Role:        string(types.AccessRoleOperator),
+		Permissions: []string{string(types.PermReadMemory)},
+	})
+	if err != nil {
+		t.Fatalf("setup: register key 2 failed: %v", err)
+	}
+
+	// Fill sessions up to the limit using different keys (unique session IDs)
+	_, err = msgServer.StartSession(ctx, &types.MsgStartSession{
+		Signer:  user1,
+		HomeId:  homeResp.HomeId,
+		KeyHash: "session_key_01",
+	})
+	if err != nil {
+		t.Fatalf("setup: start session 1 failed: %v", err)
+	}
+
+	_, err = msgServer.StartSession(ctx, &types.MsgStartSession{
+		Signer:  user1,
+		HomeId:  homeResp.HomeId,
+		KeyHash: "session_key_02",
+	})
+	if err != nil {
+		t.Fatalf("setup: start session 2 failed: %v", err)
 	}
 
 	// Verify sessions are at the limit
@@ -124,10 +144,23 @@ func TestOC_HM2_SessionLimitExceeded(t *testing.T) {
 	}
 
 	// ATTACK: Try to start one more session beyond the limit
+	// Register a third key so the session ID would be unique
+	_, err = msgServer.RegisterKey(ctx, &types.MsgRegisterKey{
+		Owner:       owner1,
+		HomeId:      homeResp.HomeId,
+		KeyHash:     "session_key_03",
+		KeyType:     "ed25519",
+		Role:        string(types.AccessRoleOperator),
+		Permissions: []string{string(types.PermReadMemory)},
+	})
+	if err != nil {
+		t.Fatalf("setup: register key 3 failed: %v", err)
+	}
+
 	_, err = msgServer.StartSession(ctx, &types.MsgStartSession{
 		Signer:  user1,
 		HomeId:  homeResp.HomeId,
-		KeyHash: "session_key_01",
+		KeyHash: "session_key_03",
 	})
 	if err == nil {
 		t.Error("OC-HM-2 FAIL: session beyond MaxSessionsPerHome was accepted — " +
