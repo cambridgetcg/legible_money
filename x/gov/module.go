@@ -243,28 +243,35 @@ func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.Disb
 // --- BigInt string helpers ---
 
 func addBigIntStrings(vals ...string) string {
-	var total uint64
+	total := new(big.Int)
 	for _, v := range vals {
-		n := parseBigIntString(v)
-		total += n
+		n := parseBigInt(v)
+		total.Add(total, n)
 	}
-	return fmt.Sprintf("%d", total)
+	return total.String()
 }
 
+// bpsFraction computes numerator * 10000 / denominator using big.Int
+// to avoid uint64 overflow on large stake-weighted vote sums.
 func bpsFraction(numerator, denominator string) uint64 {
-	n := parseBigIntString(numerator)
-	d := parseBigIntString(denominator)
-	if d == 0 {
+	n := parseBigInt(numerator)
+	d := parseBigInt(denominator)
+	if d.Sign() == 0 {
 		return 0
 	}
-	return (n * 10000) / d
+	// n * 10000 / d — result fits uint64 (max 10000 = 100%)
+	r := new(big.Int).Mul(n, big.NewInt(10000))
+	r.Div(r, d)
+	return r.Uint64()
 }
 
-func parseBigIntString(s string) uint64 {
+func parseBigInt(s string) *big.Int {
 	if s == "" {
-		return 0
+		return new(big.Int)
 	}
-	var n uint64
-	fmt.Sscanf(s, "%d", &n)
+	n, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		return new(big.Int)
+	}
 	return n
 }
