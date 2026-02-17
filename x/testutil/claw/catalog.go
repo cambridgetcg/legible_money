@@ -723,6 +723,238 @@ var Catalog = []Probe{
 	},
 
 	// ====================================================================
+	// disputes module — OC-DS-1 through OC-DS-8
+	// ====================================================================
+	{
+		ID: "OC-DS-1", Name: "Double-Vote Injection", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS1_DoubleVoteInjection",
+		Defense:  "CastVote rejects duplicate arbiter votes",
+	},
+	{
+		ID: "OC-DS-2", Name: "Non-Arbiter Vote", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS2_NonArbiterVote",
+		Defense:  "CastVote checks voter is in dispute.Arbiters list",
+	},
+	{
+		ID: "OC-DS-3", Name: "Vote After Deadline", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS3_VoteAfterDeadline",
+		Defense:  "CastVote checks blockHeight <= VotingDeadline",
+	},
+	{
+		ID: "OC-DS-4", Name: "Evidence After Deadline", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS4_EvidenceAfterDeadline",
+		Defense:  "CommitEvidence checks blockHeight <= EvidenceDeadline",
+	},
+	{
+		ID: "OC-DS-5", Name: "Unauthorized Submitter Evidence", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS5_UnauthorizedSubmitterEvidence",
+		Defense:  "CommitEvidence verifies submitter is challenger or defender",
+	},
+	{
+		ID: "OC-DS-6", Name: "Commitment-Reveal Mismatch", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS6_CommitmentRevealMismatch",
+		Defense:  "RevealEvidence verifies hash(content+nonce) == commitmentHash",
+	},
+	{
+		ID: "OC-DS-7", Name: "Bond Insufficiency Attack", Variant: ZeroClaw, Severity: High,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS7_BondInsufficiency",
+		Defense:  "InitiateDispute rejects zero and negative stake amounts",
+	},
+	{
+		ID: "OC-DS-8", Name: "Max Active Disputes Flooding", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "disputes", File: "x/disputes/keeper/openclaw_disputes_test.go",
+		TestFunc: "TestOC_DS8_MaxActiveDisputesFlooding",
+		Defense:  "MaxActiveDisputes param enforced; overflow rejected",
+	},
+
+	// ====================================================================
+	// ontology module — OC-ON-1 through OC-ON-3
+	// ====================================================================
+	{
+		ID: "OC-ON-1", Name: "Zero Stake Domain Proposal", Variant: ZeroClaw, Severity: High,
+		Status: Defended, Module: "ontology", File: "x/ontology/keeper/openclaw_ontology_test.go",
+		TestFunc: "TestOC_ON1_ZeroStakeDomainProposal",
+		Defense:  "ProposeDomain rejects zero and negative stake amounts",
+	},
+	{
+		ID: "OC-ON-2", Name: "Duplicate Domain Proposal", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "ontology", File: "x/ontology/keeper/openclaw_ontology_test.go",
+		TestFunc: "TestOC_ON2_DuplicateDomainProposal",
+		Defense:  "ProposeDomain rejects duplicate domain names",
+	},
+	{
+		ID: "OC-ON-3", Name: "Invalid Stratum Reference", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "ontology", File: "x/ontology/keeper/openclaw_ontology_test.go",
+		TestFunc: "TestOC_ON3_InvalidStratumReference",
+		Defense:  "ProposeDomain validates stratum exists before allowing domain creation",
+	},
+
+	// ====================================================================
+	// evidence_mgmt module — OC-EV-1 through OC-EV-3
+	// ====================================================================
+	{
+		ID: "OC-EV-1", Name: "Duplicate Evidence Submission", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "evidence_mgmt", File: "x/evidence_mgmt/keeper/openclaw_evidence_test.go",
+		TestFunc: "TestOC_EV1_DuplicateEvidenceSubmission",
+		Defense:  "Keeper rejects duplicate content hashes per claim",
+	},
+	{
+		ID: "OC-EV-2", Name: "Audit Score Bounds", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "evidence_mgmt", File: "x/evidence_mgmt/keeper/openclaw_evidence_test.go",
+		TestFunc: "TestOC_EV2_AuditScoreBounds",
+		Defense:  "Score validated at ValidateBasic layer (>1000000 rejected)",
+	},
+	{
+		ID: "OC-EV-3", Name: "Oracle Registration Validation", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "evidence_mgmt", File: "x/evidence_mgmt/keeper/openclaw_evidence_test.go",
+		TestFunc: "TestOC_EV3_OracleRegistrationValidation",
+		Defense:  "RegisterOracle validates data types and minimum stake",
+	},
+
+	// ====================================================================
+	// vesting_rewards module — OC-VR-1 through OC-VR-6
+	// ====================================================================
+	{
+		ID: "OC-VR-1", Name: "Double Claim Prevention", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
+		TestFunc: "TestOC_VR1_DoubleClaimPrevention",
+		Defense:  "ClaimRewards rejects duplicate claims for same vesting schedule",
+	},
+	{
+		ID: "OC-VR-2", Name: "Cliff Bypass Attempt", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
+		TestFunc: "TestOC_VR2_CliffBypassAttempt",
+		Defense:  "Cliff period enforced; claims before cliff rejected",
+	},
+	{
+		ID: "OC-VR-3", Name: "Zero Amount Vesting", Variant: ZeroClaw, Severity: High,
+		Status: Loophole, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
+		TestFunc: "TestOC_VR3_ZeroAmountVesting",
+		Defense:  "LOOPHOLE: zero amount accepted at keeper level (ValidateBasic blocks it but keeper doesn't)",
+	},
+	{
+		ID: "OC-VR-4", Name: "Negative Amount Vesting", Variant: NanoClaw, Severity: Critical,
+		Status: Loophole, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
+		TestFunc: "TestOC_VR4_NegativeStakeVesting",
+		Defense:  "LOOPHOLE: negative amounts accepted by keeper — underflow/wraparound vulnerability",
+	},
+	{
+		ID: "OC-VR-5", Name: "Pause/Resume Timing Exploit", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
+		TestFunc: "TestOC_VR5_PauseResumeTimingExploit",
+		Defense:  "Pause/resume timing correctly tracked; no extra vesting during pause",
+	},
+	{
+		ID: "OC-VR-6", Name: "Falsify Completed Schedule", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
+		TestFunc: "TestOC_VR6_FalsifyCompletedSchedule",
+		Defense:  "Completed schedules can be falsified (retroactive clawback is by design)",
+	},
+
+	// ====================================================================
+	// partnerships module — OC-PT-1 through OC-PT-6
+	// ====================================================================
+	{
+		ID: "OC-PT-1", Name: "Non-Participant Deposit", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "partnerships", File: "x/partnerships/keeper/openclaw_partnerships_test.go",
+		TestFunc: "TestOC_PT1_NonParticipantDeposit",
+		Defense:  "Deposit rejected from non-participants",
+	},
+	{
+		ID: "OC-PT-2", Name: "Zero Amount Deposit", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "partnerships", File: "x/partnerships/keeper/openclaw_partnerships_test.go",
+		TestFunc: "TestOC_PT2_ZeroAmountDeposit",
+		Defense:  "Zero amount rejected at ValidateBasic and handler",
+	},
+	{
+		ID: "OC-PT-3", Name: "Self-Approval Operation", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "partnerships", File: "x/partnerships/keeper/openclaw_partnerships_test.go",
+		TestFunc: "TestOC_PT3_SelfApprovalOperation",
+		Defense:  "Self-approval prevented; requires different counterparty",
+	},
+	{
+		ID: "OC-PT-4", Name: "Formation Window Expiry", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "partnerships", File: "x/partnerships/keeper/openclaw_partnerships_test.go",
+		TestFunc: "TestOC_PT4_FormationWindowExpiry",
+		Defense:  "Formation window enforced; actions after expiry rejected",
+	},
+	{
+		ID: "OC-PT-5", Name: "Double Acceptance", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "partnerships", File: "x/partnerships/keeper/openclaw_partnerships_test.go",
+		TestFunc: "TestOC_PT5_DoubleAcceptance",
+		Defense:  "Double acceptance of partnership rejected",
+	},
+	{
+		ID: "OC-PT-6", Name: "Unauthorized Dissolution", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "partnerships", File: "x/partnerships/keeper/openclaw_partnerships_test.go",
+		TestFunc: "TestOC_PT6_UnauthorizedDissolution",
+		Defense:  "Dissolution requires authorized participant",
+	},
+
+	// ====================================================================
+	// home module — OC-HM-1 through OC-HM-4
+	// ====================================================================
+	{
+		ID: "OC-HM-1", Name: "Non-Owner Key Registration", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "home", File: "x/home/keeper/openclaw_home_test.go",
+		TestFunc: "TestOC_HM1_NonOwnerKeyRegistration",
+		Defense:  "Key registration restricted to home owner",
+	},
+	{
+		ID: "OC-HM-2", Name: "Session Limit Exceeded", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "home", File: "x/home/keeper/openclaw_home_test.go",
+		TestFunc: "TestOC_HM2_SessionLimitExceeded",
+		Defense:  "MaxSessions per home enforced",
+	},
+	{
+		ID: "OC-HM-3", Name: "Non-Owner Session Start", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "home", File: "x/home/keeper/openclaw_home_test.go",
+		TestFunc: "TestOC_HM3_NonOwnerSessionStart",
+		Defense:  "Session start requires registered, non-revoked key",
+	},
+	{
+		ID: "OC-HM-4", Name: "Duplicate Home Creation", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "home", File: "x/home/keeper/openclaw_home_test.go",
+		TestFunc: "TestOC_HM4_DuplicateHomeCreation",
+		Defense:  "Per-account home creation limit enforced",
+	},
+
+	// ====================================================================
+	// capture_defense module — OC-CD-1 through OC-CD-4
+	// ====================================================================
+	{
+		ID: "OC-CD-1", Name: "Expired Qualification Bypass", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "capture_defense", File: "x/capture_defense/keeper/openclaw_capturedefense_test.go",
+		TestFunc: "TestOC_CD1_ExpiredQualificationCheck",
+		Defense:  "Expiration boundary correctly enforced at ExpiresAtBlock+1",
+	},
+	{
+		ID: "OC-CD-2", Name: "Min Accuracy Threshold", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "capture_defense", File: "x/capture_defense/keeper/openclaw_capturedefense_test.go",
+		TestFunc: "TestOC_CD2_MinAccuracyThreshold",
+		Defense:  "77% accuracy threshold enforced with correct boundary (76% rejected, 77% accepted)",
+	},
+	{
+		ID: "OC-CD-3", Name: "Duplicate Qualification", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "capture_defense", File: "x/capture_defense/keeper/openclaw_capturedefense_test.go",
+		TestFunc: "TestOC_CD3_DuplicateQualification",
+		Defense:  "Duplicate qualifications rejected; re-qualification after expiry allowed",
+	},
+	{
+		ID: "OC-CD-4", Name: "Self-Endorsement", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "capture_defense", File: "x/capture_defense/keeper/openclaw_capturedefense_test.go",
+		TestFunc: "TestOC_CD4_SelfEndorsement",
+		Defense:  "Self-endorsement filtered from endorser count",
+	},
+
+	// ====================================================================
 	// Cross-module probes (planned, not yet implemented)
 	// ====================================================================
 	{
