@@ -46,6 +46,9 @@ func (k Keeper) CreateVestingSchedule(
 	if _, ok := totalBig.SetString(totalAmount, 10); !ok {
 		return nil, types.ErrInvalidRewardAmount
 	}
+	if totalBig.Sign() <= 0 {
+		return nil, types.ErrInvalidRewardAmount
+	}
 
 	reserveRate := 1000000 - cfg.MaxRelease // basis points
 	reserveBig := new(big.Int).Mul(totalBig, big.NewInt(int64(reserveRate)))

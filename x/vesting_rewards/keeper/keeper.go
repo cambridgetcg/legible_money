@@ -21,9 +21,8 @@ type Keeper struct {
 	storeService store.KVStoreService
 
 	// Dependency keepers
-	bankKeeper        types.BankKeeper
-	stakingKeeper     types.StakingKeeper
-	autopoiesisKeeper types.AutopoiesisKeeper
+	bankKeeper    types.BankKeeper
+	stakingKeeper types.StakingKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -80,20 +79,6 @@ func (k Keeper) GetAuthority() string {
 // GetStakingKeeper returns the staking keeper for external use.
 func (k Keeper) GetStakingKeeper() types.StakingKeeper {
 	return k.stakingKeeper
-}
-
-// SetAutopoiesisKeeper sets the autopoiesis keeper after initialization (avoids circular deps).
-func (k *Keeper) SetAutopoiesisKeeper(ak types.AutopoiesisKeeper) {
-	k.autopoiesisKeeper = ak
-}
-
-// GetBlockRewardMultiplier returns the current block reward multiplier from autopoiesis (BPS, 1M = 1.0x).
-// Returns 1M (no multiplier) if autopoiesis is not wired.
-func (k Keeper) GetBlockRewardMultiplier(ctx sdk.Context) uint64 {
-	if k.autopoiesisKeeper != nil {
-		return k.autopoiesisKeeper.GetMultiplier(ctx, "blockreward.system")
-	}
-	return 1_000_000
 }
 
 // SetBlockTxCount stores the transaction count for the current block.

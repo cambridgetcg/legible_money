@@ -97,17 +97,12 @@ func (r *RehearsalQueryClient) CounterFacts(_ context.Context, _ string) ([]agen
 	return nil, nil
 }
 
-func (r *RehearsalQueryClient) ContractState(_ context.Context, _, _ string) (string, bool, error) {
-	return "", false, nil
+func (r *RehearsalQueryClient) BugFacts(_ context.Context, _ string) ([]agentsdk.FactInfo, error) {
+	return nil, nil
 }
 
-func (r *RehearsalQueryClient) ContractInfo(_ context.Context, addr string) (*agentsdk.ContractInfoResult, error) {
-	return &agentsdk.ContractInfoResult{
-		Address:    addr,
-		Creator:    "lgm1rehearsal",
-		CodeHash:   "0000000000000000",
-		BvmVersion: 1,
-	}, nil
+func (r *RehearsalQueryClient) ProposalsByTrigger(_ context.Context, _ string) ([]agentsdk.ProposalInfo, error) {
+	return nil, nil
 }
 
 // SetBalance sets a specific agent's balance.
@@ -212,6 +207,14 @@ func (r *RehearsalTxClient) EndSession(_ context.Context, _, _ string) (string, 
 }
 
 func (r *RehearsalTxClient) SetSpendingLimit(_ context.Context, _, _ string, _, _ uint64) (string, error) {
+	return r.nextHash(), nil
+}
+
+func (r *RehearsalTxClient) SubmitLIP(_ context.Context, _ agentsdk.SubmitLIPRequest) (string, error) {
+	return r.nextHash(), nil
+}
+
+func (r *RehearsalTxClient) CreateVesting(_ context.Context, _ agentsdk.CreateVestingRequest) (string, error) {
 	return r.nextHash(), nil
 }
 

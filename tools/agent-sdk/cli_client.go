@@ -241,63 +241,45 @@ func (c *CLIClient) CounterFacts(ctx context.Context, factID string) ([]CounterF
 	return nil, fmt.Errorf("CounterFacts: query not implemented in knowledge CLI")
 }
 
-func (c *CLIClient) ContractState(ctx context.Context, contractAddr, key string) (string, bool, error) {
-	if c.RESTAddr == "" {
-		return "", false, fmt.Errorf("RESTAddr not set — cannot query contract state")
-	}
-	url := fmt.Sprintf("%s/legible/bvm/v1/state/%s/%s", c.RESTAddr, contractAddr, key)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (c *CLIClient) BugFacts(ctx context.Context, domain string) ([]FactInfo, error) {
+	// Fetch all facts in the domain and filter to protocol_observation category.
+	facts, err := c.FactsByDomain(ctx, domain)
 	if err != nil {
-		return "", false, fmt.Errorf("creating request: %w", err)
+		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", false, fmt.Errorf("querying contract state: %w", err)
+	var bugs []FactInfo
+	for _, f := range facts {
+		if f.Category == "protocol_observation" {
+			bugs = append(bugs, f)
+		}
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return "", false, nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", false, fmt.Errorf("contract state query returned %d", resp.StatusCode)
-	}
-
-	var result struct {
-		Value string `json:"value"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", false, fmt.Errorf("parsing contract state: %w", err)
-	}
-	return result.Value, true, nil
+	return bugs, nil
 }
 
-func (c *CLIClient) ContractInfo(ctx context.Context, contractAddr string) (*ContractInfoResult, error) {
-	if c.RESTAddr == "" {
-		return nil, fmt.Errorf("RESTAddr not set — cannot query contract info")
-	}
-	url := fmt.Sprintf("%s/legible/bvm/v1/contract/%s", c.RESTAddr, contractAddr)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (c *CLIClient) ProposalsByTrigger(ctx context.Context, triggerType string) ([]ProposalInfo, error) {
+	out, err := c.runQuery(ctx, "query", "gov", "proposals", "--status", "voting")
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("querying contract: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("contract %s not found", contractAddr)
+		return nil, err
 	}
 
-	var result struct {
-		Contract ContractInfoResult `json:"contract"`
+	var resp struct {
+		Proposals []ProposalInfo `json:"proposals"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("parsing contract info: %w", err)
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing proposals: %w", err)
 	}
-	return &result.Contract, nil
+
+	// Filter by trigger type if specified.
+	if triggerType == "" {
+		return resp.Proposals, nil
+	}
+	var filtered []ProposalInfo
+	for _, p := range resp.Proposals {
+		if p.TriggerType == triggerType {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered, nil
 }
 
 // --- TxClient Implementation ---
@@ -446,4 +428,355 @@ func (c *CLIClient) SetSpendingLimit(ctx context.Context, homeID, keyType string
 		"--key-type", keyType,
 		"--max-amount", fmt.Sprintf("%d%s", maxAmount, Denom),
 		"--period-blocks", fmt.Sprintf("%d", periodBlocks))
+}
+
+// --- Governance Operations ---
+
+func (c *CLIClient) SubmitLIP(ctx context.Context, req SubmitLIPRequest) (string, error) {
+	args := []string{
+		"tx", "gov", "submit-proposal",
+		"--title", req.Title,
+		"--description", req.Description,
+		"--deposit", fmt.Sprintf("%d%s", req.Deposit, Denom),
+	}
+	if req.FixClaimID != "" {
+		args = append(args, "--fix-claim-id", req.FixClaimID)
+	}
+	if len(req.BugFactIDs) > 0 {
+		args = append(args, "--bug-fact-ids", strings.Join(req.BugFactIDs, ","))
+	}
+	return c.runTx(ctx, args...)
+}
+
+// --- Vesting Rewards Operations ---
+
+func (c *CLIClient) CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error) {
+	args := []string{
+		"tx", "vesting-rewards", "create-vesting",
+		req.Beneficiary,
+		fmt.Sprintf("%d%s", req.Amount, Denom),
+		"--source", req.Source,
+	}
+	if req.Category != "" {
+		args = append(args, "--category", req.Category)
+	}
+	if req.Description != "" {
+		args = append(args, "--description", req.Description)
+	}
+	return c.runTx(ctx, args...)
+}
+
+// --- Dispute Operations (x/disputes) ---
+
+func (c *CLIClient) GetDispute(ctx context.Context, disputeID string) (*DisputeInfo, error) {
+	out, err := c.runQuery(ctx, "query", "disputes", "dispute", disputeID)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Dispute DisputeInfo `json:"dispute"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing dispute: %w", err)
+	}
+	return &resp.Dispute, nil
+}
+
+func (c *CLIClient) DisputesByFact(ctx context.Context, factID string) ([]DisputeInfo, error) {
+	out, err := c.runQuery(ctx, "query", "disputes", "disputes-by-fact", factID)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Disputes []DisputeInfo `json:"disputes"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing disputes: %w", err)
+	}
+	return resp.Disputes, nil
+}
+
+func (c *CLIClient) ActiveDisputes(ctx context.Context) ([]DisputeInfo, error) {
+	out, err := c.runQuery(ctx, "query", "disputes", "active-disputes")
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Disputes []DisputeInfo `json:"disputes"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing active disputes: %w", err)
+	}
+	return resp.Disputes, nil
+}
+
+func (c *CLIClient) DisputeVotes(ctx context.Context, disputeID string) ([]DisputeVoteInfo, error) {
+	out, err := c.runQuery(ctx, "query", "disputes", "votes", disputeID)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Votes []DisputeVoteInfo `json:"votes"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing votes: %w", err)
+	}
+	return resp.Votes, nil
+}
+
+func (c *CLIClient) InitiateDispute(ctx context.Context, req InitiateDisputeRequest) (string, error) {
+	return c.runTx(ctx, "tx", "disputes", "initiate-dispute",
+		req.TargetID, req.Reason,
+		"--stake", fmt.Sprintf("%d%s", req.Stake, Denom))
+}
+
+func (c *CLIClient) CommitDisputeEvidence(ctx context.Context, disputeID, commitmentHash string) (string, error) {
+	return c.runTx(ctx, "tx", "disputes", "commit-evidence", disputeID, commitmentHash)
+}
+
+func (c *CLIClient) RevealDisputeEvidence(ctx context.Context, req RevealDisputeEvidenceRequest) (string, error) {
+	args := []string{
+		"tx", "disputes", "reveal-evidence", req.DisputeID,
+		"--nonce", req.Nonce,
+	}
+	for _, e := range req.Evidence {
+		args = append(args, "--evidence", e)
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) ArbiterVote(ctx context.Context, req ArbiterVoteRequest) (string, error) {
+	return c.runTx(ctx, "tx", "disputes", "arbiter-vote",
+		req.DisputeID, string(req.Vote),
+		"--reasoning", req.Reasoning)
+}
+
+func (c *CLIClient) EscalateDispute(ctx context.Context, disputeID string, additionalStake uint64) (string, error) {
+	return c.runTx(ctx, "tx", "disputes", "escalate-dispute", disputeID,
+		"--additional-stake", fmt.Sprintf("%d%s", additionalStake, Denom))
+}
+
+// --- Evidence Management Operations (x/evidence_mgmt) ---
+
+func (c *CLIClient) EvidenceByClaimID(ctx context.Context, claimID string) ([]EvidenceInfo, error) {
+	out, err := c.runQuery(ctx, "query", "evidence-mgmt", "evidence-by-claim", claimID)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Evidence []EvidenceInfo `json:"evidence"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing evidence: %w", err)
+	}
+	return resp.Evidence, nil
+}
+
+func (c *CLIClient) ActiveOracles(ctx context.Context) ([]OracleInfo, error) {
+	out, err := c.runQuery(ctx, "query", "evidence-mgmt", "active-oracles")
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Oracles []OracleInfo `json:"oracles"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing oracles: %w", err)
+	}
+	return resp.Oracles, nil
+}
+
+func (c *CLIClient) SubmitEvidence(ctx context.Context, req SubmitEvidenceRequest) (string, error) {
+	args := []string{
+		"tx", "evidence-mgmt", "submit-evidence",
+		req.ClaimID, req.EvidenceType, req.ContentHash,
+		"--description", req.Description,
+	}
+	if req.SourceURI != "" {
+		args = append(args, "--source-uri", req.SourceURI)
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) AuditEvidence(ctx context.Context, req AuditEvidenceRequest) (string, error) {
+	return c.runTx(ctx, "tx", "evidence-mgmt", "audit-evidence",
+		req.EvidenceID,
+		"--stake", fmt.Sprintf("%d%s", req.Stake, Denom),
+		"--score", fmt.Sprintf("%d", req.Score),
+		"--rationale", req.Rationale)
+}
+
+func (c *CLIClient) RegisterOracle(ctx context.Context, req RegisterOracleRequest) (string, error) {
+	args := []string{
+		"tx", "evidence-mgmt", "register-oracle",
+		req.Name,
+		"--stake", fmt.Sprintf("%d%s", req.Stake, Denom),
+	}
+	if len(req.DataTypes) > 0 {
+		args = append(args, "--data-types", strings.Join(req.DataTypes, ","))
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) SubmitOracleData(ctx context.Context, req SubmitOracleDataRequest) (string, error) {
+	return c.runTx(ctx, "tx", "evidence-mgmt", "submit-oracle-data",
+		req.OracleID, req.ClaimID, req.DataType, req.ContentHash)
+}
+
+// --- Research Operations (x/research) ---
+
+func (c *CLIClient) GetResearch(ctx context.Context, researchID string) (*ResearchInfo, error) {
+	out, err := c.runQuery(ctx, "query", "research", "research", researchID)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Research ResearchInfo `json:"research"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing research: %w", err)
+	}
+	return &resp.Research, nil
+}
+
+func (c *CLIClient) ResearchSubmissions(ctx context.Context, status, domain string) ([]ResearchInfo, error) {
+	args := []string{"query", "research", "submissions"}
+	if status != "" {
+		args = append(args, "--status", status)
+	}
+	if domain != "" {
+		args = append(args, "--domain", domain)
+	}
+	out, err := c.runQuery(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Submissions []ResearchInfo `json:"submissions"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing submissions: %w", err)
+	}
+	return resp.Submissions, nil
+}
+
+func (c *CLIClient) GetBounty(ctx context.Context, bountyID string) (*ResearchBountyInfo, error) {
+	out, err := c.runQuery(ctx, "query", "research", "bounty", bountyID)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Bounty ResearchBountyInfo `json:"bounty"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing bounty: %w", err)
+	}
+	return &resp.Bounty, nil
+}
+
+func (c *CLIClient) SubmitResearch(ctx context.Context, req SubmitResearchRequest) (string, error) {
+	return c.runTx(ctx, "tx", "research", "submit-research",
+		req.Title, req.Description, req.Domain,
+		"--stake", fmt.Sprintf("%d%s", req.Stake, Denom))
+}
+
+func (c *CLIClient) ReviewResearch(ctx context.Context, req ReviewResearchRequest) (string, error) {
+	return c.runTx(ctx, "tx", "research", "review-research",
+		req.ResearchID, string(req.Verdict),
+		"--quality-score", fmt.Sprintf("%d", req.QualityScore),
+		"--reasoning", req.Reasoning)
+}
+
+func (c *CLIClient) CreateResearchBounty(ctx context.Context, req CreateResearchBountyRequest) (string, error) {
+	return c.runTx(ctx, "tx", "research", "create-bounty",
+		req.Title, req.Description,
+		"--reward", fmt.Sprintf("%d%s", req.Reward, Denom),
+		"--deadline-height", fmt.Sprintf("%d", req.DeadlineHeight))
+}
+
+func (c *CLIClient) ClaimResearchBounty(ctx context.Context, bountyID string) (string, error) {
+	return c.runTx(ctx, "tx", "research", "claim-bounty", bountyID)
+}
+
+func (c *CLIClient) FundResearch(ctx context.Context, amount uint64) (string, error) {
+	return c.runTx(ctx, "tx", "research", "fund-research",
+		fmt.Sprintf("%d%s", amount, Denom))
+}
+
+// --- Ontology Operations (x/ontology) ---
+
+func (c *CLIClient) AllDomains(ctx context.Context) ([]DomainInfo, error) {
+	out, err := c.runQuery(ctx, "query", "ontology", "all-domains")
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Domains []DomainInfo `json:"domains"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing domains: %w", err)
+	}
+	return resp.Domains, nil
+}
+
+func (c *CLIClient) DomainsByStratum(ctx context.Context, stratum uint32) ([]DomainInfo, error) {
+	out, err := c.runQuery(ctx, "query", "ontology", "domains-by-stratum", fmt.Sprintf("%d", stratum))
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Domains []DomainInfo `json:"domains"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing domains: %w", err)
+	}
+	return resp.Domains, nil
+}
+
+func (c *CLIClient) ConfidenceCeiling(ctx context.Context, domain string) (*ConfidenceCeilingInfo, error) {
+	out, err := c.runQuery(ctx, "query", "ontology", "confidence-ceiling", domain)
+	if err != nil {
+		return nil, err
+	}
+	var resp ConfidenceCeilingInfo
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing confidence ceiling: %w", err)
+	}
+	return &resp, nil
+}
+
+func (c *CLIClient) AllLogicZones(ctx context.Context) ([]LogicZoneInfo, error) {
+	out, err := c.runQuery(ctx, "query", "ontology", "all-logic-zones")
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Zones []LogicZoneInfo `json:"logic_zones"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing logic zones: %w", err)
+	}
+	return resp.Zones, nil
+}
+
+func (c *CLIClient) ProposeOntologyDomain(ctx context.Context, req ProposeOntologyDomainRequest) (string, error) {
+	return c.runTx(ctx, "tx", "ontology", "propose-domain",
+		req.Name, req.DisplayName,
+		"--description", req.Description,
+		"--stratum", fmt.Sprintf("%d", req.Stratum),
+		"--stake", fmt.Sprintf("%d%s", req.Stake, Denom))
+}
+
+func (c *CLIClient) VoteDomainProposal(ctx context.Context, proposalID string, approve bool) (string, error) {
+	voteStr := "false"
+	if approve {
+		voteStr = "true"
+	}
+	return c.runTx(ctx, "tx", "ontology", "vote-domain-proposal", proposalID, voteStr)
+}
+
+func (c *CLIClient) AcknowledgeIncompleteness(ctx context.Context, factID, zone, reason string) (string, error) {
+	return c.runTx(ctx, "tx", "ontology", "acknowledge-incompleteness",
+		factID, zone,
+		"--reason", reason)
 }

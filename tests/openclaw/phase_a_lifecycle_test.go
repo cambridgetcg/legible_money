@@ -9,7 +9,7 @@ import (
 
 	agentsdk "github.com/legible-money/legible/tools/agent-sdk"
 	"github.com/legible-money/legible/tests/openclaw/agents"
-	"github.com/legible-money/legible/tests/openclaw/devnet"
+	"github.com/legible-money/legible/tests/openclaw/env"
 	"github.com/legible-money/legible/tests/openclaw/helpers"
 )
 
@@ -19,20 +19,17 @@ func TestPhaseA(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Boot devnet
-	h := devnet.NewHarness(t, binaryPath)
-	if err := h.Start(ctx); err != nil {
-		t.Fatalf("devnet start failed: %v", err)
-	}
+	// Boot environment (devnet, testnet, or external)
+	e := env.Boot(t, binaryPath, ctx)
+	t.Logf("Phase A: %s", env.EnvInfo(e))
 
 	// Create a query client for the validator key (used across subtests)
-	valClient := h.NewCLIClient("validator")
+	valClient := e.NewCLIClient("validator")
 
 	// State carried across sequential subtests
 	var (
 		test1Addr string
 		claimText = "The speed of light in vacuum is approximately 299792458 meters per second"
-		claimCat  = "replicated" // empirical zone compatible; "computational" requires presburger/peano/propositional
 	)
 
 	t.Run("OCA-A-01_ChainBootAndBlockProduction", func(t *testing.T) {
@@ -43,21 +40,21 @@ func TestPhaseA(t *testing.T) {
 		if status.LatestHeight <= 0 {
 			t.Fatalf("height should be > 0, got %d", status.LatestHeight)
 		}
-		if status.ChainID != h.ChainID {
-			t.Fatalf("chain_id mismatch: got %s, want %s", status.ChainID, h.ChainID)
+		if status.ChainID != e.ChainID() {
+			t.Fatalf("chain_id mismatch: got %s, want %s", status.ChainID, e.ChainID())
 		}
 		helpers.Result(t, "A-01", "chain booted and producing blocks")
 		t.Logf("height=%d chain_id=%s", status.LatestHeight, status.ChainID)
 	})
 
 	t.Run("OCA-A-02_AccountRegistration", func(t *testing.T) {
-		test1Client := h.NewCLIClient("test1")
+		test1Client := e.NewCLIClient("test1")
 		_, err := test1Client.RegisterAccount(ctx, "")
 		if err != nil {
 			t.Logf("RegisterAccount returned error (may be expected if module not wired): %v", err)
 		}
 		helpers.WaitForTx(ctx, valClient)
-		test1Addr = h.KeyAddress("test1")
+		test1Addr = e.KeyAddress("test1")
 		if test1Addr == "" {
 			t.Fatal("test1 address is empty")
 		}
@@ -65,10 +62,10 @@ func TestPhaseA(t *testing.T) {
 	})
 
 	t.Run("OCA-A-03_AccountFunding", func(t *testing.T) {
-		test1Addr = h.KeyAddress("test1")
+		test1Addr = e.KeyAddress("test1")
 		fundAmount := uint64(10_000_000_000) // 10K LGM
 
-		if err := h.FundAccount(ctx, "validator", test1Addr, fundAmount); err != nil {
+		if err := e.FundAccount(ctx, "validator", test1Addr, fundAmount); err != nil {
 			t.Fatalf("FundAccount: %v", err)
 		}
 		helpers.WaitForTx(ctx, valClient)
@@ -78,13 +75,13 @@ func TestPhaseA(t *testing.T) {
 	})
 
 	t.Run("OCA-A-04_ClaimSubmission", func(t *testing.T) {
-		test1Client := h.NewCLIClient("test1")
+		test1Client := e.NewCLIClient("test1")
 		stakeUlgm := uint64(1_000_000) // 1 LGM
 
 		txHash, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     claimText,
 			Domain:   "general",
-			Category: claimCat,
+			Category: "empirical",
 			Stake:    stakeUlgm,
 		})
 		if err != nil {
@@ -93,7 +90,7 @@ func TestPhaseA(t *testing.T) {
 		helpers.WaitForTx(ctx, valClient)
 
 		// Verify claim is queryable
-		test1Addr = h.KeyAddress("test1")
+		test1Addr = e.KeyAddress("test1")
 		claims, err := test1Client.ClaimsBySubmitter(ctx, test1Addr)
 		if err != nil {
 			t.Logf("ClaimsBySubmitter query error (module may need wiring): %v", err)
@@ -199,7 +196,7 @@ func TestPhaseA(t *testing.T) {
 	})
 
 	t.Run("OCA-A-10_RewardDistribution", func(t *testing.T) {
-		valAddr := h.KeyAddress("validator")
+		valAddr := e.KeyAddress("validator")
 		bal, err := valClient.Balance(ctx, valAddr)
 		if err != nil {
 			t.Fatalf("Balance query: %v", err)
@@ -214,13 +211,10 @@ func TestPhaseA_AgentSDKWorkflow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	h := devnet.NewHarness(t, binaryPath)
-	if err := h.Start(ctx); err != nil {
-		t.Fatalf("devnet start failed: %v", err)
-	}
+	e := env.Boot(t, binaryPath, ctx)
 
 	// Create an agent using the SDK
-	agent, client, err := agents.CreateAgent(h, "test1", agentsdk.RoleVerifier)
+	agent, client, err := agents.CreateAgentFromEnv(e, "test1", agentsdk.RoleVerifier)
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
 	}

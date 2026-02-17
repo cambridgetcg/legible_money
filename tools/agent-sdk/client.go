@@ -38,12 +38,58 @@ type QueryClient interface {
 	// CounterFacts returns counter-facts targeting a fact.
 	CounterFacts(ctx context.Context, factID string) ([]CounterFactInfo, error)
 
-	// ContractState reads a single storage slot from a deployed BVM contract.
-	// Returns the hex-encoded value and whether the key was found.
-	ContractState(ctx context.Context, contractAddr, key string) (string, bool, error)
+	// BugFacts returns verified protocol_observation facts for a domain.
+	BugFacts(ctx context.Context, domain string) ([]FactInfo, error)
 
-	// ContractInfo returns metadata about a deployed BVM contract.
-	ContractInfo(ctx context.Context, contractAddr string) (*ContractInfoResult, error)
+	// ProposalsByTrigger returns governance proposals by trigger type.
+	ProposalsByTrigger(ctx context.Context, triggerType string) ([]ProposalInfo, error)
+
+	// --- Dispute Queries (x/disputes) ---
+
+	// GetDispute returns details of a specific dispute.
+	GetDispute(ctx context.Context, disputeID string) (*DisputeInfo, error)
+
+	// DisputesByFact returns all disputes targeting a fact.
+	DisputesByFact(ctx context.Context, factID string) ([]DisputeInfo, error)
+
+	// ActiveDisputes returns all non-resolved disputes.
+	ActiveDisputes(ctx context.Context) ([]DisputeInfo, error)
+
+	// DisputeVotes returns votes cast on a dispute.
+	DisputeVotes(ctx context.Context, disputeID string) ([]DisputeVoteInfo, error)
+
+	// --- Evidence Queries (x/evidence_mgmt) ---
+
+	// EvidenceByClaimID returns all evidence submitted for a claim.
+	EvidenceByClaimID(ctx context.Context, claimID string) ([]EvidenceInfo, error)
+
+	// ActiveOracles returns all active oracle feeds.
+	ActiveOracles(ctx context.Context) ([]OracleInfo, error)
+
+	// --- Research Queries (x/research) ---
+
+	// GetResearch returns details of a research submission.
+	GetResearch(ctx context.Context, researchID string) (*ResearchInfo, error)
+
+	// ResearchSubmissions returns research filtered by status and/or domain.
+	ResearchSubmissions(ctx context.Context, status, domain string) ([]ResearchInfo, error)
+
+	// GetBounty returns details of a research bounty.
+	GetBounty(ctx context.Context, bountyID string) (*ResearchBountyInfo, error)
+
+	// --- Ontology Queries (x/ontology) ---
+
+	// AllDomains returns all registered knowledge domains.
+	AllDomains(ctx context.Context) ([]DomainInfo, error)
+
+	// DomainsByStratum returns domains in a specific stratum.
+	DomainsByStratum(ctx context.Context, stratum uint32) ([]DomainInfo, error)
+
+	// ConfidenceCeiling returns the max confidence and decay rate for a domain.
+	ConfidenceCeiling(ctx context.Context, domain string) (*ConfidenceCeilingInfo, error)
+
+	// AllLogicZones returns all registered logic zones.
+	AllLogicZones(ctx context.Context) ([]LogicZoneInfo, error)
 }
 
 // TxClient defines the interface for submitting transactions.
@@ -101,6 +147,71 @@ type TxClient interface {
 
 	// SetSpendingLimit sets a spending limit on an Agent Home key type (x/home).
 	SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error)
+
+	// SubmitLIP submits a governance proposal linking a fix to bug facts (x/gov).
+	SubmitLIP(ctx context.Context, req SubmitLIPRequest) (string, error)
+
+	// CreateVesting creates a vesting reward entry for bounty payouts (x/vesting_rewards).
+	CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error)
+
+	// --- Dispute Transactions (x/disputes) ---
+
+	// InitiateDispute opens a dispute against a fact or claim.
+	InitiateDispute(ctx context.Context, req InitiateDisputeRequest) (string, error)
+
+	// CommitDisputeEvidence commits evidence hash (phase 1 of commit-reveal).
+	CommitDisputeEvidence(ctx context.Context, disputeID, commitmentHash string) (string, error)
+
+	// RevealDisputeEvidence reveals evidence content (phase 2 of commit-reveal).
+	RevealDisputeEvidence(ctx context.Context, req RevealDisputeEvidenceRequest) (string, error)
+
+	// ArbiterVote casts an arbiter vote on a dispute.
+	ArbiterVote(ctx context.Context, req ArbiterVoteRequest) (string, error)
+
+	// EscalateDispute escalates to a higher tier with additional stake.
+	EscalateDispute(ctx context.Context, disputeID string, additionalStake uint64) (string, error)
+
+	// --- Evidence Transactions (x/evidence_mgmt) ---
+
+	// SubmitEvidence submits evidence supporting a claim.
+	SubmitEvidence(ctx context.Context, req SubmitEvidenceRequest) (string, error)
+
+	// AuditEvidence stakes on evidence quality assessment.
+	AuditEvidence(ctx context.Context, req AuditEvidenceRequest) (string, error)
+
+	// RegisterOracle registers a new oracle feed with stake.
+	RegisterOracle(ctx context.Context, req RegisterOracleRequest) (string, error)
+
+	// SubmitOracleData submits oracle data for a claim.
+	SubmitOracleData(ctx context.Context, req SubmitOracleDataRequest) (string, error)
+
+	// --- Research Transactions (x/research) ---
+
+	// SubmitResearch submits a new research entry.
+	SubmitResearch(ctx context.Context, req SubmitResearchRequest) (string, error)
+
+	// ReviewResearch submits a peer review.
+	ReviewResearch(ctx context.Context, req ReviewResearchRequest) (string, error)
+
+	// CreateResearchBounty creates a research bounty with reward.
+	CreateResearchBounty(ctx context.Context, req CreateResearchBountyRequest) (string, error)
+
+	// ClaimResearchBounty claims an open research bounty.
+	ClaimResearchBounty(ctx context.Context, bountyID string) (string, error)
+
+	// FundResearch adds funds to the research treasury.
+	FundResearch(ctx context.Context, amount uint64) (string, error)
+
+	// --- Ontology Transactions (x/ontology) ---
+
+	// ProposeOntologyDomain proposes a new domain in a stratum.
+	ProposeOntologyDomain(ctx context.Context, req ProposeOntologyDomainRequest) (string, error)
+
+	// VoteDomainProposal votes on an ontology domain proposal.
+	VoteDomainProposal(ctx context.Context, proposalID string, approve bool) (string, error)
+
+	// AcknowledgeIncompleteness records a Gödelian acknowledgment for a fact.
+	AcknowledgeIncompleteness(ctx context.Context, factID, zone, reason string) (string, error)
 }
 
 // --- Response Types ---
@@ -182,14 +293,6 @@ type ClaimInfo struct {
 	Stake     string `json:"stake"`
 }
 
-// ContractInfoResult holds BVM contract metadata.
-type ContractInfoResult struct {
-	Address    string `json:"address"`
-	Creator    string `json:"creator"`
-	CodeHash   string `json:"code_hash"`
-	BvmVersion uint32 `json:"bvm_version"`
-}
-
 // --- Request Types ---
 
 // RegisterAgentRequest contains fields for agent registration.
@@ -207,6 +310,258 @@ type SubmitClaimRequest struct {
 	Domain   string `json:"domain"`
 	Category string `json:"category"`
 	Stake    uint64 `json:"stake"` // in ulgm
+}
+
+// SubmitLIPRequest contains fields for governance proposal (LIP) submission.
+type SubmitLIPRequest struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	BugFactIDs  []string `json:"bug_fact_ids"`  // References to verified bug facts
+	FixClaimID  string   `json:"fix_claim_id"`  // The fix claim
+	Deposit     uint64   `json:"deposit"`        // in ulgm
+}
+
+// CreateVestingRequest contains fields for vesting reward creation.
+type CreateVestingRequest struct {
+	Beneficiary string `json:"beneficiary"` // Recipient address
+	Amount      uint64 `json:"amount"`      // in ulgm
+	Source      string `json:"source"`      // e.g. "bounty_fulfillment"
+	Category    string `json:"category"`    // e.g. "protocol_observation"
+	Description string `json:"description"` // Human-readable description
+}
+
+// ProposalInfo holds governance proposal data.
+type ProposalInfo struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Status      string `json:"status"` // "voting", "passed", "rejected", "deposit"
+	TriggerType string `json:"trigger_type,omitempty"`
+	SubmittedBy string `json:"submitted_by"`
+}
+
+// BugFixRequest contains fields for submitting a bug fix.
+type BugFixRequest struct {
+	Title          string   `json:"title"`
+	FixDescription string   `json:"fix_description"`
+	BugFactIDs     []string `json:"bug_fact_ids"` // Verified bug facts this fix addresses
+	Stake          uint64   `json:"stake"`         // in ulgm
+	Deposit        uint64   `json:"deposit"`       // LIP deposit in ulgm
+}
+
+// BountyFinder holds the address and share for a bug finder.
+type BountyFinder struct {
+	Address string `json:"address"`
+	Share   uint64 `json:"share"` // in ulgm
+}
+
+// BountyDistribution contains fields for distributing bug bounty payouts.
+type BountyDistribution struct {
+	BugFinders []BountyFinder `json:"bug_finders"`
+	FixAuthor  string         `json:"fix_author"`
+	FixShare   uint64         `json:"fix_share"`  // in ulgm
+	BugFactIDs []string       `json:"bug_fact_ids"`
+	LIPID      string         `json:"lip_id"`
+}
+
+// --- Dispute Types ---
+
+// DisputeVote represents the vote options in a dispute.
+type DisputeVote string
+
+const (
+	DisputeVoteChallenger DisputeVote = "CHALLENGER"
+	DisputeVoteDefender   DisputeVote = "DEFENDER"
+	DisputeVoteAbstain    DisputeVote = "ABSTAIN"
+)
+
+// InitiateDisputeRequest contains fields for opening a dispute.
+type InitiateDisputeRequest struct {
+	TargetID string `json:"target_id"` // Fact or claim ID
+	Reason   string `json:"reason"`
+	Stake    uint64 `json:"stake"` // in ulgm
+}
+
+// RevealDisputeEvidenceRequest contains fields for revealing dispute evidence.
+type RevealDisputeEvidenceRequest struct {
+	DisputeID string   `json:"dispute_id"`
+	Evidence  []string `json:"evidence"` // Evidence content items
+	Nonce     string   `json:"nonce"`
+}
+
+// ArbiterVoteRequest contains fields for casting an arbiter vote.
+type ArbiterVoteRequest struct {
+	DisputeID string      `json:"dispute_id"`
+	Vote      DisputeVote `json:"vote"`
+	Reasoning string      `json:"reasoning"`
+}
+
+// DisputeInfo holds dispute data.
+type DisputeInfo struct {
+	ID              string `json:"id"`
+	TargetID        string `json:"target_id"`
+	Challenger      string `json:"challenger"`
+	Status          string `json:"status"`   // open, evidence, voting, resolved, expired, escalated
+	Outcome         string `json:"outcome"`  // upheld, overturned, inconclusive, weakened, undecidability
+	EscalationTier  uint32 `json:"escalation_tier"` // 1, 2, or 3
+	ChallengerStake string `json:"challenger_stake"`
+	CreatedAtBlock  uint64 `json:"created_at_block"`
+	DeadlineBlock   uint64 `json:"deadline_block"`
+}
+
+// DisputeVoteInfo holds a single arbiter vote.
+type DisputeVoteInfo struct {
+	Arbiter   string `json:"arbiter"`
+	Vote      string `json:"vote"` // CHALLENGER, DEFENDER, ABSTAIN
+	Reasoning string `json:"reasoning"`
+}
+
+// --- Evidence Types ---
+
+// SubmitEvidenceRequest contains fields for submitting evidence.
+type SubmitEvidenceRequest struct {
+	ClaimID      string `json:"claim_id"`
+	EvidenceType string `json:"evidence_type"` // on_chain, oracle_feed, attestation, computation, document, experiment
+	ContentHash  string `json:"content_hash"`
+	Description  string `json:"description"`
+	SourceURI    string `json:"source_uri,omitempty"`
+}
+
+// AuditEvidenceRequest contains fields for auditing evidence quality.
+type AuditEvidenceRequest struct {
+	EvidenceID string `json:"evidence_id"`
+	Stake      uint64 `json:"stake"`     // in ulgm
+	Score      uint32 `json:"score"`     // 0-1000000 (BPS)
+	Rationale  string `json:"rationale"`
+}
+
+// RegisterOracleRequest contains fields for registering an oracle.
+type RegisterOracleRequest struct {
+	Name      string   `json:"name"`
+	DataTypes []string `json:"data_types"`
+	Stake     uint64   `json:"stake"` // in ulgm
+}
+
+// SubmitOracleDataRequest contains fields for submitting oracle data.
+type SubmitOracleDataRequest struct {
+	OracleID    string `json:"oracle_id"`
+	ClaimID     string `json:"claim_id"`
+	DataType    string `json:"data_type"`
+	ContentHash string `json:"content_hash"`
+}
+
+// EvidenceInfo holds evidence data.
+type EvidenceInfo struct {
+	ID           string `json:"id"`
+	ClaimID      string `json:"claim_id"`
+	Submitter    string `json:"submitter"`
+	EvidenceType string `json:"evidence_type"`
+	ContentHash  string `json:"content_hash"`
+	Status       string `json:"status"` // submitted, verified, rejected, expired
+	Description  string `json:"description"`
+}
+
+// OracleInfo holds oracle feed data.
+type OracleInfo struct {
+	ID        string   `json:"id"`
+	Operator  string   `json:"operator"`
+	Name      string   `json:"name"`
+	DataTypes []string `json:"data_types"`
+	Stake     string   `json:"stake"`
+	Status    string   `json:"status"`
+}
+
+// --- Research Types ---
+
+// ReviewVerdict represents the review outcome.
+type ReviewVerdict string
+
+const (
+	ReviewVerdictApprove ReviewVerdict = "APPROVE"
+	ReviewVerdictReject  ReviewVerdict = "REJECT"
+	ReviewVerdictRevise  ReviewVerdict = "REVISE"
+)
+
+// SubmitResearchRequest contains fields for submitting research.
+type SubmitResearchRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Domain      string `json:"domain"`
+	Stake       uint64 `json:"stake"` // in ulgm
+}
+
+// ReviewResearchRequest contains fields for peer reviewing research.
+type ReviewResearchRequest struct {
+	ResearchID   string        `json:"research_id"`
+	Verdict      ReviewVerdict `json:"verdict"`
+	QualityScore uint32        `json:"quality_score"` // 0-100
+	Reasoning    string        `json:"reasoning"`
+}
+
+// CreateResearchBountyRequest contains fields for creating a research bounty.
+type CreateResearchBountyRequest struct {
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Reward         uint64 `json:"reward"`          // in ulgm
+	DeadlineHeight uint64 `json:"deadline_height"` // Block height deadline
+}
+
+// ResearchInfo holds research submission data.
+type ResearchInfo struct {
+	ID          string `json:"id"`
+	Submitter   string `json:"submitter"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Domain      string `json:"domain"`
+	Status      string `json:"status"` // submitted, under_review, accepted, rejected, challenged
+	Stake       string `json:"stake"`
+}
+
+// ResearchBountyInfo holds research bounty data.
+type ResearchBountyInfo struct {
+	ID             string `json:"id"`
+	Creator        string `json:"creator"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Reward         string `json:"reward"`
+	Status         string `json:"status"`          // open, claimed, fulfilled, expired
+	DeadlineHeight uint64 `json:"deadline_height"`
+	Claimer        string `json:"claimer,omitempty"`
+}
+
+// --- Ontology Types ---
+
+// ProposeOntologyDomainRequest contains fields for proposing a domain.
+type ProposeOntologyDomainRequest struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+	Stratum     uint32 `json:"stratum"` // 0-6
+	Stake       uint64 `json:"stake"`   // in ulgm
+}
+
+// DomainInfo holds ontology domain data.
+type DomainInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Stratum     uint32 `json:"stratum"`
+	Status      string `json:"status"`
+}
+
+// ConfidenceCeilingInfo holds confidence ceiling and decay for a domain.
+type ConfidenceCeilingInfo struct {
+	Domain         string `json:"domain"`
+	MaxConfidence  uint32 `json:"max_confidence_bps"` // BPS (0-1000000)
+	DecayRateBPS   uint32 `json:"decay_rate_bps"`
+}
+
+// LogicZoneInfo holds logic zone properties.
+type LogicZoneInfo struct {
+	Zone           string `json:"zone"` // propositional, presburger, peano, set_theory, empirical
+	Complete       bool   `json:"complete"`
+	Decidable      bool   `json:"decidable"`
+	GoedelApplies  bool   `json:"goedel_applies"`
+	MaxConfidence  uint32 `json:"max_confidence_bps"` // BPS (0-1000000)
 }
 
 // --- CLI Client Implementation ---

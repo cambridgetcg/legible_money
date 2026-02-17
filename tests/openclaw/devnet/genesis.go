@@ -77,6 +77,47 @@ func PatchGenesis(genesisPath string) error {
 	return os.WriteFile(genesisPath, out, 0644)
 }
 
+// PatchGenesisForAgent applies base PatchGenesis plus extended phase windows
+// for AI agent reasoning. Commit and reveal phases are widened to 20 blocks
+// (~50s each) so the agent has time to evaluate claims via Claude Opus 4.
+func PatchGenesisForAgent(genesisPath string) error {
+	// Apply base patches first
+	if err := PatchGenesis(genesisPath); err != nil {
+		return err
+	}
+
+	// Re-read to apply agent-specific overrides
+	data, err := os.ReadFile(genesisPath)
+	if err != nil {
+		return fmt.Errorf("reading genesis for agent patches: %w", err)
+	}
+
+	var genesis map[string]interface{}
+	if err := json.Unmarshal(data, &genesis); err != nil {
+		return fmt.Errorf("parsing genesis for agent patches: %w", err)
+	}
+
+	appState, ok := genesis["app_state"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("genesis missing app_state")
+	}
+
+	// Widen commit/reveal phases: 60 blocks each (~150s at 2.521s/block)
+	// The AI agent needs 30-60s per gateway call (skill loading + Claude Opus reasoning),
+	// so phases must be wide enough to survive agent latency.
+	// Proto field names: commit_phase_duration / reveal_phase_duration (uint64).
+	ensureNestedMap(appState, "knowledge", "params")
+	knowledgeParams := appState["knowledge"].(map[string]interface{})["params"].(map[string]interface{})
+	knowledgeParams["commit_phase_duration"] = uint64(60)
+	knowledgeParams["reveal_phase_duration"] = uint64(60)
+
+	out, err := json.MarshalIndent(genesis, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling agent genesis: %w", err)
+	}
+	return os.WriteFile(genesisPath, out, 0644)
+}
+
 // setNestedValue sets a value at a nested map path, creating intermediate maps.
 func setNestedValue(m map[string]interface{}, path []string, value interface{}) {
 	for i, key := range path {

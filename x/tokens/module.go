@@ -110,16 +110,14 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 		panic("failed to unmarshal genesis: " + err.Error())
 	}
 	am.keeper.InitGenesis(ctx, genState)
+	// Also initialize hand-written token/pool entries from raw JSON
+	am.keeper.InitGenesisTokens(ctx, data)
+	am.keeper.InitGenesisPools(ctx, data)
 }
 
-// ExportGenesis exports the module's genesis state.
+// ExportGenesis exports the module's genesis state including secondary token entries.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
-	genState := am.keeper.ExportGenesis(ctx)
-	bz, err := json.Marshal(genState)
-	if err != nil {
-		panic("failed to marshal genesis: " + err.Error())
-	}
-	return bz
+	return am.keeper.ExportGenesisJSON(ctx)
 }
 
 // ConsensusVersion returns the module's consensus version.

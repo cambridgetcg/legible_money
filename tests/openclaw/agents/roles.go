@@ -7,6 +7,7 @@ import (
 
 	agentsdk "github.com/legible-money/legible/tools/agent-sdk"
 	"github.com/legible-money/legible/tests/openclaw/devnet"
+	"github.com/legible-money/legible/tests/openclaw/env"
 )
 
 // CreateAgent creates an Agent SDK instance wired to the harness for a given keyring key.
@@ -32,6 +33,29 @@ func CreateAgent(h *devnet.Harness, keyName string, role agentsdk.AgentRole) (*a
 
 	// Wire CLIClient as both query and tx backend
 	client := h.NewCLIClient(keyName)
+	agent.SetTxClient(client)
+	agent.SetQueryClient(client)
+
+	return agent, client, nil
+}
+
+// CreateAgentFromEnv creates an Agent SDK instance wired to an Environment.
+func CreateAgentFromEnv(e env.Environment, keyName string, role agentsdk.AgentRole) (*agentsdk.Agent, *agentsdk.CLIClient, error) {
+	cfg := agentsdk.AgentConfig{
+		NodeRPC:  e.RPCAddr(),
+		ChainID:  e.ChainID(),
+		KeyDir:   filepath.Join(e.NodeHome(), "agent-keys", keyName),
+		GasPrice: 1,
+		Role:     role,
+		Domains:  []string{"general"},
+	}
+
+	agent := agentsdk.New(cfg)
+	if err := agent.GenerateKey(keyName); err != nil {
+		return nil, nil, err
+	}
+
+	client := e.NewCLIClient(keyName)
 	agent.SetTxClient(client)
 	agent.SetQueryClient(client)
 
