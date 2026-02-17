@@ -12,6 +12,7 @@ package keeper_test
 // ==================================================================================
 
 import (
+	"math/big"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -19,6 +20,9 @@ import (
 	"github.com/legible-money/legible/x/vesting_rewards/keeper"
 	"github.com/legible-money/legible/x/vesting_rewards/types"
 )
+
+// Verify that keeper.NewMsgServerImpl is used (compile-time check)
+var _ = keeper.NewMsgServerImpl
 
 // ---------- OC-VR-1: Double Claim Prevention ----------
 
@@ -114,19 +118,11 @@ func TestOC_VR2_CliffBypassAttempt(t *testing.T) {
 		t.Errorf("ATTACK SUCCEEDED: claimed %s before cliff ended -- cliff bypass vulnerability", claimed)
 	}
 
-	// Verify that 1 block after cliff, rewards start releasing
-	ctx = ctx.WithBlockHeight(6556)
-	releasedAfter := k.CalculateReleasedAmount(ctx, schedule)
-	if releasedAfter == "0" {
-		// This is not necessarily an attack, but it would indicate the cliff
-		// logic also requires elapsed > cliff, which is actually correct since
-		// the code subtracts cliff from elapsed. At exactly cliff+1 the released
-		// amount depends on the half-life curve. Let's check a bit further out.
-		ctx = ctx.WithBlockHeight(7000)
-		releasedLater := k.CalculateReleasedAmount(ctx, schedule)
-		if releasedLater == "0" {
-			t.Error("released amount is still 0 well after cliff; vesting curve may be broken")
-		}
+	// Verify that after cliff, rewards start releasing (check a reasonable distance past cliff)
+	ctx = ctx.WithBlockHeight(7000)
+	releasedAfterCliff := k.CalculateReleasedAmount(ctx, schedule)
+	if releasedAfterCliff == "0" {
+		t.Error("released amount is still 0 well after cliff; vesting curve may be broken")
 	}
 }
 
@@ -201,7 +197,6 @@ func TestOC_VR4_NegativeStakeVesting(t *testing.T) {
 	// The keeper parses amount via big.Int.SetString which accepts "-100".
 	// This should be caught somewhere in the pipeline.
 	if err == nil {
-		// If it didn't error, check that the schedule doesn't have exploitable state
 		t.Error("ATTACK SUCCEEDED: msg server accepted negative amount vesting -- negative amount bypass")
 	}
 
@@ -286,7 +281,7 @@ func TestOC_VR5_PauseResumeTimingExploit(t *testing.T) {
 	// Calculate released for the paused schedule
 	releasedWithPause := k.CalculateReleasedAmount(ctx, schedule)
 
-	// Create a reference schedule WITHOUT any pause at the same block height
+	// Create a reference schedule WITHOUT any pause at the same starting block
 	refSchedule, err := k.CreateVestingSchedule(ctx.WithBlockHeight(1000), "claim-ref", "fact-ref", recipient,
 		"1000000000000000000", types.CategoryFormalProof, types.SourceVerification)
 	if err != nil {
@@ -306,7 +301,6 @@ func TestOC_VR5_PauseResumeTimingExploit(t *testing.T) {
 	// Additional check: verify the paused schedule's released amount is strictly less
 	// (both should be non-zero since we're well past the cliff)
 	if releasedWithPause != "0" && releasedWithoutPause != "0" {
-		// Parse as big.Int for comparison
 		pausedBig := new(big.Int)
 		pausedBig.SetString(releasedWithPause, 10)
 		unpausedBig := new(big.Int)
@@ -404,9 +398,3 @@ func TestOC_VR6_FalsifyCompletedSchedule(t *testing.T) {
 		t.Error("ATTACK SUCCEEDED: completed/falsified schedule accepted a second CompleteVesting call")
 	}
 }
-
-// Need math/big for the pause/resume comparison
-import "math/big"
-
-// Verify that keeper.NewMsgServerImpl is used (compile-time check)
-var _ = keeper.NewMsgServerImpl
