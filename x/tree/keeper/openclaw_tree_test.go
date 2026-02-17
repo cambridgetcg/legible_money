@@ -145,10 +145,11 @@ func TestOC_TREE3_InvalidPhaseTransition(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 
-	// ATTACK: Try to seed the project (which requires sprout phase with enough contributors)
-	_, err = msgServer.SeedProject(ctx, &types.MsgSeedProject{
-		Founder:   founder1,
+	// ATTACK: Try to begin seeding (which requires sprout phase with enough contributors)
+	_, err = msgServer.BeginSeeding(ctx, &types.MsgBeginSeeding{
+		Seeder:    founder1,
 		ProjectId: resp.ProjectId,
+		Domain:    "mathematics",
 	})
 	if err == nil {
 		t.Fatal("OC-TREE-3 FAIL: phase skip allowed (seed -> grow directly)!")
