@@ -955,6 +955,340 @@ var Catalog = []Probe{
 	},
 
 	// ====================================================================
+	// billing module — OC-BILL-1 through OC-BILL-4
+	// ====================================================================
+	{
+		ID: "OC-BILL-1", Name: "Quote Replay Attack", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "billing", File: "x/billing/keeper/openclaw_billing_test.go",
+		TestFunc: "TestOC_BILL1_QuoteReplayAttack",
+		Defense:  "quote.Executed set to true after first execution; replay rejected",
+	},
+	{
+		ID: "OC-BILL-2", Name: "Quote Caller Impersonation", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "billing", File: "x/billing/keeper/openclaw_billing_test.go",
+		TestFunc: "TestOC_BILL2_QuoteCallerImpersonation",
+		Defense:  "ExecuteQuote verifies msg.Caller matches quote.Caller",
+	},
+	{
+		ID: "OC-BILL-3", Name: "Expired Quote Execution", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "billing", File: "x/billing/keeper/openclaw_billing_test.go",
+		TestFunc: "TestOC_BILL3_ExpiredQuoteExecution",
+		Defense:  "ExecuteQuote checks block height vs quote expiry",
+	},
+	{
+		ID: "OC-BILL-4", Name: "UpdateParams Auth Bypass", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "billing", File: "x/billing/keeper/openclaw_billing_test.go",
+		TestFunc: "TestOC_BILL4_UpdateParamsAuthBypass",
+		Defense:  "UpdateParams checks msg.Authority == k.authority",
+	},
+
+	// ====================================================================
+	// capture_challenge module — OC-CC-1 through OC-CC-3
+	// ====================================================================
+	{
+		ID: "OC-CC-1", Name: "Unauthorized Resolution", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "capture_challenge", File: "x/capture_challenge/keeper/openclaw_capture_challenge_test.go",
+		TestFunc: "TestOC_CC1_UnauthorizedResolution",
+		Defense:  "ResolveChallenge checks msg.Resolver == k.authority",
+	},
+	{
+		ID: "OC-CC-2", Name: "Double Resolution", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "capture_challenge", File: "x/capture_challenge/keeper/openclaw_capture_challenge_test.go",
+		TestFunc: "TestOC_CC2_DoubleResolution",
+		Defense:  "ResolveChallenge rejects already-resolved challenges",
+	},
+	{
+		ID: "OC-CC-3", Name: "Evidence By Non-Challenger", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "capture_challenge", File: "x/capture_challenge/keeper/openclaw_capture_challenge_test.go",
+		TestFunc: "TestOC_CC3_EvidenceByNonChallenger",
+		Defense:  "SubmitEvidence verifies submitter is the original challenger",
+	},
+
+	// ====================================================================
+	// channels module — OC-CH-1 through OC-CH-12
+	// ====================================================================
+	{
+		ID: "OC-CH-1", Name: "Third-Party State Manipulation", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH1_ThirdPartyStateManipulation",
+		Defense:  "UpdateChannel checks msg.Sender is payer or provider",
+	},
+	{
+		ID: "OC-CH-2", Name: "Nonce Rollback", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH2_NonceRollback",
+		Defense:  "UpdateChannel checks msg.Sequence > ch.Nonce",
+	},
+	{
+		ID: "OC-CH-3", Name: "Premature Settlement During Dispute", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH3_PrematureSettlementDuringDispute",
+		Defense:  "SettleChannel checks currentBlock > ch.DisputeDeadline for disputed channels",
+	},
+	{
+		ID: "OC-CH-4", Name: "Overspend Attack", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH4_OverspendAttack",
+		Defense:  "UpdateChannel checks spent <= deposited",
+	},
+	{
+		ID: "OC-CH-5", Name: "Nonce Freshness Replay", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH5_NonceFreshness",
+		Defense:  "UpdateState checks msg.Update.Nonce > ch.Nonce (strictly greater)",
+	},
+	{
+		ID: "OC-CH-6", Name: "Channel ID Determinism", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH6_ChannelIdDeterminism",
+		Defense:  "Channel IDs are deterministic and unique across same-block opens",
+	},
+	{
+		ID: "OC-CH-7", Name: "SpendFromChannel Overspend", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH7_OverspendChannel",
+		Defense:  "SpendFromChannel checks cumulative spent <= deposit",
+	},
+	{
+		ID: "OC-CH-8", Name: "Unauthorized Close", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH8_UnauthorizedClose",
+		Defense:  "CloseChannel checks msg.Sender is payer or provider",
+	},
+	{
+		ID: "OC-CH-9", Name: "Deposit to Closed Channel", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH9_DepositToClosedChannel",
+		Defense:  "Deposit rejected for non-open channels",
+	},
+	{
+		ID: "OC-CH-10", Name: "Claim Expired Before Expiry", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH10_ClaimExpiredBeforeExpiry",
+		Defense:  "ClaimExpired checks currentBlock > ch.TimeoutHeight",
+	},
+	{
+		ID: "OC-CH-11", Name: "Zero Deposit Channel", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH11_ZeroDepositChannel",
+		Defense:  "OpenChannel rejects zero and negative deposits",
+	},
+	{
+		ID: "OC-CH-12", Name: "Spend From Non-Existent", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "channels", File: "x/channels/keeper/openclaw_channels_test.go",
+		TestFunc: "TestOC_CH12_SpendFromNonExistent",
+		Defense:  "SpendFromChannel returns error for unknown channel IDs",
+	},
+
+	// ====================================================================
+	// claiming_pot module — OC-CP-1 through OC-CP-3
+	// ====================================================================
+	{
+		ID: "OC-CP-1", Name: "Double Claim", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "claiming_pot", File: "x/claiming_pot/keeper/openclaw_claiming_pot_test.go",
+		TestFunc: "TestOC_CP1_DoubleClaim",
+		Defense:  "ClaimFromPot checks record.ClaimCount >= config.MaxClaimsPerAccount",
+	},
+	{
+		ID: "OC-CP-2", Name: "Non-Creator Close", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "claiming_pot", File: "x/claiming_pot/keeper/openclaw_claiming_pot_test.go",
+		TestFunc: "TestOC_CP2_NonCreatorClose",
+		Defense:  "ClosePot checks msg.Creator == pot.Creator",
+	},
+	{
+		ID: "OC-CP-3", Name: "Claim From Expired Pot", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "claiming_pot", File: "x/claiming_pot/keeper/openclaw_claiming_pot_test.go",
+		TestFunc: "TestOC_CP3_ClaimFromExpiredPot",
+		Defense:  "ClaimFromPot checks currentBlock <= pot.ExpiresAtBlock",
+	},
+
+	// ====================================================================
+	// compute_pool module — OC-COMP-1 through OC-COMP-3
+	// ====================================================================
+	{
+		ID: "OC-COMP-1", Name: "Duplicate Provider Registration", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "compute_pool", File: "x/compute_pool/keeper/openclaw_compute_pool_test.go",
+		TestFunc: "TestOC_COMP1_DuplicateProviderRegistration",
+		Defense:  "RegisterProvider checks if provider already exists",
+	},
+	{
+		ID: "OC-COMP-2", Name: "Unregistered Heartbeat", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "compute_pool", File: "x/compute_pool/keeper/openclaw_compute_pool_test.go",
+		TestFunc: "TestOC_COMP2_UnregisteredHeartbeat",
+		Defense:  "Heartbeat rejected for non-registered providers",
+	},
+	{
+		ID: "OC-COMP-3", Name: "UpdateParams Auth Bypass", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "compute_pool", File: "x/compute_pool/keeper/openclaw_compute_pool_test.go",
+		TestFunc: "TestOC_COMP3_UpdateParamsAuthBypass",
+		Defense:  "UpdateParams checks msg.Authority == k.authority",
+	},
+
+	// ====================================================================
+	// discovery module — OC-DISC-1 through OC-DISC-10
+	// ====================================================================
+	{
+		ID: "OC-DISC-1", Name: "Insufficient Stake Registration", Variant: NanoClaw, Severity: High,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS1_InsufficientStakeRegistration",
+		Defense:  "RegisterAgent enforces minimum stake; boundary at 100 LGM verified",
+	},
+	{
+		ID: "OC-DISC-2", Name: "Capability Spam", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS2_CapabilitySpam",
+		Defense:  "MaxCapabilitiesPerAgent enforced; overflow rejected",
+	},
+	{
+		ID: "OC-DISC-3", Name: "Duplicate Capability", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS3_DuplicateCapability",
+		Defense:  "AddCapability rejects or deduplicates same capability type",
+	},
+	{
+		ID: "OC-DISC-4", Name: "Deregister Stake Refund", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS4_DeregisterStakeRefund",
+		Defense:  "Deregistration cleans profile, domain/capability indexes, refunds stake",
+	},
+	{
+		ID: "OC-DISC-5", Name: "Heartbeat Reactivation", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS5_HeartbeatReactivation",
+		Defense:  "Heartbeat reactivates expired agents with updated LastActiveBlock",
+	},
+	{
+		ID: "OC-DISC-6", Name: "Ghost Domain Query", Variant: ZeroClaw, Severity: Low,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS6_GhostDomainQuery",
+		Defense:  "Empty domain/capability queries return empty slice, no panic",
+	},
+	{
+		ID: "OC-DISC-7", Name: "Profile Update Preservation", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS7_ProfileUpdatePreservation",
+		Defense:  "UpdateProfile only modifies specified fields; domains/capabilities preserved",
+	},
+	{
+		ID: "OC-DISC-8", Name: "Double Registration", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS8_DoubleRegistration",
+		Defense:  "RegisterAgent rejects duplicate registrations; original profile preserved",
+	},
+	{
+		ID: "OC-DISC-9", Name: "Expired Agent Not In Queries", Variant: OpenClaw, Severity: Medium,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS9_ExpiredAgentNotInQueries",
+		Defense:  "Domain queries filter out expired agents",
+	},
+	{
+		ID: "OC-DISC-10", Name: "Deregister Non-Existent", Variant: ZeroClaw, Severity: Medium,
+		Status: Defended, Module: "discovery", File: "x/discovery/keeper/openclaw_discovery_test.go",
+		TestFunc: "TestOC_DS10_DeregisterNonExistent",
+		Defense:  "DeregisterAgent returns error for unknown addresses; no side effects",
+	},
+
+	// ====================================================================
+	// qualification module — OC-QUAL-1 through OC-QUAL-4
+	// ====================================================================
+	{
+		ID: "OC-QUAL-1", Name: "Double Qualification", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "qualification", File: "x/qualification/keeper/openclaw_qualification_test.go",
+		TestFunc: "TestOC_QUAL1_DoubleQualification",
+		Defense:  "QualifyViaStakeCommitment checks if already qualified",
+	},
+	{
+		ID: "OC-QUAL-2", Name: "Stratum Inheritance Wrong Direction", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "qualification", File: "x/qualification/keeper/openclaw_qualification_test.go",
+		TestFunc: "TestOC_QUAL2_StratumInheritanceWrongDirection",
+		Defense:  "Stratum inheritance only flows from lower to higher strata",
+	},
+	{
+		ID: "OC-QUAL-3", Name: "Renew Revoked Qualification", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "qualification", File: "x/qualification/keeper/openclaw_qualification_test.go",
+		TestFunc: "TestOC_QUAL3_RenewRevokedQualification",
+		Defense:  "Revoked qualifications cannot be renewed; must re-qualify",
+	},
+	{
+		ID: "OC-QUAL-4", Name: "UpdateParams Auth Bypass", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "qualification", File: "x/qualification/keeper/openclaw_qualification_test.go",
+		TestFunc: "TestOC_QUAL4_UpdateParamsAuthBypass",
+		Defense:  "UpdateParams checks msg.Authority == k.authority",
+	},
+
+	// ====================================================================
+	// research module — OC-RES-1 through OC-RES-4
+	// ====================================================================
+	{
+		ID: "OC-RES-1", Name: "Double Review", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "research", File: "x/research/keeper/openclaw_research_test.go",
+		TestFunc: "TestOC_RES1_DoubleReview",
+		Defense:  "ReviewResearch checks if reviewer already reviewed",
+	},
+	{
+		ID: "OC-RES-2", Name: "Unauthorized Resolution", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "research", File: "x/research/keeper/openclaw_research_test.go",
+		TestFunc: "TestOC_RES2_UnauthorizedResolution",
+		Defense:  "ResolveResearch checks authority of resolver",
+	},
+	{
+		ID: "OC-RES-3", Name: "Challenge Accepted Research", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "research", File: "x/research/keeper/openclaw_research_test.go",
+		TestFunc: "TestOC_RES3_ChallengeAcceptedResearch",
+		Defense:  "ChallengeResearch rejected on already-accepted research",
+	},
+	{
+		ID: "OC-RES-4", Name: "Bounty Claim After Expiry", Variant: NanoClaw, Severity: Medium,
+		Status: Defended, Module: "research", File: "x/research/keeper/openclaw_research_test.go",
+		TestFunc: "TestOC_RES4_BountyClaimAfterExpiry",
+		Defense:  "ClaimBounty checks expiry block before allowing claim",
+	},
+
+	// ====================================================================
+	// schedule module — OC-SCHED-1 through OC-SCHED-3
+	// ====================================================================
+	{
+		ID: "OC-SCHED-1", Name: "Non-Creator Cancel", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "schedule", File: "x/schedule/keeper/openclaw_schedule_test.go",
+		TestFunc: "TestOC_SCHED1_NonCreatorCancel",
+		Defense:  "CancelSchedule checks msg.Creator == process.Creator",
+	},
+	{
+		ID: "OC-SCHED-2", Name: "Non-Creator Pause", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "schedule", File: "x/schedule/keeper/openclaw_schedule_test.go",
+		TestFunc: "TestOC_SCHED2_NonCreatorPause",
+		Defense:  "PauseSchedule checks msg.Creator == process.Creator",
+	},
+	{
+		ID: "OC-SCHED-3", Name: "UpdateParams Auth Bypass", Variant: OpenClaw, Severity: Critical,
+		Status: Defended, Module: "schedule", File: "x/schedule/keeper/openclaw_schedule_test.go",
+		TestFunc: "TestOC_SCHED3_UpdateParamsAuthBypass",
+		Defense:  "UpdateParams checks msg.Authority == k.authority",
+	},
+
+	// ====================================================================
+	// tree module — OC-TREE-1 through OC-TREE-3
+	// ====================================================================
+	{
+		ID: "OC-TREE-1", Name: "Non-Founder Phase Transition", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "tree", File: "x/tree/keeper/openclaw_tree_test.go",
+		TestFunc: "TestOC_TREE1_NonFounderPhaseTransition",
+		Defense:  "ProposeProject checks msg.Proposer == project.Founder",
+	},
+	{
+		ID: "OC-TREE-2", Name: "Non-Founder Adds Contributor", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "tree", File: "x/tree/keeper/openclaw_tree_test.go",
+		TestFunc: "TestOC_TREE2_NonFounderAddsContributor",
+		Defense:  "ReviewApplication checks msg.Reviewer == project.Founder",
+	},
+	{
+		ID: "OC-TREE-3", Name: "Invalid Phase Transition", Variant: OpenClaw, Severity: High,
+		Status: Defended, Module: "tree", File: "x/tree/keeper/openclaw_tree_test.go",
+		TestFunc: "TestOC_TREE3_InvalidPhaseTransition",
+		Defense:  "Phase transitions enforce valid ordering (seed→sprout→growth→harvest)",
+	},
+
+	// ====================================================================
 	// Cross-module probes (planned, not yet implemented)
 	// ====================================================================
 	{
