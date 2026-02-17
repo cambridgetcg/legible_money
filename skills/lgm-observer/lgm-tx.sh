@@ -768,7 +768,7 @@ cmd_reflect() {
     # Process pending observations
     local updated=0 still_pending=0
     state=$(echo "$state" | python3 -c "
-import sys, json, subprocess, os
+import sys, json
 
 NODE_URL = '$NODE_URL'
 state = json.load(sys.stdin)
