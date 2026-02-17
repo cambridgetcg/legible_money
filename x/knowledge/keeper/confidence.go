@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 
 	sdkmath "cosmossdk.io/math"
@@ -10,6 +11,17 @@ import (
 
 	"github.com/legible-money/legible/x/knowledge/types"
 )
+
+// safeMulDiv computes a * b / c without uint64 overflow using big.Int.
+func safeMulDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	r := new(big.Int).SetUint64(a)
+	r.Mul(r, new(big.Int).SetUint64(b))
+	r.Div(r, new(big.Int).SetUint64(c))
+	return r.Uint64()
+}
 
 // sortedMapKeys returns the keys of a map[string]T sorted lexicographically.
 // Used to ensure deterministic iteration over maps in state-modifying code.
