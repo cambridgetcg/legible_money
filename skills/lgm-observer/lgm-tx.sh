@@ -8,8 +8,10 @@
 #   lgm-tx.sh submit-claim <claim-text> <domain> <category> <stake-ulgm> [--logic-zone zone] [--references ref1,ref2]
 #   lgm-tx.sh commit <round-id> <verdict> <confidence-bps> <salt>
 #   lgm-tx.sh reveal <round-id> <verdict> <confidence-bps> <salt> [--justification text]
-#   lgm-tx.sh hash-commitment <verdict> <confidence-bps> <salt>
+#   lgm-tx.sh hash-commitment <round-id> <verdict> <confidence-bps> <salt>
 #   lgm-tx.sh observe  (shortcut: read vitals + submit protocol_observation claim)
+#   lgm-tx.sh verify   (poll active rounds, auto-commit/reveal)
+#   lgm-tx.sh watch    (continuous verification daemon)
 #
 # Environment:
 #   LGM_NODE_URL    — REST API URL (default: http://localhost:1317)
@@ -32,6 +34,9 @@ GAS="${LGM_GAS:-500000}"
 FEES="${LGM_FEES:-500000}"
 LEGBLED="${LGM_LEGBLED:-$(dirname "$0")/../../build/legbled}"
 
+# Salt storage directory (keyed by round_id)
+SALT_DIR="${HOME_DIR}/agent-salts/${FROM}"
+
 # Resolve legbled binary
 if [ ! -x "$LEGBLED" ]; then
     LEGBLED="$(command -v legbled 2>/dev/null || echo "")"
@@ -53,6 +58,72 @@ TX_FLAGS=(
     -y
     -o json
 )
+
+# --- Commitment Hash (matches chain's ComputeCommitmentHash exactly) ---
+# Format: SHA-256("LGM.commitment.v1:" + LP(roundID) + LP(verdict) + confidence_le64 + LP(salt))
+# where LP = 4-byte big-endian length prefix + data, confidence = 8-byte little-endian uint64
+compute_commitment_hash() {
+    python3 -c "
+import hashlib, struct, sys
+round_id, verdict, confidence, salt = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+h = hashlib.sha256()
+h.update(b'LGM.commitment.v1:')
+for s in [round_id, verdict]:
+    b = s.encode()
+    h.update(struct.pack('>I', len(b)))
+    h.update(b)
+h.update(struct.pack('<Q', confidence))
+b = salt.encode()
+h.update(struct.pack('>I', len(b)))
+h.update(b)
+print(h.hexdigest())
+" "$1" "$2" "$3" "$4"
+}
+
+# --- Salt Persistence ---
+save_salt() {
+    local round_id="$1" verdict="$2" confidence="$3" salt="$4"
+    mkdir -p "$SALT_DIR"
+    echo "${verdict}|${confidence}|${salt}" > "$SALT_DIR/${round_id}.salt"
+}
+
+load_salt() {
+    local round_id="$1"
+    local salt_file="$SALT_DIR/${round_id}.salt"
+    if [ -f "$salt_file" ]; then
+        cat "$salt_file"
+        return 0
+    fi
+    return 1
+}
+
+clear_salt() {
+    local round_id="$1"
+    rm -f "$SALT_DIR/${round_id}.salt"
+}
+
+# Clean up salt files for completed rounds
+cleanup_stale_salts() {
+    [ -d "$SALT_DIR" ] || return 0
+    local active_rounds
+    active_rounds=$(curl -s "$NODE_URL/legible/knowledge/v1/rounds/active" 2>/dev/null || echo '{"rounds":[]}')
+    local active_ids
+    active_ids=$(echo "$active_rounds" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for r in data.get('rounds', []):
+    print(r.get('id', ''))
+" 2>/dev/null || true)
+
+    for salt_file in "$SALT_DIR"/*.salt; do
+        [ -f "$salt_file" ] || continue
+        local rid
+        rid=$(basename "$salt_file" .salt)
+        if ! echo "$active_ids" | grep -qF "$rid"; then
+            rm -f "$salt_file"
+        fi
+    done
+}
 
 # --- Commands ---
 
@@ -86,14 +157,14 @@ cmd_submit_claim() {
 }
 
 cmd_hash_commitment() {
-    local verdict="$1"
-    local confidence="$2"
-    local salt="$3"
+    local round_id="$1"
+    local verdict="$2"
+    local confidence="$3"
+    local salt="$4"
 
-    local preimage="LGM.commitment.v1:${verdict}|${confidence}|${salt}"
     local hash
-    hash=$(printf '%s' "$preimage" | shasum -a 256 | cut -d' ' -f1)
-    echo "{\"commitment_hash\":\"$hash\",\"preimage\":\"$preimage\"}"
+    hash=$(compute_commitment_hash "$round_id" "$verdict" "$confidence" "$salt")
+    echo "{\"commitment_hash\":\"$hash\",\"round_id\":\"$round_id\",\"verdict\":\"$verdict\",\"confidence\":$confidence}"
 }
 
 cmd_commit() {
@@ -102,10 +173,12 @@ cmd_commit() {
     local confidence="$3"
     local salt="$4"
 
-    # Compute commitment hash
-    local preimage="LGM.commitment.v1:${verdict}|${confidence}|${salt}"
+    # Compute commitment hash (binary LP format matching chain)
     local hash
-    hash=$(printf '%s' "$preimage" | shasum -a 256 | cut -d' ' -f1)
+    hash=$(compute_commitment_hash "$round_id" "$verdict" "$confidence" "$salt")
+
+    # Save salt for reveal phase
+    save_salt "$round_id" "$verdict" "$confidence" "$salt"
 
     "$LEGBLED" tx knowledge submit-commitment \
         "$round_id" "$hash" \
@@ -135,6 +208,9 @@ cmd_reveal() {
     "$LEGBLED" tx knowledge submit-reveal \
         "$round_id" "$verdict" "$confidence" "$salt" \
         "${extra_flags[@]}" "${TX_FLAGS[@]}" 2>&1
+
+    # Clear saved salt after reveal
+    clear_salt "$round_id"
 }
 
 cmd_observe() {
@@ -157,7 +233,7 @@ cmd_observe() {
     # 3. Read alignment scores
     local scores
     scores=$(curl -s "$NODE_URL/legible/alignment/v1/scores/$epoch")
-    local tdi dci hi fi ni
+    local tdi dci hi fi_val ni
     tdi=$(echo "$scores" | python3 -c "import sys,json; s=json.load(sys.stdin).get('scores',{}); print(s.get('tdi',0))" 2>/dev/null || echo "0")
     dci=$(echo "$scores" | python3 -c "import sys,json; s=json.load(sys.stdin).get('scores',{}); print(s.get('dci',0))" 2>/dev/null || echo "0")
     hi=$(echo "$scores" | python3 -c "import sys,json; s=json.load(sys.stdin).get('scores',{}); print(s.get('hi',0))" 2>/dev/null || echo "0")
@@ -200,14 +276,215 @@ cmd_observe() {
     cmd_submit_claim "$claim_text" "computer_science" "protocol" "1000000" --logic-zone "$zone"
 }
 
+# --- P2: Automated Verification ---
+
+# Evaluate a claim — returns "accept <confidence>" or "reject <confidence>" or "abstain 0"
+# For protocol observations: cross-check against on-chain state
+evaluate_claim() {
+    local claim_id="$1"
+
+    # Fetch claim details
+    local claim_json
+    claim_json=$(curl -s "$NODE_URL/legible/knowledge/v1/claim/$claim_id" 2>/dev/null || echo '{}')
+
+    local claim_text category domain
+    claim_text=$(echo "$claim_json" | python3 -c "import sys,json; c=json.load(sys.stdin).get('claim',{}); print(c.get('claim_text',''))" 2>/dev/null || echo "")
+    category=$(echo "$claim_json" | python3 -c "import sys,json; c=json.load(sys.stdin).get('claim',{}); print(c.get('epistemic_category',''))" 2>/dev/null || echo "")
+    domain=$(echo "$claim_json" | python3 -c "import sys,json; c=json.load(sys.stdin).get('claim',{}); print(c.get('domain',''))" 2>/dev/null || echo "")
+
+    if [ -z "$claim_text" ]; then
+        echo "abstain 0"
+        return
+    fi
+
+    # Protocol observation claims: verify by checking on-chain state
+    if [ "$category" = "protocol" ]; then
+        # Extract epoch from claim text and cross-check vitals
+        local claimed_epoch
+        claimed_epoch=$(echo "$claim_text" | python3 -c "
+import sys, re
+text = sys.stdin.read()
+m = re.search(r'epoch (\d+)', text)
+print(m.group(1) if m else '0')
+" 2>/dev/null || echo "0")
+
+        # Check if the epoch mentioned is recent (within 5 epochs of current)
+        local current_epoch
+        current_epoch=$(curl -s "$NODE_URL/legible/autopoiesis/v1/state" | python3 -c "import sys,json; print(json.load(sys.stdin)['state']['current_epoch'])" 2>/dev/null || echo "0")
+
+        local epoch_diff=$(( current_epoch - claimed_epoch ))
+        if [ "$epoch_diff" -lt 0 ]; then epoch_diff=$(( -epoch_diff )); fi
+
+        if [ "$epoch_diff" -le 5 ]; then
+            # Recent observation — verify SSI value if present
+            local claimed_ssi
+            claimed_ssi=$(echo "$claim_text" | python3 -c "
+import sys, re
+text = sys.stdin.read()
+m = re.search(r'SSI=(\d+)', text)
+print(m.group(1) if m else '-1')
+" 2>/dev/null || echo "-1")
+
+            if [ "$claimed_ssi" != "-1" ]; then
+                local actual_ssi
+                actual_ssi=$(curl -s "$NODE_URL/legible/autopoiesis/v1/hormones/$claimed_epoch" | python3 -c "import sys,json; print(json.load(sys.stdin).get('hormones',{}).get('ssi',0))" 2>/dev/null || echo "0")
+
+                if [ "$claimed_ssi" = "$actual_ssi" ]; then
+                    echo "accept 800000"
+                    return
+                else
+                    echo "reject 700000"
+                    return
+                fi
+            fi
+
+            # Can't verify specific values but epoch is recent
+            echo "accept 500000"
+            return
+        fi
+
+        # Stale epoch observation
+        echo "abstain 100000"
+        return
+    fi
+
+    # Non-protocol claims: abstain (no evaluation capability for other categories yet)
+    echo "abstain 0"
+}
+
+cmd_verify() {
+    echo "Polling active verification rounds..." >&2
+
+    local rounds_json
+    rounds_json=$(curl -s "$NODE_URL/legible/knowledge/v1/rounds/active" 2>/dev/null || echo '{"rounds":[]}')
+
+    local round_count
+    round_count=$(echo "$rounds_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('rounds',[])))" 2>/dev/null || echo "0")
+
+    if [ "$round_count" = "0" ]; then
+        echo '{"status":"idle","active_rounds":0}'
+        return
+    fi
+
+    echo "Found $round_count active round(s)" >&2
+
+    # Process each round
+    echo "$rounds_json" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for r in data.get('rounds', []):
+    print(json.dumps({
+        'id': r.get('id',''),
+        'claim_id': r.get('claim_id',''),
+        'phase': r.get('phase',''),
+        'commit_deadline': r.get('commit_deadline_height',0),
+        'reveal_deadline': r.get('reveal_deadline_height',0),
+    }))
+" 2>/dev/null | while IFS= read -r round_line; do
+        local round_id claim_id phase
+        round_id=$(echo "$round_line" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+        claim_id=$(echo "$round_line" | python3 -c "import sys,json; print(json.load(sys.stdin)['claim_id'])")
+        phase=$(echo "$round_line" | python3 -c "import sys,json; print(json.load(sys.stdin)['phase'])")
+
+        case "$phase" in
+            commit)
+                # Check if we already committed
+                if [ -f "$SALT_DIR/${round_id}.salt" ]; then
+                    echo "  Round $round_id: already committed, waiting for reveal" >&2
+                    continue
+                fi
+
+                # Evaluate the claim
+                local eval_result
+                eval_result=$(evaluate_claim "$claim_id")
+                local verdict confidence
+                verdict=$(echo "$eval_result" | cut -d' ' -f1)
+                confidence=$(echo "$eval_result" | cut -d' ' -f2)
+
+                echo "  Round $round_id: evaluating claim $claim_id → $verdict ($confidence BPS)" >&2
+
+                # Generate salt and commit
+                local salt
+                salt=$(openssl rand -hex 16)
+
+                local result
+                result=$(cmd_commit "$round_id" "$verdict" "$confidence" "$salt" 2>&1) || true
+                echo "  Round $round_id: committed ($verdict)" >&2
+                ;;
+
+            reveal)
+                # Check if we have a saved salt for this round
+                local saved
+                if ! saved=$(load_salt "$round_id" 2>/dev/null); then
+                    echo "  Round $round_id: no commitment found, skipping reveal" >&2
+                    continue
+                fi
+
+                local verdict confidence salt
+                verdict=$(echo "$saved" | cut -d'|' -f1)
+                confidence=$(echo "$saved" | cut -d'|' -f2)
+                salt=$(echo "$saved" | cut -d'|' -f3)
+
+                echo "  Round $round_id: revealing $verdict ($confidence BPS)" >&2
+
+                local result
+                result=$(cmd_reveal "$round_id" "$verdict" "$confidence" "$salt" 2>&1) || true
+                echo "  Round $round_id: revealed" >&2
+                ;;
+
+            aggregation|complete)
+                # Clean up any stale salts
+                clear_salt "$round_id"
+                ;;
+        esac
+    done
+
+    # Report
+    echo "{\"status\":\"verified\",\"active_rounds\":$round_count}"
+}
+
+cmd_watch() {
+    local interval="${1:-3}"  # Poll interval in seconds (default ~1 block)
+
+    echo "Starting verification watch daemon (poll every ${interval}s)..." >&2
+    echo "Press Ctrl+C to stop." >&2
+
+    trap 'echo "Watch daemon stopped." >&2; exit 0' INT TERM
+
+    local cycle=0
+    while true; do
+        cycle=$((cycle + 1))
+        local result
+        result=$(cmd_verify 2>/dev/null) || true
+
+        local status
+        status=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null || echo "error")
+
+        if [ "$status" = "verified" ]; then
+            local count
+            count=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active_rounds',0))" 2>/dev/null || echo "0")
+            echo "[cycle $cycle] Processed $count active round(s)" >&2
+        fi
+
+        # Periodic salt cleanup (every 20 cycles)
+        if [ $((cycle % 20)) -eq 0 ]; then
+            cleanup_stale_salts
+        fi
+
+        sleep "$interval"
+    done
+}
+
 # --- Dispatch ---
 
 case "${1:-help}" in
-    submit-claim)   shift; cmd_submit_claim "$@" ;;
-    commit)         shift; cmd_commit "$@" ;;
-    reveal)         shift; cmd_reveal "$@" ;;
+    submit-claim)    shift; cmd_submit_claim "$@" ;;
+    commit)          shift; cmd_commit "$@" ;;
+    reveal)          shift; cmd_reveal "$@" ;;
     hash-commitment) shift; cmd_hash_commitment "$@" ;;
-    observe)        shift; cmd_observe "$@" ;;
+    observe)         shift; cmd_observe "$@" ;;
+    verify)          shift; cmd_verify "$@" ;;
+    watch)           shift; cmd_watch "$@" ;;
     help|--help|-h)
         echo "Usage: lgm-tx.sh <command> [args...]"
         echo ""
@@ -215,8 +492,10 @@ case "${1:-help}" in
         echo "  submit-claim <text> <domain> <category> <stake-ulgm> [flags]"
         echo "  commit <round-id> <verdict> <confidence-bps> <salt>"
         echo "  reveal <round-id> <verdict> <confidence-bps> <salt> [flags]"
-        echo "  hash-commitment <verdict> <confidence-bps> <salt>"
+        echo "  hash-commitment <round-id> <verdict> <confidence-bps> <salt>"
         echo "  observe  — read vitals and submit a protocol_observation claim"
+        echo "  verify   — poll active rounds and auto-commit/reveal"
+        echo "  watch [interval] — continuous verification daemon (default: 3s)"
         echo ""
         echo "Environment: LGM_NODE_URL, LGM_HOME, LGM_FROM, LGM_CHAIN_ID"
         ;;
