@@ -132,12 +132,37 @@ type RoundInfo struct {
 
 // FactInfo holds accepted fact data.
 type FactInfo struct {
-	ID         string `json:"id"`
-	ClaimText  string `json:"claim_text"`
-	Domain     string `json:"domain"`
-	Category   string `json:"category"`
-	Confidence uint32 `json:"confidence"`
-	SubmittedBy string `json:"submitted_by"`
+	ID            string   `json:"id"`
+	ClaimText     string   `json:"claim_text"`
+	Domain        string   `json:"domain"`
+	Category      string   `json:"category"`
+	Confidence    uint32   `json:"confidence"`
+	SubmittedBy   string   `json:"submitted_by"`
+	Maturity      string   `json:"maturity,omitempty"`       // emerging/established/canonical
+	CitationCount uint32   `json:"citation_count,omitempty"`
+	References    []string `json:"references,omitempty"`     // outgoing fact IDs
+	StratumCeiling uint32  `json:"stratum_ceiling,omitempty"`
+	NoveltyScore  uint32   `json:"novelty_score,omitempty"`
+	LogicZone     string   `json:"logic_zone,omitempty"`
+	Status        string   `json:"status,omitempty"`
+	EvidenceBonus uint32   `json:"evidence_bonus,omitempty"`
+}
+
+// FactReference represents a typed edge between two facts.
+type FactReference struct {
+	FromFactID string `json:"from_fact_id"`
+	ToFactID   string `json:"to_fact_id"`
+	Type       string `json:"reference_type"` // supports/contradicts/extends/qualifies
+	Weight     uint32 `json:"weight"`
+}
+
+// CounterFactInfo holds counter-fact data.
+type CounterFactInfo struct {
+	ID             string `json:"id"`
+	OriginalFactID string `json:"original_fact_id"`
+	NegationType   string `json:"negation_type"` // rejection/contradiction/falsification/supersession
+	Confidence     uint32 `json:"confidence"`
+	Status         string `json:"status"`
 }
 
 // ClaimInfo holds claim data.
