@@ -235,7 +235,7 @@ func TestOC_DS4_DeregisterStakeRefund(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-5: Heartbeat reactivation from expired state.
+// OC-DISC-5: Heartbeat reactivation from expired state.
 // Attack: Register, let expire, send heartbeat, verify reactivated
 // with updated LastActiveBlock.
 // -----------------------------------------------------------------------
