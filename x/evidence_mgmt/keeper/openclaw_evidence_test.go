@@ -102,13 +102,13 @@ func TestOC_EV3_OracleRegistrationValidation(t *testing.T) {
 
 	operator := testAddr(10)
 
-	// Register oracle with valid data types
+	// Register oracle with valid data types and sufficient stake
 	_, err := ms.RegisterOracle(sdk.WrapSDKContext(ctx), &types.MsgRegisterOracle{
 		Operator:    operator,
 		Name:        "test-oracle",
 		Description: "A test oracle",
 		DataTypes:   []string{string(types.EvidenceTypeOracleFeed)},
-		Stake:       "1000000",
+		Stake:       "100000000",
 	})
 	if err != nil {
 		t.Fatalf("OC-EV-3: valid registration failed: %v", err)
