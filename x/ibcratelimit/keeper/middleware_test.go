@@ -58,7 +58,7 @@ func (m *mockIBCModule) OnChanOpenTry(
 	return "", nil
 }
 
-func (m *mockIBCModule) OnChanOpenAck(_ sdk.Context, _, _, _ string) error { return nil }
+func (m *mockIBCModule) OnChanOpenAck(_ sdk.Context, _, _, _, _ string) error { return nil }
 func (m *mockIBCModule) OnChanOpenConfirm(_ sdk.Context, _, _ string) error {
 	return nil
 }
