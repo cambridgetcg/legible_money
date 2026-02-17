@@ -2,30 +2,33 @@
 
 package helpers
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/legible-money/legible/x/testutil/claw"
+)
 
 // Insight logs a structured insight from a test probe.
-// Pattern: extends "OC-1 INSIGHT: ..." convention from openclaw_test.go.
+// Delegates to claw.Insight with "OCA-" prefix for devnet integration probes.
 func Insight(t *testing.T, testID, msg string) {
 	t.Helper()
-	t.Logf("OCA-%s INSIGHT: %s", testID, msg)
+	claw.Insight(t, "OCA-"+testID, msg)
 }
 
 // Economics logs economic analysis of an attack/defense scenario.
 func Economics(t *testing.T, testID string, cost, reward, damage int64) {
 	t.Helper()
-	t.Logf("OCA-%s ECONOMICS: cost=%d ulgm, reward=%d ulgm, damage=%d ulgm, profit=%d ulgm",
-		testID, cost, reward, damage, reward-cost)
+	claw.Economics(t, "OCA-"+testID, cost, reward, damage)
 }
 
 // Defense logs a defense mechanism observation.
 func Defense(t *testing.T, testID, defense, evidence string) {
 	t.Helper()
-	t.Logf("OCA-%s DEFENSE: %s — %s", testID, defense, evidence)
+	claw.Defense(t, "OCA-"+testID, defense, evidence)
 }
 
 // Result logs the outcome of a test scenario.
 func Result(t *testing.T, testID, outcome string) {
 	t.Helper()
-	t.Logf("OCA-%s RESULT: %s", testID, outcome)
+	claw.Result(t, "OCA-"+testID, claw.Defended, outcome)
 }
