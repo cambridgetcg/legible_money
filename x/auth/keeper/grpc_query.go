@@ -28,7 +28,7 @@ func (qs queryServer) Account(goCtx context.Context, req *types.QueryAccountRequ
 		return nil, types.ErrAccountNotFound
 	}
 
-	return &types.QueryAccountResponse{Account: &account}, nil
+	return &types.QueryAccountResponse{Account: account}, nil
 }
 
 // AccountByDID returns a Legible account by DID.
@@ -40,7 +40,7 @@ func (qs queryServer) AccountByDID(goCtx context.Context, req *types.QueryAccoun
 		return nil, types.ErrAccountNotFound
 	}
 
-	return &types.QueryAccountByDIDResponse{Account: &account}, nil
+	return &types.QueryAccountByDIDResponse{Account: account}, nil
 }
 
 // SessionKeys returns all session keys for an owner.
@@ -49,7 +49,7 @@ func (qs queryServer) SessionKeys(goCtx context.Context, req *types.QuerySession
 
 	sessions := qs.GetSessionKeysForOwner(ctx, req.Owner)
 	if sessions == nil {
-		sessions = []types.SessionKey{}
+		sessions = []*types.SessionKey{}
 	}
 
 	return &types.QuerySessionKeysResponse{SessionKeys: sessions}, nil
@@ -61,5 +61,5 @@ func (qs queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest)
 
 	params := qs.GetParams(ctx)
 
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

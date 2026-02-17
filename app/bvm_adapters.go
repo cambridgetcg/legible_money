@@ -157,7 +157,7 @@ func (a *BVMAuthAdapter) RegisterSessionKey(ctx context.Context, ownerAddress, k
 			CanVote:         caps.CanVote,
 		},
 	}
-	a.keeper.SetSessionKey(sdkCtx, session)
+	a.keeper.SetSessionKey(sdkCtx, &session)
 
 	// Increment session key count on the account
 	if account, found := a.keeper.GetAccount(sdkCtx, ownerAddress); found {

@@ -37,7 +37,7 @@ type QuerySessionKeysRequest struct {
 
 // QuerySessionKeysResponse is the response for the SessionKeys query.
 type QuerySessionKeysResponse struct {
-	SessionKeys []SessionKey `json:"session_keys"`
+	SessionKeys []*SessionKey `json:"session_keys"`
 }
 
 // QueryParamsRequest is the request for the Params query.
@@ -45,7 +45,7 @@ type QueryParamsRequest struct{}
 
 // QueryParamsResponse is the response for the Params query.
 type QueryParamsResponse struct {
-	Params Params `json:"params"`
+	Params *Params `json:"params"`
 }
 
 // proto.Message stubs

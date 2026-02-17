@@ -23,7 +23,7 @@ func AccountDIDParityInvariant(k Keeper) sdk.Invariant {
 		broken := false
 
 		// Check every account has a DID mapping
-		k.IterateAccounts(ctx, func(account types.LegibleAccount) bool {
+		k.IterateAccounts(ctx, func(account *types.LegibleAccount) bool {
 			if account.Did == "" {
 				return false // skip accounts without DID (shouldn't happen but defensive)
 			}
@@ -50,7 +50,7 @@ func SessionCountConsistencyInvariant(k Keeper) sdk.Invariant {
 		broken := false
 		currentHeight := uint64(ctx.BlockHeight())
 
-		k.IterateAccounts(ctx, func(account types.LegibleAccount) bool {
+		k.IterateAccounts(ctx, func(account *types.LegibleAccount) bool {
 			sessions := k.GetSessionKeysForOwner(ctx, account.Address)
 			activeCount := uint32(0)
 			for _, s := range sessions {

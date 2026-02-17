@@ -80,13 +80,13 @@ func ValidateDIDDerivation(did string, pubKeyHex string) error {
 // ============================================================
 
 // GetSigners returns the signers for MsgRotateKey
-func (msg MsgRotateKey) GetSigners() []sdk.AccAddress {
+func (msg *MsgRotateKey) GetSigners() []sdk.AccAddress {
 	sender, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{sender}
 }
 
 // ValidateBasic validates MsgRotateKey
-func (msg MsgRotateKey) ValidateBasic() error {
+func (msg *MsgRotateKey) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return fmt.Errorf("invalid sender address: %w", err)
 	}
@@ -100,13 +100,13 @@ func (msg MsgRotateKey) ValidateBasic() error {
 }
 
 // GetSigners returns the signers for MsgCreateSession
-func (msg MsgCreateSession) GetSigners() []sdk.AccAddress {
+func (msg *MsgCreateSession) GetSigners() []sdk.AccAddress {
 	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
 	return []sdk.AccAddress{owner}
 }
 
 // ValidateBasic validates MsgCreateSession
-func (msg MsgCreateSession) ValidateBasic() error {
+func (msg *MsgCreateSession) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
 		return fmt.Errorf("invalid owner address: %w", err)
 	}
@@ -117,13 +117,13 @@ func (msg MsgCreateSession) ValidateBasic() error {
 }
 
 // GetSigners returns the signers for MsgRevokeSession
-func (msg MsgRevokeSession) GetSigners() []sdk.AccAddress {
+func (msg *MsgRevokeSession) GetSigners() []sdk.AccAddress {
 	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
 	return []sdk.AccAddress{owner}
 }
 
 // ValidateBasic validates MsgRevokeSession
-func (msg MsgRevokeSession) ValidateBasic() error {
+func (msg *MsgRevokeSession) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
 		return fmt.Errorf("invalid owner address: %w", err)
 	}
@@ -134,13 +134,13 @@ func (msg MsgRevokeSession) ValidateBasic() error {
 }
 
 // GetSigners returns the signers for MsgUpdateParams
-func (msg MsgUpdateParams) GetSigners() []sdk.AccAddress {
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }
 
 // ValidateBasic validates MsgUpdateParams
-func (msg MsgUpdateParams) ValidateBasic() error {
+func (msg *MsgUpdateParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
@@ -268,18 +268,21 @@ func (msg MsgUnfreezeAccountResponse) ProtoMessage()  {}
 
 // MsgSetRecoveryConfig sets recovery configuration for an account
 type MsgSetRecoveryConfig struct {
-	Sender string         `json:"sender"`
-	Config RecoveryConfig `json:"config"`
+	Sender string          `json:"sender"`
+	Config *RecoveryConfig `json:"config"`
 }
 type MsgSetRecoveryConfigResponse struct{}
 
-func (msg MsgSetRecoveryConfig) GetSigners() []sdk.AccAddress {
+func (msg *MsgSetRecoveryConfig) GetSigners() []sdk.AccAddress {
 	sender, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{sender}
 }
-func (msg MsgSetRecoveryConfig) ValidateBasic() error {
+func (msg *MsgSetRecoveryConfig) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.Config == nil {
+		return fmt.Errorf("config cannot be nil")
 	}
 	if msg.Config.Threshold < 1 {
 		return fmt.Errorf("threshold must be >= 1")
@@ -292,11 +295,11 @@ func (msg MsgSetRecoveryConfig) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgSetRecoveryConfig) Reset() {}
-func (msg MsgSetRecoveryConfig) String() string {
+func (msg *MsgSetRecoveryConfig) Reset() {}
+func (msg *MsgSetRecoveryConfig) String() string {
 	return fmt.Sprintf("MsgSetRecoveryConfig{%s}", msg.Sender)
 }
-func (msg MsgSetRecoveryConfig) ProtoMessage()          {}
+func (msg *MsgSetRecoveryConfig) ProtoMessage()          {}
 func (msg MsgSetRecoveryConfigResponse) Reset()         {}
 func (msg MsgSetRecoveryConfigResponse) String() string { return "MsgSetRecoveryConfigResponse{}" }
 func (msg MsgSetRecoveryConfigResponse) ProtoMessage()  {}

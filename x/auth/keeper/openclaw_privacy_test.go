@@ -74,7 +74,7 @@ func TestOCP2_SessionCapabilityBoundary(t *testing.T) {
 			CanChallenge:    true,
 		},
 	}
-	k.SetAccount(ctx, agentAccount)
+	k.SetAccount(ctx, &agentAccount)
 
 	// Create session key with restricted capabilities
 	sessionPubKey := "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
@@ -93,7 +93,7 @@ func TestOCP2_SessionCapabilityBoundary(t *testing.T) {
 			CanVote:         false, // RESTRICTED: no governance
 		},
 	}
-	k.SetSessionKey(ctx, session)
+	k.SetSessionKey(ctx, &session)
 
 	// Verify session was stored correctly
 	stored, found := k.GetSessionKey(ctx, testAddr1, sessionHash)
@@ -142,7 +142,7 @@ func TestOCP3_SessionExpiryEnforcement(t *testing.T) {
 			CanSubmitClaims: true,
 		},
 	}
-	k.SetSessionKey(ctx, session)
+	k.SetSessionKey(ctx, &session)
 
 	// Block 149: should be valid
 	if !k.IsSessionValid(ctx, testAddr1, "session_hash_3", 149) {
@@ -185,11 +185,11 @@ func TestOCP4_FrozenAccountIsolation(t *testing.T) {
 			Frozen:          false,
 		},
 	}
-	k.SetAccount(ctx, account)
+	k.SetAccount(ctx, &account)
 
 	// Freeze the account
 	account.Flags.Frozen = true
-	k.SetAccount(ctx, account)
+	k.SetAccount(ctx, &account)
 
 	// Verify freeze persists
 	frozen, found := k.GetAccount(ctx, testAddr1)
@@ -203,7 +203,7 @@ func TestOCP4_FrozenAccountIsolation(t *testing.T) {
 	}
 
 	// Verify DID still resolves (frozen ≠ deleted)
-	k.SetDIDMapping(ctx, types.DIDMapping{Did: testDID1, Bech32: testAddr1, PubKey: testPubKey1})
+	k.SetDIDMapping(ctx, &types.DIDMapping{Did: testDID1, Bech32: testAddr1, PubKey: testPubKey1})
 	addr, didFound := k.GetAddressForDID(ctx, testDID1)
 	if !didFound {
 		t.Error("OCP-4 FAILURE: DID mapping lost for frozen account")
@@ -331,7 +331,7 @@ func TestOCP7_MultiSessionIsolation(t *testing.T) {
 			CanTransfer:     true, // Agent 1 can transfer
 		},
 	}
-	k.SetSessionKey(ctx, session1)
+	k.SetSessionKey(ctx, &session1)
 
 	// Agent 2 session
 	session2 := types.SessionKey{
@@ -345,7 +345,7 @@ func TestOCP7_MultiSessionIsolation(t *testing.T) {
 			CanTransfer:     false, // Agent 2 CANNOT transfer
 		},
 	}
-	k.SetSessionKey(ctx, session2)
+	k.SetSessionKey(ctx, &session2)
 
 	// Agent 1 cannot see Agent 2's session
 	_, found := k.GetSessionKey(ctx, testAddr1, "hash_agent2")
@@ -397,7 +397,7 @@ func TestOCP8_RecoveryConfigPrivacy(t *testing.T) {
 		RecoveryDelayBlocks:   34272, // 1 day
 		ChallengePeriodBlocks: 17136, // 12 hours
 	}
-	k.SetRecoveryConfig(ctx, testAddr1, config)
+	k.SetRecoveryConfig(ctx, testAddr1, &config)
 
 	// Agent 1 can read their own config
 	stored, found := k.GetRecoveryConfig(ctx, testAddr1)
@@ -498,7 +498,7 @@ func TestOCP10_SessionDeletionEnforcement(t *testing.T) {
 			CanTransfer:     true,
 		},
 	}
-	k.SetSessionKey(ctx, session)
+	k.SetSessionKey(ctx, &session)
 
 	// Verify it exists
 	if _, found := k.GetSessionKey(ctx, testAddr1, "delete_me"); !found {
@@ -528,7 +528,7 @@ func TestOCP10_SessionDeletionEnforcement(t *testing.T) {
 	}
 
 	// Try to re-use the same hash (should work — no tombstoning)
-	k.SetSessionKey(ctx, session)
+	k.SetSessionKey(ctx, &session)
 	if _, found := k.GetSessionKey(ctx, testAddr1, "delete_me"); !found {
 		t.Error("OCP-10 NOTE: Cannot re-create session with same hash after deletion")
 	}
@@ -616,10 +616,10 @@ func TestOCP12_KeyRotationContinuity(t *testing.T) {
 			CanChallenge:    true,
 		},
 	}
-	k.SetAccount(ctx, account)
+	k.SetAccount(ctx, &account)
 
 	// Set up DID mapping and session
-	k.SetDIDMapping(ctx, types.DIDMapping{Did: testDID1, Bech32: testAddr1, PubKey: testPubKey1})
+	k.SetDIDMapping(ctx, &types.DIDMapping{Did: testDID1, Bech32: testAddr1, PubKey: testPubKey1})
 	session := types.SessionKey{
 		KeyHash:        "active_session",
 		PublicKey:      "dddd000000000000000000000000000000000000000000000000000000000004",
@@ -628,13 +628,13 @@ func TestOCP12_KeyRotationContinuity(t *testing.T) {
 		CreatedAtBlock: 80,
 		Capabilities:   &types.SessionCapabilities{CanSubmitClaims: true},
 	}
-	k.SetSessionKey(ctx, session)
+	k.SetSessionKey(ctx, &session)
 
 	// Simulate key rotation (update operational key version)
 	account.OperationalKeyVersion = 2
 	account.OperationalKeyHash = "new_opkey_hash"
 	account.LastActiveBlock = 100
-	k.SetAccount(ctx, account)
+	k.SetAccount(ctx, &account)
 
 	// Verify identity is preserved
 	rotated, found := k.GetAccount(ctx, testAddr1)

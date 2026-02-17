@@ -47,8 +47,8 @@ func migrateRecoveryConfigs(ctx sdk.Context, kvStore store.KVStore) error {
 
 	var entries []entry
 	for ; iter.Valid(); iter.Next() {
-		var config types.RecoveryConfig
-		if err := json.Unmarshal(iter.Value(), &config); err != nil {
+		config := new(types.RecoveryConfig)
+		if err := json.Unmarshal(iter.Value(), config); err != nil {
 			ctx.Logger().Error("skipping malformed recovery config during migration", "error", err)
 			continue
 		}
@@ -62,13 +62,13 @@ func migrateRecoveryConfigs(ctx sdk.Context, kvStore store.KVStore) error {
 			config.AccountAddress = address
 			keyCopy := make([]byte, len(key))
 			copy(keyCopy, key)
-			entries = append(entries, entry{key: keyCopy, address: address, config: config})
+			entries = append(entries, entry{key: keyCopy, address: address, config: *config})
 		}
 	}
 
 	// Write back outside of iteration
 	for _, e := range entries {
-		bz, err := json.Marshal(e.config)
+		bz, err := json.Marshal(&e.config)
 		if err != nil {
 			return fmt.Errorf("failed to marshal recovery config for %s: %w", e.address, err)
 		}
@@ -87,8 +87,8 @@ func migrateParams(ctx sdk.Context, kvStore store.KVStore) error {
 		return nil
 	}
 
-	var params types.Params
-	if err := json.Unmarshal(bz, &params); err != nil {
+	params := new(types.Params)
+	if err := json.Unmarshal(bz, params); err != nil {
 		return fmt.Errorf("failed to unmarshal params: %w", err)
 	}
 

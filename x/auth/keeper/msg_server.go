@@ -79,7 +79,7 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 		LastActiveBlock:       currentHeight,
 		Flags:                 flags,
 	}
-	ms.SetAccount(ctx, account)
+	ms.SetAccount(ctx, &account)
 
 	// Create DID mapping
 	mapping := types.DIDMapping{
@@ -87,7 +87,7 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 		Bech32: msg.Sender,
 		PubKey: msg.PublicKey,
 	}
-	ms.SetDIDMapping(ctx, mapping)
+	ms.SetDIDMapping(ctx, &mapping)
 
 	// Sync Ed25519 pubkey to Cosmos BaseAccount for standard sig verification
 	senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
@@ -255,7 +255,7 @@ func (ms msgServer) CreateSession(goCtx context.Context, msg *types.MsgCreateSes
 	}
 
 	// Store session key
-	ms.SetSessionKey(ctx, session)
+	ms.SetSessionKey(ctx, &session)
 
 	// Update account
 	account.SessionKeyCount++

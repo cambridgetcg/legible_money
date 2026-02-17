@@ -228,7 +228,7 @@ func (lcd LegibleCapabilityDecorator) findSessionByPubKey(ctx sdk.Context, owner
 			continue // expired
 		}
 		if session.PublicKey == pubKeyHex {
-			return &session
+			return session
 		}
 	}
 	return nil

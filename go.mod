@@ -1,6 +1,6 @@
 module github.com/legible-money/legible
 
-go 1.22
+go 1.23
 
 require (
 	cosmossdk.io/core v0.11.1

@@ -1406,7 +1406,7 @@ func TestSetRecoveryConfig_Success(t *testing.T) {
 
 	_, err := ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1433,7 +1433,7 @@ func TestSetRecoveryConfig_AccountNotFound(t *testing.T) {
 
 	_, err := ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: types.RecoveryConfig{Threshold: 1, TotalShards: 1},
+		Config: &types.RecoveryConfig{Threshold: 1, TotalShards: 1},
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent account")
@@ -1466,7 +1466,7 @@ func TestInitiateRecovery_Success(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, err := ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1529,7 +1529,7 @@ func TestInitiateRecovery_UnauthorizedInitiator(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, err := ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1562,7 +1562,7 @@ func TestInitiateRecovery_AlreadyActive(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	// First initiation
@@ -1630,7 +1630,7 @@ func TestSubmitRecoveryShard_Success(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1694,7 +1694,7 @@ func TestSubmitRecoveryShard_DuplicateShard(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1742,7 +1742,7 @@ func TestSubmitRecoveryShard_WrongSender(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1786,7 +1786,7 @@ func TestChallengeRecovery_OwnerCancels(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1856,7 +1856,7 @@ func TestChallengeRecovery_NotChallengeable(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1898,7 +1898,7 @@ func TestChallengeRecovery_ThirdPartyBlocked(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -1963,7 +1963,7 @@ func TestExecuteRecovery_FullLifecycle(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	// Initiate
@@ -2053,7 +2053,7 @@ func TestExecuteRecovery_NotExecutable(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -2212,7 +2212,7 @@ func TestProcessRecoveryTimeouts_DelayedToChallengeable(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -2271,7 +2271,7 @@ func TestProcessRecoveryTimeouts_ChallengeableToExecutable(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	_, _ = ms.InitiateRecovery(ctx, &types.MsgInitiateRecovery{
@@ -2487,7 +2487,7 @@ func TestGenesisRoundtrip_WithRecoveryConfigs(t *testing.T) {
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
 		Sender: testAddr1,
-		Config: config,
+		Config: &config,
 	})
 
 	// Export genesis
@@ -2566,7 +2566,7 @@ func TestAccountDIDParityInvariant_DetectsOrphanedAccount(t *testing.T) {
 		PublicKey:   testPubKey1,
 		AccountType: "agent",
 	}
-	k.SetAccount(ctx, account)
+	k.SetAccount(ctx, &account)
 
 	inv := keeper.AccountDIDParityInvariant(k)
 	_, broken := inv(ctx)
