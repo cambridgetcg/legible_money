@@ -98,8 +98,9 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
 		k.SetDisbursement(ctx, *disb)
 	}
 
-	// Restore sybil detection state (supplementary, hand-written JSON)
-	k.InitSybilGenesis(ctx, k.loadSybilGenesisFromStore(ctx))
+	// Initialize sybil detection with defaults.
+	// For full genesis migration, use InitSybilGenesis with exported blob.
+	k.InitSybilGenesis(ctx, nil)
 }
 
 // ExportGenesis exports the module's state.
@@ -138,30 +139,4 @@ func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
 		panic("failed to marshal gov genesis: " + err.Error())
 	}
 	return bz
-}
-
-// SaveSybilGenesisToStore persists sybil genesis JSON into the module store.
-// Called during ExportGenesis so that InitGenesis can restore it.
-func (k Keeper) SaveSybilGenesisToStore(ctx sdk.Context) {
-	bz := k.ExportSybilGenesis(ctx)
-	store := k.storeService.OpenKVStore(ctx)
-	if err := store.Set(sybilGenesisStoreKey(), bz); err != nil {
-		panic("failed to save sybil genesis: " + err.Error())
-	}
-}
-
-// loadSybilGenesisFromStore loads sybil genesis JSON from the module store.
-func (k Keeper) loadSybilGenesisFromStore(ctx sdk.Context) json.RawMessage {
-	store := k.storeService.OpenKVStore(ctx)
-	bz, err := store.Get(sybilGenesisStoreKey())
-	if err != nil || bz == nil {
-		return nil
-	}
-	return bz
-}
-
-// sybilGenesisStoreKey returns a store key for the sybil genesis blob.
-// Uses SybilParamsKey with a "genesis" suffix to avoid collision with the params key.
-func sybilGenesisStoreKey() []byte {
-	return append(types.SybilParamsKey, []byte("/genesis")...)
 }
