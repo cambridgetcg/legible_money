@@ -43,11 +43,13 @@ type cachedEval struct {
 // StringInstrument implements domain-aware verification (the "strings" section).
 // It satisfies agentsdk.ClaimEvaluator for use with Agent.AutoVerify().
 type StringInstrument struct {
-	strategy VerificationStrategy
-	domains  []string // specialist domains (only used with StrategySpecialist)
-	resolver ClaimResolver
-	cache    map[string]cachedEval // claimID → cached result
-	mu       sync.RWMutex
+	strategy    VerificationStrategy
+	domains     []string // specialist domains (only used with StrategySpecialist)
+	resolver    ClaimResolver
+	cache       map[string]cachedEval // claimID → cached result
+	mu          sync.RWMutex
+	navigator   KnowledgeNavigator        // optional: enables tree-aware evaluation
+	ctxProvider KnowledgeContextProvider   // optional: provides knowledge context
 }
 
 // NewStringInstrument creates a verifier instrument.
