@@ -142,8 +142,8 @@ func TestOC_SCHED3_UpdateParamsAuthBypass(t *testing.T) {
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: attackerAddr,
 		Params: types.Params{
-			MaxActivePerAccount: 999999,
-			MinFeePerExecution:  "1", // absurdly low
+			MaxActivePerAccount:  999999,
+			MinPrepaidExecutions: 1, // absurdly low
 		},
 	})
 	if err == nil {
