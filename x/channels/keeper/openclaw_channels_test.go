@@ -1,13 +1,20 @@
 package keeper_test
 
 // ==================================================================================
-// OpenClaw Channels Adversarial Probe Suite (OC-CH-1 through OC-CH-4)
+// OpenClaw Channels Adversarial Probe Suite (OC-CH-1 through OC-CH-12)
 //
 // Attack surfaces tested:
 // - Non-party channel update (third party modifies state)
 // - Nonce rollback (submit lower nonce to revert spent amount)
 // - Settle during active dispute (premature settlement)
 // - Overspend (spent exceeds deposited)
+// - Nonce freshness (same-nonce replay)
+// - Channel ID determinism and uniqueness
+// - SpendFromChannel overspend and non-existent channel
+// - Unauthorized close/settle by third party
+// - Deposit to closed/disputed channels
+// - ClaimExpired before grace period
+// - Zero/negative deposit channel creation
 // ==================================================================================
 
 import (
