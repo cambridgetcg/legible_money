@@ -1,0 +1,108 @@
+{
+  "name": "legible-money",
+  "version": "0.1.0",
+  "description": "Money You Can Read - An open source protocol for AI agent economies",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "lgm": "./dist/cmd/lgm.js"
+  },
+  "homepage": "https://legible.money",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/legible-protocol/legible-money"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:fast": "tsup",
+    "build:watch": "tsc --watch",
+    "build:clean": "rm -rf dist && tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "devnet": "bash devnet/scripts/devnet-ctl.sh start",
+    "devnet:stop": "bash devnet/scripts/devnet-ctl.sh stop",
+    "devnet:status": "bash devnet/scripts/devnet-ctl.sh status",
+    "devnet:logs": "bash devnet/scripts/devnet-ctl.sh logs",
+    "devnet:reset": "bash devnet/scripts/devnet-ctl.sh reset",
+    "devnet:local": "bash devnet/scripts/devnet-ctl.sh local",
+    "node": "tsx node/cli.ts",
+    "lgm": "tsx cmd/lgm.ts",
+    "lint": "eslint . --ext .ts --cache --cache-location node_modules/.cache/eslint",
+    "lint:fix": "eslint . --ext .ts --fix --cache --cache-location node_modules/.cache/eslint",
+    "format": "prettier --write '**/*.ts' --cache",
+    "format:check": "prettier --check '**/*.ts' --cache",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "clean": "rm -rf dist coverage node_modules/.cache node_modules/.vitest",
+    "prepare": "husky",
+    "benchmark": "tsx tools/benchmark.ts",
+    "benchmark:crypto": "tsx tools/benchmark.ts --crypto",
+    "perf:check": "tsx tools/benchmark.ts && npm run typecheck",
+    "daemon": "tsx daemon/src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-yamux": "^8.0.0",
+    "@libp2p/bootstrap": "^12.0.0",
+    "@libp2p/gossipsub": "^15.0.0",
+    "@libp2p/identify": "^4.0.0",
+    "@libp2p/kad-dht": "^16.1.0",
+    "@libp2p/mdns": "^12.0.0",
+    "@libp2p/ping": "^3.0.10",
+    "@libp2p/tcp": "^11.0.0",
+    "@libp2p/websockets": "^10.1.0",
+    "@multiformats/multiaddr": "^13.0.0",
+    "@noble/curves": "^1.4.0",
+    "@noble/ed25519": "^3.0.0",
+    "@noble/hashes": "^1.4.0",
+    "commander": "^12.0.0",
+    "level": "^8.0.0",
+    "libp2p": "^3.1.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^1.4.0",
+    "@xstate/graph": "^3.0.4",
+    "concurrently": "^8.2.0",
+    "eslint": "^8.57.0",
+    "fast-check": "^4.5.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "memory-level": "^3.1.0",
+    "prettier": "^3.2.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0",
+    "xstate": "^5.26.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai-agents",
+    "cryptocurrency",
+    "blockchain",
+    "open-source",
+    "legible",
+    "proof-of-truth",
+    "knowledge-layer",
+    "agent-economy"
+  ],
+  "license": "MIT",
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix --cache --cache-location node_modules/.cache/eslint",
+      "prettier --write --cache"
+    ]
+  }
+}

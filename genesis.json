@@ -1,0 +1,1158 @@
+{
+  "app_name": "\u003cappd\u003e",
+  "app_version": "",
+  "genesis_time": "2026-02-22T00:00:00Z",
+  "chain_id": "legible-1",
+  "initial_height": 1,
+  "app_hash": null,
+  "app_state": {
+    "auth": {
+      "params": {
+        "max_memo_characters": "256",
+        "tx_sig_limit": "7",
+        "tx_size_cost_per_byte": "10",
+        "sig_verify_cost_ed25519": "590",
+        "sig_verify_cost_secp256k1": "1000"
+      },
+      "accounts": [
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "lgm1mnf2llay9lh9mgdu9zslsrhavn8fdp0qs9xltg",
+          "pub_key": null,
+          "account_number": "0",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "lgm1kz8ujdxlmc3rmjh86mjy9n42l5f5xthn0aca4s",
+          "pub_key": null,
+          "account_number": "1",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "lgm1ymsrluytrqrzhx4rgy2dwe4pvqcu4yz58maj2v",
+          "pub_key": null,
+          "account_number": "2",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "lgm1gytxfza0qm0ztawfnkyad6fv8hwx9k8q4w424t",
+          "pub_key": null,
+          "account_number": "3",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "lgm1ggzs2ym6ghdxj9cvfhdqm269rzcmh5w6jj40gu",
+          "pub_key": null,
+          "account_number": "4",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "lgm1z4883778k44rflae8phj3vtpu82wszdc0rw4q4",
+          "pub_key": null,
+          "account_number": "5",
+          "sequence": "0"
+        }
+      ]
+    },
+    "autopoiesis": {
+      "params": {
+        "epoch_length_blocks": 1111,
+        "max_change_per_epoch_bps": 50000,
+        "slash_multiplier_min": 500000,
+        "slash_multiplier_max": 3000000,
+        "ssi_critical_threshold": 800000,
+        "ssi_moderate_threshold": 500000,
+        "ssi_low_moderate_threshold": 200000,
+        "enabled": true
+      }
+    },
+    "bank": {
+      "params": {
+        "send_enabled": [],
+        "default_send_enabled": true
+      },
+      "balances": [
+        {
+          "address": "lgm1z4883778k44rflae8phj3vtpu82wszdc0rw4q4",
+          "coins": [
+            {
+              "denom": "ulgm",
+              "amount": "1000000000000"
+            }
+          ]
+        },
+        {
+          "address": "lgm1ymsrluytrqrzhx4rgy2dwe4pvqcu4yz58maj2v",
+          "coins": [
+            {
+              "denom": "ulgm",
+              "amount": "500000000000"
+            }
+          ]
+        },
+        {
+          "address": "lgm1gytxfza0qm0ztawfnkyad6fv8hwx9k8q4w424t",
+          "coins": [
+            {
+              "denom": "ulgm",
+              "amount": "1000000000000"
+            }
+          ]
+        },
+        {
+          "address": "lgm1ggzs2ym6ghdxj9cvfhdqm269rzcmh5w6jj40gu",
+          "coins": [
+            {
+              "denom": "ulgm",
+              "amount": "1000000000000"
+            }
+          ]
+        },
+        {
+          "address": "lgm1kz8ujdxlmc3rmjh86mjy9n42l5f5xthn0aca4s",
+          "coins": [
+            {
+              "denom": "ulgm",
+              "amount": "5000000000000"
+            }
+          ]
+        },
+        {
+          "address": "lgm1mnf2llay9lh9mgdu9zslsrhavn8fdp0qs9xltg",
+          "coins": [
+            {
+              "denom": "ulgm",
+              "amount": "10000000000000"
+            }
+          ]
+        }
+      ],
+      "supply": [
+        {
+          "denom": "ulgm",
+          "amount": "18500000000000"
+        }
+      ],
+      "denom_metadata": [],
+      "send_enabled": []
+    },
+    "billing": {
+      "params": {
+        "base_cost_per_fact": "1000000",
+        "confidence_threshold": 500000,
+        "confidence_premium_bps": 200000,
+        "freshness_window_blocks": 1000,
+        "freshness_discount_bps": 100000,
+        "quote_validity_blocks": 100,
+        "min_provider_stake": "100000000",
+        "research_share_bps": 70000,
+        "research_min_bps": 50000,
+        "research_ramp_blocks": 3084480
+      }
+    },
+    "bvm": {
+      "params": {
+        "max_bytecode_size": 1048576,
+        "max_state_entries": 100000,
+        "max_schedules_per_contract": 100,
+        "deploy_gas_cost": 200000,
+        "call_base_gas_cost": 21000,
+        "storage_write_gas_cost": 5000,
+        "storage_read_gas_cost": 2000
+      }
+    },
+    "capture_challenge": {
+      "params": {
+        "evidence_period_blocks": 777,
+        "review_period_blocks": 7777,
+        "domain_pause_duration_blocks": 777
+      }
+    },
+    "capture_defense": {
+      "params": {
+        "stake_lock_period": 7777,
+        "min_verifications_for_qual": 19,
+        "min_accuracy_for_qual": 770000,
+        "min_endorsers_for_qual": 3,
+        "inactivity_expiration_blocks": 777777,
+        "probationary_period_blocks": 777,
+        "reputation_half_life_blocks": 77777,
+        "detection_interval_blocks": 777,
+        "decay_interval_blocks": 7777,
+        "herfindahl_trigger_threshold": 400000,
+        "max_expirations_per_block": 100
+      }
+    },
+    "channels": {
+      "params": {
+        "min_deposit": "1000000",
+        "max_channel_duration": 1036800,
+        "default_settlement_freq": 100,
+        "dispute_period_blocks": 1000,
+        "expiry_grace_period": 500,
+        "fraud_penalty_bps": 500,
+        "max_channels_per_payer": 50
+      }
+    },
+    "claiming_pot": {
+      "params": {
+        "max_pots_per_creator": 100,
+        "min_initial_deposit": "1000000",
+        "max_allowlist_size": 10000,
+        "min_amount_per_claim": "1000"
+      }
+    },
+    "discovery": {
+      "params": {
+        "min_registration_stake": "100000000",
+        "max_capabilities_per_agent": 50,
+        "profile_expiry_blocks": 342720
+      }
+    },
+    "disputes": {
+      "params": {
+        "tier_configs": [
+          {
+            "tier": 1,
+            "arbiter_count": 3,
+            "min_bond": "111000000",
+            "evidence_period": 34272,
+            "voting_period": 68544,
+            "quorum_threshold": 660000,
+            "majority_threshold": 770000
+          },
+          {
+            "tier": 2,
+            "arbiter_count": 7,
+            "min_bond": "555000000",
+            "evidence_period": 68544,
+            "voting_period": 137088,
+            "quorum_threshold": 660000,
+            "majority_threshold": 770000
+          },
+          {
+            "tier": 3,
+            "arbiter_count": 15,
+            "min_bond": "1111000000",
+            "evidence_period": 102816,
+            "voting_period": 239904,
+            "quorum_threshold": 660000,
+            "majority_threshold": 770000
+          }
+        ],
+        "max_active_disputes": 3,
+        "escalation_delay": 17136,
+        "slash_rate_loser": 500000,
+        "reward_rate_winner": 300000,
+        "arbiter_reward_rate": 200000
+      }
+    },
+    "distribution": {
+      "params": {
+        "community_tax": "0.020000000000000000",
+        "base_proposer_reward": "0.000000000000000000",
+        "bonus_proposer_reward": "0.000000000000000000",
+        "withdraw_addr_enabled": true
+      },
+      "fee_pool": {
+        "community_pool": []
+      },
+      "delegator_withdraw_infos": [],
+      "previous_proposer": "",
+      "outstanding_rewards": [],
+      "validator_accumulated_commissions": [],
+      "validator_historical_rewards": [],
+      "validator_current_rewards": [],
+      "delegator_starting_infos": [],
+      "validator_slash_events": []
+    },
+    "emergency": {
+      "params": {
+        "halt_quorum": 750000,
+        "revert_quorum": 800000,
+        "resume_quorum": 800000,
+        "halt_prevote_blocks": 11,
+        "halt_precommit_blocks": 11,
+        "halt_timeout_blocks": 44,
+        "revert_prevote_blocks": 22,
+        "revert_precommit_blocks": 22,
+        "revert_timeout_blocks": 111,
+        "resume_prevote_blocks": 22,
+        "resume_precommit_blocks": 22,
+        "resume_timeout_blocks": 111,
+        "max_proposals_per_epoch": 3,
+        "max_proposals_per_guardian_per_epoch": 1,
+        "cooldown_blocks": 111,
+        "min_guardian_stake": "50000000000",
+        "min_distinct_voters": 2,
+        "max_revert_depth": 111111,
+        "epoch_blocks": 34272,
+        "council_virtual_stake": "11111000000",
+        "max_halt_duration_blocks": 34272
+      },
+      "status": "normal"
+    },
+    "evidence": {
+      "evidence": []
+    },
+    "evidence_mgmt": {
+      "params": {
+        "min_audit_stake": "22000000",
+        "audit_window": 34272,
+        "min_audits_for_consensus": 3,
+        "accuracy_threshold": 100000,
+        "slash_rate": 100000,
+        "reward_rate": 50000,
+        "min_oracle_stake": "100000000",
+        "oracle_slash_rate": 200000,
+        "max_evidence_per_claim": 10
+      }
+    },
+    "feegrant": {
+      "allowances": []
+    },
+    "feeibc": {
+      "identified_fees": [],
+      "fee_enabled_channels": [],
+      "registered_payees": [],
+      "registered_counterparty_payees": [],
+      "forward_relayers": []
+    },
+    "genutil": {
+      "gen_txs": [
+        {
+          "body": {
+            "messages": [
+              {
+                "@type": "/cosmos.staking.v1beta1.MsgCreateValidator",
+                "description": {
+                  "moniker": "validator-1",
+                  "identity": "",
+                  "website": "",
+                  "security_contact": "",
+                  "details": ""
+                },
+                "commission": {
+                  "rate": "0.100000000000000000",
+                  "max_rate": "0.200000000000000000",
+                  "max_change_rate": "0.010000000000000000"
+                },
+                "min_self_delegation": "1",
+                "delegator_address": "",
+                "validator_address": "lgmvaloper1gytxfza0qm0ztawfnkyad6fv8hwx9k8q6zfk0w",
+                "pubkey": {
+                  "@type": "/cosmos.crypto.ed25519.PubKey",
+                  "key": "V40OvG11azBpMCy+cBvPuNN18fmOxTTg0kKNmXRWo1Q="
+                },
+                "value": {
+                  "denom": "ulgm",
+                  "amount": "100000000000"
+                }
+              }
+            ],
+            "memo": "aaa3bd6b9aef702ebf3031546ec7f78d9626e8ed@192.168.50.189:26656",
+            "timeout_height": "0",
+            "extension_options": [],
+            "non_critical_extension_options": []
+          },
+          "auth_info": {
+            "signer_infos": [
+              {
+                "public_key": {
+                  "@type": "/cosmos.crypto.secp256k1.PubKey",
+                  "key": "Alhto3F6C5J98+ACPxrorX5+15SctKnQprghdSffoZRR"
+                },
+                "mode_info": {
+                  "single": {
+                    "mode": "SIGN_MODE_DIRECT"
+                  }
+                },
+                "sequence": "0"
+              }
+            ],
+            "fee": {
+              "amount": [],
+              "gas_limit": "200000",
+              "payer": "",
+              "granter": ""
+            },
+            "tip": null
+          },
+          "signatures": [
+            "y9tTkZf/RYzHWsNmlkcSSmoBbxVwDDimH72dXZGjGU87QkuEhEI5u+lHTUdN57bRuieDbnn6jCPn5UL2vAg/JQ=="
+          ]
+        },
+        {
+          "body": {
+            "messages": [
+              {
+                "@type": "/cosmos.staking.v1beta1.MsgCreateValidator",
+                "description": {
+                  "moniker": "validator-2",
+                  "identity": "",
+                  "website": "",
+                  "security_contact": "",
+                  "details": ""
+                },
+                "commission": {
+                  "rate": "0.100000000000000000",
+                  "max_rate": "0.200000000000000000",
+                  "max_change_rate": "0.010000000000000000"
+                },
+                "min_self_delegation": "1",
+                "delegator_address": "",
+                "validator_address": "lgmvaloper1ggzs2ym6ghdxj9cvfhdqm269rzcmh5w6a7fnje",
+                "pubkey": {
+                  "@type": "/cosmos.crypto.ed25519.PubKey",
+                  "key": "tlL11+OZY+CMJ36K/bi8Wk06adaJIrTY/37xpt7xFVs="
+                },
+                "value": {
+                  "denom": "ulgm",
+                  "amount": "100000000000"
+                }
+              }
+            ],
+            "memo": "6ccce009296a8f9be9144030221aa7cbfe536a8f@192.168.50.189:26656",
+            "timeout_height": "0",
+            "extension_options": [],
+            "non_critical_extension_options": []
+          },
+          "auth_info": {
+            "signer_infos": [
+              {
+                "public_key": {
+                  "@type": "/cosmos.crypto.secp256k1.PubKey",
+                  "key": "A9mk5L3rr1m3/GGfgyIDSXz6yb+rlPQ3UP4PHXxL2hRH"
+                },
+                "mode_info": {
+                  "single": {
+                    "mode": "SIGN_MODE_DIRECT"
+                  }
+                },
+                "sequence": "0"
+              }
+            ],
+            "fee": {
+              "amount": [],
+              "gas_limit": "200000",
+              "payer": "",
+              "granter": ""
+            },
+            "tip": null
+          },
+          "signatures": [
+            "n3PH9EHgdpPeF39tQKE8RKgJgrIuH82Qr/ZFjnaLrl5QyXD/XmIyMs/q8xOWiDakmOQTL5CG9ZfkVNi4iMBAAA=="
+          ]
+        },
+        {
+          "body": {
+            "messages": [
+              {
+                "@type": "/cosmos.staking.v1beta1.MsgCreateValidator",
+                "description": {
+                  "moniker": "validator-3",
+                  "identity": "",
+                  "website": "",
+                  "security_contact": "",
+                  "details": ""
+                },
+                "commission": {
+                  "rate": "0.100000000000000000",
+                  "max_rate": "0.200000000000000000",
+                  "max_change_rate": "0.010000000000000000"
+                },
+                "min_self_delegation": "1",
+                "delegator_address": "",
+                "validator_address": "lgmvaloper1z4883778k44rflae8phj3vtpu82wszdcq0jf6s",
+                "pubkey": {
+                  "@type": "/cosmos.crypto.ed25519.PubKey",
+                  "key": "fGd/sg0GxZlou5PeqNvUszfcZMNx9Eyt1+ASZiG4Q1k="
+                },
+                "value": {
+                  "denom": "ulgm",
+                  "amount": "100000000000"
+                }
+              }
+            ],
+            "memo": "23a075a81ff79913c559ae43419ae315c0efe2ef@192.168.50.189:26656",
+            "timeout_height": "0",
+            "extension_options": [],
+            "non_critical_extension_options": []
+          },
+          "auth_info": {
+            "signer_infos": [
+              {
+                "public_key": {
+                  "@type": "/cosmos.crypto.secp256k1.PubKey",
+                  "key": "Ax8r/LS4+Y/5IY52paqWsy+4wbDRPPCF/8hWcvw8cYxE"
+                },
+                "mode_info": {
+                  "single": {
+                    "mode": "SIGN_MODE_DIRECT"
+                  }
+                },
+                "sequence": "0"
+              }
+            ],
+            "fee": {
+              "amount": [],
+              "gas_limit": "200000",
+              "payer": "",
+              "granter": ""
+            },
+            "tip": null
+          },
+          "signatures": [
+            "6308HKtF713FKMj5sL3lOe+Z6GnbKgiFc60yXngijC9iV194p5u/ctjad0YrD3vjwX+LKG+tyMMpGX0VDAIuhg=="
+          ]
+        }
+      ]
+    },
+    "gov": {
+      "starting_proposal_id": "1",
+      "deposits": [],
+      "votes": [],
+      "proposals": [],
+      "deposit_params": null,
+      "voting_params": null,
+      "tally_params": null,
+      "params": {
+        "min_deposit": [
+          {
+            "denom": "ulgm",
+            "amount": "10000000"
+          }
+        ],
+        "max_deposit_period": "172800s",
+        "voting_period": "172800s",
+        "quorum": "0.334000000000000000",
+        "threshold": "0.500000000000000000",
+        "veto_threshold": "0.334000000000000000",
+        "min_initial_deposit_ratio": "0.000000000000000000",
+        "proposal_cancel_ratio": "0.500000000000000000",
+        "proposal_cancel_dest": "",
+        "expedited_voting_period": "86400s",
+        "expedited_threshold": "0.667000000000000000",
+        "expedited_min_deposit": [
+          {
+            "denom": "ulgm",
+            "amount": "50000000"
+          }
+        ],
+        "burn_vote_quorum": false,
+        "burn_proposal_deposit_prevote": false,
+        "burn_vote_veto": true,
+        "min_deposit_ratio": "0.010000000000000000"
+      },
+      "constitution": ""
+    },
+    "home": {
+      "params": {
+        "max_homes_per_account": 3,
+        "min_creation_stake": "1000000",
+        "session_max_duration": 34272,
+        "max_keys_per_home": 20,
+        "max_alerts_per_home": 100,
+        "max_sessions_per_home": 5,
+        "deadman_min_threshold": 34272,
+        "alert_retention_blocks": 342720
+      }
+    },
+    "ibc": {
+      "client_genesis": {
+        "clients": [],
+        "clients_consensus": [],
+        "clients_metadata": [],
+        "params": {
+          "allowed_clients": [
+            "*"
+          ]
+        },
+        "create_localhost": false,
+        "next_client_sequence": "0"
+      },
+      "connection_genesis": {
+        "connections": [],
+        "client_connection_paths": [],
+        "next_connection_sequence": "0",
+        "params": {
+          "max_expected_time_per_block": "30000000000"
+        }
+      },
+      "channel_genesis": {
+        "channels": [],
+        "acknowledgements": [],
+        "commitments": [],
+        "receipts": [],
+        "send_sequences": [],
+        "recv_sequences": [],
+        "ack_sequences": [],
+        "next_channel_sequence": "0",
+        "params": {
+          "upgrade_timeout": {
+            "height": {
+              "revision_number": "0",
+              "revision_height": "0"
+            },
+            "timestamp": "600000000000"
+          }
+        }
+      }
+    },
+    "ibcratelimit": {
+      "params": {
+        "epoch_length_blocks": 34272,
+        "max_outflow_per_epoch": "10000000000",
+        "max_inflow_per_epoch": "10000000000",
+        "tracked_denom": "ulgm"
+      }
+    },
+    "icaauth": {
+      "params": {
+        "max_remote_accounts_per_did": 10,
+        "allowed_host_msg_types": [
+          "/cosmos.bank.v1beta1.MsgSend",
+          "/cosmos.staking.v1beta1.MsgDelegate",
+          "/cosmos.staking.v1beta1.MsgUndelegate",
+          "/cosmos.gov.v1.MsgVote",
+          "/ibc.applications.transfer.v1.MsgTransfer"
+        ],
+        "registration_cooldown": 100
+      }
+    },
+    "interchainaccounts": {
+      "controller_genesis_state": {
+        "active_channels": [],
+        "interchain_accounts": [],
+        "ports": [],
+        "params": {
+          "controller_enabled": true
+        }
+      },
+      "host_genesis_state": {
+        "active_channels": [],
+        "interchain_accounts": [],
+        "port": "icahost",
+        "params": {
+          "host_enabled": true,
+          "allow_messages": [
+            "*"
+          ]
+        }
+      }
+    },
+    "knowledge": {
+      "params": {
+        "ontology_version": 1,
+        "cross_stratum_discount": 50000,
+        "min_domain_proposal_stake": "1000000",
+        "domain_voting_period": 34272,
+        "min_endorsements": 3,
+        "allow_partial_coverage": true,
+        "partial_coverage_penalty": 100000,
+        "lower_stratum_veto_weight": 200000,
+        "cross_stratum_agreement_threshold": 670000,
+        "min_claim_text_length": 20,
+        "max_claim_reward_multiplier": 2,
+        "commit_phase_duration": 100,
+        "reveal_phase_duration": 100,
+        "aggregation_phase_duration": 50,
+        "min_verifiers": 1,
+        "acceptance_threshold": 770000,
+        "quorum_threshold": 660000,
+        "max_validators_per_round": 22,
+        "invalid_claim_slash_bps": 220000,
+        "verification_reward_amount": 3000000
+      },
+      "domains": [
+        {
+          "name": "mathematics",
+          "description": "Formal mathematical truths, proofs, and theorems",
+          "status": "active"
+        },
+        {
+          "name": "physics",
+          "description": "Physical laws, constants, and empirical observations about the natural world",
+          "status": "active"
+        },
+        {
+          "name": "computer_science",
+          "description": "Algorithms, data structures, protocols, and computational theory",
+          "status": "active"
+        },
+        {
+          "name": "general",
+          "description": "General knowledge claims not fitting a specific domain",
+          "status": "active"
+        }
+      ]
+    },
+    "legible_auth": {
+      "params": {
+        "max_session_keys": 5,
+        "max_session_duration": 34272,
+        "key_rotation_cooldown": 111,
+        "recovery_delay_blocks": 1000,
+        "challenge_period_blocks": 500,
+        "bootstrap_enabled": true,
+        "bootstrap_amount": "222000"
+      }
+    },
+    "legible_staking": {
+      "params": {
+        "unbonding_period": 268560,
+        "virtual_stake": "11000000",
+        "max_validators": 100,
+        "min_self_delegation": "111000",
+        "max_slashes_per_epoch": 2,
+        "slash_decay_period_blocks": 34272,
+        "max_slash_count_deactivate": 3,
+        "min_stake_for_verification": "111000",
+        "slash_escalation_bps": 100000
+      },
+      "tier_configs": [
+        {
+          "tier": "apprentice",
+          "min_stake": "111000",
+          "max_slash_count": -1,
+          "allowed_categories": [
+            "protocol",
+            "computational",
+            "formal"
+          ],
+          "reward_multiplier": 100,
+          "selection_weight": 100,
+          "contested_verification_multiplier": 1
+        },
+        {
+          "tier": "verified",
+          "min_stake": "1110000",
+          "min_verifications": 22,
+          "min_accuracy": 770000,
+          "max_slash_count": -1,
+          "allowed_categories": [
+            "protocol",
+            "computational",
+            "formal",
+            "empirical"
+          ],
+          "reward_multiplier": 500,
+          "selection_weight": 500,
+          "contested_verification_multiplier": 1
+        },
+        {
+          "tier": "bonded",
+          "min_stake": "1111000000",
+          "min_verifications": 11,
+          "min_accuracy": 500000,
+          "max_slash_count": -1,
+          "allowed_categories": [
+            "protocol",
+            "computational",
+            "formal",
+            "empirical",
+            "oracle",
+            "attestation"
+          ],
+          "reward_multiplier": 1000,
+          "selection_weight": 1000,
+          "contested_verification_multiplier": 1
+        },
+        {
+          "tier": "guardian",
+          "min_stake": "11111000000",
+          "min_verifications": 333,
+          "min_accuracy": 770000,
+          "allowed_categories": [
+            "protocol",
+            "computational",
+            "formal",
+            "empirical",
+            "oracle",
+            "attestation",
+            "predictive",
+            "social",
+            "contested"
+          ],
+          "reward_multiplier": 2000,
+          "selection_weight": 1500,
+          "slash_window_epochs": 10,
+          "min_contested_verifications": 33,
+          "contested_verification_multiplier": 3
+        }
+      ]
+    },
+    "lgm_gov": {
+      "params": {
+        "voting_period_blocks": 34272,
+        "review_period_blocks": 17136,
+        "last_call_period_blocks": 17136,
+        "base_cost_per_vote": "1000000",
+        "max_votes_per_voter": 100,
+        "support_threshold_bps": 7500,
+        "quorum_threshold_bps": 1500,
+        "disbursement_stake": "2000000000",
+        "disbursement_timelock_blocks": 50000,
+        "disbursement_support_bps": 8000,
+        "disbursement_quorum_bps": 2000,
+        "lip_stake_consensus": "1000000000",
+        "lip_stake_economics": "800000000",
+        "lip_stake_interface": "400000000",
+        "lip_stake_process": "200000000"
+      },
+      "next_lip_number": 1,
+      "next_disb_number": 1
+    },
+    "ontology": {
+      "params": {
+        "min_proposal_stake": "1000000",
+        "proposal_voting_period": 34272,
+        "min_endorsements": 3,
+        "cross_stratum_discount": 50000,
+        "max_domains_per_stratum": 100
+      },
+      "strata": [
+        {
+          "name": "axiomatic",
+          "description": "Mathematical axioms, tautologies, and logical foundations. Complete and decidable within their formal system.",
+          "complete": true,
+          "decidable": true,
+          "consistency_proof": "internal",
+          "max_confidence": 1000000
+        },
+        {
+          "stratum": 1,
+          "name": "formal",
+          "description": "Formal proofs and theorems derived from axioms. Complete in restricted domains (propositional, Presburger).",
+          "complete": true,
+          "decidable": true,
+          "consistency_proof": "internal",
+          "max_confidence": 1000000,
+          "decay_rate": 1
+        },
+        {
+          "stratum": 2,
+          "name": "protocol",
+          "description": "Blockchain-verifiable, deterministic facts. Verifiable by any full node via state replay.",
+          "decidable": true,
+          "consistency_proof": "external",
+          "max_confidence": 990000,
+          "decay_rate": 5
+        },
+        {
+          "stratum": 3,
+          "name": "computational",
+          "description": "Computation results that are reproducible but may involve undecidable problems (halting problem).",
+          "goedel_applies": true,
+          "consistency_proof": "assumed",
+          "max_confidence": 980000,
+          "decay_rate": 10
+        },
+        {
+          "stratum": 4,
+          "name": "empirical",
+          "description": "Scientific observations, experimental results. Falsifiable and subject to revision by new evidence.",
+          "consistency_proof": "external",
+          "max_confidence": 950000,
+          "decay_rate": 50
+        },
+        {
+          "stratum": 5,
+          "name": "historical",
+          "description": "Historical records and evidence-based claims about past events. Dependent on source reliability.",
+          "consistency_proof": "external",
+          "max_confidence": 900000,
+          "decay_rate": 100
+        },
+        {
+          "stratum": 6,
+          "name": "testimonial",
+          "description": "Human attestations and trust-weighted claims. Lowest formal verifiability, highest social dependency.",
+          "consistency_proof": "external",
+          "max_confidence": 800000,
+          "decay_rate": 200
+        }
+      ],
+      "domains": [
+        {
+          "name": "logic",
+          "display_name": "Logic \u0026 Foundations",
+          "description": "Propositional logic, predicate logic, set theory foundations, and metamathematics",
+          "status": "active"
+        },
+        {
+          "name": "mathematics",
+          "display_name": "Mathematics",
+          "description": "Formal mathematical truths, proofs, and theorems",
+          "stratum": 1,
+          "status": "active"
+        },
+        {
+          "name": "protocol",
+          "display_name": "Blockchain Protocol",
+          "description": "On-chain state, transaction results, and protocol-verifiable facts",
+          "stratum": 2,
+          "status": "active"
+        },
+        {
+          "name": "computer_science",
+          "display_name": "Computer Science",
+          "description": "Algorithms, data structures, protocols, and computational theory",
+          "stratum": 3,
+          "status": "active"
+        },
+        {
+          "name": "physics",
+          "display_name": "Physics",
+          "description": "Physical laws, constants, and empirical observations about the natural world",
+          "stratum": 4,
+          "status": "active"
+        },
+        {
+          "name": "general",
+          "display_name": "General Knowledge",
+          "description": "General knowledge claims not fitting a specific domain",
+          "stratum": 4,
+          "status": "active"
+        },
+        {
+          "name": "history",
+          "display_name": "History",
+          "description": "Historical records, events, and evidence-based accounts of the past",
+          "stratum": 5,
+          "status": "active"
+        }
+      ]
+    },
+    "partnerships": {
+      "params": {
+        "formation_window_blocks": 77,
+        "cooling_period_blocks": 222222,
+        "common_pot_share_bps": 220000,
+        "safety_freeze_duration_blocks": 222,
+        "max_freezes_per_epoch": 3,
+        "coercion_review_blocks": 1111,
+        "base_cooldown_blocks": 77,
+        "max_counter_proposal_depth": 3,
+        "default_human_split_bps": 500000,
+        "default_agent_split_bps": 500000
+      }
+    },
+    "qualification": {
+      "params": {
+        "stake_leaf": "22000000",
+        "stake_mid": "222000000",
+        "stake_top": "2222000000",
+        "stake_lock_period": 7777,
+        "min_verifications": 19,
+        "min_accuracy_bps": 7700,
+        "min_endorsers": 3,
+        "endorser_stake": "22000000",
+        "endorsement_decay_blocks": 77777,
+        "stratum_discount_bps": 7000,
+        "inactivity_expiration": 777777,
+        "probationary_period": 777,
+        "probationary_weight_bps": 5000,
+        "suspension_accuracy_bps": 5000,
+        "suspension_consecutive": 5,
+        "revocation_challenges": 3,
+        "max_qualification_depth": 7
+      }
+    },
+    "research": {
+      "params": {
+        "min_research_stake": "100000000",
+        "min_challenge_stake": "100000000",
+        "review_period_blocks": 68544,
+        "min_reviewer_count": 3,
+        "acceptance_score_threshold": 60,
+        "rejection_slash_bps": 330000,
+        "max_bounty_reward": "10000000000",
+        "bounty_min_deadline_blocks": 34272
+      },
+      "treasury_balance": {
+        "balance": "0"
+      }
+    },
+    "schedule": {
+      "params": {
+        "max_active_per_account": 100,
+        "max_gas_per_block": 2000000,
+        "min_interval_blocks": 1,
+        "max_future_blocks": 12500000,
+        "min_prepaid_executions": 10,
+        "expired_retention_blocks": 1000
+      }
+    },
+    "slashing": {
+      "params": {
+        "signed_blocks_window": "100",
+        "min_signed_per_window": "0.500000000000000000",
+        "downtime_jail_duration": "600s",
+        "slash_fraction_double_sign": "0.050000000000000000",
+        "slash_fraction_downtime": "0.010000000000000000"
+      },
+      "signing_infos": [],
+      "missed_blocks": []
+    },
+    "staking": {
+      "params": {
+        "unbonding_time": "1814400s",
+        "max_validators": 100,
+        "max_entries": 7,
+        "historical_entries": 10000,
+        "bond_denom": "ulgm",
+        "min_commission_rate": "0.000000000000000000"
+      },
+      "last_total_power": "0",
+      "last_validator_powers": [],
+      "validators": [],
+      "delegations": [],
+      "unbonding_delegations": [],
+      "redelegations": [],
+      "exported": false
+    },
+    "tokens": {
+      "params": {},
+      "rai": {
+        "balance": "0",
+        "total_received": "0",
+        "total_distributed": "0"
+      }
+    },
+    "transfer": {
+      "port_id": "transfer",
+      "denom_traces": [],
+      "params": {
+        "send_enabled": true,
+        "receive_enabled": true
+      },
+      "total_escrowed": []
+    },
+    "tree": {
+      "params": {
+        "min_budget": "1000000",
+        "max_tasks_per_project": 200,
+        "max_contributors": 50,
+        "max_applications": 100,
+        "task_deadline_min_blocks": 100,
+        "task_deadline_max_blocks": 1036800,
+        "max_rejections": 3,
+        "seed_expiry_blocks": 172800,
+        "min_contributors_to_start": 1,
+        "evidence_tax_bp": 220000,
+        "contributors_bp": 390000,
+        "research_fund_bp": 234000,
+        "protocol_treasury_bp": 156000
+      }
+    },
+    "upgrade": {},
+    "vesting": {},
+    "vesting_rewards": {
+      "params": {
+        "research_share_bps": 70000,
+        "block_reward_amount": "3000000",
+        "min_validators_for_full_reward": 3,
+        "vesting_enabled": true,
+        "released_clawback_rate": 3300,
+        "initial_fund_balance": "0",
+        "blocks_per_epoch": 240000,
+        "decay_factor_bps": 850000,
+        "floor_reward": "100000",
+        "fund_health_threshold_bps": 100000,
+        "api_suppression_exponent": 2
+      },
+      "category_configs": [
+        {
+          "category": "axiomatic",
+          "half_life_blocks": 1111111,
+          "cliff_blocks": 11111,
+          "max_release": 950000
+        },
+        {
+          "category": "formal_proof",
+          "half_life_blocks": 555555,
+          "cliff_blocks": 5555,
+          "max_release": 920000
+        },
+        {
+          "category": "on_chain",
+          "half_life_blocks": 222222,
+          "cliff_blocks": 1111,
+          "max_release": 900000
+        },
+        {
+          "category": "cryptographic",
+          "half_life_blocks": 222222,
+          "cliff_blocks": 3333,
+          "max_release": 900000
+        },
+        {
+          "category": "computational",
+          "half_life_blocks": 333333,
+          "cliff_blocks": 2222,
+          "max_release": 880000
+        },
+        {
+          "category": "peer_reviewed",
+          "half_life_blocks": 111111,
+          "cliff_blocks": 5555,
+          "max_release": 850000
+        },
+        {
+          "category": "replicated",
+          "half_life_blocks": 111111,
+          "cliff_blocks": 3333,
+          "max_release": 880000
+        },
+        {
+          "category": "oracle_feed",
+          "half_life_blocks": 55555,
+          "cliff_blocks": 555,
+          "max_release": 800000
+        },
+        {
+          "category": "attestation",
+          "half_life_blocks": 77777,
+          "cliff_blocks": 2222,
+          "max_release": 800000
+        },
+        {
+          "category": "contested",
+          "half_life_blocks": 22222,
+          "cliff_blocks": 1111,
+          "max_release": 600000
+        }
+      ]
+    }
+  },
+  "consensus": {
+    "params": {
+      "block": {
+        "max_bytes": "4194304",
+        "max_gas": "-1"
+      },
+      "evidence": {
+        "max_age_num_blocks": "100000",
+        "max_age_duration": "172800000000000",
+        "max_bytes": "1048576"
+      },
+      "validator": {
+        "pub_key_types": [
+          "ed25519"
+        ]
+      },
+      "version": {
+        "app": "0"
+      },
+      "abci": {
+        "vote_extensions_enable_height": "1"
+      }
+    }
+  }
+}
