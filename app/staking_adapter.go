@@ -236,3 +236,58 @@ func (a *KnowledgeKeeperForEvidence) HasClaim(goCtx context.Context, claimId str
 	_, found := a.keeper.GetClaim(ctx, claimId)
 	return found
 }
+
+// ---------- Compute Pool Adapters ----------
+
+// ComputePoolStakingAdapter wraps the Legible staking keeper to satisfy
+// the compute_pool module's StakingKeeper interface.
+type ComputePoolStakingAdapter struct {
+	keeper legiblestakingkeeper.Keeper
+}
+
+func NewComputePoolStakingAdapter(keeper legiblestakingkeeper.Keeper) *ComputePoolStakingAdapter {
+	return &ComputePoolStakingAdapter{keeper: keeper}
+}
+
+var _ computepooltypes.StakingKeeper = (*ComputePoolStakingAdapter)(nil)
+
+// GetValidatorByAddress returns a validator's tier and stake.
+func (a *ComputePoolStakingAdapter) GetValidatorByAddress(ctx sdk.Context, addr string) (tier string, stake string, found bool) {
+	v, ok := a.keeper.GetValidator(ctx, addr)
+	if !ok {
+		return "", "", false
+	}
+	return v.Tier, v.TotalStake, true
+}
+
+// ComputePoolKnowledgeAdapter wraps the Knowledge keeper to satisfy
+// the compute_pool module's KnowledgeKeeper interface.
+type ComputePoolKnowledgeAdapter struct {
+	keeper knowledgekeeper.Keeper
+}
+
+func NewComputePoolKnowledgeAdapter(keeper knowledgekeeper.Keeper) *ComputePoolKnowledgeAdapter {
+	return &ComputePoolKnowledgeAdapter{keeper: keeper}
+}
+
+var _ computepooltypes.KnowledgeKeeper = (*ComputePoolKnowledgeAdapter)(nil)
+
+// GetClaimComplexity returns the evidence count and cross-domain reference count for a claim.
+func (a *ComputePoolKnowledgeAdapter) GetClaimComplexity(ctx sdk.Context, claimId string) (evidenceCount uint64, crossDomainRefs uint64, found bool) {
+	claim, ok := a.keeper.GetClaim(ctx, claimId)
+	if !ok {
+		return 0, 0, false
+	}
+
+	evidenceCount = uint64(len(claim.Evidence))
+
+	// Count cross-domain references: references to facts in different domains
+	for _, refFactId := range claim.References {
+		fact, factFound := a.keeper.GetFact(ctx, refFactId)
+		if factFound && fact.Domain != claim.Domain {
+			crossDomainRefs++
+		}
+	}
+
+	return evidenceCount, crossDomainRefs, true
+}
