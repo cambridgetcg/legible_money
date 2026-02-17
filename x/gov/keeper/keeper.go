@@ -97,6 +97,9 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
 	for _, disb := range gs.Disbursements {
 		k.SetDisbursement(ctx, *disb)
 	}
+
+	// Restore sybil detection state (supplementary, hand-written JSON)
+	k.InitSybilGenesis(ctx, k.loadSybilGenesisFromStore(ctx))
 }
 
 // ExportGenesis exports the module's state.
