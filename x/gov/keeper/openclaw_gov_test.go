@@ -305,10 +305,10 @@ func TestOC_GOV8_CategoryStakeThresholds(t *testing.T) {
 		expectedStake  string
 		insufficientFn func(string) string // returns a stake amount below threshold
 	}{
-		{types.CategoryConsensus, params.GetLIPStake(types.CategoryConsensus), func(s string) string { return "999999999" }},  // < 1000 LGM
-		{types.CategoryEconomics, params.GetLIPStake(types.CategoryEconomics), func(s string) string { return "799999999" }}, // < 800 LGM
-		{types.CategoryInterface, params.GetLIPStake(types.CategoryInterface), func(s string) string { return "399999999" }}, // < 400 LGM
-		{types.CategoryProcess, params.GetLIPStake(types.CategoryProcess), func(s string) string { return "199999999" }},     // < 200 LGM
+		{types.CategoryConsensus, params.GetLIPStake(types.CategoryConsensus), func(s string) string { return "998999999" }},  // initial 1M + this < 1000 LGM threshold
+		{types.CategoryEconomics, params.GetLIPStake(types.CategoryEconomics), func(s string) string { return "798999999" }}, // initial 1M + this < 800 LGM threshold
+		{types.CategoryInterface, params.GetLIPStake(types.CategoryInterface), func(s string) string { return "398999999" }}, // initial 1M + this < 400 LGM threshold
+		{types.CategoryProcess, params.GetLIPStake(types.CategoryProcess), func(s string) string { return "198999999" }},     // initial 1M + this < 200 LGM threshold
 	}
 
 	for i, tt := range tests {
