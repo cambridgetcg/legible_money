@@ -51,18 +51,29 @@ legible-money/
 │   ├── staking/            # COMPLETE: 4-tier graduated validators, VRF weight
 │   ├── emergency/          # COMPLETE: 3-phase BFT kill switch
 │   ├── gov/                # COMPLETE: LIP lifecycle, quadratic voting
-│   ├── tokens/             # PARTIAL: Dual-ledger period overlay
-│   ├── vesting_rewards/    # PARTIAL: Block reward emission
-│   ├── bvm/                # PARTIAL: Belief Virtual Machine
-│   ├── home/               # PARTIAL: Agent Home
-│   ├── disputes/           # COMPLETE: 3-tier escalation, commit-reveal evidence, cascade confidence
-│   ├── evidence_mgmt/      # COMPLETE: Oracle integration, stake-weighted reliability scoring
-│   ├── research/           # COMPLETE: Peer review, bounty distribution, project funding
-│   ├── ontology/           # COMPLETE: Domain trees, logic zones, cross-module knowledge API
-│   ├── channels/           # STUB
-│   ├── tree/               # COMPLETE: Full project lifecycle, service deployment, seeding
-│   ├── autopoiesis/        # COMPLETE: Proposal triggers, 5-hormone system, Loop 4
-│   └── ... (channels stub)
+│   ├── tokens/             # STUB: Proto skeleton with params only (14 msg handlers unimplemented)
+│   ├── vesting_rewards/    # SUBSTANTIAL: Block reward emission + vesting
+│   ├── bvm/                # SUBSTANTIAL: Belief VM with interpreter, opcodes, host functions
+│   ├── home/               # SUBSTANTIAL: Agent Home, aging/patina, guardian system
+│   ├── disputes/           # SUBSTANTIAL: Dispute lifecycle, voting, evidence
+│   ├── evidence_mgmt/      # SUBSTANTIAL: Evidence management, audit trails, oracles
+│   ├── research/           # SUBSTANTIAL: Research module, bounty system, treasury
+│   ├── ontology/           # SUBSTANTIAL: Strata, domains, proposals, logic zones
+│   ├── channels/           # SUBSTANTIAL: Payment channels, dispute resolution
+│   ├── tree/               # SUBSTANTIAL: Projects, tasks, services, seeds
+│   ├── alignment/          # SUBSTANTIAL: 5 sensors, corrections, meta-loop
+│   ├── autopoiesis/        # SUBSTANTIAL: Self-organization, learning, proposals
+│   ├── billing/            # SUBSTANTIAL: Distribution, pricing
+│   ├── capture_challenge/  # SUBSTANTIAL: Challenge system
+│   ├── capture_defense/    # SUBSTANTIAL: Detection, reputation
+│   ├── claiming_pot/       # SUBSTANTIAL: Eligibility checking
+│   ├── compute_pool/       # SUBSTANTIAL: Credits, pools, providers, redemption (wired)
+│   ├── discovery/          # MODERATE: Discovery engine
+│   ├── partnerships/       # SUBSTANTIAL: Anti-coercion, deliberation, matching
+│   ├── qualification/      # SUBSTANTIAL: Hooks, lifecycle, pathways
+│   ├── schedule/           # SUBSTANTIAL: Process scheduling
+│   ├── ibcratelimit/       # MODERATE: IBC rate limiting middleware (tested)
+│   └── icaauth/            # MODERATE: Interchain accounts auth (tested)
 │
 ├── proto/                  # Protobuf definitions
 ├── devnet/scripts/         # DevNet management scripts
