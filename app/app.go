@@ -938,6 +938,11 @@ func NewLegibleApp(
 	)
 	// Cross-module wiring for alignment sensors (nil-safe: stubs return defaults)
 	app.AlignmentKeeper.SetAutopoiesisKeeper(NewAlignmentAutopoiesisAdapter(app.AutopoiesisKeeper))
+	app.AlignmentKeeper.SetEmergencyKeeper(NewAlignmentEmergencyAdapter(app.EmergencyKeeper))
+	app.AlignmentKeeper.SetKnowledgeKeeper(NewAlignmentKnowledgeAdapter(app.KnowledgeKeeper))
+	app.AlignmentKeeper.SetStakingKeeper(NewAlignmentStakingAdapter(app.LegibleStakingKeeper))
+	app.AlignmentKeeper.SetOntologyKeeper(NewAlignmentOntologyAdapter(app.OntologyKeeper))
+	app.AlignmentKeeper.SetVestingKeeper(NewAlignmentVestingRewardsAdapter(app.VestingRewardsKeeper))
 
 	// Wire autopoiesis → staking for SSI slash multiplier
 	app.LegibleStakingKeeper.SetAutopoiesisKeeper(app.AutopoiesisKeeper)
