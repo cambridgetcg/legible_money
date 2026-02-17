@@ -170,8 +170,8 @@ func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeCh
 	if !found {
 		return nil, types.ErrChannelNotFound
 	}
-	if ch.Status != types.ChannelStatusOpen && ch.Status != types.ChannelStatusClosing {
-		return nil, types.ErrChannelNotOpen.Wrap("channel must be open or closing to dispute")
+	if ch.Status != types.ChannelStatusOpen && ch.Status != types.ChannelStatusClosing && ch.Status != types.ChannelStatusDisputed {
+		return nil, types.ErrChannelNotOpen.Wrap("channel must be open, closing, or disputed to dispute")
 	}
 
 	// Verify disputer is payer or provider

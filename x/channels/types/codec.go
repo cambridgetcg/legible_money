@@ -45,6 +45,7 @@ type SupplementalMsgServer interface {
 	DepositChannel(context.Context, *MsgDepositChannel) (*MsgDepositChannelResponse, error)
 	UpdateState(context.Context, *MsgUpdateState) (*MsgUpdateStateResponse, error)
 	ClaimExpired(context.Context, *MsgClaimExpired) (*MsgClaimExpiredResponse, error)
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 
 // FullMsgServer combines the protobuf-generated MsgServer with supplemental methods.
