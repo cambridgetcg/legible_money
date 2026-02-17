@@ -97,6 +97,14 @@ func (r *RehearsalQueryClient) CounterFacts(_ context.Context, _ string) ([]agen
 	return nil, nil
 }
 
+func (r *RehearsalQueryClient) BugFacts(_ context.Context, _ string) ([]agentsdk.FactInfo, error) {
+	return nil, nil
+}
+
+func (r *RehearsalQueryClient) ProposalsByTrigger(_ context.Context, _ string) ([]agentsdk.ProposalInfo, error) {
+	return nil, nil
+}
+
 // SetBalance sets a specific agent's balance.
 func (r *RehearsalQueryClient) SetBalance(address string, balance uint64) {
 	r.balancesMu.Lock()
