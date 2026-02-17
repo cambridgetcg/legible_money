@@ -1373,7 +1373,9 @@ func (interp *Interpreter) executeOpcode(
 					data[i] = bytecode[idx]
 				}
 			}
-			push(new(big.Int).SetBytes(data))
+			if !push(new(big.Int).SetBytes(data)) {
+				return actionError
+			}
 			interp.pc += n // Advance past pushed bytes (loop will add 1 more)
 			return actionContinue
 		}
