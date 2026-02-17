@@ -115,6 +115,14 @@ type HomeKeeper interface {
 	RecordChallenge(ctx sdk.Context, ownerAddr string)
 }
 
+// AutopoiesisKeeper defines the expected autopoiesis keeper interface.
+// The knowledge module reads adaptive multipliers for slash/verification tuning.
+type AutopoiesisKeeper interface {
+	// GetMultiplier returns the current multiplier value for a path (BPS, 1M = 1.0x).
+	// Returns DefaultMultiplier (1M) if path not set.
+	GetMultiplier(ctx sdk.Context, path string) uint64
+}
+
 // StakingKeeper defines the expected staking keeper interface.
 // The knowledge module uses this to query validator info for VRF selection.
 type StakingKeeper interface {

@@ -942,6 +942,12 @@ func NewLegibleApp(
 	// Wire autopoiesis → staking for SSI slash multiplier
 	app.LegibleStakingKeeper.SetAutopoiesisKeeper(app.AutopoiesisKeeper)
 
+	// Wire autopoiesis → knowledge for adaptive slash multipliers
+	app.KnowledgeKeeper.SetAutopoiesisKeeper(&app.AutopoiesisKeeper)
+
+	// Wire autopoiesis → vesting_rewards for adaptive block reward multiplier
+	app.VestingRewardsKeeper.SetAutopoiesisKeeper(&app.AutopoiesisKeeper)
+
 	// Wire governance → autopoiesis for auto-proposal rate limiting (Loop 4)
 	app.AutopoiesisKeeper.SetGovKeeper(NewAutopoiesisGovAdapter(app.LegibleGovKeeper))
 

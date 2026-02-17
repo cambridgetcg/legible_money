@@ -34,6 +34,9 @@ type Keeper struct {
 	// Home keeper for epistemic activity notifications
 	homeKeeper types.HomeKeeper
 
+	// Autopoiesis keeper for adaptive multipliers
+	autopoiesisKeeper types.AutopoiesisKeeper
+
 	// Verification hooks (staking reputation, qualification metrics, etc.)
 	verificationHooks types.VerificationHooks
 
@@ -93,6 +96,20 @@ func (k *Keeper) SetOntologyKeeper(ok types.OntologyKeeper) {
 // GetOntologyKeeper returns the ontology keeper for cross-module use (e.g. evaluation engine).
 func (k Keeper) GetOntologyKeeper() types.OntologyKeeper {
 	return k.ontologyKeeper
+}
+
+// SetAutopoiesisKeeper sets the autopoiesis keeper after initialization (avoids circular deps).
+func (k *Keeper) SetAutopoiesisKeeper(ak types.AutopoiesisKeeper) {
+	k.autopoiesisKeeper = ak
+}
+
+// GetSlashMultiplier returns the current slash multiplier from autopoiesis (BPS, 1M = 1.0x).
+// Returns 1M (no multiplier) if autopoiesis is not wired.
+func (k Keeper) GetSlashMultiplier(ctx sdk.Context) uint64 {
+	if k.autopoiesisKeeper != nil {
+		return k.autopoiesisKeeper.GetMultiplier(ctx, "slash.system")
+	}
+	return 1_000_000
 }
 
 // SetHomeKeeper sets the home keeper after initialization (avoids circular deps).
