@@ -10,6 +10,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
+	computepooltypes "github.com/legible-money/legible/x/compute_pool/types"
 	evidencemgmtkeeper "github.com/legible-money/legible/x/evidence_mgmt/keeper"
 	evidencemgmttypes "github.com/legible-money/legible/x/evidence_mgmt/types"
 	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
