@@ -120,7 +120,7 @@ func TestOC_EV3_OracleRegistrationValidation(t *testing.T) {
 		Name:        "bad-oracle",
 		Description: "Bad type",
 		DataTypes:   []string{"invalid_type"},
-		Stake:       "1000000",
+		Stake:       "100000000",
 	})
 	if err == nil {
 		t.Error("OC-EV-3: oracle with invalid data type should fail — attacker can register rogue oracle types")
