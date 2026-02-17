@@ -424,9 +424,52 @@ cmd_observe() {
     echo "}"
 
     # 6. Submit the observation as a protocol claim
+    local stake="${LGM_OBSERVE_STAKE:-1000000}"
     echo "---" >&2
-    echo "Submitting protocol_observation claim..." >&2
-    cmd_submit_claim "$claim_text" "computer_science" "protocol" "1000000" --logic-zone "$zone"
+    echo "Submitting protocol_observation claim (stake: ${stake} ulgm)..." >&2
+    local tx_result
+    tx_result=$(cmd_submit_claim "$claim_text" "computer_science" "protocol" "$stake" --logic-zone "$zone" 2>&1) || true
+    echo "$tx_result" >&2
+
+    # 7. Record observation in agent state
+    local claim_id=""
+    claim_id=$(echo "$tx_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    # Try to extract claim_id from tx response logs
+    for log in data.get('logs', []):
+        for ev in log.get('events', []):
+            for attr in ev.get('attributes', []):
+                if attr.get('key') == 'claim_id':
+                    print(attr['value'])
+                    sys.exit()
+    # Fallback: use txhash as claim reference
+    if 'txhash' in data:
+        print('tx:' + data['txhash'])
+except:
+    pass
+" 2>/dev/null || echo "")
+
+    if [ -n "$claim_id" ]; then
+        local height
+        height=$(get_current_height)
+        local state
+        state=$(load_state)
+        state=$(add_observation "$state" "$claim_id" "$epoch" "$height" "$ssi" "$concern" "$stake")
+        # Append SSI to trend history
+        state=$(echo "$state" | python3 -c "
+import sys, json
+s = json.load(sys.stdin)
+s['trends']['ssi_history'].append(int('$ssi'))
+# Keep last 20 SSI values
+s['trends']['ssi_history'] = s['trends']['ssi_history'][-20:]
+s['trends']['accuracy']['submitted'] = s['trends']['accuracy'].get('submitted', 0) + 1
+print(json.dumps(s))
+")
+        save_state "$state"
+        echo "Recorded observation: $claim_id" >&2
+    fi
 }
 
 # --- P2: Automated Verification ---
