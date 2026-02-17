@@ -289,6 +289,32 @@ func (k Keeper) GetDVITracking(ctx sdk.Context, domain string) *types.DVIValue {
 	return &dvi
 }
 
+// --- Multiplier Freeze ---
+
+func frozenKey(path string) []byte {
+	return append(types.FrozenKeyPrefix, []byte(path)...)
+}
+
+// SetMultiplierFrozen sets the frozen state for a multiplier path.
+func (k Keeper) SetMultiplierFrozen(ctx sdk.Context, path string, frozen bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	if frozen {
+		_ = kvStore.Set(frozenKey(path), []byte{0x01})
+	} else {
+		_ = kvStore.Delete(frozenKey(path))
+	}
+}
+
+// IsMultiplierFrozen returns whether a multiplier path is frozen by governance.
+func (k Keeper) IsMultiplierFrozen(ctx sdk.Context, path string) bool {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(frozenKey(path))
+	if err != nil || bz == nil {
+		return false
+	}
+	return len(bz) > 0 && bz[0] == 0x01
+}
+
 // --- Adaptation History ---
 
 func adaptationKey(epoch uint64) []byte {
@@ -464,18 +490,24 @@ func (k Keeper) CollectAndAdapt(ctx sdk.Context) {
 		}
 	}
 
-	// === Write all adaptations ===
+	// === Write all adaptations (skip frozen multipliers) ===
+	var appliedAdaptations []types.Adaptation
 	for _, a := range allAdaptations {
 		if a.Delta != 0 {
+			if k.IsMultiplierFrozen(ctx, a.Path) {
+				k.Logger(ctx).Debug("skipping frozen multiplier", "path", a.Path, "delta", a.Delta)
+				continue
+			}
 			k.SetMultiplier(ctx, types.MultiplierEntry{
 				Path:    a.Path,
 				Value:   a.NewValue,
 				Hormone: a.Hormone,
 				Epoch:   epoch,
 			})
+			appliedAdaptations = append(appliedAdaptations, a)
 		}
 	}
-	k.SetAdaptations(ctx, epoch, allAdaptations)
+	k.SetAdaptations(ctx, epoch, appliedAdaptations)
 
 	// === Update DVI tracking for consecutive negative epochs ===
 	for _, d := range dvi {

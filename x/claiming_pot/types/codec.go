@@ -15,6 +15,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgFundPot{}, "claiming_pot/FundPot", nil)
 	cdc.RegisterConcrete(&MsgClaimFromPot{}, "claiming_pot/ClaimFromPot", nil)
 	cdc.RegisterConcrete(&MsgClosePot{}, "claiming_pot/ClosePot", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "claiming_pot/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the claiming_pot module's interfaces.
@@ -24,6 +25,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgFundPot{},
 		&MsgClaimFromPot{},
 		&MsgClosePot{},
+		&MsgUpdateParams{},
 	)
 }
 

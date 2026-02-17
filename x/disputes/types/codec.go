@@ -15,6 +15,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgEscalateDispute{}, "disputes/EscalateDispute", nil)
 	cdc.RegisterConcrete(&MsgSettleDispute{}, "disputes/SettleDispute", nil)
 	cdc.RegisterConcrete(&MsgTimeoutDispute{}, "disputes/TimeoutDispute", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "disputes/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the module's interface types with the interface registry.
@@ -27,6 +28,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgEscalateDispute{},
 		&MsgSettleDispute{},
 		&MsgTimeoutDispute{},
+		&MsgUpdateParams{},
 	)
 }
 

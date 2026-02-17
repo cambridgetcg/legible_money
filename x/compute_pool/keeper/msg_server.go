@@ -138,3 +138,20 @@ func (k msgServer) UpdateComputeParams(goCtx context.Context, msg *types.MsgUpda
 
 	return &types.MsgUpdateComputeParamsResponse{}, nil
 }
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	k.SetParams(ctx, msg.Params)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"compute_pool_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
+}

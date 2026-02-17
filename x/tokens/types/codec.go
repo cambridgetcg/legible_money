@@ -8,6 +8,7 @@ import (
 
 func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgTransferFrom{}, "tokens/TransferFrom", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "tokens/UpdateParams", nil)
 }
 
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
@@ -26,6 +27,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgAddLiquidity{},
 		&MsgRemoveLiquidity{},
 		&MsgSwap{},
+		&MsgUpdateParams{},
 	)
 }
 

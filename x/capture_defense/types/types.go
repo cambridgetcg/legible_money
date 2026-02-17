@@ -265,6 +265,7 @@ type QueryCaptureRiskResponse struct {
 func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgRequestQualification{}, "capture_defense/RequestQualification", nil)
 	cdc.RegisterConcrete(&MsgEndorseQualification{}, "capture_defense/EndorseQualification", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "capture_defense/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the module's interfaces.
@@ -388,4 +389,39 @@ func _Query_CaptureRisk_Handler(srv interface{}, ctx context.Context, dec func(i
 // RegisterQueryServer registers the capture defense query server.
 func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
+}
+
+
+// MsgUpdateParams is the governance message to update module params.
+type MsgUpdateParams struct {
+	Authority string  `json:"authority"`
+	Params    *Params `json:"params"`
+}
+
+// MsgUpdateParamsResponse is the response type for MsgUpdateParams.
+type MsgUpdateParamsResponse struct{}
+
+func (*MsgUpdateParams) ProtoMessage()             {}
+func (*MsgUpdateParams) Reset()                     {}
+func (*MsgUpdateParams) String() string             { return "MsgUpdateParams" }
+func (*MsgUpdateParamsResponse) ProtoMessage()      {}
+func (*MsgUpdateParamsResponse) Reset()             {}
+func (*MsgUpdateParamsResponse) String() string     { return "MsgUpdateParamsResponse" }
+
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUpdateParams) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	if msg.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
+	return msg.Params.Validate()
 }

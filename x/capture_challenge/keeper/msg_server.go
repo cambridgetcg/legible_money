@@ -249,3 +249,20 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 
 	return &types.MsgResolveChallengeResponse{ChallengerReward: challengerReward}, nil
 }
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (k Keeper) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	k.SetParams(ctx, *msg.Params)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"capture_challenge_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
+}

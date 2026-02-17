@@ -18,6 +18,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgSettleChannel{}, "channels/SettleChannel", nil)
 	cdc.RegisterConcrete(&MsgCloseChannel{}, "channels/CloseChannel", nil)
 	cdc.RegisterConcrete(&MsgClaimExpired{}, "channels/ClaimExpired", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "channels/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the channels module's interfaces.
@@ -28,6 +29,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgCloseChannel{},
 		&MsgSettleChannel{},
 		&MsgDisputeChannel{},
+		&MsgUpdateParams{},
 	)
 }
 

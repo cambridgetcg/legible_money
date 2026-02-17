@@ -68,6 +68,11 @@ func prefixEndBytes(prefix []byte) []byte {
 	return nil
 }
 
+// GetAuthority returns the module authority address.
+func (k Keeper) GetAuthority() string {
+	return k.authority
+}
+
 // Logger returns a module-specific logger.
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))

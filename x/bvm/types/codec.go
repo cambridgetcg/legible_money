@@ -16,6 +16,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgScheduleContract{}, "bvm/ScheduleContract", nil)
 	cdc.RegisterConcrete(&MsgCancelSchedule{}, "bvm/CancelSchedule", nil)
 	cdc.RegisterConcrete(&MsgUpdateContractState{}, "bvm/UpdateContractState", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "bvm/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the bvm module's interfaces.
@@ -24,6 +25,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgDeployContract{},
 		&MsgCallContract{},
 		&MsgScheduleExecution{},
+		&MsgUpdateParams{},
 	)
 }
 
