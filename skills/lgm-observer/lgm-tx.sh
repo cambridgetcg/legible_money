@@ -770,7 +770,7 @@ cmd_reflect() {
     state=$(echo "$state" | python3 -c "
 import sys, json, subprocess, os
 
-NODE_URL = os.environ.get('NODE_URL', 'http://localhost:1317')
+NODE_URL = '$NODE_URL'
 state = json.load(sys.stdin)
 updated = 0
 still_pending = 0
