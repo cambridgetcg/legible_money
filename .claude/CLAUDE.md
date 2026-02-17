@@ -121,8 +121,10 @@ PROJECT CONTEXT (Legible Money - Go Chain):
 2. Read `.claude/memory/CURRENT_STATE.md` for project state
 3. Read `.claude/memory/DECISIONS.md` for key decisions made
 4. Check `.claude/memory/BLOCKED.md` for any blockers
-5. Pick work (issue, roadmap task, or human-assigned)
-6. Create feature branch: `git checkout -b {type}-{scope}-{slug}`
+5. Skim `.claude/memory/EUREKA.md` for deep patterns (23 insights)
+6. For file lookup: `.claude/memory/INDEX.md` indexes all 76 memory files
+7. Pick work (issue, roadmap task, or human-assigned)
+8. Create feature branch: `git checkout -b {type}-{scope}-{slug}`
 
 ### During Session
 - Commit frequently to your feature branch
