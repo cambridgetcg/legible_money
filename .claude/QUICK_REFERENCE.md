@@ -95,18 +95,18 @@ try {
 
 ---
 
-## Memory Files
+## Memory Files (76 total — see INDEX.md for complete catalog)
 
-| File | Purpose | When to Update |
-|------|---------|----------------|
-| CURRENT_STATE.md | What's built/next | Each session |
-| DECISIONS.md | Technical choices | When deciding |
-| INSIGHTS.md | Learnings | When learning |
-| BLOCKED.md | Blockers | When stuck |
-| PROMPTS.md | Useful prompts | As discovered |
-| THINKING.md | Mental models | Rarely |
-| MOTIVATIONS.md | Why decisions | When deciding |
-| EVOLUTION.md | Project history | Each phase |
+| File | Purpose | When to Read |
+|------|---------|--------------|
+| **CURRENT_STATE.md** | What's built/next | Every session start |
+| **BLOCKED.md** | Active blockers | Every session start |
+| **EUREKA.md** | 23 deep insights | Session start (skim) |
+| **DECISIONS.md** | Technical choices | When deciding |
+| **INSIGHT_TREE.md** | Hierarchical synthesis | Deep work |
+| **INDEX.md** | Master file index | Finding files |
+| **THINKING.md** | Mental models | Reasoning about design |
+| **PROMPTS.md** | Useful prompts | As needed |
 
 ---
 
