@@ -400,10 +400,8 @@ func TestMiddleware_OnAckPacket_ErrorDoesNotTrack(t *testing.T) {
 		clienttypes.NewHeight(0, 1000), 0,
 	)
 
-	// Error ack — transfer failed on counterparty
-	ackBytes, _ := json.Marshal(channeltypes.NewErrorAcknowledgement(
-		types.ErrOutflowExceeded,
-	))
+	// Error ack — transfer failed on counterparty, use canonical IBC JSON
+	ackBytes := channeltypes.NewErrorAcknowledgement(types.ErrOutflowExceeded).Acknowledgement()
 
 	err := mw.OnAcknowledgementPacket(ctx, packet, ackBytes, nil)
 	if err != nil {
