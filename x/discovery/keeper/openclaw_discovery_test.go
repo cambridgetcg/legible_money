@@ -353,7 +353,7 @@ func TestOC_DS7_ProfileUpdatePreservation(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-8: Double registration prevention.
+// OC-DISC-8: Double registration prevention.
 // Attack: Register agent1. Try to register agent1 again. Must fail.
 // -----------------------------------------------------------------------
 
