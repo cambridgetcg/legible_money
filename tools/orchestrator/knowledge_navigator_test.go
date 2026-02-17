@@ -236,13 +236,17 @@ func TestFindCitationChainFoundation(t *testing.T) {
 		t.Fatalf("FindCitationChain: %v", err)
 	}
 
-	// Foundation should include fact-b (no further supporting from c) and fact-c
+	// fact-c is the foundation: it has no outgoing supporting refs.
+	// fact-b is NOT foundation because it has a supporting ref to fact-c.
 	foundationMap := make(map[string]bool)
 	for _, f := range chain.Foundation {
 		foundationMap[f] = true
 	}
-	if !foundationMap["fact-b"] {
-		t.Fatal("expected fact-b in foundation (no supporting refs out of fact-c)")
+	if !foundationMap["fact-c"] {
+		t.Fatalf("expected fact-c in foundation (leaf with no supporting refs), got %v", chain.Foundation)
+	}
+	if foundationMap["fact-b"] {
+		t.Fatal("fact-b should NOT be in foundation — it has a supporting ref to fact-c")
 	}
 }
 

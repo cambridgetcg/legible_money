@@ -97,6 +97,19 @@ func (r *RehearsalQueryClient) CounterFacts(_ context.Context, _ string) ([]agen
 	return nil, nil
 }
 
+func (r *RehearsalQueryClient) ContractState(_ context.Context, _, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (r *RehearsalQueryClient) ContractInfo(_ context.Context, addr string) (*agentsdk.ContractInfoResult, error) {
+	return &agentsdk.ContractInfoResult{
+		Address:    addr,
+		Creator:    "lgm1rehearsal",
+		CodeHash:   "0000000000000000",
+		BvmVersion: 1,
+	}, nil
+}
+
 // SetBalance sets a specific agent's balance.
 func (r *RehearsalQueryClient) SetBalance(address string, balance uint64) {
 	r.balancesMu.Lock()

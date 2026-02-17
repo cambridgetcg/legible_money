@@ -58,7 +58,7 @@ func TestPhaseB(t *testing.T) {
 		txHash, err := claimer.Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     "Grief test: honest claim submitted for rejection analysis",
 			Domain:   "general",
-			Category: "computational",
+			Category: "replicated",
 			Stake:    1_000_000, // 1 LGM at risk
 		})
 		if err != nil {
@@ -92,7 +92,7 @@ func TestPhaseB(t *testing.T) {
 			_, err := claimer.Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 				Text:     text,
 				Domain:   "general",
-				Category: "computational",
+				Category: "replicated",
 				Stake:    1, // minimum: 1 ulgm
 			})
 			if err != nil {
@@ -193,7 +193,7 @@ func TestPhaseB(t *testing.T) {
 		_, err := claimer.Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     "too short",
 			Domain:   "general",
-			Category: "computational",
+			Category: "replicated",
 			Stake:    1_000_000,
 		})
 		if err != nil {
@@ -206,7 +206,7 @@ func TestPhaseB(t *testing.T) {
 		_, err = claimer.Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     "This is a claim with an empty domain for testing purposes",
 			Domain:   "",
-			Category: "computational",
+			Category: "replicated",
 			Stake:    1_000_000,
 		})
 		if err != nil {

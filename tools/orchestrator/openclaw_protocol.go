@@ -12,6 +12,9 @@ const (
 	OCmdIdentifyGaps      = "identify_gaps"
 	OCmdAnalyzeReferences = "analyze_references"
 	OCmdGenerateClaim     = "generate_claim"
+	OCmdDeployContract    = "deploy_contract"
+	OCmdCallContract      = "call_contract"
+	OCmdQueryContract     = "query_contract"
 )
 
 // OpenClawRequest is the structured command sent to an OpenClaw session.
@@ -97,6 +100,34 @@ type ClaimSuggestion struct {
 	Domain   string `json:"domain"`
 	Category string `json:"category"`
 	Stake    uint64 `json:"stake"`
+}
+
+// DeployContractPayload is the payload for deploy_contract commands.
+type DeployContractPayload struct {
+	BytecodeHex string `json:"bytecode_hex"`
+	Description string `json:"description,omitempty"` // Human-readable description of the contract
+}
+
+// CallContractPayload is the payload for call_contract commands.
+type CallContractPayload struct {
+	ContractAddr string `json:"contract_address"`
+	InputDataHex string `json:"input_data_hex"`
+	GasLimit     uint64 `json:"gas_limit,omitempty"` // 0 = default (500000)
+}
+
+// QueryContractPayload is the payload for query_contract commands.
+type QueryContractPayload struct {
+	ContractAddr string `json:"contract_address"`
+	StorageKey   string `json:"storage_key"`
+}
+
+// ContractResult is the response for BVM contract operations.
+type ContractResult struct {
+	TxHash          string `json:"tx_hash,omitempty"`
+	ContractAddress string `json:"contract_address,omitempty"`
+	ReturnData      string `json:"return_data,omitempty"`
+	StorageValue    string `json:"storage_value,omitempty"`
+	GasUsed         uint64 `json:"gas_used,omitempty"`
 }
 
 // StructuredOpenClawManager wraps OpenClawManager with a typed JSON protocol.
@@ -253,4 +284,87 @@ func (s *StructuredOpenClawManager) GenerateClaim(ctx context.Context, sessionID
 	}
 
 	return &resp.Claims[0], nil
+}
+
+// DeployContract sends a deploy_contract command and returns the result.
+func (s *StructuredOpenClawManager) DeployContract(ctx context.Context, sessionID, bytecodeHex, description string) (*ContractResult, error) {
+	payload := DeployContractPayload{
+		BytecodeHex: bytecodeHex,
+		Description: description,
+	}
+	payloadData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	req := &OpenClawRequest{
+		Type:    OCmdDeployContract,
+		Payload: payloadData,
+	}
+
+	resp, err := s.sendRequest(ctx, sessionID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ContractResult{
+		TxHash:          resp.Verdict,  // deploy returns tx hash in verdict field
+		ContractAddress: resp.Analysis, // contract address in analysis field
+		GasUsed:         uint64(resp.Confidence),
+	}, nil
+}
+
+// CallContract sends a call_contract command and returns the result.
+func (s *StructuredOpenClawManager) CallContract(ctx context.Context, sessionID, contractAddr, inputDataHex string, gasLimit uint64) (*ContractResult, error) {
+	payload := CallContractPayload{
+		ContractAddr: contractAddr,
+		InputDataHex: inputDataHex,
+		GasLimit:     gasLimit,
+	}
+	payloadData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	req := &OpenClawRequest{
+		Type:    OCmdCallContract,
+		Payload: payloadData,
+	}
+
+	resp, err := s.sendRequest(ctx, sessionID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ContractResult{
+		TxHash:     resp.Verdict,
+		ReturnData: resp.Analysis,
+		GasUsed:    uint64(resp.Confidence),
+	}, nil
+}
+
+// QueryContract sends a query_contract command and returns the storage value.
+func (s *StructuredOpenClawManager) QueryContract(ctx context.Context, sessionID, contractAddr, storageKey string) (*ContractResult, error) {
+	payload := QueryContractPayload{
+		ContractAddr: contractAddr,
+		StorageKey:   storageKey,
+	}
+	payloadData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	req := &OpenClawRequest{
+		Type:    OCmdQueryContract,
+		Payload: payloadData,
+	}
+
+	resp, err := s.sendRequest(ctx, sessionID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ContractResult{
+		StorageValue: resp.Analysis,
+	}, nil
 }

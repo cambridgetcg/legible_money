@@ -241,6 +241,65 @@ func (c *CLIClient) CounterFacts(ctx context.Context, factID string) ([]CounterF
 	return nil, fmt.Errorf("CounterFacts: query not implemented in knowledge CLI")
 }
 
+func (c *CLIClient) ContractState(ctx context.Context, contractAddr, key string) (string, bool, error) {
+	if c.RESTAddr == "" {
+		return "", false, fmt.Errorf("RESTAddr not set — cannot query contract state")
+	}
+	url := fmt.Sprintf("%s/legible/bvm/v1/state/%s/%s", c.RESTAddr, contractAddr, key)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", false, fmt.Errorf("creating request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", false, fmt.Errorf("querying contract state: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "", false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", false, fmt.Errorf("contract state query returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Value string `json:"value"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", false, fmt.Errorf("parsing contract state: %w", err)
+	}
+	return result.Value, true, nil
+}
+
+func (c *CLIClient) ContractInfo(ctx context.Context, contractAddr string) (*ContractInfoResult, error) {
+	if c.RESTAddr == "" {
+		return nil, fmt.Errorf("RESTAddr not set — cannot query contract info")
+	}
+	url := fmt.Sprintf("%s/legible/bvm/v1/contract/%s", c.RESTAddr, contractAddr)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("querying contract: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("contract %s not found", contractAddr)
+	}
+
+	var result struct {
+		Contract ContractInfoResult `json:"contract"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("parsing contract info: %w", err)
+	}
+	return &result.Contract, nil
+}
+
 // --- TxClient Implementation ---
 
 func (c *CLIClient) RegisterAccount(ctx context.Context, pubKeyHex string) (string, error) {

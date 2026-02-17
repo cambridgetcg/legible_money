@@ -37,6 +37,13 @@ type QueryClient interface {
 
 	// CounterFacts returns counter-facts targeting a fact.
 	CounterFacts(ctx context.Context, factID string) ([]CounterFactInfo, error)
+
+	// ContractState reads a single storage slot from a deployed BVM contract.
+	// Returns the hex-encoded value and whether the key was found.
+	ContractState(ctx context.Context, contractAddr, key string) (string, bool, error)
+
+	// ContractInfo returns metadata about a deployed BVM contract.
+	ContractInfo(ctx context.Context, contractAddr string) (*ContractInfoResult, error)
 }
 
 // TxClient defines the interface for submitting transactions.
@@ -173,6 +180,14 @@ type ClaimInfo struct {
 	Category  string `json:"category"`
 	Status    string `json:"status"`
 	Stake     string `json:"stake"`
+}
+
+// ContractInfoResult holds BVM contract metadata.
+type ContractInfoResult struct {
+	Address    string `json:"address"`
+	Creator    string `json:"creator"`
+	CodeHash   string `json:"code_hash"`
+	BvmVersion uint32 `json:"bvm_version"`
 }
 
 // --- Request Types ---

@@ -32,6 +32,7 @@ func TestPhaseA(t *testing.T) {
 	var (
 		test1Addr string
 		claimText = "The speed of light in vacuum is approximately 299792458 meters per second"
+		claimCat  = "replicated" // empirical zone compatible; "computational" requires presburger/peano/propositional
 	)
 
 	t.Run("OCA-A-01_ChainBootAndBlockProduction", func(t *testing.T) {
@@ -83,7 +84,7 @@ func TestPhaseA(t *testing.T) {
 		txHash, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     claimText,
 			Domain:   "general",
-			Category: "computational",
+			Category: claimCat,
 			Stake:    stakeUlgm,
 		})
 		if err != nil {

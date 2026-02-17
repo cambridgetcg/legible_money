@@ -62,6 +62,7 @@ func (p *Plugin) Tools() []Tool {
 		// BVM
 		&ChainDeployContractTool{plugin: p},
 		&ChainCallContractTool{plugin: p},
+		&ChainReadContractTool{plugin: p},
 		&ChainScheduleTool{plugin: p},
 		// Agent Home
 		&ChainHomeCreateTool{plugin: p},
@@ -86,14 +87,14 @@ type ChainClaimTool struct{ plugin *Plugin }
 
 func (t *ChainClaimTool) Name() string { return "chain_claim" }
 func (t *ChainClaimTool) Description() string {
-	return "Submit a knowledge claim to the Legible Money chain for PoT verification. Args: text (required, min 20 chars), domain (required), category (optional, default: computational), stake (optional, default: 1000000 ulgm)"
+	return "Submit a knowledge claim to the Legible Money chain for PoT verification. Args: text (required, min 20 chars), domain (required), category (optional, default: empirical), stake (optional, default: 1000000 ulgm)"
 }
 func (t *ChainClaimTool) Execute(ctx context.Context, args map[string]string) (string, error) {
 	text := args["text"]
 	domain := args["domain"]
 	category := args["category"]
 	if category == "" {
-		category = "computational"
+		category = "empirical"
 	}
 	stake := parseUint(args["stake"], 1000000)
 
@@ -370,6 +371,30 @@ func (t *ChainScheduleTool) Execute(ctx context.Context, args map[string]string)
 		return "", fmt.Errorf("schedule failed: %w", err)
 	}
 	return fmt.Sprintf("Execution scheduled. TxHash: %s\nContract: %s, At block: %d", txHash, contract, atBlock), nil
+}
+
+// ChainReadContractTool reads state from a deployed BVM contract.
+type ChainReadContractTool struct{ plugin *Plugin }
+
+func (t *ChainReadContractTool) Name() string { return "chain_read_contract" }
+func (t *ChainReadContractTool) Description() string {
+	return "Read storage state from a deployed BVM contract (no tx needed). Args: contract (required, lgm1... address), key (required, storage slot key). Returns the stored value."
+}
+func (t *ChainReadContractTool) Execute(ctx context.Context, args map[string]string) (string, error) {
+	contract := args["contract"]
+	key := args["key"]
+	if contract == "" || key == "" {
+		return "", fmt.Errorf("contract and key are required")
+	}
+
+	value, found, err := t.plugin.agent.QueryClient().ContractState(ctx, contract, key)
+	if err != nil {
+		return "", fmt.Errorf("read failed: %w", err)
+	}
+	if !found {
+		return fmt.Sprintf("Key %q not found in contract %s", key, contract), nil
+	}
+	return fmt.Sprintf("Contract: %s\nKey: %s\nValue: %s", contract, key, value), nil
 }
 
 // --- Home Lifecycle Tools ---
