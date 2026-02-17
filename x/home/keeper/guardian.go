@@ -236,11 +236,15 @@ func (k Keeper) checkMinLiquidBalance(ctx sdk.Context, home types.AgentHome) {
 // CreateAlert creates a new alert for a home.
 func (k Keeper) CreateAlert(ctx sdk.Context, homeId string, alertType types.AlertType, priority types.AlertPriority, message, data string) {
 	params := k.GetParams(ctx)
-	if k.CountPendingAlerts(ctx, homeId) >= params.MaxAlertsPerHome {
+	pendingCount := k.CountPendingAlerts(ctx, homeId)
+	if pendingCount >= params.MaxAlertsPerHome {
 		return // Silently drop if at max alerts
 	}
 
-	alertId := fmt.Sprintf("alert-%d-%d", ctx.BlockHeight(), ctx.BlockTime().UnixNano())
+	// Use homeId + blockHeight + pendingCount for unique alert IDs within a block.
+	// Previous formula used BlockTime().UnixNano() which collides for multiple alerts
+	// created in the same block (P1 fix).
+	alertId := fmt.Sprintf("alert-%s-%d-%d", homeId, ctx.BlockHeight(), pendingCount)
 
 	alert := types.Alert{
 		AlertId:      alertId,
