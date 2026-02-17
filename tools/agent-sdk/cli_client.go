@@ -241,6 +241,47 @@ func (c *CLIClient) CounterFacts(ctx context.Context, factID string) ([]CounterF
 	return nil, fmt.Errorf("CounterFacts: query not implemented in knowledge CLI")
 }
 
+func (c *CLIClient) BugFacts(ctx context.Context, domain string) ([]FactInfo, error) {
+	// Fetch all facts in the domain and filter to protocol_observation category.
+	facts, err := c.FactsByDomain(ctx, domain)
+	if err != nil {
+		return nil, err
+	}
+	var bugs []FactInfo
+	for _, f := range facts {
+		if f.Category == "protocol_observation" {
+			bugs = append(bugs, f)
+		}
+	}
+	return bugs, nil
+}
+
+func (c *CLIClient) ProposalsByTrigger(ctx context.Context, triggerType string) ([]ProposalInfo, error) {
+	out, err := c.runQuery(ctx, "query", "gov", "proposals", "--status", "voting")
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Proposals []ProposalInfo `json:"proposals"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("parsing proposals: %w", err)
+	}
+
+	// Filter by trigger type if specified.
+	if triggerType == "" {
+		return resp.Proposals, nil
+	}
+	var filtered []ProposalInfo
+	for _, p := range resp.Proposals {
+		if p.TriggerType == triggerType {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered, nil
+}
+
 // --- TxClient Implementation ---
 
 func (c *CLIClient) RegisterAccount(ctx context.Context, pubKeyHex string) (string, error) {
