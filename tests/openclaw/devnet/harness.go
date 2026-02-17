@@ -152,10 +152,19 @@ func (h *Harness) Start(ctx context.Context) error {
 	}
 	h.Cmd = cmd
 
+	// 10a. Quick check: did the process exit immediately?
+	time.Sleep(3 * time.Second)
+	if h.Cmd.ProcessState != nil {
+		// Process already exited — dump full log
+		h.logFile.Sync()
+		h.dumpFullLogs()
+		return fmt.Errorf("node exited immediately with code %d", h.Cmd.ProcessState.ExitCode())
+	}
+
 	// 11. Wait for height >= 2
 	if err := h.WaitForBlock(ctx, 2); err != nil {
 		// Dump last logs on failure
-		h.dumpLogs()
+		h.dumpFullLogs()
 		return fmt.Errorf("waiting for blocks: %w", err)
 	}
 
