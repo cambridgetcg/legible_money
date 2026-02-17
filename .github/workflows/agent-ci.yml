@@ -22,7 +22,7 @@ jobs:
       risk_number: ${{ steps.classify.outputs.risk_number }}
       risk_label: ${{ steps.classify.outputs.risk_label }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
@@ -72,7 +72,7 @@ jobs:
       agent_tier: ${{ steps.check.outputs.agent_tier }}
       agent_did: ${{ steps.check.outputs.agent_did }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
 
       - id: check
         name: Identify agent
@@ -118,7 +118,7 @@ jobs:
     if: needs.detect-agent.outputs.is_agent == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
@@ -210,7 +210,7 @@ jobs:
     needs: [classify]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
 
       - name: Validate reviewer authority
         env:
