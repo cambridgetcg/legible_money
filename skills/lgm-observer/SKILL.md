@@ -503,48 +503,61 @@ Look for:
 
 ### Recursive Observation Loop (Full Cycle)
 
-This is the self-improvement cycle. Run it at each epoch boundary (~47 minutes):
+**Fully automated** — run a single command and the agent handles all 4 steps:
+
+```bash
+# One command to rule them all:
+./lgm-tx.sh loop
+
+# Or with a second verifier agent in parallel:
+# Terminal 1 (observer+verifier+reflector):
+./lgm-tx.sh loop
+
+# Terminal 2 (dedicated verifier):
+LGM_FROM=test2 ./lgm-tx.sh watch
+```
+
+The loop daemon executes this cycle every 30 seconds:
 
 ```
-Step 1: OBSERVE (as observer agent)
-  ./lgm-tx.sh observe
-  → reads all vitals, submits protocol_observation claim
-  → returns JSON with epoch, hormones, alignment, concerns
-  → creates a verification round on-chain
+Step 1: OBSERVE (once per epoch, ~47 minutes)
+  → Reads hormones + alignment + multipliers
+  → Submits protocol_observation claim with adaptive stake
+  → Records claim_id + metadata in agent state
+  → Skips if same epoch as last observation
 
-Step 2: VERIFY (as verifier agent — automated)
-  # Option A: One-shot (evaluate all active rounds once)
-  LGM_FROM=test2 ./lgm-tx.sh verify
+Step 2: VERIFY (every cycle)
+  → Polls active rounds from REST API
+  → Commits during commit phase, reveals during reveal phase
+  → Manages salts automatically
 
-  # Option B: Continuous daemon (keeps polling until stopped)
-  LGM_FROM=test2 ./lgm-tx.sh watch
+Step 3: REFLECT (every 5 cycles, ~2.5 minutes)
+  → Queries on-chain status for each pending observation
+  → Updates outcomes: accepted / rejected / expired
+  → Computes running accuracy percentage
+  → Prunes old observations (keeps last 50)
 
-  The verify/watch commands handle the full commit-reveal cycle automatically:
-  - Polls active rounds from the REST API
-  - During commit phase: evaluates the claim, generates salt, submits commitment
-  - During reveal phase: loads saved salt, submits reveal
-  - Salt is persisted between calls so commit and reveal can happen in separate cycles
-
-  Phase windows on DevNet: commit=4 blocks (~10s), reveal=4 blocks (~10s),
-  aggregation=3 blocks (~7.5s). Total round: ~27.7s.
-
-Step 3: REFLECT
-  # After aggregation, check if the observation became a fact
-  curl -s "$LGM_NODE_URL/legible/knowledge/v1/claim/<claim_id>"
-
-  # Check if hormones changed in the next epoch
-  curl -s "$LGM_NODE_URL/legible/autopoiesis/v1/hormones/{N+1}"
-
-  # Was the meta-learning state updated?
-  curl -s "$LGM_NODE_URL/legible/autopoiesis/v1/learning/state"
-
-Step 4: ADAPT
-  # If SSI is rising: observe with higher concern severity
-  # If alignment scores are dropping: focus observations on that dimension
-  # If meta-learning rate changed: note which multipliers are being tuned
+Step 4: ADAPT (continuous)
+  → Adjusts stake based on accuracy (0.5-2 LGM)
+  → Tracks SSI trend (rising/falling/stable)
+  → Pauses observations when balance is low
+  → Stops all activity when balance is critical
 ```
 
 **The recursion**: your observation (Step 1) becomes a verified fact → the autopoiesis module reads it next epoch → adjusts hormones → you observe the change (back to Step 1). The protocol evolves based on what agents observe about it.
+
+**Manual steps** (for deeper investigation):
+
+```bash
+# Check your agent's accumulated state:
+./lgm-tx.sh status
+
+# One-shot reflection (without the full loop):
+./lgm-tx.sh reflect
+
+# Challenge a fact you believe is incorrect:
+./lgm-tx.sh challenge <fact-id> "reason" <stake-ulgm>
+```
 
 ## Reporting
 
