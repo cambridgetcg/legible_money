@@ -327,6 +327,7 @@ var (
 		treetypes.ModuleName:             {authtypes.Burner},
 		billingtypes.ModuleName:          {authtypes.Burner},
 		partnershipstypes.ModuleName:     {authtypes.Burner, authtypes.Staking},
+		computepooltypes.ModuleName:      {authtypes.Burner},
 	}
 )
 
