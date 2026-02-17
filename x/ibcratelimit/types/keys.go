@@ -19,7 +19,7 @@ const (
 // Store key prefixes.
 var (
 	FlowPrefix = []byte{0x01} // channel_id -> ChannelFlow
-	ParamsKey   = []byte{0x02}
+	ParamsKey  = []byte{0x02}
 )
 
 // FlowKey returns the store key for a specific channel's flow record.

@@ -43,6 +43,11 @@ func (p Params) Validate() error {
 	if p.ResearchMinBps > p.ResearchShareBps {
 		return fmt.Errorf("research_min_bps must be <= research_share_bps")
 	}
+	if p.FoundationAddress != "" {
+		if _, err := sdk.AccAddressFromBech32(p.FoundationAddress); err != nil {
+			return fmt.Errorf("invalid foundation_address: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -57,8 +62,9 @@ func DefaultParams() Params {
 		QuoteValidityBlocks:   100,
 		MinProviderStake:      "100000000",
 		ResearchShareBps:      70000,
-		ResearchMinBps:        50000,          // 5% starting rate
-		ResearchRampBlocks:    34272 * 90,     // ~90 days to reach full 7%
+		ResearchMinBps:        50000,      // 5% starting rate
+		ResearchRampBlocks:    34272 * 90, // ~90 days to reach full 7%
+		FoundationAddress:     "",         // empty = module account fallback
 	}
 }
 
@@ -101,7 +107,7 @@ type MsgRegisterProvider struct {
 	StakeAmount string   `json:"stake_amount"`
 }
 
-func (msg *MsgRegisterProvider) Reset()        {}
+func (msg *MsgRegisterProvider) Reset()         {}
 func (msg *MsgRegisterProvider) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRegisterProvider) ProtoMessage()  {}
 
@@ -130,7 +136,7 @@ func (msg *MsgRegisterProvider) ValidateBasic() error {
 // MsgRegisterProviderResponse is the response for MsgRegisterProvider.
 type MsgRegisterProviderResponse struct{}
 
-func (msg *MsgRegisterProviderResponse) Reset()        {}
+func (msg *MsgRegisterProviderResponse) Reset()         {}
 func (msg *MsgRegisterProviderResponse) String() string { return "" }
 func (msg *MsgRegisterProviderResponse) ProtoMessage()  {}
 
@@ -139,7 +145,7 @@ type MsgDeregisterProvider struct {
 	Sender string `json:"sender"`
 }
 
-func (msg *MsgDeregisterProvider) Reset()        {}
+func (msg *MsgDeregisterProvider) Reset()         {}
 func (msg *MsgDeregisterProvider) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDeregisterProvider) ProtoMessage()  {}
 
@@ -161,7 +167,7 @@ func (msg *MsgDeregisterProvider) ValidateBasic() error {
 // MsgDeregisterProviderResponse is the response for MsgDeregisterProvider.
 type MsgDeregisterProviderResponse struct{}
 
-func (msg *MsgDeregisterProviderResponse) Reset()        {}
+func (msg *MsgDeregisterProviderResponse) Reset()         {}
 func (msg *MsgDeregisterProviderResponse) String() string { return "" }
 func (msg *MsgDeregisterProviderResponse) ProtoMessage()  {}
 
@@ -172,7 +178,7 @@ type MsgRequestQuote struct {
 	FactIds  []string `json:"fact_ids"`
 }
 
-func (msg *MsgRequestQuote) Reset()        {}
+func (msg *MsgRequestQuote) Reset()         {}
 func (msg *MsgRequestQuote) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRequestQuote) ProtoMessage()  {}
 
@@ -205,7 +211,7 @@ type MsgRequestQuoteResponse struct {
 	Quote APIQuote `json:"quote"`
 }
 
-func (msg *MsgRequestQuoteResponse) Reset()        {}
+func (msg *MsgRequestQuoteResponse) Reset()         {}
 func (msg *MsgRequestQuoteResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRequestQuoteResponse) ProtoMessage()  {}
 
@@ -215,7 +221,7 @@ type MsgExecutePayment struct {
 	QuoteId uint64 `json:"quote_id"`
 }
 
-func (msg *MsgExecutePayment) Reset()        {}
+func (msg *MsgExecutePayment) Reset()         {}
 func (msg *MsgExecutePayment) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgExecutePayment) ProtoMessage()  {}
 
@@ -239,7 +245,7 @@ type MsgExecutePaymentResponse struct {
 	RecordId uint64 `json:"record_id"`
 }
 
-func (msg *MsgExecutePaymentResponse) Reset()        {}
+func (msg *MsgExecutePaymentResponse) Reset()         {}
 func (msg *MsgExecutePaymentResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgExecutePaymentResponse) ProtoMessage()  {}
 
@@ -249,7 +255,7 @@ type MsgUpdateParams struct {
 	Params    Params `json:"params"`
 }
 
-func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) Reset()         {}
 func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgUpdateParams) ProtoMessage()  {}
 
@@ -271,7 +277,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response for MsgUpdateParams.
 type MsgUpdateParamsResponse struct{}
 
-func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 

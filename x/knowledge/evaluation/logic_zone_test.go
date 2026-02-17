@@ -68,16 +68,135 @@ func TestEvaluateLogicZone_Peano_WithGrounding(t *testing.T) {
 		},
 		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
 			if id == "axiom-1" {
-				return types.Fact{Id: "axiom-1", Status: types.FactStatusVerified, Confidence: 950_000}, true
+				// Propositional fact (more formal) grounds a Peano claim — valid
+				return types.Fact{
+					Id: "axiom-1", Status: types.FactStatusVerified,
+					Confidence: 950_000, LogicZone: "propositional", Domain: "mathematics",
+				}, true
 			}
 			return types.Fact{}, false
 		},
 	}
-	claim := types.Claim{LogicZone: "peano", References: []string{"axiom-1"}}
+	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"axiom-1"}}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.ForceVerdict != "" {
-		t.Errorf("expected no forced verdict when grounded, got %q", result.ForceVerdict)
+		t.Errorf("expected no forced verdict when grounded with compatible zone, got %q", result.ForceVerdict)
+	}
+}
+
+func TestEvaluateLogicZone_Peano_EmpiricalRefRejected(t *testing.T) {
+	// G-2: An empirical fact should NOT ground a Peano claim
+	ctx := mockCtx()
+	evalCtx := &EvaluationContext{
+		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
+			return 850_000
+		},
+		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
+			return zone == "peano"
+		},
+		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+			if id == "obs-1" {
+				return types.Fact{
+					Id: "obs-1", Status: types.FactStatusVerified,
+					Confidence: 700_000, LogicZone: "empirical", Domain: "mathematics",
+				}, true
+			}
+			return types.Fact{}, false
+		},
+	}
+	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"obs-1"}}
+
+	result := evaluateLogicZone(ctx, evalCtx, claim)
+	if result.ForceVerdict != "abstain" {
+		t.Errorf("empirical fact should not ground Peano claim, expected abstain, got %q", result.ForceVerdict)
+	}
+}
+
+func TestEvaluateLogicZone_Peano_WrongDomainRejected(t *testing.T) {
+	// G-2: A fact in a different domain should NOT ground a Gödelian claim
+	ctx := mockCtx()
+	evalCtx := &EvaluationContext{
+		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
+			return 850_000
+		},
+		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
+			return zone == "peano"
+		},
+		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+			if id == "axiom-1" {
+				return types.Fact{
+					Id: "axiom-1", Status: types.FactStatusVerified,
+					Confidence: 950_000, LogicZone: "propositional", Domain: "physics",
+				}, true
+			}
+			return types.Fact{}, false
+		},
+	}
+	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"axiom-1"}}
+
+	result := evaluateLogicZone(ctx, evalCtx, claim)
+	if result.ForceVerdict != "abstain" {
+		t.Errorf("cross-domain ref should not ground Peano claim, expected abstain, got %q", result.ForceVerdict)
+	}
+}
+
+func TestEvaluateLogicZone_Peano_EmptyZoneRefAllowed(t *testing.T) {
+	// Backward compat: fact with no LogicZone set still grounds (no restriction)
+	ctx := mockCtx()
+	evalCtx := &EvaluationContext{
+		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
+			return 850_000
+		},
+		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
+			return zone == "peano"
+		},
+		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+			if id == "legacy-fact" {
+				return types.Fact{
+					Id: "legacy-fact", Status: types.FactStatusVerified,
+					Confidence: 900_000, LogicZone: "", Domain: "",
+				}, true
+			}
+			return types.Fact{}, false
+		},
+	}
+	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"legacy-fact"}}
+
+	result := evaluateLogicZone(ctx, evalCtx, claim)
+	if result.ForceVerdict != "" {
+		t.Errorf("legacy fact (no zone) should still ground, got %q", result.ForceVerdict)
+	}
+}
+
+func TestIsZoneCompatibleGrounding(t *testing.T) {
+	tests := []struct {
+		refZone   string
+		claimZone string
+		want      bool
+	}{
+		{"propositional", "peano", true},         // more formal → less formal: OK
+		{"propositional", "propositional", true}, // same zone: OK
+		{"presburger", "peano", true},            // more formal → less formal: OK
+		{"peano", "peano", true},                 // same zone: OK
+		{"empirical", "peano", false},            // less formal → more formal: BLOCKED
+		{"empirical", "set_theory", false},       // less formal → more formal: BLOCKED
+		{"set_theory", "peano", false},           // less formal → more formal: BLOCKED
+		{"peano", "set_theory", true},            // more formal → less formal: OK
+		{"", "peano", true},                      // empty ref zone: backward compat
+		{"peano", "", true},                      // empty claim zone: backward compat
+		{"unknown", "peano", true},               // unknown zone: forward compat
+	}
+
+	for _, tt := range tests {
+		name := fmt.Sprintf("%s->%s", tt.refZone, tt.claimZone)
+		t.Run(name, func(t *testing.T) {
+			got := isZoneCompatibleGrounding(tt.refZone, tt.claimZone)
+			if got != tt.want {
+				t.Errorf("isZoneCompatibleGrounding(%q, %q) = %v, want %v",
+					tt.refZone, tt.claimZone, got, tt.want)
+			}
+		})
 	}
 }
 

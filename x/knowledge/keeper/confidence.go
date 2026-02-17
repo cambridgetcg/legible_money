@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"fmt"
+	"sort"
 
 	sdkmath "cosmossdk.io/math"
 
@@ -9,6 +10,17 @@ import (
 
 	"github.com/legible-money/legible/x/knowledge/types"
 )
+
+// sortedMapKeys returns the keys of a map[string]T sorted lexicographically.
+// Used to ensure deterministic iteration over maps in state-modifying code.
+func sortedMapKeys[T any](m map[string]T) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // AggregateVerificationResult computes the final outcome of a verification round
 // using stake-weighted confidence aggregation.
@@ -32,9 +44,10 @@ func (k Keeper) AggregateVerificationResult(
 		}
 	}
 
-	// Gather stake weights for all revealing validators, adjusted by domain reputation
+	// Gather stake weights for all revealing validators, adjusted by domain reputation.
+	// CRITICAL: iterate in sorted order to ensure deterministic state across validators.
 	stakeMap := make(map[string]uint64, len(round.Reveals))
-	for validatorAddr := range round.Reveals {
+	for _, validatorAddr := range sortedMapKeys(round.Reveals) {
 		stake := k.GetEffectiveStakeForValidator(ctx, validatorAddr)
 		// If capture defense keeper is wired, adjust by domain reputation
 		if k.captureDefenseKeeper != nil && roundDomain != "" {
@@ -50,9 +63,10 @@ func (k Keeper) AggregateVerificationResult(
 		stakeMap[validatorAddr] = stake
 	}
 
-	// Compute stake-weighted verdicts
+	// Compute stake-weighted verdicts (deterministic order)
 	var acceptWeight, rejectWeight, abstainWeight, totalWeight uint64
-	for validatorAddr, reveal := range round.Reveals {
+	for _, validatorAddr := range sortedMapKeys(round.Reveals) {
+		reveal := round.Reveals[validatorAddr]
 		stake := stakeMap[validatorAddr]
 		if stake == 0 {
 			stake = 1 // Prevent zero-weight for Tier 0 validators
@@ -230,10 +244,12 @@ func (k Keeper) calculateRewardsAndSlashes(
 	}
 	missedSlashBps := params.MissedRevealSlashBps
 	if missedSlashBps == 0 {
-		missedSlashBps = 100 // fallback: 0.01% (Cosmos-aligned downtime penalty)
+		missedSlashBps = 10000 // fallback: 1% — commit-but-no-reveal must be costly
+		// enough to deter quorum manipulation (OpenClaw C-2 fix: was 100 bps / 0.01%)
 	}
 
-	for validatorAddr, reveal := range round.Reveals {
+	for _, validatorAddr := range sortedMapKeys(round.Reveals) {
+		reveal := round.Reveals[validatorAddr]
 		// Check if validator's verdict aligns with final outcome
 		correct := (result.Verdict == "accepted" && reveal.Verdict == "accept") ||
 			(result.Verdict == "rejected" && reveal.Verdict == "reject")
@@ -264,8 +280,8 @@ func (k Keeper) calculateRewardsAndSlashes(
 		}
 	}
 
-	// Slash validators who committed but failed to reveal
-	for validatorAddr := range round.Commitments {
+	// Slash validators who committed but failed to reveal (deterministic order)
+	for _, validatorAddr := range sortedMapKeys(round.Commitments) {
 		if _, revealed := round.Reveals[validatorAddr]; !revealed {
 			// Lookup stake for non-revealing validator (not in stakeMap)
 			stake := stakeMap[validatorAddr]
@@ -293,8 +309,10 @@ func (k Keeper) ApplyRewardsAndSlashes(
 		researchTaxRate = 70000 // fallback: 7%
 	}
 
-	// Apply rewards via BankKeeper (module → validator account)
-	for validatorAddr, amount := range result.Rewards {
+	// Apply rewards via BankKeeper (module → validator account).
+	// CRITICAL: deterministic order prevents AppHash divergence across validators.
+	for _, validatorAddr := range sortedMapKeys(result.Rewards) {
+		amount := result.Rewards[validatorAddr]
 		if k.verificationHooks != nil {
 			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, true); err != nil {
 				k.Logger(ctx).Error("verification hook failed for correct verification",
@@ -332,8 +350,9 @@ func (k Keeper) ApplyRewardsAndSlashes(
 		}
 	}
 
-	// Apply slashes
-	for validatorAddr, amount := range result.Slashes {
+	// Apply slashes (deterministic order)
+	for _, validatorAddr := range sortedMapKeys(result.Slashes) {
+		amount := result.Slashes[validatorAddr]
 		if err := k.SlashMissedVerification(ctx, validatorAddr, fmt.Sprintf("%d", amount)); err != nil {
 			k.Logger(ctx).Error("failed to apply slash",
 				"validator", validatorAddr, "amount", amount, "error", err)
@@ -410,6 +429,9 @@ func inferDomainStratum(domain string) string {
 // Only evidence with status "verified" or "submitted" is considered.
 // Unaudited evidence (reliability=0) contributes at a base reliability of 10%.
 func (k Keeper) computeEvidenceBonus(ctx sdk.Context, claimId string) uint64 {
+	if k.evidenceMgmtKeeper == nil {
+		return 0
+	}
 	evidences := k.evidenceMgmtKeeper.GetEvidenceByClaimId(ctx, claimId)
 	if len(evidences) == 0 {
 		return 0

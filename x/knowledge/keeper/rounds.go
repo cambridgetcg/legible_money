@@ -151,8 +151,8 @@ func (k Keeper) GetCommitmentsForRound(ctx sdk.Context, roundID string) ([]types
 	}
 
 	commitments := make([]types.VerificationCommitment, 0, len(round.Commitments))
-	for _, c := range round.Commitments {
-		commitments = append(commitments, *c)
+	for _, k := range sortedMapKeys(round.Commitments) {
+		commitments = append(commitments, *round.Commitments[k])
 	}
 	return commitments, nil
 }
@@ -203,8 +203,8 @@ func (k Keeper) GetRevealsForRound(ctx sdk.Context, roundID string) ([]types.Ver
 	}
 
 	reveals := make([]types.VerificationReveal, 0, len(round.Reveals))
-	for _, r := range round.Reveals {
-		reveals = append(reveals, *r)
+	for _, k := range sortedMapKeys(round.Reveals) {
+		reveals = append(reveals, *round.Reveals[k])
 	}
 	return reveals, nil
 }
@@ -220,6 +220,15 @@ func (k Keeper) CompleteRound(
 	round types.VerificationRound,
 	result types.VerificationResult,
 ) error {
+	// Idempotency guard: if this round was already completed (e.g., during state
+	// replay or migration), skip all side effects to prevent duplicate fact
+	// creation and double stake returns. (PP-CONSENSUS-2 remediation)
+	if round.Phase == "complete" {
+		k.Logger(ctx).Debug("skipping already-completed round",
+			"round_id", round.Id, "claim_id", round.ClaimId)
+		return nil
+	}
+
 	round.Phase = "complete"
 	round.FinalVerdict = result.Verdict
 	round.FinalConfidence = result.Confidence
@@ -367,7 +376,7 @@ func (k Keeper) CompleteRound(
 					totalReward += r
 				}
 				if totalReward > 0 {
-					k.DistributeCitationRewards(ctx, factID, totalReward)
+					k.DistributeCitationRewards(ctx, factID, totalReward, claim.Submitter)
 				}
 			}
 
@@ -384,6 +393,11 @@ func (k Keeper) CompleteRound(
 			claim.Status = "rejected"
 			k.SetClaim(ctx, claim)
 			k.UpdateSubmitterCalibration(ctx, claim.Submitter, false)
+
+			// FARM-6 fix: Check agent's rejection rate and pause all vesting if misbehaving.
+			// This prevents the "grief-and-extract" pattern where agents earn vesting through
+			// honest work then profit during misbehavior.
+			k.checkMisbehaviorVestingPause(ctx, claim.Submitter)
 
 			// Path A: Automatic counter-fact creation on rejection.
 			// Rejected claims produce a "rejection" counter-fact, recording the
@@ -437,6 +451,15 @@ func (k Keeper) CompleteRound(
 
 			// Return stake on insufficient participation — not the submitter's fault
 			k.returnClaimStake(ctx, claim)
+
+		case "inconclusive":
+			claim.Status = "inconclusive"
+			k.SetClaim(ctx, claim)
+
+			// Return stake on inconclusive (below 55% agreement) — not the submitter's fault.
+			// Without this, the submitter's stake would be permanently locked in the module
+			// account with no recovery mechanism. (OpenClaw C-1 fix)
+			k.returnClaimStake(ctx, claim)
 		}
 	}
 
@@ -459,6 +482,21 @@ roundFinalize:
 		"verdict", result.Verdict,
 		"confidence", result.Confidence,
 	)
+
+	// Notify home module of verification results for epistemic stats.
+	// Each validator who revealed gets a RecordVerification call with whether
+	// their verdict matched consensus.
+	if k.homeKeeper != nil && result.Verdict != "insufficient" {
+		domain := ""
+		if claimFound {
+			domain = claim.Domain
+		}
+		for _, validatorAddr := range sortedMapKeys(round.Reveals) {
+			reveal := round.Reveals[validatorAddr]
+			matchedConsensus := reveal.Verdict == result.Verdict
+			k.homeKeeper.RecordVerification(ctx, reveal.Validator, domain, matchedConsensus)
+		}
+	}
 
 	return nil
 }
@@ -557,9 +595,14 @@ func (k Keeper) slashAndReturnClaimStake(ctx sdk.Context, claim types.Claim, sla
 	)
 }
 
-// handleEquivocation records equivocation evidence and slashes the validator's full stake.
+// handleEquivocation slashes the validator's full stake and records equivocation evidence.
 // This is the most severe PoT violation — a validator attempted to submit conflicting
 // commitments or reveals in the same verification round.
+//
+// The slash is attempted BEFORE recording evidence so that the on-chain audit trail
+// accurately reflects the actual slashed amount. If the slash fails, evidence is still
+// recorded with SlashedAmount="0" to preserve the audit trail, and the error is
+// propagated so callers can handle appropriately. (PP-CONSENSUS-3 remediation)
 func (k Keeper) handleEquivocation(
 	ctx sdk.Context,
 	roundID string,
@@ -572,9 +615,27 @@ func (k Keeper) handleEquivocation(
 
 	// Get validator's effective stake for 100% slash
 	stake := k.stakingKeeper.GetEffectiveStake(ctx, validatorAddr)
-	slashAmount := fmt.Sprintf("%d", stake)
+	requestedSlash := fmt.Sprintf("%d", stake)
 
-	// Record equivocation evidence (on-chain audit trail)
+	// Attempt slash FIRST — determine actual slashed amount before recording evidence
+	actualSlashed := "0"
+	slashFailed := false
+	if stake > 0 {
+		reason := fmt.Sprintf("PoT %s equivocation in round %s", equivocationType, roundID)
+		if err := k.stakingKeeper.SlashValidator(ctx, validatorAddr, requestedSlash, reason); err != nil {
+			k.Logger(ctx).Error("CRITICAL: failed to slash equivocating validator — economic security degraded",
+				"validator", validatorAddr,
+				"round_id", roundID,
+				"requested_slash", requestedSlash,
+				"error", err,
+			)
+			slashFailed = true
+		} else {
+			actualSlashed = requestedSlash
+		}
+	}
+
+	// Record equivocation evidence with accurate slashed amount
 	evidence := types.EquivocationEvidence{
 		RoundId:          roundID,
 		Validator:        validatorAddr,
@@ -582,21 +643,9 @@ func (k Keeper) handleEquivocation(
 		OriginalValue:    originalValue,
 		ConflictingValue: conflictingValue,
 		DetectedAtHeight: height,
-		SlashedAmount:    slashAmount,
+		SlashedAmount:    actualSlashed,
 	}
 	k.SetEquivocationEvidence(ctx, evidence)
-
-	// Slash 100% of stake via staking keeper
-	if stake > 0 {
-		reason := fmt.Sprintf("PoT %s equivocation in round %s", equivocationType, roundID)
-		if err := k.stakingKeeper.SlashValidator(ctx, validatorAddr, slashAmount, reason); err != nil {
-			k.Logger(ctx).Error("failed to slash equivocating validator",
-				"validator", validatorAddr,
-				"round_id", roundID,
-				"error", err,
-			)
-		}
-	}
 
 	// Emit event for indexers and monitoring
 	ctx.EventManager().EmitEvent(
@@ -606,17 +655,27 @@ func (k Keeper) handleEquivocation(
 			sdk.NewAttribute("type", equivocationType),
 			sdk.NewAttribute("original_value", originalValue),
 			sdk.NewAttribute("conflicting_value", conflictingValue),
-			sdk.NewAttribute("slashed_amount", slashAmount),
+			sdk.NewAttribute("slashed_amount", actualSlashed),
+			sdk.NewAttribute("slash_failed", fmt.Sprintf("%t", slashFailed)),
 			sdk.NewAttribute("height", fmt.Sprintf("%d", height)),
 		),
 	)
 
-	k.Logger(ctx).Error("EQUIVOCATION DETECTED — validator slashed 100%",
-		"validator", validatorAddr,
-		"round_id", roundID,
-		"type", equivocationType,
-		"slashed", slashAmount,
-	)
+	if slashFailed {
+		k.Logger(ctx).Error("EQUIVOCATION DETECTED — slash FAILED, validator retains stake",
+			"validator", validatorAddr,
+			"round_id", roundID,
+			"type", equivocationType,
+			"requested_slash", requestedSlash,
+		)
+	} else {
+		k.Logger(ctx).Error("EQUIVOCATION DETECTED — validator slashed 100%",
+			"validator", validatorAddr,
+			"round_id", roundID,
+			"type", equivocationType,
+			"slashed", actualSlashed,
+		)
+	}
 }
 
 // completeContradictionRound handles the completion of a contradiction verification round.
@@ -636,12 +695,8 @@ func (k Keeper) completeContradictionRound(
 
 	height := uint64(ctx.BlockHeight())
 
-	// Collect verifiers
-	var verifiers []string
-	for v := range round.Reveals {
-		verifiers = append(verifiers, v)
-	}
-	cf.Verifiers = verifiers
+	// Collect verifiers (sorted for deterministic state)
+	cf.Verifiers = sortedMapKeys(round.Reveals)
 
 	switch result.Verdict {
 	case "accepted":
@@ -733,9 +788,10 @@ func (k Keeper) completeContradictionRound(
 // scaled by the counter-fact's confidence, and capped at 3x the contradiction stake.
 //
 // Reward formula:
-//   rewardBase = targetFact.OriginalStake * cf.Confidence / 1_000_000
-//   rewardCap  = cf.StakeAmount * FalsificationRewardCapBps / 1_000_000  (3x stake)
-//   reward     = min(rewardBase, rewardCap)
+//
+//	rewardBase = targetFact.OriginalStake * cf.Confidence / 1_000_000
+//	rewardCap  = cf.StakeAmount * FalsificationRewardCapBps / 1_000_000  (3x stake)
+//	reward     = min(rewardBase, rewardCap)
 //
 // The reward is minted from the knowledge module account. The submitter's locked
 // stake is returned separately in completeContradictionRound (accepted case).
@@ -843,6 +899,12 @@ func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf types.CounterF
 			sdk.NewAttribute("target_fact_id", cf.TargetFactId),
 			sdk.NewAttribute("recipient", cf.Submitter),
 			sdk.NewAttribute("amount", rewardAmount.String()),
+			sdk.NewAttribute("target_stake", targetStake.String()),
+			sdk.NewAttribute("cf_confidence", fmt.Sprintf("%d", cf.Confidence)),
+			sdk.NewAttribute("cf_stake", cf.StakeAmount),
+			sdk.NewAttribute("reward_cap_bps", fmt.Sprintf("%d", types.FalsificationRewardCapBps)),
+			sdk.NewAttribute("epoch", fmt.Sprintf("%d", epoch)),
+			sdk.NewAttribute("epoch_paid_before", fmt.Sprintf("%d", epochPaid)),
 		),
 	)
 }
@@ -887,11 +949,8 @@ func (k Keeper) createRejectionCounterFact(
 	height := uint64(ctx.BlockHeight())
 	cfID := GenerateCounterFactID("", claim.Id, "system", height)
 
-	// Collect verifier addresses from reveals
-	var verifiers []string
-	for v := range round.Reveals {
-		verifiers = append(verifiers, v)
-	}
+	// Collect verifier addresses from reveals (sorted for deterministic state)
+	verifiers := sortedMapKeys(round.Reveals)
 
 	// R-4: Derive counter-fact stake from the rejected claim's slash amount.
 	// The slash amount sits in the module account after slashAndReturnClaimStake.
@@ -1040,7 +1099,7 @@ func (k Keeper) OpenCounterFactChallenge(
 		}
 	}
 
-	challengeID := fmt.Sprintf("cfc-%x", sha256Hash([]byte(counterFactId+challenger+fmt.Sprintf("%d", height)))[:16])
+	challengeID := fmt.Sprintf("cfc-%x", sha256Hash([]byte(counterFactId + challenger + fmt.Sprintf("%d", height)))[:16])
 
 	challenge := types.CounterFactChallenge{
 		Id:              challengeID,
@@ -1302,6 +1361,35 @@ func sha256Hash(data []byte) []byte {
 	h := sha256.New()
 	h.Write(data)
 	return h.Sum(nil)
+}
+
+// checkMisbehaviorVestingPause checks an agent's rejection rate and pauses all their
+// active vesting schedules if it exceeds MisbehaviorRejectionThreshold (30%).
+// FARM-6 remediation: prevents "grief-and-extract" where agents accumulate vesting
+// from honest work then misbehave while continuing to receive vesting releases.
+func (k Keeper) checkMisbehaviorVestingPause(ctx sdk.Context, submitter string) {
+	if k.vestingRewardsKeeper == nil {
+		return
+	}
+
+	record, found := k.GetCalibrationRecord(ctx, submitter)
+	if !found || record.TotalClaims < types.MisbehaviorMinSamples {
+		return
+	}
+
+	// Calculate rejection rate: rejectedClaims * 1,000,000 / totalClaims
+	rejectionRate := (record.RejectedClaims * 1_000_000) / record.TotalClaims
+	if rejectionRate > types.MisbehaviorRejectionThreshold {
+		paused := k.vestingRewardsKeeper.PauseAllVestingByRecipient(ctx, submitter)
+		if paused > 0 {
+			k.Logger(ctx).Warn("FARM-6: agent misbehavior detected — vesting paused",
+				"submitter", submitter,
+				"rejection_rate", rejectionRate,
+				"threshold", types.MisbehaviorRejectionThreshold,
+				"schedules_paused", paused,
+			)
+		}
+	}
 }
 
 // CleanupExpiredRounds removes rounds that completed more than retentionBlocks ago.

@@ -68,9 +68,11 @@ func TestCalibration_PerfectSubmitter(t *testing.T) {
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
-	// rate = 1,000,000, deviation = 300,000, /5 = 60,000 → capped at 50,000
-	if result.Adjustment != int64(types.MaxCalibrationBonus) {
-		t.Errorf("expected %d (max bonus), got %d", types.MaxCalibrationBonus, result.Adjustment)
+	// FARM-2 fix: 100% acceptance is suspiciously trivial.
+	// rate = 1,000,000, excess = 50,000, penalty = -(50000 * 100000) / 50000 = -100,000
+	expected := -int64(types.MaxCalibrationTrivialPenalty)
+	if result.Adjustment != expected {
+		t.Errorf("expected %d (trivial penalty), got %d", expected, result.Adjustment)
 	}
 }
 
@@ -185,9 +187,54 @@ func TestCalibration_ExactMinSamples(t *testing.T) {
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
-	// rate = 1,000,000, deviation = 300,000, /5 = 60,000 → capped at 50,000
-	if result.Adjustment != int64(types.MaxCalibrationBonus) {
-		t.Errorf("expected %d at exact min samples, got %d", types.MaxCalibrationBonus, result.Adjustment)
+	// FARM-2 fix: 100% acceptance triggers trivial penalty even at min samples
+	expected := -int64(types.MaxCalibrationTrivialPenalty)
+	if result.Adjustment != expected {
+		t.Errorf("expected %d (trivial penalty) at exact min samples, got %d", expected, result.Adjustment)
+	}
+}
+
+func TestCalibration_TrivialThresholdBoundary(t *testing.T) {
+	ctx := mockCtx()
+
+	// 96% acceptance = just above trivial threshold (950,000)
+	evalCtx := &EvaluationContext{
+		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
+			return types.CalibrationRecord{
+				TotalClaims:    100,
+				AcceptedClaims: 96, // 96% acceptance
+			}, true
+		},
+	}
+	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+
+	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
+
+	// rate = 960,000, excess = 10,000, penalty = -(10000 * 100000) / 50000 = -20,000
+	if result.Adjustment != -20_000 {
+		t.Errorf("expected -20000 for 96%% acceptance, got %d", result.Adjustment)
+	}
+}
+
+func TestCalibration_JustBelowTrivialThreshold(t *testing.T) {
+	ctx := mockCtx()
+
+	// 94% acceptance = below trivial threshold, gets normal bonus
+	evalCtx := &EvaluationContext{
+		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
+			return types.CalibrationRecord{
+				TotalClaims:    100,
+				AcceptedClaims: 94, // 94% acceptance — just below threshold
+			}, true
+		},
+	}
+	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+
+	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
+
+	// rate = 940,000, deviation from 700k = 240,000, /5 = 48,000 (bonus)
+	if result.Adjustment != 48_000 {
+		t.Errorf("expected 48000 bonus for 94%% acceptance, got %d", result.Adjustment)
 	}
 }
 

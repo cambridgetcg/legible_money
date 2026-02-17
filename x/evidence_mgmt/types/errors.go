@@ -3,8 +3,8 @@ package types
 import "cosmossdk.io/errors"
 
 var (
-	ErrEvidenceNotFound        = errors.Register(ModuleName, 2, "evidence not found")
-	ErrInvalidEvidence         = errors.Register(ModuleName, 3, "invalid evidence submission")
+	ErrEvidenceNotFound = errors.Register(ModuleName, 2, "evidence not found")
+	ErrInvalidEvidence  = errors.Register(ModuleName, 3, "invalid evidence submission")
 	// Error codes 4-5 reserved (previously ErrOracleNotRegistered, ErrEvidenceExpired — unused, removed)
 	ErrDuplicateEvidence       = errors.Register(ModuleName, 6, "duplicate evidence hash")
 	ErrAuditNotFound           = errors.Register(ModuleName, 7, "audit not found")

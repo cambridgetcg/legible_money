@@ -9,6 +9,13 @@ import (
 	storetypes "cosmossdk.io/store/types"
 )
 
+// BalanceQuerier resolves account balances via the bank keeper.
+// Injected into CosmosStateDB so BALANCE/SELFBALANCE opcodes return real values.
+type BalanceQuerier interface {
+	// GetBalanceByAddress returns the ulgm balance for a 20-byte address as *big.Int.
+	GetBalanceByAddress(addr []byte) *big.Int
+}
+
 // CosmosStateDB adapts a Cosmos KV store to the StateDB interface.
 // Key layout matches x/bvm/keeper/state.go and x/bvm/types/keys.go exactly.
 type CosmosStateDB struct {
@@ -18,6 +25,9 @@ type CosmosStateDB struct {
 	statePrefix    []byte // 0x03
 	codePrefix     []byte // 0x02
 	contractPrefix []byte // 0x01
+
+	// Optional: resolves real balances via bank keeper
+	balanceQuerier BalanceQuerier
 }
 
 // NewCosmosStateDB creates a StateDB backed by a Cosmos KV store.
@@ -28,6 +38,13 @@ func NewCosmosStateDB(store storetypes.KVStore) *CosmosStateDB {
 		codePrefix:     []byte{0x02},
 		contractPrefix: []byte{0x01},
 	}
+}
+
+// NewCosmosStateDBWithBalance creates a StateDB with bank keeper balance resolution.
+func NewCosmosStateDBWithBalance(store storetypes.KVStore, bq BalanceQuerier) *CosmosStateDB {
+	s := NewCosmosStateDB(store)
+	s.balanceQuerier = bq
+	return s
 }
 
 // contractStateKey builds a key matching types.ContractStateKey:
@@ -75,8 +92,9 @@ func (s *CosmosStateDB) SetStorage(contract []byte, key []byte, value []byte) {
 }
 
 func (s *CosmosStateDB) GetBalance(addr []byte) *big.Int {
-	// Balance queries go through the bank keeper, not the KV store.
-	// This is a fallback that returns 0.
+	if s.balanceQuerier != nil {
+		return s.balanceQuerier.GetBalanceByAddress(addr)
+	}
 	return new(big.Int)
 }
 

@@ -14,11 +14,11 @@ import (
 
 // Keeper manages the icaauth module state.
 type Keeper struct {
-	cdc              codec.Codec
-	storeService     store.KVStoreService
-	legibleAuth      types.LegibleAuthKeeper
-	icaController    types.ICAControllerKeeper
-	authority        string
+	cdc           codec.Codec
+	storeService  store.KVStoreService
+	legibleAuth   types.LegibleAuthKeeper
+	icaController types.ICAControllerKeeper
+	authority     string
 }
 
 // NewKeeper creates a new Keeper instance.

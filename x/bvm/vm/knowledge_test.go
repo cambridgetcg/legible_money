@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+// mockFact implements the FactData interface for testing.
+type mockFact struct {
+	confidence uint64
+	domain     string
+}
+
+func (f *mockFact) GetConfidence() uint64 { return f.confidence }
+func (f *mockFact) GetDomain() string     { return f.domain }
+
 // mockKnowledgeKeeper implements KnowledgeKeeper for testing.
 type mockKnowledgeKeeper struct {
 	facts  map[string]interface{}
@@ -16,10 +25,10 @@ type mockKnowledgeKeeper struct {
 func newMockKnowledgeKeeper() *mockKnowledgeKeeper {
 	return &mockKnowledgeKeeper{
 		facts: map[string]interface{}{
-			"fact1": struct{ Confidence float64 }{0.85},
+			"fact1": &mockFact{confidence: 850000, domain: "general"},
 		},
 		domain: map[string][]interface{}{
-			"mathematics": {struct{}{}, struct{}{}},
+			"mathematics": {&mockFact{confidence: 500000, domain: "mathematics"}, &mockFact{confidence: 600000, domain: "mathematics"}},
 		},
 	}
 }
@@ -31,6 +40,22 @@ func (m *mockKnowledgeKeeper) GetFact(_ context.Context, factId string) (interfa
 
 func (m *mockKnowledgeKeeper) GetFactsByDomain(_ context.Context, domain string) []interface{} {
 	return m.domain[domain]
+}
+
+func (m *mockKnowledgeKeeper) SubmitClaimFromBVM(_ context.Context, submitterDID, domain, contentHash, evidenceHash, logicZone string, stakeAmount uint64) (string, error) {
+	return fmt.Sprintf("claim-%s-%s", submitterDID, domain), nil
+}
+
+func (m *mockKnowledgeKeeper) CommitVoteFromBVM(_ context.Context, validatorDID, roundId, commitmentHash string) error {
+	return nil
+}
+
+func (m *mockKnowledgeKeeper) RevealVoteFromBVM(_ context.Context, validatorDID, roundId, verdict string, confidence uint64, salt string) error {
+	return nil
+}
+
+func (m *mockKnowledgeKeeper) ChallengeFactFromBVM(_ context.Context, challengerDID, factId, evidenceHash string, stakeAmount uint64) (string, error) {
+	return fmt.Sprintf("round-%s-%s", challengerDID, factId), nil
 }
 
 // mockFullHost implements HostFunctions backed by KnowledgeHost for knowledge ops.
@@ -64,48 +89,48 @@ func (h *mockFullHost) InitiateChallenge(callerDID string, factId, evidenceHash 
 }
 
 // Stub implementations for non-knowledge host functions
-func (h *mockFullHost) AgentDID([]byte) []byte                                  { return nil }
-func (h *mockFullHost) AgentHome(string) []byte                                 { return nil }
-func (h *mockFullHost) VerifyIdentity([]byte) bool                              { return false }
-func (h *mockFullHost) AttestIdentity(string, []byte, []byte, []byte) []byte    { return nil }
-func (h *mockFullHost) GetBelief(string, []byte) uint64                         { return 0 }
-func (h *mockFullHost) SetBelief(string, []byte, uint64, []byte)                {}
-func (h *mockFullHost) CompareBelief(string, []byte) int64                      { return 0 }
-func (h *mockFullHost) BeliefCount(string, []byte) uint64                       { return 0 }
-func (h *mockFullHost) GetTrust(string, []byte) uint64                          { return 0 }
-func (h *mockFullHost) SetTrust(string, []byte, uint64, []byte)                 {}
-func (h *mockFullHost) IsTrusted(string, []byte, uint64) bool                   { return false }
-func (h *mockFullHost) Delegate(string, []byte, []byte, []byte) []byte          { return nil }
-func (h *mockFullHost) ScheduleSelf([]byte, []byte, uint64, uint64) []byte      { return nil }
-func (h *mockFullHost) CancelScheduleHost([]byte) bool                          { return false }
-func (h *mockFullHost) ModifySchedule([]byte, uint64) bool                      { return false }
-func (h *mockFullHost) GetScheduleCount([]byte) uint64                          { return 0 }
-func (h *mockFullHost) ListTrusted(string, uint64, uint64) (uint64, [][]byte)   { return 0, nil }
-func (h *mockFullHost) BlockAgent(string, []byte, []byte) bool                  { return false }
-func (h *mockFullHost) UnblockAgent(string, []byte) bool                        { return false }
-func (h *mockFullHost) RevokeDelegation(string, []byte) bool                    { return false }
-func (h *mockFullHost) ClaimVesting(string, []byte) *big.Int                    { return nil }
-func (h *mockFullHost) QueryVesting(string, uint64, uint64) (uint64, [][]byte)  { return 0, nil }
-func (h *mockFullHost) StakeTokens(string, *big.Int, []byte) []byte             { return nil }
-func (h *mockFullHost) UnstakeTokens(string, []byte) *big.Int                   { return nil }
-func (h *mockFullHost) QueryExpiring(string, []byte) (*big.Int, uint64)         { return nil, 0 }
-func (h *mockFullHost) ExtendExpiring(string, []byte, uint64) bool              { return false }
-func (h *mockFullHost) SetSpendLimit(string, []byte, []byte, uint64) bool       { return false }
+func (h *mockFullHost) AgentDID([]byte) []byte                                 { return nil }
+func (h *mockFullHost) AgentHome(string) []byte                                { return nil }
+func (h *mockFullHost) VerifyIdentity([]byte) bool                             { return false }
+func (h *mockFullHost) AttestIdentity(string, []byte, []byte, []byte) []byte   { return nil }
+func (h *mockFullHost) GetBelief(string, []byte) uint64                        { return 0 }
+func (h *mockFullHost) SetBelief(string, []byte, uint64, []byte)               {}
+func (h *mockFullHost) CompareBelief(string, []byte) int64                     { return 0 }
+func (h *mockFullHost) BeliefCount(string, []byte) uint64                      { return 0 }
+func (h *mockFullHost) GetTrust(string, []byte) uint64                         { return 0 }
+func (h *mockFullHost) SetTrust(string, []byte, uint64, []byte)                {}
+func (h *mockFullHost) IsTrusted(string, []byte, uint64) bool                  { return false }
+func (h *mockFullHost) Delegate(string, []byte, []byte, []byte) []byte         { return nil }
+func (h *mockFullHost) ScheduleSelf([]byte, []byte, uint64, uint64) []byte     { return nil }
+func (h *mockFullHost) CancelScheduleHost([]byte) bool                         { return false }
+func (h *mockFullHost) ModifySchedule([]byte, uint64) bool                     { return false }
+func (h *mockFullHost) GetScheduleCount([]byte) uint64                         { return 0 }
+func (h *mockFullHost) ListTrusted(string, uint64, uint64) (uint64, [][]byte)  { return 0, nil }
+func (h *mockFullHost) BlockAgent(string, []byte, []byte) bool                 { return false }
+func (h *mockFullHost) UnblockAgent(string, []byte) bool                       { return false }
+func (h *mockFullHost) RevokeDelegation(string, []byte) bool                   { return false }
+func (h *mockFullHost) ClaimVesting(string, []byte) *big.Int                   { return nil }
+func (h *mockFullHost) QueryVesting(string, uint64, uint64) (uint64, [][]byte) { return 0, nil }
+func (h *mockFullHost) StakeTokens(string, *big.Int, []byte) []byte            { return nil }
+func (h *mockFullHost) UnstakeTokens(string, []byte) *big.Int                  { return nil }
+func (h *mockFullHost) QueryExpiring(string, []byte) (*big.Int, uint64)        { return nil, 0 }
+func (h *mockFullHost) ExtendExpiring(string, []byte, uint64) bool             { return false }
+func (h *mockFullHost) SetSpendLimit(string, []byte, []byte, uint64) bool      { return false }
 func (h *mockFullHost) QueryTreasury(string) (*big.Int, *big.Int, *big.Int, *big.Int) {
 	return nil, nil, nil, nil
 }
-func (h *mockFullHost) QueryAlerts(string, uint64, uint64) (uint64, [][]byte)              { return 0, nil }
-func (h *mockFullHost) DismissAlert(string, []byte) bool                                   { return false }
-func (h *mockFullHost) SetDefense(string, []byte, []byte, []byte) bool                     { return false }
-func (h *mockFullHost) QueryDefenses(string) (uint64, [][]byte)                            { return 0, nil }
-func (h *mockFullHost) RegisterKey(string, []byte, []byte, []byte, []byte) bool            { return false }
-func (h *mockFullHost) RevokeKey(string, []byte) bool                                      { return false }
-func (h *mockFullHost) QueryPermissions(string, []byte) *big.Int                           { return nil }
-func (h *mockFullHost) QuerySession(string) ([]byte, []byte, uint64, uint64)               { return nil, nil, 0, 0 }
-func (h *mockFullHost) SelfBalance(string) *big.Int                                        { return nil }
-func (h *mockFullHost) SelfStake(string) *big.Int                                          { return nil }
-func (h *mockFullHost) SelfReputation(string) uint64                                       { return 0 }
-func (h *mockFullHost) SelfAccuracy(string) uint64                                         { return 0 }
+func (h *mockFullHost) QueryAlerts(string, uint64, uint64) (uint64, [][]byte)   { return 0, nil }
+func (h *mockFullHost) DismissAlert(string, []byte) bool                        { return false }
+func (h *mockFullHost) SetDefense(string, []byte, []byte, []byte) bool          { return false }
+func (h *mockFullHost) QueryDefenses(string) (uint64, [][]byte)                 { return 0, nil }
+func (h *mockFullHost) RegisterKey(string, []byte, []byte, []byte, []byte) bool { return false }
+func (h *mockFullHost) RevokeKey(string, []byte) bool                           { return false }
+func (h *mockFullHost) QueryPermissions(string, []byte) *big.Int                { return nil }
+func (h *mockFullHost) QuerySession(string) ([]byte, []byte, uint64, uint64)    { return nil, nil, 0, 0 }
+func (h *mockFullHost) SelfBalance(string) *big.Int                             { return nil }
+func (h *mockFullHost) SelfStake(string) *big.Int                               { return nil }
+func (h *mockFullHost) SelfReputation(string) uint64                            { return 0 }
+func (h *mockFullHost) SelfAccuracy(string) uint64                              { return 0 }
 
 func TestKnowledge_QueryFact(t *testing.T) {
 	// Set up mock with a fact keyed by hex of the 32-byte value we'll push
@@ -114,7 +139,7 @@ func TestKnowledge_QueryFact(t *testing.T) {
 
 	mk := &mockKnowledgeKeeper{
 		facts: map[string]interface{}{
-			factIdHex: struct{ Confidence float64 }{0.85},
+			factIdHex: &mockFact{confidence: 850000, domain: "general"},
 		},
 		domain: map[string][]interface{}{},
 	}
@@ -152,10 +177,10 @@ func TestKnowledge_QueryFact(t *testing.T) {
 	if exists.Int64() != 1 {
 		t.Fatalf("expected exists=1, got %s", exists)
 	}
-	// Check confidence (second 32 bytes) = 800000000000000000 (0.8 * 1e18)
+	// Check confidence (second 32 bytes) = 850000 * 1e12 = 850000000000000000
 	confidence := new(big.Int).SetBytes(result.ReturnData[32:64])
-	if confidence.Uint64() != 800000000000000000 {
-		t.Fatalf("expected confidence=800000000000000000, got %s", confidence)
+	if confidence.Uint64() != 850000000000000000 {
+		t.Fatalf("expected confidence=850000000000000000, got %s", confidence)
 	}
 }
 
@@ -308,7 +333,7 @@ func TestKnowledge_InitiateChallenge(t *testing.T) {
 
 	// INITIATE_CHALLENGE pops 3 (factId, evidenceHash, stake), pushes 1 (challengeId)
 	bytecode := make([]byte, 0, 32)
-	bytecode = append(bytecode, PUSH1, 100) // stake
+	bytecode = append(bytecode, PUSH1, 100)  // stake
 	bytecode = append(bytecode, PUSH1, 0xEE) // evidenceHash
 	bytecode = append(bytecode, PUSH1, 0xAA) // factId
 	bytecode = append(bytecode, INITIATE_CHALLENGE)

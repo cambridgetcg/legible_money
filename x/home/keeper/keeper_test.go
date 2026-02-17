@@ -233,7 +233,7 @@ func TestUpdateMemoryCID(t *testing.T) {
 	_, err := msgServer.UpdateMemoryCID(ctx, &types.MsgUpdateMemoryCID{
 		Owner:  owner1,
 		HomeId: resp.HomeId,
-		CID:    "QmYwAPJzv5CZsnN625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+		Cid:    "QmYwAPJzv5CZsnN625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
 	})
 	if err != nil {
 		t.Fatalf("update memory CID failed: %v", err)
@@ -479,20 +479,18 @@ func TestConfigureGuardian(t *testing.T) {
 		Name:  "Guardian Home",
 	})
 
-	aggressive := string(types.DefenseAggressive)
-	autoDefend := true
 	_, err := msgServer.ConfigureGuardian(ctx, &types.MsgConfigureGuardian{
 		Owner:           owner1,
 		HomeId:          homeResp.HomeId,
-		DefenseStrategy: &aggressive,
-		AutoDefend:      &autoDefend,
+		DefenseStrategy: string(types.DefenseAggressive),
+		AutoDefend:      true,
 		Deadman: &types.DeadmanConfig{
 			Enabled:             true,
 			InactivityThreshold: 50000,
 			Action:              string(types.DeadmanAlertGuardians),
 		},
-		RecoveryDIDs:      []string{"did:lgm:recovery1", "did:lgm:recovery2"},
-		RecoveryThreshold: ptrUint32(2),
+		RecoveryDids:      []string{"did:lgm:recovery1", "did:lgm:recovery2"},
+		RecoveryThreshold: 2,
 	})
 	if err != nil {
 		t.Fatalf("configure guardian failed: %v", err)
@@ -647,7 +645,7 @@ func TestSetSpendingLimit(t *testing.T) {
 		HomeId:       homeResp.HomeId,
 		KeyType:      "operator",
 		MaxAmount:    "5000000", // 5 LGM
-		PeriodBlocks: 34272,    // 1 day
+		PeriodBlocks: 34272,     // 1 day
 	})
 	if err != nil {
 		t.Fatalf("set spending limit failed: %v", err)
@@ -819,7 +817,7 @@ func TestCheckAndDebitSpendingLimit_PeriodReset(t *testing.T) {
 	homeId := "home-period-reset"
 	k.SetHome(ctx, types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Period Reset",
-		Status: string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
@@ -850,7 +848,7 @@ func TestCheckAndDebitSpendingLimit_NoLimit(t *testing.T) {
 	homeId := "home-no-limit"
 	k.SetHome(ctx, types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "No Limit",
-		Status: string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
@@ -867,7 +865,7 @@ func TestCheckAndDebitSpendingLimit_InvalidAmount(t *testing.T) {
 	homeId := "home-invalid-amt"
 	k.SetHome(ctx, types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Invalid Amt",
-		Status: string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
@@ -901,7 +899,7 @@ func TestGetRemainingSpendingLimit(t *testing.T) {
 	homeId := "home-remaining"
 	k.SetHome(ctx, types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Remaining",
-		Status: string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
@@ -942,7 +940,7 @@ func TestProcessTreasuryAutomation_AutoCompound(t *testing.T) {
 	// Create home with auto-compound enabled
 	home := types.AgentHome{
 		HomeId: "home-autocompound", OwnerAddress: owner1, Name: "AutoCompound",
-		Status: string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 		Treasury: &types.HomeTreasury{
 			ReservedBalance: "0",
@@ -980,7 +978,7 @@ func TestProcessTreasuryAutomation_SkipsDormant(t *testing.T) {
 	// Create a dormant home with automation
 	home := types.AgentHome{
 		HomeId: "home-dormant-auto", OwnerAddress: owner1, Name: "DormantAuto",
-		Status: string(types.HomeStatusDormant),
+		Status:   string(types.HomeStatusDormant),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 		Treasury: &types.HomeTreasury{
 			Automation: &types.TreasuryAutomation{AutoCompoundRewards: true},
@@ -1005,7 +1003,7 @@ func TestProcessTreasuryAutomation_NoAutomation(t *testing.T) {
 	// Home without automation configured
 	home := types.AgentHome{
 		HomeId: "home-no-auto", OwnerAddress: owner1, Name: "NoAuto",
-		Status: string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 		Treasury: &types.HomeTreasury{ReservedBalance: "0"},
 	}
@@ -1073,42 +1071,42 @@ func TestGetRewardMultiplierBps(t *testing.T) {
 }
 
 func TestComputePatina(t *testing.T) {
-	// Zero age/activity but stable (0 status changes) → stability factor = 20
-	patina := keeper.ComputePatina(0, 0, 0, 0)
+	// Zero age, zero epistemic score, stable (0 status changes) → stability factor = 20
+	patina := keeper.ComputePatina(0, 0, 0)
 	if patina != 20 {
 		t.Errorf("expected patina 20 for zero-age stable home, got %d", patina)
 	}
 
-	// 1 day old, fully active, no status changes — mid-range
-	patina = keeper.ComputePatina(keeper.BlocksPerDay, keeper.BlocksPerDay, keeper.BlocksPerDay, 0)
+	// 1 day old, moderate epistemic score (50/100), no status changes — mid-range
+	patina = keeper.ComputePatina(keeper.BlocksPerDay, 50, 0)
 	if patina == 0 {
 		t.Error("expected non-zero patina for 1-day-old active home")
 	}
 
-	// Very old (365 days), fully active, no status changes — should be high
+	// Very old (365 days), high epistemic score (90/100), no status changes — should be high
 	age365 := uint64(keeper.BlocksPerDay * 365)
-	patina = keeper.ComputePatina(age365, age365, age365, 0)
+	patina = keeper.ComputePatina(age365, 90, 0)
 	if patina < 80 {
 		t.Errorf("expected high patina for 365-day active home, got %d", patina)
 	}
 
 	// Old but lots of status changes — stability factor hurts
-	patina10changes := keeper.ComputePatina(age365, age365, age365, 10)
-	patinaStable := keeper.ComputePatina(age365, age365, age365, 0)
+	patina10changes := keeper.ComputePatina(age365, 90, 10)
+	patinaStable := keeper.ComputePatina(age365, 90, 0)
 	if patina10changes >= patinaStable {
 		t.Errorf("expected lower patina with 10 status changes: %d >= %d", patina10changes, patinaStable)
 	}
 
-	// Old but inactive — activity factor hurts
-	patinaInactive := keeper.ComputePatina(age365, 0, age365, 0)
-	patinaActive := keeper.ComputePatina(age365, age365, age365, 0)
+	// Old but no epistemic activity — epistemic factor hurts
+	patinaInactive := keeper.ComputePatina(age365, 0, 0)
+	patinaActive := keeper.ComputePatina(age365, 90, 0)
 	if patinaInactive >= patinaActive {
-		t.Errorf("expected lower patina when inactive: %d >= %d", patinaInactive, patinaActive)
+		t.Errorf("expected lower patina when no epistemic activity: %d >= %d", patinaInactive, patinaActive)
 	}
 
 	// Patina capped at 100
 	huge := uint64(keeper.BlocksPerDay * 10000)
-	patinaCapped := keeper.ComputePatina(huge, huge, huge, 0)
+	patinaCapped := keeper.ComputePatina(huge, 100, 0)
 	if patinaCapped > 100 {
 		t.Errorf("expected patina capped at 100, got %d", patinaCapped)
 	}
@@ -1169,11 +1167,11 @@ func TestUpdateHomeMaturity_AllStages(t *testing.T) {
 		created  uint64
 		expected string
 	}{
-		{100, 99, keeper.MaturityFresh},                                        // 1 block old
-		{keeper.ThresholdEstablished + 10, 10, keeper.MaturityEstablished},     // just past established
-		{int64(keeper.ThresholdMature) + 10, 10, keeper.MaturityMature},        // just past mature
-		{int64(keeper.ThresholdVenerable) + 10, 10, keeper.MaturityVenerable},  // just past venerable
-		{int64(keeper.ThresholdAncient) + 10, 10, keeper.MaturityAncient},      // just past ancient
+		{100, 99, keeper.MaturityFresh},                                       // 1 block old
+		{keeper.ThresholdEstablished + 10, 10, keeper.MaturityEstablished},    // just past established
+		{int64(keeper.ThresholdMature) + 10, 10, keeper.MaturityMature},       // just past mature
+		{int64(keeper.ThresholdVenerable) + 10, 10, keeper.MaturityVenerable}, // just past venerable
+		{int64(keeper.ThresholdAncient) + 10, 10, keeper.MaturityAncient},     // just past ancient
 	}
 
 	for i, tc := range stages {
@@ -1343,7 +1341,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	homeId := "home-session-cleanup"
 	k.SetHome(ctx, types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Session Cleanup",
-		Status:  string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
@@ -1386,7 +1384,7 @@ func TestCleanupOldAlerts(t *testing.T) {
 	homeId := "home-alert-cleanup"
 	k.SetHome(ctx, types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Alert Cleanup",
-		Status:  string(types.HomeStatusActive),
+		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
@@ -1430,5 +1428,3 @@ func TestCleanupOldAlerts(t *testing.T) {
 }
 
 // ---------- Helpers ----------
-
-func ptrUint32(v uint32) *uint32 { return &v }

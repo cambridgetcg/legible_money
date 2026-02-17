@@ -8,10 +8,10 @@ func DefaultParams() Params {
 		MaxSessionKeys:        5,
 		MaxSessionDuration:    34272, // 1 day in blocks
 		KeyRotationCooldown:   111,
-		RecoveryDelayBlocks:   1000,  // ~42 min
-		ChallengePeriodBlocks: 500,   // ~21 min
+		RecoveryDelayBlocks:   1000, // ~42 min
+		ChallengePeriodBlocks: 500,  // ~21 min
 		BootstrapEnabled:      true,
-		BootstrapAmount:       "222000000000000000", // 0.222 LGM in ulgm
+		BootstrapAmount:       "222000", // 0.222 LGM in ulgm
 	}
 }
 

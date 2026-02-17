@@ -123,7 +123,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion returns the module's consensus version.
-func (AppModule) ConsensusVersion() uint64 { return 1 }
+func (AppModule) ConsensusVersion() uint64 { return 2 }
 
 // BeginBlock executes begin-block logic: execute pending scheduled contract calls.
 func (am AppModule) BeginBlock(goCtx context.Context) error {

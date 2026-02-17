@@ -32,10 +32,10 @@ var (
 	DomainFactIndexPrefix      = []byte{0x05}
 	ParamsKey                  = []byte{0x06}
 	// 0x07 used by domainKey in state.go
-	IncomingRefIndexPrefix     = []byte{0x08} // toFactId:fromFactId → reference lookup
-	ContentHashIndexPrefix     = []byte{0x09} // contentHash → claimId (duplicate detection)
-	ClaimRoundIndexPrefix      = []byte{0x0a} // claimId → roundId (active round lookup)
-	EquivocationKeyPrefix      = []byte{0x0b} // roundId:validator → equivocation evidence
+	IncomingRefIndexPrefix = []byte{0x08} // toFactId:fromFactId → reference lookup
+	ContentHashIndexPrefix = []byte{0x09} // contentHash → claimId (duplicate detection)
+	ClaimRoundIndexPrefix  = []byte{0x0a} // claimId → roundId (active round lookup)
+	EquivocationKeyPrefix  = []byte{0x0b} // roundId:validator → equivocation evidence
 
 	// Adversarial verification store keys
 	ProvisionalChallengeKeyPrefix = []byte{0x0c} // challengeId → ProvisionalChallenge
@@ -44,14 +44,14 @@ var (
 	SubmitterCalibrationPrefix    = []byte{0x0f} // submitterAddr → CalibrationRecord
 
 	// Negative knowledge store keys
-	CounterFactKeyPrefix            = []byte{0x10} // counterFactId → CounterFact
-	CounterFactByFactIndexPrefix    = []byte{0x11} // targetFactId:counterFactId → lookup
-	CounterFactByDomainIndexPrefix  = []byte{0x12} // domain:counterFactId → lookup
-	CounterFactByHeightIndexPrefix  = []byte{0x13} // height:counterFactId → lookup (for expiry)
-	FactNegationLinkPrefix          = []byte{0x14} // factId → max counter-fact confidence (cached)
-	ContradictionCooldownPrefix     = []byte{0x15} // submitter:epoch → contradiction count
-	FalsificationEpochPaidPrefix    = []byte{0x16} // epoch → total ulgm paid in falsification rewards
-	FalsificationCarryForwardPrefix = []byte{0x17} // epoch → ulgm carried forward from prior epoch cap overflow
+	CounterFactKeyPrefix             = []byte{0x10} // counterFactId → CounterFact
+	CounterFactByFactIndexPrefix     = []byte{0x11} // targetFactId:counterFactId → lookup
+	CounterFactByDomainIndexPrefix   = []byte{0x12} // domain:counterFactId → lookup
+	CounterFactByHeightIndexPrefix   = []byte{0x13} // height:counterFactId → lookup (for expiry)
+	FactNegationLinkPrefix           = []byte{0x14} // factId → max counter-fact confidence (cached)
+	ContradictionCooldownPrefix      = []byte{0x15} // submitter:epoch → contradiction count
+	FalsificationEpochPaidPrefix     = []byte{0x16} // epoch → total ulgm paid in falsification rewards
+	FalsificationCarryForwardPrefix  = []byte{0x17} // epoch → ulgm carried forward from prior epoch cap overflow
 	CounterFactChallengeKeyPrefix    = []byte{0x18} // counterFactChallengeId → CounterFactChallenge
 	CounterFactChallengeWindowPrefix = []byte{0x19} // counterFactId → challenge window end height
 	ExtendedParamsKey                = []byte{0x1a} // ExtendedParams (hand-written, JSON-encoded)

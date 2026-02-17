@@ -29,10 +29,10 @@ func (p Params) Validate() error {
 // MsgRegisterInterchainAccount requests registration of an ICA on a remote chain.
 // Must be signed by the account's operational key (not a session key).
 type MsgRegisterInterchainAccount struct {
-	Owner        string   `json:"owner"`         // bech32 address on Legible
+	Owner        string   `json:"owner"` // bech32 address on Legible
 	ConnectionId string   `json:"connection_id"`
-	Version      string   `json:"version"`       // ICA version string
-	AllowedMsgs  []string `json:"allowed_msgs"`  // proto URL allowlist
+	Version      string   `json:"version"`      // ICA version string
+	AllowedMsgs  []string `json:"allowed_msgs"` // proto URL allowlist
 }
 
 func (msg MsgRegisterInterchainAccount) GetSigners() []sdk.AccAddress {
@@ -50,9 +50,11 @@ func (msg MsgRegisterInterchainAccount) ValidateBasic() error {
 	return nil
 }
 
-func (msg MsgRegisterInterchainAccount) Reset()         {}
-func (msg MsgRegisterInterchainAccount) String() string  { return fmt.Sprintf("MsgRegisterICA{%s}", msg.Owner) }
-func (msg MsgRegisterInterchainAccount) ProtoMessage()   {}
+func (msg MsgRegisterInterchainAccount) Reset() {}
+func (msg MsgRegisterInterchainAccount) String() string {
+	return fmt.Sprintf("MsgRegisterICA{%s}", msg.Owner)
+}
+func (msg MsgRegisterInterchainAccount) ProtoMessage() {}
 
 // MsgRegisterInterchainAccountResponse is the response type.
 type MsgRegisterInterchainAccountResponse struct {
@@ -61,12 +63,12 @@ type MsgRegisterInterchainAccountResponse struct {
 }
 
 func (msg MsgRegisterInterchainAccountResponse) Reset()         {}
-func (msg MsgRegisterInterchainAccountResponse) String() string  { return "MsgRegisterICAResponse{}" }
-func (msg MsgRegisterInterchainAccountResponse) ProtoMessage()   {}
+func (msg MsgRegisterInterchainAccountResponse) String() string { return "MsgRegisterICAResponse{}" }
+func (msg MsgRegisterInterchainAccountResponse) ProtoMessage()  {}
 
 // MsgSendICATransaction sends a transaction to a remote chain via ICA.
 type MsgSendICATransaction struct {
-	Owner        string `json:"owner"`         // bech32 address on Legible
+	Owner        string `json:"owner"` // bech32 address on Legible
 	ConnectionId string `json:"connection_id"`
 	MsgBytes     []byte `json:"msg_bytes"`     // serialized CosmosTx
 	TimeoutNanos uint64 `json:"timeout_nanos"` // relative timeout in nanoseconds
@@ -91,8 +93,8 @@ func (msg MsgSendICATransaction) ValidateBasic() error {
 }
 
 func (msg MsgSendICATransaction) Reset()         {}
-func (msg MsgSendICATransaction) String() string  { return fmt.Sprintf("MsgSendICATx{%s}", msg.Owner) }
-func (msg MsgSendICATransaction) ProtoMessage()   {}
+func (msg MsgSendICATransaction) String() string { return fmt.Sprintf("MsgSendICATx{%s}", msg.Owner) }
+func (msg MsgSendICATransaction) ProtoMessage()  {}
 
 // MsgSendICATransactionResponse is the response type.
 type MsgSendICATransactionResponse struct {
@@ -100,8 +102,8 @@ type MsgSendICATransactionResponse struct {
 }
 
 func (msg MsgSendICATransactionResponse) Reset()         {}
-func (msg MsgSendICATransactionResponse) String() string  { return "MsgSendICATxResponse{}" }
-func (msg MsgSendICATransactionResponse) ProtoMessage()   {}
+func (msg MsgSendICATransactionResponse) String() string { return "MsgSendICATxResponse{}" }
+func (msg MsgSendICATransactionResponse) ProtoMessage()  {}
 
 // --- Query types ---
 
@@ -116,7 +118,7 @@ type QueryInterchainAccountsRequest struct {
 	Did string `json:"did"`
 }
 
-func (r *QueryInterchainAccountsRequest) Reset()        {}
+func (r *QueryInterchainAccountsRequest) Reset()         {}
 func (r *QueryInterchainAccountsRequest) String() string { return fmt.Sprintf("QueryICA{%s}", r.Did) }
 func (r *QueryInterchainAccountsRequest) ProtoMessage()  {}
 
@@ -125,14 +127,16 @@ type QueryInterchainAccountsResponse struct {
 	Accounts []*RemoteAccount `json:"accounts"`
 }
 
-func (r *QueryInterchainAccountsResponse) Reset()        {}
-func (r *QueryInterchainAccountsResponse) String() string { return fmt.Sprintf("QueryICAResp{%d}", len(r.Accounts)) }
-func (r *QueryInterchainAccountsResponse) ProtoMessage()  {}
+func (r *QueryInterchainAccountsResponse) Reset() {}
+func (r *QueryInterchainAccountsResponse) String() string {
+	return fmt.Sprintf("QueryICAResp{%d}", len(r.Accounts))
+}
+func (r *QueryInterchainAccountsResponse) ProtoMessage() {}
 
 // QueryParamsRequest queries module parameters.
 type QueryParamsRequest struct{}
 
-func (r *QueryParamsRequest) Reset()        {}
+func (r *QueryParamsRequest) Reset()         {}
 func (r *QueryParamsRequest) String() string { return "QueryParamsRequest{}" }
 func (r *QueryParamsRequest) ProtoMessage()  {}
 
@@ -141,7 +145,7 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (r *QueryParamsResponse) Reset()        {}
+func (r *QueryParamsResponse) Reset()         {}
 func (r *QueryParamsResponse) String() string { return "QueryParamsResponse{}" }
 func (r *QueryParamsResponse) ProtoMessage()  {}
 

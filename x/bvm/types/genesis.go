@@ -12,6 +12,7 @@ func DefaultParams() Params {
 		CallBaseGasCost:         21_000,
 		StorageWriteGasCost:     5_000,
 		StorageReadGasCost:      2_000,
+		CurrentBvmVersion:       1,
 	}
 }
 

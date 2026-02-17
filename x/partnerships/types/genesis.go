@@ -7,14 +7,14 @@ func DefaultParams() Params {
 	return Params{
 		FormationWindowBlocks:      77,
 		CoolingPeriodBlocks:        222222,
-		CommonPotShareBps:          220000,  // 22%
+		CommonPotShareBps:          220000, // 22%
 		SafetyFreezeDurationBlocks: 222,
 		MaxFreezesPerEpoch:         3,
 		CoercionReviewBlocks:       1111,
 		BaseCooldownBlocks:         77,
 		MaxCounterProposalDepth:    3,
-		DefaultHumanSplitBps:       500000,  // 50%
-		DefaultAgentSplitBps:       500000,  // 50%
+		DefaultHumanSplitBps:       500000, // 50%
+		DefaultAgentSplitBps:       500000, // 50%
 	}
 }
 

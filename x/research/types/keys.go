@@ -19,9 +19,9 @@ const (
 
 // Store key prefixes.
 var (
-	SubmissionKeyPrefix   = []byte{0x01}
-	PeerReviewKeyPrefix   = []byte{0x02}
-	BountyKeyPrefix       = []byte{0x03}
-	TreasuryKeyPrefix     = []byte{0x04}
-	ParamsKey             = []byte{0x05}
+	SubmissionKeyPrefix = []byte{0x01}
+	PeerReviewKeyPrefix = []byte{0x02}
+	BountyKeyPrefix     = []byte{0x03}
+	TreasuryKeyPrefix   = []byte{0x04}
+	ParamsKey           = []byte{0x05}
 )

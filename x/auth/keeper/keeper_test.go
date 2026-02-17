@@ -233,8 +233,8 @@ func TestRotateKey_Success(t *testing.T) {
 
 	// Rotate operational key
 	_, err = ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("newkey"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("newkey"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
@@ -258,8 +258,8 @@ func TestRotateKey_NotFound(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("newkey"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("newkey"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
@@ -281,8 +281,8 @@ func TestRotateKey_Cooldown(t *testing.T) {
 
 	// First rotation
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("key2"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("key2"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
@@ -291,8 +291,8 @@ func TestRotateKey_Cooldown(t *testing.T) {
 
 	// Immediate second rotation should fail (cooldown)
 	_, err = ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("key3"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("key3"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
@@ -303,8 +303,8 @@ func TestRotateKey_Cooldown(t *testing.T) {
 	params := k.GetParams(ctx)
 	newCtx := ctx.WithBlockHeight(int64(100 + params.KeyRotationCooldown + 1))
 	_, err = ms.RotateKey(newCtx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("key3"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("key3"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
@@ -328,8 +328,8 @@ func TestRotateKey_FrozenAccount(t *testing.T) {
 	k.SetAccount(ctx, account)
 
 	_, err := ms.RotateKey(ctx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("newkey"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("newkey"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err == nil {
@@ -374,8 +374,8 @@ func TestCreateSession_Success(t *testing.T) {
 	})
 
 	resp, err := ms.CreateSession(ctx, &types.MsgCreateSession{
-		Owner:          testAddr1,
-		SessionPubKey:  []byte("session1"),
+		Owner:         testAddr1,
+		SessionPubKey: []byte("session1"),
 		Capabilities: &types.SessionCapabilities{
 			CanTransfer:     true,
 			CanSubmitClaims: true,
@@ -1105,8 +1105,8 @@ func TestRotateKey_UpdatesLastActive(t *testing.T) {
 	advancedCtx := ctx.WithBlockHeight(int64(100 + params.KeyRotationCooldown + 1))
 
 	_, err := ms.RotateKey(advancedCtx, &types.MsgRotateKey{
-		Sender:     testAddr1,
-		NewOperationalKey: []byte("newkey"),
+		Sender:                 testAddr1,
+		NewOperationalKey:      []byte("newkey"),
 		AuthorizationSignature: []byte("sig"),
 	})
 	if err != nil {
@@ -1396,9 +1396,9 @@ func TestSetRecoveryConfig_Success(t *testing.T) {
 		Threshold:   2,
 		TotalShards: 3,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,
@@ -1457,9 +1457,9 @@ func TestInitiateRecovery_Success(t *testing.T) {
 		Threshold:   2,
 		TotalShards: 3,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,
@@ -1524,7 +1524,7 @@ func TestInitiateRecovery_UnauthorizedInitiator(t *testing.T) {
 		Threshold:   2,
 		TotalShards: 3,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: false}, // cannot initiate
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: false}, // cannot initiate
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1557,7 +1557,7 @@ func TestInitiateRecovery_AlreadyActive(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1621,9 +1621,9 @@ func TestSubmitRecoveryShard_Success(t *testing.T) {
 		Threshold:   2,
 		TotalShards: 3,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2, CanInitiateRecovery: false},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,
@@ -1688,8 +1688,8 @@ func TestSubmitRecoveryShard_DuplicateShard(t *testing.T) {
 		Threshold:   2,
 		TotalShards: 2,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1736,8 +1736,8 @@ func TestSubmitRecoveryShard_WrongSender(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 2,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1, CanInitiateRecovery: false},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1779,7 +1779,7 @@ func TestChallengeRecovery_OwnerCancels(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   100,
 		ChallengePeriodBlocks: 100,
@@ -1851,7 +1851,7 @@ func TestChallengeRecovery_NotChallengeable(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -1891,7 +1891,7 @@ func TestChallengeRecovery_ThirdPartyBlocked(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   10,
 		ChallengePeriodBlocks: 10,
@@ -1956,7 +1956,7 @@ func TestExecuteRecovery_FullLifecycle(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   10,
 		ChallengePeriodBlocks: 10,
@@ -2048,7 +2048,7 @@ func TestExecuteRecovery_NotExecutable(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 	}
 	_, _ = ms.SetRecoveryConfig(ctx, &types.MsgSetRecoveryConfig{
@@ -2205,7 +2205,7 @@ func TestProcessRecoveryTimeouts_DelayedToChallengeable(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   50,
 		ChallengePeriodBlocks: 50,
@@ -2264,7 +2264,7 @@ func TestProcessRecoveryTimeouts_ChallengeableToExecutable(t *testing.T) {
 		Threshold:   1,
 		TotalShards: 1,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
 		},
 		RecoveryDelayBlocks:   10,
 		ChallengePeriodBlocks: 10,
@@ -2379,13 +2379,13 @@ func TestUpdateParams_AuthoritySuccess(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	newParams := types.Params{
-		MaxSessionKeys:      10,
-		MaxSessionDuration:  50000,
-		KeyRotationCooldown: 222,
-		RecoveryDelayBlocks: 2000,
+		MaxSessionKeys:        10,
+		MaxSessionDuration:    50000,
+		KeyRotationCooldown:   222,
+		RecoveryDelayBlocks:   2000,
 		ChallengePeriodBlocks: 1000,
-		BootstrapEnabled:    false,
-		BootstrapAmount:     "0",
+		BootstrapEnabled:      false,
+		BootstrapAmount:       "0",
 	}
 
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
@@ -2475,12 +2475,12 @@ func TestGenesisRoundtrip_WithRecoveryConfigs(t *testing.T) {
 
 	// Set recovery config
 	config := types.RecoveryConfig{
-		Threshold:             2,
-		TotalShards:           3,
+		Threshold:   2,
+		TotalShards: 3,
 		ShardHolders: []*types.ShardHolder{
-			&types.ShardHolder{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1},
-			&types.ShardHolder{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2},
+			{Type: "agent", Identifier: testAddr2, ShardIndex: 0, CanInitiateRecovery: true},
+			{Type: "agent", Identifier: "lgm1guardian2xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 1},
+			{Type: "agent", Identifier: "lgm1guardian3xxxxxxxxxxxxxxxxxxxxxxxx", ShardIndex: 2},
 		},
 		RecoveryDelayBlocks:   500,
 		ChallengePeriodBlocks: 250,

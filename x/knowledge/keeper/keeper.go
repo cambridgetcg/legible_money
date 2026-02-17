@@ -22,14 +22,17 @@ type Keeper struct {
 	memKey       storetypes.StoreKey
 
 	// Dependency keepers
-	accountKeeper         types.AccountKeeper
-	bankKeeper            types.BankKeeper
-	stakingKeeper         types.StakingKeeper
-	qualificationKeeper   types.DomainQualificationKeeper
-	captureDefenseKeeper  types.CaptureDefenseKeeper
-	vestingRewardsKeeper  types.VestingRewardsKeeper
+	accountKeeper        types.AccountKeeper
+	bankKeeper           types.BankKeeper
+	stakingKeeper        types.StakingKeeper
+	qualificationKeeper  types.DomainQualificationKeeper
+	captureDefenseKeeper types.CaptureDefenseKeeper
+	vestingRewardsKeeper types.VestingRewardsKeeper
 	evidenceMgmtKeeper   types.EvidenceMgmtKeeper
 	ontologyKeeper       types.OntologyKeeper
+
+	// Home keeper for epistemic activity notifications
+	homeKeeper types.HomeKeeper
 
 	// Verification hooks (staking reputation, qualification metrics, etc.)
 	verificationHooks types.VerificationHooks
@@ -53,17 +56,17 @@ func NewKeeper(
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:                   cdc,
-		storeService:          storeService,
-		memKey:                memKey,
-		accountKeeper:         ak,
-		bankKeeper:            bk,
-		stakingKeeper:         sk,
-		qualificationKeeper:   qk,
-		captureDefenseKeeper:  cdk,
-		vestingRewardsKeeper:  vrk,
-		evidenceMgmtKeeper:    emk,
-		authority:             authority,
+		cdc:                  cdc,
+		storeService:         storeService,
+		memKey:               memKey,
+		accountKeeper:        ak,
+		bankKeeper:           bk,
+		stakingKeeper:        sk,
+		qualificationKeeper:  qk,
+		captureDefenseKeeper: cdk,
+		vestingRewardsKeeper: vrk,
+		evidenceMgmtKeeper:   emk,
+		authority:            authority,
 	}
 }
 
@@ -90,6 +93,13 @@ func (k *Keeper) SetOntologyKeeper(ok types.OntologyKeeper) {
 // GetOntologyKeeper returns the ontology keeper for cross-module use (e.g. evaluation engine).
 func (k Keeper) GetOntologyKeeper() types.OntologyKeeper {
 	return k.ontologyKeeper
+}
+
+// SetHomeKeeper sets the home keeper after initialization (avoids circular deps).
+// Enables epistemic activity notifications: verification results, claim submissions,
+// and challenges flow to agent homes for patina score calculation.
+func (k *Keeper) SetHomeKeeper(hk types.HomeKeeper) {
+	k.homeKeeper = hk
 }
 
 // SetVerificationHooks sets the verification hooks (called after keeper construction
@@ -232,6 +242,22 @@ func (k Keeper) GetExtendedParams(ctx sdk.Context) types.ExtendedParams {
 		return types.DefaultExtendedParams()
 	}
 	return ep
+}
+
+// IsAdversarialForDomain checks whether a domain uses adversarial verification mode.
+// Per-domain overrides in ExtendedParams take precedence over the global toggle.
+func (k Keeper) IsAdversarialForDomain(ctx sdk.Context, domain string) bool {
+	params := k.GetParams(ctx)
+	globalEnabled := params.AdversarialVerificationEnabled
+
+	ep := k.GetExtendedParams(ctx)
+	if ep.AdversarialDomainOverrides != nil {
+		if override, ok := ep.AdversarialDomainOverrides[domain]; ok {
+			return override
+		}
+	}
+
+	return globalEnabled
 }
 
 // prefixEndBytes returns the end key for prefix iteration.

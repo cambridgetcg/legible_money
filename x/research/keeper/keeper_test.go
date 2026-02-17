@@ -684,8 +684,8 @@ func TestCreateBounty(t *testing.T) {
 		Creator:        creator,
 		Title:          "Find error in proof",
 		Description:    "Bounty description",
-		Reward:         "1000000000", // 1000 LGM
-		DeadlineHeight: 100 + 34272 + 1,         // current(100) + min(34272) + 1
+		Reward:         "1000000000",    // 1000 LGM
+		DeadlineHeight: 100 + 34272 + 1, // current(100) + min(34272) + 1
 	})
 	if err != nil {
 		t.Fatalf("CreateBounty failed: %v", err)

@@ -201,6 +201,17 @@ func IsValidatorSelected(vrfOutput []byte, stake, totalStake uint64, targetCount
 
 // GenerateVRFSeed creates a deterministic seed for verification round VRF.
 // Uses domainHash with structured binary payload to prevent ambiguity.
+//
+// FORK-SENSITIVITY NOTE: The seed includes prevBlockHash, which means the VRF
+// output is only valid for the specific chain state at blockNumber. This is safe
+// under CometBFT's instant finality — once a block is committed, it cannot be
+// reverted, so prevBlockHash is deterministic and stable.
+//
+// If porting to a chain without instant finality (e.g., Nakamoto consensus),
+// prevBlockHash MUST be replaced with the hash of the last finalized block to
+// prevent VRF outputs from being invalidated by chain reorganizations. In that
+// scenario, validators could produce valid VRF proofs that become invalid after
+// a reorg, creating a liveness risk for verification rounds.
 func GenerateVRFSeed(claimID string, blockNumber uint64, prevBlockHash []byte) []byte {
 	claimBytes := []byte(claimID)
 	buf := make([]byte, 8)
@@ -218,6 +229,7 @@ func GenerateVRFSeed(claimID string, blockNumber uint64, prevBlockHash []byte) [
 
 // GenerateBlockSeed creates a deterministic seed for block proposal VRF.
 // Uses domainHash with structured binary payload to prevent ambiguity.
+// See GenerateVRFSeed for fork-sensitivity notes regarding prevBlockHash.
 func GenerateBlockSeed(prevBlockHash []byte, blockNumber, epoch uint64) []byte {
 	// Build payload: prevBlockHash(32) || blockNumber(8) || epoch(8)
 	// All fields are fixed-size so no length prefix needed within payload.

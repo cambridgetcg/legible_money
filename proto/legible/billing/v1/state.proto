@@ -88,4 +88,5 @@ message Params {
   uint64 research_share_bps       = 8;  // basis points
   uint64 research_min_bps         = 9;  // basis points
   uint64 research_ramp_blocks     = 10; // blocks to reach full research share
+  string foundation_address       = 11; // bech32 address for foundation share (empty = module account fallback)
 }

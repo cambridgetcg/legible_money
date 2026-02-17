@@ -11,11 +11,11 @@ import (
 	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
 
+	sdkmath "cosmossdk.io/math"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -1540,11 +1540,12 @@ func TestIsFactExpired_ExplicitExpiry(t *testing.T) {
 		ExpiresAtBlock: 100,
 	}
 
-	expired, reason := keeper.IsFactExpired(fact, 99)
+	expired, _ := keeper.IsFactExpired(fact, 99)
 	if expired {
 		t.Error("should not be expired before expiry block")
 	}
 
+	var reason string
 	expired, reason = keeper.IsFactExpired(fact, 100)
 	if !expired || reason != "explicit_expiry" {
 		t.Errorf("expected explicit_expiry at block 100, got expired=%v reason=%s", expired, reason)
@@ -1900,8 +1901,8 @@ func TestDistributeCitationRewards(t *testing.T) {
 		ReferenceType: "supports", Weight: 1_000_000,
 	})
 
-	// Distribute from 1,000,000 ulgm total reward
-	distributed := k.DistributeCitationRewards(ctx, "citing-1", 1_000_000)
+	// Distribute from 1,000,000 ulgm total reward (citing submitter is lgm1sub2)
+	distributed := k.DistributeCitationRewards(ctx, "citing-1", 1_000_000, "lgm1sub2")
 	// 15% of 1M = 150,000 citation pool
 	if distributed == 0 {
 		t.Error("expected some rewards to be distributed")
@@ -2307,6 +2308,10 @@ func (m *mockVestingRewardsKeeper) GetEpochBlockRewardPool(_ sdk.Context, epoch 
 
 func (m *mockVestingRewardsKeeper) PauseVestingByClaimId(_ sdk.Context, claimId string) error {
 	return nil
+}
+
+func (m *mockVestingRewardsKeeper) PauseAllVestingByRecipient(_ sdk.Context, recipient string) int {
+	return 0
 }
 
 // ---------- Setup with tracking keepers ----------
@@ -4004,7 +4009,7 @@ func TestFalsificationReward_FallbackForPreMigrationFacts(t *testing.T) {
 	k.SetFact(ctx, types.Fact{
 		Id: "f-old", ClaimText: "Old fact", Domain: "general",
 		EpistemicCategory: "formal", Status: types.FactStatusVerified,
-		Submitter: "lgm1other", // No OriginalStake
+		Submitter:  "lgm1other", // No OriginalStake
 		Confidence: 700000,
 	})
 
@@ -4143,7 +4148,7 @@ func TestR1_ReducedContradictionSlash(t *testing.T) {
 	cf := types.CounterFact{
 		Id: "r1-cf", TargetFactId: "r1-target-fact",
 		NegationType: types.NegationTypeContradiction,
-		Submitter: testSubmitterAddr, StakeAmount: "600000",
+		Submitter:    testSubmitterAddr, StakeAmount: "600000",
 		Status: types.CounterFactStatusPending, Confidence: 0,
 	}
 	k.SetCounterFact(ctx, cf)
@@ -4157,7 +4162,7 @@ func TestR1_ReducedContradictionSlash(t *testing.T) {
 	k.SetClaim(ctx, claim)
 	round := types.VerificationRound{
 		Id: "r1-round", ClaimId: cf.Id, Phase: "aggregation",
-		Type: types.RoundTypeContradiction,
+		Type:        types.RoundTypeContradiction,
 		StartHeight: 10, CommitDeadlineHeight: 20, RevealDeadlineHeight: 30,
 		SelectedValidators: []string{"lgmvaloper1abc"},
 		Commitments: map[string]*types.VerificationCommitment{
@@ -4202,7 +4207,7 @@ func TestR2_CounterFactChallengeWindow(t *testing.T) {
 	cf := types.CounterFact{
 		Id: "r2-cf", TargetFactId: "r2-target",
 		NegationType: types.NegationTypeContradiction,
-		Submitter: testSubmitterAddr, StakeAmount: "500000",
+		Submitter:    testSubmitterAddr, StakeAmount: "500000",
 		Status: types.CounterFactStatusPending, Confidence: 0,
 	}
 	k.SetCounterFact(ctx, cf)
@@ -4215,7 +4220,7 @@ func TestR2_CounterFactChallengeWindow(t *testing.T) {
 	k.SetClaim(ctx, claim)
 	round := types.VerificationRound{
 		Id: "r2-round", ClaimId: cf.Id, Phase: "aggregation",
-		Type: types.RoundTypeContradiction,
+		Type:        types.RoundTypeContradiction,
 		StartHeight: 10, CommitDeadlineHeight: 20, RevealDeadlineHeight: 30,
 		SelectedValidators: []string{"lgmvaloper1abc"},
 		Commitments: map[string]*types.VerificationCommitment{
@@ -4269,7 +4274,7 @@ func TestR2_CounterFactChallengeOpened(t *testing.T) {
 	cf := types.CounterFact{
 		Id: "r2c-cf", TargetFactId: "some-fact",
 		NegationType: types.NegationTypeContradiction,
-		Submitter: testSubmitterAddr, StakeAmount: "500000",
+		Submitter:    testSubmitterAddr, StakeAmount: "500000",
 		Status: types.CounterFactStatusProvisional, Confidence: 700000,
 	}
 	k.SetCounterFact(ctx, cf)
@@ -4302,7 +4307,7 @@ func TestR2_CounterFactChallengeResolution(t *testing.T) {
 	cf := types.CounterFact{
 		Id: "r2r-cf", TargetFactId: "r2r-fact",
 		NegationType: types.NegationTypeContradiction,
-		Submitter: testSubmitterAddr, StakeAmount: "500000",
+		Submitter:    testSubmitterAddr, StakeAmount: "500000",
 		Status: types.CounterFactStatusProvisional, Confidence: 700000,
 	}
 	k.SetCounterFact(ctx, cf)
@@ -4359,7 +4364,7 @@ func TestR3_CarryForwardReward(t *testing.T) {
 	cf := types.CounterFact{
 		Id: "r3-cf", TargetFactId: "r3-fact",
 		NegationType: types.NegationTypeContradiction,
-		Submitter: testSubmitterAddr, StakeAmount: "5000000000",
+		Submitter:    testSubmitterAddr, StakeAmount: "5000000000",
 		Status: types.CounterFactStatusVerified, Confidence: 800000,
 	}
 
@@ -4515,4 +4520,3 @@ func TestR5_NonStaleContestedNotDecayed(t *testing.T) {
 		t.Errorf("expected no decay (confidence=400000), got %d", updatedFact.Confidence)
 	}
 }
-

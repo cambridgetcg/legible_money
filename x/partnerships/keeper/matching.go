@@ -11,12 +11,12 @@ import (
 
 // Pool matching constants (mirror TS FORMATION_POOL).
 const (
-	PoolRegistrationDeposit = "11000000000000000"  // 0.011 LGM
+	PoolRegistrationDeposit = "11000" // 0.011 LGM in ulgm
 	PoolMaxSize             = 222
 	PoolEntryExpiryBlocks   = 11111
 	PoolWithdrawCooldown    = 222
 	IntentDeclarationWindow = 2222
-	IntentDeposit           = "11000000000000000" // 0.011 LGM
+	IntentDeposit           = "11000" // 0.011 LGM in ulgm
 	IntentMaxPending        = 3
 )
 

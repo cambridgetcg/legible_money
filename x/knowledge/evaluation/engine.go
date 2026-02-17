@@ -8,18 +8,20 @@ import (
 	"github.com/legible-money/legible/x/knowledge/types"
 )
 
-// EvaluateClaim runs the 8-stage deterministic evaluation pipeline.
+// EvaluateClaim runs the 10-stage deterministic evaluation pipeline.
 // All validators produce identical results for identical on-chain state.
 //
 // Stages:
 //  1. Category base confidence
 //  2. Submitter calibration (acceptance rate modifier)
-//  3. Evidence quality scoring
-//  4. Fact graph analysis (references, contradictions, cycles)
-//  5. Logic zone evaluation (Godelian handling)
-//  6. Ceiling application (zone, stratum, category)
-//  7. Edge case overrides
-//  8. Counter-fact analysis (negative knowledge penalties)
+//  3. Participant context (epistemic domain: derivable vs observable)
+//  4. Evidence quality scoring
+//  5. Fact graph analysis (references, contradictions, cycles)
+//  6. Novelty assessment (information gain + bridge score)
+//  7. Logic zone evaluation (Godelian handling)
+//  8. Ceiling application (zone, stratum, category)
+//  9. Edge case overrides
+//  10. Counter-fact analysis (negative knowledge penalties)
 func EvaluateClaim(
 	ctx sdk.Context,
 	evalCtx *EvaluationContext,
@@ -31,7 +33,7 @@ func EvaluateClaim(
 	}
 
 	result := EvaluationResult{
-		Stages: make([]StageResult, 0, 8),
+		Stages: make([]StageResult, 0, 10),
 	}
 
 	// Stage 1: Category base confidence
@@ -47,25 +49,40 @@ func EvaluateClaim(
 	result.Stages = append(result.Stages, stage2)
 	confidence = applyAdjustment(confidence, stage2.Adjustment)
 
-	// Stage 3: Evidence quality
-	stage3 := evaluateEvidence(ctx, evalCtx, claim)
+	// Stage 3: Participant context (epistemic domain check)
+	stage3 := evaluateParticipantContext(ctx, evalCtx, claim)
 	result.Stages = append(result.Stages, stage3)
 	confidence = applyAdjustment(confidence, stage3.Adjustment)
+	// Apply participant context ceiling (observable + agent-only evidence)
+	if stage3.Ceiling > 0 && confidence > stage3.Ceiling {
+		confidence = stage3.Ceiling
+	}
 
-	// Stage 4: Fact graph analysis
-	stage4 := evaluateFactGraph(ctx, evalCtx, claim)
+	// Stage 4: Evidence quality
+	stage4 := evaluateEvidence(ctx, evalCtx, claim)
 	result.Stages = append(result.Stages, stage4)
 	confidence = applyAdjustment(confidence, stage4.Adjustment)
 
-	// Stage 5: Logic zone evaluation
-	stage5 := evaluateLogicZone(ctx, evalCtx, claim)
+	// Stage 5: Fact graph analysis
+	stage5 := evaluateFactGraph(ctx, evalCtx, claim)
 	result.Stages = append(result.Stages, stage5)
+	confidence = applyAdjustment(confidence, stage5.Adjustment)
 
-	// Stage 6: Ceiling application (zone + stratum + category)
-	stage6 := applyCeilings(ctx, evalCtx, claim, stage5.Ceiling)
+	// Stage 6: Novelty assessment (information gain + bridge score)
+	// Passes the evidence stage adjustment as a quality gate
+	stage6 := evaluateNovelty(ctx, evalCtx, claim, stage4.Adjustment)
 	result.Stages = append(result.Stages, stage6)
-	if stage6.Ceiling > 0 && confidence > stage6.Ceiling {
-		confidence = stage6.Ceiling
+	confidence = applyAdjustment(confidence, stage6.Adjustment)
+
+	// Stage 7: Logic zone evaluation
+	stage7 := evaluateLogicZone(ctx, evalCtx, claim)
+	result.Stages = append(result.Stages, stage7)
+
+	// Stage 8: Ceiling application (zone + stratum + category)
+	stage8 := applyCeilings(ctx, evalCtx, claim, stage7.Ceiling)
+	result.Stages = append(result.Stages, stage8)
+	if stage8.Ceiling > 0 && confidence > stage8.Ceiling {
+		confidence = stage8.Ceiling
 	}
 
 	// Clamp to valid range
@@ -73,14 +90,14 @@ func EvaluateClaim(
 		confidence = 1_000_000
 	}
 
-	// Stage 7: Edge cases (may force verdict)
-	stage7 := evaluateEdgeCases(ctx, evalCtx, claim)
-	result.Stages = append(result.Stages, stage7)
+	// Stage 9: Edge cases (may force verdict)
+	stage9 := evaluateEdgeCases(ctx, evalCtx, claim)
+	result.Stages = append(result.Stages, stage9)
 
-	// Stage 8: Counter-fact analysis (negative knowledge penalties)
-	stage8 := evaluateCounterFacts(ctx, evalCtx, claim)
-	result.Stages = append(result.Stages, stage8)
-	confidence = applyAdjustment(confidence, stage8.Adjustment)
+	// Stage 10: Counter-fact analysis (negative knowledge penalties)
+	stage10 := evaluateCounterFacts(ctx, evalCtx, claim)
+	result.Stages = append(result.Stages, stage10)
+	confidence = applyAdjustment(confidence, stage10.Adjustment)
 
 	// Determine verdict
 	result.Confidence = confidence

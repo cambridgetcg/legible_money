@@ -353,6 +353,10 @@ func rejectExtension() *abci.ResponseVerifyVoteExtension {
 	}
 }
 
+// getPrevBlockHashForVote returns the previous block's hash for VRF seed generation.
+// Under CometBFT's instant finality, LastBlockId.Hash is deterministic once committed
+// and cannot change due to reorgs. See crypto/vrf.go:GenerateVRFSeed for fork-sensitivity
+// analysis if porting to a non-instant-finality consensus engine.
 func getPrevBlockHashForVote(ctx sdk.Context) []byte {
 	header := ctx.BlockHeader()
 	if len(header.LastBlockId.Hash) > 0 {

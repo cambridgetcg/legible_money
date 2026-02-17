@@ -73,8 +73,8 @@ func (m msgServer) CreatePot(goCtx context.Context, msg *types.MsgCreatePot) (*t
 	// Build PotConfig from message fields
 	config := &types.PotConfig{
 		AmountPerClaim:      msg.InitialFunding, // default: entire funding is one claim
-		MaxClaims:           0,                   // unlimited by default
-		MaxClaimsPerAccount: 1,                   // default: one claim per account
+		MaxClaims:           0,                  // unlimited by default
+		MaxClaimsPerAccount: 1,                  // default: one claim per account
 		ExpiresAtBlock:      msg.ExpiryHeight,
 		CreatorCanClose:     true,
 	}

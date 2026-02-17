@@ -229,7 +229,7 @@ func TestAdaptation_HealthyRelaxes(t *testing.T) {
 	params := types.DefaultParams()
 	// Start with elevated multiplier
 	current := uint64(1_200_000) // 1.2x
-	ssi := uint64(100_000)      // 0.1 — healthy
+	ssi := uint64(100_000)       // 0.1 — healthy
 	newMult, delta := types.ComputeSSIAdaptation(ssi, current, params)
 	if delta >= 0 {
 		t.Errorf("expected negative delta for healthy SSI, got %d", delta)
@@ -615,12 +615,12 @@ func TestSetGetHormoneValues(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	hv := types.HormoneValues{
-		Epoch: 5,
-		SSI:   300_000,
-		GRM:   600_000,
-		CRI:   []types.CRIValue{{Domain: "math", Category: "formal", Value: 800_000}},
-		DVI:   []types.DVIValue{{Domain: "math", Value: 100_000}},
-		VCF:   []types.VCFValue{{Domain: "math", Value: 500_000}},
+		Epoch:     5,
+		SSI:       300_000,
+		GRM:       600_000,
+		CRI:       []types.CRIValue{{Domain: "math", Category: "formal", Value: 800_000}},
+		DVI:       []types.DVIValue{{Domain: "math", Value: 100_000}},
+		VCF:       []types.VCFValue{{Domain: "math", Value: 500_000}},
 		LifeForce: types.LifeForce{Value: 400_000, Status: "healthy"},
 	}
 	k.SetHormoneValues(ctx, hv)

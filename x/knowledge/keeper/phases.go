@@ -9,16 +9,29 @@ import (
 )
 
 // BeginBlockerAdversarial is the adversarial verification BeginBlocker orchestrator.
-// When AdversarialVerificationEnabled is true, this replaces the legacy verification flow.
+// When AdversarialVerificationEnabled is true globally, this replaces the legacy
+// verification flow. When per-domain overrides exist, both flows run concurrently:
+// legacy rounds are advanced for non-adversarial domains, and adversarial evaluation
+// runs for adversarial domains.
 func (k Keeper) BeginBlockerAdversarial(ctx sdk.Context) error {
 	height := uint64(ctx.BlockHeight())
 	params := k.GetParams(ctx)
+	ep := k.GetExtendedParams(ctx)
 
-	if !params.AdversarialVerificationEnabled {
-		// Legacy mode — use traditional AdvanceRoundPhases
+	hasPerDomainOverrides := len(ep.AdversarialDomainOverrides) > 0
+
+	if !params.AdversarialVerificationEnabled && !hasPerDomainOverrides {
+		// Pure legacy mode — use traditional AdvanceRoundPhases
 		return k.AdvanceRoundPhases(ctx, height)
 	}
 
+	// Always advance legacy verification rounds (handles non-adversarial domains
+	// and any rounds created before per-domain overrides were set)
+	if err := k.AdvanceRoundPhases(ctx, height); err != nil {
+		k.Logger(ctx).Error("failed to advance legacy round phases", "error", err)
+	}
+
+	// Adversarial evaluation pipeline (runs for adversarial-mode domains)
 	// 1. Evaluate pending claims (structural scoring)
 	k.EvaluatePendingClaims(ctx, height)
 
@@ -87,9 +100,10 @@ func (k Keeper) AdvanceChallengeRoundPhases(ctx sdk.Context, currentHeight uint6
 // In legacy mode, processes all rounds. In adversarial mode, only non-challenge rounds.
 //
 // Phase transitions:
-//   commit  → reveal       (at CommitDeadlineHeight)
-//   reveal  → aggregation  (at RevealDeadlineHeight)
-//   aggregation → complete (at RevealDeadlineHeight + AggregationPhaseDuration)
+//
+//	commit  → reveal       (at CommitDeadlineHeight)
+//	reveal  → aggregation  (at RevealDeadlineHeight)
+//	aggregation → complete (at RevealDeadlineHeight + AggregationPhaseDuration)
 func (k Keeper) AdvanceRoundPhases(ctx sdk.Context, currentHeight uint64) error {
 	params := k.GetParams(ctx)
 	activeRounds := k.GetActiveRounds(ctx)
@@ -245,4 +259,3 @@ func (k Keeper) performAggregation(ctx sdk.Context, round types.VerificationRoun
 
 	return k.CompleteRound(ctx, round, result)
 }
-

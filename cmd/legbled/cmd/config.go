@@ -3,8 +3,8 @@ package cmd
 import (
 	"time"
 
-	serverconfig "github.com/cosmos/cosmos-sdk/server/config"
 	cmtcfg "github.com/cometbft/cometbft/config"
+	serverconfig "github.com/cosmos/cosmos-sdk/server/config"
 )
 
 // initAppConfig returns a custom app server configuration template and default values.
@@ -17,6 +17,11 @@ func initAppConfig() (string, interface{}) {
 	// Enable API by default for development.
 	srvCfg.API.Enable = true
 	srvCfg.API.Swagger = true
+
+	// Disable gRPC by default — v2alpha1 reflection service panics when
+	// hand-written Msg types lack proto type URLs (11 modules pending proto codegen).
+	// Re-enable once all x/ modules have generated .pb.go files.
+	srvCfg.GRPC.Enable = false
 
 	return serverconfig.DefaultConfigTemplate, srvCfg
 }

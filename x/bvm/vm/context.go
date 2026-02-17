@@ -7,41 +7,43 @@ type ExecutionMode int
 
 const (
 	ModeCall         ExecutionMode = iota
-	ModeStaticCall                         // Read-only, inherited by sub-calls
-	ModeDelegateCall                       // Target code, caller's storage
-	ModeCreate                             // Contract creation
+	ModeStaticCall                 // Read-only, inherited by sub-calls
+	ModeDelegateCall               // Target code, caller's storage
+	ModeCreate                     // Contract creation
 )
 
 // SessionCapabilities restricts what a session key can do within BVM execution.
 // nil means full permissions (no session restriction).
 type SessionCapabilities struct {
-	CanTransfer    bool
-	CanStake       bool
+	CanTransfer     bool
+	CanStake        bool
 	CanSubmitClaims bool
-	CanVote        bool
+	CanVote         bool
 }
 
 // ExecutionContext provides runtime parameters to the interpreter.
 type ExecutionContext struct {
-	Caller          []byte // 20-byte address
-	CallerDID       string // did:lgm:... or empty
-	Origin          []byte // Transaction originator
-	OriginDID       string
-	CurrentContract []byte // 20-byte address of executing contract
-	BlockNumber     uint64
-	Timestamp       uint64
-	GasPrice        *big.Int
-	GasLimit        uint64
-	Value           *big.Int // Value transferred with call
-	CallData        []byte
-	Mode            ExecutionMode
-	Bytecode        []byte   // Code being executed (for CODESIZE/CODECOPY)
-	ChainID         *big.Int
-	Coinbase        []byte // Block proposer
-	PrevRandao      *big.Int
-	BaseFee         *big.Int
-	Capabilities *SessionCapabilities // nil = deny all agent opcodes (C-1 secure default)
-	InHostCall   bool                // H-1: reentrancy guard — true during host function execution
+	Caller             []byte // 20-byte address
+	CallerDID          string // did:lgm:... or empty
+	Origin             []byte // Transaction originator
+	OriginDID          string
+	CurrentContract    []byte // 20-byte address of executing contract
+	BlockNumber        uint64
+	Timestamp          uint64
+	GasPrice           *big.Int
+	GasLimit           uint64
+	Value              *big.Int // Value transferred with call
+	CallData           []byte
+	Mode               ExecutionMode
+	Bytecode           []byte // Code being executed (for CODESIZE/CODECOPY)
+	ChainID            *big.Int
+	Coinbase           []byte // Block proposer
+	PrevRandao         *big.Int
+	BaseFee            *big.Int
+	Capabilities       *SessionCapabilities // nil = deny all agent opcodes (C-1 secure default)
+	InHostCall         bool                 // H-1: reentrancy guard — true during host function execution
+	ContractBvmVersion uint32               // BVM version the contract was deployed under
+	GasSchedule        *GasSchedule         // Governance gas overrides (nil = use defaults)
 }
 
 // ExecutionResult is returned after bytecode execution completes.

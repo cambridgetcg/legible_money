@@ -17,11 +17,11 @@ import (
 type QualificationPathway string
 
 const (
-	PathwayStakeCommitment   QualificationPathway = "stake_commitment"
-	PathwayTrackRecord       QualificationPathway = "track_record"
-	PathwayCrossReference    QualificationPathway = "cross_reference"
+	PathwayStakeCommitment    QualificationPathway = "stake_commitment"
+	PathwayTrackRecord        QualificationPathway = "track_record"
+	PathwayCrossReference     QualificationPathway = "cross_reference"
 	PathwayStratumInheritance QualificationPathway = "stratum_inheritance"
-	PathwayGenesis           QualificationPathway = "genesis"
+	PathwayGenesis            QualificationPathway = "genesis"
 )
 
 // QualificationStatus represents the current status of a domain qualification.
@@ -49,34 +49,34 @@ const (
 
 const (
 	// Stake requirements (in ulgm = micro-LGM)
-	StakeLeafDomain  = "22000000"  // 22 LGM for leaf domains (depth > 2)
-	StakeMidDomain   = "222000000" // 222 LGM for mid-level (depth 2)
-	StakeTopDomain   = "2222000000" // 2222 LGM for top-level (depth 1)
+	StakeLeafDomain = "22000000"   // 22 LGM for leaf domains (depth > 2)
+	StakeMidDomain  = "222000000"  // 222 LGM for mid-level (depth 2)
+	StakeTopDomain  = "2222000000" // 2222 LGM for top-level (depth 1)
 
 	// Lock and timing (in blocks)
-	StakeLockPeriod             uint64 = 7_777
-	MinVerificationsForQual     uint64 = 19
-	MinAccuracyForQual          uint64 = 770_000 // 77% in basis points
-	MinEndorsersForQual         uint64 = 3
-	EndorsementDecayBlocks      uint64 = 77_777
-	InactivityExpirationBlocks  uint64 = 777_777
-	ProbationaryPeriodBlocks    uint64 = 777
-	MaxQualificationDepth       uint64 = 7
+	StakeLockPeriod            uint64 = 7_777
+	MinVerificationsForQual    uint64 = 19
+	MinAccuracyForQual         uint64 = 770_000 // 77% in basis points
+	MinEndorsersForQual        uint64 = 3
+	EndorsementDecayBlocks     uint64 = 77_777
+	InactivityExpirationBlocks uint64 = 777_777
+	ProbationaryPeriodBlocks   uint64 = 777
+	MaxQualificationDepth      uint64 = 7
 
 	// Weights (basis points, 1,000,000 = 100%)
-	ProbationaryWeight          uint64 = 500_000  // 50%
-	StratumInheritanceDiscount  uint64 = 700_000  // 70%
-	AccuracyThresholdSuspension uint64 = 500_000  // 50%
+	ProbationaryWeight          uint64 = 500_000 // 50%
+	StratumInheritanceDiscount  uint64 = 700_000 // 70%
+	AccuracyThresholdSuspension uint64 = 500_000 // 50%
 	ConsecutiveIncorrectSuspend uint64 = 5
 
 	// Reputation config
-	ReputationHalfLifeBlocks uint64 = 77_777
-	BaseScore                uint64 = 500
-	MaxScore                 uint64 = 1000
-	MinDecayedScore          uint64 = 300
-	GlobalReputationDiscount uint64 = 500_000  // 50%
-	StratumReputationDiscount uint64 = 700_000 // 70%
-	NewDomainDiscount        uint64 = 300_000  // 30%
+	ReputationHalfLifeBlocks     uint64 = 77_777
+	BaseScore                    uint64 = 500
+	MaxScore                     uint64 = 1000
+	MinDecayedScore              uint64 = 300
+	GlobalReputationDiscount     uint64 = 500_000 // 50%
+	StratumReputationDiscount    uint64 = 700_000 // 70%
+	NewDomainDiscount            uint64 = 300_000 // 30%
 	MinVerificationsForDomainRep uint64 = 19
 
 	// Score component weights (must sum to 1,000,000)
@@ -86,19 +86,19 @@ const (
 	CalibrationWeight      uint64 = 100_000 // 10%
 
 	// Capture detection thresholds
-	HerfindahlTriggerThreshold      uint64 = 400_000 // 0.4
-	HerfindahlPauseThreshold        uint64 = 600_000 // 0.6
-	MinVerificationsForAnalysis     uint64 = 19
-	DetectionIntervalBlocks         uint64 = 777
-	DecayIntervalBlocks             uint64 = 7_777
-	MaxExpirationsPerBlock          uint64 = 100
+	HerfindahlTriggerThreshold       uint64 = 400_000 // 0.4
+	HerfindahlPauseThreshold         uint64 = 600_000 // 0.6
+	MinVerificationsForAnalysis      uint64 = 19
+	DetectionIntervalBlocks          uint64 = 777
+	DecayIntervalBlocks              uint64 = 7_777
+	MaxExpirationsPerBlock           uint64 = 100
 	DefaultDomainPauseDurationBlocks uint64 = 777 // ~32 min auto-pause on critical HHI
 
 	// Cross-stratum
 	CrossStratumAgreementThreshold uint64 = 700_000 // 70%
 	LowerStratumVetoWeight         uint64 = 300_000 // 30%
 	PartialCoverageConfPenalty     uint64 = 200_000 // 20%
-	MaxStratumDistance              uint64 = 2
+	MaxStratumDistance             uint64 = 2
 )
 
 // --- Params Validation ---

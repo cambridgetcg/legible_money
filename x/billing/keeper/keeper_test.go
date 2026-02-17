@@ -897,32 +897,32 @@ func TestGetEffectiveResearchShareBps(t *testing.T) {
 		expected   uint64
 	}{
 		{
-			name: "no ramp (rampBlocks=0) returns max immediately",
+			name:   "no ramp (rampBlocks=0) returns max immediately",
 			height: 0, maxBps: 220000, minBps: 50000, rampBlocks: 0,
 			expected: 220000,
 		},
 		{
-			name: "block 0 with ramp returns min",
+			name:   "block 0 with ramp returns min",
 			height: 0, maxBps: 220000, minBps: 50000, rampBlocks: 1000,
 			expected: 50000,
 		},
 		{
-			name: "midpoint returns halfway between min and max",
+			name:   "midpoint returns halfway between min and max",
 			height: 500, maxBps: 220000, minBps: 20000, rampBlocks: 1000,
 			expected: 120000, // 20000 + (200000 * 500 / 1000) = 120000
 		},
 		{
-			name: "at ramp boundary returns max",
+			name:   "at ramp boundary returns max",
 			height: 1000, maxBps: 220000, minBps: 50000, rampBlocks: 1000,
 			expected: 220000,
 		},
 		{
-			name: "past ramp returns max",
+			name:   "past ramp returns max",
 			height: 5000, maxBps: 220000, minBps: 50000, rampBlocks: 1000,
 			expected: 220000,
 		},
 		{
-			name: "quarter ramp",
+			name:   "quarter ramp",
 			height: 250, maxBps: 220000, minBps: 20000, rampBlocks: 1000,
 			expected: 70000, // 20000 + (200000 * 250 / 1000) = 70000
 		},

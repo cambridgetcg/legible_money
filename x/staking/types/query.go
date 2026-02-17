@@ -71,17 +71,21 @@ type QueryDelegationsForValidatorRequest struct {
 	ValidatorAddress string `json:"validator_address"`
 }
 
-func (m *QueryDelegationsForValidatorRequest) Reset()         { *m = QueryDelegationsForValidatorRequest{} }
-func (m *QueryDelegationsForValidatorRequest) String() string { return "QueryDelegationsForValidatorRequest" }
-func (m *QueryDelegationsForValidatorRequest) ProtoMessage()  {}
+func (m *QueryDelegationsForValidatorRequest) Reset() { *m = QueryDelegationsForValidatorRequest{} }
+func (m *QueryDelegationsForValidatorRequest) String() string {
+	return "QueryDelegationsForValidatorRequest"
+}
+func (m *QueryDelegationsForValidatorRequest) ProtoMessage() {}
 
 type QueryDelegationsForValidatorResponse struct {
 	Delegations []Delegation `json:"delegations"`
 }
 
-func (m *QueryDelegationsForValidatorResponse) Reset()         { *m = QueryDelegationsForValidatorResponse{} }
-func (m *QueryDelegationsForValidatorResponse) String() string { return "QueryDelegationsForValidatorResponse" }
-func (m *QueryDelegationsForValidatorResponse) ProtoMessage()  {}
+func (m *QueryDelegationsForValidatorResponse) Reset() { *m = QueryDelegationsForValidatorResponse{} }
+func (m *QueryDelegationsForValidatorResponse) String() string {
+	return "QueryDelegationsForValidatorResponse"
+}
+func (m *QueryDelegationsForValidatorResponse) ProtoMessage() {}
 
 type QueryUnbondingsRequest struct {
 	DelegatorAddress string `json:"delegator_address"`

@@ -719,7 +719,7 @@ const (
 
 // TierConfig holds the requirements for each tier (ulgm denomination, 6 decimals).
 type TierConfig struct {
-	MinStake                  uint64  // in ulgm (1 LGM = 1,000,000 ulgm)
+	MinStake                  uint64 // in ulgm (1 LGM = 1,000,000 ulgm)
 	MinVerifications          int
 	MinAccuracy               float64 // 0.0-1.0
 	MaxSlashCount             int     // -1 = unlimited

@@ -319,7 +319,9 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) types.GenesisState {
 // Called from EndBlocker at epoch boundaries.
 //
 // Hormone priority (conflict resolution):
-//   SSI (priority 4) > CRI (priority 3) > DVI/VCF (priority 2) > GRM (priority 1)
+//
+//	SSI (priority 4) > CRI (priority 3) > DVI/VCF (priority 2) > GRM (priority 1)
+//
 // When multiple hormones target the same multiplier path, the higher-priority
 // hormone's adaptation wins. DVI and VCF have equal priority — their deltas
 // are averaged when they conflict on the same path.

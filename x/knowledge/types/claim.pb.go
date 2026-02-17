@@ -570,8 +570,13 @@ type Fact struct {
 	LastUtilizedBlock uint64 `protobuf:"varint,33,opt,name=last_utilized_block,json=lastUtilizedBlock,proto3" json:"last_utilized_block,omitempty"` // last block where fact was used in a write-path operation
 	PruningGraceStart uint64 `protobuf:"varint,34,opt,name=pruning_grace_start,json=pruningGraceStart,proto3" json:"pruning_grace_start,omitempty"` // block when grace period began (0 = not at risk)
 	PatronageBonus    uint64 `protobuf:"varint,35,opt,name=patronage_bonus,json=patronageBonus,proto3" json:"patronage_bonus,omitempty"`            // accumulated patronage KMS bonus (basis points)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Novelty & insight metrics
+	NoveltyScore       uint64 `protobuf:"varint,36,opt,name=novelty_score,json=noveltyScore,proto3" json:"novelty_score,omitempty"`                     // information gain + bridge score (0-1,000,000 bps)
+	BridgeScore        uint64 `protobuf:"varint,37,opt,name=bridge_score,json=bridgeScore,proto3" json:"bridge_score,omitempty"`                        // verified cross-domain reference score (0-1,000,000 bps)
+	IsProphetic        bool   `protobuf:"varint,38,opt,name=is_prophetic,json=isProphetic,proto3" json:"is_prophetic,omitempty"`                        // true if barely-accepted fact later gained citations
+	CitationGrowthRate uint64 `protobuf:"varint,39,opt,name=citation_growth_rate,json=citationGrowthRate,proto3" json:"citation_growth_rate,omitempty"` // citations per epoch (smoothed, bps where 1000000 = 1 citation/epoch)
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Fact) Reset() {
@@ -845,6 +850,34 @@ func (x *Fact) GetPruningGraceStart() uint64 {
 func (x *Fact) GetPatronageBonus() uint64 {
 	if x != nil {
 		return x.PatronageBonus
+	}
+	return 0
+}
+
+func (x *Fact) GetNoveltyScore() uint64 {
+	if x != nil {
+		return x.NoveltyScore
+	}
+	return 0
+}
+
+func (x *Fact) GetBridgeScore() uint64 {
+	if x != nil {
+		return x.BridgeScore
+	}
+	return 0
+}
+
+func (x *Fact) GetIsProphetic() bool {
+	if x != nil {
+		return x.IsProphetic
+	}
+	return false
+}
+
+func (x *Fact) GetCitationGrowthRate() uint64 {
+	if x != nil {
+		return x.CitationGrowthRate
 	}
 	return 0
 }
@@ -2684,7 +2717,7 @@ type Params struct {
 	WrongVerificationSlashBps uint64 `protobuf:"varint,20,opt,name=wrong_verification_slash_bps,json=wrongVerificationSlashBps,proto3" json:"wrong_verification_slash_bps,omitempty"` // slash on wrong verification (default 60000 = 6%)
 	MissedRevealSlashBps      uint64 `protobuf:"varint,21,opt,name=missed_reveal_slash_bps,json=missedRevealSlashBps,proto3" json:"missed_reveal_slash_bps,omitempty"`                // slash on missed reveal (default 100 = 0.01%)
 	VerificationRewardAmount  uint64 `protobuf:"varint,22,opt,name=verification_reward_amount,json=verificationRewardAmount,proto3" json:"verification_reward_amount,omitempty"`      // base reward per correct verification (ulgm)
-	ResearchTaxRate           uint64 `protobuf:"varint,23,opt,name=research_tax_rate,json=researchTaxRate,proto3" json:"research_tax_rate,omitempty"`                                 // research fund tax rate (default 70000 = 7%)
+	ResearchTaxRate           uint64 `protobuf:"varint,23,opt,name=research_tax_rate,json=researchTaxRate,proto3" json:"research_tax_rate,omitempty"`                                 // research fund tax rate (default 220000 = 22%)
 	EquivocationSlashBps      uint64 `protobuf:"varint,24,opt,name=equivocation_slash_bps,json=equivocationSlashBps,proto3" json:"equivocation_slash_bps,omitempty"`                  // slash for equivocation (100% = 1000000)
 	// Adversarial verification parameters
 	ProvisionalThreshold           uint64 `protobuf:"varint,25,opt,name=provisional_threshold,json=provisionalThreshold,proto3" json:"provisional_threshold,omitempty"`                                 // min score to create provisional fact (default 500000)
@@ -3205,7 +3238,7 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\x14challenge_window_end\x18\x11 \x01(\x04R\x12challengeWindowEnd\x12.\n" +
 	"\x13provisional_fact_id\x18\x12 \x01(\tR\x11provisionalFactId\x124\n" +
 	"\x16active_challenge_count\x18\x13 \x01(\rR\x14activeChallengeCount\x124\n" +
-	"\x16reverification_fact_id\x18\x14 \x01(\tR\x14reverificationFactId\"\xa5\v\n" +
+	"\x16reverification_fact_id\x18\x14 \x01(\tR\x14reverificationFactId\"\xc2\f\n" +
 	"\x04Fact\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -3248,7 +3281,11 @@ const file_legible_knowledge_v1_claim_proto_rawDesc = "" +
 	"\x13survived_challenges\x18  \x01(\rR\x12survivedChallenges\x12.\n" +
 	"\x13last_utilized_block\x18! \x01(\x04R\x11lastUtilizedBlock\x12.\n" +
 	"\x13pruning_grace_start\x18\" \x01(\x04R\x11pruningGraceStart\x12'\n" +
-	"\x0fpatronage_bonus\x18# \x01(\x04R\x0epatronageBonus\"\xa2\x01\n" +
+	"\x0fpatronage_bonus\x18# \x01(\x04R\x0epatronageBonus\x12#\n" +
+	"\rnovelty_score\x18$ \x01(\x04R\fnoveltyScore\x12!\n" +
+	"\fbridge_score\x18% \x01(\x04R\vbridgeScore\x12!\n" +
+	"\fis_prophetic\x18& \x01(\bR\visProphetic\x120\n" +
+	"\x14citation_growth_rate\x18' \x01(\x04R\x12citationGrowthRate\"\xa2\x01\n" +
 	"\x13FactEvidenceSummary\x12\x1f\n" +
 	"\vevidence_id\x18\x01 \x01(\tR\n" +
 	"evidenceId\x12#\n" +

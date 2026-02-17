@@ -25,7 +25,7 @@ type QueryEvidenceRequest struct {
 	EvidenceId string `json:"evidence_id"`
 }
 
-func (m *QueryEvidenceRequest) Reset()        {}
+func (m *QueryEvidenceRequest) Reset()         {}
 func (m *QueryEvidenceRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryEvidenceRequest) ProtoMessage()  {}
 
@@ -33,7 +33,7 @@ type QueryEvidenceResponse struct {
 	Evidence Evidence `json:"evidence"`
 }
 
-func (m *QueryEvidenceResponse) Reset()        {}
+func (m *QueryEvidenceResponse) Reset()         {}
 func (m *QueryEvidenceResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryEvidenceResponse) ProtoMessage()  {}
 
@@ -41,7 +41,7 @@ type QueryEvidenceByClaimIdRequest struct {
 	ClaimId string `json:"claim_id"`
 }
 
-func (m *QueryEvidenceByClaimIdRequest) Reset()        {}
+func (m *QueryEvidenceByClaimIdRequest) Reset()         {}
 func (m *QueryEvidenceByClaimIdRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryEvidenceByClaimIdRequest) ProtoMessage()  {}
 
@@ -49,7 +49,7 @@ type QueryEvidenceByClaimIdResponse struct {
 	Evidences []Evidence `json:"evidences"`
 }
 
-func (m *QueryEvidenceByClaimIdResponse) Reset()        {}
+func (m *QueryEvidenceByClaimIdResponse) Reset()         {}
 func (m *QueryEvidenceByClaimIdResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryEvidenceByClaimIdResponse) ProtoMessage()  {}
 
@@ -57,7 +57,7 @@ type QueryAuditRequest struct {
 	AuditId string `json:"audit_id"`
 }
 
-func (m *QueryAuditRequest) Reset()        {}
+func (m *QueryAuditRequest) Reset()         {}
 func (m *QueryAuditRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryAuditRequest) ProtoMessage()  {}
 
@@ -65,7 +65,7 @@ type QueryAuditResponse struct {
 	Audit EvidenceAudit `json:"audit"`
 }
 
-func (m *QueryAuditResponse) Reset()        {}
+func (m *QueryAuditResponse) Reset()         {}
 func (m *QueryAuditResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryAuditResponse) ProtoMessage()  {}
 
@@ -73,7 +73,7 @@ type QueryAuditsForEvidenceRequest struct {
 	EvidenceId string `json:"evidence_id"`
 }
 
-func (m *QueryAuditsForEvidenceRequest) Reset()        {}
+func (m *QueryAuditsForEvidenceRequest) Reset()         {}
 func (m *QueryAuditsForEvidenceRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryAuditsForEvidenceRequest) ProtoMessage()  {}
 
@@ -81,7 +81,7 @@ type QueryAuditsForEvidenceResponse struct {
 	Audits []EvidenceAudit `json:"audits"`
 }
 
-func (m *QueryAuditsForEvidenceResponse) Reset()        {}
+func (m *QueryAuditsForEvidenceResponse) Reset()         {}
 func (m *QueryAuditsForEvidenceResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryAuditsForEvidenceResponse) ProtoMessage()  {}
 
@@ -89,7 +89,7 @@ type QueryOracleRequest struct {
 	OracleId string `json:"oracle_id"`
 }
 
-func (m *QueryOracleRequest) Reset()        {}
+func (m *QueryOracleRequest) Reset()         {}
 func (m *QueryOracleRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryOracleRequest) ProtoMessage()  {}
 
@@ -97,13 +97,13 @@ type QueryOracleResponse struct {
 	Oracle Oracle `json:"oracle"`
 }
 
-func (m *QueryOracleResponse) Reset()        {}
+func (m *QueryOracleResponse) Reset()         {}
 func (m *QueryOracleResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryOracleResponse) ProtoMessage()  {}
 
 type QueryActiveOraclesRequest struct{}
 
-func (m *QueryActiveOraclesRequest) Reset()        {}
+func (m *QueryActiveOraclesRequest) Reset()         {}
 func (m *QueryActiveOraclesRequest) String() string { return "QueryActiveOraclesRequest{}" }
 func (m *QueryActiveOraclesRequest) ProtoMessage()  {}
 
@@ -111,7 +111,7 @@ type QueryActiveOraclesResponse struct {
 	Oracles []Oracle `json:"oracles"`
 }
 
-func (m *QueryActiveOraclesResponse) Reset()        {}
+func (m *QueryActiveOraclesResponse) Reset()         {}
 func (m *QueryActiveOraclesResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryActiveOraclesResponse) ProtoMessage()  {}
 
@@ -119,7 +119,7 @@ type QueryConsensusRequest struct {
 	EvidenceId string `json:"evidence_id"`
 }
 
-func (m *QueryConsensusRequest) Reset()        {}
+func (m *QueryConsensusRequest) Reset()         {}
 func (m *QueryConsensusRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryConsensusRequest) ProtoMessage()  {}
 
@@ -127,13 +127,13 @@ type QueryConsensusResponse struct {
 	Consensus AuditConsensus `json:"consensus"`
 }
 
-func (m *QueryConsensusResponse) Reset()        {}
+func (m *QueryConsensusResponse) Reset()         {}
 func (m *QueryConsensusResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryConsensusResponse) ProtoMessage()  {}
 
 type QueryParamsRequest struct{}
 
-func (m *QueryParamsRequest) Reset()        {}
+func (m *QueryParamsRequest) Reset()         {}
 func (m *QueryParamsRequest) String() string { return "QueryParamsRequest{}" }
 func (m *QueryParamsRequest) ProtoMessage()  {}
 
@@ -141,7 +141,7 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (m *QueryParamsResponse) Reset()        {}
+func (m *QueryParamsResponse) Reset()         {}
 func (m *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryParamsResponse) ProtoMessage()  {}
 

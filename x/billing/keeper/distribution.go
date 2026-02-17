@@ -107,7 +107,7 @@ func (k Keeper) CalculateDistribution(ctx sdk.Context, totalPayment *big.Int, fa
 	knowledgePool := k.calculateKnowledgePoolDistribution(ctx, knowledgePoolTotal, factIds)
 
 	return types.PaymentDistribution{
-		TotalPayment: totalPayment.String(),
+		TotalPayment:  totalPayment.String(),
 		ResearchShare: researchShare.String(),
 		ResearchSplit: &types.ResearchFundSplit{
 			Research:   researchFund.String(),
@@ -205,8 +205,16 @@ func (k Keeper) ExecuteDistribution(ctx sdk.Context, callerAddr sdk.AccAddress, 
 	if err := k.sendToModule(ctx, callerAddr, ResearchTreasury, researchSplit.Research); err != nil {
 		return fmt.Errorf("failed to send research fund: %w", err)
 	}
-	if err := k.sendToModule(ctx, callerAddr, FoundationTreasury, researchSplit.Foundation); err != nil {
-		return fmt.Errorf("failed to send foundation fund: %w", err)
+	// Foundation: send to configured address if set, otherwise module account
+	foundationAddr := k.GetParams(ctx).FoundationAddress
+	if foundationAddr != "" {
+		if err := k.sendToAddress(ctx, callerAddr, foundationAddr, researchSplit.Foundation); err != nil {
+			return fmt.Errorf("failed to send foundation fund: %w", err)
+		}
+	} else {
+		if err := k.sendToModule(ctx, callerAddr, FoundationTreasury, researchSplit.Foundation); err != nil {
+			return fmt.Errorf("failed to send foundation fund: %w", err)
+		}
 	}
 	if err := k.sendToModule(ctx, callerAddr, CommunityTreasury, researchSplit.Community); err != nil {
 		return fmt.Errorf("failed to send community fund: %w", err)
@@ -277,6 +285,21 @@ func (k Keeper) ExecuteDistribution(ctx sdk.Context, callerAddr sdk.AccAddress, 
 	}
 
 	return nil
+}
+
+// sendToAddress sends coins from an account to a bech32 address.
+func (k Keeper) sendToAddress(ctx sdk.Context, fromAddr sdk.AccAddress, toAddrStr string, amountStr string) error {
+	amt := new(big.Int)
+	amt.SetString(amountStr, 10)
+	if amt.Sign() <= 0 {
+		return nil
+	}
+	toAddr, err := sdk.AccAddressFromBech32(toAddrStr)
+	if err != nil {
+		return fmt.Errorf("invalid foundation address: %w", err)
+	}
+	coins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(amt)))
+	return k.bankKeeper.SendCoins(ctx, fromAddr, toAddr, coins)
 }
 
 // sendToModule sends coins from an account to a module account.

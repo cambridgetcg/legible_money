@@ -550,4 +550,3 @@ func (k Keeper) burnFromModule(ctx sdk.Context, amount *big.Int) {
 		k.Logger(ctx).Error("failed to burn coins", "amount", amount.String(), "error", err)
 	}
 }
-

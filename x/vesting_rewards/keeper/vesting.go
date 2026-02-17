@@ -57,26 +57,26 @@ func (k Keeper) CreateVestingSchedule(
 	vestingId := fmt.Sprintf("%x", hash[:16])
 
 	schedule := &types.VestingSchedule{
-		Id:               vestingId,
-		ClaimId:          claimId,
-		FactId:           factId,
-		Recipient:        recipient,
-		TotalAmount:      totalAmount,
-		ReleasedAmount:   "0",
-		ClaimableAmount:  "0",
-		ReserveAmount:    reserveBig.String(),
-		Category:         string(category),
+		Id:                vestingId,
+		ClaimId:           claimId,
+		FactId:            factId,
+		Recipient:         recipient,
+		TotalAmount:       totalAmount,
+		ReleasedAmount:    "0",
+		ClaimableAmount:   "0",
+		ReserveAmount:     reserveBig.String(),
+		Category:          string(category),
 		Source:            string(source),
-		Status:           string(types.VestingStatusActive),
-		AcceptedAtBlock:  height,
-		CliffEndsAtBlock: height + cfg.CliffBlocks,
-		LastClaimBlock:   height,
+		Status:            string(types.VestingStatusActive),
+		AcceptedAtBlock:   height,
+		CliffEndsAtBlock:  height + cfg.CliffBlocks,
+		LastClaimBlock:    height,
 		TotalPausedBlocks: 0,
-		PausedAtBlock:    0,
-		DefenseCount:     0,
-		ReplicationCount: 0,
-		CreatedAt:        height,
-		UpdatedAt:        height,
+		PausedAtBlock:     0,
+		DefenseCount:      0,
+		ReplicationCount:  0,
+		CreatedAt:         height,
+		UpdatedAt:         height,
 	}
 
 	k.SetVestingSchedule(ctx, schedule)
@@ -112,8 +112,8 @@ func (k Keeper) DistributeFalsificationReward(
 ) error {
 	_, err := k.CreateVestingSchedule(
 		ctx,
-		counterFactId,    // claimId parameter = counter-fact ID
-		targetFactId,     // factId parameter = disproven fact ID
+		counterFactId, // claimId parameter = counter-fact ID
+		targetFactId,  // factId parameter = disproven fact ID
 		recipient,
 		amount,
 		types.CategoryComputational, // Short vesting period, appropriate for falsification
@@ -374,7 +374,6 @@ func (k Keeper) UpdateClaimableAmount(ctx sdk.Context, vestingId string) error {
 	return nil
 }
 
-
 // ClaimRewards claims available vested rewards for a recipient.
 func (k Keeper) ClaimRewards(ctx sdk.Context, recipient string, vestingId string) (string, error) {
 	var schedules []*types.VestingSchedule
@@ -578,4 +577,36 @@ func (k Keeper) RecordCitation(ctx sdk.Context, vestingId string) error {
 	schedule.UpdatedAt = uint64(ctx.BlockHeight())
 	k.SetVestingSchedule(ctx, schedule)
 	return nil
+}
+
+// PauseAllVestingByRecipient pauses ALL active vesting schedules for an agent.
+// FARM-6 fix: Called when an agent's rejection rate exceeds the misbehavior threshold,
+// preventing the "grief-and-extract" pattern where agents build up vesting through honest
+// work then profit from misbehavior while vesting continues releasing.
+// Returns the number of schedules paused.
+func (k Keeper) PauseAllVestingByRecipient(ctx sdk.Context, recipient string) int {
+	schedules := k.GetVestingSchedulesByRecipient(ctx, recipient)
+	paused := 0
+	for _, schedule := range schedules {
+		if schedule.Status != string(types.VestingStatusActive) {
+			continue
+		}
+		if err := k.PauseVesting(ctx, schedule.Id); err != nil {
+			k.Logger(ctx).Error("failed to pause vesting for misbehavior",
+				"vesting_id", schedule.Id, "recipient", recipient, "error", err)
+			continue
+		}
+		paused++
+	}
+	if paused > 0 {
+		k.Logger(ctx).Info("paused vesting schedules due to misbehavior",
+			"recipient", recipient, "count", paused)
+		ctx.EventManager().EmitEvent(
+			sdk.NewEvent("vesting_paused_misbehavior",
+				sdk.NewAttribute("recipient", recipient),
+				sdk.NewAttribute("count", fmt.Sprintf("%d", paused)),
+			),
+		)
+	}
+	return paused
 }

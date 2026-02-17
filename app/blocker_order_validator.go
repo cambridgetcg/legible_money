@@ -11,13 +11,13 @@ import (
 
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 
+	legibleauthtypes "github.com/legible-money/legible/x/auth/types"
 	capturedefensetypes "github.com/legible-money/legible/x/capture_defense/types"
 	emergencytypes "github.com/legible-money/legible/x/emergency/types"
 	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
-	legibleauthtypes "github.com/legible-money/legible/x/auth/types"
-	legiblestakingtypes "github.com/legible-money/legible/x/staking/types"
 	ontologytypes "github.com/legible-money/legible/x/ontology/types"
 	qualificationtypes "github.com/legible-money/legible/x/qualification/types"
+	legiblestakingtypes "github.com/legible-money/legible/x/staking/types"
 	tokenstypes "github.com/legible-money/legible/x/tokens/types"
 	vestingrewardstypes "github.com/legible-money/legible/x/vesting_rewards/types"
 )

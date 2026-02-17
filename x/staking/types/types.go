@@ -334,7 +334,7 @@ type MsgUpdateParams struct {
 	Params    Params `json:"params"`
 }
 
-func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) Reset()         {}
 func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams" }
 func (msg *MsgUpdateParams) ProtoMessage()  {}
 
@@ -356,7 +356,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response for MsgUpdateParams.
 type MsgUpdateParamsResponse struct{}
 
-func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 

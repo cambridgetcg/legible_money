@@ -216,3 +216,67 @@ func (a *Agent) QueryProfile(ctx context.Context) (*AgentProfileInfo, error) {
 	}
 	return a.queryClient.AgentProfile(ctx, a.address)
 }
+
+// --- BVM Workflows ---
+
+// DeployContract deploys BVM bytecode and returns the contract address.
+func (a *Agent) DeployContract(ctx context.Context, bytecodeHex string) (string, error) {
+	if a.txClient == nil {
+		return "", fmt.Errorf("tx client not initialized")
+	}
+	return a.txClient.DeployContract(ctx, bytecodeHex)
+}
+
+// CallContract calls a deployed BVM contract.
+func (a *Agent) CallContract(ctx context.Context, contractAddr, inputDataHex string, gasLimit uint64) (string, error) {
+	if a.txClient == nil {
+		return "", fmt.Errorf("tx client not initialized")
+	}
+	return a.txClient.CallContract(ctx, contractAddr, inputDataHex, gasLimit)
+}
+
+// ScheduleExecution schedules a BVM contract call at a future block.
+func (a *Agent) ScheduleExecution(ctx context.Context, contractAddr, method, payload string, atBlock, maxGas uint64) (string, error) {
+	if a.txClient == nil {
+		return "", fmt.Errorf("tx client not initialized")
+	}
+	return a.txClient.ScheduleExecution(ctx, contractAddr, method, payload, atBlock, maxGas)
+}
+
+// --- Home Lifecycle Workflows ---
+
+// CreateAndConfigureHome creates an Agent Home and configures its guardian.
+func (a *Agent) CreateAndConfigureHome(ctx context.Context, name, defenseStrategy string, deadmanThreshold uint64) (string, error) {
+	if a.txClient == nil {
+		return "", fmt.Errorf("tx client not initialized")
+	}
+	homeID, err := a.txClient.CreateHome(ctx, name)
+	if err != nil {
+		return "", fmt.Errorf("creating home: %w", err)
+	}
+	// Wait for tx inclusion
+	time.Sleep(3 * time.Second)
+	// Configure guardian
+	if _, err := a.txClient.ConfigureGuardian(ctx, homeID, defenseStrategy, true, deadmanThreshold); err != nil {
+		return homeID, fmt.Errorf("configuring guardian (home created as %s): %w", homeID, err)
+	}
+	return homeID, nil
+}
+
+// ConfigureGuardian configures the Agent Home's guardian settings.
+func (a *Agent) ConfigureGuardian(ctx context.Context, homeID, strategy string, autoDefend bool, deadmanThreshold uint64) error {
+	if a.txClient == nil {
+		return fmt.Errorf("tx client not initialized")
+	}
+	_, err := a.txClient.ConfigureGuardian(ctx, homeID, strategy, autoDefend, deadmanThreshold)
+	return err
+}
+
+// SetSpendingLimit sets a spending limit on a Home key type.
+func (a *Agent) SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) error {
+	if a.txClient == nil {
+		return fmt.Errorf("tx client not initialized")
+	}
+	_, err := a.txClient.SetSpendingLimit(ctx, homeID, keyType, maxAmount, periodBlocks)
+	return err
+}

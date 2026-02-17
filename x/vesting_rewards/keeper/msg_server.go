@@ -193,7 +193,7 @@ func (m msgServer) AccelerateVesting(
 
 	// Proto field AccelerationFactor is a uint32 multiplier.
 	// Map factor ranges to acceleration types for backward compat with keeper logic.
-	accelType := "defense"
+	var accelType string
 	switch {
 	case msg.AccelerationFactor <= 250000:
 		accelType = "citation"

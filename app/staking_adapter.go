@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/hex"
 	"math/big"
+	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
+	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
 	evidencemgmtkeeper "github.com/legible-money/legible/x/evidence_mgmt/keeper"
 	evidencemgmttypes "github.com/legible-money/legible/x/evidence_mgmt/types"
@@ -18,13 +21,20 @@ import (
 
 // StakingKeeperAdapter wraps the Legible staking keeper to satisfy
 // the knowledge module's StakingKeeper interface.
+// Falls back to Cosmos SDK staking module when the custom module has no validators.
 type StakingKeeperAdapter struct {
-	keeper legiblestakingkeeper.Keeper
+	keeper    legiblestakingkeeper.Keeper
+	sdkKeeper *stakingkeeper.Keeper // Fallback for bonded tokens lookup
 }
 
 // NewStakingKeeperAdapter creates a new adapter.
 func NewStakingKeeperAdapter(keeper legiblestakingkeeper.Keeper) *StakingKeeperAdapter {
 	return &StakingKeeperAdapter{keeper: keeper}
+}
+
+// SetSDKStakingKeeper wires in the Cosmos SDK staking keeper for fallback lookups.
+func (a *StakingKeeperAdapter) SetSDKStakingKeeper(sk *stakingkeeper.Keeper) {
+	a.sdkKeeper = sk
 }
 
 var _ knowledgetypes.StakingKeeper = (*StakingKeeperAdapter)(nil)
@@ -51,11 +61,24 @@ func (a *StakingKeeperAdapter) GetActiveValidatorInfos(ctx context.Context) []kn
 }
 
 // GetValidatorInfo returns info for a single validator.
+// Accepts both account addresses (lgm1...) and operator addresses (lgmvaloper1...).
 func (a *StakingKeeperAdapter) GetValidatorInfo(ctx context.Context, operatorAddr string) (knowledgetypes.ValidatorInfo, bool) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	v, found := a.keeper.GetValidator(sdkCtx, operatorAddr)
 	if !found {
-		return knowledgetypes.ValidatorInfo{}, false
+		// Try converting account address to validator operator address
+		if strings.HasPrefix(operatorAddr, "lgm1") && !strings.HasPrefix(operatorAddr, "lgmvaloper1") {
+			_, bz, err := bech32.DecodeAndConvert(operatorAddr)
+			if err == nil {
+				valoperAddr, err2 := bech32.ConvertAndEncode("lgmvaloper", bz)
+				if err2 == nil {
+					v, found = a.keeper.GetValidator(sdkCtx, valoperAddr)
+				}
+			}
+		}
+		if !found {
+			return knowledgetypes.ValidatorInfo{}, false
+		}
 	}
 
 	pubkey, _ := hex.DecodeString(v.ConsensusPubkey)
@@ -71,14 +94,42 @@ func (a *StakingKeeperAdapter) GetValidatorInfo(ctx context.Context, operatorAdd
 }
 
 // GetEffectiveStake returns the effective selection stake for VRF.
+// Accepts both account addresses (lgm1...) and operator addresses (lgmvaloper1...).
+// Falls back to Cosmos SDK staking module if the custom module has no record.
 func (a *StakingKeeperAdapter) GetEffectiveStake(ctx context.Context, operatorAddr string) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	v, found := a.keeper.GetValidator(sdkCtx, operatorAddr)
-	if !found {
-		return 0
+
+	// Resolve to valoper address if needed
+	valoperAddr := operatorAddr
+	if strings.HasPrefix(operatorAddr, "lgm1") && !strings.HasPrefix(operatorAddr, "lgmvaloper1") {
+		_, bz, err := bech32.DecodeAndConvert(operatorAddr)
+		if err == nil {
+			if converted, err2 := bech32.ConvertAndEncode("lgmvaloper", bz); err2 == nil {
+				valoperAddr = converted
+			}
+		}
 	}
-	stakeStr := a.keeper.GetEffectiveSelectionStake(sdkCtx, v)
-	return bigIntStringToUint64(stakeStr)
+
+	// Try custom staking module first
+	v, found := a.keeper.GetValidator(sdkCtx, valoperAddr)
+	if found {
+		stakeStr := a.keeper.GetEffectiveSelectionStake(sdkCtx, v)
+		if s := bigIntStringToUint64(stakeStr); s > 0 {
+			return s
+		}
+	}
+
+	// Fallback: query Cosmos SDK staking module for bonded tokens
+	if a.sdkKeeper != nil {
+		valAddr, err := sdk.ValAddressFromBech32(valoperAddr)
+		if err == nil {
+			if sdkVal, err := a.sdkKeeper.GetValidator(sdkCtx, valAddr); err == nil {
+				return sdkVal.BondedTokens().Uint64()
+			}
+		}
+	}
+
+	return 0
 }
 
 // GetTotalStake returns total effective stake (including virtual stakes for Tier 0/1).

@@ -74,6 +74,43 @@ service Query {
   rpc DomainProposals(QueryDomainProposalsRequest) returns (QueryDomainProposalsResponse) {
     option (google.api.http).get = "/legible/knowledge/v1/proposals";
   }
+
+  // ---- PoT Core Queries ----
+
+  // Claim queries a single claim by ID
+  rpc Claim(QueryClaimRequest) returns (QueryClaimResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/claim/{claim_id}";
+  }
+
+  // Fact queries a single verified fact by ID
+  rpc Fact(QueryFactRequest) returns (QueryFactResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/fact/{fact_id}";
+  }
+
+  // Facts queries all facts with pagination
+  rpc Facts(QueryFactsRequest) returns (QueryFactsResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/facts";
+  }
+
+  // FactsByDomain queries facts within a specific domain
+  rpc FactsByDomain(QueryFactsByDomainRequest) returns (QueryFactsByDomainResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/facts/domain/{domain}";
+  }
+
+  // VerificationRound queries a verification round by ID
+  rpc VerificationRound(QueryVerificationRoundRequest) returns (QueryVerificationRoundResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/round/{round_id}";
+  }
+
+  // ActiveRounds queries all currently active verification rounds
+  rpc ActiveRounds(QueryActiveRoundsRequest) returns (QueryActiveRoundsResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/rounds/active";
+  }
+
+  // CounterFact queries a counter-fact by ID
+  rpc CounterFact(QueryCounterFactRequest) returns (QueryCounterFactResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/counter_fact/{counter_fact_id}";
+  }
 }
 
 // ============================================================================
@@ -199,4 +236,71 @@ message QueryDomainProposalsRequest {
 message QueryDomainProposalsResponse {
   repeated DomainProposal proposals = 1;
   uint64 total = 2;
+}
+
+// ============================================================================
+// PoT Core Query Messages
+// ============================================================================
+
+message QueryClaimRequest {
+  string claim_id = 1;
+}
+
+message QueryClaimResponse {
+  Claim claim = 1;
+}
+
+message QueryFactRequest {
+  string fact_id = 1;
+}
+
+message QueryFactResponse {
+  Fact fact = 1;
+}
+
+message QueryFactsRequest {
+  uint32 limit = 1;
+  uint32 offset = 2;
+}
+
+message QueryFactsResponse {
+  repeated Fact facts = 1;
+  uint64 total = 2;
+}
+
+message QueryFactsByDomainRequest {
+  string domain = 1;
+}
+
+message QueryFactsByDomainResponse {
+  repeated Fact facts = 1;
+}
+
+message QueryVerificationRoundRequest {
+  string round_id = 1;
+}
+
+message QueryVerificationRoundResponse {
+  VerificationRound round = 1;
+}
+
+message QueryActiveRoundsRequest {}
+
+message QueryActiveRoundsResponse {
+  repeated VerificationRound rounds = 1;
+}
+
+message QueryCounterFactRequest {
+  string counter_fact_id = 1;
+}
+
+message QueryCounterFactResponse {
+  // Counter-fact fields inline since CounterFact is not in proto
+  string id = 1;
+  string target_fact_id = 2;
+  string negation_type = 3;
+  string evidence = 4;
+  string submitter = 5;
+  string status = 6;
+  uint64 confidence = 7;
 }

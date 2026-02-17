@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -371,6 +372,36 @@ func (k Keeper) CountContractSchedules(ctx sdk.Context, contractAddress string) 
 		return false
 	})
 	return count
+}
+
+// --- Gas Schedule ---
+
+// SetGasSchedule stores a governance gas schedule override.
+// The schedule maps opcode mnemonics to gas costs.
+func (k Keeper) SetGasSchedule(ctx sdk.Context, schedule map[string]uint64) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(schedule)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal gas schedule: %v", err))
+	}
+	if err := store.Set(types.GasScheduleKey, bz); err != nil {
+		panic(fmt.Sprintf("failed to set gas schedule: %v", err))
+	}
+}
+
+// GetGasSchedule retrieves the governance gas schedule override.
+// Returns nil if no schedule is set (use default opcode costs).
+func (k Keeper) GetGasSchedule(ctx sdk.Context) map[string]uint64 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.GasScheduleKey)
+	if err != nil || bz == nil {
+		return nil
+	}
+	var schedule map[string]uint64
+	if err := json.Unmarshal(bz, &schedule); err != nil {
+		return nil
+	}
+	return schedule
 }
 
 // --- Params ---

@@ -17,10 +17,10 @@ import (
 // Immune facts: eternal categories (HalfLifeBlocks == 0), high citation count,
 // or terminal statuses that are already handled.
 func (k Keeper) IsFactImmune(ctx sdk.Context, fact types.Fact) bool {
-	// Terminal statuses — already handled, skip pruning
+	// Terminal statuses — already handled, skip pruning.
+	// Note: FactStatusPruned is NOT immune — pruned facts still need hard-deletion processing.
 	if fact.Status == types.FactStatusExpired ||
 		fact.Status == types.FactStatusDisproven ||
-		fact.Status == types.FactStatusPruned ||
 		fact.Status == types.FactStatusRevoked {
 		return true
 	}
@@ -42,11 +42,16 @@ func (k Keeper) IsFactImmune(ctx sdk.Context, fact types.Fact) bool {
 		return true
 	}
 
+	// Prophetic facts are immune from pruning — they were vindicated by citations
+	if fact.IsProphetic {
+		return true
+	}
+
 	return false
 }
 
 // CalculateKMS computes the Knowledge Maintenance Score for a fact (0-1,000,000 basis points).
-// KMS = w_c*Contribution + w_u*Utilization + w_t*Trajectory + w_m*Maturity + patronage_bonus
+// KMS = w_c*Contribution + w_u*Utilization + w_t*Trajectory + w_m*Maturity + w_n*Novelty + patronage_bonus
 func (k Keeper) CalculateKMS(ctx sdk.Context, fact types.Fact) uint64 {
 	ep := k.GetExtendedParams(ctx)
 
@@ -54,12 +59,14 @@ func (k Keeper) CalculateKMS(ctx sdk.Context, fact types.Fact) uint64 {
 	utilization := k.calculateUtilizationScore(ctx, fact)
 	trajectory := k.calculateTrajectoryScore(ctx, fact)
 	maturity := k.calculateMaturityBonus(ctx, fact)
+	novelty := calculateNoveltyScore(fact)
 
-	// Weighted sum
+	// Weighted sum (5 components, weights sum to 1,000,000)
 	kms := (ep.ContributionWeight*contribution +
 		ep.UtilizationWeight*utilization +
 		ep.TrajectoryWeight*trajectory +
-		ep.MaturityWeight*maturity) / 1_000_000
+		ep.MaturityWeight*maturity +
+		ep.NoveltyWeight*novelty) / 1_000_000
 
 	// Add patronage bonus (capped at 300,000 bps = 30%)
 	kms += fact.PatronageBonus
@@ -70,6 +77,32 @@ func (k Keeper) CalculateKMS(ctx sdk.Context, fact types.Fact) uint64 {
 	}
 
 	return kms
+}
+
+// calculateNoveltyScore computes the novelty component of KMS from the
+// fact's stored novelty and bridge scores. Returns 0-1,000,000.
+func calculateNoveltyScore(fact types.Fact) uint64 {
+	// Combine novelty_score and bridge_score with prophetic bonus
+	score := fact.NoveltyScore
+
+	// Bridge score adds directly (already in bps)
+	if fact.BridgeScore > 0 {
+		bridgeContrib := fact.BridgeScore * 2 // Bridge facts are extra valuable for KMS
+		if bridgeContrib > 500_000 {
+			bridgeContrib = 500_000
+		}
+		score += bridgeContrib
+	}
+
+	// Prophetic facts get a major KMS boost (hard to prune vindicated knowledge)
+	if fact.IsProphetic {
+		score += 300_000
+	}
+
+	if score > 1_000_000 {
+		score = 1_000_000
+	}
+	return score
 }
 
 // calculateContributionScore measures how much a fact contributes to the knowledge graph.
@@ -254,6 +287,30 @@ func (k Keeper) GetGracePeriod(ctx sdk.Context, category string) uint64 {
 	return grace
 }
 
+// GetGracePeriodForFact returns the grace period accounting for novelty.
+// Novel facts (NoveltyScore above threshold) get an extended grace period
+// via NoveltyGraceMultiplier, protecting ahead-of-time knowledge from premature pruning.
+func (k Keeper) GetGracePeriodForFact(ctx sdk.Context, fact types.Fact) uint64 {
+	baseGrace := k.GetGracePeriod(ctx, fact.EpistemicCategory)
+
+	ep := k.GetExtendedParams(ctx)
+	noveltyThreshold := ep.NoveltyImmunityThresholdBps
+	if noveltyThreshold == 0 {
+		noveltyThreshold = types.NoveltyImmunityThreshold
+	}
+	noveltyMult := ep.NoveltyGraceMultiplier
+	if noveltyMult == 0 {
+		noveltyMult = types.NoveltyGraceMultiplier
+	}
+
+	// Novel facts or prophetic facts get extended grace
+	if fact.NoveltyScore >= noveltyThreshold || fact.IsProphetic {
+		return baseGrace * noveltyMult
+	}
+
+	return baseGrace
+}
+
 // MarkFactAtRisk sets the fact status to at_risk and records the grace start block.
 func (k Keeper) MarkFactAtRisk(ctx sdk.Context, fact *types.Fact) {
 	fact.Status = types.FactStatusAtRisk
@@ -389,8 +446,8 @@ func (k Keeper) PruneUnusedFactsInEndBlocker(ctx sdk.Context, maxPerBlock int) i
 			}
 
 		case types.FactStatusAtRisk:
-			// Check if grace period expired
-			gracePeriod := k.GetGracePeriod(ctx, fact.EpistemicCategory)
+			// Check if grace period expired (novelty-aware)
+			gracePeriod := k.GetGracePeriodForFact(ctx, fact)
 			graceEnd := fact.PruningGraceStart + gracePeriod
 
 			if currentHeight >= graceEnd {

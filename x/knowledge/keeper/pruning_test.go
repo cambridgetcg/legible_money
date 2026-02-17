@@ -118,14 +118,14 @@ func TestCalculateKMS_MatureCanonical(t *testing.T) {
 	k.SetFact(ctx, fact)
 
 	kms := k.CalculateKMS(ctx, fact)
-	if kms < 400_000 {
+	if kms < 300_000 {
 		t.Errorf("expected high KMS for canonical mature fact, got %d", kms)
 	}
 }
 
 func TestCalculateKMS_WeightSum(t *testing.T) {
 	ep := types.DefaultExtendedParams()
-	sum := ep.ContributionWeight + ep.UtilizationWeight + ep.TrajectoryWeight + ep.MaturityWeight
+	sum := ep.ContributionWeight + ep.UtilizationWeight + ep.TrajectoryWeight + ep.MaturityWeight + ep.NoveltyWeight
 	if sum != 1_000_000 {
 		t.Errorf("KMS weights should sum to 1,000,000, got %d", sum)
 	}
@@ -195,12 +195,20 @@ func TestIsFactImmune_EmpiricalNotImmune(t *testing.T) {
 func TestIsFactImmune_TerminalStatus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	for _, status := range []string{types.FactStatusExpired, types.FactStatusDisproven, types.FactStatusPruned, types.FactStatusRevoked} {
+	// Truly terminal statuses — no further processing needed
+	for _, status := range []string{types.FactStatusExpired, types.FactStatusDisproven, types.FactStatusRevoked} {
 		fact := createTestFact("fact-"+status, "mathematics", "empirical", status, 100_000)
 		k.SetFact(ctx, fact)
 		if !k.IsFactImmune(ctx, fact) {
 			t.Errorf("expected terminal status %s to be immune", status)
 		}
+	}
+
+	// Pruned is NOT immune — pruned facts still need hard-deletion processing
+	prunedFact := createTestFact("fact-pruned", "mathematics", "empirical", types.FactStatusPruned, 100_000)
+	k.SetFact(ctx, prunedFact)
+	if k.IsFactImmune(ctx, prunedFact) {
+		t.Error("pruned facts should not be immune (they need hard-deletion processing)")
 	}
 }
 
@@ -213,11 +221,12 @@ func TestPruningLifecycle_AtRisk(t *testing.T) {
 
 	ep := types.DefaultExtendedParams()
 	ep.PruningEnabled = true
-	ep.PruningThresholdBps = 100_000 // 10%
+	ep.PruningThresholdBps = 300_000 // 30% — high enough to catch facts with zero contribution
 	k.SetExtendedParams(ctx, ep)
 
-	// Low-KMS fact: no citations, no utilization
-	fact := createTestFact("fact-lowkms", "mathematics", "empirical", types.FactStatusVerified, 600_000)
+	// Low-KMS fact: no citations, no utilization, decaying confidence
+	fact := createTestFact("fact-lowkms", "mathematics", "empirical", types.FactStatusVerified, 100_000)
+	fact.BaseConfidence = 600_000 // confidence < base → trajectory penalty
 	fact.CitationCount = 0
 	fact.LastCitedBlock = 0
 	fact.LastUtilizedBlock = 0

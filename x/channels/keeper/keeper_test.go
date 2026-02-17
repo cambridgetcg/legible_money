@@ -218,14 +218,14 @@ func TestSetGetParams(t *testing.T) {
 func TestSetGetChannel(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	ch := types.PaymentChannel{
-		ChannelId:  "pc-100-1",
-		Payer:      payer1,
-		Provider:   provider1,
-		Deposited:  "5000000",
-		Spent:      "0",
-		Available:  "5000000",
-		Status:     types.ChannelStatusOpen,
-		Nonce:      0,
+		ChannelId: "pc-100-1",
+		Payer:     payer1,
+		Provider:  provider1,
+		Deposited: "5000000",
+		Spent:     "0",
+		Available: "5000000",
+		Status:    types.ChannelStatusOpen,
+		Nonce:     0,
 	}
 	k.SetChannel(ctx, ch)
 
@@ -630,9 +630,9 @@ func TestUpdateState_NotParty(t *testing.T) {
 	})
 
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
-		Sender: payer2, // not a party
+		Sender:    payer2, // not a party
 		ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{Nonce: 1, Spent: "1000000"},
+		Update:    types.ChannelStateUpdate{Nonce: 1, Spent: "1000000"},
 	})
 	if err == nil {
 		t.Error("expected not party error")

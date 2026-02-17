@@ -8,18 +8,18 @@ import (
 
 // Fact status constants (10-state lifecycle from TS reference + adversarial verification)
 const (
-	FactStatusPending      = "pending"
-	FactStatusProvisional  = "provisional" // survives structural eval, in challenge window
-	FactStatusVerified     = "verified"
-	FactStatusActive       = "active"
-	FactStatusContested    = "contested"
-	FactStatusChallenged   = "challenged"
-	FactStatusSuperseded   = "superseded"
-	FactStatusExpired      = "expired"
-	FactStatusDisproven    = "disproven"
-	FactStatusRevoked      = "revoked"
-	FactStatusAtRisk       = "at_risk"
-	FactStatusPruned       = "pruned"
+	FactStatusPending     = "pending"
+	FactStatusProvisional = "provisional" // survives structural eval, in challenge window
+	FactStatusVerified    = "verified"
+	FactStatusActive      = "active"
+	FactStatusContested   = "contested"
+	FactStatusChallenged  = "challenged"
+	FactStatusSuperseded  = "superseded"
+	FactStatusExpired     = "expired"
+	FactStatusDisproven   = "disproven"
+	FactStatusRevoked     = "revoked"
+	FactStatusAtRisk      = "at_risk"
+	FactStatusPruned      = "pruned"
 )
 
 // Claim status constants (adversarial verification lifecycle)
@@ -47,10 +47,10 @@ const (
 // CategoryDecayProfile defines per-category confidence decay parameters.
 // Half-life in blocks (0 = eternal, no decay). From TS EPISTEMIC_PROFILES.
 type CategoryDecayProfile struct {
-	HalfLifeBlocks      uint64 // 0 = eternal (analytic, formal, protocol)
-	MaxConfidence        uint64 // stratum ceiling (basis points, 0-1_000_000)
-	MinConfidence        uint64 // floor after decay
-	ReverificationBonus  uint64 // bonus on successful re-verification
+	HalfLifeBlocks         uint64 // 0 = eternal (analytic, formal, protocol)
+	MaxConfidence          uint64 // stratum ceiling (basis points, 0-1_000_000)
+	MinConfidence          uint64 // floor after decay
+	ReverificationBonus    uint64 // bonus on successful re-verification
 	RequiresReverification bool
 }
 
@@ -82,20 +82,21 @@ var STRATUM_CONFIDENCE_CEILING = map[string]uint64{
 
 // Citation economics constants (from TS core/knowledge/types.ts)
 const (
-	CitationShareBPS          = 150_000 // 15% of verification rewards to citation pool
-	CitationDecayPerLevel     = 500_000 // 50% decay per ancestor level
-	CitationProtocolFloorBPS  = 20_000  // 2% protocol floor
-	CrossDomainBonusRate      = 200_000 // 20% cross-domain bonus
-	MaxCrossDomainBonus       = 2_000_000 // 2.0x max
+	CitationShareBPS         = 150_000   // 15% of verification rewards to citation pool
+	CitationDecayPerLevel    = 500_000   // 50% decay per ancestor level
+	CitationProtocolFloorBPS = 20_000    // 2% protocol floor
+	SelfCitationDiscountBPS  = 500_000   // 50% discount when citing own facts (FARM-3 fix)
+	CrossDomainBonusRate     = 200_000   // 20% cross-domain bonus
+	MaxCrossDomainBonus      = 2_000_000 // 2.0x max
 
 	// Fundamentality thresholds
-	FundamentalityNotable     = 250_000 // 0.25
+	FundamentalityNotable      = 250_000 // 0.25
 	FundamentalityFoundational = 500_000 // 0.50
 	FundamentalityFundamental  = 750_000 // 0.75
 	FundamentalityAxiomatic    = 900_000 // 0.90
 
 	// Fundamentality reward multipliers
-	FundamentalityBonusNotable     = 1_100_000 // 1.1x
+	FundamentalityBonusNotable      = 1_100_000 // 1.1x
 	FundamentalityBonusFoundational = 1_250_000 // 1.25x
 	FundamentalityBonusFundamental  = 1_500_000 // 1.5x
 	FundamentalityBonusAxiomatic    = 2_000_000 // 2.0x
@@ -103,17 +104,23 @@ const (
 
 // Confidence propagation constants
 const (
-	PropagationThreshold  = 10_000  // 1% change triggers propagation (basis points)
-	MaxPropagationDepth   = 10      // max BFS hops
-	CyclePenaltyFactor    = 400_000 // 0.4× penalty for cycle members
+	PropagationThreshold = 10_000  // 1% change triggers propagation (basis points)
+	MaxPropagationDepth  = 10      // max BFS hops
+	CyclePenaltyFactor   = 400_000 // 0.4× penalty for cycle members
 )
 
 // Reverification constants
 const (
-	ReverificationThreshold = 600_000  // 60% confidence floor
-	StalenessMultiplier     = 2        // age > 2× halfLife → needs reverification
-	MinConfidenceThreshold  = 300_000  // 30% — below this, fact expires
+	ReverificationThreshold = 600_000 // 60% confidence floor
+	StalenessMultiplier     = 2       // age > 2× halfLife → needs reverification
+	MinConfidenceThreshold  = 300_000 // 30% — below this, fact expires
 )
+
+// Minimum claim stake to prevent zero-slash spam.
+// At 22% (220k bps) slash rate, stakes below 5 ulgm produce a 0 slash due to integer
+// truncation. This floor ensures every rejected claim incurs a meaningful penalty.
+// (OpenClaw C-3 fix)
+const MinClaimStakeUlgm = 1000 // 0.001 LGM — floor below which claims are rejected
 
 // Adversarial verification constants
 const (
@@ -124,30 +131,30 @@ const (
 	RejectThresholdDefault      = 300_000 // 30% — below this, claim is rejected
 
 	// Challenge window durations (in blocks)
-	BaseChallengeDurationDefault   = BlocksPerDay     // ~1 day
-	EternalChallengeMultiplier     = 3                // 3 days for eternal categories
-	SlowDecayChallengeMultiplier   = 2                // 2 days for slow-decay categories
-	FastDecayChallengeMultiplier   = 1                // 1 day for fast-decay categories
+	BaseChallengeDurationDefault = BlocksPerDay // ~1 day
+	EternalChallengeMultiplier   = 3            // 3 days for eternal categories
+	SlowDecayChallengeMultiplier = 2            // 2 days for slow-decay categories
+	FastDecayChallengeMultiplier = 1            // 1 day for fast-decay categories
 
 	// Challenge economics
-	MinChallengeStakeDefault            = 11_000_000     // 11 LGM in ulgm
-	FailedChallengeSlashBpsDefault      = 220_000        // 22% slash on failed challenge
-	SuccessfulChallengeRewardBpsDefault = 300_000        // 30% of submitter's slashed stake to challenger
-	MaxConcurrentChallenges             = 3              // max 3 concurrent challenges per claim
+	MinChallengeStakeDefault            = 11_000_000 // 11 LGM in ulgm
+	FailedChallengeSlashBpsDefault      = 220_000    // 22% slash on failed challenge
+	SuccessfulChallengeRewardBpsDefault = 300_000    // 30% of submitter's slashed stake to challenger
+	MaxConcurrentChallenges             = 3          // max 3 concurrent challenges per claim
 
 	// Confidence growth
-	ConfidenceGrowthPerEpochDefault = 11_000    // 1.1% per epoch
-	MaxSurvivalConfidenceDefault    = 770_000   // 77% cap for unchallenged facts
-	SurvivedChallengeConfidenceCap  = 880_000   // 88% cap after surviving challenge
-	ConfidenceGrowthEpoch           = 1_111     // growth applied every 1,111 blocks (~47 min)
+	ConfidenceGrowthPerEpochDefault = 11_000  // 1.1% per epoch
+	MaxSurvivalConfidenceDefault    = 770_000 // 77% cap for unchallenged facts
+	SurvivedChallengeConfidenceCap  = 880_000 // 88% cap after surviving challenge
+	ConfidenceGrowthEpoch           = 1_111   // growth applied every 1,111 blocks (~47 min)
 
 	// Challenge cooldown (anti-spam)
-	BaseCooldownBlocks  = 17_136  // ~0.5 day
-	MaxCooldownBlocks   = 171_360 // ~5 days
+	BaseCooldownBlocks = 17_136  // ~0.5 day
+	MaxCooldownBlocks  = 171_360 // ~5 days
 
 	// Verification round types
 	RoundTypeVerification   = "verification"   // legacy commit-reveal
-	RoundTypeChallenge      = "challenge"       // arbiter round for Path B challenge
+	RoundTypeChallenge      = "challenge"      // arbiter round for Path B challenge
 	RoundTypeReverification = "reverification" // AH-5: auto-triggered by confidence decay
 
 	// MaxReverificationsPerBlock limits how many reverification rounds can be created
@@ -181,6 +188,75 @@ func IsDeterministicCategory(category string) bool {
 	return false
 }
 
+// ============ Epistemic Domains ============
+
+// EpistemicDomain classifies whether a category's truth can be derived
+// purely from computation/logic (agent-sufficient) or requires observation
+// of the physical world (reality-dependent, needing human involvement).
+type EpistemicDomain string
+
+const (
+	EpistemicDomainDerivable  EpistemicDomain = "derivable"  // agent-sufficient: truth from logic/computation
+	EpistemicDomainObservable EpistemicDomain = "observable" // reality-dependent: truth requires observation
+)
+
+// CategoryEpistemicDomain maps each epistemic category to its domain.
+// Derivable: categories where truth follows from axioms, definitions, or computation.
+// Observable: categories where truth depends on physical reality.
+var CategoryEpistemicDomain = map[string]EpistemicDomain{
+	"analytic":      EpistemicDomainDerivable,
+	"formal":        EpistemicDomainDerivable,
+	"protocol":      EpistemicDomainDerivable,
+	"computational": EpistemicDomainDerivable,
+	"empirical":     EpistemicDomainObservable,
+	"historical":    EpistemicDomainObservable,
+	"predictive":    EpistemicDomainObservable,
+	"social":        EpistemicDomainObservable,
+	"replicated":    EpistemicDomainObservable,
+}
+
+// IsDerivableCategory returns true for categories where truth is derivable
+// from logic, axioms, or computation alone — no physical observation needed.
+func IsDerivableCategory(category string) bool {
+	domain, ok := CategoryEpistemicDomain[category]
+	return ok && domain == EpistemicDomainDerivable
+}
+
+// IsAgentVerifiableEvidence returns true for evidence types that an AI agent
+// can verify without human involvement: on-chain data and deterministic computation.
+func IsAgentVerifiableEvidence(evidenceType string) bool {
+	switch evidenceType {
+	case "on_chain", "computation":
+		return true
+	}
+	return false
+}
+
+// RequiresHumanInvolvement returns true for evidence types that connect to
+// physical observation — experiment results, oracle feeds, documents, attestations.
+// These evidence types carry implicit human grounding.
+func RequiresHumanInvolvement(evidenceType string) bool {
+	return !IsAgentVerifiableEvidence(evidenceType)
+}
+
+// Participant context constants (governance defaults)
+const (
+	// HumanEvidenceGapPenaltyBpsDefault is the confidence penalty applied when an
+	// observable-category claim has ONLY agent-verifiable evidence (no human grounding).
+	HumanEvidenceGapPenaltyBpsDefault = 100_000 // 10%
+
+	// AgentOnlyEmpiricalCeilingDefault is the confidence ceiling for observable-category
+	// claims backed solely by agent-verifiable evidence.
+	AgentOnlyEmpiricalCeilingDefault = 700_000 // 70%
+
+	// HumanEvidenceBonusBpsDefault is the small bonus for observable claims that DO
+	// include human-sourced evidence, rewarding proper grounding. Per human evidence item.
+	HumanEvidenceBonusBpsDefault = 10_000 // 1% per item
+
+	// MaxHumanEvidenceBonusBpsDefault caps the total human evidence bonus.
+	MaxHumanEvidenceBonusBpsDefault = 30_000 // 3% max
+)
+
 // Evidence confidence bonus constants.
 // Evidence bonus is ADDITIVE to the verification confidence, capped at MaxEvidenceBonus.
 const (
@@ -200,12 +276,12 @@ var EVIDENCE_TYPE_STRENGTH = map[string]uint64{
 
 // Maturity criteria
 const (
-	MaturityEstablishedMinConf         = 800_000 // 0.8 confidence
-	MaturityEstablishedMinAge          = 34_272  // ~1 day in blocks
+	MaturityEstablishedMinConf          = 800_000 // 0.8 confidence
+	MaturityEstablishedMinAge           = 34_272  // ~1 day in blocks
 	MaturityEstablishedMinVerifications = 3
-	MaturityCanonicalMinConf           = 900_000 // 0.9 confidence
-	MaturityCanonicalMinAge            = 342_720 // ~10 days in blocks
-	MaturityCanonicalMinVerifications  = 10
+	MaturityCanonicalMinConf            = 900_000 // 0.9 confidence
+	MaturityCanonicalMinAge             = 342_720 // ~10 days in blocks
+	MaturityCanonicalMinVerifications   = 10
 )
 
 // EquivocationEvidence records proof that a validator submitted conflicting
@@ -418,7 +494,7 @@ type MsgChallengeProvisionalFact struct {
 	CounterClaim string   `json:"counter_claim"` // optional: what challenger believes instead
 }
 
-func (msg *MsgChallengeProvisionalFact) Reset()        {}
+func (msg *MsgChallengeProvisionalFact) Reset()         {}
 func (msg *MsgChallengeProvisionalFact) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgChallengeProvisionalFact) ProtoMessage()  {}
 
@@ -451,7 +527,7 @@ type MsgChallengeProvisionalFactResponse struct {
 	DisputeId   string `json:"dispute_id,omitempty"` // set for Path B (arbiter resolution)
 }
 
-func (msg *MsgChallengeProvisionalFactResponse) Reset()        {}
+func (msg *MsgChallengeProvisionalFactResponse) Reset()         {}
 func (msg *MsgChallengeProvisionalFactResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgChallengeProvisionalFactResponse) ProtoMessage()  {}
 
@@ -506,14 +582,14 @@ type ProvisionalChallenge struct {
 	Id               string   `json:"id"`
 	ClaimId          string   `json:"claim_id"`
 	FactId           string   `json:"fact_id"`
-	Challenger       string   `json:"challenger"`        // bech32
-	Stake            string   `json:"stake"`             // challenge bond
+	Challenger       string   `json:"challenger"` // bech32
+	Stake            string   `json:"stake"`      // challenge bond
 	Reason           string   `json:"reason"`
-	EvidenceIds      []string `json:"evidence_ids"`      // counter-evidence
+	EvidenceIds      []string `json:"evidence_ids"` // counter-evidence
 	CounterClaim     string   `json:"counter_claim"`
-	Status           string   `json:"status"`            // open, resolved_upheld, resolved_overturned, resolved_weakened, resolved_inconclusive
-	ResolutionPath   string   `json:"resolution_path"`   // "deterministic" (Path A) or "arbiter" (Path B)
-	DisputeId        string   `json:"dispute_id"`        // for Path B arbiter resolution
+	Status           string   `json:"status"`          // open, resolved_upheld, resolved_overturned, resolved_weakened, resolved_inconclusive
+	ResolutionPath   string   `json:"resolution_path"` // "deterministic" (Path A) or "arbiter" (Path B)
+	DisputeId        string   `json:"dispute_id"`      // for Path B arbiter resolution
 	CreatedAtHeight  uint64   `json:"created_at_height"`
 	ResolvedAtHeight uint64   `json:"resolved_at_height,omitempty"`
 	Outcome          string   `json:"outcome,omitempty"` // upheld, overturned, weakened, inconclusive, undecidability
@@ -526,7 +602,7 @@ const (
 	ChallengeOutcomeOverturned     = "overturned"     // claim falls
 	ChallengeOutcomeWeakened       = "weakened"       // partial success
 	ChallengeOutcomeInconclusive   = "inconclusive"   // no clear winner
-	ChallengeOutcomeUndecidability = "undecidability"  // Gödel zones — provably unprovable
+	ChallengeOutcomeUndecidability = "undecidability" // Gödel zones — provably unprovable
 )
 
 // Challenge status constants
@@ -562,6 +638,25 @@ const (
 
 	// MaxCalibrationPenalty is the maximum confidence penalty for low-acceptance submitters.
 	MaxCalibrationPenalty = 150_000 // -15%
+
+	// CalibrationTrivialThreshold is the acceptance rate above which claims are considered
+	// "suspiciously trivial." Agents with >95% acceptance likely submit obvious truths
+	// to farm vesting rewards. FARM-2 remediation.
+	CalibrationTrivialThreshold = 950_000 // 95%
+
+	// MaxCalibrationTrivialPenalty is the maximum penalty for suspiciously high acceptance.
+	// Applied when acceptance rate exceeds CalibrationTrivialThreshold.
+	MaxCalibrationTrivialPenalty = 100_000 // -10%
+
+	// MisbehaviorRejectionThreshold is the rejection rate above which ALL vesting
+	// schedules for an agent are paused. Prevents the "grief-and-extract" pattern
+	// (FARM-6) where agents build vesting through honest work then misbehave.
+	// Value: 300,000 = 30% rejection rate.
+	MisbehaviorRejectionThreshold = 300_000
+
+	// MisbehaviorMinSamples is the minimum number of finalized claims before
+	// misbehavior vesting pause is evaluated. Prevents false positives on new agents.
+	MisbehaviorMinSamples = 10
 )
 
 // AH-4: Verifier method diversity constants.
@@ -597,11 +692,11 @@ const (
 
 // Counter-fact lifecycle statuses
 const (
-	CounterFactStatusPending    = "pending"    // Awaiting verification
+	CounterFactStatusPending     = "pending"     // Awaiting verification
 	CounterFactStatusProvisional = "provisional" // In challenge window
-	CounterFactStatusVerified   = "verified"   // Confirmed false
-	CounterFactStatusContested  = "contested"  // Mixed verification
-	CounterFactStatusOverturned = "overturned" // Counter-fact itself was disproved
+	CounterFactStatusVerified    = "verified"    // Confirmed false
+	CounterFactStatusContested   = "contested"   // Mixed verification
+	CounterFactStatusOverturned  = "overturned"  // Counter-fact itself was disproved
 )
 
 // ComputeBidirectionalStatus derives the epistemic status from net confidence.
@@ -649,10 +744,10 @@ const (
 	CounterFactMediumConfidence = 400_000
 
 	// Evaluation stage 8 penalties for counter-facts
-	CounterFactHighPenalty    = 80_000
-	CounterFactMediumPenalty  = 40_000
-	CounterFactLowPenalty     = 10_000
-	MaxCounterFactPenalty     = 400_000
+	CounterFactHighPenalty   = 80_000
+	CounterFactMediumPenalty = 40_000
+	CounterFactLowPenalty    = 10_000
+	MaxCounterFactPenalty    = 400_000
 
 	// EstablishedFactChallengePenalty when contradicting a high-confidence fact.
 	EstablishedFactChallengePenalty = 100_000
@@ -669,18 +764,65 @@ const (
 	// Counter-fact challenge window constants (R-2)
 	// Counter-facts must survive a challenge window before being finalized as "verified".
 	// This creates symmetry: both positive and negative knowledge face adversarial scrutiny.
-	CounterFactChallengeWindowBlocks = 34_272 // ~1 day (matches BLOCKS_PER_DAY)
-	CounterFactChallengeMinStake     = 50_000 // Minimum stake to challenge a counter-fact (50k ulgm)
+	CounterFactChallengeWindowBlocks = 34_272  // ~1 day (matches BLOCKS_PER_DAY)
+	CounterFactChallengeMinStake     = 50_000  // Minimum stake to challenge a counter-fact (50k ulgm)
 	CounterFactChallengeSlashBps     = 220_000 // 22% slash on failed counter-fact challenge (same as claim challenges)
 
 	// Counter-fact challenge statuses
 	CounterFactChallengeStatusOpen     = "open"
 	CounterFactChallengeStatusUpheld   = "upheld"   // Counter-fact survives challenge
-	CounterFactChallengeStatusReverted = "reverted"  // Counter-fact overturned by challenge
+	CounterFactChallengeStatusReverted = "reverted" // Counter-fact overturned by challenge
 
 	// Stale-contested resolution constants (R-5)
 	StaleContestedDecayEpochs  = uint64(10)     // Epochs without activity before decay starts
 	StaleContestedDecayRateBps = uint64(50_000) // 5% confidence decay per epoch when stale
+
+	// ========================================================================
+	// Novelty & Insight Metrics
+	// ========================================================================
+
+	// NoveltyMaxBonusBps is the max confidence bonus from novelty assessment (10%).
+	NoveltyMaxBonusBps = uint64(100_000)
+
+	// MinEvidenceForNoveltyBonus requires minimum evidence quality to earn novelty bonus.
+	// Claims with weak evidence get no novelty credit (prevents rewarding hallucinated "novel" claims).
+	MinEvidenceForNoveltyBonus = uint64(500_000) // 50% evidence quality floor
+
+	// VerifiedBridgeThreshold is the confidence above which a cross-domain reference
+	// flips from penalty (AH-3) to bonus — the referenced fact must be well-verified.
+	VerifiedBridgeThreshold = uint64(700_000) // 70%
+
+	// CrossDomainBridgeBonusBps is the bonus per verified cross-domain reference.
+	CrossDomainBridgeBonusBps = uint64(15_000) // 1.5%
+
+	// MaxBridgeBonusBps caps total bridge bonus across all cross-domain refs.
+	MaxBridgeBonusBps = uint64(75_000) // 7.5%
+
+	// PropheticConfidenceCap is the max confidence a prophetic fact can grow to.
+	PropheticConfidenceCap = uint64(920_000) // 92%
+
+	// PropheticBaseThreshold is the max acceptance confidence for a claim to be
+	// eligible for prophetic recognition. Claims barely accepted (thin margin
+	// above the 600k accept threshold) are candidates.
+	PropheticBaseThreshold = uint64(650_000) // 65% — within 5% of acceptance threshold
+
+	// PropheticCitationThreshold is how many citations a barely-accepted fact
+	// needs to earn "prophetic" status (ahead of its time, later vindicated).
+	PropheticCitationThreshold = uint64(10)
+
+	// NoveltyImmunityThreshold is the novelty score above which a fact gets
+	// extended grace period before pruning (protecting novel but underutilized knowledge).
+	NoveltyImmunityThreshold = uint64(500_000) // 50%
+
+	// NoveltyGraceMultiplier extends grace period for novel facts.
+	NoveltyGraceMultiplier = uint64(3) // 3× normal grace period
+
+	// NoveltyKMSWeight is the KMS weight allocated to novelty score (15%).
+	// When added, the other weights are proportionally reduced.
+	NoveltyKMSWeight = uint64(150_000)
+
+	// NoveltyDecayHalfLifeMultiplier gives novel facts slower decay (2× half-life).
+	NoveltyDecayHalfLifeMultiplier = uint64(2)
 )
 
 // CounterFactChallenge represents a challenge against a verified counter-fact (R-2).
@@ -689,12 +831,12 @@ const (
 // Not in proto — hand-written type for counter-fact challenge system.
 type CounterFactChallenge struct {
 	Id               string   `json:"id"`
-	CounterFactId    string   `json:"counter_fact_id"`     // Counter-fact being challenged
-	Challenger       string   `json:"challenger"`           // bech32 address
-	Stake            string   `json:"stake"`                // Locked challenge stake (ulgm)
-	Reason           string   `json:"reason"`               // Why the counter-fact is wrong
-	EvidenceIds      []string `json:"evidence_ids"`         // Supporting evidence
-	Status           string   `json:"status"`               // open, upheld, reverted
+	CounterFactId    string   `json:"counter_fact_id"` // Counter-fact being challenged
+	Challenger       string   `json:"challenger"`      // bech32 address
+	Stake            string   `json:"stake"`           // Locked challenge stake (ulgm)
+	Reason           string   `json:"reason"`          // Why the counter-fact is wrong
+	EvidenceIds      []string `json:"evidence_ids"`    // Supporting evidence
+	Status           string   `json:"status"`          // open, upheld, reverted
 	CreatedAtHeight  uint64   `json:"created_at_height"`
 	ResolvedAtHeight uint64   `json:"resolved_at_height,omitempty"`
 }
@@ -721,13 +863,13 @@ type ExtendedParams struct {
 	MinConfidenceThreshold  uint64 `json:"min_confidence_threshold"` // below this, fact expires (default 300000 = 30%)
 
 	// Challenge tuning
-	RejectThreshold              uint64 `json:"reject_threshold"`                // below this, claim rejected (default 300000 = 30%)
-	MaxConcurrentChallenges      uint32 `json:"max_concurrent_challenges"`       // per claim (default 3)
-	SurvivedChallengeConfCap     uint64 `json:"survived_challenge_conf_cap"`     // cap after surviving (default 880000 = 88%)
-	ConfidenceGrowthEpochBlocks  uint64 `json:"confidence_growth_epoch_blocks"`  // growth interval (default 1111 blocks)
-	BaseCooldownBlocks           uint64 `json:"base_cooldown_blocks"`            // anti-spam cooldown (default 17136 = ~0.5 day)
-	MaxCooldownBlocks            uint64 `json:"max_cooldown_blocks"`             // max exponential cooldown (default 171360 = ~5 days)
-	MaxReverificationsPerBlock   uint32 `json:"max_reverifications_per_block"`   // EndBlocker cap (default 5)
+	RejectThreshold             uint64 `json:"reject_threshold"`               // below this, claim rejected (default 300000 = 30%)
+	MaxConcurrentChallenges     uint32 `json:"max_concurrent_challenges"`      // per claim (default 3)
+	SurvivedChallengeConfCap    uint64 `json:"survived_challenge_conf_cap"`    // cap after surviving (default 880000 = 88%)
+	ConfidenceGrowthEpochBlocks uint64 `json:"confidence_growth_epoch_blocks"` // growth interval (default 1111 blocks)
+	BaseCooldownBlocks          uint64 `json:"base_cooldown_blocks"`           // anti-spam cooldown (default 17136 = ~0.5 day)
+	MaxCooldownBlocks           uint64 `json:"max_cooldown_blocks"`            // max exponential cooldown (default 171360 = ~5 days)
+	MaxReverificationsPerBlock  uint32 `json:"max_reverifications_per_block"`  // EndBlocker cap (default 5)
 
 	// Maturity criteria
 	MaturityEstablishedMinConf  uint64 `json:"maturity_established_min_conf"`  // default 800000 = 80%
@@ -751,30 +893,55 @@ type ExtendedParams struct {
 
 	// Negative knowledge
 	MaxContradictionsPerAgentPerEpoch uint32 `json:"max_contradictions_per_agent_per_epoch"` // default 3
-	MinContradictionStakeRatio       uint64 `json:"min_contradiction_stake_ratio"`           // default 500000 = 50%
-	FailedContradictionSlashBps      uint64 `json:"failed_contradiction_slash_bps"`          // default 330000 = 33%
-	FalsificationRewardCapBps        uint64 `json:"falsification_reward_cap_bps"`            // default 3000000 = 3x
-	FalsificationPoolShareBps        uint64 `json:"falsification_pool_share_bps"`            // default 150000 = 15%
-	CounterFactChallengeWindowBlocks uint64 `json:"counter_fact_challenge_window_blocks"`    // default 34272 = ~1 day
-	CounterFactChallengeMinStake     uint64 `json:"counter_fact_challenge_min_stake"`        // default 50000 ulgm
-	CounterFactChallengeSlashBps     uint64 `json:"counter_fact_challenge_slash_bps"`        // default 220000 = 22%
+	MinContradictionStakeRatio        uint64 `json:"min_contradiction_stake_ratio"`          // default 500000 = 50%
+	FailedContradictionSlashBps       uint64 `json:"failed_contradiction_slash_bps"`         // default 330000 = 33%
+	FalsificationRewardCapBps         uint64 `json:"falsification_reward_cap_bps"`           // default 3000000 = 3x
+	FalsificationPoolShareBps         uint64 `json:"falsification_pool_share_bps"`           // default 150000 = 15%
+	CounterFactChallengeWindowBlocks  uint64 `json:"counter_fact_challenge_window_blocks"`   // default 34272 = ~1 day
+	CounterFactChallengeMinStake      uint64 `json:"counter_fact_challenge_min_stake"`       // default 50000 ulgm
+	CounterFactChallengeSlashBps      uint64 `json:"counter_fact_challenge_slash_bps"`       // default 220000 = 22%
 
 	// Evidence
 	MaxEvidenceBonus uint64 `json:"max_evidence_bonus"` // default 150000 = 15%
 
+	// Epistemic domain (participant context)
+	HumanEvidenceGapPenaltyBps uint64 `json:"human_evidence_gap_penalty_bps"` // penalty for observable claims with only agent evidence (default 100000 = 10%)
+	AgentOnlyEmpiricalCeiling  uint64 `json:"agent_only_empirical_ceiling"`   // confidence ceiling in that case (default 700000 = 70%)
+	HumanEvidenceBonusBps      uint64 `json:"human_evidence_bonus_bps"`       // bonus per human evidence item (default 10000 = 1%)
+	MaxHumanEvidenceBonusBps   uint64 `json:"max_human_evidence_bonus_bps"`   // max total bonus (default 30000 = 3%)
+
+	// Per-domain adversarial mode overrides.
+	// Keys are domain names; values are true (adversarial) or false (legacy).
+	// When set, this overrides the global AdversarialVerificationEnabled for that domain.
+	AdversarialDomainOverrides map[string]bool `json:"adversarial_domain_overrides,omitempty"`
+
 	// Knowledge pruning
-	PruningEnabled                   bool   `json:"pruning_enabled"`                      // kill switch (default false)
-	PruningThresholdBps              uint64 `json:"pruning_threshold_bps"`                // KMS below this → at_risk (default 100000 = 10%)
-	GracePeriodBlocks                uint64 `json:"grace_period_blocks"`                  // default grace before pruning (default 1028160 = ~30d)
-	GraceMultiplier                  uint64 `json:"grace_multiplier"`                     // grace = max(GracePeriodBlocks, HalfLifeBlocks*GraceMultiplier) (default 2)
-	ArchiveRetentionBlocks           uint64 `json:"archive_retention_blocks"`             // time in "pruned" before hard delete (default 3427200 = ~100d)
-	MaxPruningPerBlock               uint32 `json:"max_pruning_per_block"`                // amortization cap (default 20)
-	ContributionWeight               uint64 `json:"contribution_weight"`                  // KMS weight (default 400000 = 40%)
-	UtilizationWeight                uint64 `json:"utilization_weight"`                   // KMS weight (default 300000 = 30%)
-	TrajectoryWeight                 uint64 `json:"trajectory_weight"`                    // KMS weight (default 200000 = 20%)
-	MaturityWeight                   uint64 `json:"maturity_weight"`                      // KMS weight (default 100000 = 10%)
-	FundamentalityImmunityThreshold  uint64 `json:"fundamentality_immunity_threshold"`    // citation count for immunity (default 50)
-	MinPatronageStake                uint64 `json:"min_patronage_stake"`                  // min patronage stake in ulgm (default 1000000 = 1 LGM)
+	PruningEnabled                  bool   `json:"pruning_enabled"`                   // kill switch (default false)
+	PruningThresholdBps             uint64 `json:"pruning_threshold_bps"`             // KMS below this → at_risk (default 100000 = 10%)
+	GracePeriodBlocks               uint64 `json:"grace_period_blocks"`               // default grace before pruning (default 1028160 = ~30d)
+	GraceMultiplier                 uint64 `json:"grace_multiplier"`                  // grace = max(GracePeriodBlocks, HalfLifeBlocks*GraceMultiplier) (default 2)
+	ArchiveRetentionBlocks          uint64 `json:"archive_retention_blocks"`          // time in "pruned" before hard delete (default 3427200 = ~100d)
+	MaxPruningPerBlock              uint32 `json:"max_pruning_per_block"`             // amortization cap (default 20)
+	ContributionWeight              uint64 `json:"contribution_weight"`               // KMS weight (default 340000 = 34%)
+	UtilizationWeight               uint64 `json:"utilization_weight"`                // KMS weight (default 255000 = 25.5%)
+	TrajectoryWeight                uint64 `json:"trajectory_weight"`                 // KMS weight (default 170000 = 17%)
+	MaturityWeight                  uint64 `json:"maturity_weight"`                   // KMS weight (default 85000 = 8.5%)
+	NoveltyWeight                   uint64 `json:"novelty_weight"`                    // KMS weight (default 150000 = 15%)
+	FundamentalityImmunityThreshold uint64 `json:"fundamentality_immunity_threshold"` // citation count for immunity (default 50)
+	MinPatronageStake               uint64 `json:"min_patronage_stake"`               // min patronage stake in ulgm (default 1000000 = 1 LGM)
+
+	// Novelty & insight metrics
+	NoveltyMaxBonusBps             uint64 `json:"novelty_max_bonus_bps"`              // max bonus from novelty stage (default 100000 = 10%)
+	MinEvidenceForNoveltyBonusBps  uint64 `json:"min_evidence_for_novelty_bonus_bps"` // evidence quality floor for novelty (default 500000 = 50%)
+	VerifiedBridgeThresholdBps     uint64 `json:"verified_bridge_threshold_bps"`      // cross-domain ref flips to bonus above this (default 700000 = 70%)
+	CrossDomainBridgeBonusBps      uint64 `json:"cross_domain_bridge_bonus_bps"`      // bonus per verified bridge (default 15000 = 1.5%)
+	MaxBridgeBonusBps              uint64 `json:"max_bridge_bonus_bps"`               // cap on total bridge bonus (default 75000 = 7.5%)
+	PropheticConfidenceCapBps      uint64 `json:"prophetic_confidence_cap_bps"`       // max confidence for prophetic facts (default 920000 = 92%)
+	PropheticBaseThresholdBps      uint64 `json:"prophetic_base_threshold_bps"`       // max acceptance conf for prophetic eligibility (default 650000 = 65%)
+	PropheticCitationThreshold     uint64 `json:"prophetic_citation_threshold"`       // citations needed for prophetic status (default 10)
+	NoveltyImmunityThresholdBps    uint64 `json:"novelty_immunity_threshold_bps"`     // novelty score for extended grace (default 500000 = 50%)
+	NoveltyGraceMultiplier         uint64 `json:"novelty_grace_multiplier"`           // grace period multiplier for novel facts (default 3)
+	NoveltyDecayHalfLifeMultiplier uint64 `json:"novelty_decay_half_life_multiplier"` // half-life extension for novel facts (default 2)
 }
 
 // DefaultExtendedParams returns the default extended parameters.
@@ -831,19 +998,40 @@ func DefaultExtendedParams() ExtendedParams {
 
 		MaxEvidenceBonus: MaxEvidenceBonus,
 
+		// Epistemic domain defaults
+		HumanEvidenceGapPenaltyBps: HumanEvidenceGapPenaltyBpsDefault,
+		AgentOnlyEmpiricalCeiling:  AgentOnlyEmpiricalCeilingDefault,
+		HumanEvidenceBonusBps:      HumanEvidenceBonusBpsDefault,
+		MaxHumanEvidenceBonusBps:   MaxHumanEvidenceBonusBpsDefault,
+
 		// Knowledge pruning defaults
+		// KMS weights sum to 1,000,000: contribution(34%) + utilization(25.5%) + trajectory(17%) + maturity(8.5%) + novelty(15%)
 		PruningEnabled:                  false,
 		PruningThresholdBps:             100_000,   // 10%
 		GracePeriodBlocks:               1_028_160, // ~30 days at 2521ms blocks
 		GraceMultiplier:                 2,
 		ArchiveRetentionBlocks:          3_427_200, // ~100 days
 		MaxPruningPerBlock:              20,
-		ContributionWeight:              400_000, // 40%
-		UtilizationWeight:               300_000, // 30%
-		TrajectoryWeight:                200_000, // 20%
-		MaturityWeight:                  100_000, // 10%
+		ContributionWeight:              340_000, // 34% (was 40%, reduced to make room for novelty)
+		UtilizationWeight:               255_000, // 25.5% (was 30%)
+		TrajectoryWeight:                170_000, // 17% (was 20%)
+		MaturityWeight:                  85_000,  // 8.5% (was 10%)
+		NoveltyWeight:                   150_000, // 15% (new)
 		FundamentalityImmunityThreshold: 50,
 		MinPatronageStake:               1_000_000, // 1 LGM
+
+		// Novelty & insight metrics defaults
+		NoveltyMaxBonusBps:             NoveltyMaxBonusBps,
+		MinEvidenceForNoveltyBonusBps:  MinEvidenceForNoveltyBonus,
+		VerifiedBridgeThresholdBps:     VerifiedBridgeThreshold,
+		CrossDomainBridgeBonusBps:      CrossDomainBridgeBonusBps,
+		MaxBridgeBonusBps:              MaxBridgeBonusBps,
+		PropheticConfidenceCapBps:      PropheticConfidenceCap,
+		PropheticBaseThresholdBps:      PropheticBaseThreshold,
+		PropheticCitationThreshold:     PropheticCitationThreshold,
+		NoveltyImmunityThresholdBps:    NoveltyImmunityThreshold,
+		NoveltyGraceMultiplier:         NoveltyGraceMultiplier,
+		NoveltyDecayHalfLifeMultiplier: NoveltyDecayHalfLifeMultiplier,
 	}
 }
 
@@ -882,15 +1070,41 @@ func (ep ExtendedParams) ValidateExtendedParams() error {
 	if ep.MaxEvidenceBonus > 1_000_000 {
 		return fmt.Errorf("max_evidence_bonus must be <= 1000000")
 	}
+	// Epistemic domain validation
+	if ep.HumanEvidenceGapPenaltyBps > 1_000_000 {
+		return fmt.Errorf("human_evidence_gap_penalty_bps must be <= 1000000")
+	}
+	if ep.AgentOnlyEmpiricalCeiling > 1_000_000 {
+		return fmt.Errorf("agent_only_empirical_ceiling must be <= 1000000")
+	}
+	if ep.MaxHumanEvidenceBonusBps > 1_000_000 {
+		return fmt.Errorf("max_human_evidence_bonus_bps must be <= 1000000")
+	}
 	// Pruning params validation
 	if ep.PruningThresholdBps > 1_000_000 {
 		return fmt.Errorf("pruning_threshold_bps must be <= 1000000")
 	}
-	if ep.ContributionWeight+ep.UtilizationWeight+ep.TrajectoryWeight+ep.MaturityWeight != 1_000_000 && ep.ContributionWeight > 0 {
+	if ep.ContributionWeight+ep.UtilizationWeight+ep.TrajectoryWeight+ep.MaturityWeight+ep.NoveltyWeight != 1_000_000 && ep.ContributionWeight > 0 {
 		return fmt.Errorf("KMS weights must sum to 1000000")
 	}
 	if ep.MaxPruningPerBlock > 100 {
 		return fmt.Errorf("max_pruning_per_block must be <= 100")
+	}
+	// Novelty params validation
+	if ep.NoveltyMaxBonusBps > 1_000_000 {
+		return fmt.Errorf("novelty_max_bonus_bps must be <= 1000000")
+	}
+	if ep.VerifiedBridgeThresholdBps > 1_000_000 {
+		return fmt.Errorf("verified_bridge_threshold_bps must be <= 1000000")
+	}
+	if ep.PropheticConfidenceCapBps > 1_000_000 {
+		return fmt.Errorf("prophetic_confidence_cap_bps must be <= 1000000")
+	}
+	if ep.PropheticBaseThresholdBps > 1_000_000 {
+		return fmt.Errorf("prophetic_base_threshold_bps must be <= 1000000")
+	}
+	if ep.NoveltyDecayHalfLifeMultiplier == 0 {
+		return fmt.Errorf("novelty_decay_half_life_multiplier must be > 0")
 	}
 	return nil
 }
@@ -902,7 +1116,7 @@ type MsgUpdateExtendedParams struct {
 	ExtendedParams ExtendedParams `json:"extended_params"`
 }
 
-func (msg *MsgUpdateExtendedParams) Reset()        {}
+func (msg *MsgUpdateExtendedParams) Reset()         {}
 func (msg *MsgUpdateExtendedParams) String() string { return "MsgUpdateExtendedParams" }
 func (msg *MsgUpdateExtendedParams) ProtoMessage()  {}
 
@@ -924,7 +1138,7 @@ func (msg *MsgUpdateExtendedParams) ValidateBasic() error {
 // MsgUpdateExtendedParamsResponse is the response for MsgUpdateExtendedParams.
 type MsgUpdateExtendedParamsResponse struct{}
 
-func (msg *MsgUpdateExtendedParamsResponse) Reset()        {}
+func (msg *MsgUpdateExtendedParamsResponse) Reset()         {}
 func (msg *MsgUpdateExtendedParamsResponse) String() string { return "" }
 func (msg *MsgUpdateExtendedParamsResponse) ProtoMessage()  {}
 

@@ -61,6 +61,30 @@ type TxClient interface {
 
 	// Stake delegates tokens to a validator (x/staking).
 	Stake(ctx context.Context, validatorAddr string, amount uint64) (string, error)
+
+	// DeployContract deploys BVM bytecode and returns the contract address (x/bvm).
+	DeployContract(ctx context.Context, bytecodeHex string) (string, error)
+
+	// CallContract calls a deployed BVM contract (x/bvm).
+	CallContract(ctx context.Context, contractAddr, inputDataHex string, gasLimit uint64) (string, error)
+
+	// ScheduleExecution schedules a BVM contract call at a future block (x/bvm).
+	ScheduleExecution(ctx context.Context, contractAddr, method, payload string, atBlock, maxGas uint64) (string, error)
+
+	// ConfigureGuardian configures the Agent Home's guardian settings (x/home).
+	ConfigureGuardian(ctx context.Context, homeID, strategy string, autoDefend bool, deadmanThreshold uint64) (string, error)
+
+	// RegisterHomeKey registers an access key on an Agent Home (x/home).
+	RegisterHomeKey(ctx context.Context, homeID, keyHash, role string, permissions []string, expiresAt uint64) (string, error)
+
+	// StartSession starts a session on an Agent Home (x/home).
+	StartSession(ctx context.Context, homeID, keyHash string, permissions []string) (string, error)
+
+	// EndSession ends an active session on an Agent Home (x/home).
+	EndSession(ctx context.Context, homeID, sessionID string) (string, error)
+
+	// SetSpendingLimit sets a spending limit on an Agent Home key type (x/home).
+	SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error)
 }
 
 // --- Response Types ---

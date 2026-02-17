@@ -70,29 +70,29 @@ const (
 
 // LogicZoneProperties defines the formal properties of a logic zone.
 type LogicZoneProperties struct {
-	Zone           LogicZone `json:"zone"`
-	Complete       bool      `json:"complete"`           // is the system complete?
-	Decidable      bool      `json:"decidable"`          // is there a decision procedure?
-	GoedelApplies  bool      `json:"goedel_applies"`     // does Godel's incompleteness apply?
-	MaxConfidenceBps uint64  `json:"max_confidence_bps"` // confidence ceiling (basis points 0-1000000)
-	Description    string    `json:"description"`
+	Zone             LogicZone `json:"zone"`
+	Complete         bool      `json:"complete"`           // is the system complete?
+	Decidable        bool      `json:"decidable"`          // is there a decision procedure?
+	GoedelApplies    bool      `json:"goedel_applies"`     // does Godel's incompleteness apply?
+	MaxConfidenceBps uint64    `json:"max_confidence_bps"` // confidence ceiling (basis points 0-1000000)
+	Description      string    `json:"description"`
 }
 
-func (lz *LogicZoneProperties) Reset()        {}
+func (lz *LogicZoneProperties) Reset()         {}
 func (lz *LogicZoneProperties) String() string { return fmt.Sprintf("%+v", *lz) }
 func (lz *LogicZoneProperties) ProtoMessage()  {}
 
 // IncompletenessAcknowledgment records that a fact in an incomplete zone
 // has been properly flagged with its epistemic limitations.
 type IncompletenessAcknowledgment struct {
-	FactId           string    `json:"fact_id"`
-	Zone             LogicZone `json:"zone"`
-	Reason           string    `json:"reason"` // why this claim is in an incomplete zone
-	AcknowledgedAt   uint64    `json:"acknowledged_at"` // block height
-	AcknowledgedBy   string    `json:"acknowledged_by"` // bech32 address
+	FactId         string    `json:"fact_id"`
+	Zone           LogicZone `json:"zone"`
+	Reason         string    `json:"reason"`          // why this claim is in an incomplete zone
+	AcknowledgedAt uint64    `json:"acknowledged_at"` // block height
+	AcknowledgedBy string    `json:"acknowledged_by"` // bech32 address
 }
 
-func (ia *IncompletenessAcknowledgment) Reset()        {}
+func (ia *IncompletenessAcknowledgment) Reset()         {}
 func (ia *IncompletenessAcknowledgment) String() string { return fmt.Sprintf("%+v", *ia) }
 func (ia *IncompletenessAcknowledgment) ProtoMessage()  {}
 
@@ -135,11 +135,46 @@ func DefaultLogicZones() []LogicZoneProperties {
 			Zone:             ZoneEmpirical,
 			Complete:         false,
 			Decidable:        false,
-			GoedelApplies:    false, // not formal system
+			GoedelApplies:    false,  // not formal system
 			MaxConfidenceBps: 700000, // 70% max -- inherently probabilistic
 			Description:      "Empirical claims: inherently probabilistic, falsifiable but not provable",
 		},
 	}
+}
+
+// ZoneFormality returns the formality rank of a logic zone.
+// Lower values = more formal. A more formal zone can ground claims in less formal zones.
+// Returns -1 for unknown zones.
+func ZoneFormality(zone LogicZone) int {
+	switch zone {
+	case ZonePropositional:
+		return 0
+	case ZonePresburger:
+		return 1
+	case ZonePeano:
+		return 2
+	case ZoneSetTheory:
+		return 3
+	case ZoneEmpirical:
+		return 4
+	default:
+		return -1
+	}
+}
+
+// ValidZonesForCategory maps epistemic categories to their allowed logic zones.
+// Prevents submitters from declaring a higher-formality zone than warranted by
+// their claim's epistemic nature (e.g. an empirical claim cannot use propositional zone).
+var ValidZonesForCategory = map[string]map[LogicZone]bool{
+	"analytic":      {ZonePropositional: true, ZonePresburger: true},
+	"formal":        {ZonePropositional: true, ZonePresburger: true, ZonePeano: true, ZoneSetTheory: true},
+	"protocol":      {ZonePropositional: true, ZonePresburger: true},
+	"computational": {ZonePropositional: true, ZonePresburger: true, ZonePeano: true},
+	"replicated":    {ZonePresburger: true, ZonePeano: true, ZoneEmpirical: true},
+	"empirical":     {ZoneEmpirical: true},
+	"historical":    {ZoneEmpirical: true},
+	"predictive":    {ZoneEmpirical: true},
+	"social":        {ZoneEmpirical: true},
 }
 
 // ---------- Message Types ----------
@@ -300,7 +335,7 @@ func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
 // MsgRegisterLogicZone registers a new logic zone (authority only).
 type MsgRegisterLogicZone struct {
-	Authority      string             `json:"authority"`
+	Authority      string              `json:"authority"`
 	ZoneProperties LogicZoneProperties `json:"zone_properties"`
 }
 
@@ -388,7 +423,6 @@ type MsgServer interface {
 	RegisterLogicZone(context.Context, *MsgRegisterLogicZone) (*MsgRegisterLogicZoneResponse, error)
 	AcknowledgeIncompleteness(context.Context, *MsgAcknowledgeIncompleteness) (*MsgAcknowledgeIncompletenessResponse, error)
 }
-
 
 func _Msg_ProposeDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgProposeDomain)
@@ -577,9 +611,11 @@ type QueryDomainsByStratumRequest struct {
 	Stratum Stratum `json:"stratum"`
 }
 
-func (r *QueryDomainsByStratumRequest) Reset()         {}
-func (r *QueryDomainsByStratumRequest) String() string { return fmt.Sprintf("QueryDomainsByStratum{%d}", r.Stratum) }
-func (r *QueryDomainsByStratumRequest) ProtoMessage()  {}
+func (r *QueryDomainsByStratumRequest) Reset() {}
+func (r *QueryDomainsByStratumRequest) String() string {
+	return fmt.Sprintf("QueryDomainsByStratum{%d}", r.Stratum)
+}
+func (r *QueryDomainsByStratumRequest) ProtoMessage() {}
 
 type QueryDomainsByStratumResponse struct {
 	Domains []Domain `json:"domains"`
@@ -623,9 +659,11 @@ type QueryConfidenceCeilingRequest struct {
 	DomainName string `json:"domain_name"`
 }
 
-func (r *QueryConfidenceCeilingRequest) Reset()         {}
-func (r *QueryConfidenceCeilingRequest) String() string { return fmt.Sprintf("QueryConfidenceCeiling{%s}", r.DomainName) }
-func (r *QueryConfidenceCeilingRequest) ProtoMessage()  {}
+func (r *QueryConfidenceCeilingRequest) Reset() {}
+func (r *QueryConfidenceCeilingRequest) String() string {
+	return fmt.Sprintf("QueryConfidenceCeiling{%s}", r.DomainName)
+}
+func (r *QueryConfidenceCeilingRequest) ProtoMessage() {}
 
 type QueryConfidenceCeilingResponse struct {
 	MaxConfidence uint64 `json:"max_confidence"`
@@ -669,7 +707,6 @@ type QueryAllLogicZonesResponse struct {
 func (r *QueryAllLogicZonesResponse) Reset()         {}
 func (r *QueryAllLogicZonesResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryAllLogicZonesResponse) ProtoMessage()  {}
-
 
 func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryParamsRequest)

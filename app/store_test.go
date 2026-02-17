@@ -13,8 +13,8 @@ import (
 	pruningtypes "cosmossdk.io/store/pruning/types"
 	storetypes "cosmossdk.io/store/types"
 
-	iavldb "github.com/cosmos/iavl"
 	"cosmossdk.io/store/wrapper"
+	iavldb "github.com/cosmos/iavl"
 )
 
 func TestIAVLVersionWithGoLevelDB(t *testing.T) {

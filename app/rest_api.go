@@ -469,6 +469,38 @@ func registerHomeRoutes(app *LegibleApp, router *mux.Router) {
 		})
 		writeJSON(w, map[string]interface{}{"alerts": alerts})
 	}).Methods("GET")
+
+	router.HandleFunc("/legible/home/v1/maturity/{home_id}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		homeId := mux.Vars(r)["home_id"]
+		stage := app.HomeKeeper.GetHomeMaturity(ctx, homeId)
+		multiplier := app.HomeKeeper.GetHomeRewardMultiplierBps(ctx, homeId)
+		writeJSON(w, map[string]interface{}{
+			"home_id":               homeId,
+			"maturity_stage":        stage,
+			"reward_multiplier_bps": multiplier,
+		})
+	}).Methods("GET")
+
+	router.HandleFunc("/legible/home/v1/epistemic-stats/{home_id}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, err := queryCtx(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "state not available")
+			return
+		}
+		homeId := mux.Vars(r)["home_id"]
+		stats := app.HomeKeeper.GetEpistemicStats(ctx, homeId)
+		writeJSON(w, map[string]interface{}{
+			"home_id":         homeId,
+			"stats":           stats,
+			"epistemic_score": stats.EpistemicScore(),
+			"accuracy_rate":   stats.AccuracyRate(),
+		})
+	}).Methods("GET")
 }
 
 // --- x/discovery routes (4 endpoints) ---

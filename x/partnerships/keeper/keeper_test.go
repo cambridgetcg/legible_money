@@ -1407,11 +1407,11 @@ func TestCalculateExitSettlement_AllTiers(t *testing.T) {
 	potBalance := big.NewInt(100000)
 
 	cases := []struct {
-		tier            uint32
+		tier             uint32
 		initiatorIsHuman bool
-		wantHuman       string
-		wantAgent       string
-		wantBurned      string
+		wantHuman        string
+		wantAgent        string
+		wantBurned       string
 	}{
 		// Tier 0: 11% penalty, initiator=77%, non-initiator=55%
 		// halfPot = 50000 each
@@ -1701,7 +1701,7 @@ func TestWithdrawalExecution(t *testing.T) {
 		Status:        types.OpStatusProposed,
 		Deliberation: &types.DeliberationState{
 			AmountTier:   types.AmountTierMedium,
-			FloorEndsAt:  currentBlock - 10, // floor already passed
+			FloorEndsAt:  currentBlock - 10,  // floor already passed
 			WindowEndsAt: currentBlock + 100, // window still open
 		},
 		CreatedAt: currentBlock - 50,
@@ -1866,4 +1866,3 @@ func TestConsensusOperationCRUD(t *testing.T) {
 		t.Error("expected deleted")
 	}
 }
-

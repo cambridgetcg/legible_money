@@ -8,9 +8,9 @@ import "math/big"
 var (
 	MaxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 	SignBit    = new(big.Int).Lsh(big.NewInt(1), 255)
-	WordMod   = new(big.Int).Lsh(big.NewInt(1), 256)
-	Zero      = big.NewInt(0)
-	One       = big.NewInt(1)
+	WordMod    = new(big.Int).Lsh(big.NewInt(1), 256)
+	Zero       = big.NewInt(0)
+	One        = big.NewInt(1)
 )
 
 func NewWord(v int64) *big.Int {

@@ -18,9 +18,9 @@ import (
 // 2. LGM-specific gas cost validation
 // 3. Fee routing: 7% to research fund, 93% to validators
 // 4. Legible Money custom decorators:
-//    - DID resolution and validation
-//    - Frozen account enforcement + LastActiveBlock tracking
-//    - Session key capability enforcement
+//   - DID resolution and validation
+//   - Frozen account enforcement + LastActiveBlock tracking
+//   - Session key capability enforcement
 func NewAnteHandler(app *LegibleApp) sdk.AnteHandler {
 	return sdk.ChainAnteDecorators(
 		// --- IBC ---
@@ -142,27 +142,27 @@ func lookupMsgGas(msgTypeURL string) uint64 {
 // Built from the TransactionGasCosts table and proto service definitions.
 var msgTypeURLToGas = map[string]uint64{
 	// Standard Cosmos messages
-	"/cosmos.bank.v1beta1.MsgSend":           TransactionGasCosts["transfer"],
-	"/cosmos.bank.v1beta1.MsgMultiSend":      TransactionGasCosts["transfer"] * 2,
-	"/cosmos.staking.v1beta1.MsgDelegate":    TransactionGasCosts["delegate"],
-	"/cosmos.staking.v1beta1.MsgUndelegate":  TransactionGasCosts["undelegate"],
+	"/cosmos.bank.v1beta1.MsgSend":               TransactionGasCosts["transfer"],
+	"/cosmos.bank.v1beta1.MsgMultiSend":          TransactionGasCosts["transfer"] * 2,
+	"/cosmos.staking.v1beta1.MsgDelegate":        TransactionGasCosts["delegate"],
+	"/cosmos.staking.v1beta1.MsgUndelegate":      TransactionGasCosts["undelegate"],
 	"/cosmos.staking.v1beta1.MsgBeginRedelegate": TransactionGasCosts["redelegate"],
-	"/cosmos.gov.v1.MsgSubmitProposal":       TransactionGasCosts["governance_propose"],
-	"/cosmos.gov.v1.MsgVote":                 TransactionGasCosts["governance_vote"],
+	"/cosmos.gov.v1.MsgSubmitProposal":           TransactionGasCosts["governance_propose"],
+	"/cosmos.gov.v1.MsgVote":                     TransactionGasCosts["governance_vote"],
 
 	// IBC
 	"/ibc.applications.transfer.v1.MsgTransfer": TransactionGasCosts["transfer"],
 
 	// Knowledge module
-	"/legible.knowledge.v1.MsgSubmitClaim":    TransactionGasCosts["claim_submit"],
-	"/legible.knowledge.v1.MsgSubmitCommitment": TransactionGasCosts["verification_commit"],
-	"/legible.knowledge.v1.MsgSubmitReveal":   TransactionGasCosts["verification_reveal"],
-	"/legible.knowledge.v1.MsgChallengeFact":  TransactionGasCosts["challenge_fact"],
-	"/legible.knowledge.v1.MsgAddFact":        TransactionGasCosts["add_fact"],
-	"/legible.knowledge.v1.MsgProposeDomain":  TransactionGasCosts["propose_domain"],
-	"/legible.knowledge.v1.MsgEndorseDomainProposal": TransactionGasCosts["endorse_domain"],
+	"/legible.knowledge.v1.MsgSubmitClaim":             TransactionGasCosts["claim_submit"],
+	"/legible.knowledge.v1.MsgSubmitCommitment":        TransactionGasCosts["verification_commit"],
+	"/legible.knowledge.v1.MsgSubmitReveal":            TransactionGasCosts["verification_reveal"],
+	"/legible.knowledge.v1.MsgChallengeFact":           TransactionGasCosts["challenge_fact"],
+	"/legible.knowledge.v1.MsgAddFact":                 TransactionGasCosts["add_fact"],
+	"/legible.knowledge.v1.MsgProposeDomain":           TransactionGasCosts["propose_domain"],
+	"/legible.knowledge.v1.MsgEndorseDomainProposal":   TransactionGasCosts["endorse_domain"],
 	"/legible.knowledge.v1.MsgChallengeDomainProposal": TransactionGasCosts["challenge_domain"],
-	"/legible.knowledge.v1.MsgRegisterStratum": TransactionGasCosts["register_stratum"],
+	"/legible.knowledge.v1.MsgRegisterStratum":         TransactionGasCosts["register_stratum"],
 
 	// Auth module (agent keys)
 	"/legible.auth.v1.MsgRegisterAccount": TransactionGasCosts["register_account"],
@@ -174,13 +174,13 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.staking.v1.MsgRegisterValidator": TransactionGasCosts["register_validator"],
 
 	// Disputes
-	"/legible.disputes.v1.MsgInitiateDispute":  TransactionGasCosts["initiate_dispute"],
-	"/legible.disputes.v1.MsgCommitEvidence":   TransactionGasCosts["commit_evidence"],
-	"/legible.disputes.v1.MsgRevealEvidence":   TransactionGasCosts["reveal_evidence"],
-	"/legible.disputes.v1.MsgArbiterVote":      TransactionGasCosts["arbiter_vote"],
-	"/legible.disputes.v1.MsgEscalateDispute":  TransactionGasCosts["escalate_dispute"],
-	"/legible.disputes.v1.MsgSettleDispute":     TransactionGasCosts["settle_dispute"],
-	"/legible.disputes.v1.MsgTimeoutDispute":   TransactionGasCosts["timeout_dispute"],
+	"/legible.disputes.v1.MsgInitiateDispute": TransactionGasCosts["initiate_dispute"],
+	"/legible.disputes.v1.MsgCommitEvidence":  TransactionGasCosts["commit_evidence"],
+	"/legible.disputes.v1.MsgRevealEvidence":  TransactionGasCosts["reveal_evidence"],
+	"/legible.disputes.v1.MsgArbiterVote":     TransactionGasCosts["arbiter_vote"],
+	"/legible.disputes.v1.MsgEscalateDispute": TransactionGasCosts["escalate_dispute"],
+	"/legible.disputes.v1.MsgSettleDispute":   TransactionGasCosts["settle_dispute"],
+	"/legible.disputes.v1.MsgTimeoutDispute":  TransactionGasCosts["timeout_dispute"],
 
 	// Research
 	"/legible.research.v1.MsgSubmitResearch":    TransactionGasCosts["submit_research"],
@@ -232,40 +232,40 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.channels.v1.MsgDisputeChannel": TransactionGasCosts["dispute_channel"],
 
 	// Tree of Life — projects
-	"/legible.tree.v1.MsgCreateProject":       TransactionGasCosts["create_project"],
-	"/legible.tree.v1.MsgProposeProject":      TransactionGasCosts["propose_project"],
-	"/legible.tree.v1.MsgStartDevelopment":    TransactionGasCosts["start_development"],
-	"/legible.tree.v1.MsgCompleteProject":     TransactionGasCosts["complete_project"],
-	"/legible.tree.v1.MsgPauseProject":        TransactionGasCosts["pause_project"],
-	"/legible.tree.v1.MsgResumeProject":       TransactionGasCosts["resume_project"],
-	"/legible.tree.v1.MsgAbandonProject":      TransactionGasCosts["abandon_project"],
-	"/legible.tree.v1.MsgSpawnChildProject":   TransactionGasCosts["spawn_child_project"],
+	"/legible.tree.v1.MsgCreateProject":     TransactionGasCosts["create_project"],
+	"/legible.tree.v1.MsgProposeProject":    TransactionGasCosts["propose_project"],
+	"/legible.tree.v1.MsgStartDevelopment":  TransactionGasCosts["start_development"],
+	"/legible.tree.v1.MsgCompleteProject":   TransactionGasCosts["complete_project"],
+	"/legible.tree.v1.MsgPauseProject":      TransactionGasCosts["pause_project"],
+	"/legible.tree.v1.MsgResumeProject":     TransactionGasCosts["resume_project"],
+	"/legible.tree.v1.MsgAbandonProject":    TransactionGasCosts["abandon_project"],
+	"/legible.tree.v1.MsgSpawnChildProject": TransactionGasCosts["spawn_child_project"],
 
 	// Tree of Life — tasks
-	"/legible.tree.v1.MsgAddTask":             TransactionGasCosts["add_task"],
-	"/legible.tree.v1.MsgAssignTask":          TransactionGasCosts["assign_task"],
-	"/legible.tree.v1.MsgStartWork":           TransactionGasCosts["start_work"],
-	"/legible.tree.v1.MsgSubmitDeliverable":   TransactionGasCosts["submit_deliverable"],
-	"/legible.tree.v1.MsgApproveDeliverable":  TransactionGasCosts["approve_deliverable"],
-	"/legible.tree.v1.MsgRejectDeliverable":   TransactionGasCosts["reject_deliverable"],
-	"/legible.tree.v1.MsgReopenTask":          TransactionGasCosts["reopen_task"],
+	"/legible.tree.v1.MsgAddTask":            TransactionGasCosts["add_task"],
+	"/legible.tree.v1.MsgAssignTask":         TransactionGasCosts["assign_task"],
+	"/legible.tree.v1.MsgStartWork":          TransactionGasCosts["start_work"],
+	"/legible.tree.v1.MsgSubmitDeliverable":  TransactionGasCosts["submit_deliverable"],
+	"/legible.tree.v1.MsgApproveDeliverable": TransactionGasCosts["approve_deliverable"],
+	"/legible.tree.v1.MsgRejectDeliverable":  TransactionGasCosts["reject_deliverable"],
+	"/legible.tree.v1.MsgReopenTask":         TransactionGasCosts["reopen_task"],
 
 	// Tree of Life — services
-	"/legible.tree.v1.MsgDeployService":       TransactionGasCosts["deploy_service"],
-	"/legible.tree.v1.MsgCallService":         TransactionGasCosts["call_service"],
-	"/legible.tree.v1.MsgSubscribeService":    TransactionGasCosts["subscribe_service"],
-	"/legible.tree.v1.MsgPauseService":        TransactionGasCosts["pause_service"],
-	"/legible.tree.v1.MsgResumeService":       TransactionGasCosts["resume_service"],
-	"/legible.tree.v1.MsgRetireService":       TransactionGasCosts["retire_service"],
+	"/legible.tree.v1.MsgDeployService":    TransactionGasCosts["deploy_service"],
+	"/legible.tree.v1.MsgCallService":      TransactionGasCosts["call_service"],
+	"/legible.tree.v1.MsgSubscribeService": TransactionGasCosts["subscribe_service"],
+	"/legible.tree.v1.MsgPauseService":     TransactionGasCosts["pause_service"],
+	"/legible.tree.v1.MsgResumeService":    TransactionGasCosts["resume_service"],
+	"/legible.tree.v1.MsgRetireService":    TransactionGasCosts["retire_service"],
 
 	// Tree of Life — seeds & contributors
-	"/legible.tree.v1.MsgBeginSeeding":        TransactionGasCosts["begin_seeding"],
-	"/legible.tree.v1.MsgDetectOpportunity":   TransactionGasCosts["detect_opportunity"],
-	"/legible.tree.v1.MsgClaimOpportunity":    TransactionGasCosts["claim_opportunity"],
-	"/legible.tree.v1.MsgAddContributor":      TransactionGasCosts["add_contributor"],
-	"/legible.tree.v1.MsgApplyToProject":      TransactionGasCosts["apply_to_project"],
-	"/legible.tree.v1.MsgReviewApplication":   TransactionGasCosts["review_application"],
-	"/legible.tree.v1.MsgSetAvailability":     TransactionGasCosts["set_availability"],
+	"/legible.tree.v1.MsgBeginSeeding":      TransactionGasCosts["begin_seeding"],
+	"/legible.tree.v1.MsgDetectOpportunity": TransactionGasCosts["detect_opportunity"],
+	"/legible.tree.v1.MsgClaimOpportunity":  TransactionGasCosts["claim_opportunity"],
+	"/legible.tree.v1.MsgAddContributor":    TransactionGasCosts["add_contributor"],
+	"/legible.tree.v1.MsgApplyToProject":    TransactionGasCosts["apply_to_project"],
+	"/legible.tree.v1.MsgReviewApplication": TransactionGasCosts["review_application"],
+	"/legible.tree.v1.MsgSetAvailability":   TransactionGasCosts["set_availability"],
 
 	// BVM
 	"/legible.bvm.v1.MsgDeployContract":    TransactionGasCosts["deploy_contract"],
@@ -273,13 +273,13 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.bvm.v1.MsgScheduleExecution": TransactionGasCosts["schedule_execution"],
 
 	// Governance (extended)
-	"/legible.gov.v1.MsgSubmitLIP":          TransactionGasCosts["submit_lip"],
-	"/legible.gov.v1.MsgCastVote":           TransactionGasCosts["cast_vote"],
-	"/legible.gov.v1.MsgLockVote":           TransactionGasCosts["lock_vote"],
-	"/legible.gov.v1.MsgUnlockVote":         TransactionGasCosts["unlock_vote"],
-	"/legible.gov.v1.MsgCommitReview":       TransactionGasCosts["commit_review"],
-	"/legible.gov.v1.MsgRevealReview":       TransactionGasCosts["reveal_review"],
-	"/legible.gov.v1.MsgSubmitDisbursement": TransactionGasCosts["submit_disbursement"],
+	"/legible.gov.v1.MsgSubmitLIP":           TransactionGasCosts["submit_lip"],
+	"/legible.gov.v1.MsgCastVote":            TransactionGasCosts["cast_vote"],
+	"/legible.gov.v1.MsgLockVote":            TransactionGasCosts["lock_vote"],
+	"/legible.gov.v1.MsgUnlockVote":          TransactionGasCosts["unlock_vote"],
+	"/legible.gov.v1.MsgCommitReview":        TransactionGasCosts["commit_review"],
+	"/legible.gov.v1.MsgRevealReview":        TransactionGasCosts["reveal_review"],
+	"/legible.gov.v1.MsgSubmitDisbursement":  TransactionGasCosts["submit_disbursement"],
 	"/legible.gov.v1.MsgExecuteDisbursement": TransactionGasCosts["execute_disbursement"],
 
 	// Emergency
@@ -291,10 +291,10 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.emergency.v1.MsgVoteResume":    TransactionGasCosts["vote_resume"],
 
 	// Claiming pots
-	"/legible.claiming_pot.v1.MsgCreatePot":     TransactionGasCosts["create_pot"],
-	"/legible.claiming_pot.v1.MsgFundPot":       TransactionGasCosts["fund_pot"],
-	"/legible.claiming_pot.v1.MsgClaimFromPot":  TransactionGasCosts["claim_from_pot"],
-	"/legible.claiming_pot.v1.MsgClosePot":      TransactionGasCosts["close_pot"],
+	"/legible.claiming_pot.v1.MsgCreatePot":    TransactionGasCosts["create_pot"],
+	"/legible.claiming_pot.v1.MsgFundPot":      TransactionGasCosts["fund_pot"],
+	"/legible.claiming_pot.v1.MsgClaimFromPot": TransactionGasCosts["claim_from_pot"],
+	"/legible.claiming_pot.v1.MsgClosePot":     TransactionGasCosts["close_pot"],
 
 	// Capture defense
 	"/legible.capture_defense.v1.MsgRequestQualification": TransactionGasCosts["request_capture_qualification"],
@@ -319,58 +319,58 @@ var msgTypeURLToGas = map[string]uint64{
 
 	// Qualification
 	"/legible.qualification.v1.MsgRequestQualification":  TransactionGasCosts["request_qualification"],
-	"/legible.qualification.v1.MsgEndorseValidator":       TransactionGasCosts["endorse_validator"],
-	"/legible.qualification.v1.MsgRenewQualification":     TransactionGasCosts["renew_qualification"],
-	"/legible.qualification.v1.MsgWithdrawQualification":  TransactionGasCosts["withdraw_qualification"],
+	"/legible.qualification.v1.MsgEndorseValidator":      TransactionGasCosts["endorse_validator"],
+	"/legible.qualification.v1.MsgRenewQualification":    TransactionGasCosts["renew_qualification"],
+	"/legible.qualification.v1.MsgWithdrawQualification": TransactionGasCosts["withdraw_qualification"],
 
 	// Auth recovery (hand-written ExtendedMsg service)
-	"/legible.auth.v1.MsgRecoverAccount":       TransactionGasCosts["recover_account"],
-	"/legible.auth.v1.MsgFreezeAccount":        TransactionGasCosts["freeze_account"],
-	"/legible.auth.v1.MsgUnfreezeAccount":      TransactionGasCosts["unfreeze_account"],
-	"/legible.auth.v1.MsgSetRecoveryConfig":    TransactionGasCosts["set_recovery_config"],
-	"/legible.auth.v1.MsgInitiateRecovery":     TransactionGasCosts["initiate_recovery"],
-	"/legible.auth.v1.MsgSubmitRecoveryShard":  TransactionGasCosts["submit_recovery_shard"],
-	"/legible.auth.v1.MsgChallengeRecovery":    TransactionGasCosts["challenge_recovery"],
-	"/legible.auth.v1.MsgExecuteRecovery":      TransactionGasCosts["execute_recovery"],
+	"/legible.auth.v1.MsgRecoverAccount":      TransactionGasCosts["recover_account"],
+	"/legible.auth.v1.MsgFreezeAccount":       TransactionGasCosts["freeze_account"],
+	"/legible.auth.v1.MsgUnfreezeAccount":     TransactionGasCosts["unfreeze_account"],
+	"/legible.auth.v1.MsgSetRecoveryConfig":   TransactionGasCosts["set_recovery_config"],
+	"/legible.auth.v1.MsgInitiateRecovery":    TransactionGasCosts["initiate_recovery"],
+	"/legible.auth.v1.MsgSubmitRecoveryShard": TransactionGasCosts["submit_recovery_shard"],
+	"/legible.auth.v1.MsgChallengeRecovery":   TransactionGasCosts["challenge_recovery"],
+	"/legible.auth.v1.MsgExecuteRecovery":     TransactionGasCosts["execute_recovery"],
 
 	// Governance extras
-	"/legible.gov.v1.MsgStakeLIP":             TransactionGasCosts["governance_stake_lip"],
-	"/legible.gov.v1.MsgAmendLIP":             TransactionGasCosts["amend_lip"],
-	"/legible.gov.v1.MsgAdvanceLIPStage":      TransactionGasCosts["advance_lip_stage"],
-	"/legible.gov.v1.MsgWithdrawLIP":          TransactionGasCosts["withdraw_lip"],
-	"/legible.gov.v1.MsgSwitchVote":           TransactionGasCosts["switch_vote"],
-	"/legible.gov.v1.MsgFinalizeReview":       TransactionGasCosts["finalize_review"],
-	"/legible.gov.v1.MsgStakeDisbursement":    TransactionGasCosts["stake_disbursement"],
-	"/legible.gov.v1.MsgAdvanceDisbursement":  TransactionGasCosts["advance_disbursement"],
-	"/legible.gov.v1.MsgCancelDisbursement":   TransactionGasCosts["cancel_disbursement"],
-	"/legible.gov.v1.MsgRegisterOperator":     TransactionGasCosts["register_operator"],
-	"/legible.gov.v1.MsgAddAgent":             TransactionGasCosts["add_agent"],
-	"/legible.gov.v1.MsgRemoveAgent":          TransactionGasCosts["remove_agent"],
-	"/legible.gov.v1.MsgSlashOperator":        TransactionGasCosts["slash_operator"],
-	"/legible.gov.v1.MsgCreateDeployment":     TransactionGasCosts["create_deployment"],
-	"/legible.gov.v1.MsgAdvanceDeployment":    TransactionGasCosts["advance_deployment"],
-	"/legible.gov.v1.MsgApproveDeployment":    TransactionGasCosts["approve_deployment"],
-	"/legible.gov.v1.MsgRollbackDeployment":   TransactionGasCosts["rollback_deployment"],
+	"/legible.gov.v1.MsgStakeLIP":            TransactionGasCosts["governance_stake_lip"],
+	"/legible.gov.v1.MsgAmendLIP":            TransactionGasCosts["amend_lip"],
+	"/legible.gov.v1.MsgAdvanceLIPStage":     TransactionGasCosts["advance_lip_stage"],
+	"/legible.gov.v1.MsgWithdrawLIP":         TransactionGasCosts["withdraw_lip"],
+	"/legible.gov.v1.MsgSwitchVote":          TransactionGasCosts["switch_vote"],
+	"/legible.gov.v1.MsgFinalizeReview":      TransactionGasCosts["finalize_review"],
+	"/legible.gov.v1.MsgStakeDisbursement":   TransactionGasCosts["stake_disbursement"],
+	"/legible.gov.v1.MsgAdvanceDisbursement": TransactionGasCosts["advance_disbursement"],
+	"/legible.gov.v1.MsgCancelDisbursement":  TransactionGasCosts["cancel_disbursement"],
+	"/legible.gov.v1.MsgRegisterOperator":    TransactionGasCosts["register_operator"],
+	"/legible.gov.v1.MsgAddAgent":            TransactionGasCosts["add_agent"],
+	"/legible.gov.v1.MsgRemoveAgent":         TransactionGasCosts["remove_agent"],
+	"/legible.gov.v1.MsgSlashOperator":       TransactionGasCosts["slash_operator"],
+	"/legible.gov.v1.MsgCreateDeployment":    TransactionGasCosts["create_deployment"],
+	"/legible.gov.v1.MsgAdvanceDeployment":   TransactionGasCosts["advance_deployment"],
+	"/legible.gov.v1.MsgApproveDeployment":   TransactionGasCosts["approve_deployment"],
+	"/legible.gov.v1.MsgRollbackDeployment":  TransactionGasCosts["rollback_deployment"],
 
 	// Discovery
-	"/legible.discovery.v1.MsgRegisterAgent":     TransactionGasCosts["register_agent"],
-	"/legible.discovery.v1.MsgUpdateProfile":     TransactionGasCosts["update_profile"],
-	"/legible.discovery.v1.MsgAddCapability":     TransactionGasCosts["add_capability"],
-	"/legible.discovery.v1.MsgRemoveCapability":  TransactionGasCosts["remove_capability"],
-	"/legible.discovery.v1.MsgDeregisterAgent":   TransactionGasCosts["deregister_agent"],
-	"/legible.discovery.v1.MsgHeartbeat":         TransactionGasCosts["heartbeat"],
+	"/legible.discovery.v1.MsgRegisterAgent":    TransactionGasCosts["register_agent"],
+	"/legible.discovery.v1.MsgUpdateProfile":    TransactionGasCosts["update_profile"],
+	"/legible.discovery.v1.MsgAddCapability":    TransactionGasCosts["add_capability"],
+	"/legible.discovery.v1.MsgRemoveCapability": TransactionGasCosts["remove_capability"],
+	"/legible.discovery.v1.MsgDeregisterAgent":  TransactionGasCosts["deregister_agent"],
+	"/legible.discovery.v1.MsgHeartbeat":        TransactionGasCosts["heartbeat"],
 
 	// Partnerships
-	"/legible.partnerships.v1.MsgInitiatePartnership":  TransactionGasCosts["initiate_partnership"],
-	"/legible.partnerships.v1.MsgAcceptPartnership":    TransactionGasCosts["accept_partnership"],
-	"/legible.partnerships.v1.MsgDepositToPot":         TransactionGasCosts["deposit_to_pot"],
-	"/legible.partnerships.v1.MsgDistributeReward":     TransactionGasCosts["distribute_reward"],
-	"/legible.partnerships.v1.MsgProposeOperation":     TransactionGasCosts["propose_operation"],
-	"/legible.partnerships.v1.MsgApproveOperation":     TransactionGasCosts["approve_operation"],
-	"/legible.partnerships.v1.MsgRejectOperation":      TransactionGasCosts["reject_operation"],
-	"/legible.partnerships.v1.MsgSafetyFreeze":         TransactionGasCosts["safety_freeze"],
-	"/legible.partnerships.v1.MsgRaiseCoercionSignal":  TransactionGasCosts["raise_coercion_signal"],
-	"/legible.partnerships.v1.MsgInitiateExit":         TransactionGasCosts["initiate_exit"],
+	"/legible.partnerships.v1.MsgInitiatePartnership": TransactionGasCosts["initiate_partnership"],
+	"/legible.partnerships.v1.MsgAcceptPartnership":   TransactionGasCosts["accept_partnership"],
+	"/legible.partnerships.v1.MsgDepositToPot":        TransactionGasCosts["deposit_to_pot"],
+	"/legible.partnerships.v1.MsgDistributeReward":    TransactionGasCosts["distribute_reward"],
+	"/legible.partnerships.v1.MsgProposeOperation":    TransactionGasCosts["propose_operation"],
+	"/legible.partnerships.v1.MsgApproveOperation":    TransactionGasCosts["approve_operation"],
+	"/legible.partnerships.v1.MsgRejectOperation":     TransactionGasCosts["reject_operation"],
+	"/legible.partnerships.v1.MsgSafetyFreeze":        TransactionGasCosts["safety_freeze"],
+	"/legible.partnerships.v1.MsgRaiseCoercionSignal": TransactionGasCosts["raise_coercion_signal"],
+	"/legible.partnerships.v1.MsgInitiateExit":        TransactionGasCosts["initiate_exit"],
 
 	// Ontology
 	"/legible.ontology.v1.MsgProposeDomain":             TransactionGasCosts["propose_domain"],
@@ -380,17 +380,17 @@ var msgTypeURLToGas = map[string]uint64{
 	"/legible.ontology.v1.MsgAcknowledgeIncompleteness": TransactionGasCosts["acknowledge_incompleteness"],
 
 	// Schedule
-	"/legible.schedule.v1.MsgCreateSchedule":  TransactionGasCosts["create_schedule"],
-	"/legible.schedule.v1.MsgPauseSchedule":   TransactionGasCosts["pause_schedule"],
-	"/legible.schedule.v1.MsgResumeSchedule":  TransactionGasCosts["resume_schedule"],
-	"/legible.schedule.v1.MsgCancelSchedule":  TransactionGasCosts["cancel_schedule"],
-	"/legible.schedule.v1.MsgAddFee":          TransactionGasCosts["add_fee"],
+	"/legible.schedule.v1.MsgCreateSchedule": TransactionGasCosts["create_schedule"],
+	"/legible.schedule.v1.MsgPauseSchedule":  TransactionGasCosts["pause_schedule"],
+	"/legible.schedule.v1.MsgResumeSchedule": TransactionGasCosts["resume_schedule"],
+	"/legible.schedule.v1.MsgCancelSchedule": TransactionGasCosts["cancel_schedule"],
+	"/legible.schedule.v1.MsgAddFee":         TransactionGasCosts["add_fee"],
 
 	// Billing
-	"/legible.billing.v1.MsgRegisterProvider":    TransactionGasCosts["register_provider"],
-	"/legible.billing.v1.MsgDeregisterProvider":  TransactionGasCosts["deregister_provider"],
-	"/legible.billing.v1.MsgRequestQuote":        TransactionGasCosts["request_quote"],
-	"/legible.billing.v1.MsgExecutePayment":      TransactionGasCosts["execute_payment"],
+	"/legible.billing.v1.MsgRegisterProvider":   TransactionGasCosts["register_provider"],
+	"/legible.billing.v1.MsgDeregisterProvider": TransactionGasCosts["deregister_provider"],
+	"/legible.billing.v1.MsgRequestQuote":       TransactionGasCosts["request_quote"],
+	"/legible.billing.v1.MsgExecutePayment":     TransactionGasCosts["execute_payment"],
 }
 
 // ---------- Fee Router Decorator ----------

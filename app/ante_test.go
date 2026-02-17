@@ -225,10 +225,10 @@ type mockMsg struct {
 	typeURL string
 }
 
-func (m mockMsg) ProtoMessage()             {}
-func (m mockMsg) Reset()                    {}
-func (m mockMsg) String() string            { return m.typeURL }
-func (m mockMsg) ValidateBasic() error      { return nil }
+func (m mockMsg) ProtoMessage()        {}
+func (m mockMsg) Reset()               {}
+func (m mockMsg) String() string       { return m.typeURL }
+func (m mockMsg) ValidateBasic() error { return nil }
 
 // We register the mock type URL via TypeURL method
 func (m mockMsg) XXX_MessageName() string { return m.typeURL[1:] } // strip leading /
@@ -338,9 +338,9 @@ type mockFeeTx struct {
 	msgs []sdk.Msg
 }
 
-func (m mockFeeTx) GetGas() uint64       { return m.gas }
-func (m mockFeeTx) GetFee() sdk.Coins    { return m.fee }
-func (m mockFeeTx) GetMsgs() []sdk.Msg   { return m.msgs }
+func (m mockFeeTx) GetGas() uint64     { return m.gas }
+func (m mockFeeTx) GetFee() sdk.Coins  { return m.fee }
+func (m mockFeeTx) GetMsgs() []sdk.Msg { return m.msgs }
 func (m mockFeeTx) FeeGranter() []byte { return nil }
 func (m mockFeeTx) FeePayer() []byte   { return nil }
 

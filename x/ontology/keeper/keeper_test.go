@@ -1793,3 +1793,83 @@ func TestLogicZonesExportImport(t *testing.T) {
 		t.Errorf("expected peano max_confidence=850000, got %d", peano.MaxConfidenceBps)
 	}
 }
+
+// ---------- G-1: Zone-Category Consistency Tests ----------
+
+func TestValidateZoneForCategory_Valid(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Analytic claims can use propositional or presburger
+	if err := k.ValidateZoneForCategory(ctx, "propositional", "analytic"); err != nil {
+		t.Errorf("analytic+propositional should be valid: %v", err)
+	}
+	if err := k.ValidateZoneForCategory(ctx, "presburger", "analytic"); err != nil {
+		t.Errorf("analytic+presburger should be valid: %v", err)
+	}
+
+	// Formal claims can use any formal zone
+	if err := k.ValidateZoneForCategory(ctx, "peano", "formal"); err != nil {
+		t.Errorf("formal+peano should be valid: %v", err)
+	}
+	if err := k.ValidateZoneForCategory(ctx, "set_theory", "formal"); err != nil {
+		t.Errorf("formal+set_theory should be valid: %v", err)
+	}
+
+	// Empirical claims can only use empirical zone
+	if err := k.ValidateZoneForCategory(ctx, "empirical", "empirical"); err != nil {
+		t.Errorf("empirical+empirical should be valid: %v", err)
+	}
+}
+
+func TestValidateZoneForCategory_Invalid(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// G-1: Empirical claim cannot use propositional zone (the key attack vector)
+	err := k.ValidateZoneForCategory(ctx, "propositional", "empirical")
+	if err == nil {
+		t.Error("empirical+propositional should be rejected")
+	}
+
+	// Social claim cannot use presburger zone
+	err = k.ValidateZoneForCategory(ctx, "presburger", "social")
+	if err == nil {
+		t.Error("social+presburger should be rejected")
+	}
+
+	// Historical claim cannot use peano zone
+	err = k.ValidateZoneForCategory(ctx, "peano", "historical")
+	if err == nil {
+		t.Error("historical+peano should be rejected")
+	}
+
+	// Analytic claim cannot use empirical zone
+	err = k.ValidateZoneForCategory(ctx, "empirical", "analytic")
+	if err == nil {
+		t.Error("analytic+empirical should be rejected")
+	}
+
+	// Protocol claim cannot use peano zone
+	err = k.ValidateZoneForCategory(ctx, "peano", "protocol")
+	if err == nil {
+		t.Error("protocol+peano should be rejected")
+	}
+}
+
+func TestValidateZoneForCategory_BackwardCompat(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Empty zone — backward compatible
+	if err := k.ValidateZoneForCategory(ctx, "", "empirical"); err != nil {
+		t.Errorf("empty zone should be valid (backward compat): %v", err)
+	}
+
+	// Empty category — backward compatible
+	if err := k.ValidateZoneForCategory(ctx, "propositional", ""); err != nil {
+		t.Errorf("empty category should be valid (backward compat): %v", err)
+	}
+
+	// Unknown category — pass through (knowledge module validates categories)
+	if err := k.ValidateZoneForCategory(ctx, "propositional", "unknown_category"); err != nil {
+		t.Errorf("unknown category should pass through: %v", err)
+	}
+}

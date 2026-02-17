@@ -215,7 +215,6 @@ func (k Keeper) RecordVerificationOutcome(ctx sdk.Context, validatorAddr, domain
 		}
 	}
 
-
 	// Recalculate weight
 	q.Metrics.EffectiveWeightBps = k.calculateWeight(q)
 

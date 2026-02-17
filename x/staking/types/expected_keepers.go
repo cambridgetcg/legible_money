@@ -34,4 +34,3 @@ type LegibleAuthKeeper interface{}
 type AutopoiesisKeeper interface {
 	GetMultiplier(ctx sdk.Context, path string) uint64
 }
-

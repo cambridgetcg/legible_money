@@ -40,6 +40,10 @@ type OntologyKeeper interface {
 	// RequiresIncompletenessAck returns whether a zone requires Gödelian
 	// incompleteness acknowledgment (true for Peano, set_theory).
 	RequiresIncompletenessAck(ctx sdk.Context, zone string) bool
+
+	// ValidateZoneForCategory checks that the declared logic zone is compatible
+	// with the claim's epistemic category. Prevents zone self-declaration gaming.
+	ValidateZoneForCategory(ctx sdk.Context, zone string, epistemicCategory string) error
 }
 
 // DomainQualificationKeeper defines the expected domain qualification keeper interface.
@@ -74,6 +78,9 @@ type VestingRewardsKeeper interface {
 	// PauseVestingByClaimId pauses the vesting schedule associated with a claim.
 	// Used when a fact is archived (pruned) to stop further reward vesting.
 	PauseVestingByClaimId(ctx sdk.Context, claimId string) error
+	// PauseAllVestingByRecipient pauses ALL active vesting schedules for an agent.
+	// FARM-6 fix: called when agent's rejection rate exceeds misbehavior threshold.
+	PauseAllVestingByRecipient(ctx sdk.Context, recipient string) int
 }
 
 // EvidenceMgmtKeeper defines the expected evidence management keeper interface.
@@ -96,6 +103,16 @@ type EvidenceRecord struct {
 	EvidenceType string `json:"evidence_type"` // on_chain, oracle_feed, attestation, computation, document, experiment
 	Status       string `json:"status"`        // submitted, verified, rejected, expired
 	Reliability  uint64 `json:"reliability"`   // 0-1,000,000 basis points
+}
+
+// HomeKeeper defines the expected home module keeper interface.
+// The knowledge module uses this to notify agent homes of epistemic activity
+// (verifications, claim submissions, challenges) so patina scores reflect
+// actual knowledge contributions.
+type HomeKeeper interface {
+	RecordVerification(ctx sdk.Context, ownerAddr string, domain string, matchedConsensus bool)
+	RecordClaimSubmission(ctx sdk.Context, ownerAddr string)
+	RecordChallenge(ctx sdk.Context, ownerAddr string)
 }
 
 // StakingKeeper defines the expected staking keeper interface.

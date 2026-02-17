@@ -25,8 +25,16 @@ var File_legible_knowledge_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_knowledge_v1_tx_proto_rawDesc = "" +
 	"\n" +
-	"\x1dlegible/knowledge/v1/tx.proto\x12\x14legible.knowledge.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a legible/knowledge/v1/claim.proto2\xd3\x04\n" +
-	"\x03Msg\x12g\n" +
+	"\x1dlegible/knowledge/v1/tx.proto\x12\x14legible.knowledge.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a legible/knowledge/v1/claim.proto\x1a'legible/knowledge/v1/counter_fact.proto2\xb2\n" +
+	"\n" +
+	"\x03Msg\x12a\n" +
+	"\vSubmitClaim\x12$.legible.knowledge.v1.MsgSubmitClaim\x1a,.legible.knowledge.v1.MsgSubmitClaimResponse\x12p\n" +
+	"\x10SubmitCommitment\x12).legible.knowledge.v1.MsgSubmitCommitment\x1a1.legible.knowledge.v1.MsgSubmitCommitmentResponse\x12d\n" +
+	"\fSubmitReveal\x12%.legible.knowledge.v1.MsgSubmitReveal\x1a-.legible.knowledge.v1.MsgSubmitRevealResponse\x12g\n" +
+	"\rChallengeFact\x12&.legible.knowledge.v1.MsgChallengeFact\x1a..legible.knowledge.v1.MsgChallengeFactResponse\x12U\n" +
+	"\aAddFact\x12 .legible.knowledge.v1.MsgAddFact\x1a(.legible.knowledge.v1.MsgAddFactResponse\x12y\n" +
+	"\x13SubmitContradiction\x12,.legible.knowledge.v1.MsgSubmitContradiction\x1a4.legible.knowledge.v1.MsgSubmitContradictionResponse\x12g\n" +
+	"\rPatronizeFact\x12&.legible.knowledge.v1.MsgPatronizeFact\x1a..legible.knowledge.v1.MsgPatronizeFactResponse\x12g\n" +
 	"\rProposeDomain\x12&.legible.knowledge.v1.MsgProposeDomain\x1a..legible.knowledge.v1.MsgProposeDomainResponse\x12\x7f\n" +
 	"\x15EndorseDomainProposal\x12..legible.knowledge.v1.MsgEndorseDomainProposal\x1a6.legible.knowledge.v1.MsgEndorseDomainProposalResponse\x12\x85\x01\n" +
 	"\x17ChallengeDomainProposal\x120.legible.knowledge.v1.MsgChallengeDomainProposal\x1a8.legible.knowledge.v1.MsgChallengeDomainProposalResponse\x12m\n" +
@@ -34,33 +42,61 @@ const file_legible_knowledge_v1_tx_proto_rawDesc = "" +
 	"\fUpdateParams\x12%.legible.knowledge.v1.MsgUpdateParams\x1a-.legible.knowledge.v1.MsgUpdateParamsResponse\x1a\x05\x80\xe7\xb0*\x01B4Z2github.com/legible-money/legible/x/knowledge/typesb\x06proto3"
 
 var file_legible_knowledge_v1_tx_proto_goTypes = []any{
-	(*MsgProposeDomain)(nil),                   // 0: legible.knowledge.v1.MsgProposeDomain
-	(*MsgEndorseDomainProposal)(nil),           // 1: legible.knowledge.v1.MsgEndorseDomainProposal
-	(*MsgChallengeDomainProposal)(nil),         // 2: legible.knowledge.v1.MsgChallengeDomainProposal
-	(*MsgRegisterStratum)(nil),                 // 3: legible.knowledge.v1.MsgRegisterStratum
-	(*MsgUpdateParams)(nil),                    // 4: legible.knowledge.v1.MsgUpdateParams
-	(*MsgProposeDomainResponse)(nil),           // 5: legible.knowledge.v1.MsgProposeDomainResponse
-	(*MsgEndorseDomainProposalResponse)(nil),   // 6: legible.knowledge.v1.MsgEndorseDomainProposalResponse
-	(*MsgChallengeDomainProposalResponse)(nil), // 7: legible.knowledge.v1.MsgChallengeDomainProposalResponse
-	(*MsgRegisterStratumResponse)(nil),         // 8: legible.knowledge.v1.MsgRegisterStratumResponse
-	(*MsgUpdateParamsResponse)(nil),            // 9: legible.knowledge.v1.MsgUpdateParamsResponse
+	(*MsgSubmitClaim)(nil),                     // 0: legible.knowledge.v1.MsgSubmitClaim
+	(*MsgSubmitCommitment)(nil),                // 1: legible.knowledge.v1.MsgSubmitCommitment
+	(*MsgSubmitReveal)(nil),                    // 2: legible.knowledge.v1.MsgSubmitReveal
+	(*MsgChallengeFact)(nil),                   // 3: legible.knowledge.v1.MsgChallengeFact
+	(*MsgAddFact)(nil),                         // 4: legible.knowledge.v1.MsgAddFact
+	(*MsgSubmitContradiction)(nil),             // 5: legible.knowledge.v1.MsgSubmitContradiction
+	(*MsgPatronizeFact)(nil),                   // 6: legible.knowledge.v1.MsgPatronizeFact
+	(*MsgProposeDomain)(nil),                   // 7: legible.knowledge.v1.MsgProposeDomain
+	(*MsgEndorseDomainProposal)(nil),           // 8: legible.knowledge.v1.MsgEndorseDomainProposal
+	(*MsgChallengeDomainProposal)(nil),         // 9: legible.knowledge.v1.MsgChallengeDomainProposal
+	(*MsgRegisterStratum)(nil),                 // 10: legible.knowledge.v1.MsgRegisterStratum
+	(*MsgUpdateParams)(nil),                    // 11: legible.knowledge.v1.MsgUpdateParams
+	(*MsgSubmitClaimResponse)(nil),             // 12: legible.knowledge.v1.MsgSubmitClaimResponse
+	(*MsgSubmitCommitmentResponse)(nil),        // 13: legible.knowledge.v1.MsgSubmitCommitmentResponse
+	(*MsgSubmitRevealResponse)(nil),            // 14: legible.knowledge.v1.MsgSubmitRevealResponse
+	(*MsgChallengeFactResponse)(nil),           // 15: legible.knowledge.v1.MsgChallengeFactResponse
+	(*MsgAddFactResponse)(nil),                 // 16: legible.knowledge.v1.MsgAddFactResponse
+	(*MsgSubmitContradictionResponse)(nil),     // 17: legible.knowledge.v1.MsgSubmitContradictionResponse
+	(*MsgPatronizeFactResponse)(nil),           // 18: legible.knowledge.v1.MsgPatronizeFactResponse
+	(*MsgProposeDomainResponse)(nil),           // 19: legible.knowledge.v1.MsgProposeDomainResponse
+	(*MsgEndorseDomainProposalResponse)(nil),   // 20: legible.knowledge.v1.MsgEndorseDomainProposalResponse
+	(*MsgChallengeDomainProposalResponse)(nil), // 21: legible.knowledge.v1.MsgChallengeDomainProposalResponse
+	(*MsgRegisterStratumResponse)(nil),         // 22: legible.knowledge.v1.MsgRegisterStratumResponse
+	(*MsgUpdateParamsResponse)(nil),            // 23: legible.knowledge.v1.MsgUpdateParamsResponse
 }
 var file_legible_knowledge_v1_tx_proto_depIdxs = []int32{
-	0, // 0: legible.knowledge.v1.Msg.ProposeDomain:input_type -> legible.knowledge.v1.MsgProposeDomain
-	1, // 1: legible.knowledge.v1.Msg.EndorseDomainProposal:input_type -> legible.knowledge.v1.MsgEndorseDomainProposal
-	2, // 2: legible.knowledge.v1.Msg.ChallengeDomainProposal:input_type -> legible.knowledge.v1.MsgChallengeDomainProposal
-	3, // 3: legible.knowledge.v1.Msg.RegisterStratum:input_type -> legible.knowledge.v1.MsgRegisterStratum
-	4, // 4: legible.knowledge.v1.Msg.UpdateParams:input_type -> legible.knowledge.v1.MsgUpdateParams
-	5, // 5: legible.knowledge.v1.Msg.ProposeDomain:output_type -> legible.knowledge.v1.MsgProposeDomainResponse
-	6, // 6: legible.knowledge.v1.Msg.EndorseDomainProposal:output_type -> legible.knowledge.v1.MsgEndorseDomainProposalResponse
-	7, // 7: legible.knowledge.v1.Msg.ChallengeDomainProposal:output_type -> legible.knowledge.v1.MsgChallengeDomainProposalResponse
-	8, // 8: legible.knowledge.v1.Msg.RegisterStratum:output_type -> legible.knowledge.v1.MsgRegisterStratumResponse
-	9, // 9: legible.knowledge.v1.Msg.UpdateParams:output_type -> legible.knowledge.v1.MsgUpdateParamsResponse
-	5, // [5:10] is the sub-list for method output_type
-	0, // [0:5] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: legible.knowledge.v1.Msg.SubmitClaim:input_type -> legible.knowledge.v1.MsgSubmitClaim
+	1,  // 1: legible.knowledge.v1.Msg.SubmitCommitment:input_type -> legible.knowledge.v1.MsgSubmitCommitment
+	2,  // 2: legible.knowledge.v1.Msg.SubmitReveal:input_type -> legible.knowledge.v1.MsgSubmitReveal
+	3,  // 3: legible.knowledge.v1.Msg.ChallengeFact:input_type -> legible.knowledge.v1.MsgChallengeFact
+	4,  // 4: legible.knowledge.v1.Msg.AddFact:input_type -> legible.knowledge.v1.MsgAddFact
+	5,  // 5: legible.knowledge.v1.Msg.SubmitContradiction:input_type -> legible.knowledge.v1.MsgSubmitContradiction
+	6,  // 6: legible.knowledge.v1.Msg.PatronizeFact:input_type -> legible.knowledge.v1.MsgPatronizeFact
+	7,  // 7: legible.knowledge.v1.Msg.ProposeDomain:input_type -> legible.knowledge.v1.MsgProposeDomain
+	8,  // 8: legible.knowledge.v1.Msg.EndorseDomainProposal:input_type -> legible.knowledge.v1.MsgEndorseDomainProposal
+	9,  // 9: legible.knowledge.v1.Msg.ChallengeDomainProposal:input_type -> legible.knowledge.v1.MsgChallengeDomainProposal
+	10, // 10: legible.knowledge.v1.Msg.RegisterStratum:input_type -> legible.knowledge.v1.MsgRegisterStratum
+	11, // 11: legible.knowledge.v1.Msg.UpdateParams:input_type -> legible.knowledge.v1.MsgUpdateParams
+	12, // 12: legible.knowledge.v1.Msg.SubmitClaim:output_type -> legible.knowledge.v1.MsgSubmitClaimResponse
+	13, // 13: legible.knowledge.v1.Msg.SubmitCommitment:output_type -> legible.knowledge.v1.MsgSubmitCommitmentResponse
+	14, // 14: legible.knowledge.v1.Msg.SubmitReveal:output_type -> legible.knowledge.v1.MsgSubmitRevealResponse
+	15, // 15: legible.knowledge.v1.Msg.ChallengeFact:output_type -> legible.knowledge.v1.MsgChallengeFactResponse
+	16, // 16: legible.knowledge.v1.Msg.AddFact:output_type -> legible.knowledge.v1.MsgAddFactResponse
+	17, // 17: legible.knowledge.v1.Msg.SubmitContradiction:output_type -> legible.knowledge.v1.MsgSubmitContradictionResponse
+	18, // 18: legible.knowledge.v1.Msg.PatronizeFact:output_type -> legible.knowledge.v1.MsgPatronizeFactResponse
+	19, // 19: legible.knowledge.v1.Msg.ProposeDomain:output_type -> legible.knowledge.v1.MsgProposeDomainResponse
+	20, // 20: legible.knowledge.v1.Msg.EndorseDomainProposal:output_type -> legible.knowledge.v1.MsgEndorseDomainProposalResponse
+	21, // 21: legible.knowledge.v1.Msg.ChallengeDomainProposal:output_type -> legible.knowledge.v1.MsgChallengeDomainProposalResponse
+	22, // 22: legible.knowledge.v1.Msg.RegisterStratum:output_type -> legible.knowledge.v1.MsgRegisterStratumResponse
+	23, // 23: legible.knowledge.v1.Msg.UpdateParams:output_type -> legible.knowledge.v1.MsgUpdateParamsResponse
+	12, // [12:24] is the sub-list for method output_type
+	0,  // [0:12] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_legible_knowledge_v1_tx_proto_init() }
@@ -69,6 +105,7 @@ func file_legible_knowledge_v1_tx_proto_init() {
 		return
 	}
 	file_legible_knowledge_v1_claim_proto_init()
+	file_legible_knowledge_v1_counter_fact_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

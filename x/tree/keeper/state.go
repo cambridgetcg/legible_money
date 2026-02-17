@@ -576,3 +576,68 @@ func IsFounderOrContributor(project types.ProductProject, addr string) bool {
 	}
 	return IsContributor(project, addr)
 }
+
+// ======================== Pending Abandon Proposals (SEC-1) ========================
+
+// SetPendingAbandon stores a pending abandon proposal.
+func (k Keeper) SetPendingAbandon(ctx sdk.Context, pa types.PendingAbandon) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(pa)
+	if err != nil {
+		panic(err)
+	}
+	if err := store.Set(types.PendingAbandonKey(pa.ProjectId), bz); err != nil {
+		panic(err)
+	}
+}
+
+// GetPendingAbandon retrieves a pending abandon proposal.
+func (k Keeper) GetPendingAbandon(ctx sdk.Context, projectId string) (types.PendingAbandon, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.PendingAbandonKey(projectId))
+	if err != nil || bz == nil {
+		return types.PendingAbandon{}, false
+	}
+	var pa types.PendingAbandon
+	if err := json.Unmarshal(bz, &pa); err != nil {
+		return types.PendingAbandon{}, false
+	}
+	return pa, true
+}
+
+// DeletePendingAbandon removes a pending abandon proposal.
+func (k Keeper) DeletePendingAbandon(ctx sdk.Context, projectId string) {
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Delete(types.PendingAbandonKey(projectId))
+}
+
+// ContributorMajorityConsented returns true if >50% of contributors (excluding founder)
+// have consented to the abandon proposal.
+func ContributorMajorityConsented(project types.ProductProject, pa types.PendingAbandon) bool {
+	// Count non-founder contributors
+	nonFounderCount := 0
+	for _, c := range project.Contributors {
+		if c.Did != project.Founder {
+			nonFounderCount++
+		}
+	}
+	if nonFounderCount == 0 {
+		return true // sole founder, no consent needed
+	}
+
+	// Count consented non-founder contributors
+	consentSet := make(map[string]bool)
+	for _, addr := range pa.Consented {
+		consentSet[addr] = true
+	}
+
+	consentedCount := 0
+	for _, c := range project.Contributors {
+		if c.Did != project.Founder && consentSet[c.Did] {
+			consentedCount++
+		}
+	}
+
+	// >50% consent required
+	return consentedCount*2 > nonFounderCount
+}

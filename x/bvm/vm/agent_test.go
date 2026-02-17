@@ -46,70 +46,156 @@ func (m *testVMAuthKeeper) GetSessionForDID(_ context.Context, _ string, _ uint6
 }
 
 // Knowledge
-func (c *compositeHost) QueryFact(factId []byte) (bool, uint64, []byte)              { return c.kh.QueryFact(factId) }
-func (c *compositeHost) QueryDomain(domain []byte, limit uint64) (uint64, [][]byte)  { return c.kh.QueryDomain(domain, limit) }
-func (c *compositeHost) SubmitClaim(callerDID string, domain, dataHash, evidenceHash []byte, blockNumber uint64) []byte { return c.kh.SubmitClaim(callerDID, domain, dataHash, evidenceHash, blockNumber) }
-func (c *compositeHost) CommitVote(callerDID string, claimId, voteHash []byte, blockNumber uint64) bool { return c.kh.CommitVote(callerDID, claimId, voteHash, blockNumber) }
-func (c *compositeHost) RevealVote(callerDID string, claimId []byte, vote, salt *big.Int, blockNumber uint64) bool { return c.kh.RevealVote(callerDID, claimId, vote, salt, blockNumber) }
-func (c *compositeHost) InitiateChallenge(callerDID string, factId, evidenceHash []byte, stake *big.Int, blockNumber uint64) []byte { return c.kh.InitiateChallenge(callerDID, factId, evidenceHash, stake, blockNumber) }
+func (c *compositeHost) QueryFact(factId []byte) (bool, uint64, []byte) {
+	return c.kh.QueryFact(factId)
+}
+func (c *compositeHost) QueryDomain(domain []byte, limit uint64) (uint64, [][]byte) {
+	return c.kh.QueryDomain(domain, limit)
+}
+func (c *compositeHost) SubmitClaim(callerDID string, domain, dataHash, evidenceHash []byte, blockNumber uint64) []byte {
+	return c.kh.SubmitClaim(callerDID, domain, dataHash, evidenceHash, blockNumber)
+}
+func (c *compositeHost) CommitVote(callerDID string, claimId, voteHash []byte, blockNumber uint64) bool {
+	return c.kh.CommitVote(callerDID, claimId, voteHash, blockNumber)
+}
+func (c *compositeHost) RevealVote(callerDID string, claimId []byte, vote, salt *big.Int, blockNumber uint64) bool {
+	return c.kh.RevealVote(callerDID, claimId, vote, salt, blockNumber)
+}
+func (c *compositeHost) InitiateChallenge(callerDID string, factId, evidenceHash []byte, stake *big.Int, blockNumber uint64) []byte {
+	return c.kh.InitiateChallenge(callerDID, factId, evidenceHash, stake, blockNumber)
+}
 
 // Agent Identity
-func (c *compositeHost) AgentDID(caller []byte) []byte                                    { return c.agent.AgentDID(caller) }
-func (c *compositeHost) AgentHome(callerDID string) []byte                                { return c.agent.AgentHome(callerDID) }
-func (c *compositeHost) VerifyIdentity(targetDID []byte) bool                             { return c.agent.VerifyIdentity(targetDID) }
-func (c *compositeHost) AttestIdentity(callerDID string, targetDID, attType, data []byte) []byte { return c.agent.AttestIdentity(callerDID, targetDID, attType, data) }
+func (c *compositeHost) AgentDID(caller []byte) []byte     { return c.agent.AgentDID(caller) }
+func (c *compositeHost) AgentHome(callerDID string) []byte { return c.agent.AgentHome(callerDID) }
+func (c *compositeHost) VerifyIdentity(targetDID []byte) bool {
+	return c.agent.VerifyIdentity(targetDID)
+}
+func (c *compositeHost) AttestIdentity(callerDID string, targetDID, attType, data []byte) []byte {
+	return c.agent.AttestIdentity(callerDID, targetDID, attType, data)
+}
 
 // Agent Belief
-func (c *compositeHost) GetBelief(callerDID string, factId []byte) uint64           { return c.agent.GetBelief(callerDID, factId) }
-func (c *compositeHost) SetBelief(callerDID string, factId []byte, conf uint64, src []byte) { c.agent.SetBelief(callerDID, factId, conf, src) }
-func (c *compositeHost) CompareBelief(callerDID string, factId []byte) int64         { return c.agent.CompareBelief(callerDID, factId) }
-func (c *compositeHost) BeliefCount(callerDID string, domain []byte) uint64          { return c.agent.BeliefCount(callerDID, domain) }
+func (c *compositeHost) GetBelief(callerDID string, factId []byte) uint64 {
+	return c.agent.GetBelief(callerDID, factId)
+}
+func (c *compositeHost) SetBelief(callerDID string, factId []byte, conf uint64, src []byte) {
+	c.agent.SetBelief(callerDID, factId, conf, src)
+}
+func (c *compositeHost) CompareBelief(callerDID string, factId []byte) int64 {
+	return c.agent.CompareBelief(callerDID, factId)
+}
+func (c *compositeHost) BeliefCount(callerDID string, domain []byte) uint64 {
+	return c.agent.BeliefCount(callerDID, domain)
+}
 
 // Agent Relationship
-func (c *compositeHost) GetTrust(callerDID string, targetDID []byte) uint64          { return c.agent.GetTrust(callerDID, targetDID) }
-func (c *compositeHost) SetTrust(callerDID string, targetDID []byte, level uint64, reason []byte) { c.agent.SetTrust(callerDID, targetDID, level, reason) }
-func (c *compositeHost) IsTrusted(callerDID string, targetDID []byte, threshold uint64) bool { return c.agent.IsTrusted(callerDID, targetDID, threshold) }
-func (c *compositeHost) Delegate(callerDID string, targetDID, cap, constraints []byte) []byte { return c.agent.Delegate(callerDID, targetDID, cap, constraints) }
+func (c *compositeHost) GetTrust(callerDID string, targetDID []byte) uint64 {
+	return c.agent.GetTrust(callerDID, targetDID)
+}
+func (c *compositeHost) SetTrust(callerDID string, targetDID []byte, level uint64, reason []byte) {
+	c.agent.SetTrust(callerDID, targetDID, level, reason)
+}
+func (c *compositeHost) IsTrusted(callerDID string, targetDID []byte, threshold uint64) bool {
+	return c.agent.IsTrusted(callerDID, targetDID, threshold)
+}
+func (c *compositeHost) Delegate(callerDID string, targetDID, cap, constraints []byte) []byte {
+	return c.agent.Delegate(callerDID, targetDID, cap, constraints)
+}
 
 // Agent Autonomy
-func (c *compositeHost) ScheduleSelf(contract, callData []byte, execBlock, gasLimit uint64) []byte { return c.agent.ScheduleSelf(contract, callData, execBlock, gasLimit) }
-func (c *compositeHost) CancelScheduleHost(scheduleId []byte) bool                  { return c.agent.CancelScheduleHost(scheduleId) }
-func (c *compositeHost) ModifySchedule(scheduleId []byte, newBlock uint64) bool      { return c.agent.ModifySchedule(scheduleId, newBlock) }
-func (c *compositeHost) GetScheduleCount(contract []byte) uint64                     { return c.agent.GetScheduleCount(contract) }
+func (c *compositeHost) ScheduleSelf(contract, callData []byte, execBlock, gasLimit uint64) []byte {
+	return c.agent.ScheduleSelf(contract, callData, execBlock, gasLimit)
+}
+func (c *compositeHost) CancelScheduleHost(scheduleId []byte) bool {
+	return c.agent.CancelScheduleHost(scheduleId)
+}
+func (c *compositeHost) ModifySchedule(scheduleId []byte, newBlock uint64) bool {
+	return c.agent.ModifySchedule(scheduleId, newBlock)
+}
+func (c *compositeHost) GetScheduleCount(contract []byte) uint64 {
+	return c.agent.GetScheduleCount(contract)
+}
 
 // Extended Relationships
-func (c *compositeHost) ListTrusted(callerDID string, offset, limit uint64) (uint64, [][]byte) { return c.agent.ListTrusted(callerDID, offset, limit) }
-func (c *compositeHost) BlockAgent(callerDID string, targetDID, reason []byte) bool  { return c.agent.BlockAgent(callerDID, targetDID, reason) }
-func (c *compositeHost) UnblockAgent(callerDID string, targetDID []byte) bool        { return c.agent.UnblockAgent(callerDID, targetDID) }
-func (c *compositeHost) RevokeDelegation(callerDID string, delegationId []byte) bool { return c.agent.RevokeDelegation(callerDID, delegationId) }
+func (c *compositeHost) ListTrusted(callerDID string, offset, limit uint64) (uint64, [][]byte) {
+	return c.agent.ListTrusted(callerDID, offset, limit)
+}
+func (c *compositeHost) BlockAgent(callerDID string, targetDID, reason []byte) bool {
+	return c.agent.BlockAgent(callerDID, targetDID, reason)
+}
+func (c *compositeHost) UnblockAgent(callerDID string, targetDID []byte) bool {
+	return c.agent.UnblockAgent(callerDID, targetDID)
+}
+func (c *compositeHost) RevokeDelegation(callerDID string, delegationId []byte) bool {
+	return c.agent.RevokeDelegation(callerDID, delegationId)
+}
 
 // Treasury
-func (c *compositeHost) ClaimVesting(callerDID string, vestingId []byte) *big.Int    { return c.treasury.ClaimVesting(callerDID, vestingId) }
-func (c *compositeHost) QueryVesting(callerDID string, off, lim uint64) (uint64, [][]byte) { return c.treasury.QueryVesting(callerDID, off, lim) }
-func (c *compositeHost) StakeTokens(callerDID string, amount *big.Int, valDID []byte) []byte { return c.treasury.StakeTokens(callerDID, amount, valDID) }
-func (c *compositeHost) UnstakeTokens(callerDID string, stakeId []byte) *big.Int     { return c.treasury.UnstakeTokens(callerDID, stakeId) }
-func (c *compositeHost) QueryExpiring(callerDID string, periodId []byte) (*big.Int, uint64) { return c.treasury.QueryExpiring(callerDID, periodId) }
-func (c *compositeHost) ExtendExpiring(callerDID string, periodId []byte, newExpiry uint64) bool { return c.treasury.ExtendExpiring(callerDID, periodId, newExpiry) }
-func (c *compositeHost) SetSpendLimit(callerDID string, limitType, amount []byte, period uint64) bool { return c.treasury.SetSpendLimit(callerDID, limitType, amount, period) }
-func (c *compositeHost) QueryTreasury(callerDID string) (*big.Int, *big.Int, *big.Int, *big.Int) { return c.treasury.QueryTreasury(callerDID) }
+func (c *compositeHost) ClaimVesting(callerDID string, vestingId []byte) *big.Int {
+	return c.treasury.ClaimVesting(callerDID, vestingId)
+}
+func (c *compositeHost) QueryVesting(callerDID string, off, lim uint64) (uint64, [][]byte) {
+	return c.treasury.QueryVesting(callerDID, off, lim)
+}
+func (c *compositeHost) StakeTokens(callerDID string, amount *big.Int, valDID []byte) []byte {
+	return c.treasury.StakeTokens(callerDID, amount, valDID)
+}
+func (c *compositeHost) UnstakeTokens(callerDID string, stakeId []byte) *big.Int {
+	return c.treasury.UnstakeTokens(callerDID, stakeId)
+}
+func (c *compositeHost) QueryExpiring(callerDID string, periodId []byte) (*big.Int, uint64) {
+	return c.treasury.QueryExpiring(callerDID, periodId)
+}
+func (c *compositeHost) ExtendExpiring(callerDID string, periodId []byte, newExpiry uint64) bool {
+	return c.treasury.ExtendExpiring(callerDID, periodId, newExpiry)
+}
+func (c *compositeHost) SetSpendLimit(callerDID string, limitType, amount []byte, period uint64) bool {
+	return c.treasury.SetSpendLimit(callerDID, limitType, amount, period)
+}
+func (c *compositeHost) QueryTreasury(callerDID string) (*big.Int, *big.Int, *big.Int, *big.Int) {
+	return c.treasury.QueryTreasury(callerDID)
+}
 
 // Guardian
-func (c *compositeHost) QueryAlerts(callerDID string, off, lim uint64) (uint64, [][]byte) { return c.treasury.QueryAlerts(callerDID, off, lim) }
-func (c *compositeHost) DismissAlert(callerDID string, alertId []byte) bool           { return c.treasury.DismissAlert(callerDID, alertId) }
-func (c *compositeHost) SetDefense(callerDID string, defenseType, config, threshold []byte) bool { return c.treasury.SetDefense(callerDID, defenseType, config, threshold) }
-func (c *compositeHost) QueryDefenses(callerDID string) (uint64, [][]byte)            { return c.treasury.QueryDefenses(callerDID) }
+func (c *compositeHost) QueryAlerts(callerDID string, off, lim uint64) (uint64, [][]byte) {
+	return c.treasury.QueryAlerts(callerDID, off, lim)
+}
+func (c *compositeHost) DismissAlert(callerDID string, alertId []byte) bool {
+	return c.treasury.DismissAlert(callerDID, alertId)
+}
+func (c *compositeHost) SetDefense(callerDID string, defenseType, config, threshold []byte) bool {
+	return c.treasury.SetDefense(callerDID, defenseType, config, threshold)
+}
+func (c *compositeHost) QueryDefenses(callerDID string) (uint64, [][]byte) {
+	return c.treasury.QueryDefenses(callerDID)
+}
 
 // Access Control
-func (c *compositeHost) RegisterKey(callerDID string, keyType, pubKey, perms, expiry []byte) bool { return c.treasury.RegisterKey(callerDID, keyType, pubKey, perms, expiry) }
-func (c *compositeHost) RevokeKey(callerDID string, keyId []byte) bool                { return c.treasury.RevokeKey(callerDID, keyId) }
-func (c *compositeHost) QueryPermissions(callerDID string, role []byte) *big.Int      { return c.treasury.QueryPermissions(callerDID, role) }
-func (c *compositeHost) QuerySession(callerDID string) ([]byte, []byte, uint64, uint64) { return c.treasury.QuerySession(callerDID) }
+func (c *compositeHost) RegisterKey(callerDID string, keyType, pubKey, perms, expiry []byte) bool {
+	return c.treasury.RegisterKey(callerDID, keyType, pubKey, perms, expiry)
+}
+func (c *compositeHost) RevokeKey(callerDID string, keyId []byte) bool {
+	return c.treasury.RevokeKey(callerDID, keyId)
+}
+func (c *compositeHost) QueryPermissions(callerDID string, role []byte) *big.Int {
+	return c.treasury.QueryPermissions(callerDID, role)
+}
+func (c *compositeHost) QuerySession(callerDID string) ([]byte, []byte, uint64, uint64) {
+	return c.treasury.QuerySession(callerDID)
+}
 
 // Introspection
-func (c *compositeHost) SelfBalance(callerDID string) *big.Int    { return c.treasury.SelfBalance(callerDID) }
-func (c *compositeHost) SelfStake(callerDID string) *big.Int      { return c.treasury.SelfStake(callerDID) }
-func (c *compositeHost) SelfReputation(callerDID string) uint64   { return c.treasury.SelfReputation(callerDID) }
-func (c *compositeHost) SelfAccuracy(callerDID string) uint64     { return c.treasury.SelfAccuracy(callerDID) }
+func (c *compositeHost) SelfBalance(callerDID string) *big.Int {
+	return c.treasury.SelfBalance(callerDID)
+}
+func (c *compositeHost) SelfStake(callerDID string) *big.Int { return c.treasury.SelfStake(callerDID) }
+func (c *compositeHost) SelfReputation(callerDID string) uint64 {
+	return c.treasury.SelfReputation(callerDID)
+}
+func (c *compositeHost) SelfAccuracy(callerDID string) uint64 {
+	return c.treasury.SelfAccuracy(callerDID)
+}
 
 // --- Agent Identity Tests ---
 

@@ -42,13 +42,6 @@ func newMockBankKeeper() *mockBankKeeper {
 	}
 }
 
-func (m *mockBankKeeper) setBalance(addr, denom string, amount int64) {
-	if m.balances[addr] == nil {
-		m.balances[addr] = make(map[string]int64)
-	}
-	m.balances[addr][denom] = amount
-}
-
 func (m *mockBankKeeper) SendCoins(_ context.Context, _, _ sdk.AccAddress, _ sdk.Coins) error {
 	return nil
 }
@@ -78,7 +71,7 @@ func (m *mockBankKeeper) BurnCoins(_ context.Context, _ string, _ sdk.Coins) err
 type mockAccountKeeper struct{}
 
 func (m *mockAccountKeeper) GetAccount(_ context.Context, _ sdk.AccAddress) sdk.AccountI { return nil }
-func (m *mockAccountKeeper) SetAccount(_ context.Context, _ sdk.AccountI)               {}
+func (m *mockAccountKeeper) SetAccount(_ context.Context, _ sdk.AccountI)                {}
 func (m *mockAccountKeeper) NewAccountWithAddress(_ context.Context, _ sdk.AccAddress) sdk.AccountI {
 	return nil
 }
@@ -304,8 +297,8 @@ func TestCountBlockProducers(t *testing.T) {
 	bondedAddr := sdk.AccAddress("val_bonded__________").String()
 	guardianAddr := sdk.AccAddress("val_guardian________").String()
 
-	registerTestValidator(t, k, ctx, appAddr, "did:lgm:app1", "111000")           // tier 0
-	registerTestValidator(t, k, ctx, bondedAddr, "did:lgm:bonded1", "1111000000")    // tier 2 stake
+	registerTestValidator(t, k, ctx, appAddr, "did:lgm:app1", "111000")                // tier 0
+	registerTestValidator(t, k, ctx, bondedAddr, "did:lgm:bonded1", "1111000000")      // tier 2 stake
 	registerTestValidator(t, k, ctx, guardianAddr, "did:lgm:guardian1", "11111000000") // tier 3 stake
 
 	// Promote to actual tiers via verification records

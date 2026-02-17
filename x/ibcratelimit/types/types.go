@@ -101,9 +101,11 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (m *QueryParamsResponse) Reset()         { *m = QueryParamsResponse{} }
-func (m *QueryParamsResponse) String() string { return fmt.Sprintf("QueryParamsResponse{%+v}", m.Params) }
-func (m *QueryParamsResponse) ProtoMessage()  {}
+func (m *QueryParamsResponse) Reset() { *m = QueryParamsResponse{} }
+func (m *QueryParamsResponse) String() string {
+	return fmt.Sprintf("QueryParamsResponse{%+v}", m.Params)
+}
+func (m *QueryParamsResponse) ProtoMessage() {}
 
 // QueryChannelFlowRequest is the request for the ChannelFlow query.
 // NOTE: The proto-generated ChannelFlow type uses ChannelId (not ChannelID).
@@ -112,9 +114,11 @@ type QueryChannelFlowRequest struct {
 	ChannelID string `json:"channel_id"`
 }
 
-func (m *QueryChannelFlowRequest) Reset()         { *m = QueryChannelFlowRequest{} }
-func (m *QueryChannelFlowRequest) String() string { return fmt.Sprintf("QueryChannelFlowRequest{%s}", m.ChannelID) }
-func (m *QueryChannelFlowRequest) ProtoMessage()  {}
+func (m *QueryChannelFlowRequest) Reset() { *m = QueryChannelFlowRequest{} }
+func (m *QueryChannelFlowRequest) String() string {
+	return fmt.Sprintf("QueryChannelFlowRequest{%s}", m.ChannelID)
+}
+func (m *QueryChannelFlowRequest) ProtoMessage() {}
 
 // QueryChannelFlowResponse is the response for the ChannelFlow query.
 type QueryChannelFlowResponse struct {
@@ -122,6 +126,8 @@ type QueryChannelFlowResponse struct {
 	Found bool         `json:"found"`
 }
 
-func (m *QueryChannelFlowResponse) Reset()         { *m = QueryChannelFlowResponse{} }
-func (m *QueryChannelFlowResponse) String() string { return fmt.Sprintf("QueryChannelFlowResponse{found:%v}", m.Found) }
-func (m *QueryChannelFlowResponse) ProtoMessage()  {}
+func (m *QueryChannelFlowResponse) Reset() { *m = QueryChannelFlowResponse{} }
+func (m *QueryChannelFlowResponse) String() string {
+	return fmt.Sprintf("QueryChannelFlowResponse{found:%v}", m.Found)
+}
+func (m *QueryChannelFlowResponse) ProtoMessage() {}

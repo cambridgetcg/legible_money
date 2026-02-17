@@ -100,6 +100,11 @@ message Fact {
   uint64 last_utilized_block = 33;       // last block where fact was used in a write-path operation
   uint64 pruning_grace_start = 34;       // block when grace period began (0 = not at risk)
   uint64 patronage_bonus = 35;           // accumulated patronage KMS bonus (basis points)
+  // Novelty & insight metrics
+  uint64 novelty_score = 36;             // information gain + bridge score (0-1,000,000 bps)
+  uint64 bridge_score = 37;              // verified cross-domain reference score (0-1,000,000 bps)
+  bool is_prophetic = 38;                // true if barely-accepted fact later gained citations
+  uint64 citation_growth_rate = 39;      // citations per epoch (smoothed, bps where 1000000 = 1 citation/epoch)
 }
 
 // FactEvidenceSummary is a snapshot of evidence that supported a fact at verification time.

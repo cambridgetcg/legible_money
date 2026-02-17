@@ -18,15 +18,19 @@ type Interpreter struct {
 	callDepth  int
 	stopped    bool
 
+	// EIP-2929 cold/warm access tracking for storage and addresses
+	accessTracker *AccessTracker
+
 	// Precomputed JUMPDEST set for the current bytecode.
 	jumpDests map[int]bool
 }
 
 func NewInterpreter() *Interpreter {
 	return &Interpreter{
-		stack:     NewStack(),
-		memory:    NewMemory(),
-		jumpDests: make(map[int]bool),
+		stack:         NewStack(),
+		memory:        NewMemory(),
+		accessTracker: NewAccessTracker(),
+		jumpDests:     make(map[int]bool),
 	}
 }
 
@@ -43,6 +47,17 @@ func (interp *Interpreter) Execute(
 	interp.changes = nil
 	interp.stopped = false
 	interp.gas = NewGasMeter(ctx.GasLimit)
+	interp.accessTracker = NewAccessTracker()
+
+	// Pre-warm caller and contract addresses (EIP-2929: tx-origin and called address are warm)
+	interp.accessTracker.MarkAddressWarm(ctx.Caller)
+	interp.accessTracker.MarkAddressWarm(ctx.CurrentContract)
+	if ctx.Origin != nil {
+		interp.accessTracker.MarkAddressWarm(ctx.Origin)
+	}
+	if ctx.Coinbase != nil {
+		interp.accessTracker.MarkAddressWarm(ctx.Coinbase)
+	}
 
 	// Enforce call depth limit (prevents recursive call DoS)
 	if interp.callDepth > MaxCallDepth {
@@ -66,14 +81,39 @@ func (interp *Interpreter) Execute(
 			return interp.errorResult(ErrCodeInvalidOpcode, "invalid opcode: 0x"+hexByte(opcode))
 		}
 
+		// Version gate: reject opcodes requiring a newer BVM version
+		if info.MinVersion > ctx.ContractBvmVersion {
+			return interp.errorResult(ErrCodeInvalidOpcode, "opcode "+info.Mnemonic+" requires BVM version "+uitoa(uint64(info.MinVersion)))
+		}
+
+		// Activation gate: reject opcodes before their activation block
+		if info.ActivationBlock > 0 && ctx.BlockNumber < info.ActivationBlock {
+			return interp.errorResult(ErrCodeInvalidOpcode, "opcode "+info.Mnemonic+" not active until block "+uitoa(info.ActivationBlock))
+		}
+
+		// Deprecation gate: deprecated opcodes become no-ops (pop inputs, push zeros)
+		if info.DeprecatedAtBlock > 0 && ctx.BlockNumber >= info.DeprecatedAtBlock {
+			for i := 0; i < info.StackInputs; i++ {
+				if _, err := interp.stack.Pop(); err != nil {
+					return interp.errorResult(ErrCodeStackUnderflow, "stack underflow in deprecated "+info.Mnemonic)
+				}
+			}
+			for i := 0; i < info.StackOutputs; i++ {
+				interp.stack.Push(new(big.Int))
+			}
+			interp.pc++
+			continue
+		}
+
 		// Staticcall restriction: reject state-modifying opcodes
 		if ctx.Mode == ModeStaticCall && info.IsStateModifier {
 			return interp.errorResult(ErrCodeStaticStateChange, "state modification in static call: "+info.Mnemonic)
 		}
 
-		// Consume base gas
-		if info.GasCost > 0 {
-			if err := interp.gas.Consume(info.GasCost); err != nil {
+		// Consume base gas (with governance override if set)
+		gasCost := ctx.GasSchedule.GasCostFor(opcode, info.GasCost)
+		if gasCost > 0 {
+			if err := interp.gas.Consume(gasCost); err != nil {
 				return interp.errorResult(ErrCodeOutOfGas, "out of gas at "+info.Mnemonic)
 			}
 		}
@@ -493,7 +533,13 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 		b32 := WordToBytes32(addr)
-		bal := state.GetBalance(b32[12:]) // last 20 bytes
+		addrBytes := b32[12:] // last 20 bytes
+		// EIP-2929: charge cold/warm gas for address access
+		accessGas := interp.accessTracker.AddressGas(addrBytes)
+		if err := interp.gas.Consume(accessGas); err != nil {
+			return actionError
+		}
+		bal := state.GetBalance(addrBytes)
 		push(bal)
 
 	case ORIGIN:
@@ -603,7 +649,13 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 		b32 := WordToBytes32(addr)
-		push(big.NewInt(int64(state.GetCodeSize(b32[12:]))))
+		addrBytes := b32[12:]
+		// EIP-2929: charge cold/warm gas for address access
+		accessGas := interp.accessTracker.AddressGas(addrBytes)
+		if err := interp.gas.Consume(accessGas); err != nil {
+			return actionError
+		}
+		push(big.NewInt(int64(state.GetCodeSize(addrBytes))))
 
 	case EXTCODECOPY:
 		addr, ok1 := pop()
@@ -611,6 +663,13 @@ func (interp *Interpreter) executeOpcode(
 		codeOff, ok3 := pop()
 		length, ok4 := pop()
 		if !ok1 || !ok2 || !ok3 || !ok4 {
+			return actionError
+		}
+		b32 := WordToBytes32(addr)
+		addrBytes := b32[12:]
+		// EIP-2929: charge cold/warm gas for address access
+		accessGas := interp.accessTracker.AddressGas(addrBytes)
+		if err := interp.gas.Consume(accessGas); err != nil {
 			return actionError
 		}
 		ln := int(length.Uint64())
@@ -626,8 +685,7 @@ func (interp *Interpreter) executeOpcode(
 					return actionError
 				}
 			}
-			b32 := WordToBytes32(addr)
-			code := state.GetCode(b32[12:])
+			code := state.GetCode(addrBytes)
 			src := make([]byte, ln)
 			srcOff := int(codeOff.Uint64())
 			for i := 0; i < ln; i++ {
@@ -674,7 +732,13 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 		b32 := WordToBytes32(addr)
-		hash := state.GetCodeHash(b32[12:])
+		addrBytes := b32[12:]
+		// EIP-2929: charge cold/warm gas for address access
+		accessGas := interp.accessTracker.AddressGas(addrBytes)
+		if err := interp.gas.Consume(accessGas); err != nil {
+			return actionError
+		}
+		hash := state.GetCodeHash(addrBytes)
 		if hash == nil {
 			push(new(big.Int))
 		} else {
@@ -789,6 +853,11 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 		b32 := WordToBytes32(key)
+		// EIP-2929: charge cold/warm gas for storage access
+		accessGas := interp.accessTracker.StorageGas(ctx.CurrentContract, b32[:])
+		if err := interp.gas.Consume(accessGas); err != nil {
+			return actionError
+		}
 		val := state.GetStorage(ctx.CurrentContract, b32[:])
 		if val == nil {
 			push(new(big.Int))
@@ -803,6 +872,13 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 		b32Key := WordToBytes32(key)
+		// EIP-2929: charge cold gas on first access to this slot
+		if !interp.accessTracker.IsStorageWarm(ctx.CurrentContract, b32Key[:]) {
+			if err := interp.gas.Consume(GasColdSloadCost); err != nil {
+				return actionError
+			}
+			interp.accessTracker.MarkStorageWarm(ctx.CurrentContract, b32Key[:])
+		}
 		oldVal := state.GetStorage(ctx.CurrentContract, b32Key[:])
 		oldWord := new(big.Int)
 		if oldVal != nil {
@@ -1880,7 +1956,13 @@ func (interp *Interpreter) executeAgentOpcode(
 
 	case QUERY_TREASURY:
 		available, reserved, staked, delegated := host.QueryTreasury(ctx.CallerDID)
-		pushOrZero := func(v *big.Int) { if v != nil { push(v) } else { push(new(big.Int)) } }
+		pushOrZero := func(v *big.Int) {
+			if v != nil {
+				push(v)
+			} else {
+				push(new(big.Int))
+			}
+		}
 		pushOrZero(available)
 		pushOrZero(reserved)
 		pushOrZero(staked)

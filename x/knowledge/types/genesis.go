@@ -42,9 +42,9 @@ func DefaultDomains() []*OntologicalDomain {
 func DefaultParams() Params {
 	return Params{
 		OntologyVersion:                1,
-		CrossStratumDiscount:           50000, // 5%
+		CrossStratumDiscount:           50000,     // 5%
 		MinDomainProposalStake:         "1000000", // 1 LGM
-		DomainVotingPeriod:             34272, // ~1 day (BLOCKS_PER_DAY)
+		DomainVotingPeriod:             34272,     // ~1 day (BLOCKS_PER_DAY)
 		MinEndorsements:                3,
 		AllowPartialCoverage:           true,
 		PartialCoveragePenalty:         100000, // 10%
@@ -52,14 +52,14 @@ func DefaultParams() Params {
 		CrossStratumAgreementThreshold: 670000, // 67%
 		MinClaimTextLength:             20,
 		MaxClaimRewardMultiplier:       2,
-		CommitPhaseDuration:            4,       // 4 blocks (~10s)
-		RevealPhaseDuration:            4,       // 4 blocks (~10s)
-		AggregationPhaseDuration:       3,       // 3 blocks (~7.5s)
+		CommitPhaseDuration:            4, // 4 blocks (~10s)
+		RevealPhaseDuration:            4, // 4 blocks (~10s)
+		AggregationPhaseDuration:       3, // 3 blocks (~7.5s)
 		MinVerifiers:                   3,
-		AcceptanceThreshold:            770000,  // 77% agreement required
-		QuorumThreshold:                660000,  // 66% participation required
+		AcceptanceThreshold:            770000, // 77% agreement required
+		QuorumThreshold:                660000, // 66% participation required
 		MaxValidatorsPerRound:          22,
-		InvalidClaimSlashBps:           220000, // 22% slash on rejected claims
+		InvalidClaimSlashBps:           220000,  // 22% slash on rejected claims
 		VerificationRewardAmount:       3000000, // 3 LGM base reward per correct verification (ulgm)
 	}
 }

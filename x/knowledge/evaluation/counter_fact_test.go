@@ -182,12 +182,12 @@ func TestEvaluateCounterFacts_DisprovenRefForcesReject(t *testing.T) {
 		},
 		GetBidirectionalConfidence: func(_ sdk.Context, factId string) types.BidirectionalConfidence {
 			return types.BidirectionalConfidence{
-				FactId:           factId,
-				TruthConfidence:  100_000,
+				FactId:            factId,
+				TruthConfidence:   100_000,
 				FalsityConfidence: 900_000,
-				NetConfidence:    -800_000,
-				CounterFactCount: 1,
-				Status:           "disproven",
+				NetConfidence:     -800_000,
+				CounterFactCount:  1,
+				Status:            "disproven",
 			}
 		},
 	}

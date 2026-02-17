@@ -40,7 +40,7 @@ const (
 type LogicConditionType = string
 
 const (
-	LogicStateCompare    LogicConditionType = "state_compare"
+	LogicStateCompare     LogicConditionType = "state_compare"
 	LogicThresholdCrossed LogicConditionType = "threshold_crossed"
 )
 
@@ -91,17 +91,17 @@ func (p Params) Validate() error {
 type MsgCreateSchedule struct {
 	Creator          string             `json:"creator"`
 	Condition        *ScheduleCondition `json:"condition"`
-	MaxExecutions    uint64            `json:"max_executions"`
-	FeePerExecution  string            `json:"fee_per_execution"`
-	PrepaidFee       string            `json:"prepaid_fee"`
-	TargetAddress    string            `json:"target_address"`
-	CallData         string            `json:"call_data"`
-	TransferValue    string            `json:"transfer_value"`
-	LinkedEntityType string            `json:"linked_entity_type,omitempty"`
-	LinkedEntityId   string            `json:"linked_entity_id,omitempty"`
+	MaxExecutions    uint64             `json:"max_executions"`
+	FeePerExecution  string             `json:"fee_per_execution"`
+	PrepaidFee       string             `json:"prepaid_fee"`
+	TargetAddress    string             `json:"target_address"`
+	CallData         string             `json:"call_data"`
+	TransferValue    string             `json:"transfer_value"`
+	LinkedEntityType string             `json:"linked_entity_type,omitempty"`
+	LinkedEntityId   string             `json:"linked_entity_id,omitempty"`
 }
 
-func (msg *MsgCreateSchedule) Reset()        {}
+func (msg *MsgCreateSchedule) Reset()         {}
 func (msg *MsgCreateSchedule) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgCreateSchedule) ProtoMessage()  {}
 
@@ -130,7 +130,7 @@ type MsgCreateScheduleResponse struct {
 	ProcessId string `json:"process_id"`
 }
 
-func (msg *MsgCreateScheduleResponse) Reset()        {}
+func (msg *MsgCreateScheduleResponse) Reset()         {}
 func (msg *MsgCreateScheduleResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgCreateScheduleResponse) ProtoMessage()  {}
 
@@ -140,7 +140,7 @@ type MsgPauseSchedule struct {
 	ProcessId string `json:"process_id"`
 }
 
-func (msg *MsgPauseSchedule) Reset()        {}
+func (msg *MsgPauseSchedule) Reset()         {}
 func (msg *MsgPauseSchedule) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgPauseSchedule) ProtoMessage()  {}
 
@@ -165,7 +165,7 @@ func (msg *MsgPauseSchedule) ValidateBasic() error {
 // MsgPauseScheduleResponse is the response for MsgPauseSchedule.
 type MsgPauseScheduleResponse struct{}
 
-func (msg *MsgPauseScheduleResponse) Reset()        {}
+func (msg *MsgPauseScheduleResponse) Reset()         {}
 func (msg *MsgPauseScheduleResponse) String() string { return "" }
 func (msg *MsgPauseScheduleResponse) ProtoMessage()  {}
 
@@ -175,7 +175,7 @@ type MsgResumeSchedule struct {
 	ProcessId string `json:"process_id"`
 }
 
-func (msg *MsgResumeSchedule) Reset()        {}
+func (msg *MsgResumeSchedule) Reset()         {}
 func (msg *MsgResumeSchedule) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgResumeSchedule) ProtoMessage()  {}
 
@@ -200,7 +200,7 @@ func (msg *MsgResumeSchedule) ValidateBasic() error {
 // MsgResumeScheduleResponse is the response for MsgResumeSchedule.
 type MsgResumeScheduleResponse struct{}
 
-func (msg *MsgResumeScheduleResponse) Reset()        {}
+func (msg *MsgResumeScheduleResponse) Reset()         {}
 func (msg *MsgResumeScheduleResponse) String() string { return "" }
 func (msg *MsgResumeScheduleResponse) ProtoMessage()  {}
 
@@ -210,7 +210,7 @@ type MsgCancelSchedule struct {
 	ProcessId string `json:"process_id"`
 }
 
-func (msg *MsgCancelSchedule) Reset()        {}
+func (msg *MsgCancelSchedule) Reset()         {}
 func (msg *MsgCancelSchedule) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgCancelSchedule) ProtoMessage()  {}
 
@@ -237,7 +237,7 @@ type MsgCancelScheduleResponse struct {
 	RefundedAmount string `json:"refunded_amount"`
 }
 
-func (msg *MsgCancelScheduleResponse) Reset()        {}
+func (msg *MsgCancelScheduleResponse) Reset()         {}
 func (msg *MsgCancelScheduleResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgCancelScheduleResponse) ProtoMessage()  {}
 
@@ -248,7 +248,7 @@ type MsgAddFee struct {
 	Amount    string `json:"amount"` // ulgm to add
 }
 
-func (msg *MsgAddFee) Reset()        {}
+func (msg *MsgAddFee) Reset()         {}
 func (msg *MsgAddFee) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgAddFee) ProtoMessage()  {}
 
@@ -276,7 +276,7 @@ func (msg *MsgAddFee) ValidateBasic() error {
 // MsgAddFeeResponse is the response for MsgAddFee.
 type MsgAddFeeResponse struct{}
 
-func (msg *MsgAddFeeResponse) Reset()        {}
+func (msg *MsgAddFeeResponse) Reset()         {}
 func (msg *MsgAddFeeResponse) String() string { return "" }
 func (msg *MsgAddFeeResponse) ProtoMessage()  {}
 
@@ -286,7 +286,7 @@ type MsgUpdateParams struct {
 	Params    Params `json:"params"`
 }
 
-func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) Reset()         {}
 func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgUpdateParams) ProtoMessage()  {}
 
@@ -308,7 +308,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response for MsgUpdateParams.
 type MsgUpdateParamsResponse struct{}
 
-func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
@@ -449,7 +449,7 @@ type QueryServer interface {
 
 type QueryParamsRequest struct{}
 
-func (r *QueryParamsRequest) Reset()        {}
+func (r *QueryParamsRequest) Reset()         {}
 func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
 func (r *QueryParamsRequest) ProtoMessage()  {}
 
@@ -457,7 +457,7 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (r *QueryParamsResponse) Reset()        {}
+func (r *QueryParamsResponse) Reset()         {}
 func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryParamsResponse) ProtoMessage()  {}
 
@@ -465,7 +465,7 @@ type QueryProcessRequest struct {
 	ProcessId string `json:"process_id"`
 }
 
-func (r *QueryProcessRequest) Reset()        {}
+func (r *QueryProcessRequest) Reset()         {}
 func (r *QueryProcessRequest) String() string { return fmt.Sprintf("QueryProcess{%s}", r.ProcessId) }
 func (r *QueryProcessRequest) ProtoMessage()  {}
 
@@ -473,7 +473,7 @@ type QueryProcessResponse struct {
 	Process *ScheduleProcess `json:"process"`
 }
 
-func (r *QueryProcessResponse) Reset()        {}
+func (r *QueryProcessResponse) Reset()         {}
 func (r *QueryProcessResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryProcessResponse) ProtoMessage()  {}
 
@@ -481,15 +481,17 @@ type QueryProcessesByCreatorRequest struct {
 	Creator string `json:"creator"`
 }
 
-func (r *QueryProcessesByCreatorRequest) Reset()        {}
-func (r *QueryProcessesByCreatorRequest) String() string { return fmt.Sprintf("QueryProcessesByCreator{%s}", r.Creator) }
-func (r *QueryProcessesByCreatorRequest) ProtoMessage()  {}
+func (r *QueryProcessesByCreatorRequest) Reset() {}
+func (r *QueryProcessesByCreatorRequest) String() string {
+	return fmt.Sprintf("QueryProcessesByCreator{%s}", r.Creator)
+}
+func (r *QueryProcessesByCreatorRequest) ProtoMessage() {}
 
 type QueryProcessesByCreatorResponse struct {
 	Processes []*ScheduleProcess `json:"processes"`
 }
 
-func (r *QueryProcessesByCreatorResponse) Reset()        {}
+func (r *QueryProcessesByCreatorResponse) Reset()         {}
 func (r *QueryProcessesByCreatorResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryProcessesByCreatorResponse) ProtoMessage()  {}
 
@@ -537,6 +539,7 @@ func _Query_ProcessesByCreator_Handler(srv interface{}, ctx context.Context, dec
 		return srv.(QueryServer).ProcessesByCreator(ctx, req.(*QueryProcessesByCreatorRequest))
 	})
 }
+
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.schedule.v1.Query",
 	HandlerType: (*QueryServer)(nil),

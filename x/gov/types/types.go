@@ -13,10 +13,10 @@ import (
 type LIPCategory string
 
 const (
-	CategoryConsensus  LIPCategory = "consensus"
-	CategoryEconomics  LIPCategory = "economics"
-	CategoryInterface  LIPCategory = "interface"
-	CategoryProcess    LIPCategory = "process"
+	CategoryConsensus LIPCategory = "consensus"
+	CategoryEconomics LIPCategory = "economics"
+	CategoryInterface LIPCategory = "interface"
+	CategoryProcess   LIPCategory = "process"
 )
 
 // VoteDirection represents how a voter voted (hand-written string enum).
@@ -350,9 +350,11 @@ func (msg MsgAttachUpgradePlan) ValidateBasic() error {
 	return nil
 }
 
-func (msg MsgAttachUpgradePlan) Reset()         {}
-func (msg MsgAttachUpgradePlan) String() string { return fmt.Sprintf("MsgAttachUpgradePlan{%s}", msg.LipId) }
-func (msg MsgAttachUpgradePlan) ProtoMessage()  {}
+func (msg MsgAttachUpgradePlan) Reset() {}
+func (msg MsgAttachUpgradePlan) String() string {
+	return fmt.Sprintf("MsgAttachUpgradePlan{%s}", msg.LipId)
+}
+func (msg MsgAttachUpgradePlan) ProtoMessage() {}
 
 func (msg MsgAttachUpgradePlanResponse) Reset()         {}
 func (msg MsgAttachUpgradePlanResponse) String() string { return "MsgAttachUpgradePlanResponse{}" }

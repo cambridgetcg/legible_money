@@ -11,13 +11,20 @@ import (
 	"github.com/legible-money/legible/x/knowledge/types"
 )
 
+// deterministicMarshal serializes a protobuf message with deterministic output.
+// This is CRITICAL for consensus: proto.Marshal uses random map iteration order
+// for map fields (e.g. VerificationRound.Commitments, .Reveals), causing
+// different validators to produce different byte sequences for the same state.
+// Using Deterministic: true ensures map entries are sorted by key.
+var deterministicMarshal = proto.MarshalOptions{Deterministic: true}.Marshal
+
 // ---------- Fact Operations ----------
 
 // SetFact stores a fact in the KV store.
 func (k Keeper) SetFact(ctx sdk.Context, fact types.Fact) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(fact.Id)
-	bz, err := proto.Marshal(&fact)
+	bz, err := deterministicMarshal(&fact)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact: %v", err))
 	}
@@ -115,7 +122,7 @@ func (k Keeper) GetFactCount(ctx sdk.Context) uint64 {
 func (k Keeper) SetClaim(ctx sdk.Context, claim types.Claim) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claim.Id)
-	bz, err := proto.Marshal(&claim)
+	bz, err := deterministicMarshal(&claim)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim: %v", err))
 	}
@@ -204,7 +211,7 @@ func (k Keeper) GetPendingClaims(ctx sdk.Context) []types.Claim {
 func (k Keeper) SetVerificationRound(ctx sdk.Context, round types.VerificationRound) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := roundKey(round.Id)
-	bz, err := proto.Marshal(&round)
+	bz, err := deterministicMarshal(&round)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal round: %v", err))
 	}
@@ -356,7 +363,7 @@ func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.
 func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factRefKey(ref.FromFactId, ref.ToFactId)
-	bz, err := proto.Marshal(&ref)
+	bz, err := deterministicMarshal(&ref)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact reference: %v", err))
 	}
@@ -443,7 +450,7 @@ func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []types.Fa
 func (k Keeper) SetDomain(ctx sdk.Context, domain types.OntologicalDomain) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := domainKey(domain.Name)
-	bz, err := proto.Marshal(&domain)
+	bz, err := deterministicMarshal(&domain)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal domain: %v", err))
 	}
@@ -584,6 +591,27 @@ func ComputeClaimContentHash(claimText, domain, epistemicCategory string) string
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// ---------- Deterministic ID Generation ----------
+//
+// All knowledge-layer IDs are generated as SHA-256 hashes with domain separation:
+//   ID = hex(SHA-256("LGM.<type>.id.v1:" || field1 || ":" || field2 || ... ))
+//
+// Properties:
+//   - Deterministic: same inputs always produce the same ID
+//   - Collision-resistant: SHA-256 over unique domain tags
+//   - Verifiable: any node can recompute an ID from its constituent fields
+//   - 64 hex chars (256-bit) for claims, facts, and rounds
+//   - "cfact-" + 64 hex chars for counter-facts (prefix distinguishes negative knowledge)
+//
+// ID types and their inputs:
+//   ClaimID:       submitter + contentHash + height       → hex(SHA-256(...))
+//   FactID:        claimID + roundID                      → hex(SHA-256(...))
+//   RoundID:       claimID + height                       → hex(SHA-256(...))
+//   CounterFactID: targetFactId + targetClaimId + submitter + height → "cfact-" + hex(SHA-256(...))
+//
+// The height parameter ensures uniqueness when the same submitter resubmits
+// after rejection (different block → different ID).
+
 // GenerateClaimID generates a deterministic claim ID (full 256-bit SHA-256, 64 hex chars).
 func GenerateClaimID(submitter, contentHash string, height uint64) string {
 	h := sha256.New()
@@ -680,10 +708,6 @@ func counterFactByHeightKey(height uint64, counterFactId string) []byte {
 	return append(types.CounterFactByHeightIndexPrefix, []byte(hBytes+":"+counterFactId)...)
 }
 
-func factNegationLinkKey(factId string) []byte {
-	return append(types.FactNegationLinkPrefix, []byte(factId)...)
-}
-
 func contradictionCooldownKey(submitter string, epoch uint64) []byte {
 	return append(types.ContradictionCooldownPrefix, []byte(fmt.Sprintf("%s:%d", submitter, epoch))...)
 }
@@ -706,7 +730,7 @@ func (k Keeper) SetCounterFact(ctx sdk.Context, cf types.CounterFact) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 
 	// Primary storage
-	bz, err := proto.Marshal(&cf)
+	bz, err := deterministicMarshal(&cf)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal counter-fact: %v", err))
 	}
@@ -859,12 +883,12 @@ func (k Keeper) GetBidirectionalConfidence(ctx sdk.Context, factId string) types
 	net := int64(fact.Confidence) - int64(falsityConf)
 
 	return types.BidirectionalConfidence{
-		FactId:           factId,
-		TruthConfidence:  fact.Confidence,
+		FactId:            factId,
+		TruthConfidence:   fact.Confidence,
 		FalsityConfidence: falsityConf,
-		NetConfidence:    net,
-		CounterFactCount: verifiedCount,
-		Status:           types.ComputeBidirectionalStatus(net),
+		NetConfidence:     net,
+		CounterFactCount:  verifiedCount,
+		Status:            types.ComputeBidirectionalStatus(net),
 	}
 }
 

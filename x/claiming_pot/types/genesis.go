@@ -6,9 +6,9 @@ import "fmt"
 func DefaultParams() *Params {
 	return &Params{
 		MaxPotsPerCreator: 100,
-		MinInitialDeposit: "1000000",  // 1 LGM in ulgm
+		MinInitialDeposit: "1000000", // 1 LGM in ulgm
 		MaxAllowlistSize:  10000,
-		MinAmountPerClaim: "1000",     // 0.001 LGM in ulgm
+		MinAmountPerClaim: "1000", // 0.001 LGM in ulgm
 	}
 }
 

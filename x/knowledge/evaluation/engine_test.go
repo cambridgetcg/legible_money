@@ -103,8 +103,8 @@ func TestEvaluateClaim_ProtocolClaim_Accept(t *testing.T) {
 	if result.Confidence == 0 {
 		t.Error("expected non-zero confidence")
 	}
-	if len(result.Stages) != 8 {
-		t.Errorf("expected 8 stages, got %d", len(result.Stages))
+	if len(result.Stages) != 10 {
+		t.Errorf("expected 10 stages, got %d", len(result.Stages))
 	}
 }
 

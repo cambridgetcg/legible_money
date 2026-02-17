@@ -287,15 +287,15 @@ func (k Keeper) qualifyByCrossReference(
 	stratum := k.getDomainStratum(ctx, domain)
 
 	return types.DomainQualification{
-		ValidatorAddr:  validatorAddr,
-		Domain:         domain,
-		Stratum:        stratum,
-		Pathway:        string(types.PathwayCrossReference),
-		Status:         string(types.StatusProbationary),
-		EarnedAtBlock:  currentBlock,
-		ExpiresAtBlock: currentBlock + types.EndorsementDecayBlocks,
-		Metrics:        &types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
-		Endorsers:      validEndorsers,
+		ValidatorAddr:       validatorAddr,
+		Domain:              domain,
+		Stratum:             stratum,
+		Pathway:             string(types.PathwayCrossReference),
+		Status:              string(types.StatusProbationary),
+		EarnedAtBlock:       currentBlock,
+		ExpiresAtBlock:      currentBlock + types.EndorsementDecayBlocks,
+		Metrics:             &types.QualificationMetrics{EffectiveWeight: types.ProbationaryWeight},
+		Endorsers:           validEndorsers,
 		InheritanceDiscount: 1_000_000, // 100% = no discount
 	}, nil
 }

@@ -10,7 +10,7 @@ import (
 // QueryParamsRequest is the request for the Params query.
 type QueryParamsRequest struct{}
 
-func (r *QueryParamsRequest) Reset()        {}
+func (r *QueryParamsRequest) Reset()         {}
 func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
 func (r *QueryParamsRequest) ProtoMessage()  {}
 
@@ -19,7 +19,7 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (r *QueryParamsResponse) Reset()        {}
+func (r *QueryParamsResponse) Reset()         {}
 func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryParamsResponse) ProtoMessage()  {}
 

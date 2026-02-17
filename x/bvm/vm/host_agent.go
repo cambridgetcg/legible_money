@@ -16,9 +16,9 @@ type AgentKeeper interface {
 // AgentHost bridges BVM agent opcodes to Cosmos keeper state.
 // Agent beliefs/relationships are stored in contract state under reserved key prefixes.
 type AgentHost struct {
-	ctx          context.Context
-	stateDB      StateDB
-	schedKeeper  ScheduleKeeper // nil-safe: methods degrade gracefully
+	ctx         context.Context
+	stateDB     StateDB
+	schedKeeper ScheduleKeeper // nil-safe: methods degrade gracefully
 }
 
 func NewAgentHost(ctx context.Context, stateDB StateDB) *AgentHost {
@@ -167,9 +167,9 @@ func (h *AgentHost) ScheduleSelf(contract []byte, callData []byte, executeBlock 
 
 	scheduleId, err := h.schedKeeper.CreateSchedule(
 		contractAddr,
-		contractAddr, // self-invocation: caller is the contract itself
+		contractAddr,                 // self-invocation: caller is the contract itself
 		hex.EncodeToString(callData), // method stored as hex of calldata
-		"",            // no separate payload
+		"",                           // no separate payload
 		executeBlock,
 		gasLimit,
 	)

@@ -21,9 +21,9 @@ const (
 
 // Store key prefixes.
 var (
-	ProjectKeyPrefix  = []byte{0x01}
-	ServiceKeyPrefix  = []byte{0x02}
-	TaskKeyPrefix     = []byte{0x03}
+	ProjectKeyPrefix      = []byte{0x01}
+	ServiceKeyPrefix      = []byte{0x02}
+	TaskKeyPrefix         = []byte{0x03}
 	SeedKeyPrefix         = []byte{0x04}
 	ParamsKey             = []byte{0x05}
 	SubscriptionKeyPrefix = []byte{0x06}
@@ -37,12 +37,8 @@ var (
 	SeedDomainIndexPrefix          = []byte{0x15} // 0x15 | domain | seedId -> nil
 	SubscriptionServiceIndexPrefix = []byte{0x16} // 0x16 | serviceId | subscriptionId -> nil
 
-	// Counters
-	projectCounterKey      = []byte{0x20}
-	taskCounterKey         = []byte{0x21}
-	serviceCounterKey      = []byte{0x22}
-	seedCounterKey         = []byte{0x23}
-	subscriptionCounterKey = []byte{0x24}
+	// P0 Remediation: Pending abandon proposals (SEC-1)
+	PendingAbandonKeyPrefix = []byte{0x17} // 0x17 | projectId -> PendingAbandon JSON
 )
 
 // ProjectKey returns the store key for a project.
@@ -147,6 +143,11 @@ func SubscriptionServiceIndexKey(serviceId, subscriptionId string) []byte {
 	key = append(key, '/')
 	key = append(key, []byte(subscriptionId)...)
 	return key
+}
+
+// PendingAbandonKey returns the store key for a pending abandon proposal.
+func PendingAbandonKey(projectId string) []byte {
+	return append(PendingAbandonKeyPrefix, []byte(projectId)...)
 }
 
 // Uint64ToBytes converts uint64 to big-endian bytes.

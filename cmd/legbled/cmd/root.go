@@ -16,16 +16,18 @@ import (
 	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	bankcli "github.com/cosmos/cosmos-sdk/x/bank/client/cli"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	govcli "github.com/cosmos/cosmos-sdk/x/gov/client/cli"
-	stakingcli "github.com/cosmos/cosmos-sdk/x/staking/client/cli"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+	govcli "github.com/cosmos/cosmos-sdk/x/gov/client/cli"
+	stakingcli "github.com/cosmos/cosmos-sdk/x/staking/client/cli"
 
 	legibleapp "github.com/legible-money/legible/app"
+	homecli "github.com/legible-money/legible/x/home/client/cli"
+	knowledgecli "github.com/legible-money/legible/x/knowledge/client/cli"
 )
 
 // NewRootCmd creates the root command for the legbled daemon.
@@ -108,6 +110,8 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		authcmd.QueryTxCmd(),
 		server.QueryBlocksCmd(),
 		server.QueryBlockResultsCmd(),
+		// Legible custom modules
+		knowledgecli.NewQueryCmd(),
 	)
 	rootCmd.AddCommand(queryCmd)
 
@@ -132,6 +136,8 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		bankcli.NewTxCmd(addrCodec),
 		stakingcli.NewTxCmd(valAddrCodec, addrCodec),
 		govcli.NewTxCmd(nil),
+		knowledgecli.NewTxCmd(),
+		homecli.NewTxCmd(),
 	)
 	rootCmd.AddCommand(txCmd)
 

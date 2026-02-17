@@ -156,6 +156,7 @@ func (k Keeper) SlashMissedVerification(
 
 // getPreviousBlockHash extracts the previous block hash from context.
 // In ABCI++, this is available from the block header.
+// Safe under CometBFT instant finality — see crypto/vrf.go for fork-sensitivity analysis.
 func getPreviousBlockHash(ctx sdk.Context) []byte {
 	header := ctx.BlockHeader()
 	if len(header.LastBlockId.Hash) > 0 {

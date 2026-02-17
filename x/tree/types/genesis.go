@@ -3,14 +3,14 @@ package types
 // DefaultParams returns default tree module parameters.
 func DefaultParams() *Params {
 	return &Params{
-		MinBudget:              "1000000",   // 1 LGM
+		MinBudget:              "1000000", // 1 LGM
 		MaxTasksPerProject:     200,
 		MaxContributors:        50,
 		MaxApplications:        100,
 		TaskDeadlineMinBlocks:  100,
-		TaskDeadlineMaxBlocks:  1036800,     // ~30 days
+		TaskDeadlineMaxBlocks:  1036800, // ~30 days
 		MaxRejections:          3,
-		SeedExpiryBlocks:       172800,      // ~5 days
+		SeedExpiryBlocks:       172800, // ~5 days
 		MinContributorsToStart: 1,
 		EvidenceTaxBp:          220000,
 		ContributorsBp:         390000,

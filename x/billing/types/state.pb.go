@@ -653,6 +653,7 @@ type Params struct {
 	ResearchShareBps      uint64                 `protobuf:"varint,8,opt,name=research_share_bps,json=researchShareBps,proto3" json:"research_share_bps,omitempty"`                // basis points
 	ResearchMinBps        uint64                 `protobuf:"varint,9,opt,name=research_min_bps,json=researchMinBps,proto3" json:"research_min_bps,omitempty"`                      // basis points
 	ResearchRampBlocks    uint64                 `protobuf:"varint,10,opt,name=research_ramp_blocks,json=researchRampBlocks,proto3" json:"research_ramp_blocks,omitempty"`         // blocks to reach full research share
+	FoundationAddress     string                 `protobuf:"bytes,11,opt,name=foundation_address,json=foundationAddress,proto3" json:"foundation_address,omitempty"`               // bech32 address for foundation share (empty = module account fallback)
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -757,6 +758,13 @@ func (x *Params) GetResearchRampBlocks() uint64 {
 	return 0
 }
 
+func (x *Params) GetFoundationAddress() string {
+	if x != nil {
+		return x.FoundationAddress
+	}
+	return ""
+}
+
 var File_legible_billing_v1_state_proto protoreflect.FileDescriptor
 
 const file_legible_billing_v1_state_proto_rawDesc = "" +
@@ -825,7 +833,7 @@ const file_legible_billing_v1_state_proto_rawDesc = "" +
 	"total_paid\x18\x05 \x01(\tR\ttotalPaid\x12\x1d\n" +
 	"\n" +
 	"fact_count\x18\x06 \x01(\rR\tfactCount\x12\x14\n" +
-	"\x05block\x18\a \x01(\x04R\x05block\"\xf8\x03\n" +
+	"\x05block\x18\a \x01(\x04R\x05block\"\xa7\x04\n" +
 	"\x06Params\x12+\n" +
 	"\x12base_cost_per_fact\x18\x01 \x01(\tR\x0fbaseCostPerFact\x121\n" +
 	"\x14confidence_threshold\x18\x02 \x01(\x04R\x13confidenceThreshold\x124\n" +
@@ -837,7 +845,8 @@ const file_legible_billing_v1_state_proto_rawDesc = "" +
 	"\x12research_share_bps\x18\b \x01(\x04R\x10researchShareBps\x12(\n" +
 	"\x10research_min_bps\x18\t \x01(\x04R\x0eresearchMinBps\x120\n" +
 	"\x14research_ramp_blocks\x18\n" +
-	" \x01(\x04R\x12researchRampBlocksB2Z0github.com/legible-money/legible/x/billing/typesb\x06proto3"
+	" \x01(\x04R\x12researchRampBlocks\x12-\n" +
+	"\x12foundation_address\x18\v \x01(\tR\x11foundationAddressB2Z0github.com/legible-money/legible/x/billing/typesb\x06proto3"
 
 var (
 	file_legible_billing_v1_state_proto_rawDescOnce sync.Once

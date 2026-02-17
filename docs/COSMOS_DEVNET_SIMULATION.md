@@ -167,7 +167,7 @@ The Legible chain uses a custom ante handler (`app/ante_legible.go`) that adds:
 - Payment channels
 - BVM (Bytecode Virtual Machine)
 - All 25 custom module REST/gRPC endpoints
-- Claude evaluation daemon integration
+- LLM evaluation sidecar integration
 
 ---
 

@@ -56,17 +56,17 @@ func (gs GenesisState) Validate() error {
 
 // MsgRegisterAgent registers a new agent profile.
 type MsgRegisterAgent struct {
-	Address     string            `json:"address"`
-	Did         string            `json:"did"`
-	DisplayName string            `json:"display_name"`
+	Address      string            `json:"address"`
+	Did          string            `json:"did"`
+	DisplayName  string            `json:"display_name"`
 	Capabilities []AgentCapability `json:"capabilities"`
-	Domains     []string          `json:"domains"`
-	Stake       string            `json:"stake"`
-	Description string            `json:"description"`
-	Metadata    string            `json:"metadata"`
+	Domains      []string          `json:"domains"`
+	Stake        string            `json:"stake"`
+	Description  string            `json:"description"`
+	Metadata     string            `json:"metadata"`
 }
 
-func (msg *MsgRegisterAgent) Reset()        {}
+func (msg *MsgRegisterAgent) Reset()         {}
 func (msg *MsgRegisterAgent) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRegisterAgent) ProtoMessage()  {}
 
@@ -91,7 +91,7 @@ func (msg *MsgRegisterAgent) ValidateBasic() error {
 // MsgRegisterAgentResponse is the response.
 type MsgRegisterAgentResponse struct{}
 
-func (msg *MsgRegisterAgentResponse) Reset()        {}
+func (msg *MsgRegisterAgentResponse) Reset()         {}
 func (msg *MsgRegisterAgentResponse) String() string { return "" }
 func (msg *MsgRegisterAgentResponse) ProtoMessage()  {}
 
@@ -103,7 +103,7 @@ type MsgUpdateProfile struct {
 	Metadata    string `json:"metadata"`
 }
 
-func (msg *MsgUpdateProfile) Reset()        {}
+func (msg *MsgUpdateProfile) Reset()         {}
 func (msg *MsgUpdateProfile) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgUpdateProfile) ProtoMessage()  {}
 
@@ -125,7 +125,7 @@ func (msg *MsgUpdateProfile) ValidateBasic() error {
 // MsgUpdateProfileResponse is the response.
 type MsgUpdateProfileResponse struct{}
 
-func (msg *MsgUpdateProfileResponse) Reset()        {}
+func (msg *MsgUpdateProfileResponse) Reset()         {}
 func (msg *MsgUpdateProfileResponse) String() string { return "" }
 func (msg *MsgUpdateProfileResponse) ProtoMessage()  {}
 
@@ -135,7 +135,7 @@ type MsgAddCapability struct {
 	Capability AgentCapability `json:"capability"`
 }
 
-func (msg *MsgAddCapability) Reset()        {}
+func (msg *MsgAddCapability) Reset()         {}
 func (msg *MsgAddCapability) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgAddCapability) ProtoMessage()  {}
 
@@ -160,7 +160,7 @@ func (msg *MsgAddCapability) ValidateBasic() error {
 // MsgAddCapabilityResponse is the response.
 type MsgAddCapabilityResponse struct{}
 
-func (msg *MsgAddCapabilityResponse) Reset()        {}
+func (msg *MsgAddCapabilityResponse) Reset()         {}
 func (msg *MsgAddCapabilityResponse) String() string { return "" }
 func (msg *MsgAddCapabilityResponse) ProtoMessage()  {}
 
@@ -170,7 +170,7 @@ type MsgRemoveCapability struct {
 	CapabilityType string `json:"capability_type"`
 }
 
-func (msg *MsgRemoveCapability) Reset()        {}
+func (msg *MsgRemoveCapability) Reset()         {}
 func (msg *MsgRemoveCapability) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRemoveCapability) ProtoMessage()  {}
 
@@ -195,7 +195,7 @@ func (msg *MsgRemoveCapability) ValidateBasic() error {
 // MsgRemoveCapabilityResponse is the response.
 type MsgRemoveCapabilityResponse struct{}
 
-func (msg *MsgRemoveCapabilityResponse) Reset()        {}
+func (msg *MsgRemoveCapabilityResponse) Reset()         {}
 func (msg *MsgRemoveCapabilityResponse) String() string { return "" }
 func (msg *MsgRemoveCapabilityResponse) ProtoMessage()  {}
 
@@ -204,7 +204,7 @@ type MsgDeregisterAgent struct {
 	Address string `json:"address"`
 }
 
-func (msg *MsgDeregisterAgent) Reset()        {}
+func (msg *MsgDeregisterAgent) Reset()         {}
 func (msg *MsgDeregisterAgent) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDeregisterAgent) ProtoMessage()  {}
 
@@ -228,7 +228,7 @@ type MsgDeregisterAgentResponse struct {
 	RefundedStake string `json:"refunded_stake"`
 }
 
-func (msg *MsgDeregisterAgentResponse) Reset()        {}
+func (msg *MsgDeregisterAgentResponse) Reset()         {}
 func (msg *MsgDeregisterAgentResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDeregisterAgentResponse) ProtoMessage()  {}
 
@@ -237,7 +237,7 @@ type MsgHeartbeat struct {
 	Address string `json:"address"`
 }
 
-func (msg *MsgHeartbeat) Reset()        {}
+func (msg *MsgHeartbeat) Reset()         {}
 func (msg *MsgHeartbeat) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgHeartbeat) ProtoMessage()  {}
 
@@ -259,7 +259,7 @@ func (msg *MsgHeartbeat) ValidateBasic() error {
 // MsgHeartbeatResponse is the response.
 type MsgHeartbeatResponse struct{}
 
-func (msg *MsgHeartbeatResponse) Reset()        {}
+func (msg *MsgHeartbeatResponse) Reset()         {}
 func (msg *MsgHeartbeatResponse) String() string { return "" }
 func (msg *MsgHeartbeatResponse) ProtoMessage()  {}
 
@@ -269,7 +269,7 @@ type MsgUpdateParams struct {
 	Params    Params `json:"params"`
 }
 
-func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) Reset()         {}
 func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgUpdateParams) ProtoMessage()  {}
 
@@ -291,7 +291,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response.
 type MsgUpdateParamsResponse struct{}
 
-func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
@@ -444,56 +444,68 @@ type QueryServer interface {
 }
 
 type QueryParamsRequest struct{}
-func (r *QueryParamsRequest) Reset()        {}
+
+func (r *QueryParamsRequest) Reset()         {}
 func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
 func (r *QueryParamsRequest) ProtoMessage()  {}
 
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
-func (r *QueryParamsResponse) Reset()        {}
+
+func (r *QueryParamsResponse) Reset()         {}
 func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryParamsResponse) ProtoMessage()  {}
 
 type QueryAgentRequest struct {
 	Address string `json:"address"`
 }
-func (r *QueryAgentRequest) Reset()        {}
+
+func (r *QueryAgentRequest) Reset()         {}
 func (r *QueryAgentRequest) String() string { return fmt.Sprintf("QueryAgent{%s}", r.Address) }
 func (r *QueryAgentRequest) ProtoMessage()  {}
 
 type QueryAgentResponse struct {
 	Profile AgentProfile `json:"profile"`
 }
-func (r *QueryAgentResponse) Reset()        {}
+
+func (r *QueryAgentResponse) Reset()         {}
 func (r *QueryAgentResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryAgentResponse) ProtoMessage()  {}
 
 type QueryAgentsByDomainRequest struct {
 	Domain string `json:"domain"`
 }
-func (r *QueryAgentsByDomainRequest) Reset()        {}
-func (r *QueryAgentsByDomainRequest) String() string { return fmt.Sprintf("QueryAgentsByDomain{%s}", r.Domain) }
-func (r *QueryAgentsByDomainRequest) ProtoMessage()  {}
+
+func (r *QueryAgentsByDomainRequest) Reset() {}
+func (r *QueryAgentsByDomainRequest) String() string {
+	return fmt.Sprintf("QueryAgentsByDomain{%s}", r.Domain)
+}
+func (r *QueryAgentsByDomainRequest) ProtoMessage() {}
 
 type QueryAgentsByDomainResponse struct {
 	Profiles []AgentProfile `json:"profiles"`
 }
-func (r *QueryAgentsByDomainResponse) Reset()        {}
+
+func (r *QueryAgentsByDomainResponse) Reset()         {}
 func (r *QueryAgentsByDomainResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryAgentsByDomainResponse) ProtoMessage()  {}
 
 type QueryAgentsByCapabilityRequest struct {
 	CapabilityType string `json:"capability_type"`
 }
-func (r *QueryAgentsByCapabilityRequest) Reset()        {}
-func (r *QueryAgentsByCapabilityRequest) String() string { return fmt.Sprintf("QueryAgentsByCapability{%s}", r.CapabilityType) }
-func (r *QueryAgentsByCapabilityRequest) ProtoMessage()  {}
+
+func (r *QueryAgentsByCapabilityRequest) Reset() {}
+func (r *QueryAgentsByCapabilityRequest) String() string {
+	return fmt.Sprintf("QueryAgentsByCapability{%s}", r.CapabilityType)
+}
+func (r *QueryAgentsByCapabilityRequest) ProtoMessage() {}
 
 type QueryAgentsByCapabilityResponse struct {
 	Profiles []AgentProfile `json:"profiles"`
 }
-func (r *QueryAgentsByCapabilityResponse) Reset()        {}
+
+func (r *QueryAgentsByCapabilityResponse) Reset()         {}
 func (r *QueryAgentsByCapabilityResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryAgentsByCapabilityResponse) ProtoMessage()  {}
 

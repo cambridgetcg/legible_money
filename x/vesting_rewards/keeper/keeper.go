@@ -41,11 +41,11 @@ func NewKeeper(
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:          cdc,
-		storeService: storeService,
-		bankKeeper:   bk,
+		cdc:           cdc,
+		storeService:  storeService,
+		bankKeeper:    bk,
 		stakingKeeper: sk,
-		authority:    authority,
+		authority:     authority,
 	}
 }
 
@@ -182,6 +182,12 @@ func (k Keeper) SetTotalMinted(ctx sdk.Context, amount *big.Int) {
 
 // MintWithCap mints new LGM tokens up to the supply cap (222,222,222 LGM).
 // Returns the actual amount minted (may be less than requested if near cap).
+//
+// Burn recycling: the cap is enforced against current bank supply (not cumulative
+// totalMinted). When tokens are burned via BurnCoins, supply decreases and the
+// freed headroom becomes available for future block rewards. This prevents
+// permanent supply contraction from slashing, penalties, and lost keys while
+// preserving the hard cap on tokens in existence at any moment.
 func (k Keeper) MintWithCap(ctx sdk.Context, amount *big.Int) (*big.Int, error) {
 	if amount.Sign() <= 0 {
 		return new(big.Int), nil
@@ -190,8 +196,18 @@ func (k Keeper) MintWithCap(ctx sdk.Context, amount *big.Int) (*big.Int, error) 
 	maxSupply := new(big.Int)
 	maxSupply.SetString(types.MaxSupplyUlgm, 10)
 
-	totalMinted := k.GetTotalMinted(ctx)
-	remaining := new(big.Int).Sub(maxSupply, totalMinted)
+	// Use current bank supply (minted - burned) for the cap check.
+	// Burned tokens free headroom for future minting.
+	var currentSupply *big.Int
+	if k.bankKeeper != nil {
+		supply := k.bankKeeper.GetSupply(ctx, "ulgm")
+		currentSupply = supply.Amount.BigInt()
+	} else {
+		// Fallback for tests without bank keeper: use totalMinted
+		currentSupply = k.GetTotalMinted(ctx)
+	}
+
+	remaining := new(big.Int).Sub(maxSupply, currentSupply)
 
 	if remaining.Sign() <= 0 {
 		return new(big.Int), nil // supply exhausted
@@ -211,7 +227,8 @@ func (k Keeper) MintWithCap(ctx sdk.Context, amount *big.Int) (*big.Int, error) 
 		}
 	}
 
-	// Update total minted
+	// Update total minted (informational counter — tracks cumulative minting history)
+	totalMinted := k.GetTotalMinted(ctx)
 	newTotal := new(big.Int).Add(totalMinted, actual)
 	k.SetTotalMinted(ctx, newTotal)
 

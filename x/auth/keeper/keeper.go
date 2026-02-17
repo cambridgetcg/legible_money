@@ -15,8 +15,8 @@ import (
 
 // Keeper manages Legible Money account state with 4-layer key architecture
 type Keeper struct {
-	cdc          codec.Codec
-	storeService store.KVStoreService
+	cdc           codec.Codec
+	storeService  store.KVStoreService
 	accountKeeper types.CosmosAccountKeeper
 	bankKeeper    types.BankKeeper
 	authority     string // module authority (gov)
@@ -31,8 +31,8 @@ func NewKeeper(
 	authority string,
 ) Keeper {
 	return Keeper{
-		cdc:          cdc,
-		storeService: storeService,
+		cdc:           cdc,
+		storeService:  storeService,
 		accountKeeper: accountKeeper,
 		bankKeeper:    bankKeeper,
 		authority:     authority,

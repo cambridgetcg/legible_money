@@ -108,7 +108,7 @@ func TestEvaluateFactGraph_BrokenReferences(t *testing.T) {
 
 func TestEvaluateFactGraph_HighConfidenceContradiction(t *testing.T) {
 	facts := map[string]types.Fact{
-		"f1":    {Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000},
+		"f1":     {Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000},
 		"contra": {Id: "contra", Status: types.FactStatusActive, Confidence: 800_000},
 	}
 	ctx := mockCtx()

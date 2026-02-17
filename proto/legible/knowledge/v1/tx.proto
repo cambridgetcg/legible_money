@@ -5,23 +5,31 @@ option go_package = "github.com/legible-money/legible/x/knowledge/types";
 
 import "cosmos/msg/v1/msg.proto";
 import "legible/knowledge/v1/claim.proto";
+import "legible/knowledge/v1/counter_fact.proto";
 
 // Msg defines the knowledge module's transaction service
 service Msg {
   option (cosmos.msg.v1.service) = true;
 
-  // ProposeDomain submits a proposal to add a new domain
+  // PoT lifecycle: claim submission and verification
+  rpc SubmitClaim(MsgSubmitClaim) returns (MsgSubmitClaimResponse);
+  rpc SubmitCommitment(MsgSubmitCommitment) returns (MsgSubmitCommitmentResponse);
+  rpc SubmitReveal(MsgSubmitReveal) returns (MsgSubmitRevealResponse);
+  rpc ChallengeFact(MsgChallengeFact) returns (MsgChallengeFactResponse);
+  rpc AddFact(MsgAddFact) returns (MsgAddFactResponse);
+
+  // Negative knowledge
+  rpc SubmitContradiction(MsgSubmitContradiction) returns (MsgSubmitContradictionResponse);
+
+  // Knowledge preservation
+  rpc PatronizeFact(MsgPatronizeFact) returns (MsgPatronizeFactResponse);
+
+  // Domain management
   rpc ProposeDomain(MsgProposeDomain) returns (MsgProposeDomainResponse);
-
-  // EndorseDomainProposal endorses a pending domain proposal
   rpc EndorseDomainProposal(MsgEndorseDomainProposal) returns (MsgEndorseDomainProposalResponse);
-
-  // ChallengeDomainProposal challenges a pending domain proposal
   rpc ChallengeDomainProposal(MsgChallengeDomainProposal) returns (MsgChallengeDomainProposalResponse);
-
-  // RegisterStratum registers a new stratum (governance-controlled)
   rpc RegisterStratum(MsgRegisterStratum) returns (MsgRegisterStratumResponse);
 
-  // UpdateParams updates module parameters (governance-controlled)
+  // Governance
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }

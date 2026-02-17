@@ -16,6 +16,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"github.com/legible-money/legible/x/home/client/cli"
 	"github.com/legible-money/legible/x/home/keeper"
 	"github.com/legible-money/legible/x/home/types"
 )
@@ -70,7 +71,7 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the module's tx CLI command.
 func (a AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil
+	return cli.NewTxCmd()
 }
 
 // GetQueryCmd returns the module's query CLI command.

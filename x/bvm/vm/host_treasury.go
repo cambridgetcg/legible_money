@@ -22,7 +22,7 @@ type VMAuthKeeper interface {
 // When authKeeper is non-nil, access control opcodes delegate to x/auth's canonical store.
 type TreasuryHost struct {
 	stateDB    StateDB
-	authKeeper VMAuthKeeper  // nil = legacy contract-state mode
+	authKeeper VMAuthKeeper // nil = legacy contract-state mode
 	ctx        context.Context
 }
 

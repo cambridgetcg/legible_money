@@ -7,16 +7,17 @@ import (
 
 func makeCtx(gasLimit uint64) *ExecutionContext {
 	return &ExecutionContext{
-		Caller:          make([]byte, 20),
-		Origin:          make([]byte, 20),
-		CurrentContract: make([]byte, 20),
-		BlockNumber:     100,
-		Timestamp:       1700000000,
-		GasLimit:        gasLimit,
-		Value:           new(big.Int),
-		GasPrice:        new(big.Int),
-		ChainID:         big.NewInt(2521),
-		BaseFee:         new(big.Int),
+		Caller:             make([]byte, 20),
+		Origin:             make([]byte, 20),
+		CurrentContract:    make([]byte, 20),
+		BlockNumber:        100,
+		Timestamp:          1700000000,
+		GasLimit:           gasLimit,
+		Value:              new(big.Int),
+		GasPrice:           new(big.Int),
+		ChainID:            big.NewInt(2521),
+		BaseFee:            new(big.Int),
+		ContractBvmVersion: 1,
 	}
 }
 
@@ -173,10 +174,10 @@ func TestInterp_MstoreMload(t *testing.T) {
 func TestInterp_SstoreSload(t *testing.T) {
 	// Store 99 at slot 1, load it back
 	bytecode := []byte{
-		PUSH1, 99,  // value
-		PUSH1, 1,   // key
+		PUSH1, 99, // value
+		PUSH1, 1, // key
 		SSTORE,
-		PUSH1, 1,   // key
+		PUSH1, 1, // key
 		SLOAD,
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
@@ -202,10 +203,10 @@ func TestInterp_SstoreSload(t *testing.T) {
 func TestInterp_JumpJumpdest(t *testing.T) {
 	// PUSH1 4 JUMP STOP JUMPDEST PUSH1 42 PUSH1 0 MSTORE PUSH1 32 PUSH1 0 RETURN
 	bytecode := []byte{
-		PUSH1, 4,   // Push jump dest (byte 4)
-		JUMP,       // Jump to byte 4
-		STOP,       // Should be skipped
-		JUMPDEST,   // Byte 4: landing pad
+		PUSH1, 4, // Push jump dest (byte 4)
+		JUMP,     // Jump to byte 4
+		STOP,     // Should be skipped
+		JUMPDEST, // Byte 4: landing pad
 		PUSH1, 42,
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
@@ -245,11 +246,11 @@ func TestInterp_BadJump(t *testing.T) {
 func TestInterp_JumpiTrue(t *testing.T) {
 	// PUSH1 1 (condition true) PUSH1 6 JUMPI STOP JUMPDEST PUSH1 99 ...
 	bytecode := []byte{
-		PUSH1, 1,   // condition (true)
-		PUSH1, 6,   // dest
-		JUMPI,      // byte 4: conditional jump
-		STOP,       // byte 5: skipped
-		JUMPDEST,   // byte 6: target
+		PUSH1, 1, // condition (true)
+		PUSH1, 6, // dest
+		JUMPI,    // byte 4: conditional jump
+		STOP,     // byte 5: skipped
+		JUMPDEST, // byte 6: target
 		PUSH1, 99,
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
@@ -271,9 +272,9 @@ func TestInterp_JumpiTrue(t *testing.T) {
 func TestInterp_JumpiFalse(t *testing.T) {
 	// Condition 0 → falls through to PUSH1 77
 	bytecode := []byte{
-		PUSH1, 0,   // condition (false)
-		PUSH1, 8,   // dest (doesn't matter)
-		JUMPI,      // falls through
+		PUSH1, 0, // condition (false)
+		PUSH1, 8, // dest (doesn't matter)
+		JUMPI, // falls through
 		PUSH1, 77,
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
@@ -347,8 +348,8 @@ func TestInterp_LogEmission(t *testing.T) {
 	// LOG1 with one topic
 	bytecode := []byte{
 		PUSH1, 0xAA, // topic
-		PUSH1, 0,    // length
-		PUSH1, 0,    // offset
+		PUSH1, 0, // length
+		PUSH1, 0, // offset
 		LOG1,
 		STOP,
 	}
@@ -374,7 +375,7 @@ func TestInterp_Return(t *testing.T) {
 		PUSH2, 0xBE, 0xEF,
 		PUSH1, 0,
 		MSTORE,
-		PUSH1, 2,  // length
+		PUSH1, 2, // length
 		PUSH1, 30, // offset (last 2 bytes of 32-byte word)
 		RETURN,
 	}
@@ -427,8 +428,8 @@ func TestInterp_Revert(t *testing.T) {
 func TestInterp_RevertClearsStateChanges(t *testing.T) {
 	// SSTORE then REVERT — changes should be discarded
 	bytecode := []byte{
-		PUSH1, 99,  // value
-		PUSH1, 1,   // key
+		PUSH1, 99, // value
+		PUSH1, 1, // key
 		SSTORE,
 		PUSH1, 0,
 		PUSH1, 0,
@@ -656,8 +657,8 @@ func TestInterp_SHA3(t *testing.T) {
 	bytecode := []byte{
 		PUSH1, 1,
 		PUSH1, 0, MSTORE8,
-		PUSH1, 1,  // length
-		PUSH1, 0,  // offset
+		PUSH1, 1, // length
+		PUSH1, 0, // offset
 		SHA3,
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
@@ -890,7 +891,7 @@ func TestInterp_Msize(t *testing.T) {
 	bytecode := []byte{
 		PUSH1, 42,
 		PUSH1, 0,
-		MSTORE,    // Expands memory to 32 bytes
+		MSTORE, // Expands memory to 32 bytes
 		MSIZE,
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
@@ -955,10 +956,10 @@ func TestCheckCapability_AllGranted(t *testing.T) {
 	ctx := makeCtx(100000)
 	// Explicit all-true capabilities (set by keeper for identity/operational key callers)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:    true,
-		CanStake:       true,
+		CanTransfer:     true,
+		CanStake:        true,
 		CanSubmitClaims: true,
-		CanVote:        true,
+		CanVote:         true,
 	}
 	if !checkCapability(ctx, "stake") {
 		t.Fatal("expected stake allowed with all capabilities granted")
@@ -981,10 +982,10 @@ func TestCheckCapability_AllGranted(t *testing.T) {
 func TestCheckCapability_StakeBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:    true,
-		CanStake:       false,
+		CanTransfer:     true,
+		CanStake:        false,
 		CanSubmitClaims: true,
-		CanVote:        true,
+		CanVote:         true,
 	}
 	if checkCapability(ctx, "stake") {
 		t.Fatal("expected stake blocked")
@@ -1003,10 +1004,10 @@ func TestCheckCapability_StakeBlocked(t *testing.T) {
 func TestCheckCapability_TransferBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:    false,
-		CanStake:       true,
+		CanTransfer:     false,
+		CanStake:        true,
 		CanSubmitClaims: true,
-		CanVote:        true,
+		CanVote:         true,
 	}
 	if checkCapability(ctx, "transfer") {
 		t.Fatal("expected transfer blocked")
@@ -1019,10 +1020,10 @@ func TestCheckCapability_TransferBlocked(t *testing.T) {
 func TestCheckCapability_VoteBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:    true,
-		CanStake:       true,
+		CanTransfer:     true,
+		CanStake:        true,
 		CanSubmitClaims: true,
-		CanVote:        false,
+		CanVote:         false,
 	}
 	if checkCapability(ctx, "vote") {
 		t.Fatal("expected vote blocked")
@@ -1032,10 +1033,10 @@ func TestCheckCapability_VoteBlocked(t *testing.T) {
 func TestCheckCapability_SubmitClaimsBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:    true,
-		CanStake:       true,
+		CanTransfer:     true,
+		CanStake:        true,
 		CanSubmitClaims: false,
-		CanVote:        true,
+		CanVote:         true,
 	}
 	if checkCapability(ctx, "submit_claims") {
 		t.Fatal("expected submit_claims blocked")
@@ -1045,10 +1046,10 @@ func TestCheckCapability_SubmitClaimsBlocked(t *testing.T) {
 func TestCheckCapability_AllBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:    false,
-		CanStake:       false,
+		CanTransfer:     false,
+		CanStake:        false,
 		CanSubmitClaims: false,
-		CanVote:        false,
+		CanVote:         false,
 	}
 	if checkCapability(ctx, "stake") {
 		t.Fatal("expected stake blocked")
@@ -1364,7 +1365,7 @@ func TestInterp_Pop(t *testing.T) {
 	bytecode := []byte{
 		PUSH1, 42,
 		PUSH1, 99,
-		POP,  // Discard 99
+		POP, // Discard 99
 		PUSH1, 0, MSTORE,
 		PUSH1, 32, PUSH1, 0, RETURN,
 	}

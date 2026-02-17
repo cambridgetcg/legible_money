@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	supportBonus       = 30_000  // per supporting verified reference
-	maxSupportBonus    = 150_000 // cap on total support bonus
-	discreditPenalty   = 50_000  // per disproven/revoked reference
-	maxDiscreditPenalty = 300_000 // cap on total discredit penalty
-	brokenRefPenalty   = 10_000  // per nonexistent reference
-	contradictionPenalty = 50_000 // per high-confidence contradiction
+	supportBonus            = 30_000  // per supporting verified reference
+	maxSupportBonus         = 150_000 // cap on total support bonus
+	discreditPenalty        = 50_000  // per disproven/revoked reference
+	maxDiscreditPenalty     = 300_000 // cap on total discredit penalty
+	brokenRefPenalty        = 10_000  // per nonexistent reference
+	contradictionPenalty    = 50_000  // per high-confidence contradiction
+	maxContradictionPenalty = 250_000 // cap on total contradiction penalty
 
 	// contradictionHighConf is the threshold above which a contradicting
 	// fact significantly penalizes the claim.
@@ -45,6 +46,7 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 	var totalAdjustment int64
 	var supportTotal uint64
 	var discreditTotal uint64
+	var contradictionTotal uint64
 
 	for _, refId := range claim.References {
 		fact, found := evalCtx.GetFact(ctx, refId)
@@ -77,20 +79,30 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 			}
 		}
 
-		// Check for high-confidence contradictions
-		if evalCtx.GetContradictingFacts != nil {
+		// Check for high-confidence contradictions (capped at maxContradictionPenalty)
+		if evalCtx.GetContradictingFacts != nil && contradictionTotal < maxContradictionPenalty {
 			contradictions := evalCtx.GetContradictingFacts(ctx, refId)
 			for _, contra := range contradictions {
+				if contradictionTotal >= maxContradictionPenalty {
+					break
+				}
 				contraFact, contraFound := evalCtx.GetFact(ctx, contra.FromFactId)
 				if contraFound && contraFact.Confidence > contradictionHighConf {
-					totalAdjustment -= int64(contradictionPenalty)
+					penalty := uint64(contradictionPenalty)
+					if contradictionTotal+penalty > maxContradictionPenalty {
+						penalty = maxContradictionPenalty - contradictionTotal
+					}
+					contradictionTotal += penalty
+					totalAdjustment -= int64(penalty)
 				}
 			}
 		}
 	}
 
-	// Domain coherence check (AH-3): penalize references from unrelated domains.
-	// This catches hallucinated claims that cite real facts about unrelated topics.
+	// Domain coherence check (AH-3): penalize references from unrelated domains,
+	// BUT reward verified cross-domain bridges (novelty-aware AH-3).
+	// Unverified cross-domain refs are suspicious (hallucination). Well-verified ones
+	// from different domains represent genuine interdisciplinary synthesis.
 	if claim.Domain != "" && evalCtx.GetFact != nil {
 		var incoherencePenalty uint64
 		for _, refId := range claim.References {
@@ -101,6 +113,16 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 			if !found || refFact.Domain == "" || refFact.Domain == claim.Domain {
 				continue
 			}
+
+			// Verified bridge: high-confidence cross-domain ref → skip penalty.
+			// The novelty stage (stage 6) awards a positive bonus for these.
+			// Here we just avoid penalizing what's actually valuable synthesis.
+			if refFact.Confidence >= types.VerifiedBridgeThreshold &&
+				(refFact.Status == types.FactStatusVerified || refFact.Status == types.FactStatusActive) {
+				continue
+			}
+
+			// Unverified cross-domain ref: apply AH-3 penalty as before
 			claimStratum := inferStratum(claim.Domain)
 			refStratum := inferStratum(refFact.Domain)
 			var penalty uint64
@@ -119,13 +141,17 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 
 	// Circular reference detection via bounded BFS
 	if detectCycle(ctx, evalCtx, claim.References) {
-		// Apply cycle penalty factor: 40% reduction
-		// CyclePenaltyFactor = 400,000 means multiply by 0.4 (i.e., lose 60%)
 		result.Justification = "circular reference detected in fact graph"
-		// Express as a negative adjustment proportional to current positive adjustment
 		if totalAdjustment > 0 {
+			// Apply cycle penalty factor: 40% reduction
+			// CyclePenaltyFactor = 400,000 means multiply by 0.4 (i.e., lose 60%)
 			cyclePenalty := int64(uint64(totalAdjustment) * (1_000_000 - types.CyclePenaltyFactor) / 1_000_000)
 			totalAdjustment -= cyclePenalty
+		} else {
+			// Negative or zero adjustment with a cycle: apply a fixed penalty
+			// so circular references always have a cost, even when the graph
+			// already penalizes the claim.
+			totalAdjustment -= int64(brokenRefPenalty)
 		}
 	}
 

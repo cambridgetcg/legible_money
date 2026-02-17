@@ -618,12 +618,12 @@ func TestCastVote(t *testing.T) {
 
 	// Create a dispute in voting phase
 	dispute := types.Dispute{
-		Id:              "dispute-vote",
-		FactId:          "fact-001",
-		Status:          string(types.DisputeStatusVoting),
-		Tier:            uint32(types.TierBasic),
-		VotingDeadline:  200,
-		Arbiters:        []string{arbiter1, arbiter2},
+		Id:             "dispute-vote",
+		FactId:         "fact-001",
+		Status:         string(types.DisputeStatusVoting),
+		Tier:           uint32(types.TierBasic),
+		VotingDeadline: 200,
+		Arbiters:       []string{arbiter1, arbiter2},
 	}
 	k.SetDispute(ctx, dispute)
 
@@ -1397,8 +1397,8 @@ func TestMsgEscalateDispute(t *testing.T) {
 
 	srv := keeper.NewMsgServerImpl(k)
 	_, err := srv.EscalateDispute(ctx, &types.MsgEscalateDispute{
-		Requester:      requester,
-		DisputeId:      "dispute-esc-msg",
+		Requester:       requester,
+		DisputeId:       "dispute-esc-msg",
 		AdditionalStake: "555000000",
 	})
 	if err != nil {

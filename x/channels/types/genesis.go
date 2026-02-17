@@ -5,12 +5,12 @@ import "fmt"
 // DefaultParams returns default channels module parameters.
 func DefaultParams() *Params {
 	return &Params{
-		MinDeposit:            "1000000",  // 1 LGM in ulgm
-		MaxChannelDuration:    1036800,    // ~30 days at 2.521s blocks
+		MinDeposit:            "1000000", // 1 LGM in ulgm
+		MaxChannelDuration:    1036800,   // ~30 days at 2.521s blocks
 		DefaultSettlementFreq: 100,
 		DisputePeriodBlocks:   1000,
 		ExpiryGracePeriod:     500,
-		FraudPenaltyBps:       500,        // 5%
+		FraudPenaltyBps:       500, // 5%
 		MaxChannelsPerPayer:   50,
 	}
 }

@@ -65,7 +65,7 @@ func ValidateDIDDerivation(did string, pubKeyHex string) error {
 			return fmt.Errorf("DID does not derive from public key: expected did:lgm:%s, got %s", expected, did)
 		}
 	case 64:
-		if strings.ToLower(suffix) != strings.ToLower(pubKeyHex) {
+		if !strings.EqualFold(suffix, pubKeyHex) {
 			return fmt.Errorf("DID does not match full public key: expected did:lgm:%s, got %s", strings.ToLower(pubKeyHex), did)
 		}
 	default:
@@ -195,9 +195,11 @@ func (msg MsgRegisterAccount) ValidateBasic() error {
 	return nil
 }
 
-func (msg MsgRegisterAccount) Reset()         {}
-func (msg MsgRegisterAccount) String() string { return fmt.Sprintf("MsgRegisterAccount{%s}", msg.Sender) }
-func (msg MsgRegisterAccount) ProtoMessage()  {}
+func (msg MsgRegisterAccount) Reset() {}
+func (msg MsgRegisterAccount) String() string {
+	return fmt.Sprintf("MsgRegisterAccount{%s}", msg.Sender)
+}
+func (msg MsgRegisterAccount) ProtoMessage() {}
 
 func (msg MsgRegisterAccountResponse) Reset()         {}
 func (msg MsgRegisterAccountResponse) String() string { return "MsgRegisterAccountResponse{}" }
@@ -228,9 +230,9 @@ func (msg MsgFreezeAccount) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgFreezeAccount) Reset()         {}
-func (msg MsgFreezeAccount) String() string { return fmt.Sprintf("MsgFreezeAccount{%s}", msg.Address) }
-func (msg MsgFreezeAccount) ProtoMessage()  {}
+func (msg MsgFreezeAccount) Reset()                 {}
+func (msg MsgFreezeAccount) String() string         { return fmt.Sprintf("MsgFreezeAccount{%s}", msg.Address) }
+func (msg MsgFreezeAccount) ProtoMessage()          {}
 func (msg MsgFreezeAccountResponse) Reset()         {}
 func (msg MsgFreezeAccountResponse) String() string { return "MsgFreezeAccountResponse{}" }
 func (msg MsgFreezeAccountResponse) ProtoMessage()  {}
@@ -255,9 +257,11 @@ func (msg MsgUnfreezeAccount) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgUnfreezeAccount) Reset()         {}
-func (msg MsgUnfreezeAccount) String() string { return fmt.Sprintf("MsgUnfreezeAccount{%s}", msg.Address) }
-func (msg MsgUnfreezeAccount) ProtoMessage()  {}
+func (msg MsgUnfreezeAccount) Reset() {}
+func (msg MsgUnfreezeAccount) String() string {
+	return fmt.Sprintf("MsgUnfreezeAccount{%s}", msg.Address)
+}
+func (msg MsgUnfreezeAccount) ProtoMessage()          {}
 func (msg MsgUnfreezeAccountResponse) Reset()         {}
 func (msg MsgUnfreezeAccountResponse) String() string { return "MsgUnfreezeAccountResponse{}" }
 func (msg MsgUnfreezeAccountResponse) ProtoMessage()  {}
@@ -288,9 +292,11 @@ func (msg MsgSetRecoveryConfig) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgSetRecoveryConfig) Reset()         {}
-func (msg MsgSetRecoveryConfig) String() string { return fmt.Sprintf("MsgSetRecoveryConfig{%s}", msg.Sender) }
-func (msg MsgSetRecoveryConfig) ProtoMessage()  {}
+func (msg MsgSetRecoveryConfig) Reset() {}
+func (msg MsgSetRecoveryConfig) String() string {
+	return fmt.Sprintf("MsgSetRecoveryConfig{%s}", msg.Sender)
+}
+func (msg MsgSetRecoveryConfig) ProtoMessage()          {}
 func (msg MsgSetRecoveryConfigResponse) Reset()         {}
 func (msg MsgSetRecoveryConfigResponse) String() string { return "MsgSetRecoveryConfigResponse{}" }
 func (msg MsgSetRecoveryConfigResponse) ProtoMessage()  {}
@@ -319,9 +325,11 @@ func (msg MsgInitiateRecovery) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgInitiateRecovery) Reset()         {}
-func (msg MsgInitiateRecovery) String() string { return fmt.Sprintf("MsgInitiateRecovery{%s}", msg.AccountAddress) }
-func (msg MsgInitiateRecovery) ProtoMessage()  {}
+func (msg MsgInitiateRecovery) Reset() {}
+func (msg MsgInitiateRecovery) String() string {
+	return fmt.Sprintf("MsgInitiateRecovery{%s}", msg.AccountAddress)
+}
+func (msg MsgInitiateRecovery) ProtoMessage()          {}
 func (msg MsgInitiateRecoveryResponse) Reset()         {}
 func (msg MsgInitiateRecoveryResponse) String() string { return "MsgInitiateRecoveryResponse{}" }
 func (msg MsgInitiateRecoveryResponse) ProtoMessage()  {}
@@ -351,9 +359,11 @@ func (msg MsgSubmitRecoveryShard) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgSubmitRecoveryShard) Reset()         {}
-func (msg MsgSubmitRecoveryShard) String() string { return fmt.Sprintf("MsgSubmitRecoveryShard{shard=%d}", msg.ShardIndex) }
-func (msg MsgSubmitRecoveryShard) ProtoMessage()  {}
+func (msg MsgSubmitRecoveryShard) Reset() {}
+func (msg MsgSubmitRecoveryShard) String() string {
+	return fmt.Sprintf("MsgSubmitRecoveryShard{shard=%d}", msg.ShardIndex)
+}
+func (msg MsgSubmitRecoveryShard) ProtoMessage()          {}
 func (msg MsgSubmitRecoveryShardResponse) Reset()         {}
 func (msg MsgSubmitRecoveryShardResponse) String() string { return "MsgSubmitRecoveryShardResponse{}" }
 func (msg MsgSubmitRecoveryShardResponse) ProtoMessage()  {}
@@ -382,9 +392,11 @@ func (msg MsgChallengeRecovery) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgChallengeRecovery) Reset()         {}
-func (msg MsgChallengeRecovery) String() string { return fmt.Sprintf("MsgChallengeRecovery{%s}", msg.AccountAddress) }
-func (msg MsgChallengeRecovery) ProtoMessage()  {}
+func (msg MsgChallengeRecovery) Reset() {}
+func (msg MsgChallengeRecovery) String() string {
+	return fmt.Sprintf("MsgChallengeRecovery{%s}", msg.AccountAddress)
+}
+func (msg MsgChallengeRecovery) ProtoMessage()          {}
 func (msg MsgChallengeRecoveryResponse) Reset()         {}
 func (msg MsgChallengeRecoveryResponse) String() string { return "MsgChallengeRecoveryResponse{}" }
 func (msg MsgChallengeRecoveryResponse) ProtoMessage()  {}
@@ -409,9 +421,11 @@ func (msg MsgExecuteRecovery) ValidateBasic() error {
 	}
 	return nil
 }
-func (msg MsgExecuteRecovery) Reset()         {}
-func (msg MsgExecuteRecovery) String() string { return fmt.Sprintf("MsgExecuteRecovery{%s}", msg.AccountAddress) }
-func (msg MsgExecuteRecovery) ProtoMessage()  {}
+func (msg MsgExecuteRecovery) Reset() {}
+func (msg MsgExecuteRecovery) String() string {
+	return fmt.Sprintf("MsgExecuteRecovery{%s}", msg.AccountAddress)
+}
+func (msg MsgExecuteRecovery) ProtoMessage()          {}
 func (msg MsgExecuteRecoveryResponse) Reset()         {}
 func (msg MsgExecuteRecoveryResponse) String() string { return "MsgExecuteRecoveryResponse{}" }
 func (msg MsgExecuteRecoveryResponse) ProtoMessage()  {}
@@ -423,16 +437,18 @@ func (msg MsgExecuteRecoveryResponse) ProtoMessage()  {}
 // RecoveryShard stores an encrypted Shamir shard on-chain during recovery.
 // The shard data is encrypted with the shard holder's key before submission.
 type RecoveryShard struct {
-	OwnerAddress   string `json:"owner_address"`    // Account being recovered
-	ShardIndex     uint32 `json:"shard_index"`      // 1-based shard index
+	OwnerAddress   string `json:"owner_address"`     // Account being recovered
+	ShardIndex     uint32 `json:"shard_index"`       // 1-based shard index
 	SubmitterAddr  string `json:"submitter_address"` // Who submitted this shard
-	EncryptedData  []byte `json:"encrypted_data"`   // Encrypted shard bytes
-	SubmittedBlock uint64 `json:"submitted_block"`  // Block height when submitted
+	EncryptedData  []byte `json:"encrypted_data"`    // Encrypted shard bytes
+	SubmittedBlock uint64 `json:"submitted_block"`   // Block height when submitted
 }
 
-func (s RecoveryShard) Reset()         {}
-func (s RecoveryShard) String() string { return fmt.Sprintf("RecoveryShard{%s/%d}", s.OwnerAddress, s.ShardIndex) }
-func (s RecoveryShard) ProtoMessage()  {}
+func (s RecoveryShard) Reset() {}
+func (s RecoveryShard) String() string {
+	return fmt.Sprintf("RecoveryShard{%s/%d}", s.OwnerAddress, s.ShardIndex)
+}
+func (s RecoveryShard) ProtoMessage() {}
 
 // ============================================================
 // Extended MsgServer for methods not in the proto service definition

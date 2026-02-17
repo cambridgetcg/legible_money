@@ -14,7 +14,7 @@ import (
 // QueryParamsRequest is the request for the Params query.
 type QueryParamsRequest struct{}
 
-func (r *QueryParamsRequest) Reset()        {}
+func (r *QueryParamsRequest) Reset()         {}
 func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
 func (r *QueryParamsRequest) ProtoMessage()  {}
 
@@ -23,7 +23,7 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (r *QueryParamsResponse) Reset()        {}
+func (r *QueryParamsResponse) Reset()         {}
 func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryParamsResponse) ProtoMessage()  {}
 
@@ -32,7 +32,7 @@ type QueryProviderRequest struct {
 	Address string `json:"address"`
 }
 
-func (r *QueryProviderRequest) Reset()        {}
+func (r *QueryProviderRequest) Reset()         {}
 func (r *QueryProviderRequest) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryProviderRequest) ProtoMessage()  {}
 
@@ -41,7 +41,7 @@ type QueryProviderResponse struct {
 	Provider Provider `json:"provider"`
 }
 
-func (r *QueryProviderResponse) Reset()        {}
+func (r *QueryProviderResponse) Reset()         {}
 func (r *QueryProviderResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryProviderResponse) ProtoMessage()  {}
 
@@ -50,7 +50,7 @@ type QueryQuoteRequest struct {
 	QuoteId uint64 `json:"quote_id"`
 }
 
-func (r *QueryQuoteRequest) Reset()        {}
+func (r *QueryQuoteRequest) Reset()         {}
 func (r *QueryQuoteRequest) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryQuoteRequest) ProtoMessage()  {}
 
@@ -59,7 +59,7 @@ type QueryQuoteResponse struct {
 	Quote APIQuote `json:"quote"`
 }
 
-func (r *QueryQuoteResponse) Reset()        {}
+func (r *QueryQuoteResponse) Reset()         {}
 func (r *QueryQuoteResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryQuoteResponse) ProtoMessage()  {}
 

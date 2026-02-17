@@ -1,7 +1,6 @@
 package keeper_test
 
 import (
-	"context"
 	"testing"
 
 	"cosmossdk.io/log"
@@ -17,9 +16,9 @@ import (
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
+	ontologytypes "github.com/legible-money/legible/x/ontology/types"
 	"github.com/legible-money/legible/x/qualification/keeper"
 	"github.com/legible-money/legible/x/qualification/types"
-	ontologytypes "github.com/legible-money/legible/x/ontology/types"
 	stakingtypes "github.com/legible-money/legible/x/staking/types"
 )
 
@@ -93,18 +92,6 @@ func (m *mockStakingKeeper) GetActiveValidatorSet(_ sdk.Context) []stakingtypes.
 	return result
 }
 
-// ---------- Mock BankKeeper (no-op) ----------
-
-type mockBankKeeper struct{}
-
-func (mockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, _ sdk.AccAddress, _ string, _ sdk.Coins) error {
-	return nil
-}
-
-func (mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ string, _ sdk.AccAddress, _ sdk.Coins) error {
-	return nil
-}
-
 // ---------- Test Setup ----------
 
 func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockOntologyKeeper, *mockStakingKeeper) {
@@ -124,10 +111,10 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockOntologyKeeper,
 	cdc := codec.NewProtoCodec(registry)
 
 	mockOK := newMockOntologyKeeper()
-	mockOK.addDomain("mathematics", ontologytypes.StratumAxiomatic)   // stratum 0
-	mockOK.addDomain("physics", ontologytypes.StratumEmpirical)       // stratum 4
-	mockOK.addDomain("history", ontologytypes.StratumHistorical)      // stratum 5
-	mockOK.addDomain("formal_logic", ontologytypes.StratumFormal)     // stratum 1
+	mockOK.addDomain("mathematics", ontologytypes.StratumAxiomatic) // stratum 0
+	mockOK.addDomain("physics", ontologytypes.StratumEmpirical)     // stratum 4
+	mockOK.addDomain("history", ontologytypes.StratumHistorical)    // stratum 5
+	mockOK.addDomain("formal_logic", ontologytypes.StratumFormal)   // stratum 1
 
 	mockSK := newMockStakingKeeper()
 	mockSK.addValidator("lgmvaloper1abc", stakingtypes.TierBonded, 100, 90)
@@ -238,7 +225,7 @@ func TestSetGetEndorsement(t *testing.T) {
 		EndorserAddr:    "lgmvaloper1abc",
 		TargetValidator: "lgmvaloper1def",
 		Domain:          "mathematics",
-		Stake:           "22000000000000000000",
+		Stake:           "22000000",
 		EndorsedAtBlock: 100,
 		ExpiresAtBlock:  100000,
 	}
@@ -314,7 +301,7 @@ func TestQualifyViaStakeCommitment_Success(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Physics is stratum 4 → StakeLeaf required (22 LGM)
-	q, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "physics", "22000000000000000000")
+	q, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "physics", "22000000")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -324,7 +311,7 @@ func TestQualifyViaStakeCommitment_Success(t *testing.T) {
 	if q.Pathway != string(types.PathwayStakeCommitment) {
 		t.Errorf("expected stake_commitment pathway, got %s", q.Pathway)
 	}
-	if q.LockedStake != "22000000000000000000" {
+	if q.LockedStake != "22000000" {
 		t.Errorf("expected locked stake 22000000000000000000, got %s", q.LockedStake)
 	}
 }
@@ -333,7 +320,7 @@ func TestQualifyViaStakeCommitment_InsufficientStake(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Mathematics is stratum 0 → StakeTop required (2222 LGM)
-	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "mathematics", "22000000000000000000")
+	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "mathematics", "22000000")
 	if err == nil {
 		t.Fatal("expected error for insufficient stake")
 	}
@@ -342,12 +329,12 @@ func TestQualifyViaStakeCommitment_InsufficientStake(t *testing.T) {
 func TestQualifyViaStakeCommitment_AlreadyQualified(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "physics", "22000000000000000000")
+	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "physics", "22000000")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_, err = k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "physics", "22000000000000000000")
+	_, err = k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "physics", "22000000")
 	if err == nil {
 		t.Fatal("expected error for already qualified")
 	}
@@ -356,7 +343,7 @@ func TestQualifyViaStakeCommitment_AlreadyQualified(t *testing.T) {
 func TestQualifyViaStakeCommitment_ValidatorNotFound(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1zzz", "physics", "22000000000000000000")
+	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1zzz", "physics", "22000000")
 	if err == nil {
 		t.Fatal("expected error for nonexistent validator")
 	}
@@ -365,7 +352,7 @@ func TestQualifyViaStakeCommitment_ValidatorNotFound(t *testing.T) {
 func TestQualifyViaStakeCommitment_DomainNotFound(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "nonexistent", "22000000000000000000")
+	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "nonexistent", "22000000")
 	if err == nil {
 		t.Fatal("expected error for nonexistent domain")
 	}
@@ -564,9 +551,9 @@ func TestIsQualified_ActiveQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	k.SetQualification(ctx, types.DomainQualification{
-		ValidatorAddr: "lgmvaloper1abc",
-		Domain:        "mathematics",
-		Status:        string(types.StatusActive),
+		ValidatorAddr:  "lgmvaloper1abc",
+		Domain:         "mathematics",
+		Status:         string(types.StatusActive),
 		ExpiresAtBlock: 0, // no expiry
 	})
 
@@ -579,9 +566,9 @@ func TestIsQualified_ProbationaryQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	k.SetQualification(ctx, types.DomainQualification{
-		ValidatorAddr: "lgmvaloper1abc",
-		Domain:        "mathematics",
-		Status:        string(types.StatusProbationary),
+		ValidatorAddr:  "lgmvaloper1abc",
+		Domain:         "mathematics",
+		Status:         string(types.StatusProbationary),
 		ExpiresAtBlock: 0,
 	})
 
@@ -886,7 +873,7 @@ func TestWithdrawQualification_Success(t *testing.T) {
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
 		Status:         string(types.StatusActive),
-		LockedStake:    "22000000000000000000",
+		LockedStake:    "22000000",
 		StakeUnlocksAt: 50, // already unlocked at block 100
 	})
 
@@ -1037,7 +1024,7 @@ func TestMsgRequestQualification_StakeCommitment(t *testing.T) {
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Pathway:       types.PathwayStakeCommitment,
-		Stake:         "22000000000000000000",
+		Stake:         "22000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1093,7 +1080,7 @@ func TestMsgEndorseValidator(t *testing.T) {
 		EndorserAddr:    "lgmvaloper1abc",
 		TargetValidator: "lgmvaloper1def",
 		Domain:          "physics",
-		Stake:           "22000000000000000000",
+		Stake:           "22000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1306,11 +1293,11 @@ func TestStakeRequirement_TopStratum(t *testing.T) {
 
 	// Mathematics is stratum 0 → StakeTop (2222 LGM)
 	// Providing exactly StakeTop should succeed
-	q, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "mathematics", "2222000000000000000000")
+	q, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "mathematics", "2222000000")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.LockedStake != "2222000000000000000000" {
+	if q.LockedStake != "2222000000" {
 		t.Errorf("expected locked stake 2222000000000000000000, got %s", q.LockedStake)
 	}
 }
@@ -1319,13 +1306,13 @@ func TestStakeRequirement_MidStratum(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// formal_logic is stratum 1 → StakeTop (2222 LGM) — strata 0-1 map to top
-	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "formal_logic", "222000000000000000000")
+	_, err := k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "formal_logic", "222000000")
 	if err == nil {
 		t.Fatal("expected error: stratum 1 requires StakeTop, not StakeMid")
 	}
 
 	// Provide StakeTop for stratum 1
-	_, err = k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "formal_logic", "2222000000000000000000")
+	_, err = k.QualifyViaStakeCommitment(ctx, "lgmvaloper1abc", "formal_logic", "2222000000")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -128,9 +128,9 @@ func TestSubmitLIP(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	resp, err := ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test LIP",
-		Description: "A test improvement proposal",
+		Proposer:     testAddr("alice"),
+		Title:        "Test LIP",
+		Description:  "A test improvement proposal",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -158,16 +158,16 @@ func TestSubmitLIP_IncrementingIds(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	resp1, _ := ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "First LIP",
-		Description: "First",
+		Proposer:     testAddr("alice"),
+		Title:        "First LIP",
+		Description:  "First",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
 	resp2, _ := ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("bob"),
-		Title:       "Second LIP",
-		Description: "Second",
+		Proposer:     testAddr("bob"),
+		Title:        "Second LIP",
+		Description:  "Second",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -186,9 +186,9 @@ func TestStakeLIP_AdvancesToReview(t *testing.T) {
 
 	// Submit a LIP with process category
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Process LIP",
-		Description: "Process improvement",
+		Proposer:     testAddr("alice"),
+		Title:        "Process LIP",
+		Description:  "Process improvement",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -219,9 +219,9 @@ func TestStakeLIP_InsufficientStake(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Consensus LIP",
-		Description: "Big stake needed",
+		Proposer:     testAddr("alice"),
+		Title:        "Consensus LIP",
+		Description:  "Big stake needed",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -268,9 +268,9 @@ func createAndAdvanceToVoting(t *testing.T, k keeper.Keeper, ms types.MsgServer,
 	k.SetParams(ctx, params)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -303,9 +303,9 @@ func TestAdvanceLIPStage_ReviewToLastCall(t *testing.T) {
 
 	// Create and advance to review
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -343,9 +343,9 @@ func TestAdvanceLIPStage_LastCallToVoting(t *testing.T) {
 	k.SetParams(ctx, params)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -388,9 +388,9 @@ func TestAdvanceLIPStage_FromDraft_Fails(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -409,9 +409,9 @@ func TestWithdrawLIP(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Withdraw Me",
-		Description: "Will be withdrawn",
+		Proposer:     testAddr("alice"),
+		Title:        "Withdraw Me",
+		Description:  "Will be withdrawn",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -435,9 +435,9 @@ func TestWithdrawLIP_NotProposer(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -456,9 +456,9 @@ func TestWithdrawLIP_AlreadyTerminal(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -533,9 +533,9 @@ func TestCastVote_NotInVotingStage(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -799,9 +799,9 @@ func TestInitExportGenesis(t *testing.T) {
 
 	// Create some state
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Genesis LIP",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Genesis LIP",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -837,9 +837,9 @@ func TestQueryLIP(t *testing.T) {
 	qs := keeper.NewQueryServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Query Test",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Query Test",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_ECONOMIC_POLICY,
 		InitialStake: "1000000",
 	})
@@ -869,16 +869,16 @@ func TestQueryLIPs_ByStage(t *testing.T) {
 	qs := keeper.NewQueryServerImpl(k)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Draft 1",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Draft 1",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Draft 2",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Draft 2",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -1031,9 +1031,9 @@ func TestAttachUpgradePlan(t *testing.T) {
 
 	// Submit a LIP and set to consensus category
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Upgrade v2",
-		Description: "Software upgrade to v2",
+		Proposer:     testAddr("alice"),
+		Title:        "Upgrade v2",
+		Description:  "Software upgrade to v2",
 		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
 		InitialStake: "1000000",
 	})
@@ -1071,9 +1071,9 @@ func TestAttachUpgradePlan_NotConsensus(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k).(extendedMsgServer)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Process LIP",
-		Description: "Not a consensus LIP",
+		Proposer:     testAddr("alice"),
+		Title:        "Process LIP",
+		Description:  "Not a consensus LIP",
 		LipType:      types.LIPType_LIP_TYPE_COMMUNITY,
 		InitialStake: "1000000",
 	})
@@ -1095,9 +1095,9 @@ func TestAttachUpgradePlan_NotProposer(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k).(extendedMsgServer)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Upgrade v2",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Upgrade v2",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
 		InitialStake: "1000000",
 	})
@@ -1121,9 +1121,9 @@ func TestAttachUpgradePlan_DuplicatePlan(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k).(extendedMsgServer)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Upgrade v2",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Upgrade v2",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
 		InitialStake: "1000000",
 	})
@@ -1154,9 +1154,9 @@ func TestAttachUpgradePlan_TerminalLIP(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k).(extendedMsgServer)
 
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Upgrade v2",
-		Description: "Test",
+		Proposer:     testAddr("alice"),
+		Title:        "Upgrade v2",
+		Description:  "Test",
 		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
 		InitialStake: "1000000",
 	})
@@ -1230,9 +1230,9 @@ func TestGenesisRoundtrip_LIPFields(t *testing.T) {
 
 	// Create a LIP and advance it
 	ms.SubmitLIP(ctx, &types.MsgSubmitLIP{
-		Proposer:    testAddr("alice"),
-		Title:       "Roundtrip LIP",
-		Description: "Tests field preservation",
+		Proposer:     testAddr("alice"),
+		Title:        "Roundtrip LIP",
+		Description:  "Tests field preservation",
 		LipType:      types.LIPType_LIP_TYPE_SOFTWARE_UPGRADE,
 		InitialStake: "1000000",
 	})

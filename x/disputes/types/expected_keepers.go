@@ -62,15 +62,15 @@ type VestingKeeper interface {
 
 // ClawbackRecord mirrors vesting_rewards types to avoid circular imports.
 type ClawbackRecord struct {
-	Id               string `json:"id"`
-	ClaimId          string `json:"claim_id"`
-	ReleasedClawback string `json:"released_clawback"`
+	Id                string `json:"id"`
+	ClaimId           string `json:"claim_id"`
+	ReleasedClawback  string `json:"released_clawback"`
 	UnvestedForfeited string `json:"unvested_forfeited"`
-	ChallengerReward string `json:"challenger_reward"`
-	BlockHeight      uint64 `json:"block_height"`
+	ChallengerReward  string `json:"challenger_reward"`
+	BlockHeight       uint64 `json:"block_height"`
 }
 
-func (c *ClawbackRecord) Reset()        {}
+func (c *ClawbackRecord) Reset()         {}
 func (c *ClawbackRecord) String() string { return "" }
 func (c *ClawbackRecord) ProtoMessage()  {}
 
@@ -93,7 +93,7 @@ type Fact struct {
 	ChallengeCount     uint32   `json:"challenge_count,omitempty"`
 }
 
-func (f *Fact) Reset()        {}
+func (f *Fact) Reset()         {}
 func (f *Fact) String() string { return "" }
 func (f *Fact) ProtoMessage()  {}
 
@@ -104,7 +104,7 @@ type Claim struct {
 	Status    string `json:"status"`
 }
 
-func (c *Claim) Reset()        {}
+func (c *Claim) Reset()         {}
 func (c *Claim) String() string { return "" }
 func (c *Claim) ProtoMessage()  {}
 
@@ -117,6 +117,6 @@ type ValidatorInfo struct {
 	Reputation uint64 `json:"reputation"`
 }
 
-func (vi *ValidatorInfo) Reset()        {}
+func (vi *ValidatorInfo) Reset()         {}
 func (vi *ValidatorInfo) String() string { return "" }
 func (vi *ValidatorInfo) ProtoMessage()  {}

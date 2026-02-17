@@ -209,3 +209,27 @@ func (m *mockTxClient) UpdateMemoryCID(ctx context.Context, homeID, cid string) 
 func (m *mockTxClient) Stake(ctx context.Context, validatorAddr string, amount uint64) (string, error) {
 	return "mock-tx-hash", nil
 }
+func (m *mockTxClient) DeployContract(ctx context.Context, bytecodeHex string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CallContract(ctx context.Context, contractAddr, inputDataHex string, gasLimit uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ScheduleExecution(ctx context.Context, contractAddr, method, payload string, atBlock, maxGas uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) ConfigureGuardian(ctx context.Context, homeID, strategy string, autoDefend bool, deadmanThreshold uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) RegisterHomeKey(ctx context.Context, homeID, keyHash, role string, permissions []string, expiresAt uint64) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) StartSession(ctx context.Context, homeID, keyHash string, permissions []string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) EndSession(ctx context.Context, homeID, sessionID string) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error) {
+	return "mock-tx-hash", nil
+}

@@ -17,7 +17,6 @@ func GetLockMultiplier(lockTier uint32) *big.Int {
 	return new(big.Int).SetUint64(types.LockTiers[lockTier].MultiplierBps)
 }
 
-
 // DistributeReward distributes a gross reward through the partnership.
 //
 // Steps:

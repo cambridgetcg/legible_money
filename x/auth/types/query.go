@@ -49,25 +49,31 @@ type QueryParamsResponse struct {
 }
 
 // proto.Message stubs
-func (m QueryAccountRequest) Reset()         {}
-func (m QueryAccountRequest) String() string { return fmt.Sprintf("QueryAccountRequest{%s}", m.Address) }
-func (m QueryAccountRequest) ProtoMessage()  {}
+func (m QueryAccountRequest) Reset() {}
+func (m QueryAccountRequest) String() string {
+	return fmt.Sprintf("QueryAccountRequest{%s}", m.Address)
+}
+func (m QueryAccountRequest) ProtoMessage() {}
 
 func (m QueryAccountResponse) Reset()         {}
 func (m QueryAccountResponse) String() string { return "QueryAccountResponse{}" }
 func (m QueryAccountResponse) ProtoMessage()  {}
 
-func (m QueryAccountByDIDRequest) Reset()         {}
-func (m QueryAccountByDIDRequest) String() string { return fmt.Sprintf("QueryAccountByDIDRequest{%s}", m.Did) }
-func (m QueryAccountByDIDRequest) ProtoMessage()  {}
+func (m QueryAccountByDIDRequest) Reset() {}
+func (m QueryAccountByDIDRequest) String() string {
+	return fmt.Sprintf("QueryAccountByDIDRequest{%s}", m.Did)
+}
+func (m QueryAccountByDIDRequest) ProtoMessage() {}
 
 func (m QueryAccountByDIDResponse) Reset()         {}
 func (m QueryAccountByDIDResponse) String() string { return "QueryAccountByDIDResponse{}" }
 func (m QueryAccountByDIDResponse) ProtoMessage()  {}
 
-func (m QuerySessionKeysRequest) Reset()         {}
-func (m QuerySessionKeysRequest) String() string { return fmt.Sprintf("QuerySessionKeysRequest{%s}", m.Owner) }
-func (m QuerySessionKeysRequest) ProtoMessage()  {}
+func (m QuerySessionKeysRequest) Reset() {}
+func (m QuerySessionKeysRequest) String() string {
+	return fmt.Sprintf("QuerySessionKeysRequest{%s}", m.Owner)
+}
+func (m QuerySessionKeysRequest) ProtoMessage() {}
 
 func (m QuerySessionKeysResponse) Reset()         {}
 func (m QuerySessionKeysResponse) String() string { return "QuerySessionKeysResponse{}" }

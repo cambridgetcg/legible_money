@@ -4,18 +4,25 @@
 // verification rounds into CometBFT's single-block cycle.
 //
 // TS → ABCI++ Mapping:
-//   tryProduceBlock()          →  PrepareProposal
-//   validateBlock()            →  ProcessProposal
-//   submitCommitment/Reveal    →  ExtendVote (vote_extensions.go)
-//   verifyCommitment           →  VerifyVoteExtension (vote_extensions.go)
-//   applyBlock()               →  FinalizeBlock
+//
+//	tryProduceBlock()          →  PrepareProposal
+//	validateBlock()            →  ProcessProposal
+//	submitCommitment/Reveal    →  ExtendVote (vote_extensions.go)
+//	verifyCommitment           →  VerifyVoteExtension (vote_extensions.go)
+//	applyBlock()               →  FinalizeBlock
+//
+//	tryProduceBlock()          →  PrepareProposal
+//	validateBlock()            →  ProcessProposal
+//	submitCommitment/Reveal    →  ExtendVote (vote_extensions.go)
+//	verifyCommitment           →  VerifyVoteExtension (vote_extensions.go)
+//	applyBlock()               →  FinalizeBlock
 //
 // Vote Extension Data Flow:
-//   1. ExtendVote: Validators attach commitments/reveals to CometBFT votes
-//   2. PrepareProposal: Proposer collects extensions, creates injection tx
-//   3. ProcessProposal: Validators verify injection tx format
-//   4. PreBlocker: All validators process injection tx, store in keeper state
-//   5. BeginBlocker: Phase transitions and aggregation via knowledge module
+//  1. ExtendVote: Validators attach commitments/reveals to CometBFT votes
+//  2. PrepareProposal: Proposer collects extensions, creates injection tx
+//  3. ProcessProposal: Validators verify injection tx format
+//  4. PreBlocker: All validators process injection tx, store in keeper state
+//  5. BeginBlocker: Phase transitions and aggregation via knowledge module
 package app
 
 import (
@@ -50,7 +57,7 @@ type VoteExtension struct {
 // VoteCommitment represents a validator's commitment to a verification verdict.
 type VoteCommitment struct {
 	RoundID        string `json:"round_id"`
-	CommitmentHash string `json:"commitment_hash"` // sha256(verdict || confidence || salt)
+	CommitmentHash string `json:"commitment_hash"`      // sha256(verdict || confidence || salt)
 	VRFOutput      string `json:"vrf_output,omitempty"` // hex-encoded VRF output
 	VRFProof       string `json:"vrf_proof,omitempty"`  // hex-encoded VRF proof
 	Height         uint64 `json:"height"`
@@ -166,15 +173,18 @@ func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
 			if len(injection.Commitments) > 0 || len(injection.Reveals) > 0 {
 				injBytes, err := encodeVoteExtInjection(injection)
 				if err != nil {
-					logger.Error("failed to encode vote extension injection", "err", err)
-				} else {
-					txs = append(txs, injBytes)
-
-					logger.Info("injecting vote extension data",
-						"commitments", len(injection.Commitments),
-						"reveals", len(injection.Reveals),
-					)
+					// Encoding a well-formed VoteExtInjection should never fail.
+					// If it does, this proposer must not produce a block with
+					// missing PoT data — return error so CometBFT selects the
+					// next proposer. (PP-CONSENSUS-1 remediation)
+					return nil, fmt.Errorf("critical: vote extension injection encoding failed: %w", err)
 				}
+				txs = append(txs, injBytes)
+
+				logger.Info("injecting vote extension data",
+					"commitments", len(injection.Commitments),
+					"reveals", len(injection.Reveals),
+				)
 			}
 		}
 
@@ -443,12 +453,6 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 			"reveals_total", len(inj.Reveals),
 		)
 	}
-}
-
-// isValidVoteExtension performs basic structural validation of a vote extension.
-func (app *LegibleApp) isValidVoteExtension(ctx sdk.Context, extBytes []byte) bool {
-	var ext VoteExtension
-	return json.Unmarshal(extBytes, &ext) == nil
 }
 
 // ComputeCommitmentHash generates a commitment hash for a verification verdict.

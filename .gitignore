@@ -32,14 +32,13 @@ devnet/secrets/*.secret
 devnet/data/
 
 # Go build output
-build/
 legbled
 coverage.out
 
 # Test output
 test-results/
 
-# Node
+# Legacy Node artifacts
 node_modules/
 dist/
 

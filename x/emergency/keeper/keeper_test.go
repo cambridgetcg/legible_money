@@ -102,7 +102,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 	mockSK.addGuardian("guardian3", "120000000000000000000000000") // 120M LGM
 	mockSK.addGuardian("guardian4", "120000000000000000000000000") // 120M LGM
 	mockSK.addGuardian("guardian5", "120000000000000000000000000") // 120M LGM
-	mockSK.addBonded("bonded1", "50000000000000000000000000")     // 50M LGM (not guardian)
+	mockSK.addBonded("bonded1", "50000000000000000000000000")      // 50M LGM (not guardian)
 
 	storeService := runtime.NewKVStoreService(storeKey)
 

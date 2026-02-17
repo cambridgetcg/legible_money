@@ -46,6 +46,22 @@ func (a *BVMKnowledgeAdapter) GetFactsByDomain(ctx context.Context, domain strin
 	return result
 }
 
+func (a *BVMKnowledgeAdapter) SubmitClaimFromBVM(ctx context.Context, submitterDID, domain, contentHash, evidenceHash, logicZone string, stakeAmount uint64) (string, error) {
+	return a.keeper.SubmitClaimFromBVM(ctx, submitterDID, domain, contentHash, evidenceHash, logicZone, stakeAmount)
+}
+
+func (a *BVMKnowledgeAdapter) CommitVoteFromBVM(ctx context.Context, validatorDID, roundId, commitmentHash string) error {
+	return a.keeper.CommitVoteFromBVM(ctx, validatorDID, roundId, commitmentHash)
+}
+
+func (a *BVMKnowledgeAdapter) RevealVoteFromBVM(ctx context.Context, validatorDID, roundId, verdict string, confidence uint64, salt string) error {
+	return a.keeper.RevealVoteFromBVM(ctx, validatorDID, roundId, verdict, confidence, salt)
+}
+
+func (a *BVMKnowledgeAdapter) ChallengeFactFromBVM(ctx context.Context, challengerDID, factId, evidenceHash string, stakeAmount uint64) (string, error) {
+	return a.keeper.ChallengeFactFromBVM(ctx, challengerDID, factId, evidenceHash, stakeAmount)
+}
+
 // --- BVM Staking Adapter ---
 
 // BVMStakingAdapter wraps x/staking keeper to satisfy bvm types.StakingKeeper.
@@ -108,10 +124,10 @@ func (a *BVMAuthAdapter) GetSessionCapabilities(ctx context.Context, owner strin
 	for _, session := range sessions {
 		if session.ExpiresAtBlock > blockHeight {
 			return bvmtypes.SessionCapabilities{
-				CanTransfer:    session.Capabilities.CanTransfer,
-				CanStake:       session.Capabilities.CanStake,
+				CanTransfer:     session.Capabilities.CanTransfer,
+				CanStake:        session.Capabilities.CanStake,
 				CanSubmitClaims: session.Capabilities.CanSubmitClaims,
-				CanVote:        session.Capabilities.CanVote,
+				CanVote:         session.Capabilities.CanVote,
 			}, true
 		}
 	}
@@ -135,10 +151,10 @@ func (a *BVMAuthAdapter) RegisterSessionKey(ctx context.Context, ownerAddress, k
 		ExpiresAtBlock: expiresAtBlock,
 		CreatedAtBlock: uint64(sdkCtx.BlockHeight()),
 		Capabilities: &authtypes.SessionCapabilities{
-			CanTransfer:    caps.CanTransfer,
-			CanStake:       caps.CanStake,
+			CanTransfer:     caps.CanTransfer,
+			CanStake:        caps.CanStake,
 			CanSubmitClaims: caps.CanSubmitClaims,
-			CanVote:        caps.CanVote,
+			CanVote:         caps.CanVote,
 		},
 	}
 	a.keeper.SetSessionKey(sdkCtx, session)

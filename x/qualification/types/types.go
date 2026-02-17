@@ -12,11 +12,11 @@ import (
 type QualificationPathway string
 
 const (
-	PathwayStakeCommitment   QualificationPathway = "stake_commitment"
-	PathwayTrackRecord       QualificationPathway = "track_record"
-	PathwayCrossReference    QualificationPathway = "cross_reference"
+	PathwayStakeCommitment    QualificationPathway = "stake_commitment"
+	PathwayTrackRecord        QualificationPathway = "track_record"
+	PathwayCrossReference     QualificationPathway = "cross_reference"
 	PathwayStratumInheritance QualificationPathway = "stratum_inheritance"
-	PathwayGenesis           QualificationPathway = "genesis"
+	PathwayGenesis            QualificationPathway = "genesis"
 )
 
 func (p QualificationPathway) IsValid() bool {
@@ -65,8 +65,8 @@ type MsgRequestQualification struct {
 	ValidatorAddr string               `json:"validator_addr"`
 	Domain        string               `json:"domain"`
 	Pathway       QualificationPathway `json:"pathway"`
-	Stake         string               `json:"stake,omitempty"`         // for stake_commitment
-	InheritFrom   string               `json:"inherit_from,omitempty"`  // for stratum_inheritance
+	Stake         string               `json:"stake,omitempty"`        // for stake_commitment
+	InheritFrom   string               `json:"inherit_from,omitempty"` // for stratum_inheritance
 }
 
 func (m *MsgRequestQualification) Reset()         { *m = MsgRequestQualification{} }

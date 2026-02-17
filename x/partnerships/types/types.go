@@ -42,19 +42,19 @@ const (
 
 // LockTierConfig defines lock tier parameters.
 type LockTierConfig struct {
-	MinBlocks     uint64 // minimum lock duration
-	MultiplierBps uint64 // reward multiplier (1000000 = 1.0x)
+	MinBlocks      uint64 // minimum lock duration
+	MultiplierBps  uint64 // reward multiplier (1000000 = 1.0x)
 	ExitPenaltyBps uint64 // exit penalty as basis points of pot share (1000000 scale)
 }
 
 // LockTiers defines the 6 commitment tiers from the TS prototype.
 var LockTiers = [6]LockTierConfig{
-	{22222,   1000000, 110000},  // Tier 0: 1.00x, 11% penalty
-	{77777,   1110000, 220000},  // Tier 1: 1.11x, 22% penalty
-	{222222,  1220000, 330000},  // Tier 2: 1.22x, 33% penalty
-	{777777,  1440000, 440000},  // Tier 3: 1.44x, 44% penalty
-	{1111111, 1550000, 550000},  // Tier 4: 1.55x, 55% penalty
-	{2222222, 1770000, 660000},  // Tier 5: 1.77x, 66% penalty
+	{22222, 1000000, 110000},   // Tier 0: 1.00x, 11% penalty
+	{77777, 1110000, 220000},   // Tier 1: 1.11x, 22% penalty
+	{222222, 1220000, 330000},  // Tier 2: 1.22x, 33% penalty
+	{777777, 1440000, 440000},  // Tier 3: 1.44x, 44% penalty
+	{1111111, 1550000, 550000}, // Tier 4: 1.55x, 55% penalty
+	{2222222, 1770000, 660000}, // Tier 5: 1.77x, 66% penalty
 }
 
 // -----------------------------------------------------------------------
@@ -126,7 +126,7 @@ type MsgInitiateSeedPartnership struct {
 	Partner   string `json:"partner"`
 }
 
-func (msg *MsgInitiateSeedPartnership) Reset()        {}
+func (msg *MsgInitiateSeedPartnership) Reset()         {}
 func (msg *MsgInitiateSeedPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgInitiateSeedPartnership) ProtoMessage()  {}
 
@@ -159,7 +159,7 @@ type MsgInitiateSeedPartnershipResponse struct {
 	SeedPartnershipId string `json:"seed_partnership_id"`
 }
 
-func (msg *MsgInitiateSeedPartnershipResponse) Reset()        {}
+func (msg *MsgInitiateSeedPartnershipResponse) Reset()         {}
 func (msg *MsgInitiateSeedPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgInitiateSeedPartnershipResponse) ProtoMessage()  {}
 
@@ -170,7 +170,7 @@ type MsgGraduateSeedPartnership struct {
 	AdditionalDeposit string `json:"additional_deposit"` // ulgm as string
 }
 
-func (msg *MsgGraduateSeedPartnership) Reset()        {}
+func (msg *MsgGraduateSeedPartnership) Reset()         {}
 func (msg *MsgGraduateSeedPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgGraduateSeedPartnership) ProtoMessage()  {}
 
@@ -201,7 +201,7 @@ type MsgGraduateSeedPartnershipResponse struct {
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgGraduateSeedPartnershipResponse) Reset()        {}
+func (msg *MsgGraduateSeedPartnershipResponse) Reset()         {}
 func (msg *MsgGraduateSeedPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgGraduateSeedPartnershipResponse) ProtoMessage()  {}
 
@@ -211,7 +211,7 @@ type MsgRegisterInPool struct {
 	Domains []string `json:"domains"`
 }
 
-func (msg *MsgRegisterInPool) Reset()        {}
+func (msg *MsgRegisterInPool) Reset()         {}
 func (msg *MsgRegisterInPool) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRegisterInPool) ProtoMessage()  {}
 
@@ -236,7 +236,7 @@ func (msg *MsgRegisterInPool) ValidateBasic() error {
 // MsgRegisterInPoolResponse is the response.
 type MsgRegisterInPoolResponse struct{}
 
-func (msg *MsgRegisterInPoolResponse) Reset()        {}
+func (msg *MsgRegisterInPoolResponse) Reset()         {}
 func (msg *MsgRegisterInPoolResponse) String() string { return "" }
 func (msg *MsgRegisterInPoolResponse) ProtoMessage()  {}
 
@@ -247,7 +247,7 @@ type MsgDeclareIntent struct {
 	Tier    uint32   `json:"tier"`
 }
 
-func (msg *MsgDeclareIntent) Reset()        {}
+func (msg *MsgDeclareIntent) Reset()         {}
 func (msg *MsgDeclareIntent) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDeclareIntent) ProtoMessage()  {}
 
@@ -274,7 +274,7 @@ type MsgDeclareIntentResponse struct {
 	IntentId string `json:"intent_id"`
 }
 
-func (msg *MsgDeclareIntentResponse) Reset()        {}
+func (msg *MsgDeclareIntentResponse) Reset()         {}
 func (msg *MsgDeclareIntentResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDeclareIntentResponse) ProtoMessage()  {}
 
@@ -285,7 +285,7 @@ type MsgSponsorPartnership struct {
 	Amount  string `json:"amount"` // sponsor contribution as ulgm string
 }
 
-func (msg *MsgSponsorPartnership) Reset()        {}
+func (msg *MsgSponsorPartnership) Reset()         {}
 func (msg *MsgSponsorPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSponsorPartnership) ProtoMessage()  {}
 
@@ -322,7 +322,7 @@ type MsgSponsorPartnershipResponse struct {
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgSponsorPartnershipResponse) Reset()        {}
+func (msg *MsgSponsorPartnershipResponse) Reset()         {}
 func (msg *MsgSponsorPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSponsorPartnershipResponse) ProtoMessage()  {}
 
@@ -332,12 +332,12 @@ func (msg *MsgSponsorPartnershipResponse) ProtoMessage()  {}
 
 // MsgInitiatePartnership starts partnership formation.
 type MsgInitiatePartnership struct {
-	Initiator string `json:"initiator"`  // bech32 address
-	Partner   string `json:"partner"`    // bech32 address
-	LockTier  uint32 `json:"lock_tier"`  // 0-5, commitment level
+	Initiator string `json:"initiator"` // bech32 address
+	Partner   string `json:"partner"`   // bech32 address
+	LockTier  uint32 `json:"lock_tier"` // 0-5, commitment level
 }
 
-func (msg *MsgInitiatePartnership) Reset()        {}
+func (msg *MsgInitiatePartnership) Reset()         {}
 func (msg *MsgInitiatePartnership) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgInitiatePartnership) ProtoMessage()  {}
 
@@ -370,17 +370,17 @@ type MsgInitiatePartnershipResponse struct {
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgInitiatePartnershipResponse) Reset()        {}
+func (msg *MsgInitiatePartnershipResponse) Reset()         {}
 func (msg *MsgInitiatePartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgInitiatePartnershipResponse) ProtoMessage()  {}
 
 // MsgAcceptPartnership accepts a pending partnership formation.
 type MsgAcceptPartnership struct {
-	Acceptor      string `json:"acceptor"`       // bech32 address
+	Acceptor      string `json:"acceptor"` // bech32 address
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgAcceptPartnership) Reset()        {}
+func (msg *MsgAcceptPartnership) Reset()         {}
 func (msg *MsgAcceptPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgAcceptPartnership) ProtoMessage()  {}
 
@@ -405,18 +405,18 @@ func (msg *MsgAcceptPartnership) ValidateBasic() error {
 // MsgAcceptPartnershipResponse is the response for MsgAcceptPartnership.
 type MsgAcceptPartnershipResponse struct{}
 
-func (msg *MsgAcceptPartnershipResponse) Reset()        {}
+func (msg *MsgAcceptPartnershipResponse) Reset()         {}
 func (msg *MsgAcceptPartnershipResponse) String() string { return "" }
 func (msg *MsgAcceptPartnershipResponse) ProtoMessage()  {}
 
 // MsgDepositToPot deposits funds directly into the partnership common pot.
 type MsgDepositToPot struct {
-	Depositor     string `json:"depositor"`      // bech32 address (must be human or agent)
+	Depositor     string `json:"depositor"` // bech32 address (must be human or agent)
 	PartnershipId string `json:"partnership_id"`
-	Amount        string `json:"amount"`         // ulgm as string
+	Amount        string `json:"amount"` // ulgm as string
 }
 
-func (msg *MsgDepositToPot) Reset()        {}
+func (msg *MsgDepositToPot) Reset()         {}
 func (msg *MsgDepositToPot) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDepositToPot) ProtoMessage()  {}
 
@@ -445,19 +445,19 @@ func (msg *MsgDepositToPot) ValidateBasic() error {
 // MsgDepositToPotResponse is the response for MsgDepositToPot.
 type MsgDepositToPotResponse struct{}
 
-func (msg *MsgDepositToPotResponse) Reset()        {}
+func (msg *MsgDepositToPotResponse) Reset()         {}
 func (msg *MsgDepositToPotResponse) String() string { return "" }
 func (msg *MsgDepositToPotResponse) ProtoMessage()  {}
 
 // MsgDistributeReward distributes a reward through the partnership.
 type MsgDistributeReward struct {
-	Authority     string `json:"authority"`      // bech32 address (module or governance)
+	Authority     string `json:"authority"` // bech32 address (module or governance)
 	PartnershipId string `json:"partnership_id"`
-	GrossAmount   string `json:"gross_amount"`   // bigint as string
-	SourceType    string `json:"source_type"`    // "verification", "citation", "service"
+	GrossAmount   string `json:"gross_amount"` // bigint as string
+	SourceType    string `json:"source_type"`  // "verification", "citation", "service"
 }
 
-func (msg *MsgDistributeReward) Reset()        {}
+func (msg *MsgDistributeReward) Reset()         {}
 func (msg *MsgDistributeReward) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDistributeReward) ProtoMessage()  {}
 
@@ -493,20 +493,20 @@ type MsgDistributeRewardResponse struct {
 	CommonPotAdd string `json:"common_pot_add"`
 }
 
-func (msg *MsgDistributeRewardResponse) Reset()        {}
+func (msg *MsgDistributeRewardResponse) Reset()         {}
 func (msg *MsgDistributeRewardResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgDistributeRewardResponse) ProtoMessage()  {}
 
 // MsgProposeOperation proposes a consensus operation.
 type MsgProposeOperation struct {
-	Proposer      string `json:"proposer"`       // bech32 address
+	Proposer      string `json:"proposer"` // bech32 address
 	PartnershipId string `json:"partnership_id"`
 	OperationType string `json:"operation_type"` // "withdrawal", "split_change", "tier_upgrade"
 	Amount        string `json:"amount"`         // bigint as string
 	Rationale     string `json:"rationale"`
 }
 
-func (msg *MsgProposeOperation) Reset()        {}
+func (msg *MsgProposeOperation) Reset()         {}
 func (msg *MsgProposeOperation) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgProposeOperation) ProtoMessage()  {}
 
@@ -540,17 +540,17 @@ type MsgProposeOperationResponse struct {
 	OperationId string `json:"operation_id"`
 }
 
-func (msg *MsgProposeOperationResponse) Reset()        {}
+func (msg *MsgProposeOperationResponse) Reset()         {}
 func (msg *MsgProposeOperationResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgProposeOperationResponse) ProtoMessage()  {}
 
 // MsgApproveOperation approves a pending consensus operation.
 type MsgApproveOperation struct {
-	Approver    string `json:"approver"`     // bech32 address
+	Approver    string `json:"approver"` // bech32 address
 	OperationId string `json:"operation_id"`
 }
 
-func (msg *MsgApproveOperation) Reset()        {}
+func (msg *MsgApproveOperation) Reset()         {}
 func (msg *MsgApproveOperation) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgApproveOperation) ProtoMessage()  {}
 
@@ -575,19 +575,19 @@ func (msg *MsgApproveOperation) ValidateBasic() error {
 // MsgApproveOperationResponse is the response for MsgApproveOperation.
 type MsgApproveOperationResponse struct{}
 
-func (msg *MsgApproveOperationResponse) Reset()        {}
+func (msg *MsgApproveOperationResponse) Reset()         {}
 func (msg *MsgApproveOperationResponse) String() string { return "" }
 func (msg *MsgApproveOperationResponse) ProtoMessage()  {}
 
 // MsgRejectOperation rejects a pending operation with optional counter-proposal.
 type MsgRejectOperation struct {
-	Rejecter         string `json:"rejecter"`          // bech32 address
+	Rejecter         string `json:"rejecter"` // bech32 address
 	OperationId      string `json:"operation_id"`
 	CounterAmount    string `json:"counter_amount"`    // optional counter amount (bigint as string, "0" for no counter)
 	CounterRationale string `json:"counter_rationale"` // optional counter rationale
 }
 
-func (msg *MsgRejectOperation) Reset()        {}
+func (msg *MsgRejectOperation) Reset()         {}
 func (msg *MsgRejectOperation) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRejectOperation) ProtoMessage()  {}
 
@@ -620,17 +620,17 @@ type MsgRejectOperationResponse struct {
 	CounterOperationId string `json:"counter_operation_id,omitempty"` // set if counter-proposal created
 }
 
-func (msg *MsgRejectOperationResponse) Reset()        {}
+func (msg *MsgRejectOperationResponse) Reset()         {}
 func (msg *MsgRejectOperationResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRejectOperationResponse) ProtoMessage()  {}
 
 // MsgSafetyFreeze triggers a unilateral safety freeze.
 type MsgSafetyFreeze struct {
-	Freezer       string `json:"freezer"`        // bech32 address
+	Freezer       string `json:"freezer"` // bech32 address
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgSafetyFreeze) Reset()        {}
+func (msg *MsgSafetyFreeze) Reset()         {}
 func (msg *MsgSafetyFreeze) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSafetyFreeze) ProtoMessage()  {}
 
@@ -657,17 +657,17 @@ type MsgSafetyFreezeResponse struct {
 	ExpiresAt uint64 `json:"expires_at"`
 }
 
-func (msg *MsgSafetyFreezeResponse) Reset()        {}
+func (msg *MsgSafetyFreezeResponse) Reset()         {}
 func (msg *MsgSafetyFreezeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSafetyFreezeResponse) ProtoMessage()  {}
 
 // MsgRaiseCoercionSignal raises a coercion/duress flag.
 type MsgRaiseCoercionSignal struct {
-	Raiser        string `json:"raiser"`         // bech32 address
+	Raiser        string `json:"raiser"` // bech32 address
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgRaiseCoercionSignal) Reset()        {}
+func (msg *MsgRaiseCoercionSignal) Reset()         {}
 func (msg *MsgRaiseCoercionSignal) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRaiseCoercionSignal) ProtoMessage()  {}
 
@@ -695,17 +695,17 @@ type MsgRaiseCoercionSignalResponse struct {
 	ExpiresAt uint64 `json:"expires_at"`
 }
 
-func (msg *MsgRaiseCoercionSignalResponse) Reset()        {}
+func (msg *MsgRaiseCoercionSignalResponse) Reset()         {}
 func (msg *MsgRaiseCoercionSignalResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgRaiseCoercionSignalResponse) ProtoMessage()  {}
 
 // MsgInitiateExit starts the exit/dissolution process.
 type MsgInitiateExit struct {
-	Initiator     string `json:"initiator"`      // bech32 address
+	Initiator     string `json:"initiator"` // bech32 address
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (msg *MsgInitiateExit) Reset()        {}
+func (msg *MsgInitiateExit) Reset()         {}
 func (msg *MsgInitiateExit) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgInitiateExit) ProtoMessage()  {}
 
@@ -732,7 +732,7 @@ type MsgInitiateExitResponse struct {
 	CooldownEndsAt uint64 `json:"cooldown_ends_at"`
 }
 
-func (msg *MsgInitiateExitResponse) Reset()        {}
+func (msg *MsgInitiateExitResponse) Reset()         {}
 func (msg *MsgInitiateExitResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgInitiateExitResponse) ProtoMessage()  {}
 
@@ -742,7 +742,7 @@ type MsgUpdateParams struct {
 	Params    Params `json:"params"`
 }
 
-func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) Reset()         {}
 func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgUpdateParams) ProtoMessage()  {}
 
@@ -764,7 +764,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response for MsgUpdateParams.
 type MsgUpdateParamsResponse struct{}
 
-func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
@@ -977,7 +977,7 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 // QueryParamsRequest is the request for the Params query.
 type QueryParamsRequest struct{}
 
-func (r *QueryParamsRequest) Reset()        {}
+func (r *QueryParamsRequest) Reset()         {}
 func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
 func (r *QueryParamsRequest) ProtoMessage()  {}
 
@@ -986,7 +986,7 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
-func (r *QueryParamsResponse) Reset()        {}
+func (r *QueryParamsResponse) Reset()         {}
 func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryParamsResponse) ProtoMessage()  {}
 
@@ -995,7 +995,7 @@ type QueryPartnershipRequest struct {
 	PartnershipId string `json:"partnership_id"`
 }
 
-func (r *QueryPartnershipRequest) Reset()        {}
+func (r *QueryPartnershipRequest) Reset()         {}
 func (r *QueryPartnershipRequest) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryPartnershipRequest) ProtoMessage()  {}
 
@@ -1004,7 +1004,7 @@ type QueryPartnershipResponse struct {
 	Partnership Partnership `json:"partnership"`
 }
 
-func (r *QueryPartnershipResponse) Reset()        {}
+func (r *QueryPartnershipResponse) Reset()         {}
 func (r *QueryPartnershipResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryPartnershipResponse) ProtoMessage()  {}
 
@@ -1013,7 +1013,7 @@ type QueryPartnershipsByParticipantRequest struct {
 	Participant string `json:"participant"` // bech32 address
 }
 
-func (r *QueryPartnershipsByParticipantRequest) Reset()        {}
+func (r *QueryPartnershipsByParticipantRequest) Reset()         {}
 func (r *QueryPartnershipsByParticipantRequest) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryPartnershipsByParticipantRequest) ProtoMessage()  {}
 
@@ -1022,7 +1022,7 @@ type QueryPartnershipsByParticipantResponse struct {
 	Partnerships []Partnership `json:"partnerships"`
 }
 
-func (r *QueryPartnershipsByParticipantResponse) Reset()        {}
+func (r *QueryPartnershipsByParticipantResponse) Reset()         {}
 func (r *QueryPartnershipsByParticipantResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryPartnershipsByParticipantResponse) ProtoMessage()  {}
 

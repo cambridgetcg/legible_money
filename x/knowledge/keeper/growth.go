@@ -162,6 +162,143 @@ func (k Keeper) DecayStaleContestedFacts(ctx sdk.Context, currentHeight uint64) 
 	})
 }
 
+// DetectPropheticFacts scans verified facts for prophetic recognition.
+// A fact is prophetic if it was barely accepted (confidence near the acceptance threshold)
+// but has since accumulated significant citations — ahead of its time, later vindicated.
+// Called every ConfidenceGrowthEpoch blocks in BeginBlocker.
+func (k Keeper) DetectPropheticFacts(ctx sdk.Context, currentHeight uint64) {
+	ep := k.GetExtendedParams(ctx)
+	propheticThreshold := ep.PropheticBaseThresholdBps
+	if propheticThreshold == 0 {
+		propheticThreshold = types.PropheticBaseThreshold
+	}
+	citationThreshold := ep.PropheticCitationThreshold
+	if citationThreshold == 0 {
+		citationThreshold = types.PropheticCitationThreshold
+	}
+	propheticCap := ep.PropheticConfidenceCapBps
+	if propheticCap == 0 {
+		propheticCap = types.PropheticConfidenceCap
+	}
+
+	k.IterateFacts(ctx, func(fact types.Fact) bool {
+		// Skip if already prophetic or not verified
+		if fact.IsProphetic {
+			return false
+		}
+		if fact.Status != types.FactStatusVerified && fact.Status != types.FactStatusActive {
+			return false
+		}
+
+		// Check: was this fact barely accepted?
+		// BaseConfidence represents the structural score at acceptance time.
+		// If it was near the acceptance threshold (600k), it was a close call.
+		baseConf := fact.BaseConfidence
+		if baseConf == 0 {
+			baseConf = fact.Confidence
+		}
+		if baseConf > propheticThreshold {
+			return false // wasn't barely accepted
+		}
+
+		// Check: has it since gained significant citations?
+		if fact.CitationCount < citationThreshold {
+			return false
+		}
+
+		// Prophetic! Mark it and apply confidence boost.
+		fact.IsProphetic = true
+
+		// Calculate citation growth rate (citations per epoch since creation)
+		ageBlocks := currentHeight - fact.CreatedAtHeight
+		if ageBlocks > 0 {
+			epochBlocks := uint64(types.ConfidenceGrowthEpoch)
+			epochsAlive := ageBlocks / epochBlocks
+			if epochsAlive == 0 {
+				epochsAlive = 1
+			}
+			// Rate in bps where 1,000,000 = 1 citation/epoch
+			fact.CitationGrowthRate = fact.CitationCount * 1_000_000 / epochsAlive
+		}
+
+		// Boost confidence toward prophetic cap
+		if fact.Confidence < propheticCap {
+			// Gradual boost: move 10% closer to cap per detection
+			gap := propheticCap - fact.Confidence
+			boost := gap / 10
+			if boost == 0 {
+				boost = 1
+			}
+			fact.Confidence += boost
+			fact.LastConfidenceUpdate = currentHeight
+		}
+
+		k.SetFact(ctx, fact)
+
+		ctx.EventManager().EmitEvent(
+			sdk.NewEvent("prophetic_fact_detected",
+				sdk.NewAttribute("fact_id", fact.Id),
+				sdk.NewAttribute("base_confidence", fmt.Sprintf("%d", baseConf)),
+				sdk.NewAttribute("citation_count", fmt.Sprintf("%d", fact.CitationCount)),
+				sdk.NewAttribute("new_confidence", fmt.Sprintf("%d", fact.Confidence)),
+			),
+		)
+
+		return false
+	})
+}
+
+// ApplyPropheticGrowth gives prophetic facts accelerated confidence growth
+// and an elevated confidence cap. Called alongside ApplyConfidenceGrowth.
+func (k Keeper) ApplyPropheticGrowth(ctx sdk.Context, currentHeight uint64) {
+	ep := k.GetExtendedParams(ctx)
+	propheticCap := ep.PropheticConfidenceCapBps
+	if propheticCap == 0 {
+		propheticCap = types.PropheticConfidenceCap
+	}
+
+	params := k.GetParams(ctx)
+	growthPerEpoch := params.ConfidenceGrowthPerEpoch
+	if growthPerEpoch == 0 {
+		growthPerEpoch = types.ConfidenceGrowthPerEpochDefault
+	}
+
+	k.IterateFacts(ctx, func(fact types.Fact) bool {
+		if !fact.IsProphetic {
+			return false
+		}
+		if fact.Status != types.FactStatusVerified && fact.Status != types.FactStatusActive {
+			return false
+		}
+		if fact.IsProvisional {
+			return false
+		}
+
+		// Prophetic facts get 2× growth rate
+		effectiveGrowth := growthPerEpoch * 2
+
+		// Apply survived challenges multiplier (same as regular growth)
+		survivalMultiplier := uint64(1_000_000) + uint64(fact.SurvivedChallenges)*500_000
+		if survivalMultiplier > 3_000_000 {
+			survivalMultiplier = 3_000_000
+		}
+		effectiveGrowth = (effectiveGrowth * survivalMultiplier) / 1_000_000
+
+		newConfidence := fact.Confidence + effectiveGrowth
+		if newConfidence > propheticCap {
+			newConfidence = propheticCap
+		}
+
+		if newConfidence != fact.Confidence {
+			fact.Confidence = newConfidence
+			fact.LastConfidenceUpdate = currentHeight
+			k.SetFact(ctx, fact)
+		}
+
+		return false
+	})
+}
+
 // AdvanceMaturityLevels checks facts for maturity advancement.
 // Called every ConfidenceGrowthEpoch blocks in BeginBlocker.
 //

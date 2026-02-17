@@ -25,11 +25,11 @@ const (
 // These string constants are used by keeper logic for dispute resolution.
 
 const (
-	OutcomeUpheld               = "upheld"          // original fact stands
-	OutcomeOverturned           = "overturned"       // challenger wins
-	OutcomeInconclusive         = "inconclusive"     // no clear winner
-	OutcomeWeakened             = "weakened"          // partial success — confidence reduced
-	OutcomeUndecidabilityProven = "undecidability"   // Gödel zones — provably unprovable
+	OutcomeUpheld               = "upheld"         // original fact stands
+	OutcomeOverturned           = "overturned"     // challenger wins
+	OutcomeInconclusive         = "inconclusive"   // no clear winner
+	OutcomeWeakened             = "weakened"       // partial success — confidence reduced
+	OutcomeUndecidabilityProven = "undecidability" // Gödel zones — provably unprovable
 )
 
 // DisputeType distinguishes dispute origins.
@@ -78,7 +78,7 @@ type MsgOpenDispute struct {
 	Bond       string `json:"bond"` // bigint as string
 }
 
-func (msg *MsgOpenDispute) Reset()        {}
+func (msg *MsgOpenDispute) Reset()         {}
 func (msg *MsgOpenDispute) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgOpenDispute) ProtoMessage()  {}
 
@@ -111,7 +111,7 @@ type MsgOpenDisputeResponse struct {
 	DisputeId string `json:"dispute_id"`
 }
 
-func (msg *MsgOpenDisputeResponse) Reset()        {}
+func (msg *MsgOpenDisputeResponse) Reset()         {}
 func (msg *MsgOpenDisputeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgOpenDisputeResponse) ProtoMessage()  {}
 
@@ -150,7 +150,7 @@ type MsgSubmitEvidence struct {
 	Content   string `json:"content"` // evidence content/hash
 }
 
-func (msg *MsgSubmitEvidence) Reset()        {}
+func (msg *MsgSubmitEvidence) Reset()         {}
 func (msg *MsgSubmitEvidence) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSubmitEvidence) ProtoMessage()  {}
 
@@ -183,7 +183,7 @@ type MsgSubmitEvidenceResponse struct {
 	EvidenceId string `json:"evidence_id"`
 }
 
-func (msg *MsgSubmitEvidenceResponse) Reset()        {}
+func (msg *MsgSubmitEvidenceResponse) Reset()         {}
 func (msg *MsgSubmitEvidenceResponse) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgSubmitEvidenceResponse) ProtoMessage()  {}
 
@@ -196,7 +196,7 @@ type MsgVoteDispute struct {
 	Rationale string `json:"rationale"` // brief rationale
 }
 
-func (msg *MsgVoteDispute) Reset()        {}
+func (msg *MsgVoteDispute) Reset()         {}
 func (msg *MsgVoteDispute) String() string { return fmt.Sprintf("%+v", *msg) }
 func (msg *MsgVoteDispute) ProtoMessage()  {}
 
@@ -224,7 +224,7 @@ func (msg *MsgVoteDispute) ValidateBasic() error {
 // MsgVoteDisputeResponse is the response to MsgVoteDispute.
 type MsgVoteDisputeResponse struct{}
 
-func (msg *MsgVoteDisputeResponse) Reset()        {}
+func (msg *MsgVoteDisputeResponse) Reset()         {}
 func (msg *MsgVoteDisputeResponse) String() string { return "" }
 func (msg *MsgVoteDisputeResponse) ProtoMessage()  {}
 

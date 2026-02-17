@@ -229,11 +229,11 @@ func TestCall_BasicExecution(t *testing.T) {
 	// Then return the result from memory
 	bytecode := []byte{
 		// Push CALL args in reverse order: retLen, retOff, argsLen, argsOff, value, addr, gas
-		PUSH1, 32,  // retLen
-		PUSH1, 0,   // retOff
-		PUSH1, 0,   // argsLen
-		PUSH1, 0,   // argsOff
-		PUSH1, 0,   // value
+		PUSH1, 32, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
+		PUSH1, 0, // value
 		PUSH1, 0x02, // addr (last byte = 0x02)
 		PUSH2, 0xC3, 0x50, // gas = 50000
 		CALL,
@@ -275,11 +275,11 @@ func TestCall_RevertRollback(t *testing.T) {
 
 	// Call the target
 	bytecode := []byte{
-		PUSH1, 0,    // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
-		PUSH1, 0,    // value
+		PUSH1, 0, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
+		PUSH1, 0, // value
 		PUSH1, 0x02, // addr
 		PUSH2, 0xC3, 0x50, // gas = 50000
 		CALL,
@@ -320,11 +320,11 @@ func TestCall_SuccessCommitsState(t *testing.T) {
 	deployCode(state, targetAddr, targetCode)
 
 	bytecode := []byte{
-		PUSH1, 0,    // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
-		PUSH1, 0,    // value
+		PUSH1, 0, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
+		PUSH1, 0, // value
 		PUSH1, 0x02, // addr
 		PUSH2, 0xC3, 0x50, // gas
 		CALL,
@@ -369,10 +369,10 @@ func TestStaticCall_RejectsStateModification(t *testing.T) {
 
 	// STATICCALL: gas, addr, argsOff, argsLen, retOff, retLen (6 args)
 	bytecode := []byte{
-		PUSH1, 0,    // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
+		PUSH1, 0, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
 		PUSH1, 0x02, // addr
 		PUSH2, 0xC3, 0x50, // gas
 		STATICCALL,
@@ -416,10 +416,10 @@ func TestStaticCall_ReadOnlySucceeds(t *testing.T) {
 	deployCode(state, targetAddr, targetCode)
 
 	bytecode := []byte{
-		PUSH1, 32,   // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
+		PUSH1, 32, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
 		PUSH1, 0x02, // addr
 		PUSH2, 0xC3, 0x50, // gas
 		STATICCALL,
@@ -460,11 +460,11 @@ func TestStaticCall_InheritedBySubCall(t *testing.T) {
 
 	// Use regular CALL but from a static context — static should inherit
 	bytecode := []byte{
-		PUSH1, 0,    // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
-		PUSH1, 0,    // value
+		PUSH1, 0, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
+		PUSH1, 0, // value
 		PUSH1, 0x02, // addr
 		PUSH2, 0xC3, 0x50, // gas
 		CALL,
@@ -507,10 +507,10 @@ func TestDelegateCall_UsesCallerStorage(t *testing.T) {
 
 	// DELEGATECALL: gas, addr, argsOff, argsLen, retOff, retLen (6 args)
 	bytecode := []byte{
-		PUSH1, 0,    // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
+		PUSH1, 0, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
 		PUSH1, 0x02, // addr
 		PUSH2, 0xC3, 0x50, // gas
 		DELEGATECALL,
@@ -552,11 +552,11 @@ func TestCall_NonExistentContract(t *testing.T) {
 	targetAddr[19] = 0xFF // No code deployed here
 
 	bytecode := []byte{
-		PUSH1, 0,    // retLen
-		PUSH1, 0,    // retOff
-		PUSH1, 0,    // argsLen
-		PUSH1, 0,    // argsOff
-		PUSH1, 0,    // value
+		PUSH1, 0, // retLen
+		PUSH1, 0, // retOff
+		PUSH1, 0, // argsLen
+		PUSH1, 0, // argsOff
+		PUSH1, 0, // value
 		PUSH1, 0xFF, // addr (no code)
 		PUSH2, 0xC3, 0x50,
 		CALL,
@@ -615,8 +615,8 @@ func TestCreate_BasicDeployment(t *testing.T) {
 	// CREATE(value=0, offset=0, length=len(initCode))
 	bytecode = append(bytecode,
 		PUSH1, byte(len(initCode)), // length
-		PUSH1, 0,                    // offset
-		PUSH1, 0,                    // value
+		PUSH1, 0, // offset
+		PUSH1, 0, // value
 		CREATE,
 	)
 	// The new address is on the stack — store it at memory[0] and return

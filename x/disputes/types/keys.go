@@ -19,10 +19,10 @@ const (
 
 // Store key prefixes.
 var (
-	ParamsKey           = []byte{0x00}
-	DisputeKeyPrefix    = []byte{0x01}
-	EvidenceKeyPrefix   = []byte{0x02}
-	VoteKeyPrefix       = []byte{0x03}
+	ParamsKey                = []byte{0x00}
+	DisputeKeyPrefix         = []byte{0x01}
+	EvidenceKeyPrefix        = []byte{0x02}
+	VoteKeyPrefix            = []byte{0x03}
 	DisputeByFactPrefix      = []byte{0x04}
 	ActiveDisputePrefix      = []byte{0x05}
 	EvidenceCommitmentPrefix = []byte{0x06}

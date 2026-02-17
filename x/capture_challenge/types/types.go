@@ -15,21 +15,21 @@ import (
 
 const (
 	// Challenge stake and rewards (in ulgm)
-	MinChallengeStake              = "77000000"   // 77 LGM
-	CaptureExposureBonus           = "777000000"  // 777 LGM bonus
-	ChallengeStakeMultiplierBPS    = 7_700_000    // 7.7x in basis points (/ 1,000,000)
-	FailedChallengePenaltyBPS      = 770_000      // 77%
-	ValidatorSlashOnUpheldBPS      = 300_000      // 30%
+	MinChallengeStake           = "77000000"  // 77 LGM
+	CaptureExposureBonus        = "777000000" // 777 LGM bonus
+	ChallengeStakeMultiplierBPS = 7_700_000   // 7.7x in basis points (/ 1,000,000)
+	FailedChallengePenaltyBPS   = 770_000     // 77%
+	ValidatorSlashOnUpheldBPS   = 300_000     // 30%
 
 	// Evidence
-	MinEvidencePieces              = 3
-	MaxEvidencePieces              = 50
-	DefaultEvidencePeriodBlocks    uint64 = 777
-	DefaultReviewPeriodBlocks      uint64 = 7_777
+	MinEvidencePieces                  = 3
+	MaxEvidencePieces                  = 50
+	DefaultEvidencePeriodBlocks uint64 = 777
+	DefaultReviewPeriodBlocks   uint64 = 7_777
 
 	// Bounty pools
-	BaseBountyPool                 = "2222000000" // 2222 LGM
-	BountyReplenishmentRateBPS     = 10_000       // 1% of verification rewards
+	BaseBountyPool             = "2222000000" // 2222 LGM
+	BountyReplenishmentRateBPS = 10_000       // 1% of verification rewards
 
 	// Domain recovery
 	DefaultDomainPauseDurationBlocks uint64 = 777
@@ -41,26 +41,26 @@ const (
 type ChallengeStatus string
 
 const (
-	ChallengeSubmitted            ChallengeStatus = "submitted"
-	ChallengeEvidencePeriod       ChallengeStatus = "evidence_period"
-	ChallengeUnderReview          ChallengeStatus = "under_review"
-	ChallengeUpheld               ChallengeStatus = "upheld"
-	ChallengeRejected             ChallengeStatus = "rejected"
-	ChallengePartial              ChallengeStatus = "partial"
-	ChallengeExpired              ChallengeStatus = "expired"
+	ChallengeSubmitted      ChallengeStatus = "submitted"
+	ChallengeEvidencePeriod ChallengeStatus = "evidence_period"
+	ChallengeUnderReview    ChallengeStatus = "under_review"
+	ChallengeUpheld         ChallengeStatus = "upheld"
+	ChallengeRejected       ChallengeStatus = "rejected"
+	ChallengePartial        ChallengeStatus = "partial"
+	ChallengeExpired        ChallengeStatus = "expired"
 )
 
 // EvidenceType categorizes the kind of capture evidence.
 type EvidenceType string
 
 const (
-	EvidenceCoordinatedVoting   EvidenceType = "coordinated_voting"
-	EvidenceTimingCorrelation   EvidenceType = "timing_correlation"
+	EvidenceCoordinatedVoting    EvidenceType = "coordinated_voting"
+	EvidenceTimingCorrelation    EvidenceType = "timing_correlation"
 	EvidenceOffChainCoordination EvidenceType = "off_chain_coordination"
-	EvidenceFalseFactAccepted   EvidenceType = "false_fact_accepted"
-	EvidenceStakeManipulation   EvidenceType = "stake_manipulation"
-	EvidenceQualificationFraud  EvidenceType = "qualification_fraud"
-	EvidenceSystematicBias      EvidenceType = "systematic_bias"
+	EvidenceFalseFactAccepted    EvidenceType = "false_fact_accepted"
+	EvidenceStakeManipulation    EvidenceType = "stake_manipulation"
+	EvidenceQualificationFraud   EvidenceType = "qualification_fraud"
+	EvidenceSystematicBias       EvidenceType = "systematic_bias"
 )
 
 // --- Params Validation ---
@@ -122,7 +122,7 @@ func (m *MsgSubmitChallengeResponse) ProtoMessage()  {}
 // MsgAddEvidence adds additional evidence to an active challenge.
 type MsgAddEvidence struct {
 	Challenger  string           `json:"challenger"`
-	ChallengeId string          `json:"challenge_id"`
+	ChallengeId string           `json:"challenge_id"`
 	Evidence    *CaptureEvidence `json:"evidence"`
 }
 

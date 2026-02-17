@@ -32,6 +32,13 @@ const (
 	Query_CalculateConfidence_FullMethodName = "/legible.knowledge.v1.Query/CalculateConfidence"
 	Query_DomainProposal_FullMethodName      = "/legible.knowledge.v1.Query/DomainProposal"
 	Query_DomainProposals_FullMethodName     = "/legible.knowledge.v1.Query/DomainProposals"
+	Query_Claim_FullMethodName               = "/legible.knowledge.v1.Query/Claim"
+	Query_Fact_FullMethodName                = "/legible.knowledge.v1.Query/Fact"
+	Query_Facts_FullMethodName               = "/legible.knowledge.v1.Query/Facts"
+	Query_FactsByDomain_FullMethodName       = "/legible.knowledge.v1.Query/FactsByDomain"
+	Query_VerificationRound_FullMethodName   = "/legible.knowledge.v1.Query/VerificationRound"
+	Query_ActiveRounds_FullMethodName        = "/legible.knowledge.v1.Query/ActiveRounds"
+	Query_CounterFact_FullMethodName         = "/legible.knowledge.v1.Query/CounterFact"
 )
 
 // QueryClient is the client API for Query service.
@@ -66,6 +73,20 @@ type QueryClient interface {
 	DomainProposal(ctx context.Context, in *QueryDomainProposalRequest, opts ...grpc.CallOption) (*QueryDomainProposalResponse, error)
 	// DomainProposals queries all pending domain proposals
 	DomainProposals(ctx context.Context, in *QueryDomainProposalsRequest, opts ...grpc.CallOption) (*QueryDomainProposalsResponse, error)
+	// Claim queries a single claim by ID
+	Claim(ctx context.Context, in *QueryClaimRequest, opts ...grpc.CallOption) (*QueryClaimResponse, error)
+	// Fact queries a single verified fact by ID
+	Fact(ctx context.Context, in *QueryFactRequest, opts ...grpc.CallOption) (*QueryFactResponse, error)
+	// Facts queries all facts with pagination
+	Facts(ctx context.Context, in *QueryFactsRequest, opts ...grpc.CallOption) (*QueryFactsResponse, error)
+	// FactsByDomain queries facts within a specific domain
+	FactsByDomain(ctx context.Context, in *QueryFactsByDomainRequest, opts ...grpc.CallOption) (*QueryFactsByDomainResponse, error)
+	// VerificationRound queries a verification round by ID
+	VerificationRound(ctx context.Context, in *QueryVerificationRoundRequest, opts ...grpc.CallOption) (*QueryVerificationRoundResponse, error)
+	// ActiveRounds queries all currently active verification rounds
+	ActiveRounds(ctx context.Context, in *QueryActiveRoundsRequest, opts ...grpc.CallOption) (*QueryActiveRoundsResponse, error)
+	// CounterFact queries a counter-fact by ID
+	CounterFact(ctx context.Context, in *QueryCounterFactRequest, opts ...grpc.CallOption) (*QueryCounterFactResponse, error)
 }
 
 type queryClient struct {
@@ -206,6 +227,76 @@ func (c *queryClient) DomainProposals(ctx context.Context, in *QueryDomainPropos
 	return out, nil
 }
 
+func (c *queryClient) Claim(ctx context.Context, in *QueryClaimRequest, opts ...grpc.CallOption) (*QueryClaimResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryClaimResponse)
+	err := c.cc.Invoke(ctx, Query_Claim_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) Fact(ctx context.Context, in *QueryFactRequest, opts ...grpc.CallOption) (*QueryFactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryFactResponse)
+	err := c.cc.Invoke(ctx, Query_Fact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) Facts(ctx context.Context, in *QueryFactsRequest, opts ...grpc.CallOption) (*QueryFactsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryFactsResponse)
+	err := c.cc.Invoke(ctx, Query_Facts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) FactsByDomain(ctx context.Context, in *QueryFactsByDomainRequest, opts ...grpc.CallOption) (*QueryFactsByDomainResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryFactsByDomainResponse)
+	err := c.cc.Invoke(ctx, Query_FactsByDomain_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) VerificationRound(ctx context.Context, in *QueryVerificationRoundRequest, opts ...grpc.CallOption) (*QueryVerificationRoundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryVerificationRoundResponse)
+	err := c.cc.Invoke(ctx, Query_VerificationRound_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ActiveRounds(ctx context.Context, in *QueryActiveRoundsRequest, opts ...grpc.CallOption) (*QueryActiveRoundsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryActiveRoundsResponse)
+	err := c.cc.Invoke(ctx, Query_ActiveRounds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) CounterFact(ctx context.Context, in *QueryCounterFactRequest, opts ...grpc.CallOption) (*QueryCounterFactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryCounterFactResponse)
+	err := c.cc.Invoke(ctx, Query_CounterFact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility.
@@ -238,6 +329,20 @@ type QueryServer interface {
 	DomainProposal(context.Context, *QueryDomainProposalRequest) (*QueryDomainProposalResponse, error)
 	// DomainProposals queries all pending domain proposals
 	DomainProposals(context.Context, *QueryDomainProposalsRequest) (*QueryDomainProposalsResponse, error)
+	// Claim queries a single claim by ID
+	Claim(context.Context, *QueryClaimRequest) (*QueryClaimResponse, error)
+	// Fact queries a single verified fact by ID
+	Fact(context.Context, *QueryFactRequest) (*QueryFactResponse, error)
+	// Facts queries all facts with pagination
+	Facts(context.Context, *QueryFactsRequest) (*QueryFactsResponse, error)
+	// FactsByDomain queries facts within a specific domain
+	FactsByDomain(context.Context, *QueryFactsByDomainRequest) (*QueryFactsByDomainResponse, error)
+	// VerificationRound queries a verification round by ID
+	VerificationRound(context.Context, *QueryVerificationRoundRequest) (*QueryVerificationRoundResponse, error)
+	// ActiveRounds queries all currently active verification rounds
+	ActiveRounds(context.Context, *QueryActiveRoundsRequest) (*QueryActiveRoundsResponse, error)
+	// CounterFact queries a counter-fact by ID
+	CounterFact(context.Context, *QueryCounterFactRequest) (*QueryCounterFactResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -286,6 +391,27 @@ func (UnimplementedQueryServer) DomainProposal(context.Context, *QueryDomainProp
 }
 func (UnimplementedQueryServer) DomainProposals(context.Context, *QueryDomainProposalsRequest) (*QueryDomainProposalsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DomainProposals not implemented")
+}
+func (UnimplementedQueryServer) Claim(context.Context, *QueryClaimRequest) (*QueryClaimResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Claim not implemented")
+}
+func (UnimplementedQueryServer) Fact(context.Context, *QueryFactRequest) (*QueryFactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Fact not implemented")
+}
+func (UnimplementedQueryServer) Facts(context.Context, *QueryFactsRequest) (*QueryFactsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Facts not implemented")
+}
+func (UnimplementedQueryServer) FactsByDomain(context.Context, *QueryFactsByDomainRequest) (*QueryFactsByDomainResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FactsByDomain not implemented")
+}
+func (UnimplementedQueryServer) VerificationRound(context.Context, *QueryVerificationRoundRequest) (*QueryVerificationRoundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerificationRound not implemented")
+}
+func (UnimplementedQueryServer) ActiveRounds(context.Context, *QueryActiveRoundsRequest) (*QueryActiveRoundsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ActiveRounds not implemented")
+}
+func (UnimplementedQueryServer) CounterFact(context.Context, *QueryCounterFactRequest) (*QueryCounterFactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CounterFact not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 func (UnimplementedQueryServer) testEmbeddedByValue()               {}
@@ -542,6 +668,132 @@ func _Query_DomainProposals_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_Claim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryClaimRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Claim(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_Claim_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Claim(ctx, req.(*QueryClaimRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_Fact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryFactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Fact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_Fact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Fact(ctx, req.(*QueryFactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_Facts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryFactsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Facts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_Facts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Facts(ctx, req.(*QueryFactsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_FactsByDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryFactsByDomainRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).FactsByDomain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_FactsByDomain_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).FactsByDomain(ctx, req.(*QueryFactsByDomainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_VerificationRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryVerificationRoundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).VerificationRound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_VerificationRound_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).VerificationRound(ctx, req.(*QueryVerificationRoundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ActiveRounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryActiveRoundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ActiveRounds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_ActiveRounds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ActiveRounds(ctx, req.(*QueryActiveRoundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_CounterFact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryCounterFactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).CounterFact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_CounterFact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).CounterFact(ctx, req.(*QueryCounterFactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -600,6 +852,34 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DomainProposals",
 			Handler:    _Query_DomainProposals_Handler,
+		},
+		{
+			MethodName: "Claim",
+			Handler:    _Query_Claim_Handler,
+		},
+		{
+			MethodName: "Fact",
+			Handler:    _Query_Fact_Handler,
+		},
+		{
+			MethodName: "Facts",
+			Handler:    _Query_Facts_Handler,
+		},
+		{
+			MethodName: "FactsByDomain",
+			Handler:    _Query_FactsByDomain_Handler,
+		},
+		{
+			MethodName: "VerificationRound",
+			Handler:    _Query_VerificationRound_Handler,
+		},
+		{
+			MethodName: "ActiveRounds",
+			Handler:    _Query_ActiveRounds_Handler,
+		},
+		{
+			MethodName: "CounterFact",
+			Handler:    _Query_CounterFact_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -429,4 +429,3 @@ func (k msgServer) addVoteAudit(ctx sdk.Context, action types.AuditAction, voter
 		Details:     "",
 	})
 }
-

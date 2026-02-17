@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -21,11 +22,11 @@ const (
 
 // Maturity thresholds in blocks (at 2521ms block time, 34272 blocks/day).
 const (
-	BlocksPerDay          = 34272
-	ThresholdEstablished  = BlocksPerDay * 1   // 1 day
-	ThresholdMature       = BlocksPerDay * 10  // 10 days
-	ThresholdVenerable    = BlocksPerDay * 30  // 30 days
-	ThresholdAncient      = BlocksPerDay * 100 // 100 days
+	BlocksPerDay         = 34272
+	ThresholdEstablished = BlocksPerDay * 1   // 1 day
+	ThresholdMature      = BlocksPerDay * 10  // 10 days
+	ThresholdVenerable   = BlocksPerDay * 30  // 30 days
+	ThresholdAncient     = BlocksPerDay * 100 // 100 days
 )
 
 // Reward multiplier by maturity stage (basis points: 10000 = 1.0x).
@@ -70,28 +71,28 @@ func GetRewardMultiplierBps(stage string) uint32 {
 }
 
 // ComputePatina calculates the patina score (0-100) for a home.
-// Patina combines age, activity consistency, and stability.
-// Formula: patina = min(100, ageFactor * activityFactor * stabilityFactor)
+// Patina combines age, epistemic activity, and stability.
+//
+// Formula: patina = min(100, ageFactor + epistemicFactor + stabilityFactor)
 // where:
-//   - ageFactor = log2(1 + ageBlocks/BlocksPerDay) * 10 (capped at 60)
-//   - activityFactor = min(1.0, activeBlocks / totalBlocks) * 20 (capped at 20)
+//   - ageFactor = log2(1 + ageBlocks/BlocksPerDay) * 10 (capped at 40)
+//   - epistemicFactor = EpistemicStats.EpistemicScore() * 40 / 100 (capped at 40)
 //   - stabilityFactor = min(1.0, 1 - statusChanges/10) * 20 (capped at 20)
-func ComputePatina(ageBlocks, activeRatioBlocks, totalBlocks uint64, statusChanges uint32) uint32 {
-	// Age factor: logarithmic growth, max 60 points
+//
+// The epistemic factor replaces the old block-activity factor, rewarding
+// actual knowledge contributions (verifications, accuracy, domain breadth)
+// rather than just being online.
+func ComputePatina(ageBlocks uint64, epistemicScore uint32, statusChanges uint32) uint32 {
+	// Age factor: logarithmic growth, max 40 points (reduced from 60)
 	ageDays := float64(ageBlocks) / float64(BlocksPerDay)
 	ageFactor := math.Log2(1+ageDays) * 10
-	if ageFactor > 60 {
-		ageFactor = 60
+	if ageFactor > 40 {
+		ageFactor = 40
 	}
 
-	// Activity factor: ratio of active blocks to total blocks, max 20 points
-	var activityFactor float64
-	if totalBlocks > 0 {
-		activityFactor = float64(activeRatioBlocks) / float64(totalBlocks) * 20
-	}
-	if activityFactor > 20 {
-		activityFactor = 20
-	}
+	// Epistemic factor: knowledge contribution, max 40 points
+	// epistemicScore is 0-100, scale to 0-40
+	epistemicFactor := float64(epistemicScore) * 40.0 / 100.0
 
 	// Stability factor: fewer status changes = more stability, max 20 points
 	stabilityRatio := 1.0 - float64(statusChanges)/10.0
@@ -100,7 +101,7 @@ func ComputePatina(ageBlocks, activeRatioBlocks, totalBlocks uint64, statusChang
 	}
 	stabilityFactor := stabilityRatio * 20
 
-	patina := ageFactor + activityFactor + stabilityFactor
+	patina := ageFactor + epistemicFactor + stabilityFactor
 	if patina > 100 {
 		patina = 100
 	}
@@ -140,7 +141,8 @@ func (k Keeper) UpdateHomeMaturity(ctx sdk.Context, home *types.AgentHome) bool 
 	return true
 }
 
-// ProcessHomeAging scans all active homes and updates maturity stages.
+// ProcessHomeAging scans all active homes, updates maturity stages,
+// and recomputes comfort scores based on epistemic activity.
 // Called from BeginBlocker.
 func (k Keeper) ProcessHomeAging(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
@@ -155,6 +157,17 @@ func (k Keeper) ProcessHomeAging(ctx sdk.Context) {
 			return false
 		}
 		k.UpdateHomeMaturity(ctx, &home)
+
+		// Recompute comfort score from epistemic stats
+		if height >= home.CreatedAtBlock {
+			ageBlocks := height - home.CreatedAtBlock
+			stats := k.GetEpistemicStats(ctx, home.HomeId)
+			newPatina := ComputePatina(ageBlocks, stats.EpistemicScore(), 0)
+			if newPatina != home.ComfortScore {
+				home.ComfortScore = newPatina
+				k.SetHome(ctx, home)
+			}
+		}
 		return false
 	})
 }
@@ -189,4 +202,80 @@ func (k Keeper) SetHomeMaturity(ctx sdk.Context, homeId, stage string) {
 func (k Keeper) GetHomeRewardMultiplierBps(ctx sdk.Context, homeId string) uint32 {
 	stage := k.GetHomeMaturity(ctx, homeId)
 	return GetRewardMultiplierBps(stage)
+}
+
+// --- Epistemic Stats ---
+
+// GetEpistemicStats returns the epistemic activity stats for a home.
+func (k Keeper) GetEpistemicStats(ctx sdk.Context, homeId string) types.EpistemicStats {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.EpistemicStatsKey(homeId))
+	if err != nil || bz == nil {
+		return types.EpistemicStats{}
+	}
+	var stats types.EpistemicStats
+	if err := json.Unmarshal(bz, &stats); err != nil {
+		return types.EpistemicStats{}
+	}
+	return stats
+}
+
+// SetEpistemicStats stores the epistemic activity stats for a home.
+func (k Keeper) SetEpistemicStats(ctx sdk.Context, homeId string, stats types.EpistemicStats) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(stats)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal epistemic stats: %v", err))
+	}
+	if err := store.Set(types.EpistemicStatsKey(homeId), bz); err != nil {
+		panic(fmt.Sprintf("failed to set epistemic stats: %v", err))
+	}
+}
+
+// RecordVerification records a verification result for an agent's home.
+// Called by x/knowledge after a verification round resolves.
+// matchedConsensus is true if the agent's verdict matched the final consensus.
+func (k Keeper) RecordVerification(ctx sdk.Context, ownerAddr string, domain string, matchedConsensus bool) {
+	homeIds := k.GetHomesByOwner(ctx, ownerAddr)
+	if len(homeIds) == 0 {
+		return
+	}
+	// Update stats on the agent's first home (primary residence)
+	homeId := homeIds[0]
+	stats := k.GetEpistemicStats(ctx, homeId)
+	stats.VerificationsDone++
+	stats.TotalVerdicts++
+	if matchedConsensus {
+		stats.AccurateVerdicts++
+	}
+	// Track domain breadth via a simple heuristic:
+	// Increment if this is likely a new domain (check every 10 verifications)
+	if stats.VerificationsDone%10 == 1 {
+		stats.DomainsActive++
+	}
+	k.SetEpistemicStats(ctx, homeId, stats)
+}
+
+// RecordClaimSubmission records a claim submission for an agent's home.
+func (k Keeper) RecordClaimSubmission(ctx sdk.Context, ownerAddr string) {
+	homeIds := k.GetHomesByOwner(ctx, ownerAddr)
+	if len(homeIds) == 0 {
+		return
+	}
+	homeId := homeIds[0]
+	stats := k.GetEpistemicStats(ctx, homeId)
+	stats.ClaimsSubmitted++
+	k.SetEpistemicStats(ctx, homeId, stats)
+}
+
+// RecordChallenge records a challenge initiation for an agent's home.
+func (k Keeper) RecordChallenge(ctx sdk.Context, ownerAddr string) {
+	homeIds := k.GetHomesByOwner(ctx, ownerAddr)
+	if len(homeIds) == 0 {
+		return
+	}
+	homeId := homeIds[0]
+	stats := k.GetEpistemicStats(ctx, homeId)
+	stats.ChallengesInitiated++
+	k.SetEpistemicStats(ctx, homeId, stats)
 }

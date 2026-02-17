@@ -11,11 +11,11 @@ import (
 
 // Seed partnership constants (mirror TS SEED_TIER).
 const (
-	SeedContribution = "22000000000000000"  // 0.022 LGM
-	SeedBond         = "11000000000000000"  // 0.011 LGM
+	SeedContribution = "22000" // 0.022 LGM in ulgm
+	SeedBond         = "11000" // 0.011 LGM in ulgm
 	SeedExpiryBlocks = 22222
 	SeedMaxPerDID    = 2
-	SeedPotCap       = "222000000000000000" // 0.222 LGM
+	SeedPotCap       = "222000" // 0.222 LGM in ulgm
 )
 
 // ---------- SeedPartnership CRUD ----------

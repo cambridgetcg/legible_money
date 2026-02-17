@@ -17,9 +17,9 @@ const (
 // ============ Epoch Constants ============
 
 const (
-	EpochLengthBlocks    = 1_111 // blocks per epoch (~46.7 minutes at 2521ms)
-	LearningIntervalEpochs = 10  // Level 3 adaptation learning every N epochs
-	MinLearningEpochs      = 20  // minimum data before adaptation learning activates
+	EpochLengthBlocks      = 1_111 // blocks per epoch (~46.7 minutes at 2521ms)
+	LearningIntervalEpochs = 10    // Level 3 adaptation learning every N epochs
+	MinLearningEpochs      = 20    // minimum data before adaptation learning activates
 )
 
 // ============ Hormone Types ============
@@ -111,16 +111,16 @@ const (
 
 // DVI thresholds (from TS types.ts:DVI_THRESHOLDS)
 const (
-	DVIGrowingThreshold  = 100_000 // 0.1 — domain is growing
+	DVIGrowingThreshold   = 100_000 // 0.1 — domain is growing
 	DVIShrinkingThreshold = 100_000 // -0.1 (compare as: dvi < -DVIShrinkingThreshold)
-	DVIStressEpochs      = 3       // consecutive negative epochs before DOMAIN_STRESS
+	DVIStressEpochs       = 3       // consecutive negative epochs before DOMAIN_STRESS
 )
 
 // DVI adaptation deltas
 const (
-	DVIRewardDelta    = 30_000  // ±3% domain reward weight
+	DVIRewardDelta     = 30_000  // ±3% domain reward weight
 	DVIClaimStakeDelta = 50_000  // ±5% claim stake multiplier
-	DVIStressRevBonus = 100_000 // +10% reverification bonus on domain stress
+	DVIStressRevBonus  = 100_000 // +10% reverification bonus on domain stress
 )
 
 // ============ VCF Constants ============
@@ -133,9 +133,9 @@ const (
 
 // VCF adaptation deltas
 const (
-	VCFCitationDelta  = 100_000 // ±10% citation evidence weight
-	VCFDomainPrior    = 10_000  // ±1% domain confidence prior
-	VCFCitationRelax  = 50_000  // -5% citation weight when low
+	VCFCitationDelta = 100_000 // ±10% citation evidence weight
+	VCFDomainPrior   = 10_000  // ±1% domain confidence prior
+	VCFCitationRelax = 50_000  // -5% citation weight when low
 )
 
 // ============ GRM Constants ============
@@ -148,8 +148,8 @@ const (
 
 // GRM adaptation deltas
 const (
-	GRMMaxTxDelta  = 50_000 // ±5% max tx multiplier
-	GRMGasDelta    = 30_000 // ±3% gas cost multiplier
+	GRMMaxTxDelta = 50_000 // ±5% max tx multiplier
+	GRMGasDelta   = 30_000 // ±3% gas cost multiplier
 )
 
 // ============ Safety Bounds (BPS) ============
@@ -166,23 +166,23 @@ type MultiplierBounds struct {
 }
 
 var (
-	BoundsDecayMultiplier       = MultiplierBounds{250_000, 4_000_000}    // [0.25, 4.0]
-	BoundsRevBonusMultiplier    = MultiplierBounds{500_000, 2_000_000}    // [0.5, 2.0]
-	BoundsDomainRewardWeight    = MultiplierBounds{500_000, 2_000_000}    // [0.5, 2.0]
-	BoundsClaimStakeMultiplier  = MultiplierBounds{500_000, 10_000_000}   // [0.5, 10.0]
-	BoundsCitationEvidenceWeight = MultiplierBounds{500_000, 2_000_000}   // [0.5, 2.0]
-	BoundsDomainConfidencePrior = MultiplierBounds{500_000, 2_000_000}    // [0.5, 2.0]
-	BoundsSlashMultiplier       = MultiplierBounds{500_000, 3_000_000}    // [0.5, 3.0]
-	BoundsBlockRewardMultiplier = MultiplierBounds{250_000, 4_000_000}    // [0.25, 4.0]
-	BoundsMinVerifiersDelta     = MultiplierBounds{0, 5_000_000}          // [0, 5] (additive, in mega-BPS)
-	BoundsMaxTxMultiplier       = MultiplierBounds{500_000, 4_000_000}    // [0.5, 4.0]
-	BoundsGasCostMultiplier     = MultiplierBounds{500_000, 2_000_000}    // [0.5, 2.0]
-	BoundsAdaptationRate        = MultiplierBounds{250_000, 4_000_000}    // [0.25, 4.0]
+	BoundsDecayMultiplier        = MultiplierBounds{250_000, 4_000_000}  // [0.25, 4.0]
+	BoundsRevBonusMultiplier     = MultiplierBounds{500_000, 2_000_000}  // [0.5, 2.0]
+	BoundsDomainRewardWeight     = MultiplierBounds{500_000, 2_000_000}  // [0.5, 2.0]
+	BoundsClaimStakeMultiplier   = MultiplierBounds{500_000, 10_000_000} // [0.5, 10.0]
+	BoundsCitationEvidenceWeight = MultiplierBounds{500_000, 2_000_000}  // [0.5, 2.0]
+	BoundsDomainConfidencePrior  = MultiplierBounds{500_000, 2_000_000}  // [0.5, 2.0]
+	BoundsSlashMultiplier        = MultiplierBounds{500_000, 3_000_000}  // [0.5, 3.0]
+	BoundsBlockRewardMultiplier  = MultiplierBounds{250_000, 4_000_000}  // [0.25, 4.0]
+	BoundsMinVerifiersDelta      = MultiplierBounds{0, 5_000_000}        // [0, 5] (additive, in mega-BPS)
+	BoundsMaxTxMultiplier        = MultiplierBounds{500_000, 4_000_000}  // [0.5, 4.0]
+	BoundsGasCostMultiplier      = MultiplierBounds{500_000, 2_000_000}  // [0.5, 2.0]
+	BoundsAdaptationRate         = MultiplierBounds{250_000, 4_000_000}  // [0.25, 4.0]
 )
 
 // Rate limiting
 const (
-	MaxChangePerEpochBps = 50_000 // 5% max change per epoch (general)
+	MaxChangePerEpochBps = 50_000    // 5% max change per epoch (general)
 	DefaultMultiplier    = 1_000_000 // 1.0x
 )
 
@@ -207,11 +207,11 @@ const (
 // VCF paths are per domain: "citation.{domain}", "domainprior.{domain}"
 
 func PathDecay(category, domain string) string    { return "decay." + category + "." + domain }
-func PathRevBonus(category, domain string) string  { return "revbonus." + category + "." + domain }
-func PathReward(domain string) string              { return "reward." + domain }
-func PathClaimStake(domain string) string          { return "claimstake." + domain }
-func PathCitation(domain string) string            { return "citation." + domain }
-func PathDomainPrior(domain string) string         { return "domainprior." + domain }
+func PathRevBonus(category, domain string) string { return "revbonus." + category + "." + domain }
+func PathReward(domain string) string             { return "reward." + domain }
+func PathClaimStake(domain string) string         { return "claimstake." + domain }
+func PathCitation(domain string) string           { return "citation." + domain }
+func PathDomainPrior(domain string) string        { return "domainprior." + domain }
 
 // ============ Life Force Constants ============
 
@@ -253,24 +253,24 @@ type EpochObservation struct {
 	SlashEventsThisEpoch    uint64 `json:"slash_events_this_epoch"`
 
 	// GRM metrics
-	VerifiedFactsCreated      uint64 `json:"verified_facts_created"`
-	MaxPossibleVerifications  uint64 `json:"max_possible_verifications"`
+	VerifiedFactsCreated     uint64 `json:"verified_facts_created"`
+	MaxPossibleVerifications uint64 `json:"max_possible_verifications"`
 
 	// Per-domain metrics (Phase 2: populated when KnowledgeKeeper exposes domain iterators)
-	Domains    []DomainObservation    `json:"domains,omitempty"`
-	Retentions []CategoryRetention    `json:"retentions,omitempty"`
+	Domains    []DomainObservation `json:"domains,omitempty"`
+	Retentions []CategoryRetention `json:"retentions,omitempty"`
 }
 
 // DomainObservation holds per-domain metrics for CRI/DVI/VCF computation.
 type DomainObservation struct {
-	Domain              string `json:"domain"`
-	FactsCreated        uint64 `json:"facts_created"`
-	FactsExpired        uint64 `json:"facts_expired"`
-	TotalActiveFacts    uint64 `json:"total_active_facts"`
-	AvgInitialConfBps   uint64 `json:"avg_initial_conf_bps"`   // BPS
-	AvgFinalConfBps     uint64 `json:"avg_final_conf_bps"`     // BPS
-	NewCitations        uint64 `json:"new_citations"`
-	CascadeCount        uint64 `json:"cascade_count"`          // Phase 2
+	Domain                string `json:"domain"`
+	FactsCreated          uint64 `json:"facts_created"`
+	FactsExpired          uint64 `json:"facts_expired"`
+	TotalActiveFacts      uint64 `json:"total_active_facts"`
+	AvgInitialConfBps     uint64 `json:"avg_initial_conf_bps"` // BPS
+	AvgFinalConfBps       uint64 `json:"avg_final_conf_bps"`   // BPS
+	NewCitations          uint64 `json:"new_citations"`
+	CascadeCount          uint64 `json:"cascade_count"`           // Phase 2
 	CitingClaimsSubmitted uint64 `json:"citing_claims_submitted"` // Phase 2
 }
 
@@ -280,7 +280,7 @@ type CategoryRetention struct {
 	Category          string `json:"category"`
 	RetentionRatioBps uint64 `json:"retention_ratio_bps"` // BPS (0-1M)
 	FactCount         uint64 `json:"fact_count"`
-	WeightedRetBps    uint64 `json:"weighted_ret_bps"`    // Citation-weighted retention (BPS)
+	WeightedRetBps    uint64 `json:"weighted_ret_bps"` // Citation-weighted retention (BPS)
 }
 
 // ============ Hormone Value Types ============
@@ -323,8 +323,8 @@ type HormoneValues struct {
 	CRI       []CRIValue `json:"cri"`
 	DVI       []DVIValue `json:"dvi"`
 	VCF       []VCFValue `json:"vcf"`
-	SSI       uint64     `json:"ssi"`     // BPS
-	GRM       uint64     `json:"grm"`     // BPS
+	SSI       uint64     `json:"ssi"` // BPS
+	GRM       uint64     `json:"grm"` // BPS
 	LifeForce LifeForce  `json:"life_force"`
 }
 
@@ -419,10 +419,10 @@ func DefaultGenesis() GenesisState {
 // Returns value in basis points (0-1,000,000 representing 0.0-1.0).
 //
 // SSI = 0.30 × (1 - avgValidatorAccuracy)
-//     + 0.20 × challengeSuccessRate
-//     + 0.20 × clamp(expirationRatio, 0, 1)
-//     + 0.15 × (1 - validatorParticipationRate)
-//     + 0.15 × avgConfidenceDeclineRate
+//   - 0.20 × challengeSuccessRate
+//   - 0.20 × clamp(expirationRatio, 0, 1)
+//   - 0.15 × (1 - validatorParticipationRate)
+//   - 0.15 × avgConfidenceDeclineRate
 func ComputeSSI(obs EpochObservation) uint64 {
 	// Component 1: Validator inaccuracy (higher = more stress)
 	inaccuracy := uint64(0)

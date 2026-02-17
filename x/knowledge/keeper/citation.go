@@ -37,11 +37,15 @@ func (k Keeper) IncrementCitationCount(ctx sdk.Context, factID string) error {
 // Each ancestor level gets CitationDecayPerLevel (50%) less than the previous.
 // Protocol floor ensures at least CitationProtocolFloorBPS (2%) stays in protocol.
 //
+// FARM-3 fix: citingSubmitter is checked against each cited fact's submitter.
+// When they match (self-citation), a 50% discount is applied to prevent citation pyramids.
+//
 // From TS core/knowledge/types.ts: CITATION_ECONOMICS.
 func (k Keeper) DistributeCitationRewards(
 	ctx sdk.Context,
 	factID string,
 	totalReward uint64,
+	citingSubmitter string,
 ) uint64 {
 	if totalReward == 0 {
 		return 0
@@ -97,6 +101,14 @@ func (k Keeper) DistributeCitationRewards(
 			// Apply fundamentality bonus
 			bonus := k.calculateFundamentalityBonus(ctx, ref.ToFactId)
 			adjustedShare := (perFactShare * bonus) / 1_000_000
+
+			// FARM-3 fix: Self-citation discount — when the citing submitter is the
+			// same as the cited fact's submitter, apply SelfCitationDiscountBPS (50%)
+			// reduction. This prevents agents from building self-referential citation
+			// pyramids for passive income.
+			if citingSubmitter != "" && fact.Submitter == citingSubmitter {
+				adjustedShare = (adjustedShare * (1_000_000 - types.SelfCitationDiscountBPS)) / 1_000_000
+			}
 
 			// Enforce protocol floor
 			protocolFloor := (totalReward * types.CitationProtocolFloorBPS) / 1_000_000

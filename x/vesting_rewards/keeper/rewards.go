@@ -339,11 +339,26 @@ func (k Keeper) DistributeBlockReward(
 			}
 		}
 
-		// Send verification pool share to knowledge module account
-		if verificationPoolBig.Sign() > 0 {
-			verificationCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(verificationPoolBig)))
+		// Split verification pool between knowledge module and compute pool.
+		// ComputePoolShareBps (30%) of the verification pool funds compute infrastructure;
+		// the remaining 70% funds verification rewards via the knowledge module.
+		computePoolBig := new(big.Int).Mul(verificationPoolBig, big.NewInt(int64(types.ComputePoolShareBps)))
+		computePoolBig.Div(computePoolBig, big.NewInt(1000000))
+		actualVerificationBig := new(big.Int).Sub(verificationPoolBig, computePoolBig)
+
+		// Send verification rewards share (70% of pool) to knowledge module
+		if actualVerificationBig.Sign() > 0 {
+			verificationCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(actualVerificationBig)))
 			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, types.KnowledgeModuleName, verificationCoins); err != nil {
 				k.Logger(ctx).Error("failed to send verification pool share", "error", err)
+			}
+		}
+
+		// Send compute pool share (30% of pool) to compute_pool module
+		if computePoolBig.Sign() > 0 {
+			computeCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(computePoolBig)))
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, types.ComputePoolModuleName, computeCoins); err != nil {
+				k.Logger(ctx).Error("failed to send compute pool share", "error", err)
 			}
 		}
 	}
@@ -417,13 +432,13 @@ func (k Keeper) FalsifyClaim(
 	recordId := fmt.Sprintf("%x", hash[:16])
 
 	record := &types.ClawbackRecord{
-		Id:               recordId,
-		VestingId:        schedule.Id,
-		ReleasedClawback: releasedClawback.String(),
+		Id:                recordId,
+		VestingId:         schedule.Id,
+		ReleasedClawback:  releasedClawback.String(),
 		UnvestedForfeited: unvested.String(),
-		ReserveForfeited: reserveBig.String(),
-		ChallengerReward: challengerReward.String(),
-		BlockHeight:      height,
+		ReserveForfeited:  reserveBig.String(),
+		ChallengerReward:  challengerReward.String(),
+		BlockHeight:       height,
 	}
 
 	// Update vesting schedule status

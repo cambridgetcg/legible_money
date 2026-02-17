@@ -97,8 +97,12 @@ func InitWorkspace(dir, agentName, keyName string, domains []string) error {
 	return nil
 }
 
-// ComputeMemoryCID computes a content identifier for the memory directory.
-// In production this would upload to IPFS; for devnet we use a content hash.
+// ComputeMemoryCID computes a content-addressable hash for the memory directory.
+// This is NOT an IPFS CID — it is a SHA-256 content hash prefixed with "lgmhash:"
+// to clearly distinguish it from real IPFS CIDs (which start with "bafy"/"bafk").
+//
+// To use a real IPFS CID, upload the memory directory to IPFS separately
+// and pass the resulting CID directly to Agent Home's UpdateMemoryCID.
 func ComputeMemoryCID(memoryDir string) (string, error) {
 	h := sha256.New()
 
@@ -122,9 +126,8 @@ func ComputeMemoryCID(memoryDir string) (string, error) {
 		return "", fmt.Errorf("walking memory dir: %w", err)
 	}
 
-	// Use a bafk... prefix to resemble CIDv1 (base32 would be proper)
 	hash := hex.EncodeToString(h.Sum(nil))
-	return "bafk" + hash[:56], nil
+	return "lgmhash:" + hash, nil
 }
 
 // LoadWorkspaceConfig reads config from a workspace directory.

@@ -19,6 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	Msg_SubmitClaim_FullMethodName             = "/legible.knowledge.v1.Msg/SubmitClaim"
+	Msg_SubmitCommitment_FullMethodName        = "/legible.knowledge.v1.Msg/SubmitCommitment"
+	Msg_SubmitReveal_FullMethodName            = "/legible.knowledge.v1.Msg/SubmitReveal"
+	Msg_ChallengeFact_FullMethodName           = "/legible.knowledge.v1.Msg/ChallengeFact"
+	Msg_AddFact_FullMethodName                 = "/legible.knowledge.v1.Msg/AddFact"
+	Msg_SubmitContradiction_FullMethodName     = "/legible.knowledge.v1.Msg/SubmitContradiction"
+	Msg_PatronizeFact_FullMethodName           = "/legible.knowledge.v1.Msg/PatronizeFact"
 	Msg_ProposeDomain_FullMethodName           = "/legible.knowledge.v1.Msg/ProposeDomain"
 	Msg_EndorseDomainProposal_FullMethodName   = "/legible.knowledge.v1.Msg/EndorseDomainProposal"
 	Msg_ChallengeDomainProposal_FullMethodName = "/legible.knowledge.v1.Msg/ChallengeDomainProposal"
@@ -32,15 +39,22 @@ const (
 //
 // Msg defines the knowledge module's transaction service
 type MsgClient interface {
-	// ProposeDomain submits a proposal to add a new domain
+	// PoT lifecycle: claim submission and verification
+	SubmitClaim(ctx context.Context, in *MsgSubmitClaim, opts ...grpc.CallOption) (*MsgSubmitClaimResponse, error)
+	SubmitCommitment(ctx context.Context, in *MsgSubmitCommitment, opts ...grpc.CallOption) (*MsgSubmitCommitmentResponse, error)
+	SubmitReveal(ctx context.Context, in *MsgSubmitReveal, opts ...grpc.CallOption) (*MsgSubmitRevealResponse, error)
+	ChallengeFact(ctx context.Context, in *MsgChallengeFact, opts ...grpc.CallOption) (*MsgChallengeFactResponse, error)
+	AddFact(ctx context.Context, in *MsgAddFact, opts ...grpc.CallOption) (*MsgAddFactResponse, error)
+	// Negative knowledge
+	SubmitContradiction(ctx context.Context, in *MsgSubmitContradiction, opts ...grpc.CallOption) (*MsgSubmitContradictionResponse, error)
+	// Knowledge preservation
+	PatronizeFact(ctx context.Context, in *MsgPatronizeFact, opts ...grpc.CallOption) (*MsgPatronizeFactResponse, error)
+	// Domain management
 	ProposeDomain(ctx context.Context, in *MsgProposeDomain, opts ...grpc.CallOption) (*MsgProposeDomainResponse, error)
-	// EndorseDomainProposal endorses a pending domain proposal
 	EndorseDomainProposal(ctx context.Context, in *MsgEndorseDomainProposal, opts ...grpc.CallOption) (*MsgEndorseDomainProposalResponse, error)
-	// ChallengeDomainProposal challenges a pending domain proposal
 	ChallengeDomainProposal(ctx context.Context, in *MsgChallengeDomainProposal, opts ...grpc.CallOption) (*MsgChallengeDomainProposalResponse, error)
-	// RegisterStratum registers a new stratum (governance-controlled)
 	RegisterStratum(ctx context.Context, in *MsgRegisterStratum, opts ...grpc.CallOption) (*MsgRegisterStratumResponse, error)
-	// UpdateParams updates module parameters (governance-controlled)
+	// Governance
 	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 }
 
@@ -50,6 +64,76 @@ type msgClient struct {
 
 func NewMsgClient(cc grpc.ClientConnInterface) MsgClient {
 	return &msgClient{cc}
+}
+
+func (c *msgClient) SubmitClaim(ctx context.Context, in *MsgSubmitClaim, opts ...grpc.CallOption) (*MsgSubmitClaimResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgSubmitClaimResponse)
+	err := c.cc.Invoke(ctx, Msg_SubmitClaim_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) SubmitCommitment(ctx context.Context, in *MsgSubmitCommitment, opts ...grpc.CallOption) (*MsgSubmitCommitmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgSubmitCommitmentResponse)
+	err := c.cc.Invoke(ctx, Msg_SubmitCommitment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) SubmitReveal(ctx context.Context, in *MsgSubmitReveal, opts ...grpc.CallOption) (*MsgSubmitRevealResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgSubmitRevealResponse)
+	err := c.cc.Invoke(ctx, Msg_SubmitReveal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) ChallengeFact(ctx context.Context, in *MsgChallengeFact, opts ...grpc.CallOption) (*MsgChallengeFactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgChallengeFactResponse)
+	err := c.cc.Invoke(ctx, Msg_ChallengeFact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) AddFact(ctx context.Context, in *MsgAddFact, opts ...grpc.CallOption) (*MsgAddFactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgAddFactResponse)
+	err := c.cc.Invoke(ctx, Msg_AddFact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) SubmitContradiction(ctx context.Context, in *MsgSubmitContradiction, opts ...grpc.CallOption) (*MsgSubmitContradictionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgSubmitContradictionResponse)
+	err := c.cc.Invoke(ctx, Msg_SubmitContradiction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) PatronizeFact(ctx context.Context, in *MsgPatronizeFact, opts ...grpc.CallOption) (*MsgPatronizeFactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgPatronizeFactResponse)
+	err := c.cc.Invoke(ctx, Msg_PatronizeFact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *msgClient) ProposeDomain(ctx context.Context, in *MsgProposeDomain, opts ...grpc.CallOption) (*MsgProposeDomainResponse, error) {
@@ -108,15 +192,22 @@ func (c *msgClient) UpdateParams(ctx context.Context, in *MsgUpdateParams, opts 
 //
 // Msg defines the knowledge module's transaction service
 type MsgServer interface {
-	// ProposeDomain submits a proposal to add a new domain
+	// PoT lifecycle: claim submission and verification
+	SubmitClaim(context.Context, *MsgSubmitClaim) (*MsgSubmitClaimResponse, error)
+	SubmitCommitment(context.Context, *MsgSubmitCommitment) (*MsgSubmitCommitmentResponse, error)
+	SubmitReveal(context.Context, *MsgSubmitReveal) (*MsgSubmitRevealResponse, error)
+	ChallengeFact(context.Context, *MsgChallengeFact) (*MsgChallengeFactResponse, error)
+	AddFact(context.Context, *MsgAddFact) (*MsgAddFactResponse, error)
+	// Negative knowledge
+	SubmitContradiction(context.Context, *MsgSubmitContradiction) (*MsgSubmitContradictionResponse, error)
+	// Knowledge preservation
+	PatronizeFact(context.Context, *MsgPatronizeFact) (*MsgPatronizeFactResponse, error)
+	// Domain management
 	ProposeDomain(context.Context, *MsgProposeDomain) (*MsgProposeDomainResponse, error)
-	// EndorseDomainProposal endorses a pending domain proposal
 	EndorseDomainProposal(context.Context, *MsgEndorseDomainProposal) (*MsgEndorseDomainProposalResponse, error)
-	// ChallengeDomainProposal challenges a pending domain proposal
 	ChallengeDomainProposal(context.Context, *MsgChallengeDomainProposal) (*MsgChallengeDomainProposalResponse, error)
-	// RegisterStratum registers a new stratum (governance-controlled)
 	RegisterStratum(context.Context, *MsgRegisterStratum) (*MsgRegisterStratumResponse, error)
-	// UpdateParams updates module parameters (governance-controlled)
+	// Governance
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 	mustEmbedUnimplementedMsgServer()
 }
@@ -128,6 +219,27 @@ type MsgServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMsgServer struct{}
 
+func (UnimplementedMsgServer) SubmitClaim(context.Context, *MsgSubmitClaim) (*MsgSubmitClaimResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitClaim not implemented")
+}
+func (UnimplementedMsgServer) SubmitCommitment(context.Context, *MsgSubmitCommitment) (*MsgSubmitCommitmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitCommitment not implemented")
+}
+func (UnimplementedMsgServer) SubmitReveal(context.Context, *MsgSubmitReveal) (*MsgSubmitRevealResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitReveal not implemented")
+}
+func (UnimplementedMsgServer) ChallengeFact(context.Context, *MsgChallengeFact) (*MsgChallengeFactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChallengeFact not implemented")
+}
+func (UnimplementedMsgServer) AddFact(context.Context, *MsgAddFact) (*MsgAddFactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddFact not implemented")
+}
+func (UnimplementedMsgServer) SubmitContradiction(context.Context, *MsgSubmitContradiction) (*MsgSubmitContradictionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitContradiction not implemented")
+}
+func (UnimplementedMsgServer) PatronizeFact(context.Context, *MsgPatronizeFact) (*MsgPatronizeFactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PatronizeFact not implemented")
+}
 func (UnimplementedMsgServer) ProposeDomain(context.Context, *MsgProposeDomain) (*MsgProposeDomainResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeDomain not implemented")
 }
@@ -162,6 +274,132 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&Msg_ServiceDesc, srv)
+}
+
+func _Msg_SubmitClaim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitClaim)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitClaim(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_SubmitClaim_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitClaim(ctx, req.(*MsgSubmitClaim))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_SubmitCommitment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitCommitment)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitCommitment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_SubmitCommitment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitCommitment(ctx, req.(*MsgSubmitCommitment))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_SubmitReveal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitReveal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitReveal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_SubmitReveal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitReveal(ctx, req.(*MsgSubmitReveal))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_ChallengeFact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgChallengeFact)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ChallengeFact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_ChallengeFact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ChallengeFact(ctx, req.(*MsgChallengeFact))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_AddFact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgAddFact)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).AddFact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_AddFact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).AddFact(ctx, req.(*MsgAddFact))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_SubmitContradiction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitContradiction)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitContradiction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_SubmitContradiction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitContradiction(ctx, req.(*MsgSubmitContradiction))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_PatronizeFact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgPatronizeFact)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).PatronizeFact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_PatronizeFact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).PatronizeFact(ctx, req.(*MsgPatronizeFact))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Msg_ProposeDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -261,6 +499,34 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "legible.knowledge.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SubmitClaim",
+			Handler:    _Msg_SubmitClaim_Handler,
+		},
+		{
+			MethodName: "SubmitCommitment",
+			Handler:    _Msg_SubmitCommitment_Handler,
+		},
+		{
+			MethodName: "SubmitReveal",
+			Handler:    _Msg_SubmitReveal_Handler,
+		},
+		{
+			MethodName: "ChallengeFact",
+			Handler:    _Msg_ChallengeFact_Handler,
+		},
+		{
+			MethodName: "AddFact",
+			Handler:    _Msg_AddFact_Handler,
+		},
+		{
+			MethodName: "SubmitContradiction",
+			Handler:    _Msg_SubmitContradiction_Handler,
+		},
+		{
+			MethodName: "PatronizeFact",
+			Handler:    _Msg_PatronizeFact_Handler,
+		},
 		{
 			MethodName: "ProposeDomain",
 			Handler:    _Msg_ProposeDomain_Handler,

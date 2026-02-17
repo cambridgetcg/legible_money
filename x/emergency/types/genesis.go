@@ -5,9 +5,9 @@ import "fmt"
 // DefaultParams returns the default emergency module parameters.
 func DefaultParams() Params {
 	return Params{
-		HaltQuorum:                      750000,  // 75%
-		RevertQuorum:                    800000,  // 80%
-		ResumeQuorum:                    800000,  // 80%
+		HaltQuorum:                      750000, // 75%
+		RevertQuorum:                    800000, // 80%
+		ResumeQuorum:                    800000, // 80%
 		HaltPrevoteBlocks:               11,
 		HaltPrecommitBlocks:             11,
 		HaltTimeoutBlocks:               44,

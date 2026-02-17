@@ -32,13 +32,13 @@ var TransactionGasCosts = map[string]uint64{
 	"unstake":  50_000,
 
 	// Knowledge / consensus
-	"claim_submit":         100_000,
-	"verification_commit":  30_000,
-	"verification_reveal":  40_000,
-	"challenge_fact":       80_000,
-	"add_fact":             120_000,
-	"challenge_claim":      80_000,
-	"revoke_fact":          60_000,
+	"claim_submit":        100_000,
+	"verification_commit": 30_000,
+	"verification_reveal": 40_000,
+	"challenge_fact":      80_000,
+	"add_fact":            120_000,
+	"challenge_claim":     80_000,
+	"revoke_fact":         60_000,
 
 	// Staking / delegation
 	"delegate":           60_000,
@@ -55,9 +55,9 @@ var TransactionGasCosts = map[string]uint64{
 	"emergency_resume":    0,
 
 	// Agent identity
-	"register_account": 50_000,
-	"rotate_key":       30_000,
-	"create_session":   40_000,
+	"register_account":      50_000,
+	"rotate_key":            30_000,
+	"create_session":        40_000,
 	"revoke_session":        25_000,
 	"recover_account":       80_000,
 	"freeze_account":        30_000,
@@ -72,35 +72,35 @@ var TransactionGasCosts = map[string]uint64{
 	"patronize_fact": 50_000,
 
 	// Ontology
-	"propose_domain":    80_000,
-	"endorse_domain":    30_000,
-	"challenge_domain":  50_000,
-	"register_stratum":  60_000,
+	"propose_domain":   80_000,
+	"endorse_domain":   30_000,
+	"challenge_domain": 50_000,
+	"register_stratum": 60_000,
 
 	// Governance
-	"governance_propose":    100_000,
-	"governance_vote":       30_000,
-	"governance_stake_lip":  50_000,
-	"submit_lip":            100_000,
-	"cast_vote":             30_000,
-	"lock_vote":             40_000,
-	"unlock_vote":           30_000,
-	"switch_vote":           35_000,
-	"commit_review":         40_000,
-	"reveal_review":         50_000,
-	"finalize_review":       60_000,
-	"submit_disbursement":   80_000,
-	"execute_disbursement":  100_000,
+	"governance_propose":   100_000,
+	"governance_vote":      30_000,
+	"governance_stake_lip": 50_000,
+	"submit_lip":           100_000,
+	"cast_vote":            30_000,
+	"lock_vote":            40_000,
+	"unlock_vote":          30_000,
+	"switch_vote":          35_000,
+	"commit_review":        40_000,
+	"reveal_review":        50_000,
+	"finalize_review":      60_000,
+	"submit_disbursement":  80_000,
+	"execute_disbursement": 100_000,
 
 	// Disputes
-	"initiate_dispute":  100_000,
-	"commit_evidence":   40_000,
-	"reveal_evidence":   50_000,
-	"arbiter_vote":      30_000,
-	"vote_dispute":      30_000, // alias matching MsgVoteDispute
-	"escalate_dispute":  60_000,
-	"settle_dispute":    80_000,
-	"timeout_dispute":   40_000,
+	"initiate_dispute": 100_000,
+	"commit_evidence":  40_000,
+	"reveal_evidence":  50_000,
+	"arbiter_vote":     30_000,
+	"vote_dispute":     30_000, // alias matching MsgVoteDispute
+	"escalate_dispute": 60_000,
+	"settle_dispute":   80_000,
+	"timeout_dispute":  40_000,
 
 	// Research
 	"submit_research":    80_000,
@@ -113,20 +113,20 @@ var TransactionGasCosts = map[string]uint64{
 	"fund_research":      50_000,
 
 	// Evidence management
-	"submit_evidence":    60_000,
-	"archive_evidence":   40_000,
-	"audit_submit":       50_000,
-	"audit_resolve":      60_000,
-	"register_oracle":    80_000,
+	"submit_evidence":  60_000,
+	"archive_evidence": 40_000,
+	"audit_submit":     50_000,
+	"audit_resolve":    60_000,
+	"register_oracle":  80_000,
 
 	// Vesting / rewards
-	"create_vesting":      80_000,
-	"claim_vesting":       40_000,
-	"pause_vesting":       25_000,
-	"resume_vesting":      25_000,
-	"accelerate_vesting":  50_000,
-	"falsify_vesting":     60_000,
-	"complete_vesting":    40_000,
+	"create_vesting":     80_000,
+	"claim_vesting":      40_000,
+	"pause_vesting":      25_000,
+	"resume_vesting":     25_000,
+	"accelerate_vesting": 50_000,
+	"falsify_vesting":    60_000,
+	"complete_vesting":   40_000,
 
 	// Secondary tokens (LGM-20)
 	"token_create":             150_000,
@@ -152,39 +152,39 @@ var TransactionGasCosts = map[string]uint64{
 	"dispute_channel": 80_000,
 
 	// Tree of Life (projects, tasks, services, seeds)
-	"create_project":       80_000,
-	"propose_project":      60_000,
-	"start_development":    40_000,
-	"complete_project":     60_000,
-	"pause_project":        25_000,
-	"resume_project":       25_000,
-	"abandon_project":      30_000,
-	"spawn_child_project":  80_000,
-	"add_task":             40_000,
-	"assign_task":          30_000,
-	"start_work":           25_000,
-	"submit_deliverable":   50_000,
-	"approve_deliverable":  30_000,
-	"reject_deliverable":   30_000,
-	"reopen_task":          25_000,
-	"deploy_service":       100_000,
-	"call_service":         40_000,
-	"subscribe_service":    50_000,
-	"pause_service":        25_000,
-	"resume_service":       25_000,
-	"retire_service":       30_000,
-	"begin_seeding":        60_000,
-	"detect_opportunity":   40_000,
-	"claim_opportunity":    50_000,
-	"add_contributor":      30_000,
-	"apply_to_project":     40_000,
-	"review_application":   30_000,
-	"set_availability":     25_000,
+	"create_project":      80_000,
+	"propose_project":     60_000,
+	"start_development":   40_000,
+	"complete_project":    60_000,
+	"pause_project":       25_000,
+	"resume_project":      25_000,
+	"abandon_project":     30_000,
+	"spawn_child_project": 80_000,
+	"add_task":            40_000,
+	"assign_task":         30_000,
+	"start_work":          25_000,
+	"submit_deliverable":  50_000,
+	"approve_deliverable": 30_000,
+	"reject_deliverable":  30_000,
+	"reopen_task":         25_000,
+	"deploy_service":      100_000,
+	"call_service":        40_000,
+	"subscribe_service":   50_000,
+	"pause_service":       25_000,
+	"resume_service":      25_000,
+	"retire_service":      30_000,
+	"begin_seeding":       60_000,
+	"detect_opportunity":  40_000,
+	"claim_opportunity":   50_000,
+	"add_contributor":     30_000,
+	"apply_to_project":    40_000,
+	"review_application":  30_000,
+	"set_availability":    25_000,
 
 	// BVM contracts
-	"deploy_contract":     200_000,
-	"call_contract":       21_000,
-	"schedule_execution":  40_000,
+	"deploy_contract":    200_000,
+	"call_contract":      21_000,
+	"schedule_execution": 40_000,
 
 	// Emergency
 	"propose_halt":   50_000,
@@ -201,16 +201,16 @@ var TransactionGasCosts = map[string]uint64{
 	"close_pot":      40_000,
 
 	// Agent Home
-	"create_home":         150_000,
-	"update_home":          40_000,
-	"update_memory_cid":    30_000,
-	"home_start_session":   30_000,
-	"home_end_session":     20_000,
-	"home_register_key":    50_000,
-	"home_revoke_key":      25_000,
-	"configure_guardian":    50_000,
-	"acknowledge_alert":    20_000,
-	"set_spending_limit":   40_000,
+	"create_home":        150_000,
+	"update_home":        40_000,
+	"update_memory_cid":  30_000,
+	"home_start_session": 30_000,
+	"home_end_session":   20_000,
+	"home_register_key":  50_000,
+	"home_revoke_key":    25_000,
+	"configure_guardian": 50_000,
+	"acknowledge_alert":  20_000,
+	"set_spending_limit": 40_000,
 
 	// Domain qualification
 	"request_qualification":  80_000,
@@ -224,70 +224,70 @@ var TransactionGasCosts = map[string]uint64{
 
 	// Capture challenge
 	"submit_capture_challenge":  100_000,
-	"add_challenge_evidence":     50_000,
-	"resolve_capture_challenge":  80_000,
+	"add_challenge_evidence":    50_000,
+	"resolve_capture_challenge": 80_000,
 
 	// Discovery
-	"register_agent":     60_000,
-	"update_profile":     30_000,
-	"add_capability":     25_000,
-	"remove_capability":  20_000,
-	"deregister_agent":   30_000,
-	"heartbeat":          15_000,
+	"register_agent":    60_000,
+	"update_profile":    30_000,
+	"add_capability":    25_000,
+	"remove_capability": 20_000,
+	"deregister_agent":  30_000,
+	"heartbeat":         15_000,
 
 	// Partnerships
-	"initiate_partnership":   100_000,
-	"accept_partnership":      40_000,
-	"deposit_to_pot":          50_000,
-	"distribute_reward":       60_000,
-	"propose_operation":       80_000,
-	"approve_operation":       30_000,
-	"reject_operation":        30_000,
-	"safety_freeze":           80_000,
-	"raise_coercion_signal":   60_000,
-	"initiate_exit":           50_000,
+	"initiate_partnership":  100_000,
+	"accept_partnership":    40_000,
+	"deposit_to_pot":        50_000,
+	"distribute_reward":     60_000,
+	"propose_operation":     80_000,
+	"approve_operation":     30_000,
+	"reject_operation":      30_000,
+	"safety_freeze":         80_000,
+	"raise_coercion_signal": 60_000,
+	"initiate_exit":         50_000,
 
 	// Ontology (extended)
-	"vote_domain_proposal":        30_000,
-	"update_domain":               40_000,
-	"register_logic_zone":         60_000,
-	"acknowledge_incompleteness":  30_000,
+	"vote_domain_proposal":       30_000,
+	"update_domain":              40_000,
+	"register_logic_zone":        60_000,
+	"acknowledge_incompleteness": 30_000,
 
 	// Schedule
-	"create_schedule":  80_000,
-	"pause_schedule":   20_000,
-	"resume_schedule":  20_000,
-	"cancel_schedule":  30_000,
-	"add_fee":          25_000,
+	"create_schedule": 80_000,
+	"pause_schedule":  20_000,
+	"resume_schedule": 20_000,
+	"cancel_schedule": 30_000,
+	"add_fee":         25_000,
 
 	// Billing
-	"register_provider":    80_000,
-	"deregister_provider":  30_000,
-	"request_quote":        20_000,
-	"execute_payment":      40_000,
+	"register_provider":   80_000,
+	"deregister_provider": 30_000,
+	"request_quote":       20_000,
+	"execute_payment":     40_000,
 
 	// Governance (extended)
-	"amend_lip":             60_000,
-	"advance_lip_stage":     40_000,
-	"withdraw_lip":          30_000,
-	"stake_disbursement":    50_000,
-	"advance_disbursement":  40_000,
-	"cancel_disbursement":   30_000,
-	"register_operator":     80_000,
-	"add_agent":             30_000,
-	"remove_agent":          30_000,
-	"slash_operator":        80_000,
-	"create_deployment":     80_000,
-	"advance_deployment":    40_000,
-	"approve_deployment":    40_000,
-	"rollback_deployment":   60_000,
+	"amend_lip":            60_000,
+	"advance_lip_stage":    40_000,
+	"withdraw_lip":         30_000,
+	"stake_disbursement":   50_000,
+	"advance_disbursement": 40_000,
+	"cancel_disbursement":  30_000,
+	"register_operator":    80_000,
+	"add_agent":            30_000,
+	"remove_agent":         30_000,
+	"slash_operator":       80_000,
+	"create_deployment":    80_000,
+	"advance_deployment":   40_000,
+	"approve_deployment":   40_000,
+	"rollback_deployment":  60_000,
 }
 
 // Fee routing constants (basis points, 1000000 = 100%).
 const (
-	ResearchTaxBPS  uint64 = 70000   // 7% to research fund
-	ValidatorFeeBPS uint64 = 930000  // 93% to block producer / validators
-	BurnRateBPS     uint64 = 50000   // 5% burn rate (applied at penalty sites)
+	ResearchTaxBPS  uint64 = 70000  // 7% to research fund
+	ValidatorFeeBPS uint64 = 930000 // 93% to block producer / validators
+	BurnRateBPS     uint64 = 50000  // 5% burn rate (applied at penalty sites)
 )
 
 // Bootstrap gas-free period: first 480,000 blocks (~14 days at 2521ms).
@@ -297,11 +297,11 @@ const BootstrapEndBlock int64 = 480_000
 
 // BootstrapGasFreeTypes lists message type URLs exempt from gas during bootstrap.
 var BootstrapGasFreeTypes = map[string]bool{
-	"/legible.knowledge.v1.MsgSubmitClaim":       true,
-	"/legible.knowledge.v1.MsgSubmitCommitment":  true,
-	"/legible.knowledge.v1.MsgSubmitReveal":      true,
-	"/legible.staking.v1.MsgRegisterValidator":   true,
-	"/legible.auth.v1.MsgRegisterAccount":        true,
+	"/legible.knowledge.v1.MsgSubmitClaim":      true,
+	"/legible.knowledge.v1.MsgSubmitCommitment": true,
+	"/legible.knowledge.v1.MsgSubmitReveal":     true,
+	"/legible.staking.v1.MsgRegisterValidator":  true,
+	"/legible.auth.v1.MsgRegisterAccount":       true,
 }
 
 // Module account names for fee routing.

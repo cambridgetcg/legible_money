@@ -63,6 +63,28 @@ func (k Keeper) RequiresIncompletenessAck(ctx sdk.Context, zone string) bool {
 	return props.GoedelApplies
 }
 
+// ValidateZoneForCategory checks that the declared logic zone is compatible with
+// the claim's epistemic category. Prevents zone gaming where submitters declare a
+// more formal zone to bypass Gödelian confidence ceilings.
+func (k Keeper) ValidateZoneForCategory(ctx sdk.Context, zone string, epistemicCategory string) error {
+	if zone == "" || epistemicCategory == "" {
+		return nil // backward compatible
+	}
+
+	allowedZones, catFound := types.ValidZonesForCategory[epistemicCategory]
+	if !catFound {
+		// Unknown category — let the knowledge module validate
+		return nil
+	}
+
+	if !allowedZones[types.LogicZone(zone)] {
+		return fmt.Errorf("%w: category %q cannot use zone %q",
+			types.ErrZoneCategoryMismatch, epistemicCategory, zone)
+	}
+
+	return nil
+}
+
 // GetZoneConfidenceCeiling returns the maximum confidence in basis points for a zone.
 // Returns 1000000 (100%) if the zone is not found or empty.
 func (k Keeper) GetZoneConfidenceCeiling(ctx sdk.Context, zone string) uint64 {

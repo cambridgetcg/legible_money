@@ -263,3 +263,83 @@ func (c *CLIClient) Stake(ctx context.Context, validatorAddr string, amount uint
 	return c.runTx(ctx, "tx", "staking", "delegate", validatorAddr,
 		fmt.Sprintf("%d%s", amount, Denom))
 }
+
+// --- BVM Operations ---
+
+func (c *CLIClient) DeployContract(ctx context.Context, bytecodeHex string) (string, error) {
+	return c.runTx(ctx, "tx", "bvm", "deploy-contract",
+		"--bytecode", bytecodeHex)
+}
+
+func (c *CLIClient) CallContract(ctx context.Context, contractAddr, inputDataHex string, gasLimit uint64) (string, error) {
+	args := []string{
+		"tx", "bvm", "call-contract", contractAddr,
+		"--input", inputDataHex,
+	}
+	if gasLimit > 0 {
+		args = append(args, "--gas-limit", fmt.Sprintf("%d", gasLimit))
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) ScheduleExecution(ctx context.Context, contractAddr, method, payload string, atBlock, maxGas uint64) (string, error) {
+	return c.runTx(ctx, "tx", "bvm", "schedule-contract", contractAddr,
+		"--method", method,
+		"--payload", payload,
+		"--execute-at", fmt.Sprintf("%d", atBlock),
+		"--max-gas", fmt.Sprintf("%d", maxGas))
+}
+
+// --- Home Lifecycle Operations ---
+
+func (c *CLIClient) ConfigureGuardian(ctx context.Context, homeID, strategy string, autoDefend bool, deadmanThreshold uint64) (string, error) {
+	args := []string{
+		"tx", "home", "configure-guardian", homeID,
+		"--strategy", strategy,
+	}
+	if autoDefend {
+		args = append(args, "--auto-defend")
+	}
+	if deadmanThreshold > 0 {
+		args = append(args, "--deadman-threshold", fmt.Sprintf("%d", deadmanThreshold))
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) RegisterHomeKey(ctx context.Context, homeID, keyHash, role string, permissions []string, expiresAt uint64) (string, error) {
+	args := []string{
+		"tx", "home", "register-key", homeID,
+		"--key-hash", keyHash,
+		"--role", role,
+	}
+	if len(permissions) > 0 {
+		args = append(args, "--permissions", strings.Join(permissions, ","))
+	}
+	if expiresAt > 0 {
+		args = append(args, "--expires-at", fmt.Sprintf("%d", expiresAt))
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) StartSession(ctx context.Context, homeID, keyHash string, permissions []string) (string, error) {
+	args := []string{
+		"tx", "home", "start-session", homeID,
+		"--key-hash", keyHash,
+	}
+	if len(permissions) > 0 {
+		args = append(args, "--permissions", strings.Join(permissions, ","))
+	}
+	return c.runTx(ctx, args...)
+}
+
+func (c *CLIClient) EndSession(ctx context.Context, homeID, sessionID string) (string, error) {
+	return c.runTx(ctx, "tx", "home", "end-session", homeID,
+		"--session-id", sessionID)
+}
+
+func (c *CLIClient) SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error) {
+	return c.runTx(ctx, "tx", "home", "set-spending-limit", homeID,
+		"--key-type", keyType,
+		"--max-amount", fmt.Sprintf("%d%s", maxAmount, Denom),
+		"--period-blocks", fmt.Sprintf("%d", periodBlocks))
+}

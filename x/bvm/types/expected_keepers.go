@@ -16,8 +16,15 @@ type BankKeeper interface {
 
 // KnowledgeKeeper defines the expected knowledge module keeper interface for BVM opcodes.
 type KnowledgeKeeper interface {
+	// Read methods
 	GetFact(ctx context.Context, factId string) (fact interface{}, found bool)
 	GetFactsByDomain(ctx context.Context, domain string) []interface{}
+
+	// Write methods for BVM opcode integration
+	SubmitClaimFromBVM(ctx context.Context, submitterDID, domain, contentHash, evidenceHash, logicZone string, stakeAmount uint64) (claimId string, err error)
+	CommitVoteFromBVM(ctx context.Context, validatorDID, roundId, commitmentHash string) error
+	RevealVoteFromBVM(ctx context.Context, validatorDID, roundId, verdict string, confidence uint64, salt string) error
+	ChallengeFactFromBVM(ctx context.Context, challengerDID, factId, evidenceHash string, stakeAmount uint64) (roundId string, err error)
 }
 
 // StakingKeeper defines the expected staking module keeper interface for BVM opcodes.
@@ -28,10 +35,10 @@ type StakingKeeper interface {
 // SessionCapabilities defines what a session key is allowed to do within BVM.
 // BVM-local copy to avoid cross-module type import from x/auth/types.
 type SessionCapabilities struct {
-	CanTransfer    bool
-	CanStake       bool
+	CanTransfer     bool
+	CanStake        bool
 	CanSubmitClaims bool
-	CanVote        bool
+	CanVote         bool
 }
 
 // AuthKeeper defines the expected auth module keeper interface for BVM opcodes.

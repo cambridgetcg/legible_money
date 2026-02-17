@@ -16,6 +16,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"github.com/legible-money/legible/x/knowledge/client/cli"
 	"github.com/legible-money/legible/x/knowledge/keeper"
 	"github.com/legible-money/legible/x/knowledge/types"
 )
@@ -69,12 +70,12 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the module's tx CLI command.
 func (a AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
+	return cli.NewTxCmd()
 }
 
 // GetQueryCmd returns the module's query CLI command.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // Phase 2: CLI commands
+	return cli.NewQueryCmd()
 }
 
 // AppModule implements the AppModule interface.
@@ -100,7 +101,7 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterExtendedMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 
 	migrator := keeper.NewMigrator(am.keeper)

@@ -780,11 +780,11 @@ func TestReputationScoreCalculation(t *testing.T) {
 	//         = 772_000_000 / 1_000_000 = 772
 
 	score, _, _ := keeper.CalculateDomainReputationScore(
-		100, 80,        // totalVerifications, correctVerifications
-		700_000,        // verdictConsistency
-		0, 0,           // challengesReceived, challengesLost (0 challenges = perfect defense)
-		500_000,        // confidenceCalibration
-		100, 100,       // currentBlock, lastActivityBlock (no decay)
+		100, 80, // totalVerifications, correctVerifications
+		700_000, // verdictConsistency
+		0, 0,    // challengesReceived, challengesLost (0 challenges = perfect defense)
+		500_000,  // confidenceCalibration
+		100, 100, // currentBlock, lastActivityBlock (no decay)
 	)
 
 	expected := uint64(772)

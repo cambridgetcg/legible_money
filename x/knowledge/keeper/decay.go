@@ -13,6 +13,22 @@ import (
 // Eternal categories (halfLife=0) return the original confidence unchanged.
 // All values in basis points (0-1,000,000).
 func CalculateDecayedConfidence(baseConfidence, blocksSince uint64, category string) uint64 {
+	return calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince, category, 1)
+}
+
+// CalculateDecayedConfidenceNovel computes confidence decay for novel facts.
+// Novel facts get an extended half-life (2× by default) so their knowledge
+// persists longer before requiring reverification.
+func CalculateDecayedConfidenceNovel(baseConfidence, blocksSince uint64, category string, halfLifeMultiplier uint64) uint64 {
+	if halfLifeMultiplier == 0 {
+		halfLifeMultiplier = 1
+	}
+	return calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince, category, halfLifeMultiplier)
+}
+
+// calculateDecayedConfidenceWithMultiplier is the shared implementation
+// for standard and novelty-aware decay.
+func calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince uint64, category string, halfLifeMultiplier uint64) uint64 {
 	profile, ok := types.CATEGORY_DECAY[category]
 	if !ok {
 		return baseConfidence // unknown category — no decay
@@ -36,7 +52,8 @@ func CalculateDecayedConfidence(baseConfidence, blocksSince uint64, category str
 	}
 
 	// Exponential decay: C(t) = C_min + (C_0 - C_min) × 0.5^(age/halfLife)
-	halfLife := float64(profile.HalfLifeBlocks)
+	// Novel facts get an extended half-life via multiplier
+	halfLife := float64(profile.HalfLifeBlocks * halfLifeMultiplier)
 	decayFactor := math.Pow(0.5, float64(blocksSince)/halfLife)
 
 	minConf := float64(profile.MinConfidence)
@@ -85,7 +102,13 @@ func (k Keeper) applyDecayToFact(fact types.Fact, currentHeight uint64) types.Fa
 		blocksSince = currentHeight - fact.VerifiedAtHeight
 	}
 
-	decayed := CalculateDecayedConfidence(base, blocksSince, fact.EpistemicCategory)
+	// Novel or prophetic facts get slower decay (extended half-life)
+	var decayed uint64
+	if fact.NoveltyScore >= types.NoveltyImmunityThreshold || fact.IsProphetic {
+		decayed = CalculateDecayedConfidenceNovel(base, blocksSince, fact.EpistemicCategory, types.NoveltyDecayHalfLifeMultiplier)
+	} else {
+		decayed = CalculateDecayedConfidence(base, blocksSince, fact.EpistemicCategory)
+	}
 	fact.Confidence = decayed
 	fact.LastConfidenceUpdate = currentHeight
 

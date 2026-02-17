@@ -113,8 +113,8 @@ type mockAuthKeeper struct {
 }
 
 type mockSession struct {
-	caps            types.SessionCapabilities
-	expiresAtBlock  uint64
+	caps           types.SessionCapabilities
+	expiresAtBlock uint64
 }
 
 func newMockAuthKeeper() *mockAuthKeeper {
@@ -517,12 +517,12 @@ func TestCallContract_Success(t *testing.T) {
 	// Deploy a simple contract: PUSH1 42, PUSH1 0, MSTORE, PUSH1 32, PUSH1 0, RETURN
 	// Returns 42 as a 32-byte big-endian value
 	bytecode := []byte{
-		0x60, 42,   // PUSH1 42
-		0x60, 0,    // PUSH1 0
-		0x52,       // MSTORE
-		0x60, 32,   // PUSH1 32
-		0x60, 0,    // PUSH1 0
-		0xF3,       // RETURN
+		0x60, 42, // PUSH1 42
+		0x60, 0, // PUSH1 0
+		0x52,     // MSTORE
+		0x60, 32, // PUSH1 32
+		0x60, 0, // PUSH1 0
+		0xF3, // RETURN
 	}
 	deployResp, _ := msgServer.DeployContract(ctx, &types.MsgDeployContract{
 		Deployer: creator1,
@@ -1183,12 +1183,12 @@ func TestCallContract_CallerDID_Resolved(t *testing.T) {
 
 	// Deploy a simple contract: PUSH1 42, PUSH1 0, MSTORE, PUSH1 32, PUSH1 0, RETURN
 	bytecode := []byte{
-		0x60, 42,   // PUSH1 42
-		0x60, 0,    // PUSH1 0
-		0x52,       // MSTORE
-		0x60, 32,   // PUSH1 32
-		0x60, 0,    // PUSH1 0
-		0xF3,       // RETURN
+		0x60, 42, // PUSH1 42
+		0x60, 0, // PUSH1 0
+		0x52,     // MSTORE
+		0x60, 32, // PUSH1 32
+		0x60, 0, // PUSH1 0
+		0xF3, // RETURN
 	}
 	deployResp, err := msgServer.DeployContract(ctx, &types.MsgDeployContract{
 		Deployer: creator1,
@@ -1257,10 +1257,10 @@ func TestCallContract_SessionCaps_StakeBlocked(t *testing.T) {
 	mockAuth.dids[caller1] = "did:lgm:restricted-caller"
 	mockAuth.sessions[caller1] = mockSession{
 		caps: types.SessionCapabilities{
-			CanTransfer:    true,
-			CanStake:       false, // blocked
+			CanTransfer:     true,
+			CanStake:        false, // blocked
 			CanSubmitClaims: true,
-			CanVote:        true,
+			CanVote:         true,
 		},
 		expiresAtBlock: 999,
 	}

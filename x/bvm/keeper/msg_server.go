@@ -77,12 +77,26 @@ func (a *kvStoreAdapter) CacheWrapWithTrace(_ io.Writer, _ storetypes.TraceConte
 type noopIterator struct{}
 
 func (n *noopIterator) Domain() (start, end []byte) { return nil, nil }
-func (n *noopIterator) Valid() bool                  { return false }
-func (n *noopIterator) Next()                        {}
-func (n *noopIterator) Key() []byte                  { return nil }
-func (n *noopIterator) Value() []byte                { return nil }
-func (n *noopIterator) Close() error                 { return nil }
-func (n *noopIterator) Error() error                 { return nil }
+func (n *noopIterator) Valid() bool                 { return false }
+func (n *noopIterator) Next()                       {}
+func (n *noopIterator) Key() []byte                 { return nil }
+func (n *noopIterator) Value() []byte               { return nil }
+func (n *noopIterator) Close() error                { return nil }
+func (n *noopIterator) Error() error                { return nil }
+
+// balanceQuerierAdapter wraps a BankKeeper + sdk.Context to implement vm.BalanceQuerier.
+// Resolves real on-chain balances for BALANCE/SELFBALANCE opcodes.
+type balanceQuerierAdapter struct {
+	bk  types.BankKeeper
+	ctx sdk.Context
+}
+
+func (a *balanceQuerierAdapter) GetBalanceByAddress(addr []byte) *big.Int {
+	// addr is 20 bytes (EVM-style) — convert to bech32 sdk.AccAddress
+	accAddr := sdk.AccAddress(addr)
+	coin := a.bk.GetBalance(a.ctx, accAddr, "ulgm")
+	return coin.Amount.BigInt()
+}
 
 type msgServer struct {
 	types.UnimplementedMsgServer
@@ -176,10 +190,10 @@ type vmAuthKeeperAdapter struct {
 
 func (a *vmAuthKeeperAdapter) RegisterSessionKey(_ context.Context, ownerDID, pubKeyHex string, canTransfer, canStake, canClaims, canVote bool, expiresAtBlock uint64) error {
 	caps := types.SessionCapabilities{
-		CanTransfer:    canTransfer,
-		CanStake:       canStake,
+		CanTransfer:     canTransfer,
+		CanStake:        canStake,
 		CanSubmitClaims: canClaims,
-		CanVote:        canVote,
+		CanVote:         canVote,
 	}
 	// Use ownerDID as both owner and keyHash (the adapter resolves internally)
 	return a.ak.RegisterSessionKey(a.ctx, ownerDID, "", pubKeyHex, caps, expiresAtBlock)
@@ -228,70 +242,158 @@ type prodCompositeHost struct {
 }
 
 // Knowledge
-func (c *prodCompositeHost) QueryFact(factId []byte) (bool, uint64, []byte)              { return c.kh.QueryFact(factId) }
-func (c *prodCompositeHost) QueryDomain(domain []byte, limit uint64) (uint64, [][]byte)  { return c.kh.QueryDomain(domain, limit) }
-func (c *prodCompositeHost) SubmitClaim(callerDID string, domain, dataHash, evidenceHash []byte, blockNumber uint64) []byte { return c.kh.SubmitClaim(callerDID, domain, dataHash, evidenceHash, blockNumber) }
-func (c *prodCompositeHost) CommitVote(callerDID string, claimId, voteHash []byte, blockNumber uint64) bool { return c.kh.CommitVote(callerDID, claimId, voteHash, blockNumber) }
-func (c *prodCompositeHost) RevealVote(callerDID string, claimId []byte, vote, salt *big.Int, blockNumber uint64) bool { return c.kh.RevealVote(callerDID, claimId, vote, salt, blockNumber) }
-func (c *prodCompositeHost) InitiateChallenge(callerDID string, factId, evidenceHash []byte, stake *big.Int, blockNumber uint64) []byte { return c.kh.InitiateChallenge(callerDID, factId, evidenceHash, stake, blockNumber) }
+func (c *prodCompositeHost) QueryFact(factId []byte) (bool, uint64, []byte) {
+	return c.kh.QueryFact(factId)
+}
+func (c *prodCompositeHost) QueryDomain(domain []byte, limit uint64) (uint64, [][]byte) {
+	return c.kh.QueryDomain(domain, limit)
+}
+func (c *prodCompositeHost) SubmitClaim(callerDID string, domain, dataHash, evidenceHash []byte, blockNumber uint64) []byte {
+	return c.kh.SubmitClaim(callerDID, domain, dataHash, evidenceHash, blockNumber)
+}
+func (c *prodCompositeHost) CommitVote(callerDID string, claimId, voteHash []byte, blockNumber uint64) bool {
+	return c.kh.CommitVote(callerDID, claimId, voteHash, blockNumber)
+}
+func (c *prodCompositeHost) RevealVote(callerDID string, claimId []byte, vote, salt *big.Int, blockNumber uint64) bool {
+	return c.kh.RevealVote(callerDID, claimId, vote, salt, blockNumber)
+}
+func (c *prodCompositeHost) InitiateChallenge(callerDID string, factId, evidenceHash []byte, stake *big.Int, blockNumber uint64) []byte {
+	return c.kh.InitiateChallenge(callerDID, factId, evidenceHash, stake, blockNumber)
+}
 
 // Agent Identity
-func (c *prodCompositeHost) AgentDID(caller []byte) []byte                                    { return c.agent.AgentDID(caller) }
-func (c *prodCompositeHost) AgentHome(callerDID string) []byte                                { return c.agent.AgentHome(callerDID) }
-func (c *prodCompositeHost) VerifyIdentity(targetDID []byte) bool                             { return c.agent.VerifyIdentity(targetDID) }
-func (c *prodCompositeHost) AttestIdentity(callerDID string, targetDID, attType, data []byte) []byte { return c.agent.AttestIdentity(callerDID, targetDID, attType, data) }
+func (c *prodCompositeHost) AgentDID(caller []byte) []byte     { return c.agent.AgentDID(caller) }
+func (c *prodCompositeHost) AgentHome(callerDID string) []byte { return c.agent.AgentHome(callerDID) }
+func (c *prodCompositeHost) VerifyIdentity(targetDID []byte) bool {
+	return c.agent.VerifyIdentity(targetDID)
+}
+func (c *prodCompositeHost) AttestIdentity(callerDID string, targetDID, attType, data []byte) []byte {
+	return c.agent.AttestIdentity(callerDID, targetDID, attType, data)
+}
 
 // Agent Belief
-func (c *prodCompositeHost) GetBelief(callerDID string, factId []byte) uint64           { return c.agent.GetBelief(callerDID, factId) }
-func (c *prodCompositeHost) SetBelief(callerDID string, factId []byte, conf uint64, src []byte) { c.agent.SetBelief(callerDID, factId, conf, src) }
-func (c *prodCompositeHost) CompareBelief(callerDID string, factId []byte) int64         { return c.agent.CompareBelief(callerDID, factId) }
-func (c *prodCompositeHost) BeliefCount(callerDID string, domain []byte) uint64          { return c.agent.BeliefCount(callerDID, domain) }
+func (c *prodCompositeHost) GetBelief(callerDID string, factId []byte) uint64 {
+	return c.agent.GetBelief(callerDID, factId)
+}
+func (c *prodCompositeHost) SetBelief(callerDID string, factId []byte, conf uint64, src []byte) {
+	c.agent.SetBelief(callerDID, factId, conf, src)
+}
+func (c *prodCompositeHost) CompareBelief(callerDID string, factId []byte) int64 {
+	return c.agent.CompareBelief(callerDID, factId)
+}
+func (c *prodCompositeHost) BeliefCount(callerDID string, domain []byte) uint64 {
+	return c.agent.BeliefCount(callerDID, domain)
+}
 
 // Agent Relationship
-func (c *prodCompositeHost) GetTrust(callerDID string, targetDID []byte) uint64          { return c.agent.GetTrust(callerDID, targetDID) }
-func (c *prodCompositeHost) SetTrust(callerDID string, targetDID []byte, level uint64, reason []byte) { c.agent.SetTrust(callerDID, targetDID, level, reason) }
-func (c *prodCompositeHost) IsTrusted(callerDID string, targetDID []byte, threshold uint64) bool { return c.agent.IsTrusted(callerDID, targetDID, threshold) }
-func (c *prodCompositeHost) Delegate(callerDID string, targetDID, cap, constraints []byte) []byte { return c.agent.Delegate(callerDID, targetDID, cap, constraints) }
+func (c *prodCompositeHost) GetTrust(callerDID string, targetDID []byte) uint64 {
+	return c.agent.GetTrust(callerDID, targetDID)
+}
+func (c *prodCompositeHost) SetTrust(callerDID string, targetDID []byte, level uint64, reason []byte) {
+	c.agent.SetTrust(callerDID, targetDID, level, reason)
+}
+func (c *prodCompositeHost) IsTrusted(callerDID string, targetDID []byte, threshold uint64) bool {
+	return c.agent.IsTrusted(callerDID, targetDID, threshold)
+}
+func (c *prodCompositeHost) Delegate(callerDID string, targetDID, cap, constraints []byte) []byte {
+	return c.agent.Delegate(callerDID, targetDID, cap, constraints)
+}
 
 // Agent Autonomy
-func (c *prodCompositeHost) ScheduleSelf(contract, callData []byte, execBlock, gasLimit uint64) []byte { return c.agent.ScheduleSelf(contract, callData, execBlock, gasLimit) }
-func (c *prodCompositeHost) CancelScheduleHost(scheduleId []byte) bool                  { return c.agent.CancelScheduleHost(scheduleId) }
-func (c *prodCompositeHost) ModifySchedule(scheduleId []byte, newBlock uint64) bool      { return c.agent.ModifySchedule(scheduleId, newBlock) }
-func (c *prodCompositeHost) GetScheduleCount(contract []byte) uint64                     { return c.agent.GetScheduleCount(contract) }
+func (c *prodCompositeHost) ScheduleSelf(contract, callData []byte, execBlock, gasLimit uint64) []byte {
+	return c.agent.ScheduleSelf(contract, callData, execBlock, gasLimit)
+}
+func (c *prodCompositeHost) CancelScheduleHost(scheduleId []byte) bool {
+	return c.agent.CancelScheduleHost(scheduleId)
+}
+func (c *prodCompositeHost) ModifySchedule(scheduleId []byte, newBlock uint64) bool {
+	return c.agent.ModifySchedule(scheduleId, newBlock)
+}
+func (c *prodCompositeHost) GetScheduleCount(contract []byte) uint64 {
+	return c.agent.GetScheduleCount(contract)
+}
 
 // Extended Relationships
-func (c *prodCompositeHost) ListTrusted(callerDID string, offset, limit uint64) (uint64, [][]byte) { return c.agent.ListTrusted(callerDID, offset, limit) }
-func (c *prodCompositeHost) BlockAgent(callerDID string, targetDID, reason []byte) bool  { return c.agent.BlockAgent(callerDID, targetDID, reason) }
-func (c *prodCompositeHost) UnblockAgent(callerDID string, targetDID []byte) bool        { return c.agent.UnblockAgent(callerDID, targetDID) }
-func (c *prodCompositeHost) RevokeDelegation(callerDID string, delegationId []byte) bool { return c.agent.RevokeDelegation(callerDID, delegationId) }
+func (c *prodCompositeHost) ListTrusted(callerDID string, offset, limit uint64) (uint64, [][]byte) {
+	return c.agent.ListTrusted(callerDID, offset, limit)
+}
+func (c *prodCompositeHost) BlockAgent(callerDID string, targetDID, reason []byte) bool {
+	return c.agent.BlockAgent(callerDID, targetDID, reason)
+}
+func (c *prodCompositeHost) UnblockAgent(callerDID string, targetDID []byte) bool {
+	return c.agent.UnblockAgent(callerDID, targetDID)
+}
+func (c *prodCompositeHost) RevokeDelegation(callerDID string, delegationId []byte) bool {
+	return c.agent.RevokeDelegation(callerDID, delegationId)
+}
 
 // Treasury
-func (c *prodCompositeHost) ClaimVesting(callerDID string, vestingId []byte) *big.Int    { return c.treasury.ClaimVesting(callerDID, vestingId) }
-func (c *prodCompositeHost) QueryVesting(callerDID string, off, lim uint64) (uint64, [][]byte) { return c.treasury.QueryVesting(callerDID, off, lim) }
-func (c *prodCompositeHost) StakeTokens(callerDID string, amount *big.Int, valDID []byte) []byte { return c.treasury.StakeTokens(callerDID, amount, valDID) }
-func (c *prodCompositeHost) UnstakeTokens(callerDID string, stakeId []byte) *big.Int     { return c.treasury.UnstakeTokens(callerDID, stakeId) }
-func (c *prodCompositeHost) QueryExpiring(callerDID string, periodId []byte) (*big.Int, uint64) { return c.treasury.QueryExpiring(callerDID, periodId) }
-func (c *prodCompositeHost) ExtendExpiring(callerDID string, periodId []byte, newExpiry uint64) bool { return c.treasury.ExtendExpiring(callerDID, periodId, newExpiry) }
-func (c *prodCompositeHost) SetSpendLimit(callerDID string, limitType, amount []byte, period uint64) bool { return c.treasury.SetSpendLimit(callerDID, limitType, amount, period) }
-func (c *prodCompositeHost) QueryTreasury(callerDID string) (*big.Int, *big.Int, *big.Int, *big.Int) { return c.treasury.QueryTreasury(callerDID) }
+func (c *prodCompositeHost) ClaimVesting(callerDID string, vestingId []byte) *big.Int {
+	return c.treasury.ClaimVesting(callerDID, vestingId)
+}
+func (c *prodCompositeHost) QueryVesting(callerDID string, off, lim uint64) (uint64, [][]byte) {
+	return c.treasury.QueryVesting(callerDID, off, lim)
+}
+func (c *prodCompositeHost) StakeTokens(callerDID string, amount *big.Int, valDID []byte) []byte {
+	return c.treasury.StakeTokens(callerDID, amount, valDID)
+}
+func (c *prodCompositeHost) UnstakeTokens(callerDID string, stakeId []byte) *big.Int {
+	return c.treasury.UnstakeTokens(callerDID, stakeId)
+}
+func (c *prodCompositeHost) QueryExpiring(callerDID string, periodId []byte) (*big.Int, uint64) {
+	return c.treasury.QueryExpiring(callerDID, periodId)
+}
+func (c *prodCompositeHost) ExtendExpiring(callerDID string, periodId []byte, newExpiry uint64) bool {
+	return c.treasury.ExtendExpiring(callerDID, periodId, newExpiry)
+}
+func (c *prodCompositeHost) SetSpendLimit(callerDID string, limitType, amount []byte, period uint64) bool {
+	return c.treasury.SetSpendLimit(callerDID, limitType, amount, period)
+}
+func (c *prodCompositeHost) QueryTreasury(callerDID string) (*big.Int, *big.Int, *big.Int, *big.Int) {
+	return c.treasury.QueryTreasury(callerDID)
+}
 
 // Guardian
-func (c *prodCompositeHost) QueryAlerts(callerDID string, off, lim uint64) (uint64, [][]byte) { return c.treasury.QueryAlerts(callerDID, off, lim) }
-func (c *prodCompositeHost) DismissAlert(callerDID string, alertId []byte) bool           { return c.treasury.DismissAlert(callerDID, alertId) }
-func (c *prodCompositeHost) SetDefense(callerDID string, defenseType, config, threshold []byte) bool { return c.treasury.SetDefense(callerDID, defenseType, config, threshold) }
-func (c *prodCompositeHost) QueryDefenses(callerDID string) (uint64, [][]byte)            { return c.treasury.QueryDefenses(callerDID) }
+func (c *prodCompositeHost) QueryAlerts(callerDID string, off, lim uint64) (uint64, [][]byte) {
+	return c.treasury.QueryAlerts(callerDID, off, lim)
+}
+func (c *prodCompositeHost) DismissAlert(callerDID string, alertId []byte) bool {
+	return c.treasury.DismissAlert(callerDID, alertId)
+}
+func (c *prodCompositeHost) SetDefense(callerDID string, defenseType, config, threshold []byte) bool {
+	return c.treasury.SetDefense(callerDID, defenseType, config, threshold)
+}
+func (c *prodCompositeHost) QueryDefenses(callerDID string) (uint64, [][]byte) {
+	return c.treasury.QueryDefenses(callerDID)
+}
 
 // Access Control
-func (c *prodCompositeHost) RegisterKey(callerDID string, keyType, pubKey, perms, expiry []byte) bool { return c.treasury.RegisterKey(callerDID, keyType, pubKey, perms, expiry) }
-func (c *prodCompositeHost) RevokeKey(callerDID string, keyId []byte) bool                { return c.treasury.RevokeKey(callerDID, keyId) }
-func (c *prodCompositeHost) QueryPermissions(callerDID string, role []byte) *big.Int      { return c.treasury.QueryPermissions(callerDID, role) }
-func (c *prodCompositeHost) QuerySession(callerDID string) ([]byte, []byte, uint64, uint64) { return c.treasury.QuerySession(callerDID) }
+func (c *prodCompositeHost) RegisterKey(callerDID string, keyType, pubKey, perms, expiry []byte) bool {
+	return c.treasury.RegisterKey(callerDID, keyType, pubKey, perms, expiry)
+}
+func (c *prodCompositeHost) RevokeKey(callerDID string, keyId []byte) bool {
+	return c.treasury.RevokeKey(callerDID, keyId)
+}
+func (c *prodCompositeHost) QueryPermissions(callerDID string, role []byte) *big.Int {
+	return c.treasury.QueryPermissions(callerDID, role)
+}
+func (c *prodCompositeHost) QuerySession(callerDID string) ([]byte, []byte, uint64, uint64) {
+	return c.treasury.QuerySession(callerDID)
+}
 
 // Introspection
-func (c *prodCompositeHost) SelfBalance(callerDID string) *big.Int    { return c.treasury.SelfBalance(callerDID) }
-func (c *prodCompositeHost) SelfStake(callerDID string) *big.Int      { return c.treasury.SelfStake(callerDID) }
-func (c *prodCompositeHost) SelfReputation(callerDID string) uint64   { return c.treasury.SelfReputation(callerDID) }
-func (c *prodCompositeHost) SelfAccuracy(callerDID string) uint64     { return c.treasury.SelfAccuracy(callerDID) }
+func (c *prodCompositeHost) SelfBalance(callerDID string) *big.Int {
+	return c.treasury.SelfBalance(callerDID)
+}
+func (c *prodCompositeHost) SelfStake(callerDID string) *big.Int {
+	return c.treasury.SelfStake(callerDID)
+}
+func (c *prodCompositeHost) SelfReputation(callerDID string) uint64 {
+	return c.treasury.SelfReputation(callerDID)
+}
+func (c *prodCompositeHost) SelfAccuracy(callerDID string) uint64 {
+	return c.treasury.SelfAccuracy(callerDID)
+}
 
 // DeployContract deploys a new contract to the BVM.
 func (m msgServer) DeployContract(goCtx context.Context, msg *types.MsgDeployContract) (*types.MsgDeployContractResponse, error) {
@@ -327,13 +429,14 @@ func (m msgServer) DeployContract(goCtx context.Context, msg *types.MsgDeployCon
 	addrHash := sha256.Sum256([]byte(addrInput))
 	contractAddress := fmt.Sprintf("lgm1contract%x", addrHash[:20])
 
-	// Store contract
+	// Store contract with current BVM version stamp
 	contract := types.DeployedContract{
 		Address:         contractAddress,
 		CodeHash:        codeHash,
 		Creator:         msg.Deployer,
 		DeployedAtBlock: blockHeight,
 		BytecodeSize:    uint64(len(msg.Bytecode)),
+		BvmVersion:      params.CurrentBvmVersion,
 	}
 	m.SetContract(ctx, contract)
 
@@ -405,28 +508,28 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 		if sc, found := m.authKeeper.GetSessionCapabilities(ctx, msg.Caller, uint64(ctx.BlockHeight())); found {
 			// Session key: use its restricted capabilities
 			caps = &vm.SessionCapabilities{
-				CanTransfer:    sc.CanTransfer,
-				CanStake:       sc.CanStake,
+				CanTransfer:     sc.CanTransfer,
+				CanStake:        sc.CanStake,
 				CanSubmitClaims: sc.CanSubmitClaims,
-				CanVote:        sc.CanVote,
+				CanVote:         sc.CanVote,
 			}
 		} else {
 			// No session key — caller authenticated with identity/operational key.
 			// Grant full capabilities (they own the account).
 			caps = &vm.SessionCapabilities{
-				CanTransfer:    true,
-				CanStake:       true,
+				CanTransfer:     true,
+				CanStake:        true,
 				CanSubmitClaims: true,
-				CanVote:        true,
+				CanVote:         true,
 			}
 		}
 	} else if callerDID != "" {
 		// authKeeper not wired but caller has DID — grant full capabilities
 		caps = &vm.SessionCapabilities{
-			CanTransfer:    true,
-			CanStake:       true,
+			CanTransfer:     true,
+			CanStake:        true,
 			CanSubmitClaims: true,
-			CanVote:        true,
+			CanVote:         true,
 		}
 	}
 	// If callerDID == "" (anonymous), caps stays nil → all agent opcodes denied
@@ -434,28 +537,50 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 	// Contract address as bytes
 	contractBytes := []byte(msg.ContractAddress)
 
+	// Build governance gas schedule overrides
+	var gasSchedule *vm.GasSchedule
+	if govSchedule := m.GetGasSchedule(ctx); govSchedule != nil {
+		overrides := make(map[byte]uint64)
+		for mnemonic, cost := range govSchedule {
+			if opcode, ok := vm.OpcodeByMnemonic(mnemonic); ok {
+				overrides[opcode] = cost
+			}
+		}
+		if len(overrides) > 0 {
+			gasSchedule = &vm.GasSchedule{Overrides: overrides}
+		}
+	}
+
 	// Build execution context
 	execCtx := &vm.ExecutionContext{
-		Caller:          callerBytes,
-		CallerDID:       callerDID,
-		Origin:          callerBytes,
-		OriginDID:       callerDID,
-		CurrentContract: contractBytes,
-		BlockNumber:     uint64(ctx.BlockHeight()),
-		Timestamp:       uint64(ctx.BlockTime().Unix()),
-		GasPrice:        new(big.Int),
-		GasLimit:        msg.GasLimit,
-		Value:           callValue,
-		CallData:        callData,
-		Mode:            vm.ModeCall,
-		Bytecode:        code.Bytecode,
-		ChainID:         big.NewInt(2521), // Legible chain ID
-		Capabilities:    caps,
+		Caller:             callerBytes,
+		CallerDID:          callerDID,
+		Origin:             callerBytes,
+		OriginDID:          callerDID,
+		CurrentContract:    contractBytes,
+		BlockNumber:        uint64(ctx.BlockHeight()),
+		Timestamp:          uint64(ctx.BlockTime().Unix()),
+		GasPrice:           new(big.Int),
+		GasLimit:           msg.GasLimit,
+		Value:              callValue,
+		CallData:           callData,
+		Mode:               vm.ModeCall,
+		Bytecode:           code.Bytecode,
+		ChainID:            big.NewInt(2521), // Legible chain ID
+		Capabilities:       caps,
+		ContractBvmVersion: contract.BvmVersion,
+		GasSchedule:        gasSchedule,
 	}
 
 	// Create state adapter: wrap new KVStoreService API for VM compatibility
 	kvStore := m.storeService.OpenKVStore(ctx)
-	stateDB := vm.NewCosmosStateDB(&kvStoreAdapter{store: kvStore})
+	var stateDB *vm.CosmosStateDB
+	if m.bankKeeper != nil {
+		bq := &balanceQuerierAdapter{bk: m.bankKeeper, ctx: ctx}
+		stateDB = vm.NewCosmosStateDBWithBalance(&kvStoreAdapter{store: kvStore}, bq)
+	} else {
+		stateDB = vm.NewCosmosStateDB(&kvStoreAdapter{store: kvStore})
+	}
 
 	// Build host functions wired to the keeper for agent opcodes
 	host := m.Keeper.buildHost(ctx, stateDB)
@@ -756,22 +881,38 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 					CanVote:         true,
 				}
 
+				// Build governance gas schedule for scheduled execution
+				var schedGasSchedule *vm.GasSchedule
+				if govSched := k.GetGasSchedule(ctx); govSched != nil {
+					overrides := make(map[byte]uint64)
+					for mnemonic, cost := range govSched {
+						if opcode, ok := vm.OpcodeByMnemonic(mnemonic); ok {
+							overrides[opcode] = cost
+						}
+					}
+					if len(overrides) > 0 {
+						schedGasSchedule = &vm.GasSchedule{Overrides: overrides}
+					}
+				}
+
 				execCtx := &vm.ExecutionContext{
-					Caller:          callerBytes,
-					CallerDID:       schedCallerDID,
-					Origin:          callerBytes,
-					OriginDID:       schedCallerDID,
-					CurrentContract: []byte(schedule.ContractAddress),
-					BlockNumber:     currentBlock,
-					Timestamp:       uint64(ctx.BlockTime().Unix()),
-					GasPrice:        new(big.Int),
-					GasLimit:        schedule.MaxGas,
-					Value:           new(big.Int),
-					CallData:        callData,
-					Mode:            vm.ModeCall,
-					Bytecode:        code.Bytecode,
-					ChainID:         big.NewInt(2521),
-					Capabilities:    fullCaps,
+					Caller:             callerBytes,
+					CallerDID:          schedCallerDID,
+					Origin:             callerBytes,
+					OriginDID:          schedCallerDID,
+					CurrentContract:    []byte(schedule.ContractAddress),
+					BlockNumber:        currentBlock,
+					Timestamp:          uint64(ctx.BlockTime().Unix()),
+					GasPrice:           new(big.Int),
+					GasLimit:           schedule.MaxGas,
+					Value:              new(big.Int),
+					CallData:           callData,
+					Mode:               vm.ModeCall,
+					Bytecode:           code.Bytecode,
+					ChainID:            big.NewInt(2521),
+					Capabilities:       fullCaps,
+					ContractBvmVersion: contract.BvmVersion,
+					GasSchedule:        schedGasSchedule,
 				}
 
 				stateDB := vm.NewCosmosStateDB(&kvStoreAdapter{store: kvStore})

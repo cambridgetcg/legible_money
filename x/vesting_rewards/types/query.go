@@ -51,6 +51,6 @@ type QueryBlockRewardDistributionResponse struct {
 type QueryParamsRequest struct{}
 
 type QueryParamsResponse struct {
-	Params          *Params            `json:"params"`
-	CategoryConfigs []*CategoryConfig  `json:"category_configs"`
+	Params          *Params           `json:"params"`
+	CategoryConfigs []*CategoryConfig `json:"category_configs"`
 }

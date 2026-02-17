@@ -32,6 +32,7 @@ type DeployedContract struct {
 	AgentDid        string                 `protobuf:"bytes,6,opt,name=agent_did,json=agentDid,proto3" json:"agent_did,omitempty"`                         // did:lgm:xxx (if agent)
 	BytecodeSize    uint64                 `protobuf:"varint,7,opt,name=bytecode_size,json=bytecodeSize,proto3" json:"bytecode_size,omitempty"`            // size of bytecode in bytes
 	Label           string                 `protobuf:"bytes,8,opt,name=label,proto3" json:"label,omitempty"`                                               // human-readable label
+	BvmVersion      uint32                 `protobuf:"varint,9,opt,name=bvm_version,json=bvmVersion,proto3" json:"bvm_version,omitempty"`                  // BVM version at deploy time
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -120,6 +121,13 @@ func (x *DeployedContract) GetLabel() string {
 		return x.Label
 	}
 	return ""
+}
+
+func (x *DeployedContract) GetBvmVersion() uint32 {
+	if x != nil {
+		return x.BvmVersion
+	}
+	return 0
 }
 
 // ContractCode stores the bytecode for a deployed contract, keyed by code hash.

@@ -19,9 +19,11 @@ type QueryResearchRequest struct {
 	ResearchId string `json:"research_id"`
 }
 
-func (m *QueryResearchRequest) Reset()         {}
-func (m *QueryResearchRequest) String() string { return fmt.Sprintf("QueryResearchRequest{%s}", m.ResearchId) }
-func (m *QueryResearchRequest) ProtoMessage()  {}
+func (m *QueryResearchRequest) Reset() {}
+func (m *QueryResearchRequest) String() string {
+	return fmt.Sprintf("QueryResearchRequest{%s}", m.ResearchId)
+}
+func (m *QueryResearchRequest) ProtoMessage() {}
 
 type QueryResearchResponse struct {
 	Research *Research     `json:"research"`
@@ -37,9 +39,11 @@ type QuerySubmissionsRequest struct {
 	Domain string `json:"domain,omitempty"`
 }
 
-func (m *QuerySubmissionsRequest) Reset()         {}
-func (m *QuerySubmissionsRequest) String() string { return fmt.Sprintf("QuerySubmissionsRequest{status=%s,domain=%s}", m.Status, m.Domain) }
-func (m *QuerySubmissionsRequest) ProtoMessage()  {}
+func (m *QuerySubmissionsRequest) Reset() {}
+func (m *QuerySubmissionsRequest) String() string {
+	return fmt.Sprintf("QuerySubmissionsRequest{status=%s,domain=%s}", m.Status, m.Domain)
+}
+func (m *QuerySubmissionsRequest) ProtoMessage() {}
 
 type QuerySubmissionsResponse struct {
 	Submissions []*Research `json:"submissions"`
@@ -53,9 +57,11 @@ type QueryBountyRequest struct {
 	BountyId string `json:"bounty_id"`
 }
 
-func (m *QueryBountyRequest) Reset()         {}
-func (m *QueryBountyRequest) String() string { return fmt.Sprintf("QueryBountyRequest{%s}", m.BountyId) }
-func (m *QueryBountyRequest) ProtoMessage()  {}
+func (m *QueryBountyRequest) Reset() {}
+func (m *QueryBountyRequest) String() string {
+	return fmt.Sprintf("QueryBountyRequest{%s}", m.BountyId)
+}
+func (m *QueryBountyRequest) ProtoMessage() {}
 
 type QueryBountyResponse struct {
 	Bounty *Bounty `json:"bounty"`

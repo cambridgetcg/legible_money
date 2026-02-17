@@ -63,9 +63,9 @@ func IsValidReviewVerdict(v ReviewVerdict) bool {
 
 func DefaultParams() Params {
 	return Params{
-		MinResearchStake:         "100000000",  // 100 LGM in ulgm
-		MinChallengeStake:        "100000000",  // 100 LGM in ulgm
-		ReviewPeriodBlocks:       68544,         // ~2 days
+		MinResearchStake:         "100000000", // 100 LGM in ulgm
+		MinChallengeStake:        "100000000", // 100 LGM in ulgm
+		ReviewPeriodBlocks:       68544,       // ~2 days
 		MinReviewerCount:         3,
 		AcceptanceScoreThreshold: 60,            // 60/100
 		RejectionSlashBps:        330000,        // 33%

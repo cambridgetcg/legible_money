@@ -12,27 +12,27 @@ import (
 type VestingCategoryStr string
 
 const (
-	CategoryAxiomatic     VestingCategoryStr = "axiomatic"      // Mathematical axioms
-	CategoryFormalProof   VestingCategoryStr = "formal_proof"   // Verified proofs
-	CategoryOnChain       VestingCategoryStr = "on_chain"       // Blockchain-verifiable
-	CategoryCryptographic VestingCategoryStr = "cryptographic"  // Cryptographic proofs
-	CategoryComputational VestingCategoryStr = "computational"  // Reproducible computation
-	CategoryPeerReviewed  VestingCategoryStr = "peer_reviewed"  // Published research
-	CategoryReplicated    VestingCategoryStr = "replicated"     // IRL-replicated
-	CategoryOracleFeed    VestingCategoryStr = "oracle_feed"    // Oracle price feeds
-	CategoryAttestation   VestingCategoryStr = "attestation"    // Human attestations
-	CategoryContested     VestingCategoryStr = "contested"      // Claims with active disputes
+	CategoryAxiomatic     VestingCategoryStr = "axiomatic"     // Mathematical axioms
+	CategoryFormalProof   VestingCategoryStr = "formal_proof"  // Verified proofs
+	CategoryOnChain       VestingCategoryStr = "on_chain"      // Blockchain-verifiable
+	CategoryCryptographic VestingCategoryStr = "cryptographic" // Cryptographic proofs
+	CategoryComputational VestingCategoryStr = "computational" // Reproducible computation
+	CategoryPeerReviewed  VestingCategoryStr = "peer_reviewed" // Published research
+	CategoryReplicated    VestingCategoryStr = "replicated"    // IRL-replicated
+	CategoryOracleFeed    VestingCategoryStr = "oracle_feed"   // Oracle price feeds
+	CategoryAttestation   VestingCategoryStr = "attestation"   // Human attestations
+	CategoryContested     VestingCategoryStr = "contested"     // Claims with active disputes
 )
 
 // VestingStatus tracks the lifecycle of a vesting schedule
 type VestingStatus string
 
 const (
-	VestingStatusActive    VestingStatus = "vesting"    // Active, releasing rewards
-	VestingStatusPaused    VestingStatus = "paused"     // Paused due to challenge
-	VestingStatusCompleted VestingStatus = "completed"  // Reached max release
-	VestingStatusFalsified VestingStatus = "falsified"  // Claim proven false
-	VestingStatusAbandoned VestingStatus = "abandoned"  // Recipient abandoned
+	VestingStatusActive    VestingStatus = "vesting"   // Active, releasing rewards
+	VestingStatusPaused    VestingStatus = "paused"    // Paused due to challenge
+	VestingStatusCompleted VestingStatus = "completed" // Reached max release
+	VestingStatusFalsified VestingStatus = "falsified" // Claim proven false
+	VestingStatusAbandoned VestingStatus = "abandoned" // Recipient abandoned
 )
 
 // RewardSource identifies where a reward originated

@@ -24,6 +24,7 @@ var (
 	HomeByOwnerPrefix     = []byte{0x06} // 0x06 + ownerAddr (index)
 	ParamsKey             = []byte{0x07}
 	HomeCounterKey        = []byte{0x08}
+	EpistemicStatsPrefix  = []byte{0x09} // 0x09 + homeId → EpistemicStats JSON
 )
 
 // HomeKey returns the store key for a home by DID.
@@ -69,4 +70,9 @@ func SpendLimitKey(homeId, keyType string) []byte {
 // HomeByOwnerKey returns the store key for a home-by-owner index entry.
 func HomeByOwnerKey(addr string) []byte {
 	return append(HomeByOwnerPrefix, []byte(addr)...)
+}
+
+// EpistemicStatsKey returns the store key for a home's epistemic activity stats.
+func EpistemicStatsKey(homeId string) []byte {
+	return append(EpistemicStatsPrefix, []byte(homeId)...)
 }

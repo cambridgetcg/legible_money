@@ -3,20 +3,20 @@ package types
 // DefaultParams returns default qualification module parameters.
 func DefaultParams() Params {
 	return Params{
-		StakeLeaf:              "22000000000000000000",    // 22 LGM
-		StakeMid:               "222000000000000000000",   // 222 LGM
-		StakeTop:               "2222000000000000000000",  // 2222 LGM
+		StakeLeaf:              "22000000",   // 22 LGM in ulgm
+		StakeMid:               "222000000",  // 222 LGM in ulgm
+		StakeTop:               "2222000000", // 2222 LGM in ulgm
 		StakeLockPeriod:        7777,
 		MinVerifications:       19,
 		MinAccuracyBps:         7700,
 		MinEndorsers:           3,
-		EndorserStake:          "22000000000000000000",    // 22 LGM
+		EndorserStake:          "22000000", // 22 LGM in ulgm
 		EndorsementDecayBlocks: 77777,
-		StratumDiscountBps:     7000,                      // 70%
+		StratumDiscountBps:     7000, // 70%
 		InactivityExpiration:   777777,
 		ProbationaryPeriod:     777,
-		ProbationaryWeightBps:  5000,                      // 50%
-		SuspensionAccuracyBps:  5000,                      // 50%
+		ProbationaryWeightBps:  5000, // 50%
+		SuspensionAccuracyBps:  5000, // 50%
 		SuspensionConsecutive:  5,
 		RevocationChallenges:   3,
 		MaxQualificationDepth:  7,

@@ -108,6 +108,7 @@ type Params struct {
 	CallBaseGasCost         uint64                 `protobuf:"varint,5,opt,name=call_base_gas_cost,json=callBaseGasCost,proto3" json:"call_base_gas_cost,omitempty"`                         // base gas cost per call
 	StorageWriteGasCost     uint64                 `protobuf:"varint,6,opt,name=storage_write_gas_cost,json=storageWriteGasCost,proto3" json:"storage_write_gas_cost,omitempty"`             // gas cost per storage write
 	StorageReadGasCost      uint64                 `protobuf:"varint,7,opt,name=storage_read_gas_cost,json=storageReadGasCost,proto3" json:"storage_read_gas_cost,omitempty"`                // gas cost per storage read
+	CurrentBvmVersion       uint32                 `protobuf:"varint,8,opt,name=current_bvm_version,json=currentBvmVersion,proto3" json:"current_bvm_version,omitempty"`                   // current BVM version for new deploys
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -187,6 +188,13 @@ func (x *Params) GetStorageWriteGasCost() uint64 {
 func (x *Params) GetStorageReadGasCost() uint64 {
 	if x != nil {
 		return x.StorageReadGasCost
+	}
+	return 0
+}
+
+func (x *Params) GetCurrentBvmVersion() uint32 {
+	if x != nil {
+		return x.CurrentBvmVersion
 	}
 	return 0
 }

@@ -22,80 +22,92 @@ type QueryServer interface {
 type QueryDisputeRequest struct {
 	DisputeId string `json:"dispute_id"`
 }
-func (m *QueryDisputeRequest) Reset()        {}
+
+func (m *QueryDisputeRequest) Reset()         {}
 func (m *QueryDisputeRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryDisputeRequest) ProtoMessage()  {}
 
 type QueryDisputeResponse struct {
 	Dispute Dispute `json:"dispute"`
 }
-func (m *QueryDisputeResponse) Reset()        {}
+
+func (m *QueryDisputeResponse) Reset()         {}
 func (m *QueryDisputeResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryDisputeResponse) ProtoMessage()  {}
 
 type QueryDisputesByFactRequest struct {
 	FactId string `json:"fact_id"`
 }
-func (m *QueryDisputesByFactRequest) Reset()        {}
+
+func (m *QueryDisputesByFactRequest) Reset()         {}
 func (m *QueryDisputesByFactRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryDisputesByFactRequest) ProtoMessage()  {}
 
 type QueryDisputesByFactResponse struct {
 	Disputes []Dispute `json:"disputes"`
 }
-func (m *QueryDisputesByFactResponse) Reset()        {}
+
+func (m *QueryDisputesByFactResponse) Reset()         {}
 func (m *QueryDisputesByFactResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryDisputesByFactResponse) ProtoMessage()  {}
 
 type QueryActiveDisputesRequest struct{}
-func (m *QueryActiveDisputesRequest) Reset()        {}
+
+func (m *QueryActiveDisputesRequest) Reset()         {}
 func (m *QueryActiveDisputesRequest) String() string { return "QueryActiveDisputesRequest{}" }
 func (m *QueryActiveDisputesRequest) ProtoMessage()  {}
 
 type QueryActiveDisputesResponse struct {
 	Disputes []Dispute `json:"disputes"`
 }
-func (m *QueryActiveDisputesResponse) Reset()        {}
+
+func (m *QueryActiveDisputesResponse) Reset()         {}
 func (m *QueryActiveDisputesResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryActiveDisputesResponse) ProtoMessage()  {}
 
 type QueryEvidenceRequest struct {
 	DisputeId string `json:"dispute_id"`
 }
-func (m *QueryEvidenceRequest) Reset()        {}
+
+func (m *QueryEvidenceRequest) Reset()         {}
 func (m *QueryEvidenceRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryEvidenceRequest) ProtoMessage()  {}
 
 type QueryEvidenceResponse struct {
 	Evidence []DisputeEvidence `json:"evidence"`
 }
-func (m *QueryEvidenceResponse) Reset()        {}
+
+func (m *QueryEvidenceResponse) Reset()         {}
 func (m *QueryEvidenceResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryEvidenceResponse) ProtoMessage()  {}
 
 type QueryVotesRequest struct {
 	DisputeId string `json:"dispute_id"`
 }
-func (m *QueryVotesRequest) Reset()        {}
+
+func (m *QueryVotesRequest) Reset()         {}
 func (m *QueryVotesRequest) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryVotesRequest) ProtoMessage()  {}
 
 type QueryVotesResponse struct {
 	Votes []DisputeVote `json:"votes"`
 }
-func (m *QueryVotesResponse) Reset()        {}
+
+func (m *QueryVotesResponse) Reset()         {}
 func (m *QueryVotesResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryVotesResponse) ProtoMessage()  {}
 
 type QueryParamsRequest struct{}
-func (m *QueryParamsRequest) Reset()        {}
+
+func (m *QueryParamsRequest) Reset()         {}
 func (m *QueryParamsRequest) String() string { return "QueryParamsRequest{}" }
 func (m *QueryParamsRequest) ProtoMessage()  {}
 
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
-func (m *QueryParamsResponse) Reset()        {}
+
+func (m *QueryParamsResponse) Reset()         {}
 func (m *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *QueryParamsResponse) ProtoMessage()  {}
 

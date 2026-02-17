@@ -113,7 +113,7 @@ import { deriveOperationalKey } from 'legible-money/agents';
 
 // Agent derives its key each session
 const { publicKey, privateKey } = deriveOperationalKey(
-  'agent-claude-001',           // agentId
+  'agent-verifier-001',          // agentId
   process.env.OPERATOR_SECRET,  // operatorSecret
   'legible-money',              // domain
   1                             // version

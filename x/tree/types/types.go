@@ -106,6 +106,32 @@ const (
 	FundingCommunity FundingSourceType = "community"
 )
 
+// --- P0 Remediation Constants ---
+
+const (
+	// SEC-1: AbandonTimelockBlocks is the minimum waiting period (in blocks)
+	// before an abandon proposal can be executed. ~1 day at 2521ms block time.
+	AbandonTimelockBlocks = uint64(34272)
+
+	// SEC-2: DisputeSlashBps is the fraction of bounty burned when a task
+	// enters disputed status (3x rejected). 30% = 300,000 bps.
+	DisputeSlashBps = int64(300000)
+
+	// BpsDenominator is the basis-point denominator (1,000,000 = 100%).
+	BpsDenominator = int64(1000000)
+)
+
+// TaskResolved is the status for a task whose dispute has been resolved.
+const TaskResolved TaskStatus = "resolved"
+
+// PendingAbandon tracks a proposed project abandonment with timelock.
+type PendingAbandon struct {
+	ProjectId       string   `json:"project_id"`
+	ProposedBy      string   `json:"proposed_by"`
+	ProposedAtBlock uint64   `json:"proposed_at_block"`
+	Consented       []string `json:"consented"` // contributor addresses that consented
+}
+
 // --- Subscription (no proto type; JSON-serialized) ---
 
 // ServiceSubscription represents an active subscription to a service.

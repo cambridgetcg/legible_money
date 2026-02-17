@@ -18,12 +18,12 @@ type msgServer struct {
 	Keeper
 }
 
-// NewMsgServerImpl returns an implementation of the ExtendedMsgServer interface.
-func NewMsgServerImpl(keeper Keeper) types.ExtendedMsgServer {
+// NewMsgServerImpl returns an implementation of the MsgServer interface.
+func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
-var _ types.ExtendedMsgServer = msgServer{}
+var _ types.MsgServer = msgServer{}
 
 // SubmitClaim handles MsgSubmitClaim — the core PoT transaction.
 //
@@ -64,6 +64,13 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 			// If zone is simply unknown, reject the claim
 			return nil, fmt.Errorf("%w: %v", types.ErrInvalidClaim, err)
 		}
+
+		// G-1: Validate zone-category consistency — prevents submitters from
+		// declaring a more formal zone than their epistemic category warrants
+		// (e.g. an empirical claim cannot use propositional zone to get 100% ceiling)
+		if err := k.ontologyKeeper.ValidateZoneForCategory(ctx, msg.LogicZone, msg.EpistemicCategory); err != nil {
+			return nil, fmt.Errorf("%w: %v", types.ErrInvalidClaim, err)
+		}
 	}
 
 	// Compute content hash and check for duplicates
@@ -78,6 +85,14 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		return nil, fmt.Errorf("%w: invalid stake amount", types.ErrInsufficientStake)
 	}
 
+	// Enforce minimum claim stake to prevent zero-slash spam.
+	// Without this floor, integer truncation makes the 22% slash = 0 for stakes < 5 ulgm,
+	// allowing attackers to spam claims with no economic penalty. (OpenClaw C-3 fix)
+	if stakeAmount.Int64() < types.MinClaimStakeUlgm {
+		return nil, fmt.Errorf("%w: claim stake must be at least %d ulgm",
+			types.ErrInsufficientStake, types.MinClaimStakeUlgm)
+	}
+
 	submitterAddr, err := sdk.AccAddressFromBech32(msg.Submitter)
 	if err != nil {
 		return nil, fmt.Errorf("invalid submitter address: %w", err)
@@ -89,17 +104,15 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	); err != nil {
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
-
-
 	// Generate deterministic IDs
 	height := uint64(ctx.BlockHeight())
 	claimID := GenerateClaimID(msg.Submitter, contentHash, height)
 	roundID := GenerateRoundID(claimID, height)
 
-	// Create claim — status depends on adversarial verification mode
-	params2 := k.GetParams(ctx) // re-fetch for adversarial check
+	// Create claim — status depends on adversarial verification mode (per-domain override supported)
+	useAdversarial := k.IsAdversarialForDomain(ctx, msg.Domain)
 	initialStatus := "pending"
-	if params2.AdversarialVerificationEnabled {
+	if useAdversarial {
 		initialStatus = types.ClaimStatusPendingEvaluation
 	}
 
@@ -121,7 +134,12 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	}
 	k.SetClaim(ctx, claim)
 
-	if params2.AdversarialVerificationEnabled {
+	// Notify home module of claim submission for epistemic stats
+	if k.homeKeeper != nil {
+		k.homeKeeper.RecordClaimSubmission(ctx, msg.Submitter)
+	}
+
+	if useAdversarial {
 		// Adversarial mode: no verification round, evaluation happens in BeginBlocker
 		ctx.EventManager().EmitEvents(sdk.Events{
 			sdk.NewEvent(
@@ -336,6 +354,12 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 			types.ErrInvalidChallenge, fact.Status)
 	}
 
+	// Prevent duplicate verification rounds for the same fact (reverification race guard)
+	if k.HasActiveRoundForClaim(ctx, msg.FactId) {
+		return nil, fmt.Errorf("%w: fact %s already has an active verification round",
+			types.ErrDuplicateChallenge, msg.FactId)
+	}
+
 	// Deduct challenge stake
 	stakeAmount := new(big.Int)
 	if _, ok := stakeAmount.SetString(msg.Stake, 10); !ok || stakeAmount.Sign() <= 0 {
@@ -353,8 +377,6 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 	); err != nil {
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
-
-
 	// Mark fact as contested
 	fact.Status = "contested"
 	k.SetFact(ctx, fact)
@@ -376,6 +398,11 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 		Reveals:              make(map[string]*types.VerificationReveal),
 	}
 	k.SetVerificationRound(ctx, round)
+
+	// Notify home module of challenge for epistemic stats
+	if k.homeKeeper != nil {
+		k.homeKeeper.RecordChallenge(ctx, msg.Challenger)
+	}
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -507,7 +534,6 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 	); err != nil {
 		return nil, fmt.Errorf("%w: %v", types.ErrInsufficientStake, err)
 	}
-
 
 	domain := types.OntologicalDomain{
 		Name:            msg.Name,
@@ -717,7 +743,6 @@ func (k msgServer) SubmitContradiction(goCtx context.Context, msg *types.MsgSubm
 		return nil, fmt.Errorf("%w: %v", types.ErrContradictionStakeTooLow, err)
 	}
 
-
 	// 6. Create counter-fact
 	cfID := GenerateCounterFactID(msg.TargetFactId, "", msg.Submitter, height)
 	counterFact := types.CounterFact{
@@ -904,7 +929,8 @@ func isValidEpistemicCategory(cat string) bool {
 
 // ComputeCommitmentHash generates a commitment hash for verification.
 // Uses length-prefixed fields with domain separation to prevent collision:
-//   hash = SHA-256("LGM.commitment.v1:" || len(roundID) || roundID || len(verdict) || verdict || confidence_le64 || len(salt) || salt)
+//
+//	hash = SHA-256("LGM.commitment.v1:" || len(roundID) || roundID || len(verdict) || verdict || confidence_le64 || len(salt) || salt)
 func ComputeCommitmentHash(roundID, verdict string, confidence uint64, salt string) string {
 	h := sha256.New()
 	h.Write([]byte("LGM.commitment.v1:"))

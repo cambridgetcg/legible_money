@@ -111,7 +111,6 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 	return dispute, nil
 }
 
-
 // TransitionToVoting moves a dispute from evidence phase to voting phase.
 func (k Keeper) TransitionToVoting(ctx sdk.Context, dispute types.Dispute) error {
 	if dispute.Status != string(types.DisputeStatusEvidence) {

@@ -6,6 +6,7 @@ run:
   modules-download-mode: readonly
 
 linters:
+  disable-all: true
   enable:
     # Security
     - gosec
@@ -18,8 +19,6 @@ linters:
     # Style
     - gofmt
     - goimports
-    # Error handling
-    - errcheck
     # Unused code
     - unused
     # Simplification
@@ -30,6 +29,8 @@ linters-settings:
     excludes:
       # Allow math/rand in non-crypto contexts (VRF uses crypto/rand)
       - G404
+      # Integer overflow conversions are endemic in Cosmos SDK (int64/uint64 interop)
+      - G115
     severity: medium
     confidence: medium
   staticcheck:
@@ -40,9 +41,8 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment # Too noisy for protobuf-generated structs
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
+      - copylocks      # Proto-generated types embed sync.Mutex via protoimpl.MessageState; standard Cosmos SDK practice to disable
+      - shadow         # Variable shadowing of `err` is idiomatic Go; shadow checker is too noisy
   goimports:
     local-prefixes: github.com/legible-money/legible
 

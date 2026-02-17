@@ -31,40 +31,40 @@ type TSStateExport struct {
 	StateRoot string `json:"stateRoot"`
 
 	// Individual state tree exports
-	Accounts          []TSAccount          `json:"accounts"`
-	Validators        []TSValidator        `json:"validators"`
-	Facts             []TSFact             `json:"facts"`
-	Claims            []TSClaim            `json:"claims"`
-	Disputes          []TSDispute          `json:"disputes"`
-	VestingSchedules  []TSVesting          `json:"vestingSchedules"`
-	Research          []TSResearch         `json:"research"`
-	Bounties          []TSBounty           `json:"bounties"`
-	Evidence          []TSEvidence         `json:"evidence"`
-	PaymentChannels   []TSPaymentChannel   `json:"paymentChannels"`
-	Projects          []TSProject          `json:"projects"`
-	Services          []TSService          `json:"services"`
-	Tasks             []TSTask             `json:"tasks"`
-	Seeds             []TSSeed             `json:"seeds"`
-	Contracts         []TSContract         `json:"contracts"`
-	SecondaryTokens   []TSSecondaryToken   `json:"secondaryTokens"`
-	GovernanceState   TSGovernanceState    `json:"governanceState"`
+	Accounts         []TSAccount        `json:"accounts"`
+	Validators       []TSValidator      `json:"validators"`
+	Facts            []TSFact           `json:"facts"`
+	Claims           []TSClaim          `json:"claims"`
+	Disputes         []TSDispute        `json:"disputes"`
+	VestingSchedules []TSVesting        `json:"vestingSchedules"`
+	Research         []TSResearch       `json:"research"`
+	Bounties         []TSBounty         `json:"bounties"`
+	Evidence         []TSEvidence       `json:"evidence"`
+	PaymentChannels  []TSPaymentChannel `json:"paymentChannels"`
+	Projects         []TSProject        `json:"projects"`
+	Services         []TSService        `json:"services"`
+	Tasks            []TSTask           `json:"tasks"`
+	Seeds            []TSSeed           `json:"seeds"`
+	Contracts        []TSContract       `json:"contracts"`
+	SecondaryTokens  []TSSecondaryToken `json:"secondaryTokens"`
+	GovernanceState  TSGovernanceState  `json:"governanceState"`
 }
 
 // TSAccount represents an account from AccountStateTree.
 type TSAccount struct {
-	DID                    string            `json:"did"`
-	PublicKey              string            `json:"publicKey"` // Hex-encoded Ed25519
-	Balance                string            `json:"balance"`   // BigInt as string
-	StakedBalance          string            `json:"stakedBalance"`
-	Nonce                  uint64            `json:"nonce"`
-	OperationalKeyHash     string            `json:"operationalKeyHash"`
-	OperationalKeyVersion  uint32            `json:"operationalKeyVersion"`
-	SessionKeyCount        uint32            `json:"sessionKeyCount"`
-	ReputationScore        float64           `json:"reputationScore"`
-	CreatedAtBlock         uint64            `json:"createdAtBlock"`
-	LastActiveBlock        uint64            `json:"lastActiveBlock"`
-	Flags                  TSAccountFlags    `json:"flags"`
-	PeriodBalances         map[string]string `json:"periodBalances,omitempty"`
+	DID                   string            `json:"did"`
+	PublicKey             string            `json:"publicKey"` // Hex-encoded Ed25519
+	Balance               string            `json:"balance"`   // BigInt as string
+	StakedBalance         string            `json:"stakedBalance"`
+	Nonce                 uint64            `json:"nonce"`
+	OperationalKeyHash    string            `json:"operationalKeyHash"`
+	OperationalKeyVersion uint32            `json:"operationalKeyVersion"`
+	SessionKeyCount       uint32            `json:"sessionKeyCount"`
+	ReputationScore       float64           `json:"reputationScore"`
+	CreatedAtBlock        uint64            `json:"createdAtBlock"`
+	LastActiveBlock       uint64            `json:"lastActiveBlock"`
+	Flags                 TSAccountFlags    `json:"flags"`
+	PeriodBalances        map[string]string `json:"periodBalances,omitempty"`
 }
 
 type TSAccountFlags struct {
@@ -77,52 +77,78 @@ type TSAccountFlags struct {
 
 // TSValidator represents a validator from ValidatorStateTree.
 type TSValidator struct {
-	DID                    string  `json:"did"`
-	PublicKey              string  `json:"publicKey"`
-	Stake                  string  `json:"stake"`
-	Commission             float64 `json:"commission"`
-	TotalVerifications     uint64  `json:"totalVerifications"`
-	CorrectVerifications   uint64  `json:"correctVerifications"`
-	SlashCount             uint64  `json:"slashCount"`
-	Tier                   uint32  `json:"tier"`
+	DID                  string  `json:"did"`
+	PublicKey            string  `json:"publicKey"`
+	Stake                string  `json:"stake"`
+	Commission           float64 `json:"commission"`
+	TotalVerifications   uint64  `json:"totalVerifications"`
+	CorrectVerifications uint64  `json:"correctVerifications"`
+	SlashCount           uint64  `json:"slashCount"`
+	Tier                 uint32  `json:"tier"`
 }
 
 // TSFact represents a fact from KnowledgeStateTree.
 type TSFact struct {
-	ID                 string   `json:"id"`
-	Claim              string   `json:"claim"`
-	Domain             string   `json:"domain"`
-	Confidence         float64  `json:"confidence"`
-	Status             string   `json:"status"`
-	Submitter          string   `json:"submitter"`
-	References         []string `json:"references"`
-	VerifiedAt         uint64   `json:"verifiedAt"`
-	VerifierCount      uint32   `json:"verifierCount"`
-	LogicZone          string   `json:"logicZone"`
-	EpistemicCategory  string   `json:"epistemicCategory"`
+	ID                string   `json:"id"`
+	Claim             string   `json:"claim"`
+	Domain            string   `json:"domain"`
+	Confidence        float64  `json:"confidence"`
+	Status            string   `json:"status"`
+	Submitter         string   `json:"submitter"`
+	References        []string `json:"references"`
+	VerifiedAt        uint64   `json:"verifiedAt"`
+	VerifierCount     uint32   `json:"verifierCount"`
+	LogicZone         string   `json:"logicZone"`
+	EpistemicCategory string   `json:"epistemicCategory"`
 }
 
 // Stub types for remaining state trees.
-type TSClaim struct{ ID string `json:"id"` }
-type TSDispute struct{ ID string `json:"id"` }
-type TSVesting struct{ ID string `json:"id"` }
-type TSResearch struct{ ID string `json:"id"` }
-type TSBounty struct{ ID string `json:"id"` }
-type TSEvidence struct{ ID string `json:"id"` }
-type TSPaymentChannel struct{ ID string `json:"id"` }
-type TSProject struct{ ID string `json:"id"` }
-type TSService struct{ ID string `json:"id"` }
-type TSTask struct{ ID string `json:"id"` }
-type TSSeed struct{ ID string `json:"id"` }
-type TSContract struct{ Address string `json:"address"` }
-type TSSecondaryToken struct{ ID string `json:"id"` }
+type TSClaim struct {
+	ID string `json:"id"`
+}
+type TSDispute struct {
+	ID string `json:"id"`
+}
+type TSVesting struct {
+	ID string `json:"id"`
+}
+type TSResearch struct {
+	ID string `json:"id"`
+}
+type TSBounty struct {
+	ID string `json:"id"`
+}
+type TSEvidence struct {
+	ID string `json:"id"`
+}
+type TSPaymentChannel struct {
+	ID string `json:"id"`
+}
+type TSProject struct {
+	ID string `json:"id"`
+}
+type TSService struct {
+	ID string `json:"id"`
+}
+type TSTask struct {
+	ID string `json:"id"`
+}
+type TSSeed struct {
+	ID string `json:"id"`
+}
+type TSContract struct {
+	Address string `json:"address"`
+}
+type TSSecondaryToken struct {
+	ID string `json:"id"`
+}
 type TSGovernanceState struct{}
 
 // DIDMapping stores the bidirectional DID ↔ bech32 mapping.
 type DIDMapping struct {
-	DID     string `json:"did"`
-	Bech32  string `json:"bech32"`
-	PubKey  string `json:"pubKey"`
+	DID    string `json:"did"`
+	Bech32 string `json:"bech32"`
+	PubKey string `json:"pubKey"`
 }
 
 // MigrateState reads a TS state export and produces a Cosmos genesis JSON.

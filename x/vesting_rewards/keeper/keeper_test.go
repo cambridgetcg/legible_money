@@ -523,9 +523,10 @@ func TestMsgAccelerateVesting_ValidateBasic(t *testing.T) {
 
 type mockBankKeeper struct {
 	mintedCoins   sdk.Coins
-	sentToAccount map[string]sdk.Coins // recipientAddr -> coins
-	sentToModule  map[string]sdk.Coins // moduleName -> coins
-	balances      map[string]sdk.Coins // addr.String() -> coins (for GetAllBalances)
+	sentToAccount map[string]sdk.Coins   // recipientAddr -> coins
+	sentToModule  map[string]sdk.Coins   // moduleName -> coins
+	balances      map[string]sdk.Coins   // addr.String() -> coins (for GetAllBalances)
+	supply        map[string]sdkmath.Int // denom -> total supply (tracks mints - burns)
 	mintErr       error
 	sendAccErr    error
 	sendModErr    error
@@ -535,6 +536,7 @@ func newMockBankKeeper() *mockBankKeeper {
 	return &mockBankKeeper{
 		sentToAccount: make(map[string]sdk.Coins),
 		sentToModule:  make(map[string]sdk.Coins),
+		supply:        make(map[string]sdkmath.Int),
 	}
 }
 
@@ -543,7 +545,32 @@ func (m *mockBankKeeper) MintCoins(_ context.Context, _ string, amounts sdk.Coin
 		return m.mintErr
 	}
 	m.mintedCoins = m.mintedCoins.Add(amounts...)
+	for _, coin := range amounts {
+		cur, ok := m.supply[coin.Denom]
+		if !ok {
+			cur = sdkmath.ZeroInt()
+		}
+		m.supply[coin.Denom] = cur.Add(coin.Amount)
+	}
 	return nil
+}
+
+func (m *mockBankKeeper) BurnCoins(_ context.Context, _ string, amounts sdk.Coins) error {
+	for _, coin := range amounts {
+		cur, ok := m.supply[coin.Denom]
+		if !ok {
+			cur = sdkmath.ZeroInt()
+		}
+		m.supply[coin.Denom] = cur.Sub(coin.Amount)
+	}
+	return nil
+}
+
+func (m *mockBankKeeper) GetSupply(_ context.Context, denom string) sdk.Coin {
+	if amt, ok := m.supply[denom]; ok {
+		return sdk.NewCoin(denom, amt)
+	}
+	return sdk.NewCoin(denom, sdkmath.ZeroInt())
 }
 
 func (m *mockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, _ string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
@@ -970,9 +997,9 @@ func setupMintKeeper(t *testing.T, bk *mockBankKeeper, totalMinted string, block
 	gs.Params.InitialFundBalance = totalMinted // InitialFundBalance stores TotalMinted on export/import
 	gs.Params.BlockRewardAmount = "3000000"    // 3 LGM initial reward
 	gs.Params.BlocksPerEpoch = 240000
-	gs.Params.DecayFactorBps = 850000           // 0.85 per epoch
-	gs.Params.FloorReward = "100000"             // 0.1 LGM floor
-	gs.Params.FundHealthThresholdBps = 100000    // 10% (unused in pure PoT)
+	gs.Params.DecayFactorBps = 850000         // 0.85 per epoch
+	gs.Params.FloorReward = "100000"          // 0.1 LGM floor
+	gs.Params.FundHealthThresholdBps = 100000 // 10% (unused in pure PoT)
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 	db := dbm.NewMemDB()
@@ -990,6 +1017,15 @@ func setupMintKeeper(t *testing.T, bk *mockBankKeeper, totalMinted string, block
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: blockHeight}, false, log.NewNopLogger())
 
 	k.InitGenesis(ctx, gs)
+
+	// Prime mock bank supply to match totalMinted so MintWithCap's bank supply
+	// check is consistent with the genesis state.
+	if totalMinted != "" && totalMinted != "0" {
+		amt, ok := new(big.Int).SetString(totalMinted, 10)
+		if ok && amt.Sign() > 0 {
+			bk.supply["ulgm"] = sdkmath.NewIntFromBigInt(amt)
+		}
+	}
 
 	return k, ctx
 }
@@ -1143,6 +1179,53 @@ func TestMintWithCap_EnforcesSupplyLimit(t *testing.T) {
 	}
 }
 
+func TestMintWithCap_BurnRecycling(t *testing.T) {
+	bk := newMockBankKeeper()
+	// Start with supply at max - only 500 ulgm remaining
+	nearCap := "222222221999500"
+	k, ctx := setupMintKeeper(t, bk, nearCap, 0)
+
+	// Mint 500 ulgm — exhausts remaining supply
+	actual, err := k.MintWithCap(ctx, big.NewInt(500))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if actual.Int64() != 500 {
+		t.Errorf("expected 500 minted, got %s", actual.String())
+	}
+
+	// Supply is now at max — further mint should return 0
+	actual2, err := k.MintWithCap(ctx, big.NewInt(1000))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if actual2.Sign() != 0 {
+		t.Errorf("expected 0 mint when supply exhausted, got %s", actual2.String())
+	}
+
+	// Simulate burning 200 ulgm (e.g., from slashing in another module).
+	// This reduces bank supply, freeing headroom for future block rewards.
+	bk.BurnCoins(ctx, "knowledge", sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(200))))
+
+	// Now 200 ulgm of headroom is available again
+	actual3, err := k.MintWithCap(ctx, big.NewInt(1000))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if actual3.Int64() != 200 {
+		t.Errorf("expected 200 minted after burn freed headroom, got %s", actual3.String())
+	}
+
+	// Supply is back at max — verify exhausted again
+	actual4, err := k.MintWithCap(ctx, big.NewInt(1))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if actual4.Sign() != 0 {
+		t.Errorf("expected 0 after re-exhaustion, got %s", actual4.String())
+	}
+}
+
 func TestApplyDecay(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1247,9 +1330,16 @@ func TestDistributeBlockReward_VerificationPoolRouting(t *testing.T) {
 	if researchCoins.AmountOf("ulgm").Int64() != 210000 {
 		t.Errorf("expected 210000 to research_fund, got %d", researchCoins.AmountOf("ulgm").Int64())
 	}
+	// Verification pool (1395000) is now split:
+	// - 30% compute pool: 1395000 * 300000 / 1000000 = 418500
+	// - 70% knowledge module: 1395000 - 418500 = 976500
 	knowledgeCoins := bk.sentToModule["knowledge"]
-	if knowledgeCoins.AmountOf("ulgm").Int64() != 1395000 {
-		t.Errorf("expected 1395000 to knowledge module, got %d", knowledgeCoins.AmountOf("ulgm").Int64())
+	if knowledgeCoins.AmountOf("ulgm").Int64() != 976500 {
+		t.Errorf("expected 976500 to knowledge module (70%% of verification pool), got %d", knowledgeCoins.AmountOf("ulgm").Int64())
+	}
+	computePoolCoins := bk.sentToModule["compute_pool"]
+	if computePoolCoins.AmountOf("ulgm").Int64() != 418500 {
+		t.Errorf("expected 418500 to compute_pool (30%% of verification pool), got %d", computePoolCoins.AmountOf("ulgm").Int64())
 	}
 	producerCoins := bk.sentToAccount[producer]
 	if producerCoins.AmountOf("ulgm").Int64() != 1395000 {
@@ -1473,7 +1563,7 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 	// The transfer amount (1,000,000 ulgm) goes through x/bank MsgSend.
 	// The gas fee (~525 ulgm at 0.025 gas price * 21000 gas) goes to fee_collector.
 	transferAmount := int64(1000000) // 1 LGM in ulgm
-	gasFee := int64(525)            // 0.025 * 21000 gas
+	gasFee := int64(525)             // 0.025 * 21000 gas
 
 	// STEP 1: Only the gas fee enters fee_collector (NOT the transfer amount)
 	feeCollectorModuleAddr := authtypes.NewModuleAddress(authtypes.FeeCollectorName)

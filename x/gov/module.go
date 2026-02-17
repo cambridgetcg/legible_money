@@ -267,4 +267,3 @@ func parseBigIntString(s string) uint64 {
 	fmt.Sscanf(s, "%d", &n)
 	return n
 }
-

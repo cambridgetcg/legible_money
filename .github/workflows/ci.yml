@@ -49,10 +49,9 @@ jobs:
           cache: true
       - run: go test ./x/... -count=1 -v
       - run: go test ./app/... -count=1 -v
-        continue-on-error: true
 
-  vet:
-    name: "Go: Vet"
+  lint:
+    name: "Go: Lint"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +59,10 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
-      - run: go vet ./...
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62
+          args: --timeout=5m
 
   # === E2E: Cosmos DevNet (manual trigger only) ===
 
@@ -160,7 +162,7 @@ jobs:
   governance-check:
     name: "Governance: Proposal Validation"
     if: contains(toJSON(github.event.pull_request.labels), 'proposal')
-    needs: [build, test, vet]
+    needs: [build, test, lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -189,7 +191,7 @@ jobs:
   collect-metrics:
     name: "Collect CI Metrics"
     if: always()
-    needs: [build, test, vet]
+    needs: [build, test, lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -206,9 +208,9 @@ jobs:
             "jobs": {
               "build": "${{ needs.build.result }}",
               "test": "${{ needs.test.result }}",
-              "vet": "${{ needs.vet.result }}"
+              "lint": "${{ needs.lint.result }}"
             },
-            "all_passed": ${{ needs.build.result == 'success' && needs.test.result == 'success' && needs.vet.result == 'success' }}
+            "all_passed": ${{ needs.build.result == 'success' && needs.test.result == 'success' && needs.lint.result == 'success' }}
           }
           EOF
           cat ci-metrics.json

@@ -9,8 +9,8 @@ func DefaultParams() Params {
 		MaxKeysPerHome:       20,
 		MaxAlertsPerHome:     100,
 		MaxSessionsPerHome:   5,
-		DeadmanMinThreshold:  34272,     // 1 day in blocks
-		AlertRetentionBlocks: 342720,    // 10 days in blocks
+		DeadmanMinThreshold:  34272,  // 1 day in blocks
+		AlertRetentionBlocks: 342720, // 10 days in blocks
 	}
 }
 

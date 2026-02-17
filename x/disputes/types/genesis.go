@@ -19,29 +19,29 @@ func DefaultTierConfigs() []*TierConfig {
 		{
 			Tier:              uint32(TierBasic),
 			ArbiterCount:      3,
-			MinBond:           "111000000",  // 111 LGM in ulgm
-			EvidencePeriod:    34272,         // ~1 day (BLOCKS_PER_DAY)
-			VotingPeriod:      68544,         // ~2 days
-			QuorumThreshold:   660000,        // 66%
-			MajorityThreshold: 770000,        // 77%
+			MinBond:           "111000000", // 111 LGM in ulgm
+			EvidencePeriod:    34272,       // ~1 day (BLOCKS_PER_DAY)
+			VotingPeriod:      68544,       // ~2 days
+			QuorumThreshold:   660000,      // 66%
+			MajorityThreshold: 770000,      // 77%
 		},
 		{
 			Tier:              uint32(TierEscalated),
 			ArbiterCount:      7,
-			MinBond:           "555000000",  // 555 LGM in ulgm
-			EvidencePeriod:    68544,         // ~2 days
-			VotingPeriod:      137088,        // ~4 days
-			QuorumThreshold:   660000,        // 66%
-			MajorityThreshold: 770000,        // 77%
+			MinBond:           "555000000", // 555 LGM in ulgm
+			EvidencePeriod:    68544,       // ~2 days
+			VotingPeriod:      137088,      // ~4 days
+			QuorumThreshold:   660000,      // 66%
+			MajorityThreshold: 770000,      // 77%
 		},
 		{
 			Tier:              uint32(TierFinal),
 			ArbiterCount:      15,
 			MinBond:           "1111000000", // 1111 LGM in ulgm
-			EvidencePeriod:    102816,        // ~3 days
-			VotingPeriod:      239904,        // ~7 days
-			QuorumThreshold:   660000,        // 66%
-			MajorityThreshold: 770000,        // 77%
+			EvidencePeriod:    102816,       // ~3 days
+			VotingPeriod:      239904,       // ~7 days
+			QuorumThreshold:   660000,       // 66%
+			MajorityThreshold: 770000,       // 77%
 		},
 	}
 }

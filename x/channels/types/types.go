@@ -103,9 +103,11 @@ type MsgDepositChannel struct {
 	Amount    string `json:"amount"` // ulgm
 }
 
-func (m *MsgDepositChannel) Reset()         { *m = MsgDepositChannel{} }
-func (m *MsgDepositChannel) String() string { return fmt.Sprintf("MsgDepositChannel{%s, %s}", m.ChannelId, m.Amount) }
-func (m *MsgDepositChannel) ProtoMessage()  {}
+func (m *MsgDepositChannel) Reset() { *m = MsgDepositChannel{} }
+func (m *MsgDepositChannel) String() string {
+	return fmt.Sprintf("MsgDepositChannel{%s, %s}", m.ChannelId, m.Amount)
+}
+func (m *MsgDepositChannel) ProtoMessage() {}
 
 func (m *MsgDepositChannel) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Depositor); err != nil {
@@ -133,9 +135,11 @@ type MsgUpdateState struct {
 	Update    ChannelStateUpdate `json:"update"`
 }
 
-func (m *MsgUpdateState) Reset()         { *m = MsgUpdateState{} }
-func (m *MsgUpdateState) String() string { return fmt.Sprintf("MsgUpdateState{%s, nonce:%d}", m.ChannelId, m.Update.Nonce) }
-func (m *MsgUpdateState) ProtoMessage()  {}
+func (m *MsgUpdateState) Reset() { *m = MsgUpdateState{} }
+func (m *MsgUpdateState) String() string {
+	return fmt.Sprintf("MsgUpdateState{%s, nonce:%d}", m.ChannelId, m.Update.Nonce)
+}
+func (m *MsgUpdateState) ProtoMessage() {}
 
 func (m *MsgUpdateState) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -177,6 +181,8 @@ type MsgClaimExpiredResponse struct {
 	RefundedAmount string `json:"refunded_amount"` // ulgm
 }
 
-func (m *MsgClaimExpiredResponse) Reset()         { *m = MsgClaimExpiredResponse{} }
-func (m *MsgClaimExpiredResponse) String() string { return fmt.Sprintf("MsgClaimExpiredResponse{%s}", m.RefundedAmount) }
-func (m *MsgClaimExpiredResponse) ProtoMessage()  {}
+func (m *MsgClaimExpiredResponse) Reset() { *m = MsgClaimExpiredResponse{} }
+func (m *MsgClaimExpiredResponse) String() string {
+	return fmt.Sprintf("MsgClaimExpiredResponse{%s}", m.RefundedAmount)
+}
+func (m *MsgClaimExpiredResponse) ProtoMessage() {}

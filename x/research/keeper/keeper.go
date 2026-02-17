@@ -112,4 +112,3 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		TreasuryBalance: &types.TreasuryBalance{Balance: k.GetTreasuryBalance(ctx)},
 	}
 }
-

@@ -16,7 +16,7 @@ import (
 
 // Compile-time interface assertions.
 var (
-	_ ibcporttypes.IBCModule  = IBCMiddleware{}
+	_ ibcporttypes.IBCModule   = IBCMiddleware{}
 	_ ibcporttypes.ICS4Wrapper = ICS4Wrapper{}
 )
 
@@ -317,4 +317,3 @@ func (w ICS4Wrapper) GetAppVersion(
 ) (string, bool) {
 	return w.channel.GetAppVersion(ctx, portID, channelID)
 }
-

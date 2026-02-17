@@ -40,6 +40,11 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 		return nil, types.ErrDuplicateDID
 	}
 
+	// Validate DID derives from the public key (prevents DID spoofing — OCP-1)
+	if err := types.ValidateDIDDerivation(msg.Did, msg.PublicKey); err != nil {
+		return nil, fmt.Errorf("DID derivation mismatch: %w", err)
+	}
+
 	currentHeight := uint64(ctx.BlockHeight())
 
 	// Create Legible account with type-specific defaults

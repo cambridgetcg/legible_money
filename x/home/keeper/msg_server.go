@@ -10,6 +10,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -156,14 +157,14 @@ func (m msgServer) UpdateMemoryCID(goCtx context.Context, msg *types.MsgUpdateMe
 		return nil, types.ErrNotHomeOwner
 	}
 
-	home.MemoryCid = msg.CID
+	home.MemoryCid = msg.Cid
 	home.LastActiveBlock = uint64(ctx.BlockHeight())
 	m.Keeper.SetHome(ctx, home)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"update_memory_cid",
 		sdk.NewAttribute("home_id", msg.HomeId),
-		sdk.NewAttribute("cid", msg.CID),
+		sdk.NewAttribute("cid", msg.Cid),
 	))
 
 	return &types.MsgUpdateMemoryCIDResponse{}, nil
@@ -394,12 +395,10 @@ func (m msgServer) ConfigureGuardian(goCtx context.Context, msg *types.MsgConfig
 	if home.Guardian == nil {
 		home.Guardian = &types.HomeGuardian{}
 	}
-	if msg.DefenseStrategy != nil {
-		home.Guardian.DefenseStrategy = *msg.DefenseStrategy
+	if msg.DefenseStrategy != "" {
+		home.Guardian.DefenseStrategy = msg.DefenseStrategy
 	}
-	if msg.AutoDefend != nil {
-		home.Guardian.AutoDefend = *msg.AutoDefend
-	}
+	home.Guardian.AutoDefend = msg.AutoDefend
 	if msg.Deadman != nil {
 		// Validate deadman threshold
 		if msg.Deadman.Enabled && msg.Deadman.InactivityThreshold < params.DeadmanMinThreshold {
@@ -408,11 +407,11 @@ func (m msgServer) ConfigureGuardian(goCtx context.Context, msg *types.MsgConfig
 		}
 		home.Guardian.Deadman = msg.Deadman
 	}
-	if msg.RecoveryDIDs != nil {
-		home.Guardian.RecoveryDids = msg.RecoveryDIDs
+	if len(msg.RecoveryDids) > 0 {
+		home.Guardian.RecoveryDids = msg.RecoveryDids
 	}
-	if msg.RecoveryThreshold != nil {
-		home.Guardian.RecoveryThreshold = *msg.RecoveryThreshold
+	if msg.RecoveryThreshold > 0 {
+		home.Guardian.RecoveryThreshold = msg.RecoveryThreshold
 	}
 
 	home.LastActiveBlock = uint64(ctx.BlockHeight())

@@ -163,7 +163,15 @@ func (q queryServer) CounterFact(goCtx context.Context, req *types.QueryCounterF
 		return nil, fmt.Errorf("%w: %s", types.ErrCounterFactNotFound, req.CounterFactId)
 	}
 
-	return &types.QueryCounterFactResponse{CounterFact: &cf}, nil
+	return &types.QueryCounterFactResponse{
+		Id:           cf.Id,
+		TargetFactId: cf.TargetFactId,
+		NegationType: cf.NegationType,
+		Evidence:     cf.Justification,
+		Submitter:    cf.Submitter,
+		Status:       cf.Status,
+		Confidence:   cf.Confidence,
+	}, nil
 }
 
 // CounterFactsByFact returns all counter-facts targeting a specific fact.

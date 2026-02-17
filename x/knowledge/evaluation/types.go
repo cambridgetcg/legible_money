@@ -17,11 +17,11 @@ type EvaluationResult struct {
 
 // StageResult records the output of one evaluation stage for auditability.
 type StageResult struct {
-	Name           string `json:"name"`
-	Adjustment     int64  `json:"adjustment"`      // signed delta to confidence
-	Ceiling        uint64 `json:"ceiling"`          // ceiling applied (0 = none)
-	ForceVerdict   string `json:"force_verdict"`    // "reject", "abstain", or "" (no override)
-	Justification  string `json:"justification"`
+	Name          string `json:"name"`
+	Adjustment    int64  `json:"adjustment"`    // signed delta to confidence
+	Ceiling       uint64 `json:"ceiling"`       // ceiling applied (0 = none)
+	ForceVerdict  string `json:"force_verdict"` // "reject", "abstain", or "" (no override)
+	Justification string `json:"justification"`
 }
 
 // EvaluationContext provides access to on-chain state for claim evaluation.
@@ -41,6 +41,10 @@ type EvaluationContext struct {
 	// Negative knowledge lookups (Stage 8)
 	GetCounterFactsByFact      func(ctx sdk.Context, factId string) []types.CounterFact
 	GetBidirectionalConfidence func(ctx sdk.Context, factId string) types.BidirectionalConfidence
+
+	// Novelty assessment lookups (Stage 5.5)
+	GetFactCountByDomain func(ctx sdk.Context, domain string) uint64
+	GetDomainCount       func(ctx sdk.Context) uint64
 }
 
 // OntologyToKnowledgeScale converts the ontology module's basis point scale
@@ -55,9 +59,9 @@ const (
 
 // Categories that require evidence or references to be credible.
 var evidenceRequiredCategories = map[string]bool{
-	"empirical":   true,
-	"historical":  true,
-	"predictive":  true,
-	"social":      true,
-	"replicated":  true,
+	"empirical":  true,
+	"historical": true,
+	"predictive": true,
+	"social":     true,
+	"replicated": true,
 }

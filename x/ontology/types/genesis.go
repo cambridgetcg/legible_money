@@ -15,12 +15,12 @@ func DefaultGenesis() *GenesisState {
 // DefaultParams returns default module parameters.
 func DefaultParams() Params {
 	return Params{
-		MinProposalStake:     "1000000",  // 1 LGM in ulgm
-		ProposalVotingPeriod: 34272,      // ~1 day (BLOCKS_PER_DAY at 2521ms block time)
-		MinEndorsements:      3,          // minimum 3 votes for approval
-		CrossStratumDiscount: 50000,      // 5% discount for cross-stratum references
-		MaxDomainsPerStratum: 100,        // maximum 100 domains per stratum
-		AllowNewStrata:       false,      // new strata require governance
+		MinProposalStake:     "1000000", // 1 LGM in ulgm
+		ProposalVotingPeriod: 34272,     // ~1 day (BLOCKS_PER_DAY at 2521ms block time)
+		MinEndorsements:      3,         // minimum 3 votes for approval
+		CrossStratumDiscount: 50000,     // 5% discount for cross-stratum references
+		MaxDomainsPerStratum: 100,       // maximum 100 domains per stratum
+		AllowNewStrata:       false,     // new strata require governance
 	}
 }
 

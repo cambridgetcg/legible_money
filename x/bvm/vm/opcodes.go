@@ -186,22 +186,22 @@ const (
 
 // Extended Relationships (0xC0-0xC3)
 const (
-	LIST_TRUSTED       byte = 0xC0
-	BLOCK_AGENT        byte = 0xC1
-	UNBLOCK_AGENT      byte = 0xC2
-	REVOKE_DELEGATION  byte = 0xC3
+	LIST_TRUSTED      byte = 0xC0
+	BLOCK_AGENT       byte = 0xC1
+	UNBLOCK_AGENT     byte = 0xC2
+	REVOKE_DELEGATION byte = 0xC3
 )
 
 // Treasury (0xD0-0xD7)
 const (
-	CLAIM_VESTING    byte = 0xD0
-	QUERY_VESTING    byte = 0xD1
-	STAKE            byte = 0xD2
-	UNSTAKE          byte = 0xD3
-	QUERY_EXPIRING   byte = 0xD4
-	EXTEND_EXPIRING  byte = 0xD5
-	SET_SPEND_LIMIT  byte = 0xD6
-	QUERY_TREASURY   byte = 0xD7
+	CLAIM_VESTING   byte = 0xD0
+	QUERY_VESTING   byte = 0xD1
+	STAKE           byte = 0xD2
+	UNSTAKE         byte = 0xD3
+	QUERY_EXPIRING  byte = 0xD4
+	EXTEND_EXPIRING byte = 0xD5
+	SET_SPEND_LIMIT byte = 0xD6
+	QUERY_TREASURY  byte = 0xD7
 )
 
 // Guardian (0xD8-0xDB)
@@ -276,12 +276,15 @@ const (
 
 // OpcodeInfo holds metadata for a single opcode.
 type OpcodeInfo struct {
-	Code            byte
-	Mnemonic        string
-	StackInputs     int
-	StackOutputs    int
-	GasCost         uint64 // Base gas cost (0 = dynamic)
-	IsStateModifier bool
+	Code              byte
+	Mnemonic          string
+	StackInputs       int
+	StackOutputs      int
+	GasCost           uint64 // Base gas cost (0 = dynamic)
+	IsStateModifier   bool
+	MinVersion        uint32 // Minimum BVM version required (0 = v1, available from genesis)
+	ActivationBlock   uint64 // Block height at which opcode becomes available (0 = always active)
+	DeprecatedAtBlock uint64 // Block height at which opcode becomes a no-op (0 = not deprecated)
 }
 
 // OpcodeTable provides O(1) lookup by opcode byte.
@@ -455,7 +458,7 @@ func init() {
 
 	// System
 	reg(CREATE, "CREATE", 3, 1, 32000, true)
-	reg(CALL, "CALL", 7, 1, 0, false)      // Dynamic gas
+	reg(CALL, "CALL", 7, 1, 0, false) // Dynamic gas
 	reg(CALLCODE, "CALLCODE", 7, 1, 0, false)
 	reg(RETURN, "RETURN", 2, 0, 0, false)
 	reg(DELEGATECALL, "DELEGATECALL", 6, 1, 0, false)
@@ -509,6 +512,25 @@ func GetMnemonic(op byte) string {
 		return "UNDEFINED"
 	}
 	return info.Mnemonic
+}
+
+// DeprecateOpcode marks an opcode as deprecated starting at the given block height.
+// After that block, the opcode becomes a no-op (pops inputs, pushes zeros).
+func DeprecateOpcode(code byte, atBlock uint64) {
+	if OpcodeTable[code] != nil {
+		OpcodeTable[code].DeprecatedAtBlock = atBlock
+	}
+}
+
+// OpcodeByMnemonic returns the opcode byte for a given mnemonic string.
+// Used by the gas schedule to map human-readable names to opcode bytes.
+func OpcodeByMnemonic(mnemonic string) (byte, bool) {
+	for i := 0; i < 256; i++ {
+		if OpcodeTable[i] != nil && OpcodeTable[i].Mnemonic == mnemonic {
+			return byte(i), true
+		}
+	}
+	return 0, false
 }
 
 func itoa(n int) string {

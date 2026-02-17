@@ -47,24 +47,24 @@ const (
 type AuditAction string
 
 const (
-	AuditHaltProposed      AuditAction = "halt_proposed"
-	AuditHaltPrevote       AuditAction = "halt_prevote"
-	AuditHaltPrecommit     AuditAction = "halt_precommit"
-	AuditHaltFinalized     AuditAction = "halt_finalized"
-	AuditHaltFailed        AuditAction = "halt_failed"
-	AuditHaltExecuted      AuditAction = "halt_executed"
-	AuditRevertProposed    AuditAction = "revert_proposed"
-	AuditRevertPrevote     AuditAction = "revert_prevote"
-	AuditRevertPrecommit   AuditAction = "revert_precommit"
-	AuditRevertFinalized   AuditAction = "revert_finalized"
-	AuditRevertFailed      AuditAction = "revert_failed"
-	AuditRevertExecuted    AuditAction = "revert_executed"
-	AuditResumeProposed    AuditAction = "resume_proposed"
-	AuditResumePrevote     AuditAction = "resume_prevote"
-	AuditResumePrecommit   AuditAction = "resume_precommit"
-	AuditResumeFinalized   AuditAction = "resume_finalized"
-	AuditResumeFailed      AuditAction = "resume_failed"
-	AuditResumeExecuted    AuditAction = "resume_executed"
+	AuditHaltProposed    AuditAction = "halt_proposed"
+	AuditHaltPrevote     AuditAction = "halt_prevote"
+	AuditHaltPrecommit   AuditAction = "halt_precommit"
+	AuditHaltFinalized   AuditAction = "halt_finalized"
+	AuditHaltFailed      AuditAction = "halt_failed"
+	AuditHaltExecuted    AuditAction = "halt_executed"
+	AuditRevertProposed  AuditAction = "revert_proposed"
+	AuditRevertPrevote   AuditAction = "revert_prevote"
+	AuditRevertPrecommit AuditAction = "revert_precommit"
+	AuditRevertFinalized AuditAction = "revert_finalized"
+	AuditRevertFailed    AuditAction = "revert_failed"
+	AuditRevertExecuted  AuditAction = "revert_executed"
+	AuditResumeProposed  AuditAction = "resume_proposed"
+	AuditResumePrevote   AuditAction = "resume_prevote"
+	AuditResumePrecommit AuditAction = "resume_precommit"
+	AuditResumeFinalized AuditAction = "resume_finalized"
+	AuditResumeFailed    AuditAction = "resume_failed"
+	AuditResumeExecuted  AuditAction = "resume_executed"
 )
 
 // --- EmergencyCeremony helpers ---
@@ -247,7 +247,7 @@ type MsgUpdateParams struct {
 	Params    Params `json:"params"`
 }
 
-func (msg *MsgUpdateParams) Reset()        {}
+func (msg *MsgUpdateParams) Reset()         {}
 func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams" }
 func (msg *MsgUpdateParams) ProtoMessage()  {}
 
@@ -269,7 +269,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response for MsgUpdateParams.
 type MsgUpdateParamsResponse struct{}
 
-func (msg *MsgUpdateParamsResponse) Reset()        {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
 func (msg *MsgUpdateParamsResponse) String() string { return "" }
 func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
@@ -288,9 +288,9 @@ type QueryServer interface {
 
 type QueryStatusRequest struct{}
 type QueryStatusResponse struct {
-	Status                EmergencyStatus `json:"status"`
-	IsHalted              bool            `json:"is_halted"`
-	ActiveHaltCeremonyId  string          `json:"active_halt_ceremony_id"`
+	Status               EmergencyStatus `json:"status"`
+	IsHalted             bool            `json:"is_halted"`
+	ActiveHaltCeremonyId string          `json:"active_halt_ceremony_id"`
 }
 
 type QueryActiveCeremonyRequest struct{}

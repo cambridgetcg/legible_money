@@ -240,7 +240,15 @@ func (m msgServer) ResumeProject(goCtx context.Context, msg *types.MsgResumeProj
 	return &types.MsgResumeProjectResponse{}, nil
 }
 
-// AbandonProject moves a project to withered phase.
+// AbandonProject moves a project to withered phase with timelock protection.
+//
+// SEC-1 Remediation: Abandonment is a destructive, irreversible action that affects
+// all contributors. It now requires either:
+//   - Contributor majority consent (>50% of non-founder contributors), OR
+//   - A timelock period (~1 day) after the founder proposes abandonment
+//
+// First call: Creates a pending abandon proposal (emits event, starts timelock).
+// Second call (after timelock or with consent): Executes the abandonment.
 // Proto field: Authority (was Sender)
 func (m msgServer) AbandonProject(goCtx context.Context, msg *types.MsgAbandonProject) (*types.MsgAbandonProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
@@ -249,21 +257,76 @@ func (m msgServer) AbandonProject(goCtx context.Context, msg *types.MsgAbandonPr
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	if project.Founder != msg.Authority {
-		return nil, types.ErrNotFounder
+	if !IsFounderOrContributor(project, msg.Authority) {
+		return nil, types.ErrNotContributor
 	}
 	if !IsValidPhaseTransition(types.ProjectPhase(project.Phase), types.PhaseWithered) {
 		return nil, types.ErrInvalidPhaseTransition
 	}
 
+	currentBlock := uint64(ctx.BlockHeight())
+
+	// Check for existing abandon proposal
+	pa, hasProposal := m.Keeper.GetPendingAbandon(ctx, msg.ProjectId)
+
+	if !hasProposal {
+		// First call: create pending abandon proposal (start timelock)
+		pa = types.PendingAbandon{
+			ProjectId:       msg.ProjectId,
+			ProposedBy:      msg.Authority,
+			ProposedAtBlock: currentBlock,
+			Consented:       []string{msg.Authority}, // proposer auto-consents
+		}
+		m.Keeper.SetPendingAbandon(ctx, pa)
+
+		ctx.EventManager().EmitEvent(sdk.NewEvent(
+			"tree_propose_abandon",
+			sdk.NewAttribute("project_id", msg.ProjectId),
+			sdk.NewAttribute("proposed_by", msg.Authority),
+			sdk.NewAttribute("expires_at_block", fmt.Sprintf("%d", currentBlock+types.AbandonTimelockBlocks)),
+		))
+
+		return &types.MsgAbandonProjectResponse{}, nil
+	}
+
+	// Existing proposal: check if caller is adding consent
+	if msg.Authority != pa.ProposedBy {
+		// Non-proposer is consenting
+		alreadyConsented := false
+		for _, addr := range pa.Consented {
+			if addr == msg.Authority {
+				alreadyConsented = true
+				break
+			}
+		}
+		if !alreadyConsented {
+			pa.Consented = append(pa.Consented, msg.Authority)
+			m.Keeper.SetPendingAbandon(ctx, pa)
+		}
+	}
+
+	// Check if we can execute: either timelock expired OR contributor majority
+	timelockExpired := currentBlock >= pa.ProposedAtBlock+types.AbandonTimelockBlocks
+	hasMajority := ContributorMajorityConsented(project, pa)
+
+	if !timelockExpired && !hasMajority {
+		return nil, types.ErrAbandonTimelockActive.Wrapf(
+			"timelock expires at block %d, or get contributor majority consent",
+			pa.ProposedAtBlock+types.AbandonTimelockBlocks)
+	}
+
+	// Execute abandonment
 	project.PreviousPhase = project.Phase
 	project.Phase = string(types.PhaseWithered)
-	project.PhaseChangedAtBlock = uint64(ctx.BlockHeight())
+	project.PhaseChangedAtBlock = currentBlock
 	m.Keeper.SetProject(ctx, project)
+	m.Keeper.DeletePendingAbandon(ctx, msg.ProjectId)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_abandon_project",
 		sdk.NewAttribute("project_id", msg.ProjectId),
+		sdk.NewAttribute("executed_by", msg.Authority),
+		sdk.NewAttribute("consent_count", fmt.Sprintf("%d", len(pa.Consented))),
 	))
 
 	return &types.MsgAbandonProjectResponse{}, nil
@@ -353,6 +416,36 @@ func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types
 	}
 
 	currentBlock := uint64(ctx.BlockHeight())
+
+	// SEC-2 Remediation: Validate bounty against remaining project budget
+	// and escrow the bounty funds into the tree module account.
+	bountyStr := msg.Bounty
+	if bountyStr != "" && bountyStr != "0" {
+		bountyAmt, ok := math.NewIntFromString(bountyStr)
+		if ok && bountyAmt.IsPositive() {
+			// Validate bounty fits within remaining budget
+			budget, _ := strconv.ParseInt(project.Budget, 10, 64)
+			spent, _ := strconv.ParseInt(project.Spent, 10, 64)
+			if budget > 0 && bountyAmt.Int64()+spent > budget {
+				return nil, types.ErrBountyExceedsBudget.Wrapf(
+					"bounty %s + spent %d exceeds budget %d", bountyStr, spent, budget)
+			}
+
+			// Escrow: task creator deposits bounty into tree module account
+			creatorAddr, err := sdk.AccAddressFromBech32(msg.Creator)
+			if err != nil {
+				return nil, fmt.Errorf("invalid creator address: %w", err)
+			}
+			coins := sdk.NewCoins(sdk.NewCoin("ulgm", bountyAmt))
+			if err := m.Keeper.bankKeeper.SendCoinsFromAccountToModule(ctx, creatorAddr, types.ModuleName, coins); err != nil {
+				return nil, types.ErrInsufficientPayment.Wrap("failed to escrow bounty: " + err.Error())
+			}
+
+			// Track spent amount on project
+			project.Spent = strconv.FormatInt(spent+bountyAmt.Int64(), 10)
+		}
+	}
+
 	counter := m.Keeper.GetNextTaskId(ctx)
 	taskId := fmt.Sprintf("task-%d-%d", currentBlock, counter)
 
@@ -379,6 +472,7 @@ func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types
 		"tree_add_task",
 		sdk.NewAttribute("task_id", taskId),
 		sdk.NewAttribute("project_id", msg.ProjectId),
+		sdk.NewAttribute("bounty_escrowed", bountyStr),
 	))
 
 	return &types.MsgAddTaskResponse{TaskId: taskId}, nil
@@ -578,7 +672,46 @@ func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgReject
 	task.RejectionCount++
 
 	if task.RejectionCount >= params.MaxRejections {
+		// T-12 Remediation: When a task enters disputed status, apply economic
+		// consequences — slash a portion of the escrowed bounty and refund the rest.
+		// This prevents indefinite limbo and creates real stakes for dispute resolution.
 		task.Status = string(types.TaskDisputed)
+
+		if task.BountyAmount != "" && task.BountyAmount != "0" {
+			bounty, ok := math.NewIntFromString(task.BountyAmount)
+			if ok && bounty.IsPositive() {
+				slashAmount := bounty.Int64() * types.DisputeSlashBps / types.BpsDenominator
+				refundAmount := bounty.Int64() - slashAmount
+
+				// Refund unslashed portion to project founder
+				if refundAmount > 0 {
+					founderAddr, addrErr := sdk.AccAddressFromBech32(project.Founder)
+					if addrErr == nil {
+						refundCoins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(refundAmount)))
+						if err := m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, founderAddr, refundCoins); err != nil {
+							return nil, types.ErrDisputeSlashFailed.Wrap("refund failed: " + err.Error())
+						}
+					}
+				}
+
+				// Slashed portion stays in module account (effectively burned from project's perspective)
+				// Update project spent to reflect the refund
+				spent, _ := strconv.ParseInt(project.Spent, 10, 64)
+				spent -= refundAmount
+				if spent < 0 {
+					spent = 0
+				}
+				project.Spent = strconv.FormatInt(spent, 10)
+				m.Keeper.SetProject(ctx, project)
+
+				ctx.EventManager().EmitEvent(sdk.NewEvent(
+					"tree_dispute_slash",
+					sdk.NewAttribute("task_id", msg.TaskId),
+					sdk.NewAttribute("slash_amount", strconv.FormatInt(slashAmount, 10)),
+					sdk.NewAttribute("refund_amount", strconv.FormatInt(refundAmount, 10)),
+				))
+			}
+		}
 	} else {
 		// Send back to in_progress for rework
 		task.Status = string(types.TaskInProgress)
@@ -589,6 +722,8 @@ func (m msgServer) RejectDeliverable(goCtx context.Context, msg *types.MsgReject
 		"tree_reject_deliverable",
 		sdk.NewAttribute("task_id", msg.TaskId),
 		sdk.NewAttribute("reason", msg.Reason),
+		sdk.NewAttribute("rejection_count", fmt.Sprintf("%d", task.RejectionCount)),
+		sdk.NewAttribute("disputed", fmt.Sprintf("%v", task.RejectionCount >= params.MaxRejections)),
 	))
 
 	return &types.MsgRejectDeliverableResponse{}, nil
@@ -951,6 +1086,9 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 				project.Contributors,
 			)
 
+			// SEC-3 Remediation: All transfers return errors atomically.
+			// In Cosmos SDK, returning an error reverts the entire tx, so partial
+			// distribution is impossible — either all transfers succeed or none do.
 			taxRecipients := []struct {
 				addr   string
 				amount int64
@@ -965,9 +1103,12 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 			for _, r := range taxRecipients {
 				if r.amount > 0 && r.addr != "" {
 					recipientAddr, addrErr := sdk.AccAddressFromBech32(r.addr)
-					if addrErr == nil {
-						coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(r.amount)))
-						_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, recipientAddr, coins)
+					if addrErr != nil {
+						return nil, fmt.Errorf("invalid tax recipient address %s: %w", r.addr, addrErr)
+					}
+					coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(r.amount)))
+					if err := m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, recipientAddr, coins); err != nil {
+						return nil, fmt.Errorf("revenue distribution tax transfer failed: %w", err)
 					}
 				}
 			}
@@ -975,26 +1116,35 @@ func (m msgServer) CallService(goCtx context.Context, msg *types.MsgCallService)
 			for _, share := range dist.ContributorShares {
 				if share.Amount > 0 {
 					addr, addrErr := sdk.AccAddressFromBech32(share.Address)
-					if addrErr == nil {
-						coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(share.Amount)))
-						_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+					if addrErr != nil {
+						return nil, fmt.Errorf("invalid contributor address %s: %w", share.Address, addrErr)
+					}
+					coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(share.Amount)))
+					if err := m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins); err != nil {
+						return nil, fmt.Errorf("revenue distribution contributor transfer failed: %w", err)
 					}
 				}
 			}
 
 			if dist.ResearchFund > 0 && params.ResearchFundAddr != "" {
 				addr, addrErr := sdk.AccAddressFromBech32(params.ResearchFundAddr)
-				if addrErr == nil {
-					coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(dist.ResearchFund)))
-					_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+				if addrErr != nil {
+					return nil, fmt.Errorf("invalid research fund address %s: %w", params.ResearchFundAddr, addrErr)
+				}
+				coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(dist.ResearchFund)))
+				if err := m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins); err != nil {
+					return nil, fmt.Errorf("revenue distribution research fund transfer failed: %w", err)
 				}
 			}
 
 			if dist.ProtocolTreasury > 0 && params.ProtocolTreasuryAddr != "" {
 				addr, addrErr := sdk.AccAddressFromBech32(params.ProtocolTreasuryAddr)
-				if addrErr == nil {
-					coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(dist.ProtocolTreasury)))
-					_ = m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins)
+				if addrErr != nil {
+					return nil, fmt.Errorf("invalid treasury address %s: %w", params.ProtocolTreasuryAddr, addrErr)
+				}
+				coins := sdk.NewCoins(sdk.NewCoin("ulgm", math.NewInt(dist.ProtocolTreasury)))
+				if err := m.Keeper.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, addr, coins); err != nil {
+					return nil, fmt.Errorf("revenue distribution treasury transfer failed: %w", err)
 				}
 			}
 

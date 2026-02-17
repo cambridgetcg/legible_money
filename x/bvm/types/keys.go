@@ -26,6 +26,7 @@ var (
 	StateKeyPrefix    = []byte{0x03}
 	ScheduleKeyPrefix = []byte{0x04}
 	ParamsKey         = []byte{0x05}
+	GasScheduleKey    = []byte{0x06}
 
 	// Index prefixes
 	ContractCreatorIndexPrefix = []byte{0x10}

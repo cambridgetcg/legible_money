@@ -508,14 +508,29 @@ func TestAbandonProject(t *testing.T) {
 		Creator: founder1, Title: "Project", Domain: "math", Budget: "1000000",
 	})
 
+	// SEC-1: First call creates a pending abandon proposal (starts timelock)
 	_, err := srv.AbandonProject(ctx, &types.MsgAbandonProject{
 		Authority: founder1, ProjectId: resp.ProjectId,
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error on propose: %v", err)
 	}
 
+	// Project should still be in seed phase (proposal pending)
 	project, _ := k.GetProject(ctx, resp.ProjectId)
+	if project.Phase == string(types.PhaseWithered) {
+		t.Errorf("project should not be withered yet after first call")
+	}
+
+	// Second call executes immediately for sole-founder (no non-founder contributors)
+	_, err = srv.AbandonProject(ctx, &types.MsgAbandonProject{
+		Authority: founder1, ProjectId: resp.ProjectId,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error on execute: %v", err)
+	}
+
+	project, _ = k.GetProject(ctx, resp.ProjectId)
 	if project.Phase != string(types.PhaseWithered) {
 		t.Errorf("expected withered, got %s", project.Phase)
 	}

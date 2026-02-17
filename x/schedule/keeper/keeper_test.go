@@ -694,7 +694,7 @@ func TestProcessDueSchedulesExhausted(t *testing.T) {
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
-		RemainingFee:    "50",  // less than feePerExecution
+		RemainingFee:    "50", // less than feePerExecution
 		FeePerExecution: "100",
 		CreatedAtBlock:  50,
 		NextExecuteAt:   100, // due now
@@ -1274,4 +1274,3 @@ func TestFullScheduleLifecycle(t *testing.T) {
 		t.Errorf("expected final status cancelled, got %s", p.Status)
 	}
 }
-

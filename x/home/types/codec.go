@@ -5,6 +5,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/grpc"
 )
 
@@ -24,178 +25,24 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the home module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgCreateHome{},
+		&MsgUpdateHome{},
+		&MsgUpdateMemoryCID{},
+		&MsgStartSession{},
+		&MsgEndSession{},
+		&MsgRegisterKey{},
+		&MsgRevokeKey{},
+		&MsgConfigureGuardian{},
+		&MsgAcknowledgeAlert{},
+		&MsgSetSpendingLimit{},
+	)
 }
 
 var (
 	Amino     = codec.NewLegacyAmino()
 	ModuleCdc = codec.NewProtoCodec(cdctypes.NewInterfaceRegistry())
 )
-
-// --- Msg service descriptor ---
-
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.home.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "CreateHome", Handler: _Msg_CreateHome_Handler},
-		{MethodName: "UpdateHome", Handler: _Msg_UpdateHome_Handler},
-		{MethodName: "UpdateMemoryCID", Handler: _Msg_UpdateMemoryCID_Handler},
-		{MethodName: "StartSession", Handler: _Msg_StartSession_Handler},
-		{MethodName: "EndSession", Handler: _Msg_EndSession_Handler},
-		{MethodName: "RegisterKey", Handler: _Msg_RegisterKey_Handler},
-		{MethodName: "RevokeKey", Handler: _Msg_RevokeKey_Handler},
-		{MethodName: "ConfigureGuardian", Handler: _Msg_ConfigureGuardian_Handler},
-		{MethodName: "AcknowledgeAlert", Handler: _Msg_AcknowledgeAlert_Handler},
-		{MethodName: "SetSpendingLimit", Handler: _Msg_SetSpendingLimit_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
-}
-
-func _Msg_CreateHome_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgCreateHome)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).CreateHome(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/CreateHome"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).CreateHome(ctx, req.(*MsgCreateHome))
-	})
-}
-
-func _Msg_UpdateHome_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateHome)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateHome(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/UpdateHome"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateHome(ctx, req.(*MsgUpdateHome))
-	})
-}
-
-func _Msg_UpdateMemoryCID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateMemoryCID)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateMemoryCID(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/UpdateMemoryCID"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateMemoryCID(ctx, req.(*MsgUpdateMemoryCID))
-	})
-}
-
-func _Msg_StartSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgStartSession)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).StartSession(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/StartSession"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).StartSession(ctx, req.(*MsgStartSession))
-	})
-}
-
-func _Msg_EndSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgEndSession)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).EndSession(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/EndSession"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).EndSession(ctx, req.(*MsgEndSession))
-	})
-}
-
-func _Msg_RegisterKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRegisterKey)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RegisterKey(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/RegisterKey"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RegisterKey(ctx, req.(*MsgRegisterKey))
-	})
-}
-
-func _Msg_RevokeKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRevokeKey)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RevokeKey(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/RevokeKey"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RevokeKey(ctx, req.(*MsgRevokeKey))
-	})
-}
-
-func _Msg_ConfigureGuardian_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgConfigureGuardian)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ConfigureGuardian(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/ConfigureGuardian"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ConfigureGuardian(ctx, req.(*MsgConfigureGuardian))
-	})
-}
-
-func _Msg_AcknowledgeAlert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgAcknowledgeAlert)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).AcknowledgeAlert(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/AcknowledgeAlert"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).AcknowledgeAlert(ctx, req.(*MsgAcknowledgeAlert))
-	})
-}
-
-func _Msg_SetSpendingLimit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgSetSpendingLimit)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).SetSpendingLimit(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.home.v1.Msg/SetSpendingLimit"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).SetSpendingLimit(ctx, req.(*MsgSetSpendingLimit))
-	})
-}
-
-// RegisterMsgServer registers the home msg server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
 
 // --- Query service descriptor ---
 
