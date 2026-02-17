@@ -142,6 +142,23 @@ func DefaultLogicZones() []LogicZoneProperties {
 	}
 }
 
+// MergeTargetPrefix is the convention prefix for encoding merge targets in proposal descriptions.
+const MergeTargetPrefix = "merge_into:"
+
+// ParseMergeTarget extracts the target domain name from a merge proposal description.
+// Returns empty string if the description doesn't contain a merge target.
+func ParseMergeTarget(description string) string {
+	if len(description) > len(MergeTargetPrefix) && description[:len(MergeTargetPrefix)] == MergeTargetPrefix {
+		return description[len(MergeTargetPrefix):]
+	}
+	return ""
+}
+
+// FormatMergeDescription creates a description string encoding the merge target.
+func FormatMergeDescription(targetDomain string) string {
+	return MergeTargetPrefix + targetDomain
+}
+
 // ZoneFormality returns the formality rank of a logic zone.
 // Lower values = more formal. A more formal zone can ground claims in less formal zones.
 // Returns -1 for unknown zones.
