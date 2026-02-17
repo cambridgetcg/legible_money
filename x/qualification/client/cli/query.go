@@ -116,7 +116,7 @@ func NewQueryParamsCmd() *cobra.Command {
 				return err
 			}
 
-			return clientCtx.PrintProto(res)
+			return clientCtx.PrintObjectLegacy(res)
 		},
 	}
 
@@ -145,7 +145,7 @@ func NewQueryQualificationCmd() *cobra.Command {
 				return fmt.Errorf("failed to query qualification: %w", err)
 			}
 
-			return clientCtx.PrintProto(res)
+			return clientCtx.PrintObjectLegacy(res)
 		},
 	}
 
@@ -173,7 +173,7 @@ func NewQueryQualificationsByValidatorCmd() *cobra.Command {
 				return fmt.Errorf("failed to query qualifications: %w", err)
 			}
 
-			return clientCtx.PrintProto(res)
+			return clientCtx.PrintObjectLegacy(res)
 		},
 	}
 
@@ -201,7 +201,7 @@ func NewQueryQualifiedValidatorsCmd() *cobra.Command {
 				return fmt.Errorf("failed to query qualified validators: %w", err)
 			}
 
-			return clientCtx.PrintProto(res)
+			return clientCtx.PrintObjectLegacy(res)
 		},
 	}
 
@@ -229,7 +229,7 @@ func NewQueryEndorsementCmd() *cobra.Command {
 				return fmt.Errorf("failed to query endorsement: %w", err)
 			}
 
-			return clientCtx.PrintProto(res)
+			return clientCtx.PrintObjectLegacy(res)
 		},
 	}
 
@@ -257,7 +257,7 @@ func NewQueryEndorsementsForValidatorCmd() *cobra.Command {
 				return fmt.Errorf("failed to query endorsements: %w", err)
 			}
 
-			return clientCtx.PrintProto(res)
+			return clientCtx.PrintObjectLegacy(res)
 		},
 	}
 
