@@ -12,6 +12,7 @@ package keeper_test
 // ==================================================================================
 
 import (
+	"math/big"
 	"testing"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
