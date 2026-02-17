@@ -232,8 +232,9 @@ func TestKnowledge_SubmitClaim(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:test123"
+	ctx.Capabilities = allCaps()
 	ctx.BlockNumber = 100
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()
@@ -261,6 +262,7 @@ func TestKnowledge_StaticCallRejectsSubmitClaim(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Mode = ModeStaticCall
 	ctx.CallerDID = "did:lgm:test123"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()
@@ -284,7 +286,7 @@ func TestKnowledge_CommitVote(t *testing.T) {
 	}
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:validator1"
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()
@@ -313,7 +315,7 @@ func TestKnowledge_RevealVote(t *testing.T) {
 	}
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:validator1"
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()
 	interp := NewInterpreter()
@@ -342,6 +344,7 @@ func TestKnowledge_InitiateChallenge(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:challenger1"
+	ctx.Capabilities = allCaps()
 	ctx.BlockNumber = 200
 	ctx.Bytecode = bytecode
 	state := NewMemoryStateDB()

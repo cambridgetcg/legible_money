@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+// allCaps returns a SessionCapabilities with all permissions enabled, for use in tests.
+func allCaps() *SessionCapabilities {
+	return &SessionCapabilities{
+		CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true,
+		CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true,
+		CanManageDefenses: true, CanManageBeliefs: true,
+	}
+}
+
 // compositeHost combines AgentHost, TreasuryHost, and KnowledgeHost into a full HostFunctions.
 type compositeHost struct {
 	agent    *AgentHost
@@ -284,6 +293,7 @@ func TestAgent_SetAndGetBelief(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = "did:lgm:testAgent001"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -323,6 +333,7 @@ func TestAgent_SetAndGetTrust(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = "did:lgm:agent123"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -363,6 +374,7 @@ func TestAgent_IsTrusted(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = "did:lgm:trustor"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -393,6 +405,7 @@ func TestAgent_ScheduleSelf(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:scheduler"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -424,6 +437,7 @@ func TestAgent_BlockAndUnblockAgent(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:blocker"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -457,7 +471,7 @@ func TestTreasury_StakeTokens(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:staker"
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -484,6 +498,7 @@ func TestTreasury_QueryTreasury(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:querier"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -518,6 +533,7 @@ func TestAccess_RegisterAndRevokeKey(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:keyowner"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -545,6 +561,7 @@ func TestIntrospection_SelfBalance(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:introspect"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -569,6 +586,7 @@ func TestIntrospection_SelfReputation(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "did:lgm:repcheck"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -597,6 +615,7 @@ func TestAgent_StaticCallRejectsSetBelief(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Mode = ModeStaticCall
 	ctx.CallerDID = "did:lgm:static"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -619,6 +638,7 @@ func TestAgent_StaticCallRejectsSetTrust(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Mode = ModeStaticCall
 	ctx.CallerDID = "did:lgm:static"
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)

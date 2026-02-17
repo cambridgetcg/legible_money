@@ -1427,6 +1427,16 @@ func checkCapability(ctx *ExecutionContext, cap string) bool {
 		return ctx.Capabilities.CanSubmitClaims
 	case "vote":
 		return ctx.Capabilities.CanVote
+	case "manage_trust":
+		return ctx.Capabilities.CanManageTrust
+	case "manage_identity":
+		return ctx.Capabilities.CanManageIdentity
+	case "manage_schedules":
+		return ctx.Capabilities.CanManageSchedules
+	case "manage_defenses":
+		return ctx.Capabilities.CanManageDefenses
+	case "manage_beliefs":
+		return ctx.Capabilities.CanManageBeliefs
 	default:
 		return false // Unknown capability: deny
 	}
@@ -1579,6 +1589,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case INITIATE_CHALLENGE:
+		if !checkCapability(ctx, "submit_claims") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		factId, ok1 := pop()
 		evidenceHash, ok2 := pop()
 		stakeAmt, ok3 := pop()
@@ -1624,6 +1643,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case ATTEST_IDENTITY:
+		if !checkCapability(ctx, "manage_identity") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		targetDID, ok1 := pop()
 		attestType, ok2 := pop()
 		data, ok3 := pop()
@@ -1651,6 +1679,14 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(confidence))
 
 	case SET_BELIEF:
+		if !checkCapability(ctx, "manage_beliefs") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			return actionContinue
+		}
 		factId, ok1 := pop()
 		confidence, ok2 := pop()
 		source, ok3 := pop()
@@ -1696,6 +1732,14 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(level))
 
 	case SET_TRUST:
+		if !checkCapability(ctx, "manage_trust") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			return actionContinue
+		}
 		targetDID, ok1 := pop()
 		level, ok2 := pop()
 		reason, ok3 := pop()
@@ -1720,6 +1764,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case DELEGATE:
+		if !checkCapability(ctx, "manage_trust") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		targetDID, ok1 := pop()
 		capability, ok2 := pop()
 		constraints, ok3 := pop()
@@ -1738,6 +1791,15 @@ func (interp *Interpreter) executeAgentOpcode(
 
 	// Agent Autonomy (0xEC-0xEF)
 	case SCHEDULE_SELF:
+		if !checkCapability(ctx, "manage_schedules") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		callData, ok1 := pop()
 		executeBlock, ok2 := pop()
 		gasLimit, ok3 := pop()
@@ -1753,6 +1815,13 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case CANCEL_SCHEDULE:
+		if !checkCapability(ctx, "manage_schedules") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		scheduleId, ok := pop()
 		if !ok {
 			return actionError
@@ -1765,6 +1834,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case MODIFY_SCHEDULE:
+		if !checkCapability(ctx, "manage_schedules") {
+			for i := 0; i < 2; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		scheduleId, ok1 := pop()
 		newBlock, ok2 := pop()
 		if !ok1 || !ok2 {
@@ -1792,6 +1870,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(count))
 
 	case BLOCK_AGENT:
+		if !checkCapability(ctx, "manage_trust") {
+			for i := 0; i < 2; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		targetDID, ok1 := pop()
 		reason, ok2 := pop()
 		if !ok1 || !ok2 {
@@ -1806,6 +1893,13 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case UNBLOCK_AGENT:
+		if !checkCapability(ctx, "manage_trust") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		targetDID, ok := pop()
 		if !ok {
 			return actionError
@@ -1818,6 +1912,13 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case REVOKE_DELEGATION:
+		if !checkCapability(ctx, "manage_trust") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		delegationId, ok := pop()
 		if !ok {
 			return actionError
@@ -1987,6 +2088,13 @@ func (interp *Interpreter) executeAgentOpcode(
 		push(new(big.Int).SetUint64(count))
 
 	case DISMISS_ALERT:
+		if !checkCapability(ctx, "manage_defenses") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		alertId, ok := pop()
 		if !ok {
 			return actionError
@@ -1999,6 +2107,15 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case SET_DEFENSE:
+		if !checkCapability(ctx, "manage_defenses") {
+			for i := 0; i < 3; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		defenseType, ok1 := pop()
 		config, ok2 := pop()
 		threshold, ok3 := pop()
@@ -2020,6 +2137,15 @@ func (interp *Interpreter) executeAgentOpcode(
 
 	// Access Control (0xDC-0xDF)
 	case REGISTER_KEY:
+		if !checkCapability(ctx, "manage_identity") {
+			for i := 0; i < 4; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		keyType, ok1 := pop()
 		pubKey, ok2 := pop()
 		perms, ok3 := pop()
@@ -2038,6 +2164,13 @@ func (interp *Interpreter) executeAgentOpcode(
 		}
 
 	case REVOKE_KEY:
+		if !checkCapability(ctx, "manage_identity") {
+			if _, ok := pop(); !ok {
+				return actionError
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
 		keyId, ok := pop()
 		if !ok {
 			return actionError

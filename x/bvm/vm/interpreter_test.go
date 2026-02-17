@@ -956,10 +956,15 @@ func TestCheckCapability_AllGranted(t *testing.T) {
 	ctx := makeCtx(100000)
 	// Explicit all-true capabilities (set by keeper for identity/operational key callers)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:     true,
-		CanStake:        true,
-		CanSubmitClaims: true,
-		CanVote:         true,
+		CanTransfer:        true,
+		CanStake:           true,
+		CanSubmitClaims:    true,
+		CanVote:            true,
+		CanManageTrust:     true,
+		CanManageIdentity:  true,
+		CanManageSchedules: true,
+		CanManageDefenses:  true,
+		CanManageBeliefs:   true,
 	}
 	if !checkCapability(ctx, "stake") {
 		t.Fatal("expected stake allowed with all capabilities granted")
@@ -973,6 +978,21 @@ func TestCheckCapability_AllGranted(t *testing.T) {
 	if !checkCapability(ctx, "vote") {
 		t.Fatal("expected vote allowed with all capabilities granted")
 	}
+	if !checkCapability(ctx, "manage_trust") {
+		t.Fatal("expected manage_trust allowed with all capabilities granted")
+	}
+	if !checkCapability(ctx, "manage_identity") {
+		t.Fatal("expected manage_identity allowed with all capabilities granted")
+	}
+	if !checkCapability(ctx, "manage_schedules") {
+		t.Fatal("expected manage_schedules allowed with all capabilities granted")
+	}
+	if !checkCapability(ctx, "manage_defenses") {
+		t.Fatal("expected manage_defenses allowed with all capabilities granted")
+	}
+	if !checkCapability(ctx, "manage_beliefs") {
+		t.Fatal("expected manage_beliefs allowed with all capabilities granted")
+	}
 	// Unknown capability should still be denied
 	if checkCapability(ctx, "unknown") {
 		t.Fatal("expected unknown capability DENIED even with all capabilities granted")
@@ -982,10 +1002,15 @@ func TestCheckCapability_AllGranted(t *testing.T) {
 func TestCheckCapability_StakeBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:     true,
-		CanStake:        false,
-		CanSubmitClaims: true,
-		CanVote:         true,
+		CanTransfer:        true,
+		CanStake:           false,
+		CanSubmitClaims:    true,
+		CanVote:            true,
+		CanManageTrust:     true,
+		CanManageIdentity:  true,
+		CanManageSchedules: true,
+		CanManageDefenses:  true,
+		CanManageBeliefs:   true,
 	}
 	if checkCapability(ctx, "stake") {
 		t.Fatal("expected stake blocked")
@@ -1004,10 +1029,15 @@ func TestCheckCapability_StakeBlocked(t *testing.T) {
 func TestCheckCapability_TransferBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:     false,
-		CanStake:        true,
-		CanSubmitClaims: true,
-		CanVote:         true,
+		CanTransfer:        false,
+		CanStake:           true,
+		CanSubmitClaims:    true,
+		CanVote:            true,
+		CanManageTrust:     true,
+		CanManageIdentity:  true,
+		CanManageSchedules: true,
+		CanManageDefenses:  true,
+		CanManageBeliefs:   true,
 	}
 	if checkCapability(ctx, "transfer") {
 		t.Fatal("expected transfer blocked")
@@ -1020,10 +1050,15 @@ func TestCheckCapability_TransferBlocked(t *testing.T) {
 func TestCheckCapability_VoteBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:     true,
-		CanStake:        true,
-		CanSubmitClaims: true,
-		CanVote:         false,
+		CanTransfer:        true,
+		CanStake:           true,
+		CanSubmitClaims:    true,
+		CanVote:            false,
+		CanManageTrust:     true,
+		CanManageIdentity:  true,
+		CanManageSchedules: true,
+		CanManageDefenses:  true,
+		CanManageBeliefs:   true,
 	}
 	if checkCapability(ctx, "vote") {
 		t.Fatal("expected vote blocked")
@@ -1033,10 +1068,15 @@ func TestCheckCapability_VoteBlocked(t *testing.T) {
 func TestCheckCapability_SubmitClaimsBlocked(t *testing.T) {
 	ctx := makeCtx(100000)
 	ctx.Capabilities = &SessionCapabilities{
-		CanTransfer:     true,
-		CanStake:        true,
-		CanSubmitClaims: false,
-		CanVote:         true,
+		CanTransfer:        true,
+		CanStake:           true,
+		CanSubmitClaims:    false,
+		CanVote:            true,
+		CanManageTrust:     true,
+		CanManageIdentity:  true,
+		CanManageSchedules: true,
+		CanManageDefenses:  true,
+		CanManageBeliefs:   true,
 	}
 	if checkCapability(ctx, "submit_claims") {
 		t.Fatal("expected submit_claims blocked")
@@ -1062,6 +1102,21 @@ func TestCheckCapability_AllBlocked(t *testing.T) {
 	}
 	if checkCapability(ctx, "vote") {
 		t.Fatal("expected vote blocked")
+	}
+	if checkCapability(ctx, "manage_trust") {
+		t.Fatal("expected manage_trust blocked")
+	}
+	if checkCapability(ctx, "manage_identity") {
+		t.Fatal("expected manage_identity blocked")
+	}
+	if checkCapability(ctx, "manage_schedules") {
+		t.Fatal("expected manage_schedules blocked")
+	}
+	if checkCapability(ctx, "manage_defenses") {
+		t.Fatal("expected manage_defenses blocked")
+	}
+	if checkCapability(ctx, "manage_beliefs") {
+		t.Fatal("expected manage_beliefs blocked")
 	}
 	// C-1 FIX: Unknown capabilities now default to DENIED
 	if checkCapability(ctx, "unknown_cap") {
@@ -1101,6 +1156,9 @@ func TestReentrancyGuard_RejectsNestedAgentOpcode(t *testing.T) {
 	ctx.Capabilities = &SessionCapabilities{
 		CanTransfer: true, CanStake: true,
 		CanSubmitClaims: true, CanVote: true,
+		CanManageTrust: true, CanManageIdentity: true,
+		CanManageSchedules: true, CanManageDefenses: true,
+		CanManageBeliefs: true,
 	}
 	ctx.InHostCall = true // Simulate being inside a host call
 	ctx.Bytecode = bytecode
