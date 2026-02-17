@@ -54,6 +54,12 @@ func (q *contextTestQC) FactReferences(_ context.Context, factID string) ([]agen
 func (q *contextTestQC) CounterFacts(_ context.Context, factID string) ([]agentsdk.CounterFactInfo, error) {
 	return q.counterFacts[factID], nil
 }
+func (q *contextTestQC) BugFacts(_ context.Context, _ string) ([]agentsdk.FactInfo, error) {
+	return nil, nil
+}
+func (q *contextTestQC) ProposalsByTrigger(_ context.Context, _ string) ([]agentsdk.ProposalInfo, error) {
+	return nil, nil
+}
 
 // --- Tests ---
 
