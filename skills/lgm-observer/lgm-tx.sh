@@ -887,6 +887,100 @@ cmd_watch() {
     done
 }
 
+cmd_loop() {
+    local interval="${1:-30}"  # Cycle interval in seconds (default 30s)
+
+    echo "Starting autonomous loop daemon (cycle every ${interval}s)..." >&2
+    echo "  Agent: $FROM" >&2
+    echo "  Node: $NODE_URL" >&2
+    echo "  Press Ctrl+C to stop." >&2
+    echo "" >&2
+
+    trap 'echo ""; echo "Loop daemon stopped." >&2; cmd_status 2>/dev/null; exit 0' INT TERM
+
+    local cycle=0
+    while true; do
+        cycle=$((cycle + 1))
+        echo "=== Cycle $cycle ===" >&2
+
+        # --- Balance guard ---
+        local balance
+        balance=$(get_balance)
+        local balance_lgm=$(( balance / 1000000 ))
+
+        if [ "$balance_lgm" -lt 5 ]; then
+            echo "[cycle $cycle] CRITICAL: Balance ${balance_lgm} LGM < 5 LGM. All activity paused." >&2
+            sleep "$interval"
+            continue
+        fi
+
+        local observe_paused=false
+        if [ "$balance_lgm" -lt 10 ]; then
+            echo "[cycle $cycle] WARNING: Balance ${balance_lgm} LGM < 10 LGM. Observations paused, verification-only mode." >&2
+            observe_paused=true
+        fi
+
+        # --- Step 1: Observe (if new epoch) ---
+        if [ "$observe_paused" = "false" ]; then
+            local current_epoch
+            current_epoch=$(curl -s "$NODE_URL/legible/autopoiesis/v1/state" | python3 -c "import sys,json; print(json.load(sys.stdin)['state']['current_epoch'])" 2>/dev/null || echo "0")
+
+            local state
+            state=$(load_state)
+            local last_epoch
+            last_epoch=$(echo "$state" | python3 -c "import sys,json; print(json.load(sys.stdin).get('last_observe_epoch', 0))" 2>/dev/null || echo "0")
+
+            if [ "$current_epoch" -gt "$last_epoch" ] 2>/dev/null; then
+                echo "[cycle $cycle] New epoch $current_epoch (last: $last_epoch) — observing..." >&2
+
+                # Adaptive stake
+                local adaptive_stake
+                adaptive_stake=$(compute_adaptive_stake "$state")
+                export LGM_OBSERVE_STAKE="$adaptive_stake"
+                echo "[cycle $cycle] Adaptive stake: $adaptive_stake ulgm" >&2
+
+                # Run observe
+                local obs_result
+                obs_result=$(cmd_observe 2>&1) || true
+                echo "[cycle $cycle] Observation submitted" >&2
+            else
+                echo "[cycle $cycle] Same epoch ($current_epoch), skipping observe" >&2
+            fi
+        fi
+
+        # --- Step 2: Verify (always) ---
+        local verify_result
+        verify_result=$(cmd_verify 2>/dev/null) || true
+        local vstatus
+        vstatus=$(echo "$verify_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null || echo "error")
+        if [ "$vstatus" = "verified" ]; then
+            local vcount
+            vcount=$(echo "$verify_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active_rounds',0))" 2>/dev/null || echo "0")
+            echo "[cycle $cycle] Verified $vcount active round(s)" >&2
+        else
+            echo "[cycle $cycle] No active rounds" >&2
+        fi
+
+        # --- Step 3: Reflect (every 5 cycles) ---
+        if [ $((cycle % 5)) -eq 0 ]; then
+            echo "[cycle $cycle] Reflecting on past observations..." >&2
+            local reflect_result
+            reflect_result=$(cmd_reflect 2>/dev/null) || true
+            local rupdated
+            rupdated=$(echo "$reflect_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('updated',0))" 2>/dev/null || echo "0")
+            echo "[cycle $cycle] Reflect: $rupdated observation(s) updated" >&2
+        fi
+
+        # --- Periodic cleanup (every 20 cycles) ---
+        if [ $((cycle % 20)) -eq 0 ]; then
+            cleanup_stale_salts
+        fi
+
+        echo "" >&2
+        sleep "$interval"
+    done
+}
+
 # --- Dispatch ---
 
 case "${1:-help}" in
