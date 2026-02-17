@@ -1296,6 +1296,7 @@ func NewLegibleApp(
 		partnershipstypes.ModuleName,     // Partnerships: formation records.
 		icaauthtypes.ModuleName,          // ICA auth: ICA entries.
 		ibcratelimittypes.ModuleName,     // IBC rate limit: flow records.
+		computepooltypes.ModuleName,      // Compute pool: providers, credits.
 		knowledgetypes.ModuleName,        // Knowledge: facts, claims, domains. LAST because
 		// it depends on staking, ontology, qualification.
 	)
