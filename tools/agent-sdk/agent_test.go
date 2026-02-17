@@ -234,3 +234,9 @@ func (m *mockTxClient) EndSession(ctx context.Context, homeID, sessionID string)
 func (m *mockTxClient) SetSpendingLimit(ctx context.Context, homeID, keyType string, maxAmount, periodBlocks uint64) (string, error) {
 	return "mock-tx-hash", nil
 }
+func (m *mockTxClient) SubmitLIP(ctx context.Context, req SubmitLIPRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
+func (m *mockTxClient) CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error) {
+	return "mock-tx-hash", nil
+}
