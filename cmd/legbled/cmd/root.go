@@ -26,8 +26,12 @@ import (
 	stakingcli "github.com/cosmos/cosmos-sdk/x/staking/client/cli"
 
 	legibleapp "github.com/legible-money/legible/app"
+	legibleauthcli "github.com/legible-money/legible/x/auth/client/cli"
+	discoverycli "github.com/legible-money/legible/x/discovery/client/cli"
 	homecli "github.com/legible-money/legible/x/home/client/cli"
 	knowledgecli "github.com/legible-money/legible/x/knowledge/client/cli"
+	qualificationcli "github.com/legible-money/legible/x/qualification/client/cli"
+	legiblestakingcli "github.com/legible-money/legible/x/staking/client/cli"
 )
 
 // NewRootCmd creates the root command for the legbled daemon.
@@ -111,7 +115,11 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		server.QueryBlocksCmd(),
 		server.QueryBlockResultsCmd(),
 		// Legible custom modules
+		legibleauthcli.NewQueryCmd(),
+		discoverycli.NewQueryCmd(),
 		knowledgecli.NewQueryCmd(),
+		qualificationcli.NewQueryCmd(),
+		legiblestakingcli.NewQueryCmd(),
 	)
 	rootCmd.AddCommand(queryCmd)
 
@@ -138,6 +146,10 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		govcli.NewTxCmd(nil),
 		knowledgecli.NewTxCmd(),
 		homecli.NewTxCmd(),
+		legibleauthcli.NewTxCmd(),
+		discoverycli.NewTxCmd(),
+		qualificationcli.NewTxCmd(),
+		legiblestakingcli.NewTxCmd(),
 	)
 	rootCmd.AddCommand(txCmd)
 
