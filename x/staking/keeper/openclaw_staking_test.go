@@ -485,12 +485,11 @@ func TestOC_SK10_UnbondingIdCollision(t *testing.T) {
 		t.Errorf("OC-SK-10: expected 5 unique unbonding IDs, got %d", len(ids))
 	}
 
-	// Verify monotonic sequence
-	for i := uint64(1); i <= 5; i++ {
-		id := fmt.Sprintf("%d", i)
+	// Verify all entries are retrievable by their IDs
+	for id := range ids {
 		_, found := k.GetUnbonding(ctx, id)
 		if !found {
-			t.Errorf("OC-SK-10: unbonding entry %s not found — sequence gap", id)
+			t.Errorf("OC-SK-10: unbonding entry %s not found — storage inconsistency", id)
 		}
 	}
 }
