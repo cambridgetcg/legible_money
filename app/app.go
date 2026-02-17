@@ -296,6 +296,7 @@ var (
 		icaauthmodule.AppModuleBasic{},
 		ibcratelimitmodule.AppModuleBasic{},
 		alignmentmodule.AppModuleBasic{},
+		computepoolmodule.AppModuleBasic{},
 	)
 
 	// Module account permissions.
