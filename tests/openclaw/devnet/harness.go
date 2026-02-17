@@ -359,3 +359,21 @@ func (h *Harness) dumpLogs() {
 	}
 	h.T.Logf("=== Last node logs ===\n%s", strings.Join(lines[start:], "\n"))
 }
+
+// dumpFullLogs prints the first 100 lines + last 20 lines of node logs.
+func (h *Harness) dumpFullLogs() {
+	logPath := filepath.Join(h.NodeHome, "node.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		h.T.Logf("Could not read log file: %v", err)
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	h.T.Logf("=== Node log (%d lines total) ===", len(lines))
+	if len(lines) <= 120 {
+		h.T.Logf("%s", string(data))
+	} else {
+		h.T.Logf("=== FIRST 100 lines ===\n%s", strings.Join(lines[:100], "\n"))
+		h.T.Logf("=== LAST 20 lines ===\n%s", strings.Join(lines[len(lines)-20:], "\n"))
+	}
+}
