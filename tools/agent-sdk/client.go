@@ -43,6 +43,53 @@ type QueryClient interface {
 
 	// ProposalsByTrigger returns governance proposals by trigger type.
 	ProposalsByTrigger(ctx context.Context, triggerType string) ([]ProposalInfo, error)
+
+	// --- Dispute Queries (x/disputes) ---
+
+	// GetDispute returns details of a specific dispute.
+	GetDispute(ctx context.Context, disputeID string) (*DisputeInfo, error)
+
+	// DisputesByFact returns all disputes targeting a fact.
+	DisputesByFact(ctx context.Context, factID string) ([]DisputeInfo, error)
+
+	// ActiveDisputes returns all non-resolved disputes.
+	ActiveDisputes(ctx context.Context) ([]DisputeInfo, error)
+
+	// DisputeVotes returns votes cast on a dispute.
+	DisputeVotes(ctx context.Context, disputeID string) ([]DisputeVoteInfo, error)
+
+	// --- Evidence Queries (x/evidence_mgmt) ---
+
+	// EvidenceByClaimID returns all evidence submitted for a claim.
+	EvidenceByClaimID(ctx context.Context, claimID string) ([]EvidenceInfo, error)
+
+	// ActiveOracles returns all active oracle feeds.
+	ActiveOracles(ctx context.Context) ([]OracleInfo, error)
+
+	// --- Research Queries (x/research) ---
+
+	// GetResearch returns details of a research submission.
+	GetResearch(ctx context.Context, researchID string) (*ResearchInfo, error)
+
+	// ResearchSubmissions returns research filtered by status and/or domain.
+	ResearchSubmissions(ctx context.Context, status, domain string) ([]ResearchInfo, error)
+
+	// GetBounty returns details of a research bounty.
+	GetBounty(ctx context.Context, bountyID string) (*ResearchBountyInfo, error)
+
+	// --- Ontology Queries (x/ontology) ---
+
+	// AllDomains returns all registered knowledge domains.
+	AllDomains(ctx context.Context) ([]DomainInfo, error)
+
+	// DomainsByStratum returns domains in a specific stratum.
+	DomainsByStratum(ctx context.Context, stratum uint32) ([]DomainInfo, error)
+
+	// ConfidenceCeiling returns the max confidence and decay rate for a domain.
+	ConfidenceCeiling(ctx context.Context, domain string) (*ConfidenceCeilingInfo, error)
+
+	// AllLogicZones returns all registered logic zones.
+	AllLogicZones(ctx context.Context) ([]LogicZoneInfo, error)
 }
 
 // TxClient defines the interface for submitting transactions.
