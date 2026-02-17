@@ -641,6 +641,102 @@ for r in data.get('rounds', []):
     echo "{\"status\":\"verified\",\"active_rounds\":$round_count}"
 }
 
+cmd_status() {
+    local state
+    state=$(load_state)
+    local balance
+    balance=$(get_balance)
+
+    # Get current epoch
+    local current_epoch
+    current_epoch=$(curl -s "$NODE_URL/legible/autopoiesis/v1/state" | python3 -c "import sys,json; print(json.load(sys.stdin)['state']['current_epoch'])" 2>/dev/null || echo "0")
+
+    # Compute adaptive stake
+    local adaptive_stake
+    adaptive_stake=$(compute_adaptive_stake "$state")
+
+    # Compute SSI trend
+    local ssi_trend
+    ssi_trend=$(compute_ssi_trend "$state")
+
+    # Build dashboard
+    echo "$state" | python3 -c "
+import sys, json
+
+state = json.load(sys.stdin)
+balance_ulgm = int('$balance')
+balance_lgm = balance_ulgm / 1_000_000
+epoch = int('$current_epoch')
+adaptive_stake = int('$adaptive_stake')
+ssi_trend = '$ssi_trend'
+
+acc = state['trends']['accuracy']
+submitted = acc.get('submitted', 0)
+accepted = acc.get('accepted', 0)
+rejected = acc.get('rejected', 0)
+expired = acc.get('expired', 0)
+pending = sum(1 for o in state['observations'] if o['status'] == 'pending')
+pct = (accepted * 100) // submitted if submitted > 0 else 0
+
+# Stake tier label
+if adaptive_stake >= 2000000:
+    stake_label = '2 LGM (high confidence)'
+elif adaptive_stake >= 1000000:
+    stake_label = '1 LGM (default)'
+else:
+    stake_label = '0.5 LGM (cautious)'
+
+# SSI history for trend display
+ssi_hist = state['trends'].get('ssi_history', [])
+ssi_recent = ssi_hist[-3:] if len(ssi_hist) >= 3 else ssi_hist
+
+# Balance warning
+balance_warn = ''
+if balance_ulgm < 5_000_000:
+    balance_warn = ' !! CRITICAL: below 5 LGM — all activity paused'
+elif balance_ulgm < 10_000_000:
+    balance_warn = ' ! WARNING: below 10 LGM — observations paused'
+
+last_epoch = state.get('last_observe_epoch', 0)
+last_obs = [o for o in state['observations'] if o['epoch'] == last_epoch]
+last_height = last_obs[-1]['height'] if last_obs else 0
+
+result = {
+    'agent': '$FROM',
+    'balance_ulgm': balance_ulgm,
+    'balance_lgm': round(balance_lgm, 1),
+    'observations': {
+        'submitted': submitted,
+        'accepted': accepted,
+        'rejected': rejected,
+        'expired': expired,
+        'pending': pending
+    },
+    'accuracy_pct': pct,
+    'current_stake': stake_label,
+    'adaptive_stake_ulgm': adaptive_stake,
+    'ssi_trend': ssi_trend,
+    'ssi_recent': ssi_recent,
+    'last_observe_epoch': last_epoch,
+    'current_epoch': epoch
+}
+
+# Print human-readable dashboard
+print(f'Agent Status ({result[\"agent\"]})')
+print(f'  Balance: {balance_lgm:.1f} LGM ({balance_ulgm} ulgm){balance_warn}')
+print(f'  Observations: {submitted} submitted, {accepted} accepted, {rejected} rejected, {pending} pending')
+print(f'  Accuracy: {pct}%')
+print(f'  Current stake: {stake_label}')
+print(f'  SSI trend: {ssi_trend} ({\" -> \".join(str(s) for s in ssi_recent)} BPS)')
+print(f'  Last observe: epoch {last_epoch} (height {last_height})')
+print(f'  Current epoch: {epoch}')
+
+# Also output JSON to stdout for programmatic use
+print('---')
+print(json.dumps(result, indent=2))
+"
+}
+
 cmd_reflect() {
     echo "Reflecting on past observations..." >&2
 
