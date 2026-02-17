@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/partnerships/keeper"
 	"github.com/legible-money/legible/x/partnerships/types"
