@@ -641,6 +641,108 @@ for r in data.get('rounds', []):
     echo "{\"status\":\"verified\",\"active_rounds\":$round_count}"
 }
 
+cmd_reflect() {
+    echo "Reflecting on past observations..." >&2
+
+    local state
+    state=$(load_state)
+    local height
+    height=$(get_current_height)
+
+    # Process pending observations
+    local updated=0 still_pending=0
+    state=$(echo "$state" | python3 -c "
+import sys, json, subprocess, os
+
+NODE_URL = os.environ.get('NODE_URL', 'http://localhost:1317')
+state = json.load(sys.stdin)
+updated = 0
+still_pending = 0
+
+for obs in state['observations']:
+    if obs['status'] != 'pending':
+        continue
+    claim_id = obs['claim_id']
+    # Skip tx-hash references (can't query those as claims)
+    if claim_id.startswith('tx:'):
+        still_pending += 1
+        continue
+    try:
+        import urllib.request
+        url = f'{NODE_URL}/legible/knowledge/v1/claim/{claim_id}'
+        resp = urllib.request.urlopen(url, timeout=5).read()
+        data = json.loads(resp)
+        claim = data.get('claim', {})
+        status = claim.get('status', 'pending')
+        if status in ('accepted', 'verified', 'fact'):
+            obs['status'] = 'accepted'
+            obs['outcome'] = 'accepted'
+            state['trends']['accuracy']['accepted'] = state['trends']['accuracy'].get('accepted', 0) + 1
+            updated += 1
+        elif status in ('rejected', 'slashed'):
+            obs['status'] = 'rejected'
+            obs['outcome'] = 'rejected'
+            state['trends']['accuracy']['rejected'] = state['trends']['accuracy'].get('rejected', 0) + 1
+            updated += 1
+        elif status == 'expired':
+            obs['status'] = 'expired'
+            obs['outcome'] = 'expired'
+            state['trends']['accuracy']['expired'] = state['trends']['accuracy'].get('expired', 0) + 1
+            updated += 1
+        else:
+            still_pending += 1
+    except Exception:
+        still_pending += 1
+
+state['last_reflect_height'] = int('$height')
+
+# Prune: keep last 50 observations
+if len(state['observations']) > 50:
+    state['observations'] = state['observations'][-50:]
+
+result = {'state': state, 'updated': updated, 'still_pending': still_pending}
+print(json.dumps(result))
+" 2>/dev/null)
+
+    # Extract updated state and summary
+    local new_state summary
+    new_state=$(echo "$state" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['state']))")
+    updated=$(echo "$state" | python3 -c "import sys,json; print(json.load(sys.stdin)['updated'])")
+    still_pending=$(echo "$state" | python3 -c "import sys,json; print(json.load(sys.stdin)['still_pending'])")
+
+    save_state "$new_state"
+
+    # Compute accuracy
+    local accuracy_info
+    accuracy_info=$(echo "$new_state" | python3 -c "
+import sys, json
+s = json.load(sys.stdin)
+acc = s['trends']['accuracy']
+submitted = acc.get('submitted', 0)
+accepted = acc.get('accepted', 0)
+rejected = acc.get('rejected', 0)
+expired = acc.get('expired', 0)
+pct = (accepted * 100) // submitted if submitted > 0 else 0
+print(json.dumps({'submitted': submitted, 'accepted': accepted, 'rejected': rejected, 'expired': expired, 'accuracy_pct': pct}))
+")
+
+    echo "Updated $updated observation(s), $still_pending still pending" >&2
+
+    # Output summary
+    echo "$accuracy_info" | python3 -c "
+import sys, json
+acc = json.load(sys.stdin)
+result = {
+    'status': 'reflected',
+    'height': int('$height'),
+    'updated': int('$updated'),
+    'still_pending': int('$still_pending'),
+    'accuracy': acc
+}
+print(json.dumps(result, indent=2))
+"
+}
+
 cmd_watch() {
     local interval="${1:-3}"  # Poll interval in seconds (default ~1 block)
 
