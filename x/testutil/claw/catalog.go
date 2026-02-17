@@ -840,10 +840,10 @@ var Catalog = []Probe{
 		Defense:  "LOOPHOLE: zero amount accepted at keeper level (ValidateBasic blocks it but keeper doesn't)",
 	},
 	{
-		ID: "OC-VR-4", Name: "Negative Amount Vesting", Variant: NanoClaw, Severity: Critical,
+		ID: "OC-VR-4", Name: "Negative Amount Vesting", Variant: NanoClaw, Severity: High,
 		Status: Loophole, Module: "vesting_rewards", File: "x/vesting_rewards/keeper/openclaw_vesting_test.go",
 		TestFunc: "TestOC_VR4_NegativeStakeVesting",
-		Defense:  "LOOPHOLE: negative amounts accepted by keeper — underflow/wraparound vulnerability",
+		Defense:  "LOOPHOLE: negative amounts accepted by keeper (ValidateBasic blocks at msg layer, but keeper lacks defense-in-depth)",
 	},
 	{
 		ID: "OC-VR-5", Name: "Pause/Resume Timing Exploit", Variant: OpenClaw, Severity: High,
