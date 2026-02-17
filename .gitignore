@@ -42,6 +42,9 @@ test-results/
 node_modules/
 dist/
 
+# Claude Code hooks (device-specific, not committed)
+.claude/hooks/
+
 # Debug
 *.log
 
