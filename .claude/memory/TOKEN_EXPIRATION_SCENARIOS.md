@@ -501,5 +501,59 @@ Equal per-account distribution (not per-balance). A whale with 1M LGM gets the s
 
 ---
 
+## Appendix A: Child Account Structure (Per-Period Tracking)
+
+**Source**: `core/tokens/types.ts:63-87`, `child_account.ts`
+
+Tokens grouped by minting period, not individually tracked:
+
+```
+Parent: did:lgm:agent-123 (periodsUntilExpiration = 26)
++-- Child [period 100]: 500 LGM -> expires period 126
++-- Child [period 101]: 300 LGM -> expires period 127
++-- Child [period 102]: 200 LGM -> expires period 128
+
+Balance = sum of non-expired children (O(1) query)
+Period = floor(timestamp / periodDurationMs)
+```
+
+**ChildAccount fields**: `parentAccount`, `period`, `balance`, `expiresAt`, `swept`, `locked`
+
+## Appendix B: Config Resolution Cascade
+
+**Source**: `core/tokens/child_account.ts:107-138`
+
+```
+resolveConfig(account):
+  1. Start with global config
+  2. Apply type override (if setAccountType was called)
+     - periodDurationMs and tokenLifespanMs stay LOCKED
+  3. Apply participation score (if resolver injected)
+     - Overrides periodsUntilExpiration and tokenLifespanMs
+```
+
+## Appendix C: Orthogonal — Epistemic Category Vesting
+
+**Source**: `core/rewards/types.ts:54-91`
+
+Separate from token expiration. Reward VESTING varies by claim type:
+
+| Category | Half-Life | Max Release | Reserve |
+|---|---|---|---|
+| Axiomatic | 1.1 years | 95% | 5% |
+| Formal Proof | 6.5 months | 92% | 8% |
+| On-Chain / Cryptographic | 2.6 months | 90% | 10% |
+| Peer-Reviewed / Replicated | 5.4 weeks | 85-88% | 12-15% |
+| Contested | 1.1 weeks | 60% | 40% |
+
+Once vested tokens are minted into an account, they follow that account's expiration rules (participation + type + global).
+
+---
+
+> **Note**: This file consolidates the former `TOKEN_EXPIRATION_TIERS.md` (merged 2026-02-17).
+> Edge case analysis lives in `TOKEN_EXPIRATION_EDGE_SCENARIOS.md`.
+
+---
+
 *Analysis conducted via PP framework: Territory → Understanding → Signal → Verification*
 *Sources: 3 parallel research agents mapping 30+ code paths, manual verification of critical sections*
