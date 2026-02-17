@@ -389,7 +389,7 @@ func TestOC_DS8_DoubleRegistration(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// OC-DS-9: Expired agent NOT in domain queries.
+// OC-DISC-9: Expired agent NOT in domain queries.
 // Attack: Register agent. Let it expire. Query by domain. Expired
 // agent must NOT appear in results.
 // -----------------------------------------------------------------------
