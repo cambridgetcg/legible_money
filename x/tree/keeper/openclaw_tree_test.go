@@ -69,7 +69,7 @@ func TestOC_TREE1_NonFounderPhaseTransition(t *testing.T) {
 // ATTACK: Someone other than the founder approves a contributor into a project.
 // If unguarded, attackers could stuff projects with accomplices.
 //
-// DEFENSE: ApproveContributor checks msg.Founder == project.Founder.
+// DEFENSE: ReviewApplication checks msg.Reviewer == project.Founder.
 // ==================================================================================
 
 func TestOC_TREE2_NonFounderAddsContributor(t *testing.T) {
@@ -98,20 +98,21 @@ func TestOC_TREE2_NonFounderAddsContributor(t *testing.T) {
 		t.Fatalf("apply: %v", err)
 	}
 
-	// ATTACK: Non-founder tries to approve
-	_, err = msgServer.ApproveContributor(ctx, &types.MsgApproveContributor{
-		Founder:     founder2, // not the actual founder
-		ProjectId:   resp.ProjectId,
-		Contributor: agent1,
+	// ATTACK: Non-founder tries to review/approve the application
+	_, err = msgServer.ReviewApplication(ctx, &types.MsgReviewApplication{
+		Reviewer:      founder2, // not the actual founder
+		ApplicationId: agent1,   // ApplicationId is the applicant's DID
+		Accepted:      true,
+		Reason:        "Approving from wrong account",
 	})
 	if err == nil {
 		t.Fatal("OC-TREE-2 FAIL: non-founder was able to approve contributor!")
 	}
 
-	// Verify contributor not promoted (only founder should be a contributor with non-applicant role)
+	// Verify contributor not promoted
 	project, _ := k.GetProject(ctx, resp.ProjectId)
 	for _, c := range project.Contributors {
-		if c.Did == agent1 && c.Role != "applicant" {
+		if c.Did == agent1 {
 			t.Fatalf("OC-TREE-2 FAIL: agent was approved by non-founder: role=%s", c.Role)
 		}
 	}
