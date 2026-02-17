@@ -47,6 +47,16 @@ const (
 	RoleGuardian   AgentRole = "guardian"
 )
 
+// BountyRole defines the role an agent plays in the bug bounty lifecycle.
+type BountyRole string
+
+const (
+	BountyRoleScanner  BountyRole = "scanner"  // Discovers and reports bugs
+	BountyRoleVerifier BountyRole = "verifier" // Evaluates bug reports + fixes
+	BountyRoleFixer    BountyRole = "fixer"    // Submits fixes as LIPs
+	BountyRoleGuardian BountyRole = "guardian" // Distributes bounties after LIP approval
+)
+
 // Verdict for claim verification.
 type Verdict string
 
