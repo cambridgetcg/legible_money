@@ -61,6 +61,10 @@ type ProposalTriggerState struct {
 	Domain            string              `json:"domain,omitempty"`
 	ConsecutiveEpochs uint64              `json:"consecutive_epochs"`
 	LastCheckedEpoch  uint64              `json:"last_checked_epoch"`
+	// AcknowledgedAtBlock tracks the block height at which a count-based trigger
+	// (e.g. openclaw_critical) last fired. Facts verified after this height are
+	// counted toward the next trigger. Zero means never fired.
+	AcknowledgedAtBlock uint64 `json:"acknowledged_at_block,omitempty"`
 }
 
 // TriggerStateKey returns a unique key suffix for a ProposalTriggerState.
