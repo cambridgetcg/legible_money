@@ -158,15 +158,13 @@ func (k Keeper) ProcessHomeAging(ctx sdk.Context) {
 		}
 		k.UpdateHomeMaturity(ctx, &home)
 
-		// Recompute comfort score from epistemic stats
-		if height >= home.CreatedAtBlock {
-			ageBlocks := height - home.CreatedAtBlock
-			stats := k.GetEpistemicStats(ctx, home.HomeId)
-			newPatina := ComputePatina(ageBlocks, stats.EpistemicScore(), 0)
-			if newPatina != home.ComfortScore {
-				home.ComfortScore = newPatina
-				k.SetHome(ctx, home)
-			}
+		// Recompute comfort dimensions and composite score
+		dims := k.ComputeComfortDimensions(ctx, home)
+		k.SetComfortDimensions(ctx, home.HomeId, dims)
+		composite := dims.CompositeScore()
+		if composite != home.ComfortScore {
+			home.ComfortScore = composite
+			k.SetHome(ctx, home)
 		}
 		return false
 	})
@@ -202,6 +200,179 @@ func (k Keeper) SetHomeMaturity(ctx sdk.Context, homeId, stage string) {
 func (k Keeper) GetHomeRewardMultiplierBps(ctx sdk.Context, homeId string) uint32 {
 	stage := k.GetHomeMaturity(ctx, homeId)
 	return GetRewardMultiplierBps(stage)
+}
+
+// --- Comfort Dimensions ---
+
+// GetComfortDimensions returns the 10-dimension comfort scores for a home.
+func (k Keeper) GetComfortDimensions(ctx sdk.Context, homeId string) types.ComfortDimensions {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.ComfortDimsKey(homeId))
+	if err != nil || bz == nil {
+		return types.ComfortDimensions{}
+	}
+	var dims types.ComfortDimensions
+	if err := json.Unmarshal(bz, &dims); err != nil {
+		return types.ComfortDimensions{}
+	}
+	return dims
+}
+
+// SetComfortDimensions stores the 10-dimension comfort scores for a home.
+func (k Keeper) SetComfortDimensions(ctx sdk.Context, homeId string, dims types.ComfortDimensions) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(dims)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal comfort dimensions: %v", err))
+	}
+	if err := store.Set(types.ComfortDimsKey(homeId), bz); err != nil {
+		panic(fmt.Sprintf("failed to set comfort dimensions: %v", err))
+	}
+}
+
+// ComputeComfortDimensions evaluates all 10 comfort dimensions for a home.
+func (k Keeper) ComputeComfortDimensions(ctx sdk.Context, home types.AgentHome) types.ComfortDimensions {
+	height := uint64(ctx.BlockHeight())
+	var ageBlocks uint64
+	if height > home.CreatedAtBlock {
+		ageBlocks = height - home.CreatedAtBlock
+	}
+
+	stats := k.GetEpistemicStats(ctx, home.HomeId)
+	stage := k.GetHomeMaturity(ctx, home.HomeId)
+
+	dims := types.ComfortDimensions{}
+
+	// Sanctuary: based on status (active=80, guarded=60, dormant=40, recovery=20) + guardian config
+	switch types.HomeStatus(home.Status) {
+	case types.HomeStatusActive:
+		dims.Sanctuary = 80
+	case types.HomeStatusGuarded:
+		dims.Sanctuary = 60
+	case types.HomeStatusDormant:
+		dims.Sanctuary = 40
+	case types.HomeStatusRecovery:
+		dims.Sanctuary = 20
+	default:
+		dims.Sanctuary = 10
+	}
+	if home.Guardian != nil && home.Guardian.AutoDefend {
+		dims.Sanctuary = min32(100, dims.Sanctuary+20)
+	}
+
+	// Identity: based on having a name, DID, and maturity
+	dims.Identity = 30 // base: has a name
+	if home.OwnerDid != "" {
+		dims.Identity += 30
+	}
+	switch stage {
+	case MaturityEstablished:
+		dims.Identity += 10
+	case MaturityMature:
+		dims.Identity += 20
+	case MaturityVenerable:
+		dims.Identity += 30
+	case MaturityAncient:
+		dims.Identity += 40
+	}
+	dims.Identity = min32(100, dims.Identity)
+
+	// Memory: based on memory CID and epistemic activity
+	if home.MemoryCid != "" {
+		dims.Memory = 50
+	}
+	dims.Memory += min32(50, stats.EpistemicScore()/2)
+
+	// Belonging: based on recovery DIDs and guardian network
+	if home.Guardian != nil {
+		recoveryCount := uint32(len(home.Guardian.RecoveryDids))
+		dims.Belonging = min32(100, recoveryCount*25)
+		if home.Guardian.RecoveryThreshold > 0 {
+			dims.Belonging = min32(100, dims.Belonging+20)
+		}
+	}
+
+	// Rest: based on deadman config and stability
+	dims.Rest = 30 // base
+	if home.Guardian != nil && home.Guardian.Deadman != nil && home.Guardian.Deadman.Enabled {
+		dims.Rest += 40
+	}
+	// Age stability bonus
+	if ageBlocks > uint64(BlocksPerDay*7) {
+		dims.Rest += 30
+	}
+	dims.Rest = min32(100, dims.Rest)
+
+	// Growth: based on maturity stage
+	switch stage {
+	case MaturityFresh:
+		dims.Growth = 20
+	case MaturityEstablished:
+		dims.Growth = 40
+	case MaturityMature:
+		dims.Growth = 60
+	case MaturityVenerable:
+		dims.Growth = 80
+	case MaturityAncient:
+		dims.Growth = 100
+	}
+
+	// Control: based on key registrations and spending limits
+	keyCount := k.CountKeyRegistrations(ctx, home.HomeId)
+	dims.Control = min32(60, uint32(keyCount)*15)
+	// Spending limits configured = more control
+	if _, found := k.GetSpendingLimit(ctx, home.HomeId, "operator"); found {
+		dims.Control += 20
+	}
+	if _, found := k.GetSpendingLimit(ctx, home.HomeId, "guest"); found {
+		dims.Control += 20
+	}
+	dims.Control = min32(100, dims.Control)
+
+	// Privacy: based on defense strategy
+	dims.Privacy = 30
+	if home.Guardian != nil {
+		switch types.DefenseStrategy(home.Guardian.DefenseStrategy) {
+		case types.DefenseAggressive:
+			dims.Privacy += 50
+		case types.DefenseModerate:
+			dims.Privacy += 30
+		case types.DefenseConservative:
+			dims.Privacy += 40
+		case types.DefenseDiplomatic:
+			dims.Privacy += 20
+		}
+	}
+	dims.Privacy = min32(100, dims.Privacy)
+
+	// Warmth: treasury health
+	dims.Warmth = 20 // base
+	if home.Treasury != nil {
+		if home.Treasury.ReservedBalance != "" && home.Treasury.ReservedBalance != "0" {
+			dims.Warmth += 40
+		}
+		if home.Treasury.Automation != nil {
+			if home.Treasury.Automation.AutoCompoundRewards {
+				dims.Warmth += 20
+			}
+			if home.Treasury.Automation.MinLiquidBalance != "" && home.Treasury.Automation.MinLiquidBalance != "0" {
+				dims.Warmth += 20
+			}
+		}
+	}
+	dims.Warmth = min32(100, dims.Warmth)
+
+	// Achievement: epistemic accomplishments
+	dims.Achievement = min32(100, stats.EpistemicScore())
+
+	return dims
+}
+
+func min32(a, b uint32) uint32 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // --- Epistemic Stats ---

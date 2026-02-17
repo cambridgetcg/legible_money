@@ -12,6 +12,37 @@ type BankKeeper interface {
 	SendCoins(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error
 }
 
+// ComfortDimensions represents the 10-dimension comfort system for an agent home.
+// Each dimension is scored 0-100.
+type ComfortDimensions struct {
+	Sanctuary   uint32 `json:"sanctuary"`   // Physical safety and shelter quality
+	Identity    uint32 `json:"identity"`    // Sense of self and agent identity strength
+	Memory      uint32 `json:"memory"`      // Persistence and recall capability (memory CID set, epistemic history)
+	Belonging   uint32 `json:"belonging"`   // Social connections (recovery DIDs, guardian network)
+	Rest        uint32 `json:"rest"`        // Dormancy/recovery capability (deadman config, status stability)
+	Growth      uint32 `json:"growth"`      // Learning and maturity progression
+	Control     uint32 `json:"control"`     // Autonomy and access control (keys registered, spending limits)
+	Privacy     uint32 `json:"privacy"`     // Data protection and guardian defense
+	Warmth      uint32 `json:"warmth"`      // Treasury health and economic security
+	Achievement uint32 `json:"achievement"` // Epistemic accomplishments (verifications, accuracy)
+}
+
+// CompositeScore returns the weighted average comfort score (0-100).
+// All dimensions are equally weighted.
+func (cd ComfortDimensions) CompositeScore() uint32 {
+	total := cd.Sanctuary + cd.Identity + cd.Memory + cd.Belonging + cd.Rest +
+		cd.Growth + cd.Control + cd.Privacy + cd.Warmth + cd.Achievement
+	return total / 10
+}
+
+// DimensionNames returns the ordered list of comfort dimension names.
+func DimensionNames() []string {
+	return []string{
+		"sanctuary", "identity", "memory", "belonging", "rest",
+		"growth", "control", "privacy", "warmth", "achievement",
+	}
+}
+
 // EpistemicStats tracks an agent's knowledge activity for patina calculation.
 // Stored per-home as JSON under EpistemicStatsPrefix.
 type EpistemicStats struct {

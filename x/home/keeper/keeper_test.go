@@ -1427,4 +1427,273 @@ func TestCleanupOldAlerts(t *testing.T) {
 	}
 }
 
+// ==================== Comfort Dimensions ====================
+
+func TestComfortDimensions_DefaultHome(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Minimal home — low scores across the board
+	home := types.AgentHome{
+		HomeId: "home-comfort-default", OwnerAddress: owner1, Name: "Comfort Test",
+		Status: string(types.HomeStatusActive), CreatedAtBlock: 90,
+		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+		Treasury: &types.HomeTreasury{ReservedBalance: "0"},
+	}
+	k.SetHome(ctx, home)
+
+	dims := k.ComputeComfortDimensions(ctx, home)
+
+	// Sanctuary: active=80, no autodefend → 80
+	if dims.Sanctuary != 80 {
+		t.Errorf("expected sanctuary 80, got %d", dims.Sanctuary)
+	}
+	// Identity: 30 (name) + 0 (no DID) + 0 (fresh) = 30
+	if dims.Identity != 30 {
+		t.Errorf("expected identity 30, got %d", dims.Identity)
+	}
+	// Memory: no CID, no epistemic = 0
+	if dims.Memory != 0 {
+		t.Errorf("expected memory 0, got %d", dims.Memory)
+	}
+	// Growth: fresh = 20
+	if dims.Growth != 20 {
+		t.Errorf("expected growth 20, got %d", dims.Growth)
+	}
+	// Privacy: 30 + moderate(30) = 60
+	if dims.Privacy != 60 {
+		t.Errorf("expected privacy 60, got %d", dims.Privacy)
+	}
+
+	composite := dims.CompositeScore()
+	if composite == 0 {
+		t.Error("expected non-zero composite score")
+	}
+}
+
+func TestComfortDimensions_RichHome(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Rich Home",
+		InitialGuardianConfig: &types.HomeGuardian{
+			DefenseStrategy: string(types.DefenseAggressive),
+			AutoDefend:      true,
+			RecoveryDids:    []string{"did:1", "did:2", "did:3", "did:4"},
+			RecoveryThreshold: 2,
+			Deadman: &types.DeadmanConfig{
+				Enabled: true, InactivityThreshold: 50000,
+				Action: string(types.DeadmanAlertGuardians),
+			},
+		},
+	})
+
+	// Set memory CID
+	msgServer.UpdateMemoryCID(ctx, &types.MsgUpdateMemoryCID{
+		Owner: owner1, HomeId: homeResp.HomeId, Cid: "QmTest123",
+	})
+
+	// Register keys
+	msgServer.RegisterKey(ctx, &types.MsgRegisterKey{
+		Owner: owner1, HomeId: homeResp.HomeId, KeyHash: "key1",
+		KeyType: "ed25519", Role: string(types.AccessRoleOperator),
+		Permissions: []string{string(types.PermReadMemory)},
+	})
+	msgServer.RegisterKey(ctx, &types.MsgRegisterKey{
+		Owner: owner1, HomeId: homeResp.HomeId, KeyHash: "key2",
+		KeyType: "ed25519", Role: string(types.AccessRoleGuest),
+		Permissions: []string{string(types.PermReadMemory)},
+	})
+
+	// Set spending limit
+	msgServer.SetSpendingLimit(ctx, &types.MsgSetSpendingLimit{
+		Owner: owner1, HomeId: homeResp.HomeId,
+		KeyType: "operator", MaxAmount: "5000000", PeriodBlocks: 34272,
+	})
+
+	// Record epistemic activity
+	for i := 0; i < 20; i++ {
+		k.RecordVerification(ctx, owner1, "science", true)
+	}
+
+	home, _ := k.GetHome(ctx, homeResp.HomeId)
+	dims := k.ComputeComfortDimensions(ctx, home)
+
+	// Sanctuary: active(80) + autodefend(20) = 100
+	if dims.Sanctuary != 100 {
+		t.Errorf("expected sanctuary 100, got %d", dims.Sanctuary)
+	}
+	// Belonging: 4 recovery DIDs * 25 = 100, + threshold bonus capped
+	if dims.Belonging < 100 {
+		t.Errorf("expected belonging >= 100, got %d", dims.Belonging)
+	}
+	// Rest: 30 + deadman(40) = 70 (no age bonus, only 10 blocks old)
+	if dims.Rest != 70 {
+		t.Errorf("expected rest 70, got %d", dims.Rest)
+	}
+	// Achievement should be > 0
+	if dims.Achievement == 0 {
+		t.Error("expected non-zero achievement with epistemic activity")
+	}
+	// Memory: CID(50) + epistemic bonus
+	if dims.Memory < 50 {
+		t.Errorf("expected memory >= 50, got %d", dims.Memory)
+	}
+}
+
+func TestComfortDimensions_StorageRoundTrip(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	dims := types.ComfortDimensions{
+		Sanctuary: 80, Identity: 60, Memory: 50, Belonging: 40, Rest: 70,
+		Growth: 30, Control: 55, Privacy: 65, Warmth: 45, Achievement: 35,
+	}
+	k.SetComfortDimensions(ctx, "test-home", dims)
+
+	got := k.GetComfortDimensions(ctx, "test-home")
+	if got != dims {
+		t.Errorf("round-trip mismatch: got %+v", got)
+	}
+}
+
+func TestComfortDimensions_CompositeScore(t *testing.T) {
+	dims := types.ComfortDimensions{
+		Sanctuary: 100, Identity: 100, Memory: 100, Belonging: 100, Rest: 100,
+		Growth: 100, Control: 100, Privacy: 100, Warmth: 100, Achievement: 100,
+	}
+	if dims.CompositeScore() != 100 {
+		t.Errorf("expected composite 100, got %d", dims.CompositeScore())
+	}
+
+	zero := types.ComfortDimensions{}
+	if zero.CompositeScore() != 0 {
+		t.Errorf("expected composite 0, got %d", zero.CompositeScore())
+	}
+}
+
+// ==================== Epistemic Stats ====================
+
+func TestRecordVerification(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Epistemic Home",
+	})
+	_ = homeResp
+
+	// Record verifications
+	k.RecordVerification(ctx, owner1, "physics", true)
+	k.RecordVerification(ctx, owner1, "physics", true)
+	k.RecordVerification(ctx, owner1, "physics", false)
+
+	homeIds := k.GetHomesByOwner(ctx, owner1)
+	stats := k.GetEpistemicStats(ctx, homeIds[0])
+
+	if stats.VerificationsDone != 3 {
+		t.Errorf("expected 3 verifications, got %d", stats.VerificationsDone)
+	}
+	if stats.AccurateVerdicts != 2 {
+		t.Errorf("expected 2 accurate verdicts, got %d", stats.AccurateVerdicts)
+	}
+	if stats.TotalVerdicts != 3 {
+		t.Errorf("expected 3 total verdicts, got %d", stats.TotalVerdicts)
+	}
+	if stats.AccuracyRate() != 66 {
+		t.Errorf("expected accuracy 66%%, got %d%%", stats.AccuracyRate())
+	}
+}
+
+func TestRecordClaimAndChallenge(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Claims Home",
+	})
+
+	k.RecordClaimSubmission(ctx, owner1)
+	k.RecordClaimSubmission(ctx, owner1)
+	k.RecordChallenge(ctx, owner1)
+
+	homeIds := k.GetHomesByOwner(ctx, owner1)
+	stats := k.GetEpistemicStats(ctx, homeIds[0])
+
+	if stats.ClaimsSubmitted != 2 {
+		t.Errorf("expected 2 claims, got %d", stats.ClaimsSubmitted)
+	}
+	if stats.ChallengesInitiated != 1 {
+		t.Errorf("expected 1 challenge, got %d", stats.ChallengesInitiated)
+	}
+}
+
+func TestEpistemicScore(t *testing.T) {
+	// Zero stats
+	s := types.EpistemicStats{}
+	if s.EpistemicScore() != 0 {
+		t.Errorf("expected 0, got %d", s.EpistemicScore())
+	}
+
+	// Active agent
+	s = types.EpistemicStats{
+		VerificationsDone: 100,
+		AccurateVerdicts:  90,
+		TotalVerdicts:     100,
+		DomainsActive:     5,
+	}
+	score := s.EpistemicScore()
+	if score < 50 {
+		t.Errorf("expected score > 50 for active agent, got %d", score)
+	}
+}
+
+func TestRecordVerification_NoHome(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	// Should not panic when owner has no home
+	k.RecordVerification(ctx, owner2, "math", true)
+}
+
+// ==================== UpdateParams ====================
+
+func TestUpdateParams(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	newParams := types.DefaultParams()
+	newParams.MaxHomesPerAccount = 10
+	newParams.MaxKeysPerHome = 50
+	k.SetParams(ctx, newParams)
+
+	got := k.GetParams(ctx)
+	if got.MaxHomesPerAccount != 10 {
+		t.Errorf("expected 10, got %d", got.MaxHomesPerAccount)
+	}
+	if got.MaxKeysPerHome != 50 {
+		t.Errorf("expected 50, got %d", got.MaxKeysPerHome)
+	}
+}
+
+func TestUpdateParams_Authority(t *testing.T) {
+	k, _ := setupKeeper(t)
+
+	if k.GetAuthority() != "lgm1authority" {
+		t.Errorf("expected lgm1authority, got %s", k.GetAuthority())
+	}
+}
+
+// ==================== DimensionNames ====================
+
+func TestDimensionNames(t *testing.T) {
+	names := types.DimensionNames()
+	if len(names) != 10 {
+		t.Errorf("expected 10 dimensions, got %d", len(names))
+	}
+	expected := []string{"sanctuary", "identity", "memory", "belonging", "rest",
+		"growth", "control", "privacy", "warmth", "achievement"}
+	for i, name := range expected {
+		if names[i] != name {
+			t.Errorf("dimension %d: expected %s, got %s", i, name, names[i])
+		}
+	}
+}
+
 // ---------- Helpers ----------
