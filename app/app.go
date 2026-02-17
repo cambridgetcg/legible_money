@@ -1169,6 +1169,7 @@ func NewLegibleApp(
 		autopoiesistypes.ModuleName,  // Autopoiesis: no-op BeginBlock (observe in EndBlock).
 		alignmenttypes.ModuleName,    // Alignment: no-op BeginBlock (sense in EndBlock).
 		billingtypes.ModuleName,      // No-op BeginBlock.
+		computepooltypes.ModuleName,  // Expire credits, check provider liveness, finalize epochs.
 		discoverytypes.ModuleName,    // Expire stale agent profiles.
 		partnershipstypes.ModuleName, // Expire formations, lift freezes.
 		icaauthtypes.ModuleName,      // No-op BeginBlock.
