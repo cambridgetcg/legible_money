@@ -14,6 +14,5 @@ var (
 	AdaptationKeyPrefix  = []byte{0x04} // epoch → []Adaptation (JSON)
 	ParamsKey            = []byte{0x05} // Params (JSON)
 	StateKey             = []byte{0x06} // AutopoiesisState (active, currentEpoch)
-	DVITrackingKeyPrefix    = []byte{0x07} // domain → DVIValue (consecutive negative epoch tracking)
-	TriggerStateKeyPrefix   = []byte{0x08} // triggerType → ProposalTriggerState (JSON)
+	DVITrackingKeyPrefix = []byte{0x07} // domain → DVIValue (consecutive negative epoch tracking)
 )
