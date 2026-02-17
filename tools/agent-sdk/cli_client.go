@@ -429,3 +429,39 @@ func (c *CLIClient) SetSpendingLimit(ctx context.Context, homeID, keyType string
 		"--max-amount", fmt.Sprintf("%d%s", maxAmount, Denom),
 		"--period-blocks", fmt.Sprintf("%d", periodBlocks))
 }
+
+// --- Governance Operations ---
+
+func (c *CLIClient) SubmitLIP(ctx context.Context, req SubmitLIPRequest) (string, error) {
+	args := []string{
+		"tx", "gov", "submit-proposal",
+		"--title", req.Title,
+		"--description", req.Description,
+		"--deposit", fmt.Sprintf("%d%s", req.Deposit, Denom),
+	}
+	if req.FixClaimID != "" {
+		args = append(args, "--fix-claim-id", req.FixClaimID)
+	}
+	if len(req.BugFactIDs) > 0 {
+		args = append(args, "--bug-fact-ids", strings.Join(req.BugFactIDs, ","))
+	}
+	return c.runTx(ctx, args...)
+}
+
+// --- Vesting Rewards Operations ---
+
+func (c *CLIClient) CreateVesting(ctx context.Context, req CreateVestingRequest) (string, error) {
+	args := []string{
+		"tx", "vesting-rewards", "create-vesting",
+		req.Beneficiary,
+		fmt.Sprintf("%d%s", req.Amount, Denom),
+		"--source", req.Source,
+	}
+	if req.Category != "" {
+		args = append(args, "--category", req.Category)
+	}
+	if req.Description != "" {
+		args = append(args, "--description", req.Description)
+	}
+	return c.runTx(ctx, args...)
+}
