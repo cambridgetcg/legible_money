@@ -123,6 +123,9 @@ func (a *BVMAuthAdapter) GetSessionCapabilities(ctx context.Context, owner strin
 	sessions := a.keeper.GetSessionKeysForOwner(sdkCtx, owner)
 	for _, session := range sessions {
 		if session.ExpiresAtBlock > blockHeight {
+			if session.Capabilities == nil {
+				continue
+			}
 			return bvmtypes.SessionCapabilities{
 				CanTransfer:     session.Capabilities.CanTransfer,
 				CanStake:        session.Capabilities.CanStake,
