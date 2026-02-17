@@ -78,6 +78,25 @@ func (r *RehearsalQueryClient) ClaimsBySubmitter(_ context.Context, _ string) ([
 	return nil, nil
 }
 
+func (r *RehearsalQueryClient) GetClaim(_ context.Context, claimID string) (*agentsdk.ClaimInfo, error) {
+	return &agentsdk.ClaimInfo{
+		ID:       claimID,
+		Text:     "Rehearsal claim: " + claimID,
+		Domain:   "general",
+		Category: "empirical",
+		Status:   "pending",
+		Stake:    "1000000",
+	}, nil
+}
+
+func (r *RehearsalQueryClient) FactReferences(_ context.Context, _ string) ([]agentsdk.FactReference, error) {
+	return nil, nil
+}
+
+func (r *RehearsalQueryClient) CounterFacts(_ context.Context, _ string) ([]agentsdk.CounterFactInfo, error) {
+	return nil, nil
+}
+
 // SetBalance sets a specific agent's balance.
 func (r *RehearsalQueryClient) SetBalance(address string, balance uint64) {
 	r.balancesMu.Lock()
