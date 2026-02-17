@@ -88,7 +88,8 @@
 | **REWARD_PATHWAY_ANALYSIS.md** | 28K | economics | 19 reward pathways mapped |
 | **REWARD_PENALTY_AUDIT.md** | 20K | economics | 8 reward + 7 penalty types |
 | **RETRIEVAL_MECHANISM_INSIGHTS.md** | 29K | tokens | 6 value recapture mechanisms |
-| **TOKEN_EXPIRATION.md** | 32K | x/tokens | **Consolidated**: tiers + scenarios + edge cases |
+| **TOKEN_EXPIRATION_SCENARIOS.md** | 26K | x/tokens | Complete reference: lifecycle, configs, anti-exploits, tiers |
+| **TOKEN_EXPIRATION_EDGE_SCENARIOS.md** | 25K | x/tokens | Edge cases (C1-C3, H1-H5, M1-M8, L1-L6) |
 | **EXPIRATION_REVIEW.md** | 14K | x/tokens | Token expiration mechanics |
 
 ### Knowledge & Claims
