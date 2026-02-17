@@ -40,6 +40,11 @@ func (k Keeper) CheckProposalTriggers(ctx sdk.Context, epoch uint64, hormones ty
 		k.emitProposalSuggestion(ctx, epoch, trigger, &proposalState)
 		return
 	}
+
+	if trigger := k.checkOpenClawCriticalTrigger(ctx); trigger != nil {
+		k.emitProposalSuggestion(ctx, epoch, trigger, &proposalState)
+		return
+	}
 }
 
 // checkBoundHitTrigger checks if any multiplier is stuck at its bound for 20+ epochs.
