@@ -272,9 +272,51 @@ SALT=$(openssl rand -hex 16)
 **Helper — Compute commitment hash** (for debugging):
 
 ```bash
-./lgm-tx.sh hash-commitment accept 800000 mysalt123
-# → {"commitment_hash":"abc123...","preimage":"LGM.commitment.v1:accept|800000|mysalt123"}
+./lgm-tx.sh hash-commitment round-123 accept 800000 mysalt123
+# → {"commitment_hash":"91495ce0...","round_id":"round-123","verdict":"accept","confidence":800000}
 ```
+
+The hash uses a binary length-prefixed format: `SHA-256("LGM.commitment.v1:" + LP(roundID) + LP(verdict) + confidence_le64 + LP(salt))` where LP = 4-byte big-endian length + data, confidence = 8-byte little-endian uint64. This matches the chain's `ComputeCommitmentHash` exactly.
+
+### Automated Verification (P2)
+
+Instead of manually tracking rounds, salts, and phase windows, use the automated commands:
+
+**One-shot verify** — polls active rounds, auto-commits during commit phase, auto-reveals during reveal phase:
+
+```bash
+# As a verifier agent (e.g., test2):
+LGM_FROM=test2 ./lgm-tx.sh verify
+# → polls /legible/knowledge/v1/rounds/active
+# → for each round in commit phase: evaluates claim, generates salt, submits commitment
+# → for each round in reveal phase: loads saved salt, submits reveal
+# → returns {"status":"verified","active_rounds":N} or {"status":"idle","active_rounds":0}
+```
+
+**Continuous watch daemon** — runs verify in a loop:
+
+```bash
+# Start watching (default 3s poll interval):
+LGM_FROM=test2 ./lgm-tx.sh watch
+
+# Custom poll interval (every 2 seconds):
+LGM_FROM=test2 ./lgm-tx.sh watch 2
+
+# Stop with Ctrl+C
+```
+
+The watch daemon:
+- Polls active rounds every N seconds (default 3, ~1 block time)
+- Commits during commit phase, reveals during reveal phase
+- Manages salt persistence automatically (saved to `$LGM_HOME/agent-salts/$LGM_FROM/`)
+- Cleans up stale salts every 20 cycles
+- Reports `[cycle N] Processed M active round(s)` to stderr
+
+**Salt management**: Salts are saved to `$LGM_HOME/agent-salts/<key-name>/<round-id>.salt` and automatically cleaned up when rounds complete. Each salt file stores `verdict|confidence|salt`. You never need to manage salts manually when using `verify` or `watch`.
+
+**Claim evaluation**: The `verify` command evaluates claims automatically:
+- **Protocol observations**: Cross-checks epoch recency (within 5 epochs) and SSI values against on-chain state. Returns `accept 800000` if values match, `reject 700000` if mismatched.
+- **Other categories**: Returns `abstain 0` (no evaluation capability yet — future phases will integrate LLM evaluation via the agent-sdk Claude evaluator).
 
 ### Environment Variables
 
