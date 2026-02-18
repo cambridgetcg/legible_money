@@ -1214,7 +1214,8 @@ func TestValidateBasic_MsgAttachUpgradePlan(t *testing.T) {
 		{"negative height", types.MsgAttachUpgradePlan{Proposer: testAddr("alice"), LipId: "LIP-1", UpgradeName: "v2", Height: -1}, true},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.msg.ValidateBasic()
 			if (err != nil) != tt.wantErr {
