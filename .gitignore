@@ -30,6 +30,7 @@ devnet/secrets/*.secret
 
 # DevNet data
 devnet/data/
+deployment/docker/.devnet-data/
 
 # Go build output
 legbled
