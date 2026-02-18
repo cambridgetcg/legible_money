@@ -33,7 +33,7 @@ func TierMultiplierBps(tier string) uint64 {
 //
 // All arithmetic is integer; multipliers are in bps (1000 = 1.0x).
 func CalculateCredits(params types.Params, tier string, evidenceCount, crossDomainRefs uint64) uint64 {
-	base := params.BaseCUPerVerification
+	base := params.BaseCuPerVerification
 
 	// Complexity factor in bps: 1000000 + complexityBonusBps × evidence + crossDomainBonusBps × crossDomain
 	complexityBps := uint64(1000000)
@@ -91,7 +91,7 @@ func (k Keeper) GrantCredits(ctx sdk.Context, validatorAddr string, claimId stri
 	}
 
 	// Check max balance cap
-	maxBalance := params.BaseCUPerVerification * params.MaxCreditBalanceMultiplier * TierMultiplierBps(tier) / 1000
+	maxBalance := params.BaseCuPerVerification * params.MaxCreditBalanceMultiplier * TierMultiplierBps(tier) / 1000
 	if credit.Balance+cuAmount > maxBalance {
 		// Cap at maximum
 		cuAmount = maxBalance - credit.Balance

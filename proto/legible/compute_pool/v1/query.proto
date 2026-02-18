@@ -1,0 +1,68 @@
+syntax = "proto3";
+package legible.compute_pool.v1;
+
+option go_package = "github.com/legible-money/legible/x/compute_pool/types";
+
+import "google/api/annotations.proto";
+import "legible/compute_pool/v1/state.proto";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/compute_pool/v1/params";
+  }
+  rpc Provider(QueryProviderRequest) returns (QueryProviderResponse) {
+    option (google.api.http).get = "/legible/compute_pool/v1/provider/{address}";
+  }
+  rpc ActiveProviders(QueryActiveProvidersRequest) returns (QueryActiveProvidersResponse) {
+    option (google.api.http).get = "/legible/compute_pool/v1/providers/active";
+  }
+  rpc CreditBalance(QueryCreditBalanceRequest) returns (QueryCreditBalanceResponse) {
+    option (google.api.http).get = "/legible/compute_pool/v1/credit/{validator_addr}";
+  }
+  rpc RedemptionTicket(QueryRedemptionTicketRequest) returns (QueryRedemptionTicketResponse) {
+    option (google.api.http).get = "/legible/compute_pool/v1/ticket/{ticket_id}";
+  }
+  rpc PoolStats(QueryPoolStatsRequest) returns (QueryPoolStatsResponse) {
+    option (google.api.http).get = "/legible/compute_pool/v1/pool_stats";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+}
+
+message QueryProviderRequest {
+  string address = 1;
+}
+message QueryProviderResponse {
+  ComputeProvider provider = 1;
+}
+
+message QueryActiveProvidersRequest {
+  string service_type = 1;
+}
+message QueryActiveProvidersResponse {
+  repeated ComputeProvider providers = 1;
+}
+
+message QueryCreditBalanceRequest {
+  string validator_addr = 1;
+}
+message QueryCreditBalanceResponse {
+  ComputeCredit credit = 1;
+}
+
+message QueryRedemptionTicketRequest {
+  uint64 ticket_id = 1;
+}
+message QueryRedemptionTicketResponse {
+  RedemptionTicket ticket = 1;
+}
+
+message QueryPoolStatsRequest {}
+message QueryPoolStatsResponse {
+  string     pool_balance          = 1;
+  EpochStats current_epoch         = 2;
+  uint64     adjustment_factor_bps = 3;
+}

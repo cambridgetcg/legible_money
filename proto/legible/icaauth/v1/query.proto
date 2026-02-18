@@ -1,0 +1,29 @@
+syntax = "proto3";
+package legible.icaauth.v1;
+
+option go_package = "github.com/legible-money/legible/x/icaauth/types";
+
+import "google/api/annotations.proto";
+import "legible/icaauth/v1/state.proto";
+import "legible/icaauth/v1/genesis.proto";
+
+service Query {
+  rpc InterchainAccounts(QueryInterchainAccountsRequest) returns (QueryInterchainAccountsResponse) {
+    option (google.api.http).get = "/legible/icaauth/v1/accounts/{did}";
+  }
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/icaauth/v1/params";
+  }
+}
+
+message QueryInterchainAccountsRequest {
+  string did = 1;
+}
+message QueryInterchainAccountsResponse {
+  repeated RemoteAccount accounts = 1;
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+}

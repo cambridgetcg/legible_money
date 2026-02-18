@@ -39,7 +39,7 @@ func (k Keeper) CreateRedemptionTicket(ctx sdk.Context, validatorAddr, providerA
 	}
 
 	// Check provider epoch cap
-	if err := k.checkProviderEpochCap(ctx, params, epoch, providerAddr, cuAmount, provider.PricePerCU); err != nil {
+	if err := k.checkProviderEpochCap(ctx, params, epoch, providerAddr, cuAmount, provider.PricePerCu); err != nil {
 		return nil, err
 	}
 
@@ -50,7 +50,7 @@ func (k Keeper) CreateRedemptionTicket(ctx sdk.Context, validatorAddr, providerA
 
 	// Calculate LGM cost: cuAmount × pricePerCU
 	pricePerCU := new(big.Int)
-	pricePerCU.SetString(provider.PricePerCU, 10)
+	pricePerCU.SetString(provider.PricePerCu, 10)
 	lgmAmount := new(big.Int).Mul(big.NewInt(int64(cuAmount)), pricePerCU)
 
 	// Verify pool has sufficient funds
@@ -70,8 +70,8 @@ func (k Keeper) CreateRedemptionTicket(ctx sdk.Context, validatorAddr, providerA
 		Id:        ticketId,
 		Validator: validatorAddr,
 		Provider:  providerAddr,
-		CUAmount:  cuAmount,
-		LGMAmount: lgmAmount.String(),
+		CuAmount:  cuAmount,
+		LgmAmount: lgmAmount.String(),
 		Status:    string(types.TicketStatusPending),
 		CreatedAt: height,
 		ExpiresAt: height + params.RedemptionExpiryBlocks,
@@ -126,19 +126,19 @@ func (k Keeper) ConfirmRedemption(ctx sdk.Context, validatorAddr string, ticketI
 		return types.ErrProviderNotFound
 	}
 
-	// Calculate actual payment (may be less if actualCU < CUAmount)
+	// Calculate actual payment (may be less if actualCU < CuAmount)
 	effectiveCU := actualCU
-	if effectiveCU > ticket.CUAmount {
-		effectiveCU = ticket.CUAmount
+	if effectiveCU > ticket.CuAmount {
+		effectiveCU = ticket.CuAmount
 	}
 
 	pricePerCU := new(big.Int)
-	pricePerCU.SetString(provider.PricePerCU, 10)
+	pricePerCU.SetString(provider.PricePerCu, 10)
 	actualPayment := new(big.Int).Mul(big.NewInt(int64(effectiveCU)), pricePerCU)
 
 	// Refund excess credits if actual < requested
-	if effectiveCU < ticket.CUAmount {
-		excess := ticket.CUAmount - effectiveCU
+	if effectiveCU < ticket.CuAmount {
+		excess := ticket.CuAmount - effectiveCU
 		credit, _ := k.GetCredit(ctx, validatorAddr)
 		credit.Balance += excess
 		credit.RedeemedTotal -= excess
@@ -160,7 +160,7 @@ func (k Keeper) ConfirmRedemption(ctx sdk.Context, validatorAddr string, ticketI
 
 	// Update ticket
 	ticket.Status = string(types.TicketStatusConfirmed)
-	ticket.ActualCU = effectiveCU
+	ticket.ActualCu = effectiveCU
 	k.SetTicket(ctx, ticket)
 
 	// Create usage report
@@ -168,9 +168,9 @@ func (k Keeper) ConfirmRedemption(ctx sdk.Context, validatorAddr string, ticketI
 		TicketId:    ticketId,
 		Validator:   validatorAddr,
 		Provider:    ticket.Provider,
-		RequestedCU: ticket.CUAmount,
-		ActualCU:    effectiveCU,
-		LGMPaid:     actualPayment.String(),
+		RequestedCu: ticket.CuAmount,
+		ActualCu:    effectiveCU,
+		LgmPaid:     actualPayment.String(),
 		ConfirmedAt: height,
 	}
 	k.SetUsageReport(ctx, report)
@@ -182,18 +182,18 @@ func (k Keeper) ConfirmRedemption(ctx sdk.Context, validatorAddr string, ticketI
 	// Update provider epoch flow
 	flow := k.GetOrCreateProviderEpochFlow(ctx, epoch, ticket.Provider)
 	received := new(big.Int)
-	received.SetString(flow.LGMReceived, 10)
+	received.SetString(flow.LgmReceived, 10)
 	received.Add(received, actualPayment)
-	flow.LGMReceived = received.String()
+	flow.LgmReceived = received.String()
 	flow.TasksServed++
 	k.SetProviderEpochFlow(ctx, flow)
 
 	// Update epoch stats
 	stats := k.GetOrCreateEpochStats(ctx, epoch)
 	distributed := new(big.Int)
-	distributed.SetString(stats.LGMDistributed, 10)
+	distributed.SetString(stats.LgmDistributed, 10)
 	distributed.Add(distributed, actualPayment)
-	stats.LGMDistributed = distributed.String()
+	stats.LgmDistributed = distributed.String()
 	k.SetEpochStats(ctx, stats)
 
 	ctx.EventManager().EmitEvent(
@@ -238,8 +238,8 @@ func (k Keeper) DisputeRedemption(ctx sdk.Context, validatorAddr string, ticketI
 
 	// Return credits
 	credit, _ := k.GetCredit(ctx, validatorAddr)
-	credit.Balance += ticket.CUAmount
-	credit.RedeemedTotal -= ticket.CUAmount
+	credit.Balance += ticket.CuAmount
+	credit.RedeemedTotal -= ticket.CuAmount
 	// Extend expiry since credits were unused
 	params := k.GetParams(ctx)
 	credit.ExpiresAt = height + params.CreditExpiryBlocks
@@ -286,8 +286,8 @@ func (k Keeper) ExpireRedemptionTickets(ctx sdk.Context) {
 
 		// Return credits to validator
 		credit, _ := k.GetCredit(ctx, ticket.Validator)
-		credit.Balance += ticket.CUAmount
-		credit.RedeemedTotal -= ticket.CUAmount
+		credit.Balance += ticket.CuAmount
+		credit.RedeemedTotal -= ticket.CuAmount
 		credit.ExpiresAt = height + params.CreditExpiryBlocks
 		k.SetCredit(ctx, credit)
 
@@ -326,7 +326,7 @@ func (k Keeper) checkProviderEpochCap(ctx sdk.Context, params types.Params, epoc
 	// Get current provider flow
 	flow := k.GetOrCreateProviderEpochFlow(ctx, epoch, providerAddr)
 	currentFlow := new(big.Int)
-	currentFlow.SetString(flow.LGMReceived, 10)
+	currentFlow.SetString(flow.LgmReceived, 10)
 
 	// Calculate this redemption's cost
 	price := new(big.Int)
