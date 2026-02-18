@@ -10,6 +10,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -18,7 +19,7 @@ func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 	return &queryServer{Keeper: keeper}
 }
 
-var _ types.QueryServer = queryServer{}
+var _ types.QueryServer = &queryServer{}
 
 func (k queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	if req == nil {
@@ -26,7 +27,7 @@ func (k queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := k.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }
 
 func (k queryServer) Provider(goCtx context.Context, req *types.QueryProviderRequest) (*types.QueryProviderResponse, error) {
@@ -38,7 +39,7 @@ func (k queryServer) Provider(goCtx context.Context, req *types.QueryProviderReq
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrProviderNotFound, req.Address)
 	}
-	return &types.QueryProviderResponse{Provider: provider}, nil
+	return &types.QueryProviderResponse{Provider: &provider}, nil
 }
 
 func (k queryServer) Quote(goCtx context.Context, req *types.QueryQuoteRequest) (*types.QueryQuoteResponse, error) {
@@ -50,5 +51,5 @@ func (k queryServer) Quote(goCtx context.Context, req *types.QueryQuoteRequest) 
 	if !found {
 		return nil, fmt.Errorf("%w: %d", types.ErrQuoteNotFound, req.QuoteId)
 	}
-	return &types.QueryQuoteResponse{Quote: quote}, nil
+	return &types.QueryQuoteResponse{Quote: &quote}, nil
 }

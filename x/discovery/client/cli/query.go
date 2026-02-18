@@ -169,7 +169,7 @@ func NewQueryAgentsByCapabilityCmd() *cobra.Command {
 			}
 
 			qc := newQueryClient(clientCtx)
-			res, err := qc.AgentsByCapability(cmd.Context(), &types.QueryAgentsByCapabilityRequest{CapabilityType: args[0]})
+			res, err := qc.AgentsByCapability(cmd.Context(), &types.QueryAgentsByCapabilityRequest{Capability: args[0]})
 			if err != nil {
 				return fmt.Errorf("failed to query agents by capability: %w", err)
 			}

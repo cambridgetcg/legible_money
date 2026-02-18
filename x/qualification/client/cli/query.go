@@ -223,7 +223,9 @@ func NewQueryEndorsementCmd() *cobra.Command {
 
 			qc := newQueryClient(clientCtx)
 			res, err := qc.Endorsement(cmd.Context(), &types.QueryEndorsementRequest{
-				EndorsementId: args[0],
+				Endorser:        args[0],
+				TargetValidator: args[1],
+				Domain:          args[2],
 			})
 			if err != nil {
 				return fmt.Errorf("failed to query endorsement: %w", err)
@@ -251,7 +253,7 @@ func NewQueryEndorsementsForValidatorCmd() *cobra.Command {
 
 			qc := newQueryClient(clientCtx)
 			res, err := qc.EndorsementsForValidator(cmd.Context(), &types.QueryEndorsementsForValidatorRequest{
-				TargetValidator: args[0],
+				ValidatorAddr: args[0],
 			})
 			if err != nil {
 				return fmt.Errorf("failed to query endorsements: %w", err)

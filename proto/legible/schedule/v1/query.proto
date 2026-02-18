@@ -1,0 +1,40 @@
+syntax = "proto3";
+package legible.schedule.v1;
+
+option go_package = "github.com/legible-money/legible/x/schedule/types";
+
+import "google/api/annotations.proto";
+import "legible/schedule/v1/state.proto";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/schedule/v1/params";
+  }
+
+  rpc Process(QueryProcessRequest) returns (QueryProcessResponse) {
+    option (google.api.http).get = "/legible/schedule/v1/process/{process_id}";
+  }
+
+  rpc ProcessesByCreator(QueryProcessesByCreatorRequest) returns (QueryProcessesByCreatorResponse) {
+    option (google.api.http).get = "/legible/schedule/v1/processes/creator/{creator}";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+}
+
+message QueryProcessRequest {
+  string process_id = 1;
+}
+message QueryProcessResponse {
+  ScheduleProcess process = 1;
+}
+
+message QueryProcessesByCreatorRequest {
+  string creator = 1;
+}
+message QueryProcessesByCreatorResponse {
+  repeated ScheduleProcess processes = 1;
+}

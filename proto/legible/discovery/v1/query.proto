@@ -1,0 +1,51 @@
+syntax = "proto3";
+package legible.discovery.v1;
+
+option go_package = "github.com/legible-money/legible/x/discovery/types";
+
+import "google/api/annotations.proto";
+import "legible/discovery/v1/state.proto";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/discovery/v1/params";
+  }
+
+  rpc Agent(QueryAgentRequest) returns (QueryAgentResponse) {
+    option (google.api.http).get = "/legible/discovery/v1/agent/{address}";
+  }
+
+  rpc AgentsByDomain(QueryAgentsByDomainRequest) returns (QueryAgentsByDomainResponse) {
+    option (google.api.http).get = "/legible/discovery/v1/agents/domain/{domain}";
+  }
+
+  rpc AgentsByCapability(QueryAgentsByCapabilityRequest) returns (QueryAgentsByCapabilityResponse) {
+    option (google.api.http).get = "/legible/discovery/v1/agents/capability/{capability}";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+}
+
+message QueryAgentRequest {
+  string address = 1;
+}
+message QueryAgentResponse {
+  AgentProfile agent = 1;
+}
+
+message QueryAgentsByDomainRequest {
+  string domain = 1;
+}
+message QueryAgentsByDomainResponse {
+  repeated AgentProfile agents = 1;
+}
+
+message QueryAgentsByCapabilityRequest {
+  string capability = 1;
+}
+message QueryAgentsByCapabilityResponse {
+  repeated AgentProfile agents = 1;
+}
