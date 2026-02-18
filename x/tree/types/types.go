@@ -147,7 +147,7 @@ type ServiceSubscription struct {
 // --- Params Validation ---
 // Params struct is proto-generated in genesis.pb.go.
 
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.MaxTasksPerProject == 0 {
 		return fmt.Errorf("max tasks per project must be positive")
 	}

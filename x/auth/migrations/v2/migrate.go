@@ -42,7 +42,7 @@ func migrateRecoveryConfigs(ctx sdk.Context, kvStore store.KVStore) error {
 	type entry struct {
 		key     []byte
 		address string
-		config  types.RecoveryConfig
+		config  *types.RecoveryConfig
 	}
 
 	var entries []entry
@@ -62,13 +62,14 @@ func migrateRecoveryConfigs(ctx sdk.Context, kvStore store.KVStore) error {
 			config.AccountAddress = address
 			keyCopy := make([]byte, len(key))
 			copy(keyCopy, key)
-			entries = append(entries, entry{key: keyCopy, address: address, config: *config})
+			entries = append(entries, entry{key: keyCopy, address: address, config: config})
 		}
 	}
 
 	// Write back outside of iteration
-	for _, e := range entries {
-		bz, err := json.Marshal(&e.config)
+	for i := range entries {
+		e := entries[i]
+		bz, err := json.Marshal(e.config)
 		if err != nil {
 			return fmt.Errorf("failed to marshal recovery config for %s: %w", e.address, err)
 		}

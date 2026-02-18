@@ -16,6 +16,8 @@
 #   # 5. Tear down
 #   docker compose -f deployment/docker/docker-compose.cosmos.yml down -v
 
+name: lgm-devnet
+
 services:
   # ──── Validator 1 (Seed + Primary) ────
   validator-1:

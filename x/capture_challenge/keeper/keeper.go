@@ -75,41 +75,39 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	for _, ch := range genState.Challenges {
 		if ch != nil {
-			k.SetChallenge(ctx, *ch)
+			k.SetChallenge(ctx, ch)
 		}
 	}
 	for _, pool := range genState.BountyPools {
 		if pool != nil {
-			k.SetBountyPool(ctx, *pool)
+			k.SetBountyPool(ctx, pool)
 		}
 	}
 }
 
 // ExportGenesis exports the module's genesis state.
-func (k Keeper) ExportGenesis(ctx sdk.Context) types.GenesisState {
+func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var challenges []*types.CaptureChallenge
-	k.IterateChallenges(ctx, func(ch types.CaptureChallenge) bool {
-		c := ch // copy for pointer
-		challenges = append(challenges, &c)
+	k.IterateChallenges(ctx, func(ch *types.CaptureChallenge) bool {
+		challenges = append(challenges, ch)
 		return false
 	})
 
 	var pools []*types.DomainBountyPool
-	k.IterateBountyPools(ctx, func(p types.DomainBountyPool) bool {
-		pool := p // copy for pointer
-		pools = append(pools, &pool)
+	k.IterateBountyPools(ctx, func(p *types.DomainBountyPool) bool {
+		pools = append(pools, p)
 		return false
 	})
 
 	params := k.GetParams(ctx)
-	return types.GenesisState{
-		Params:      &params,
+	return &types.GenesisState{
+		Params:      params,
 		Challenges:  challenges,
 		BountyPools: pools,
 	}
@@ -117,7 +115,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) types.GenesisState {
 
 // AdvanceChallengePhases checks active challenges and advances their phases.
 func (k Keeper) AdvanceChallengePhases(ctx sdk.Context, currentBlock uint64) {
-	k.IterateChallenges(ctx, func(ch types.CaptureChallenge) bool {
+	k.IterateChallenges(ctx, func(ch *types.CaptureChallenge) bool {
 		changed := false
 
 		switch types.ChallengeStatus(ch.Status) {
@@ -192,7 +190,7 @@ func (k Keeper) AutoFundBountyPools(ctx sdk.Context, currentBlock uint64) {
 	}
 
 	// Iterate existing pools and check risk scores
-	k.IterateBountyPools(ctx, func(pool types.DomainBountyPool) bool {
+	k.IterateBountyPools(ctx, func(pool *types.DomainBountyPool) bool {
 		metrics, found := k.captureDefenseKeeper.GetCaptureMetrics(ctx, pool.Domain)
 		if !found {
 			return false

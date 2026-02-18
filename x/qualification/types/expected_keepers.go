@@ -11,13 +11,13 @@ import (
 
 // OntologyKeeper defines the expected ontology module keeper interface.
 type OntologyKeeper interface {
-	GetDomain(ctx sdk.Context, name string) (ontologytypes.Domain, bool)
+	GetDomain(ctx sdk.Context, name string) (*ontologytypes.Domain, bool)
 }
 
 // StakingKeeper defines the expected staking module keeper interface.
 type StakingKeeper interface {
-	GetValidator(ctx sdk.Context, operatorAddr string) (stakingtypes.LegibleValidator, bool)
-	GetActiveValidatorSet(ctx sdk.Context) []stakingtypes.LegibleValidator
+	GetValidator(ctx sdk.Context, operatorAddr string) (*stakingtypes.LegibleValidator, bool)
+	GetActiveValidatorSet(ctx sdk.Context) []*stakingtypes.LegibleValidator
 }
 
 // BankKeeper defines the expected bank keeper interface.

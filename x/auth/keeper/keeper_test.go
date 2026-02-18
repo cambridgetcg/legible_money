@@ -82,7 +82,8 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
 	// Set default params
-	if err := k.SetParams(ctx, types.DefaultParams()); err != nil {
+	defaultParams := types.DefaultParams()
+	if err := k.SetParams(ctx, &defaultParams); err != nil {
 		t.Fatalf("failed to set params: %v", err)
 	}
 
@@ -2504,7 +2505,7 @@ func TestGenesisRoundtrip_WithRecoveryConfigs(t *testing.T) {
 
 	// Import into fresh keeper
 	k2, ctx2 := setupKeeper(t)
-	if err := k2.InitGenesis(ctx2, *gs); err != nil {
+	if err := k2.InitGenesis(ctx2, gs); err != nil {
 		t.Fatalf("InitGenesis failed: %v", err)
 	}
 

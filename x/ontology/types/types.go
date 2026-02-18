@@ -38,7 +38,7 @@ func (dp *DomainProposal) HasVoted(addr string) bool {
 }
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.CrossStratumDiscount > 1000000 {
 		return fmt.Errorf("cross stratum discount cannot exceed 1000000 basis points")
 	}

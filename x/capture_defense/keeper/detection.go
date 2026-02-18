@@ -12,11 +12,11 @@ import (
 
 // AnalyzeCaptureRisk computes capture risk metrics for a domain based on
 // recent verification history. Returns updated CaptureMetrics.
-func (k Keeper) AnalyzeCaptureRisk(ctx sdk.Context, domain string, currentBlock uint64) types.CaptureMetrics {
+func (k Keeper) AnalyzeCaptureRisk(ctx sdk.Context, domain string, currentBlock uint64) *types.CaptureMetrics {
 	history := k.GetVerificationHistory(ctx, domain)
 
 	if uint64(len(history.Entries)) < types.MinVerificationsForAnalysis {
-		return types.CaptureMetrics{
+		return &types.CaptureMetrics{
 			Domain:          domain,
 			AnalyzedAtBlock: currentBlock,
 		}
@@ -50,7 +50,7 @@ func (k Keeper) AnalyzeCaptureRisk(ctx sdk.Context, domain string, currentBlock 
 	// HHI 40%, timing 20%, verdict 20%, top3 20%
 	riskScore := (hhi*400_000 + timingCorr*200_000 + verdictCorr*200_000 + top3Share*200_000) / 1_000_000
 
-	metrics := types.CaptureMetrics{
+	metrics := &types.CaptureMetrics{
 		Domain:             domain,
 		HerfindahlIndex:    hhi,
 		TimingCorrelation:  timingCorr,

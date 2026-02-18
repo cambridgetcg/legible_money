@@ -203,11 +203,31 @@ func (k Keeper) ResolveDeterministicChallenge(
 	// The evaluation engine's fact graph stage (stage 3) queries GetContradictingFacts
 	// and GetSupportingFacts via the EvaluationContext, so counter-evidence that
 	// contradicts the claim's references will naturally reduce the score.
-	challengedClaim := claim
-	challengedClaim.References = append(
-		append([]string{}, claim.References...),
-		challenge.EvidenceIds...,
-	)
+	challengedClaim := &types.Claim{
+		Id:                claim.Id,
+		ClaimText:         claim.ClaimText,
+		ContentHash:       claim.ContentHash,
+		Domain:            claim.Domain,
+		EpistemicCategory: claim.EpistemicCategory,
+		Submitter:         claim.Submitter,
+		SubmitterDid:      claim.SubmitterDid,
+		StakeAmount:       claim.StakeAmount,
+		Status:            claim.Status,
+		SubmittedAtHeight: claim.SubmittedAtHeight,
+		LogicZone:         claim.LogicZone,
+		RoundId:           claim.RoundId,
+		Evidence:          claim.Evidence,
+		StructuralScore:   claim.StructuralScore,
+		References: append(
+			append([]string{}, claim.References...),
+			challenge.EvidenceIds...,
+		),
+		ChallengeWindowStart: claim.ChallengeWindowStart,
+		ChallengeWindowEnd:   claim.ChallengeWindowEnd,
+		ProvisionalFactId:    claim.ProvisionalFactId,
+		ActiveChallengeCount: claim.ActiveChallengeCount,
+		ReverificationFactId: claim.ReverificationFactId,
+	}
 
 	// Use the same evaluation pipeline as provisional acceptance
 	evalCtx := k.BuildEvaluationContext(ctx)
@@ -220,7 +240,7 @@ func (k Keeper) ResolveDeterministicChallenge(
 		StartHeight: currentHeight,
 	}
 
-	evalResult, err := evaluation.EvaluateClaim(ctx, evalCtx, syntheticRound, challengedClaim)
+	evalResult, err := evaluation.EvaluateClaim(ctx, evalCtx, &syntheticRound, challengedClaim)
 	if err != nil {
 		return "", 0, fmt.Errorf("re-evaluation failed for challenge %s: %w", challenge.Id, err)
 	}
@@ -447,9 +467,9 @@ func (k Keeper) returnChallengerBond(ctx sdk.Context, challenge types.Provisiona
 // slashSubmitterAndRewardChallenger slashes the submitter's stake and pays a portion to the challenger.
 func (k Keeper) slashSubmitterAndRewardChallenger(
 	ctx sdk.Context,
-	claim types.Claim,
+	claim *types.Claim,
 	challenge types.ProvisionalChallenge,
-	params types.Params,
+	params *types.Params,
 ) {
 	if k.bankKeeper == nil || claim.StakeAmount == "" {
 		return

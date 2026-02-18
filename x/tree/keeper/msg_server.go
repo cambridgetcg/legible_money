@@ -36,7 +36,7 @@ func (m msgServer) CreateProject(goCtx context.Context, msg *types.MsgCreateProj
 	counter := m.Keeper.GetNextProjectId(ctx)
 	projectId := fmt.Sprintf("proj-%d-%d", currentBlock, counter)
 
-	project := types.ProductProject{
+	project := &types.ProductProject{
 		Id:                  projectId,
 		Name:                msg.Title,
 		Description:         msg.Description,
@@ -353,7 +353,7 @@ func (m msgServer) SpawnChildProject(goCtx context.Context, msg *types.MsgSpawnC
 	counter := m.Keeper.GetNextProjectId(ctx)
 	childId := fmt.Sprintf("proj-%d-%d", currentBlock, counter)
 
-	child := types.ProductProject{
+	child := &types.ProductProject{
 		Id:                  childId,
 		Name:                msg.Title,
 		Description:         msg.Description,
@@ -449,7 +449,7 @@ func (m msgServer) AddTask(goCtx context.Context, msg *types.MsgAddTask) (*types
 	counter := m.Keeper.GetNextTaskId(ctx)
 	taskId := fmt.Sprintf("task-%d-%d", currentBlock, counter)
 
-	task := types.ProjectTask{
+	task := &types.ProjectTask{
 		Id:                   taskId,
 		ProjectId:            msg.ProjectId,
 		Title:                msg.Title,
@@ -825,11 +825,10 @@ func (m msgServer) ReviewApplication(goCtx context.Context, msg *types.MsgReview
 	var appIndex int = -1
 	var projectId string
 
-	m.Keeper.IterateProjects(ctx, func(p types.ProductProject) bool {
+	m.Keeper.IterateProjects(ctx, func(p *types.ProductProject) bool {
 		for i, app := range p.Applications {
 			if app.Did == msg.ApplicationId && app.Status == string(types.AppPending) {
-				proj := p
-				targetProject = &proj
+				targetProject = p
 				appIndex = i
 				projectId = p.Id
 				return true
@@ -865,7 +864,7 @@ func (m msgServer) ReviewApplication(goCtx context.Context, msg *types.MsgReview
 		targetProject.Applications[appIndex].Status = string(types.AppRejected)
 	}
 
-	m.Keeper.SetProject(ctx, *targetProject)
+	m.Keeper.SetProject(ctx, targetProject)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"tree_review_application",
@@ -908,7 +907,7 @@ func (m msgServer) DeployService(goCtx context.Context, msg *types.MsgDeployServ
 		pricePerCall = "0"
 	}
 
-	service := types.ServiceLeaf{
+	service := &types.ServiceLeaf{
 		Id:              serviceId,
 		Name:            msg.Name,
 		Description:     msg.Description,
@@ -1308,7 +1307,7 @@ func (m msgServer) BeginSeeding(goCtx context.Context, msg *types.MsgBeginSeedin
 		domain = project.KnowledgeDomain
 	}
 
-	seed := types.OpportunitySeed{
+	seed := &types.OpportunitySeed{
 		Id:              seedId,
 		DetectedAtBlock: currentBlock,
 		KnowledgeDomain: domain,
@@ -1340,7 +1339,7 @@ func (m msgServer) DetectOpportunity(goCtx context.Context, msg *types.MsgDetect
 	counter := m.Keeper.GetNextSeedId(ctx)
 	seedId := fmt.Sprintf("seed-%d-%d", currentBlock, counter)
 
-	seed := types.OpportunitySeed{
+	seed := &types.OpportunitySeed{
 		Id:              seedId,
 		DetectedAtBlock: currentBlock,
 		KnowledgeDomain: msg.Domain,
@@ -1436,7 +1435,7 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	m.SetParams(ctx, *msg.Params)
+	m.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"tree_params_updated",

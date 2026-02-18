@@ -1,7 +1,7 @@
 package types
 
 // DefaultParams returns default governance parameters.
-func DefaultParams() Params {
+func DefaultParams() *Params {
 	p := &Params{}
 	p.VotingPeriodBlocks = 100000
 	p.ReviewPeriodBlocks = 50000
@@ -18,14 +18,13 @@ func DefaultParams() Params {
 	p.LipStakeEconomics = "800000000"  // 800 LGM in ulgm
 	p.LipStakeInterface = "400000000"  // 400 LGM in ulgm
 	p.LipStakeProcess = "200000000"    // 200 LGM in ulgm
-	return *p
+	return p
 }
 
 // DefaultGenesis returns default genesis state.
 func DefaultGenesis() *GenesisState {
-	params := DefaultParams()
 	return &GenesisState{
-		Params:         &params,
+		Params:         DefaultParams(),
 		Lips:           []*LIP{},
 		Votes:          []*QuadraticVote{},
 		Disbursements:  []*DisbursementProposal{},
@@ -35,7 +34,7 @@ func DefaultGenesis() *GenesisState {
 }
 
 // Validate validates genesis state.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		return gs.Params.Validate()
 	}

@@ -300,7 +300,7 @@ type EquivocationEvidence struct {
 }
 
 // MustMarshal marshals params to bytes, panics on error
-func (p Params) MustMarshal() []byte {
+func (p *Params) MustMarshal() []byte {
 	// Placeholder - in real implementation would use amino/proto encoding
 	return []byte{}
 }

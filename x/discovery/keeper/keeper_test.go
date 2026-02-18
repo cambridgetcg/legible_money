@@ -95,7 +95,7 @@ func TestSetGetParams(t *testing.T) {
 func TestSetGetProfile(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	profile := types.AgentProfile{
+	profile := &types.AgentProfile{
 		Address:           testAgent1,
 		Did:               "did:lgm:abc123",
 		DisplayName:       "Test Agent",
@@ -128,13 +128,13 @@ func TestGetProfilesByDomain(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Register two agents in "mathematics" domain
-	k.SetProfile(ctx, types.AgentProfile{
+	k.SetProfile(ctx, &types.AgentProfile{
 		Address: testAgent1,
 		Domains: []string{"mathematics"},
 		Status:  "active",
 		Stake:   "100000000",
 	})
-	k.SetProfile(ctx, types.AgentProfile{
+	k.SetProfile(ctx, &types.AgentProfile{
 		Address: testAgent2,
 		Domains: []string{"mathematics", "physics"},
 		Status:  "active",
@@ -155,7 +155,7 @@ func TestGetProfilesByDomain(t *testing.T) {
 func TestGetProfilesByCapability(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetProfile(ctx, types.AgentProfile{
+	k.SetProfile(ctx, &types.AgentProfile{
 		Address: testAgent1,
 		Status:  "active",
 		Stake:   "100000000",
@@ -175,7 +175,7 @@ func TestExpireStaleProfiles(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Set profile active at block 100
-	k.SetProfile(ctx, types.AgentProfile{
+	k.SetProfile(ctx, &types.AgentProfile{
 		Address:         testAgent1,
 		Status:          "active",
 		LastActiveBlock: 100,
@@ -232,7 +232,7 @@ func TestHeartbeatReactivation(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	k.SetProfile(ctx, types.AgentProfile{
+	k.SetProfile(ctx, &types.AgentProfile{
 		Address:         testAgent1,
 		Status:          "expired",
 		LastActiveBlock: 50,
@@ -300,6 +300,7 @@ func TestUpdateProfile_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unregistered agent")
 	}
+	_ = k
 }
 
 func TestUpdateProfile_EmptyFieldsPreserved(t *testing.T) {
@@ -386,6 +387,7 @@ func TestAddCapability_Duplicate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for duplicate capability")
 	}
+	_ = k
 }
 
 func TestAddCapability_InactiveAgent(t *testing.T) {
@@ -393,7 +395,7 @@ func TestAddCapability_InactiveAgent(t *testing.T) {
 	msgServer := keeper.NewMsgServerImpl(k)
 
 	// Set profile as expired
-	k.SetProfile(ctx, types.AgentProfile{
+	k.SetProfile(ctx, &types.AgentProfile{
 		Address: testAgent1,
 		Status:  "expired",
 		Stake:   "100000000",
@@ -460,6 +462,7 @@ func TestRemoveCapability_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent capability")
 	}
+	_ = k
 }
 
 // ---------- DeregisterAgent Tests ----------
@@ -501,6 +504,7 @@ func TestDeregisterAgent_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unregistered agent")
 	}
+	_ = k
 }
 
 // ---------- RegisterAgent Error Tests ----------
@@ -525,6 +529,7 @@ func TestRegisterAgent_DuplicateRegistration(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for duplicate registration")
 	}
+	_ = k
 }
 
 func TestRegisterAgent_InsufficientStake(t *testing.T) {
@@ -540,6 +545,7 @@ func TestRegisterAgent_InsufficientStake(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for insufficient stake")
 	}
+	_ = k
 }
 
 // ---------- UpdateParams Tests ----------
@@ -553,7 +559,7 @@ func TestUpdateParams(t *testing.T) {
 
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAgent1, // matches setupKeeper authority
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)
@@ -572,11 +578,12 @@ func TestUpdateParams_Unauthorized(t *testing.T) {
 	dp := types.DefaultParams()
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAgent2, // wrong authority
-		Params:    &dp,
+		Params:    dp,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized UpdateParams")
 	}
+	_ = k
 }
 
 // ---------- Heartbeat Error Tests ----------
@@ -591,4 +598,5 @@ func TestHeartbeat_NotRegistered(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unregistered agent heartbeat")
 	}
+	_ = k
 }

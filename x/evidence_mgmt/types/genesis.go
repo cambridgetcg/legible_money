@@ -6,13 +6,13 @@ import "fmt"
 func DefaultGenesis() *GenesisState {
 	p := DefaultParams()
 	return &GenesisState{
-		Params: &p,
+		Params: p,
 	}
 }
 
 // DefaultParams returns default module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		MinAuditStake:         "22000000", // 22 LGM (in ulgm)
 		AuditWindow:           34272,      // ~1 day (BLOCKS_PER_DAY)
 		MinAuditsForConsensus: 3,
@@ -26,7 +26,7 @@ func DefaultParams() Params {
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params == nil {
 		return fmt.Errorf("params cannot be nil")
 	}

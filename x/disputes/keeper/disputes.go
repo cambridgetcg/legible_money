@@ -12,43 +12,43 @@ import (
 )
 
 // OpenDispute creates a new dispute against a verified fact.
-func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond string) (types.Dispute, error) {
+func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond string) (*types.Dispute, error) {
 	params := k.GetParams(ctx)
 
 	// Verify fact exists and is disputable
 	fact, found := k.knowledgeKeeper.GetFact(ctx, factId)
 	if !found {
-		return types.Dispute{}, fmt.Errorf("%w: %s", types.ErrFactNotFound, factId)
+		return nil, fmt.Errorf("%w: %s", types.ErrFactNotFound, factId)
 	}
 	if fact.Status != "verified" && fact.Status != "contested" && fact.Status != "active" && fact.Status != "challenged" && fact.Status != "provisional" {
-		return types.Dispute{}, fmt.Errorf("%w: fact status is %s", types.ErrFactNotDisputable, fact.Status)
+		return nil, fmt.Errorf("%w: fact status is %s", types.ErrFactNotDisputable, fact.Status)
 	}
 
 	// Check active dispute limit for this fact
 	activeCount := k.GetActiveDisputeCountForFact(ctx, factId)
 	if activeCount >= params.MaxActiveDisputes {
-		return types.Dispute{}, fmt.Errorf("%w: %d active disputes for fact %s",
+		return nil, fmt.Errorf("%w: %d active disputes for fact %s",
 			types.ErrMaxActiveDisputes, activeCount, factId)
 	}
 
 	// Get tier 1 config
 	tierConfig, err := k.GetTierConfig(params, types.TierBasic)
 	if err != nil {
-		return types.Dispute{}, err
+		return nil, err
 	}
 
 	// Validate bond amount
 	bondAmount := new(big.Int)
 	if _, ok := bondAmount.SetString(bond, 10); !ok || bondAmount.Sign() <= 0 {
-		return types.Dispute{}, fmt.Errorf("%w: invalid amount", types.ErrInvalidBond)
+		return nil, fmt.Errorf("%w: invalid amount", types.ErrInvalidBond)
 	}
 
 	minBond := new(big.Int)
 	if _, ok := minBond.SetString(tierConfig.MinBond, 10); !ok {
-		return types.Dispute{}, fmt.Errorf("%w: invalid min bond config", types.ErrTierConfigNotFound)
+		return nil, fmt.Errorf("%w: invalid min bond config", types.ErrTierConfigNotFound)
 	}
 	if bondAmount.Cmp(minBond) < 0 {
-		return types.Dispute{}, fmt.Errorf("%w: need at least %s, got %s",
+		return nil, fmt.Errorf("%w: need at least %s, got %s",
 			types.ErrInsufficientBond, tierConfig.MinBond, bond)
 	}
 
@@ -63,10 +63,10 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 	// Select arbiters
 	arbiters, err := k.SelectArbiters(ctx, tierConfig.ArbiterCount, challenger, fact.Submitter)
 	if err != nil {
-		return types.Dispute{}, err
+		return nil, err
 	}
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:               disputeId,
 		FactId:           factId,
 		ClaimId:          "", // Will be set if claim info is available
@@ -112,7 +112,7 @@ func (k Keeper) OpenDispute(ctx sdk.Context, factId, challenger, reason, bond st
 }
 
 // TransitionToVoting moves a dispute from evidence phase to voting phase.
-func (k Keeper) TransitionToVoting(ctx sdk.Context, dispute types.Dispute) error {
+func (k Keeper) TransitionToVoting(ctx sdk.Context, dispute *types.Dispute) error {
 	if dispute.Status != string(types.DisputeStatusEvidence) {
 		return fmt.Errorf("%w: dispute is in %s phase", types.ErrNotInEvidencePhase, dispute.Status)
 	}
@@ -260,7 +260,7 @@ func arbiterPriority(seed []byte, address string, stake uint64) [32]byte {
 }
 
 // GetTierConfig returns the config for the specified tier from params.
-func (k Keeper) GetTierConfig(params types.Params, tier types.EscalationTier) (*types.TierConfig, error) {
+func (k Keeper) GetTierConfig(params *types.Params, tier types.EscalationTier) (*types.TierConfig, error) {
 	for _, tc := range params.TierConfigs {
 		if tc.Tier == uint32(tier) {
 			return tc, nil

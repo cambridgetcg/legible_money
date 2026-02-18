@@ -28,7 +28,7 @@ const (
 //   - At ResearchRampBlocks: returns ResearchShareBps (7% default)
 //   - After ramp: returns ResearchShareBps
 //   - If ResearchRampBlocks is 0: returns ResearchShareBps immediately (backward compatible)
-func GetEffectiveResearchShareBps(blockHeight int64, params types.Params) uint64 {
+func GetEffectiveResearchShareBps(blockHeight int64, params *types.Params) uint64 {
 	rampBlocks := params.ResearchRampBlocks
 	maxBps := params.ResearchShareBps
 	minBps := params.ResearchMinBps
@@ -55,7 +55,7 @@ func GetEffectiveResearchShareBps(blockHeight int64, params types.Params) uint64
 //  2. Research 5-way split: 77% research, 7% foundation, 7% community, 7% developers, 2% reserve
 //  3. Remaining: 60% provider, 30% knowledge pool, 10% protocol
 //  4. Protocol 10% split: 50% burn, 50% treasury
-func (k Keeper) CalculateDistribution(ctx sdk.Context, totalPayment *big.Int, factIds []string) types.PaymentDistribution {
+func (k Keeper) CalculateDistribution(ctx sdk.Context, totalPayment *big.Int, factIds []string) *types.PaymentDistribution {
 	params := k.GetParams(ctx)
 
 	// Step 1: Research share with progressive ramp
@@ -106,7 +106,7 @@ func (k Keeper) CalculateDistribution(ctx sdk.Context, totalPayment *big.Int, fa
 	// Step 4: Knowledge pool weighted by confidence * log2(citations+1)
 	knowledgePool := k.calculateKnowledgePoolDistribution(ctx, knowledgePoolTotal, factIds)
 
-	return types.PaymentDistribution{
+	return &types.PaymentDistribution{
 		TotalPayment:  totalPayment.String(),
 		ResearchShare: researchShare.String(),
 		ResearchSplit: &types.ResearchFundSplit{
@@ -198,7 +198,7 @@ func (k Keeper) calculateKnowledgePoolDistribution(ctx sdk.Context, poolTotal *b
 }
 
 // ExecuteDistribution performs the atomic transfers for a payment distribution.
-func (k Keeper) ExecuteDistribution(ctx sdk.Context, callerAddr sdk.AccAddress, providerAddr sdk.AccAddress, distribution types.PaymentDistribution) error {
+func (k Keeper) ExecuteDistribution(ctx sdk.Context, callerAddr sdk.AccAddress, providerAddr sdk.AccAddress, distribution *types.PaymentDistribution) error {
 	// 1. Send research splits to treasury modules
 	researchSplit := distribution.ResearchSplit
 

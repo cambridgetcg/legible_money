@@ -23,7 +23,7 @@ func TestEvaluateLogicZone_Propositional(t *testing.T) {
 			return false
 		},
 	}
-	claim := types.Claim{LogicZone: "propositional"}
+	claim := &types.Claim{LogicZone: "propositional"}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.Ceiling != 1_000_000 {
@@ -44,11 +44,11 @@ func TestEvaluateLogicZone_Peano_NoGrounding(t *testing.T) {
 		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
 			return zone == "peano"
 		},
-		GetFact: func(_ sdk.Context, _ string) (types.Fact, bool) {
-			return types.Fact{}, false
+		GetFact: func(_ sdk.Context, _ string) (*types.Fact, bool) {
+			return nil, false
 		},
 	}
-	claim := types.Claim{LogicZone: "peano", References: nil}
+	claim := &types.Claim{LogicZone: "peano", References: nil}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.Ceiling != 850_000 {
@@ -69,18 +69,18 @@ func TestEvaluateLogicZone_Peano_WithGrounding(t *testing.T) {
 		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
 			return zone == "peano"
 		},
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			if id == "axiom-1" {
 				// Propositional fact (more formal) grounds a Peano claim — valid
-				return types.Fact{
+				return &types.Fact{
 					Id: "axiom-1", Status: types.FactStatusVerified,
 					Confidence: 950_000, LogicZone: "propositional", Domain: "mathematics",
 				}, true
 			}
-			return types.Fact{}, false
+			return nil, false
 		},
 	}
-	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"axiom-1"}}
+	claim := &types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"axiom-1"}}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.ForceVerdict != "" {
@@ -99,17 +99,17 @@ func TestEvaluateLogicZone_Peano_EmpiricalRefRejected(t *testing.T) {
 		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
 			return zone == "peano"
 		},
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			if id == "obs-1" {
-				return types.Fact{
+				return &types.Fact{
 					Id: "obs-1", Status: types.FactStatusVerified,
 					Confidence: 700_000, LogicZone: "empirical", Domain: "mathematics",
 				}, true
 			}
-			return types.Fact{}, false
+			return nil, false
 		},
 	}
-	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"obs-1"}}
+	claim := &types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"obs-1"}}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.ForceVerdict != "abstain" {
@@ -128,17 +128,17 @@ func TestEvaluateLogicZone_Peano_WrongDomainRejected(t *testing.T) {
 		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
 			return zone == "peano"
 		},
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			if id == "axiom-1" {
-				return types.Fact{
+				return &types.Fact{
 					Id: "axiom-1", Status: types.FactStatusVerified,
 					Confidence: 950_000, LogicZone: "propositional", Domain: "physics",
 				}, true
 			}
-			return types.Fact{}, false
+			return nil, false
 		},
 	}
-	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"axiom-1"}}
+	claim := &types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"axiom-1"}}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.ForceVerdict != "abstain" {
@@ -157,17 +157,17 @@ func TestEvaluateLogicZone_Peano_EmptyZoneRefAllowed(t *testing.T) {
 		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
 			return zone == "peano"
 		},
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			if id == "legacy-fact" {
-				return types.Fact{
+				return &types.Fact{
 					Id: "legacy-fact", Status: types.FactStatusVerified,
 					Confidence: 900_000, LogicZone: "", Domain: "",
 				}, true
 			}
-			return types.Fact{}, false
+			return nil, false
 		},
 	}
-	claim := types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"legacy-fact"}}
+	claim := &types.Claim{LogicZone: "peano", Domain: "mathematics", References: []string{"legacy-fact"}}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.ForceVerdict != "" {
@@ -216,11 +216,11 @@ func TestEvaluateLogicZone_SetTheory(t *testing.T) {
 		RequiresIncompletenessAck: func(_ sdk.Context, zone string) bool {
 			return zone == "set_theory"
 		},
-		GetFact: func(_ sdk.Context, _ string) (types.Fact, bool) {
-			return types.Fact{}, false
+		GetFact: func(_ sdk.Context, _ string) (*types.Fact, bool) {
+			return nil, false
 		},
 	}
-	claim := types.Claim{LogicZone: "set_theory"}
+	claim := &types.Claim{LogicZone: "set_theory"}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.Ceiling != 800_000 {
@@ -234,7 +234,7 @@ func TestEvaluateLogicZone_SetTheory(t *testing.T) {
 func TestEvaluateLogicZone_EmptyZone(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
-	claim := types.Claim{LogicZone: ""}
+	claim := &types.Claim{LogicZone: ""}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	// Empty zone: default 1,000,000
@@ -257,7 +257,7 @@ func TestEvaluateLogicZone_Empirical(t *testing.T) {
 			return false
 		},
 	}
-	claim := types.Claim{LogicZone: "empirical"}
+	claim := &types.Claim{LogicZone: "empirical"}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
 	if result.Ceiling != 700_000 {
@@ -280,7 +280,7 @@ func TestApplyCeilings_TripleCeiling(t *testing.T) {
 		},
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:            "sociology",
 		EpistemicCategory: "social",
 		LogicZone:         "empirical",
@@ -306,7 +306,7 @@ func TestApplyCeilings_CategoryCeilingWins(t *testing.T) {
 		},
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:            "mathematics",
 		EpistemicCategory: "predictive", // MaxConfidence = 900,000
 		LogicZone:         "propositional",
@@ -329,7 +329,7 @@ func TestApplyCeilings_FallbackStratum(t *testing.T) {
 		GetConfidenceCeiling: nil, // no ontology keeper
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:            "biology",
 		EpistemicCategory: "empirical",
 	}

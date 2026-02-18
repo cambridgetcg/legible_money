@@ -115,7 +115,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &gs); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal %s genesis: %v", types.ModuleName, err))
 	}
-	am.keeper.InitGenesis(ctx, gs)
+	am.keeper.InitGenesis(ctx, &gs)
 }
 
 // ExportGenesis exports the module's genesis state.
@@ -142,7 +142,7 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 	}
 
 	// Check disbursements in voting stage for expired voting periods
-	am.keeper.IterateDisbursements(ctx, func(disb types.DisbursementProposal) bool {
+	am.keeper.IterateDisbursements(ctx, func(disb *types.DisbursementProposal) bool {
 		if disb.Stage == string(types.DisbStageVoting) && disb.VotingEndsAt > 0 && currentHeight >= disb.VotingEndsAt {
 			am.tallyAndResolveDisbursement(ctx, disb, params)
 		}
@@ -160,7 +160,7 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 // tallyAndResolveLIP tallies votes and moves a LIP to accepted/rejected.
 // If a consensus-category LIP is accepted and has an attached upgrade plan,
 // ScheduleUpgrade is called on the upgrade keeper to halt the chain at the target height.
-func (am AppModule) tallyAndResolveLIP(ctx sdk.Context, lip types.LIP, params types.Params) {
+func (am AppModule) tallyAndResolveLIP(ctx sdk.Context, lip *types.LIP, params *types.Params) {
 	totalWeight := addBigIntStrings(lip.SupportWeight, lip.OpposeWeight, lip.AbstainWeight)
 	if totalWeight == "0" {
 		lip.Stage = string(types.StageRejected)
@@ -223,7 +223,7 @@ func (am AppModule) tallyAndResolveLIP(ctx sdk.Context, lip types.LIP, params ty
 }
 
 // tallyAndResolveDisbursement tallies votes and moves a disbursement to approved/rejected.
-func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.DisbursementProposal, params types.Params) {
+func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb *types.DisbursementProposal, params *types.Params) {
 	totalWeight := addBigIntStrings(disb.SupportWeight, disb.OpposeWeight, disb.AbstainWeight)
 	if totalWeight == "0" {
 		disb.Stage = string(types.DisbStageRejected)

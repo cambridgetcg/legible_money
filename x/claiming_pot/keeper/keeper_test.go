@@ -185,7 +185,7 @@ func TestSetGetParams(t *testing.T) {
 		MaxAllowlistSize:  500,
 		MinAmountPerClaim: "2000",
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 
 	got := k.GetParams(ctx)
 	if got.MaxPotsPerCreator != 50 {
@@ -215,7 +215,7 @@ func TestSetGetPot(t *testing.T) {
 		},
 	}
 
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	got, found := k.GetPot(ctx, "pot-1")
 	if !found {
@@ -242,7 +242,7 @@ func TestDeletePot(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	pot := types.ClaimingPot{PotId: "pot-del", Creator: creator1, Status: string(types.PotStatusActive)}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	k.DeletePot(ctx, "pot-del")
 
@@ -261,11 +261,11 @@ func TestIteratePots(t *testing.T) {
 			Creator: creator1,
 			Status:  string(types.PotStatusActive),
 		}
-		k.SetPot(ctx, pot)
+		k.SetPot(ctx, &pot)
 	}
 
 	count := 0
-	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+	k.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
 		count++
 		return false
 	})
@@ -277,9 +277,9 @@ func TestIteratePots(t *testing.T) {
 func TestGetPotsByStatus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetPot(ctx, types.ClaimingPot{PotId: "active1", Status: string(types.PotStatusActive)})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "active2", Status: string(types.PotStatusActive)})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "closed1", Status: string(types.PotStatusClosed)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "active1", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "active2", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "closed1", Status: string(types.PotStatusClosed)})
 
 	active := k.GetPotsByStatus(ctx, types.PotStatusActive)
 	if len(active) != 2 {
@@ -295,9 +295,9 @@ func TestGetPotsByStatus(t *testing.T) {
 func TestGetPotsByCreator(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetPot(ctx, types.ClaimingPot{PotId: "c1p1", Creator: creator1, Status: string(types.PotStatusActive)})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "c1p2", Creator: creator1, Status: string(types.PotStatusActive)})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "c2p1", Creator: creator2, Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "c1p1", Creator: creator1, Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "c1p2", Creator: creator1, Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "c2p1", Creator: creator2, Status: string(types.PotStatusActive)})
 
 	c1pots := k.GetPotsByCreator(ctx, creator1)
 	if len(c1pots) != 2 {
@@ -323,7 +323,7 @@ func TestSetGetClaimRecord(t *testing.T) {
 		LastClaimBlock: 100,
 	}
 
-	k.SetClaimRecord(ctx, record)
+	k.SetClaimRecord(ctx, &record)
 
 	got, found := k.GetClaimRecord(ctx, "pot-1", claimer1)
 	if !found {
@@ -349,8 +349,8 @@ func TestGetClaimRecordNotFound(t *testing.T) {
 func TestGetAllClaimRecords(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetClaimRecord(ctx, types.ClaimRecord{PotId: "pot-1", Claimer: claimer1, ClaimCount: 1, TotalAmount: "100"})
-	k.SetClaimRecord(ctx, types.ClaimRecord{PotId: "pot-1", Claimer: claimer2, ClaimCount: 2, TotalAmount: "200"})
+	k.SetClaimRecord(ctx, &types.ClaimRecord{PotId: "pot-1", Claimer: claimer1, ClaimCount: 1, TotalAmount: "100"})
+	k.SetClaimRecord(ctx, &types.ClaimRecord{PotId: "pot-1", Claimer: claimer2, ClaimCount: 2, TotalAmount: "200"})
 
 	records := k.GetAllClaimRecords(ctx, "pot-1")
 	if len(records) != 2 {
@@ -455,7 +455,7 @@ func TestCreatePotMaxPotsExceeded(t *testing.T) {
 	// Set max pots per creator to 2
 	params := types.DefaultParams()
 	params.MaxPotsPerCreator = 2
-	k.SetParams(ctx, *params)
+	k.SetParams(ctx, params)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 
@@ -568,7 +568,7 @@ func TestFundPotReactivatesExhausted(t *testing.T) {
 			MaxClaimsPerAccount: 1,
 		},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 	bk.setBalance(funder1, "ulgm", 500_000)
 
 	msgServer := keeper.NewMsgServerImpl(k)
@@ -597,7 +597,7 @@ func TestFundClosedPotFails(t *testing.T) {
 		Status:  string(types.PotStatusClosed),
 		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.FundPot(ctx, &types.MsgFundPot{
@@ -708,7 +708,7 @@ func TestClaimFromPotExhaustion(t *testing.T) {
 			MaxClaimsPerAccount: 1,
 		},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 	bk.setModuleBalance(types.ModuleName, "ulgm", 200000)
 
 	msgServer := keeper.NewMsgServerImpl(k)
@@ -747,7 +747,7 @@ func TestClaimFromInactivePot(t *testing.T) {
 		Status:  string(types.PotStatusClosed),
 		Config:  &types.PotConfig{AmountPerClaim: "1000", MaxClaimsPerAccount: 1},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.ClaimFromPot(ctx, &types.MsgClaimFromPot{
@@ -774,7 +774,7 @@ func TestClaimFromExpiredPot(t *testing.T) {
 			ExpiresAtBlock:      50,
 		},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.ClaimFromPot(ctx, &types.MsgClaimFromPot{
@@ -809,7 +809,7 @@ func TestClaimFromPotMaxTotalClaims(t *testing.T) {
 			MaxClaimsPerAccount: 1,
 		},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 	bk.setModuleBalance(types.ModuleName, "ulgm", 1000000)
 
 	msgServer := keeper.NewMsgServerImpl(k)
@@ -899,7 +899,7 @@ func TestClosePotNotAllowed(t *testing.T) {
 			CreatorCanClose:     false, // not allowed
 		},
 	}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.ClosePot(ctx, &types.MsgClosePot{
@@ -929,12 +929,12 @@ func TestEligibilityAllowlist(t *testing.T) {
 		},
 	}
 
-	eligible, _ := k.EvaluateEligibility(ctx, pot, claimer1)
+	eligible, _ := k.EvaluateEligibility(ctx, &pot, claimer1)
 	if !eligible {
 		t.Error("expected claimer1 to be eligible (in allowlist)")
 	}
 
-	eligible, reason := k.EvaluateEligibility(ctx, pot, claimer2)
+	eligible, reason := k.EvaluateEligibility(ctx, &pot, claimer2)
 	if eligible {
 		t.Error("expected claimer2 to be ineligible (not in allowlist)")
 	}
@@ -957,7 +957,7 @@ func TestEligibilityNoRestrictions(t *testing.T) {
 		},
 	}
 
-	eligible, _ := k.EvaluateEligibility(ctx, pot, claimer1)
+	eligible, _ := k.EvaluateEligibility(ctx, &pot, claimer1)
 	if !eligible {
 		t.Error("expected anyone to be eligible with no restrictions")
 	}
@@ -982,12 +982,12 @@ func TestEligibilityMaxBalance(t *testing.T) {
 		},
 	}
 
-	eligible, _ := k.EvaluateEligibility(ctx, pot, claimer1)
+	eligible, _ := k.EvaluateEligibility(ctx, &pot, claimer1)
 	if !eligible {
 		t.Error("expected claimer1 to be eligible (under max balance)")
 	}
 
-	eligible, _ = k.EvaluateEligibility(ctx, pot, claimer2)
+	eligible, _ = k.EvaluateEligibility(ctx, &pot, claimer2)
 	if eligible {
 		t.Error("expected claimer2 to be ineligible (over max balance)")
 	}
@@ -1013,7 +1013,7 @@ func TestInitExportGenesis(t *testing.T) {
 		},
 	}
 
-	k.InitGenesis(ctx, gs)
+	k.InitGenesis(ctx, &gs)
 
 	// Verify params
 	params := k.GetParams(ctx)
@@ -1058,7 +1058,7 @@ func TestQueryPot(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	pot := types.ClaimingPot{PotId: "q-pot-1", Creator: creator1, Status: string(types.PotStatusActive), Balance: "500"}
-	k.SetPot(ctx, pot)
+	k.SetPot(ctx, &pot)
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.Pot(ctx, &types.QueryPotRequest{PotId: "q-pot-1"})
@@ -1083,9 +1083,9 @@ func TestQueryPotNotFound(t *testing.T) {
 func TestQueryPots(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-1", Status: string(types.PotStatusActive)})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-2", Status: string(types.PotStatusActive)})
-	k.SetPot(ctx, types.ClaimingPot{PotId: "qp-3", Status: string(types.PotStatusClosed)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "qp-1", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "qp-2", Status: string(types.PotStatusActive)})
+	k.SetPot(ctx, &types.ClaimingPot{PotId: "qp-3", Status: string(types.PotStatusClosed)})
 
 	qs := keeper.NewQueryServerImpl(k)
 
@@ -1127,7 +1127,7 @@ func TestBeginBlockExpiresOldPots(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Active pot that expires at block 50, current is 100
-	k.SetPot(ctx, types.ClaimingPot{
+	k.SetPot(ctx, &types.ClaimingPot{
 		PotId:   "bb-expired",
 		Creator: creator1,
 		Status:  string(types.PotStatusActive),
@@ -1135,7 +1135,7 @@ func TestBeginBlockExpiresOldPots(t *testing.T) {
 	})
 
 	// Active pot that expires at block 200 (should NOT expire)
-	k.SetPot(ctx, types.ClaimingPot{
+	k.SetPot(ctx, &types.ClaimingPot{
 		PotId:   "bb-future",
 		Creator: creator1,
 		Status:  string(types.PotStatusActive),
@@ -1143,7 +1143,7 @@ func TestBeginBlockExpiresOldPots(t *testing.T) {
 	})
 
 	// Active pot with no expiration (should NOT expire)
-	k.SetPot(ctx, types.ClaimingPot{
+	k.SetPot(ctx, &types.ClaimingPot{
 		PotId:   "bb-forever",
 		Creator: creator1,
 		Status:  string(types.PotStatusActive),
@@ -1152,7 +1152,7 @@ func TestBeginBlockExpiresOldPots(t *testing.T) {
 
 	// Simulate BeginBlock
 	currentBlock := uint64(ctx.BlockHeight())
-	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+	k.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
 		if pot.Status == string(types.PotStatusActive) && pot.Config != nil && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
 			pot.Status = string(types.PotStatusExpired)
 			k.SetPot(ctx, pot)

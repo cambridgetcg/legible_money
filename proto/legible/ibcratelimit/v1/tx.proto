@@ -1,0 +1,22 @@
+syntax = "proto3";
+package legible.ibcratelimit.v1;
+
+option go_package = "github.com/legible-money/legible/x/ibcratelimit/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/ibcratelimit/v1/state.proto";
+
+// Msg defines the ibcratelimit module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params = 2;
+}
+
+message MsgUpdateParamsResponse {}

@@ -14,9 +14,9 @@ import (
 // --- LIP CRUD ---
 
 // SetLIP stores a LIP by ID.
-func (k Keeper) SetLIP(ctx sdk.Context, lip types.LIP) {
+func (k Keeper) SetLIP(ctx sdk.Context, lip *types.LIP) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&lip)
+	bz, err := proto.Marshal(lip)
 	if err != nil {
 		panic("failed to marshal LIP: " + err.Error())
 	}
@@ -26,23 +26,23 @@ func (k Keeper) SetLIP(ctx sdk.Context, lip types.LIP) {
 }
 
 // GetLIP retrieves a LIP by ID.
-func (k Keeper) GetLIP(ctx sdk.Context, id string) (types.LIP, bool) {
+func (k Keeper) GetLIP(ctx sdk.Context, id string) (*types.LIP, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(lipKey(id))
 	if err != nil || bz == nil {
-		return types.LIP{}, false
+		return nil, false
 	}
 	var lip types.LIP
 	if err := proto.Unmarshal(bz, &lip); err != nil {
-		return types.LIP{}, false
+		return nil, false
 	}
-	return lip, true
+	return &lip, true
 }
 
 // GetAllLIPs returns all stored LIPs.
-func (k Keeper) GetAllLIPs(ctx sdk.Context) []types.LIP {
-	var lips []types.LIP
-	k.IterateLIPs(ctx, func(lip types.LIP) bool {
+func (k Keeper) GetAllLIPs(ctx sdk.Context) []*types.LIP {
+	var lips []*types.LIP
+	k.IterateLIPs(ctx, func(lip *types.LIP) bool {
 		lips = append(lips, lip)
 		return false
 	})
@@ -50,9 +50,9 @@ func (k Keeper) GetAllLIPs(ctx sdk.Context) []types.LIP {
 }
 
 // GetLIPsByStage returns LIPs filtered by stage.
-func (k Keeper) GetLIPsByStage(ctx sdk.Context, stage types.HandwrittenLIPStage) []types.LIP {
-	var lips []types.LIP
-	k.IterateLIPs(ctx, func(lip types.LIP) bool {
+func (k Keeper) GetLIPsByStage(ctx sdk.Context, stage types.HandwrittenLIPStage) []*types.LIP {
+	var lips []*types.LIP
+	k.IterateLIPs(ctx, func(lip *types.LIP) bool {
 		if lip.Stage == string(stage) {
 			lips = append(lips, lip)
 		}
@@ -62,7 +62,7 @@ func (k Keeper) GetLIPsByStage(ctx sdk.Context, stage types.HandwrittenLIPStage)
 }
 
 // IterateLIPs iterates over all LIPs. Return true from cb to stop.
-func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
+func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(*types.LIP) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.LIPKeyPrefix, prefixEndBytes(types.LIPKeyPrefix))
 	if err != nil {
@@ -75,7 +75,7 @@ func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
 		if err := proto.Unmarshal(iter.Value(), &lip); err != nil {
 			continue
 		}
-		if cb(lip) {
+		if cb(&lip) {
 			break
 		}
 	}
@@ -84,9 +84,9 @@ func (k Keeper) IterateLIPs(ctx sdk.Context, cb func(types.LIP) bool) {
 // --- Vote CRUD ---
 
 // SetVote stores a quadratic vote.
-func (k Keeper) SetVote(ctx sdk.Context, vote types.QuadraticVote) {
+func (k Keeper) SetVote(ctx sdk.Context, vote *types.QuadraticVote) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&vote)
+	bz, err := proto.Marshal(vote)
 	if err != nil {
 		panic("failed to marshal vote: " + err.Error())
 	}
@@ -96,22 +96,22 @@ func (k Keeper) SetVote(ctx sdk.Context, vote types.QuadraticVote) {
 }
 
 // GetVote retrieves a vote by ID.
-func (k Keeper) GetVote(ctx sdk.Context, voteId string) (types.QuadraticVote, bool) {
+func (k Keeper) GetVote(ctx sdk.Context, voteId string) (*types.QuadraticVote, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(voteKey(voteId))
 	if err != nil || bz == nil {
-		return types.QuadraticVote{}, false
+		return nil, false
 	}
 	var vote types.QuadraticVote
 	if err := proto.Unmarshal(bz, &vote); err != nil {
-		return types.QuadraticVote{}, false
+		return nil, false
 	}
-	return vote, true
+	return &vote, true
 }
 
 // GetVotesForProposal returns all votes for a given proposal ID.
-func (k Keeper) GetVotesForProposal(ctx sdk.Context, proposalId string) []types.QuadraticVote {
-	var votes []types.QuadraticVote
+func (k Keeper) GetVotesForProposal(ctx sdk.Context, proposalId string) []*types.QuadraticVote {
+	var votes []*types.QuadraticVote
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.VoteKeyPrefix, prefixEndBytes(types.VoteKeyPrefix))
 	if err != nil {
@@ -125,7 +125,7 @@ func (k Keeper) GetVotesForProposal(ctx sdk.Context, proposalId string) []types.
 			continue
 		}
 		if vote.ProposalId == proposalId {
-			votes = append(votes, vote)
+			votes = append(votes, &vote)
 		}
 	}
 	return votes
@@ -150,8 +150,8 @@ func (k Keeper) SetVoteDedupe(ctx sdk.Context, proposalId, voter string) {
 }
 
 // GetAllVotes returns all stored votes.
-func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
-	var votes []types.QuadraticVote
+func (k Keeper) GetAllVotes(ctx sdk.Context) []*types.QuadraticVote {
+	var votes []*types.QuadraticVote
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.VoteKeyPrefix, prefixEndBytes(types.VoteKeyPrefix))
 	if err != nil {
@@ -164,7 +164,7 @@ func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
 		if err := proto.Unmarshal(iter.Value(), &vote); err != nil {
 			continue
 		}
-		votes = append(votes, vote)
+		votes = append(votes, &vote)
 	}
 	return votes
 }
@@ -172,9 +172,9 @@ func (k Keeper) GetAllVotes(ctx sdk.Context) []types.QuadraticVote {
 // --- Disbursement CRUD ---
 
 // SetDisbursement stores a disbursement proposal.
-func (k Keeper) SetDisbursement(ctx sdk.Context, disb types.DisbursementProposal) {
+func (k Keeper) SetDisbursement(ctx sdk.Context, disb *types.DisbursementProposal) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&disb)
+	bz, err := proto.Marshal(disb)
 	if err != nil {
 		panic("failed to marshal disbursement: " + err.Error())
 	}
@@ -184,23 +184,23 @@ func (k Keeper) SetDisbursement(ctx sdk.Context, disb types.DisbursementProposal
 }
 
 // GetDisbursement retrieves a disbursement by ID.
-func (k Keeper) GetDisbursement(ctx sdk.Context, id string) (types.DisbursementProposal, bool) {
+func (k Keeper) GetDisbursement(ctx sdk.Context, id string) (*types.DisbursementProposal, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(disbursementKey(id))
 	if err != nil || bz == nil {
-		return types.DisbursementProposal{}, false
+		return nil, false
 	}
 	var disb types.DisbursementProposal
 	if err := proto.Unmarshal(bz, &disb); err != nil {
-		return types.DisbursementProposal{}, false
+		return nil, false
 	}
-	return disb, true
+	return &disb, true
 }
 
 // GetAllDisbursements returns all stored disbursements.
-func (k Keeper) GetAllDisbursements(ctx sdk.Context) []types.DisbursementProposal {
-	var disbs []types.DisbursementProposal
-	k.IterateDisbursements(ctx, func(d types.DisbursementProposal) bool {
+func (k Keeper) GetAllDisbursements(ctx sdk.Context) []*types.DisbursementProposal {
+	var disbs []*types.DisbursementProposal
+	k.IterateDisbursements(ctx, func(d *types.DisbursementProposal) bool {
 		disbs = append(disbs, d)
 		return false
 	})
@@ -208,7 +208,7 @@ func (k Keeper) GetAllDisbursements(ctx sdk.Context) []types.DisbursementProposa
 }
 
 // IterateDisbursements iterates over all disbursements. Return true from cb to stop.
-func (k Keeper) IterateDisbursements(ctx sdk.Context, cb func(types.DisbursementProposal) bool) {
+func (k Keeper) IterateDisbursements(ctx sdk.Context, cb func(*types.DisbursementProposal) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.DisbursementKeyPrefix, prefixEndBytes(types.DisbursementKeyPrefix))
 	if err != nil {
@@ -221,7 +221,7 @@ func (k Keeper) IterateDisbursements(ctx sdk.Context, cb func(types.Disbursement
 		if err := proto.Unmarshal(iter.Value(), &disb); err != nil {
 			continue
 		}
-		if cb(disb) {
+		if cb(&disb) {
 			break
 		}
 	}
@@ -272,7 +272,7 @@ func (k Keeper) SetNextDisbNumber(ctx sdk.Context, n uint64) {
 // --- Params ---
 
 // GetParams returns the governance module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -282,13 +282,13 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // SetParams stores the governance module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic("failed to marshal governance params: " + err.Error())
 	}

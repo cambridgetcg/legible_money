@@ -134,7 +134,7 @@ func handleCommitPhase(
 	ctx sdk.Context,
 	keeper knowledgekeeper.Keeper,
 	config *VoteExtensionConfig,
-	round knowledgetypes.VerificationRound,
+	round *knowledgetypes.VerificationRound,
 ) (*VoteCommitment, error) {
 	// Generate VRF to check if this validator is selected
 	prevBlockHash := getPrevBlockHashForVote(ctx)
@@ -237,7 +237,7 @@ func handleCommitPhase(
 // Returns nil if no local commitment exists (validator didn't commit).
 func handleRevealPhase(
 	config *VoteExtensionConfig,
-	round knowledgetypes.VerificationRound,
+	round *knowledgetypes.VerificationRound,
 ) (*VoteReveal, error) {
 	// Retrieve local commitment
 	localCommit, found := config.LocalStore.Get(round.Id)

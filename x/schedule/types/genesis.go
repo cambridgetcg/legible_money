@@ -24,7 +24,7 @@ func DefaultGenesis() *GenesisState {
 }
 
 // Validate performs genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params == nil {
 		return nil
 	}

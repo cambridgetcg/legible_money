@@ -101,7 +101,7 @@ func createVotingLIP(t *testing.T, k keeper.Keeper, ctx sdk.Context, id string, 
 		VotingEndsAt:  votingEndsAt,
 		UniqueVoters:  1,
 	}
-	k.SetLIP(ctx, lip)
+	k.SetLIP(ctx, &lip)
 }
 
 // createVotingDisbursement inserts a disbursement directly into the store in the
@@ -120,7 +120,7 @@ func createVotingDisbursement(t *testing.T, k keeper.Keeper, ctx sdk.Context, id
 		AbstainWeight: abstain,
 		VotingEndsAt:  votingEndsAt,
 	}
-	k.SetDisbursement(ctx, disb)
+	k.SetDisbursement(ctx, &disb)
 }
 
 // ==================== Task 1: Quorum Integration Tests ====================

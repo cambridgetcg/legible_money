@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"fmt"
 )
 
@@ -19,7 +18,7 @@ func DefaultParams() Params {
 }
 
 // Validate performs basic validation of params.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.EpochLengthBlocks == 0 {
 		return fmt.Errorf("epoch length blocks must be positive")
 	}
@@ -41,45 +40,21 @@ func DefaultGenesisState() GenesisState {
 }
 
 // Validate performs genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		return gs.Params.Validate()
 	}
 	return nil
 }
 
-// --- Message Types (not in proto-generated files) ---
-
-// MsgUpdateParams updates the rate limit module parameters.
-type MsgUpdateParams struct {
-	Authority string `json:"authority"` // governance authority
-	Params    Params `json:"params"`
-}
-
-func (m *MsgUpdateParams) Reset()         { *m = MsgUpdateParams{} }
-func (m *MsgUpdateParams) String() string { return fmt.Sprintf("MsgUpdateParams{%+v}", m.Params) }
-func (m *MsgUpdateParams) ProtoMessage()  {}
+// --- Message Validation (extends proto-generated types in tx.pb.go) ---
 
 func (m *MsgUpdateParams) ValidateBasic() error {
 	if m.Authority == "" {
 		return fmt.Errorf("authority cannot be empty")
 	}
+	if m.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return m.Params.Validate()
 }
-
-// MsgUpdateParamsResponse is the response to MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (m *MsgUpdateParamsResponse) Reset()         { *m = MsgUpdateParamsResponse{} }
-func (m *MsgUpdateParamsResponse) String() string { return "MsgUpdateParamsResponse{}" }
-func (m *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// --- Service Interfaces ---
-
-// MsgServer defines the ibcratelimit message handler interface.
-type MsgServer interface {
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
-}
-
-// Query types (QueryServer, QueryParamsRequest/Response, QueryChannelFlowRequest/Response)
-// are now provided by the proto-generated query.pb.go and query_grpc.pb.go files.

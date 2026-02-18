@@ -36,7 +36,7 @@ const calibrationScalingFactor = 5
 // - acceptance_rate = accepted * 1,000,000 / total
 // - Deviation from CalibrationNeutralRate (70%) is scaled to an adjustment
 // - Clamped to [-MaxCalibrationPenalty, +MaxCalibrationBonus]
-func evaluateSubmitterCalibration(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateSubmitterCalibration(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "submitter_calibration",
 	}

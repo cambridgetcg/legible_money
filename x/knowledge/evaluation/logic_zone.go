@@ -10,7 +10,7 @@ import (
 // Godelian incompleteness requirements.
 //
 // Stage 4 of the evaluation pipeline.
-func evaluateLogicZone(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateLogicZone(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "logic_zone",
 	}

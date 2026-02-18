@@ -71,9 +71,9 @@ func prefixEndBytes(prefix []byte) []byte {
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -81,7 +81,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -91,18 +91,18 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ---------- Genesis ----------
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	for _, provider := range genState.Providers {
-		k.SetProvider(ctx, *provider)
+		k.SetProvider(ctx, provider)
 	}
 }
 
@@ -110,12 +110,8 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	providers := k.GetAllProviders(ctx)
-	providerPtrs := make([]*types.Provider, len(providers))
-	for i := range providers {
-		providerPtrs[i] = &providers[i]
-	}
 	return &types.GenesisState{
-		Params:    &params,
-		Providers: providerPtrs,
+		Params:    params,
+		Providers: providers,
 	}
 }

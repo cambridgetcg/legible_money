@@ -14,7 +14,7 @@ func TestCalibration_NoKeeper(t *testing.T) {
 		ExtendedParams:          types.DefaultExtendedParams(),
 		GetSubmitterCalibration: nil,
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 	if result.Adjustment != 0 {
@@ -30,7 +30,7 @@ func TestCalibration_EmptySubmitter(t *testing.T) {
 			return types.CalibrationRecord{}, false
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: ""}
+	claim := &types.Claim{Id: "c1", Submitter: ""}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 	if result.Adjustment != 0 {
@@ -49,7 +49,7 @@ func TestCalibration_Unrated(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 	if result.Adjustment != 0 {
@@ -68,7 +68,7 @@ func TestCalibration_PerfectSubmitter(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -91,7 +91,7 @@ func TestCalibration_NeutralSubmitter(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -112,7 +112,7 @@ func TestCalibration_SerialHallucinator(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -134,7 +134,7 @@ func TestCalibration_LowAcceptance(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -156,7 +156,7 @@ func TestCalibration_HighAcceptance(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -174,7 +174,7 @@ func TestCalibration_NotFound(t *testing.T) {
 			return types.CalibrationRecord{}, false
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 	if result.Adjustment != 0 {
@@ -193,7 +193,7 @@ func TestCalibration_ExactMinSamples(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -217,7 +217,7 @@ func TestCalibration_TrivialThresholdBoundary(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -240,7 +240,7 @@ func TestCalibration_JustBelowTrivialThreshold(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 
@@ -262,7 +262,7 @@ func TestCalibration_BelowMinSamples(t *testing.T) {
 			}, true
 		},
 	}
-	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
+	claim := &types.Claim{Id: "c1", Submitter: "lgm1abc"}
 
 	result := evaluateSubmitterCalibration(ctx, evalCtx, claim)
 

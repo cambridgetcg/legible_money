@@ -73,7 +73,7 @@ func (k Keeper) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) 
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"capture_defense_params_updated",

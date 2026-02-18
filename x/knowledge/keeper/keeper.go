@@ -134,30 +134,30 @@ func (k Keeper) GetEvidenceMgmtKeeper() types.EvidenceMgmtKeeper {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	// Initialize extended params with defaults if not already set
 	k.SetExtendedParams(ctx, types.DefaultExtendedParams())
 	for _, domain := range genState.Domains {
 		if domain != nil {
-			k.SetDomainInState(ctx, *domain)
+			k.SetDomainInState(ctx, domain)
 		}
 	}
 	for _, fact := range genState.Facts {
 		if fact != nil {
-			k.SetFact(ctx, *fact)
+			k.SetFact(ctx, fact)
 		}
 	}
 	for _, claim := range genState.Claims {
 		if claim != nil {
-			k.SetClaim(ctx, *claim)
+			k.SetClaim(ctx, claim)
 		}
 	}
 	for _, ref := range genState.FactReferences {
 		if ref != nil {
-			k.SetFactReference(ctx, *ref)
+			k.SetFactReference(ctx, ref)
 		}
 	}
 }
@@ -165,23 +165,20 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 // ExportGenesis exports the module's complete state for chain upgrades and migrations.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var facts []*types.Fact
-	k.IterateFacts(ctx, func(f types.Fact) bool {
-		fc := f
-		facts = append(facts, &fc)
+	k.IterateFacts(ctx, func(f *types.Fact) bool {
+		facts = append(facts, f)
 		return false
 	})
 
 	var claims []*types.Claim
-	k.IterateClaims(ctx, func(c types.Claim) bool {
-		cc := c
-		claims = append(claims, &cc)
+	k.IterateClaims(ctx, func(c *types.Claim) bool {
+		claims = append(claims, c)
 		return false
 	})
 
 	var domains []*types.OntologicalDomain
-	k.IterateDomains(ctx, func(d types.OntologicalDomain) bool {
-		dc := d
-		domains = append(domains, &dc)
+	k.IterateDomains(ctx, func(d *types.OntologicalDomain) bool {
+		domains = append(domains, d)
 		return false
 	})
 
@@ -190,10 +187,10 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	seen := make(map[string]bool)
 	for _, fact := range facts {
 		refs := k.GetFactReferences(ctx, fact.Id)
-		for i, ref := range refs {
+		for _, ref := range refs {
 			refKey := ref.FromFactId + ":" + ref.ToFactId
 			if !seen[refKey] {
-				factRefs = append(factRefs, &refs[i])
+				factRefs = append(factRefs, ref)
 				seen[refKey] = true
 			}
 		}
@@ -201,7 +198,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:         &params,
+		Params:         params,
 		Domains:        domains,
 		Facts:          facts,
 		Claims:         claims,
@@ -210,9 +207,9 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 }
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -222,17 +219,19 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		dp := types.DefaultParams()
+		return &dp
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		dp := types.DefaultParams()
+		return &dp
 	}
-	return params
+	return &params
 }
 
 // SetExtendedParams sets extended module parameters (JSON-encoded).
@@ -295,11 +294,11 @@ func prefixEndBytes(prefix []byte) []byte {
 }
 
 // SetDomainInState stores a domain using state.go's SetDomain.
-func (k Keeper) SetDomainInState(ctx sdk.Context, domain types.OntologicalDomain) {
+func (k Keeper) SetDomainInState(ctx sdk.Context, domain *types.OntologicalDomain) {
 	k.SetDomain(ctx, domain)
 }
 
 // GetDomainFromState retrieves a domain using state.go's GetDomain.
-func (k Keeper) GetDomainFromState(ctx sdk.Context, name string) (types.OntologicalDomain, bool) {
+func (k Keeper) GetDomainFromState(ctx sdk.Context, name string) (*types.OntologicalDomain, bool) {
 	return k.GetDomain(ctx, name)
 }

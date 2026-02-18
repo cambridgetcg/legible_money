@@ -10,7 +10,7 @@ import (
 
 // EvaluateEligibility checks if a claimer meets pot eligibility rules.
 // Returns (eligible, reason).
-func (k Keeper) EvaluateEligibility(ctx sdk.Context, pot types.ClaimingPot, claimer string) (bool, string) {
+func (k Keeper) EvaluateEligibility(ctx sdk.Context, pot *types.ClaimingPot, claimer string) (bool, string) {
 	elig := pot.Config.Eligibility
 
 	// No eligibility restrictions configured — everyone is eligible

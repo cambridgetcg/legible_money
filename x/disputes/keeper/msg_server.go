@@ -111,7 +111,7 @@ func (k msgServer) CommitEvidence(goCtx context.Context, msg *types.MsgCommitEvi
 		return nil, fmt.Errorf("evidence already committed for dispute %s by %s", msg.DisputeId, msg.Submitter)
 	}
 
-	commitment := types.EvidenceCommitment{
+	commitment := &types.EvidenceCommitment{
 		DisputeId:   msg.DisputeId,
 		Submitter:   msg.Submitter,
 		Side:        side,
@@ -188,7 +188,7 @@ func (k msgServer) RevealEvidence(goCtx context.Context, msg *types.MsgRevealEvi
 	// Store each evidence item
 	for _, ev := range msg.Evidence {
 		evidenceId := GenerateEvidenceID(msg.DisputeId, msg.Submitter, currentHeight)
-		evidence := types.DisputeEvidence{
+		evidence := &types.DisputeEvidence{
 			Id:          evidenceId,
 			DisputeId:   msg.DisputeId,
 			Submitter:   msg.Submitter,
@@ -426,7 +426,7 @@ func (k msgServer) SubmitEvidence(goCtx context.Context, msg *types.MsgSubmitEvi
 
 	// Generate evidence ID and store
 	evidenceId := GenerateEvidenceID(msg.DisputeId, msg.Submitter, currentHeight)
-	evidence := types.DisputeEvidence{
+	evidence := &types.DisputeEvidence{
 		Id:          evidenceId,
 		DisputeId:   msg.DisputeId,
 		Submitter:   msg.Submitter,
@@ -471,7 +471,7 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	m.Keeper.SetParams(ctx, *msg.Params)
+	m.Keeper.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"disputes_params_updated",

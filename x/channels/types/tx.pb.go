@@ -654,11 +654,387 @@ func (*MsgDisputeChannelResponse) Descriptor() ([]byte, []int) {
 	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{9}
 }
 
+type MsgDepositChannel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Depositor     string                 `protobuf:"bytes,1,opt,name=depositor,proto3" json:"depositor,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Amount        string                 `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgDepositChannel) Reset() {
+	*x = MsgDepositChannel{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgDepositChannel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgDepositChannel) ProtoMessage() {}
+
+func (x *MsgDepositChannel) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgDepositChannel.ProtoReflect.Descriptor instead.
+func (*MsgDepositChannel) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MsgDepositChannel) GetDepositor() string {
+	if x != nil {
+		return x.Depositor
+	}
+	return ""
+}
+
+func (x *MsgDepositChannel) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *MsgDepositChannel) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+type MsgDepositChannelResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgDepositChannelResponse) Reset() {
+	*x = MsgDepositChannelResponse{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgDepositChannelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgDepositChannelResponse) ProtoMessage() {}
+
+func (x *MsgDepositChannelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgDepositChannelResponse.ProtoReflect.Descriptor instead.
+func (*MsgDepositChannelResponse) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{11}
+}
+
+type MsgUpdateState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sender        string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Update        *ChannelStateUpdate    `protobuf:"bytes,3,opt,name=update,proto3" json:"update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateState) Reset() {
+	*x = MsgUpdateState{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateState) ProtoMessage() {}
+
+func (x *MsgUpdateState) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateState.ProtoReflect.Descriptor instead.
+func (*MsgUpdateState) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MsgUpdateState) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgUpdateState) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *MsgUpdateState) GetUpdate() *ChannelStateUpdate {
+	if x != nil {
+		return x.Update
+	}
+	return nil
+}
+
+type MsgUpdateStateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateStateResponse) Reset() {
+	*x = MsgUpdateStateResponse{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateStateResponse) ProtoMessage() {}
+
+func (x *MsgUpdateStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateStateResponse.ProtoReflect.Descriptor instead.
+func (*MsgUpdateStateResponse) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{13}
+}
+
+type MsgClaimExpired struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Claimer       string                 `protobuf:"bytes,1,opt,name=claimer,proto3" json:"claimer,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgClaimExpired) Reset() {
+	*x = MsgClaimExpired{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgClaimExpired) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgClaimExpired) ProtoMessage() {}
+
+func (x *MsgClaimExpired) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgClaimExpired.ProtoReflect.Descriptor instead.
+func (*MsgClaimExpired) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MsgClaimExpired) GetClaimer() string {
+	if x != nil {
+		return x.Claimer
+	}
+	return ""
+}
+
+func (x *MsgClaimExpired) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+type MsgClaimExpiredResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	RefundedAmount string                 `protobuf:"bytes,1,opt,name=refunded_amount,json=refundedAmount,proto3" json:"refunded_amount,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MsgClaimExpiredResponse) Reset() {
+	*x = MsgClaimExpiredResponse{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgClaimExpiredResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgClaimExpiredResponse) ProtoMessage() {}
+
+func (x *MsgClaimExpiredResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgClaimExpiredResponse.ProtoReflect.Descriptor instead.
+func (*MsgClaimExpiredResponse) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *MsgClaimExpiredResponse) GetRefundedAmount() string {
+	if x != nil {
+		return x.RefundedAmount
+	}
+	return ""
+}
+
+type MsgUpdateParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authority     string                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	Params        *Params                `protobuf:"bytes,2,opt,name=params,proto3" json:"params,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParams) Reset() {
+	*x = MsgUpdateParams{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParams) ProtoMessage() {}
+
+func (x *MsgUpdateParams) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParams.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParams) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MsgUpdateParams) GetAuthority() string {
+	if x != nil {
+		return x.Authority
+	}
+	return ""
+}
+
+func (x *MsgUpdateParams) GetParams() *Params {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+type MsgUpdateParamsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParamsResponse) Reset() {
+	*x = MsgUpdateParamsResponse{}
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParamsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParamsResponse) ProtoMessage() {}
+
+func (x *MsgUpdateParamsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_channels_v1_tx_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParamsResponse.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
+	return file_legible_channels_v1_tx_proto_rawDescGZIP(), []int{17}
+}
+
 var File_legible_channels_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_channels_v1_tx_proto_rawDesc = "" +
 	"\n" +
-	"\x1clegible/channels/v1/tx.proto\x12\x13legible.channels.v1\x1a\x17cosmos/msg/v1/msg.proto\"\x92\x01\n" +
+	"\x1clegible/channels/v1/tx.proto\x12\x13legible.channels.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a\x1flegible/channels/v1/state.proto\x1a!legible/channels/v1/genesis.proto\"\x92\x01\n" +
 	"\x0eMsgOpenChannel\x12\x16\n" +
 	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x1a\n" +
 	"\breceiver\x18\x02 \x01(\tR\breceiver\x12\x18\n" +
@@ -700,19 +1076,45 @@ const file_legible_channels_v1_tx_proto_rawDesc = "" +
 	"\x18claimed_balance_receiver\x18\x04 \x01(\tR\x16claimedBalanceReceiver\x12\x1a\n" +
 	"\bsequence\x18\x05 \x01(\x04R\bsequence\x12'\n" +
 	"\x0fproof_signature\x18\x06 \x01(\fR\x0eproofSignature:\r\x82\xe7\xb0*\bdisputer\"\x1b\n" +
-	"\x19MsgDisputeChannelResponse*\x9d\x01\n" +
+	"\x19MsgDisputeChannelResponse\"x\n" +
+	"\x11MsgDepositChannel\x12\x1c\n" +
+	"\tdepositor\x18\x01 \x01(\tR\tdepositor\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x02 \x01(\tR\tchannelId\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\tR\x06amount:\x0e\x82\xe7\xb0*\tdepositor\"\x1b\n" +
+	"\x19MsgDepositChannelResponse\"\x95\x01\n" +
+	"\x0eMsgUpdateState\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x02 \x01(\tR\tchannelId\x12?\n" +
+	"\x06update\x18\x03 \x01(\v2'.legible.channels.v1.ChannelStateUpdateR\x06update:\v\x82\xe7\xb0*\x06sender\"\x18\n" +
+	"\x16MsgUpdateStateResponse\"X\n" +
+	"\x0fMsgClaimExpired\x12\x18\n" +
+	"\aclaimer\x18\x01 \x01(\tR\aclaimer\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x02 \x01(\tR\tchannelId:\f\x82\xe7\xb0*\aclaimer\"B\n" +
+	"\x17MsgClaimExpiredResponse\x12'\n" +
+	"\x0frefunded_amount\x18\x01 \x01(\tR\x0erefundedAmount\"t\n" +
+	"\x0fMsgUpdateParams\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\tR\tauthority\x123\n" +
+	"\x06params\x18\x02 \x01(\v2\x1b.legible.channels.v1.ParamsR\x06params:\x0e\x82\xe7\xb0*\tauthority\"\x19\n" +
+	"\x17MsgUpdateParamsResponse*\x9d\x01\n" +
 	"\rChannelStatus\x12\x1e\n" +
 	"\x1aCHANNEL_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13CHANNEL_STATUS_OPEN\x10\x01\x12\x1a\n" +
 	"\x16CHANNEL_STATUS_CLOSING\x10\x02\x12\x1b\n" +
 	"\x17CHANNEL_STATUS_DISPUTED\x10\x03\x12\x1a\n" +
-	"\x16CHANNEL_STATUS_SETTLED\x10\x042\x89\x04\n" +
+	"\x16CHANNEL_STATUS_SETTLED\x10\x042\x9c\a\n" +
 	"\x03Msg\x12_\n" +
 	"\vOpenChannel\x12#.legible.channels.v1.MsgOpenChannel\x1a+.legible.channels.v1.MsgOpenChannelResponse\x12e\n" +
 	"\rUpdateChannel\x12%.legible.channels.v1.MsgUpdateChannel\x1a-.legible.channels.v1.MsgUpdateChannelResponse\x12b\n" +
 	"\fCloseChannel\x12$.legible.channels.v1.MsgCloseChannel\x1a,.legible.channels.v1.MsgCloseChannelResponse\x12e\n" +
 	"\rSettleChannel\x12%.legible.channels.v1.MsgSettleChannel\x1a-.legible.channels.v1.MsgSettleChannelResponse\x12h\n" +
-	"\x0eDisputeChannel\x12&.legible.channels.v1.MsgDisputeChannel\x1a..legible.channels.v1.MsgDisputeChannelResponse\x1a\x05\x80\xe7\xb0*\x01B3Z1github.com/legible-money/legible/x/channels/typesb\x06proto3"
+	"\x0eDisputeChannel\x12&.legible.channels.v1.MsgDisputeChannel\x1a..legible.channels.v1.MsgDisputeChannelResponse\x12h\n" +
+	"\x0eDepositChannel\x12&.legible.channels.v1.MsgDepositChannel\x1a..legible.channels.v1.MsgDepositChannelResponse\x12_\n" +
+	"\vUpdateState\x12#.legible.channels.v1.MsgUpdateState\x1a+.legible.channels.v1.MsgUpdateStateResponse\x12b\n" +
+	"\fClaimExpired\x12$.legible.channels.v1.MsgClaimExpired\x1a,.legible.channels.v1.MsgClaimExpiredResponse\x12b\n" +
+	"\fUpdateParams\x12$.legible.channels.v1.MsgUpdateParams\x1a,.legible.channels.v1.MsgUpdateParamsResponse\x1a\x05\x80\xe7\xb0*\x01B3Z1github.com/legible-money/legible/x/channels/typesb\x06proto3"
 
 var (
 	file_legible_channels_v1_tx_proto_rawDescOnce sync.Once
@@ -727,7 +1129,7 @@ func file_legible_channels_v1_tx_proto_rawDescGZIP() []byte {
 }
 
 var file_legible_channels_v1_tx_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_legible_channels_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_legible_channels_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_legible_channels_v1_tx_proto_goTypes = []any{
 	(ChannelStatus)(0),                // 0: legible.channels.v1.ChannelStatus
 	(*MsgOpenChannel)(nil),            // 1: legible.channels.v1.MsgOpenChannel
@@ -740,23 +1142,43 @@ var file_legible_channels_v1_tx_proto_goTypes = []any{
 	(*MsgSettleChannelResponse)(nil),  // 8: legible.channels.v1.MsgSettleChannelResponse
 	(*MsgDisputeChannel)(nil),         // 9: legible.channels.v1.MsgDisputeChannel
 	(*MsgDisputeChannelResponse)(nil), // 10: legible.channels.v1.MsgDisputeChannelResponse
+	(*MsgDepositChannel)(nil),         // 11: legible.channels.v1.MsgDepositChannel
+	(*MsgDepositChannelResponse)(nil), // 12: legible.channels.v1.MsgDepositChannelResponse
+	(*MsgUpdateState)(nil),            // 13: legible.channels.v1.MsgUpdateState
+	(*MsgUpdateStateResponse)(nil),    // 14: legible.channels.v1.MsgUpdateStateResponse
+	(*MsgClaimExpired)(nil),           // 15: legible.channels.v1.MsgClaimExpired
+	(*MsgClaimExpiredResponse)(nil),   // 16: legible.channels.v1.MsgClaimExpiredResponse
+	(*MsgUpdateParams)(nil),           // 17: legible.channels.v1.MsgUpdateParams
+	(*MsgUpdateParamsResponse)(nil),   // 18: legible.channels.v1.MsgUpdateParamsResponse
+	(*ChannelStateUpdate)(nil),        // 19: legible.channels.v1.ChannelStateUpdate
+	(*Params)(nil),                    // 20: legible.channels.v1.Params
 }
 var file_legible_channels_v1_tx_proto_depIdxs = []int32{
-	1,  // 0: legible.channels.v1.Msg.OpenChannel:input_type -> legible.channels.v1.MsgOpenChannel
-	3,  // 1: legible.channels.v1.Msg.UpdateChannel:input_type -> legible.channels.v1.MsgUpdateChannel
-	5,  // 2: legible.channels.v1.Msg.CloseChannel:input_type -> legible.channels.v1.MsgCloseChannel
-	7,  // 3: legible.channels.v1.Msg.SettleChannel:input_type -> legible.channels.v1.MsgSettleChannel
-	9,  // 4: legible.channels.v1.Msg.DisputeChannel:input_type -> legible.channels.v1.MsgDisputeChannel
-	2,  // 5: legible.channels.v1.Msg.OpenChannel:output_type -> legible.channels.v1.MsgOpenChannelResponse
-	4,  // 6: legible.channels.v1.Msg.UpdateChannel:output_type -> legible.channels.v1.MsgUpdateChannelResponse
-	6,  // 7: legible.channels.v1.Msg.CloseChannel:output_type -> legible.channels.v1.MsgCloseChannelResponse
-	8,  // 8: legible.channels.v1.Msg.SettleChannel:output_type -> legible.channels.v1.MsgSettleChannelResponse
-	10, // 9: legible.channels.v1.Msg.DisputeChannel:output_type -> legible.channels.v1.MsgDisputeChannelResponse
-	5,  // [5:10] is the sub-list for method output_type
-	0,  // [0:5] is the sub-list for method input_type
-	0,  // [0:0] is the sub-list for extension type_name
-	0,  // [0:0] is the sub-list for extension extendee
-	0,  // [0:0] is the sub-list for field type_name
+	19, // 0: legible.channels.v1.MsgUpdateState.update:type_name -> legible.channels.v1.ChannelStateUpdate
+	20, // 1: legible.channels.v1.MsgUpdateParams.params:type_name -> legible.channels.v1.Params
+	1,  // 2: legible.channels.v1.Msg.OpenChannel:input_type -> legible.channels.v1.MsgOpenChannel
+	3,  // 3: legible.channels.v1.Msg.UpdateChannel:input_type -> legible.channels.v1.MsgUpdateChannel
+	5,  // 4: legible.channels.v1.Msg.CloseChannel:input_type -> legible.channels.v1.MsgCloseChannel
+	7,  // 5: legible.channels.v1.Msg.SettleChannel:input_type -> legible.channels.v1.MsgSettleChannel
+	9,  // 6: legible.channels.v1.Msg.DisputeChannel:input_type -> legible.channels.v1.MsgDisputeChannel
+	11, // 7: legible.channels.v1.Msg.DepositChannel:input_type -> legible.channels.v1.MsgDepositChannel
+	13, // 8: legible.channels.v1.Msg.UpdateState:input_type -> legible.channels.v1.MsgUpdateState
+	15, // 9: legible.channels.v1.Msg.ClaimExpired:input_type -> legible.channels.v1.MsgClaimExpired
+	17, // 10: legible.channels.v1.Msg.UpdateParams:input_type -> legible.channels.v1.MsgUpdateParams
+	2,  // 11: legible.channels.v1.Msg.OpenChannel:output_type -> legible.channels.v1.MsgOpenChannelResponse
+	4,  // 12: legible.channels.v1.Msg.UpdateChannel:output_type -> legible.channels.v1.MsgUpdateChannelResponse
+	6,  // 13: legible.channels.v1.Msg.CloseChannel:output_type -> legible.channels.v1.MsgCloseChannelResponse
+	8,  // 14: legible.channels.v1.Msg.SettleChannel:output_type -> legible.channels.v1.MsgSettleChannelResponse
+	10, // 15: legible.channels.v1.Msg.DisputeChannel:output_type -> legible.channels.v1.MsgDisputeChannelResponse
+	12, // 16: legible.channels.v1.Msg.DepositChannel:output_type -> legible.channels.v1.MsgDepositChannelResponse
+	14, // 17: legible.channels.v1.Msg.UpdateState:output_type -> legible.channels.v1.MsgUpdateStateResponse
+	16, // 18: legible.channels.v1.Msg.ClaimExpired:output_type -> legible.channels.v1.MsgClaimExpiredResponse
+	18, // 19: legible.channels.v1.Msg.UpdateParams:output_type -> legible.channels.v1.MsgUpdateParamsResponse
+	11, // [11:20] is the sub-list for method output_type
+	2,  // [2:11] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_legible_channels_v1_tx_proto_init() }
@@ -764,13 +1186,15 @@ func file_legible_channels_v1_tx_proto_init() {
 	if File_legible_channels_v1_tx_proto != nil {
 		return
 	}
+	file_legible_channels_v1_state_proto_init()
+	file_legible_channels_v1_genesis_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_channels_v1_tx_proto_rawDesc), len(file_legible_channels_v1_tx_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

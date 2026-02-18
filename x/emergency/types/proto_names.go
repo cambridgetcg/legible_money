@@ -1,7 +1,5 @@
 package types
 
-// XXX_MessageName methods for hand-written types — provides unique proto
-// message names so the Cosmos SDK interface registry derives distinct type URLs.
-
-func (*MsgUpdateParams) XXX_MessageName() string         { return "legible.emergency.v1.MsgUpdateParams" }
-func (*MsgUpdateParamsResponse) XXX_MessageName() string  { return "legible.emergency.v1.MsgUpdateParamsResponse" }
+// Proto message name methods are no longer needed here.
+// MsgUpdateParams and MsgUpdateParamsResponse are now proto-generated
+// in tx.pb.go and have proper proto reflection built in.

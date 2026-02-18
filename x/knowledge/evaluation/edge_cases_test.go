@@ -11,7 +11,7 @@ import (
 func TestEdgeCase_EmptyClaimText(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
-	claim := types.Claim{Id: "c1", ClaimText: ""}
+	claim := &types.Claim{Id: "c1", ClaimText: ""}
 
 	result := evaluateEdgeCases(ctx, evalCtx, claim)
 	if result.ForceVerdict != "reject" {
@@ -22,7 +22,7 @@ func TestEdgeCase_EmptyClaimText(t *testing.T) {
 func TestEdgeCase_SelfReference(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:          "c1",
 		ClaimText:   "some claim",
 		ContentHash: "abc123",
@@ -39,19 +39,19 @@ func TestEdgeCase_AxiomContradiction(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams: types.DefaultExtendedParams(),
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			if id == "axiom-f1" {
-				return types.Fact{
+				return &types.Fact{
 					Id:             "axiom-f1",
 					Status:         types.FactStatusDisproven,
 					Confidence:     0,
 					BaseConfidence: 950_000, // was axiomatic
 				}, true
 			}
-			return types.Fact{}, false
+			return nil, false
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:         "c1",
 		ClaimText:  "claim referencing disproven axiom",
 		References: []string{"axiom-f1"},
@@ -67,19 +67,19 @@ func TestEdgeCase_AxiomContradiction_LowConfidence(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams: types.DefaultExtendedParams(),
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			if id == "f1" {
-				return types.Fact{
+				return &types.Fact{
 					Id:             "f1",
 					Status:         types.FactStatusDisproven,
 					Confidence:     0,
 					BaseConfidence: 500_000, // NOT axiomatic
 				}, true
 			}
-			return types.Fact{}, false
+			return nil, false
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:         "c1",
 		ClaimText:  "claim referencing disproven non-axiom",
 		References: []string{"f1"},
@@ -99,7 +99,7 @@ func TestEdgeCase_NoEvidenceNoRefsRequiringCategory(t *testing.T) {
 			return nil // no evidence
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "empirical claim",
 		EpistemicCategory: "empirical",
@@ -120,7 +120,7 @@ func TestEdgeCase_NoEvidenceButHasRefs(t *testing.T) {
 			return nil
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "empirical claim with refs",
 		EpistemicCategory: "empirical",
@@ -144,7 +144,7 @@ func TestEdgeCase_HasSubstantiveEvidenceNoRefs(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "empirical claim with substantive evidence",
 		EpistemicCategory: "empirical",
@@ -167,7 +167,7 @@ func TestEdgeCase_AttestationOnlyInsufficient(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "empirical claim with only attestation",
 		EpistemicCategory: "empirical",
@@ -188,7 +188,7 @@ func TestEdgeCase_AnalyticDoesNotRequireEvidence(t *testing.T) {
 			return nil
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "bachelors are unmarried",
 		EpistemicCategory: "analytic", // NOT evidence-requiring
@@ -205,11 +205,11 @@ func TestEdgeCase_NoEdgeCases(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams: types.DefaultExtendedParams(),
-		GetFact: func(_ sdk.Context, _ string) (types.Fact, bool) {
-			return types.Fact{Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000}, true
+		GetFact: func(_ sdk.Context, _ string) (*types.Fact, bool) {
+			return &types.Fact{Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000}, true
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "valid claim",
 		EpistemicCategory: "analytic",
@@ -233,7 +233,7 @@ func TestEdgeCase_AllEvidenceRejected(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "empirical claim",
 		EpistemicCategory: "empirical",

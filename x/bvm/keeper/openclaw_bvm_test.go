@@ -475,7 +475,7 @@ func TestOCBVM8_ScheduleCancelAuth(t *testing.T) {
 	}
 
 	// ATTACK 3: Try to cancel already-executed schedule
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-executed-test",
 		ContractAddress: addr,
 		Caller:          creator1,

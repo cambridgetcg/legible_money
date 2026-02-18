@@ -123,7 +123,7 @@ func (k Keeper) GetGuardianEffectiveStake(ctx sdk.Context, operatorAddr string) 
 }
 
 // isCouncilMember checks if an address is in the genesis emergency council.
-func (k Keeper) isCouncilMember(operatorAddr string, params types.Params) bool {
+func (k Keeper) isCouncilMember(operatorAddr string, params *types.Params) bool {
 	for _, member := range params.GenesisCouncil {
 		if member == operatorAddr {
 			return true
@@ -133,7 +133,7 @@ func (k Keeper) isCouncilMember(operatorAddr string, params types.Params) bool {
 }
 
 // isCouncilActive checks if the genesis council is still active.
-func (k Keeper) isCouncilActive(ctx sdk.Context, params types.Params) bool {
+func (k Keeper) isCouncilActive(ctx sdk.Context, params *types.Params) bool {
 	if params.CouncilExpiryBlock == 0 || len(params.GenesisCouncil) == 0 {
 		return false
 	}
@@ -141,16 +141,16 @@ func (k Keeper) isCouncilActive(ctx sdk.Context, params types.Params) bool {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	k.SetEmergencyStatus(ctx, types.EmergencyStatus(genState.Status))
 	for _, ceremony := range genState.Ceremonies {
 		if ceremony == nil {
 			continue
 		}
-		if err := k.SetCeremony(ctx, *ceremony); err != nil {
+		if err := k.SetCeremony(ctx, ceremony); err != nil {
 			panic("failed to init genesis ceremony: " + err.Error())
 		}
 	}
@@ -158,7 +158,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 		if entry == nil {
 			continue
 		}
-		k.AddAuditEntry(ctx, *entry)
+		k.AddAuditEntry(ctx, entry)
 	}
 }
 
@@ -167,21 +167,11 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	ceremonies := k.GetAllCeremonies(ctx)
 	auditLog := k.GetAuditLog(ctx)
 
-	// Convert value slices to pointer slices for proto compatibility
-	ceremonyPtrs := make([]*types.EmergencyCeremony, len(ceremonies))
-	for i := range ceremonies {
-		ceremonyPtrs[i] = &ceremonies[i]
-	}
-	auditPtrs := make([]*types.EmergencyAuditEntry, len(auditLog))
-	for i := range auditLog {
-		auditPtrs[i] = &auditLog[i]
-	}
-
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:     &params,
+		Params:     params,
 		Status:     string(k.GetEmergencyStatus(ctx)),
-		Ceremonies: ceremonyPtrs,
-		AuditLog:   auditPtrs,
+		Ceremonies: ceremonies,
+		AuditLog:   auditLog,
 	}
 }

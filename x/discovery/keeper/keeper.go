@@ -65,12 +65,12 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	for _, profile := range genState.Profiles {
-		k.SetProfile(ctx, *profile)
+		k.SetProfile(ctx, profile)
 	}
 }
 
@@ -78,14 +78,13 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	var profiles []*types.AgentProfile
-	k.IterateProfiles(ctx, func(p types.AgentProfile) bool {
-		cp := p // copy to avoid aliasing
-		profiles = append(profiles, &cp)
+	k.IterateProfiles(ctx, func(p *types.AgentProfile) bool {
+		profiles = append(profiles, p)
 		return false
 	})
 
 	return &types.GenesisState{
-		Params:   &params,
+		Params:   params,
 		Profiles: profiles,
 	}
 }
@@ -97,7 +96,7 @@ func (k Keeper) ExpireStaleProfiles(ctx sdk.Context) int {
 	currentHeight := uint64(ctx.BlockHeight())
 	expired := 0
 
-	k.IterateProfiles(ctx, func(p types.AgentProfile) bool {
+	k.IterateProfiles(ctx, func(p *types.AgentProfile) bool {
 		if p.Status != "active" {
 			return false
 		}

@@ -18,7 +18,7 @@ import (
 //
 // Both are gated by evidence quality — claims with weak evidence get no novelty
 // credit, preventing hallucinated "novel" claims from gaming the bonus.
-func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim, evidenceAdjustment int64) StageResult {
+func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim, evidenceAdjustment int64) StageResult {
 	result := StageResult{
 		Name: "novelty",
 	}
@@ -90,7 +90,7 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Cl
 
 // calculateInformationGain measures how much new information a claim contributes.
 // Returns a value in basis points (0-1,000,000).
-func calculateInformationGain(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) uint64 {
+func calculateInformationGain(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) uint64 {
 	// Domain sparsity: fewer facts in this domain = more information gain
 	var domainSparsityBps uint64 = 1_000_000 // default: full sparsity if no domain context
 
@@ -151,7 +151,7 @@ func calculateInformationGain(ctx sdk.Context, evalCtx *EvaluationContext, claim
 // calculateBridgeScore computes the cross-domain bridge value of a claim.
 // Only verified references (above VerifiedBridgeThreshold) from different domains count.
 // Returns a value in basis points (0-1,000,000).
-func calculateBridgeScore(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) uint64 {
+func calculateBridgeScore(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) uint64 {
 	if len(claim.References) == 0 || evalCtx.GetFact == nil || claim.Domain == "" {
 		return 0
 	}

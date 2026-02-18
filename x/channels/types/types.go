@@ -93,20 +93,8 @@ func (m *MsgUpdateChannel) ValidateBasic() error {
 	return nil
 }
 
-// --- Extra message types not in protobuf definitions ---
-
-// MsgDepositChannel adds funds to an existing channel.
-type MsgDepositChannel struct {
-	Depositor string `json:"depositor"` // must be payer
-	ChannelId string `json:"channel_id"`
-	Amount    string `json:"amount"` // ulgm
-}
-
-func (m *MsgDepositChannel) Reset() { *m = MsgDepositChannel{} }
-func (m *MsgDepositChannel) String() string {
-	return fmt.Sprintf("MsgDepositChannel{%s, %s}", m.ChannelId, m.Amount)
-}
-func (m *MsgDepositChannel) ProtoMessage() {}
+// --- ValidateBasic / GetSigners methods for proto-generated message types ---
+// Struct definitions are in tx.pb.go (proto-generated). Only behavioral methods here.
 
 func (m *MsgDepositChannel) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Depositor); err != nil {
@@ -121,25 +109,6 @@ func (m *MsgDepositChannel) ValidateBasic() error {
 	return nil
 }
 
-type MsgDepositChannelResponse struct{}
-
-func (m *MsgDepositChannelResponse) Reset()         { *m = MsgDepositChannelResponse{} }
-func (m *MsgDepositChannelResponse) String() string { return "MsgDepositChannelResponse{}" }
-func (m *MsgDepositChannelResponse) ProtoMessage()  {}
-
-// MsgUpdateState submits an off-chain state update.
-type MsgUpdateState struct {
-	Sender    string             `json:"sender"` // payer or provider
-	ChannelId string             `json:"channel_id"`
-	Update    ChannelStateUpdate `json:"update"`
-}
-
-func (m *MsgUpdateState) Reset() { *m = MsgUpdateState{} }
-func (m *MsgUpdateState) String() string {
-	return fmt.Sprintf("MsgUpdateState{%s, nonce:%d}", m.ChannelId, m.Update.Nonce)
-}
-func (m *MsgUpdateState) ProtoMessage() {}
-
 func (m *MsgUpdateState) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
 		return fmt.Errorf("invalid sender address: %w", err)
@@ -150,22 +119,6 @@ func (m *MsgUpdateState) ValidateBasic() error {
 	return nil
 }
 
-type MsgUpdateStateResponse struct{}
-
-func (m *MsgUpdateStateResponse) Reset()         { *m = MsgUpdateStateResponse{} }
-func (m *MsgUpdateStateResponse) String() string { return "MsgUpdateStateResponse{}" }
-func (m *MsgUpdateStateResponse) ProtoMessage()  {}
-
-// MsgClaimExpired claims refund from an expired channel.
-type MsgClaimExpired struct {
-	Claimer   string `json:"claimer"` // payer
-	ChannelId string `json:"channel_id"`
-}
-
-func (m *MsgClaimExpired) Reset()         { *m = MsgClaimExpired{} }
-func (m *MsgClaimExpired) String() string { return fmt.Sprintf("MsgClaimExpired{%s}", m.ChannelId) }
-func (m *MsgClaimExpired) ProtoMessage()  {}
-
 func (m *MsgClaimExpired) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Claimer); err != nil {
 		return fmt.Errorf("invalid claimer address: %w", err)
@@ -175,33 +128,6 @@ func (m *MsgClaimExpired) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgClaimExpiredResponse struct {
-	RefundedAmount string `json:"refunded_amount"` // ulgm
-}
-
-func (m *MsgClaimExpiredResponse) Reset() { *m = MsgClaimExpiredResponse{} }
-func (m *MsgClaimExpiredResponse) String() string {
-	return fmt.Sprintf("MsgClaimExpiredResponse{%s}", m.RefundedAmount)
-}
-func (m *MsgClaimExpiredResponse) ProtoMessage() {}
-
-
-// MsgUpdateParams is the governance message to update module params.
-type MsgUpdateParams struct {
-	Authority string  `json:"authority"`
-	Params    *Params `json:"params"`
-}
-
-// MsgUpdateParamsResponse is the response type for MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (*MsgUpdateParams) ProtoMessage()             {}
-func (*MsgUpdateParams) Reset()                     {}
-func (*MsgUpdateParams) String() string             { return "MsgUpdateParams" }
-func (*MsgUpdateParamsResponse) ProtoMessage()      {}
-func (*MsgUpdateParamsResponse) Reset()             {}
-func (*MsgUpdateParamsResponse) String() string     { return "MsgUpdateParamsResponse" }
 
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)

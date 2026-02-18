@@ -24,7 +24,7 @@ import (
 //     receive a forced "reject" verdict.
 //   - Claims submitted about facts that are already fully disproven
 //     receive the AlreadyDisprovenPenalty (200,000).
-func evaluateCounterFacts(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateCounterFacts(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "counter_facts",
 	}
@@ -74,7 +74,7 @@ func evaluateCounterFacts(ctx sdk.Context, evalCtx *EvaluationContext, claim typ
 		// force rejection — the claim builds on false foundations.
 		if evalCtx.GetBidirectionalConfidence != nil {
 			bidir := evalCtx.GetBidirectionalConfidence(ctx, refId)
-			if bidir.Status == "disproven" {
+			if bidir != nil && bidir.Status == "disproven" {
 				disprovenRefFound = true
 			}
 		}

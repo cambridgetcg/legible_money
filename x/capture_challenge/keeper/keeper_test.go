@@ -35,26 +35,26 @@ func init() {
 // ---------- Mock CaptureDefenseKeeper ----------
 
 type mockCaptureDefenseKeeper struct {
-	metrics map[string]capturedefensetypes.CaptureMetrics
+	metrics map[string]*capturedefensetypes.CaptureMetrics
 }
 
 func newMockCaptureDefenseKeeper() *mockCaptureDefenseKeeper {
 	return &mockCaptureDefenseKeeper{
-		metrics: make(map[string]capturedefensetypes.CaptureMetrics),
+		metrics: make(map[string]*capturedefensetypes.CaptureMetrics),
 	}
 }
 
-func (m *mockCaptureDefenseKeeper) GetCaptureMetrics(_ sdk.Context, domain string) (capturedefensetypes.CaptureMetrics, bool) {
+func (m *mockCaptureDefenseKeeper) GetCaptureMetrics(_ sdk.Context, domain string) (*capturedefensetypes.CaptureMetrics, bool) {
 	cm, ok := m.metrics[domain]
 	return cm, ok
 }
 
-func (m *mockCaptureDefenseKeeper) AnalyzeCaptureRisk(_ sdk.Context, domain string, _ uint64) capturedefensetypes.CaptureMetrics {
+func (m *mockCaptureDefenseKeeper) AnalyzeCaptureRisk(_ sdk.Context, domain string, _ uint64) *capturedefensetypes.CaptureMetrics {
 	cm, ok := m.metrics[domain]
 	if ok {
 		return cm
 	}
-	return capturedefensetypes.CaptureMetrics{Domain: domain}
+	return &capturedefensetypes.CaptureMetrics{Domain: domain}
 }
 
 // ---------- Mock StakingKeeper ----------
@@ -133,7 +133,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockCaptureDefenseK
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 
 	// Set default params
-	k.SetParams(ctx, *types.DefaultParams())
+	k.SetParams(ctx, types.DefaultParams())
 
 	return k, ctx, mockCDK, mockSK
 }
@@ -254,7 +254,7 @@ func TestSubmitChallengeInsufficientEvidence(t *testing.T) {
 // ---------- Tests: Lifecycle ----------
 
 // submitAndResolve is a helper that creates a challenge and resolves it.
-func submitAndResolve(t *testing.T, k keeper.Keeper, ctx sdk.Context, outcome string) (types.CaptureChallenge, *types.MsgResolveChallengeResponse) {
+func submitAndResolve(t *testing.T, k keeper.Keeper, ctx sdk.Context, outcome string) (*types.CaptureChallenge, *types.MsgResolveChallengeResponse) {
 	t.Helper()
 
 	// Submit the challenge
@@ -398,7 +398,7 @@ func TestAdvanceChallengePhases(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Create a challenge manually in evidence_period with known deadlines
-	ch := types.CaptureChallenge{
+	ch := &types.CaptureChallenge{
 		Id:               "test-phase-challenge",
 		Domain:           "physics",
 		Challenger:       testAuthority,
@@ -439,7 +439,7 @@ func TestAutoFundBountyPools(t *testing.T) {
 	k, ctx, mockCDK, _ := setupKeeper(t)
 
 	// Set up a bounty pool for a domain
-	pool := types.DomainBountyPool{
+	pool := &types.DomainBountyPool{
 		Domain:           "physics",
 		Balance:          "1000",
 		TotalRewardsPaid: "0",
@@ -449,7 +449,7 @@ func TestAutoFundBountyPools(t *testing.T) {
 	k.SetBountyPool(ctx, pool)
 
 	// Set up capture metrics with high risk score (>= 400000)
-	mockCDK.metrics["physics"] = capturedefensetypes.CaptureMetrics{
+	mockCDK.metrics["physics"] = &capturedefensetypes.CaptureMetrics{
 		Domain:    "physics",
 		RiskScore: 500_000, // 50%, above the 40% threshold
 	}
@@ -476,7 +476,7 @@ func TestAutoFundBountyPools(t *testing.T) {
 	}
 
 	// Test that low-risk domains are NOT auto-funded
-	lowRiskPool := types.DomainBountyPool{
+	lowRiskPool := &types.DomainBountyPool{
 		Domain:           "mathematics",
 		Balance:          "500",
 		TotalRewardsPaid: "0",
@@ -485,7 +485,7 @@ func TestAutoFundBountyPools(t *testing.T) {
 	}
 	k.SetBountyPool(ctx, lowRiskPool)
 
-	mockCDK.metrics["mathematics"] = capturedefensetypes.CaptureMetrics{
+	mockCDK.metrics["mathematics"] = &capturedefensetypes.CaptureMetrics{
 		Domain:    "mathematics",
 		RiskScore: 200_000, // 20%, below the 40% threshold
 	}
@@ -725,7 +725,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 	})
 
 	// Create a bounty pool
-	k.SetBountyPool(ctx, types.DomainBountyPool{
+	k.SetBountyPool(ctx, &types.DomainBountyPool{
 		Domain:  "physics",
 		Balance: "5000000",
 	})
@@ -750,7 +750,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 
 	// Verify re-imported
 	var challengeCount int
-	k2.IterateChallenges(ctx2, func(_ types.CaptureChallenge) bool {
+	k2.IterateChallenges(ctx2, func(_ *types.CaptureChallenge) bool {
 		challengeCount++
 		return false
 	})

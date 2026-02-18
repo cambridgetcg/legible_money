@@ -95,9 +95,9 @@ func (k Keeper) SetAdjustmentFactor(ctx sdk.Context, factorBps uint64) {
 // ---------- Params ----------
 
 // SetParams stores module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := json.Marshal(&params)
+	bz, err := json.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -105,7 +105,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns the current module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -115,21 +115,21 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := json.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ---------- Genesis ----------
 
 // InitGenesis initializes the module genesis state.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	for _, provider := range genState.Providers {
-		k.SetProvider(ctx, *provider)
+		k.SetProvider(ctx, provider)
 	}
 	for _, credit := range genState.Credits {
-		k.SetCredit(ctx, *credit)
+		k.SetCredit(ctx, credit)
 	}
 }
 
@@ -137,18 +137,10 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	providers := k.GetAllProviders(ctx)
-	providerPtrs := make([]*types.ComputeProvider, len(providers))
-	for i := range providers {
-		providerPtrs[i] = &providers[i]
-	}
 	credits := k.GetAllCredits(ctx)
-	creditPtrs := make([]*types.ComputeCredit, len(credits))
-	for i := range credits {
-		creditPtrs[i] = &credits[i]
-	}
 	return &types.GenesisState{
-		Params:    &params,
-		Providers: providerPtrs,
-		Credits:   creditPtrs,
+		Params:    params,
+		Providers: providers,
+		Credits:   credits,
 	}
 }

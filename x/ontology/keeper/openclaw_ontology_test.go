@@ -25,7 +25,7 @@ func TestOC_ON1_ZeroStakeDomainProposal(t *testing.T) {
 	bk.fundAccount(proposer, largeBalance)
 
 	// Ensure stratum 1 exists
-	k.SetStratum(ctx, types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
+	k.SetStratum(ctx, &types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
 
 	// Try zero stake — should fail
 	_, err := ms.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
@@ -62,7 +62,7 @@ func TestOC_ON2_DuplicateDomainProposal(t *testing.T) {
 	proposer := testAddr("propdup_")
 	bk.fundAccount(proposer, largeBalance)
 
-	k.SetStratum(ctx, types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
+	k.SetStratum(ctx, &types.StratumProperties{Stratum: 1, Name: "Foundation", Description: "test"})
 
 	// Use a domain name that already exists in genesis (e.g., "mathematics")
 	// which was seeded by InitGenesis

@@ -97,13 +97,13 @@ func TestMigrationPath_OldParamsToNew(t *testing.T) {
 	// tier configs were in KVStore but NOT embedded in Params).
 	defaults := types.DefaultTierConfigs()
 	for _, tc := range defaults {
-		if err := k.SetTierConfig(ctx, *tc); err != nil {
+		if err := k.SetTierConfig(ctx, tc); err != nil {
 			t.Fatalf("failed to set tier config: %v", err)
 		}
 	}
 
 	// Write the old params via SetParams (it will try to sync empty tier configs — that's fine)
-	if err := k.SetParams(ctx, oldParams); err != nil {
+	if err := k.SetParams(ctx, &oldParams); err != nil {
 		t.Fatalf("failed to set old params: %v", err)
 	}
 
@@ -768,7 +768,7 @@ func TestGenesis_LegacyTierConfigsOnly(t *testing.T) {
 	dp := types.DefaultParams()
 	dp.TierConfigs = nil // Simulate old genesis format
 	legacyGenesis := &types.GenesisState{
-		Params:      &dp,
+		Params:      dp,
 		TierConfigs: defaults,
 	}
 
@@ -801,7 +801,7 @@ func TestGenesis_NewFormatTierConfigsInParams(t *testing.T) {
 	// Create genesis with tier configs IN params (new format)
 	dp := types.DefaultParams()
 	newGenesis := &types.GenesisState{
-		Params:      &dp,
+		Params:      dp,
 		TierConfigs: nil, // New format — no legacy field
 	}
 
@@ -834,7 +834,7 @@ func TestGenesis_BothTierConfigLocations_ParamsWins(t *testing.T) {
 	legacyConfigs[0].MinStake = "111000" // Original value in legacy
 
 	bothGenesis := &types.GenesisState{
-		Params:      &dp,
+		Params:      dp,
 		TierConfigs: legacyConfigs,
 	}
 
@@ -857,7 +857,7 @@ func TestGenesisState_Validate_NoTierConfigsAnywhere_Fails(t *testing.T) {
 	dp.TierConfigs = nil
 
 	gs := &types.GenesisState{
-		Params:      &dp,
+		Params:      dp,
 		TierConfigs: nil,
 	}
 
@@ -879,7 +879,7 @@ func TestUpdateParams_GovernanceFlow(t *testing.T) {
 
 	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "authority",
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)
@@ -908,7 +908,7 @@ func TestUpdateParams_UnauthorizedFails(t *testing.T) {
 	newParams := types.DefaultParams()
 	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "not_authority",
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err == nil {
 		t.Error("expected error for unauthorized UpdateParams")

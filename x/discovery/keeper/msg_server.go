@@ -62,7 +62,7 @@ func (k msgServer) RegisterAgent(goCtx context.Context, msg *types.MsgRegisterAg
 
 	currentHeight := uint64(ctx.BlockHeight())
 
-	profile := types.AgentProfile{
+	profile := &types.AgentProfile{
 		Address:           msg.Address,
 		Did:               msg.Did,
 		DisplayName:       msg.DisplayName,
@@ -251,7 +251,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }

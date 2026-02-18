@@ -65,15 +65,15 @@ func (k Keeper) GetConfidenceCeiling(ctx sdk.Context, domainName string) (maxCon
 }
 
 // GetStratumForDomain returns the stratum properties for a given domain.
-func (k Keeper) GetStratumForDomain(ctx sdk.Context, domainName string) (types.StratumProperties, error) {
+func (k Keeper) GetStratumForDomain(ctx sdk.Context, domainName string) (*types.StratumProperties, error) {
 	domain, found := k.GetDomain(ctx, domainName)
 	if !found {
-		return types.StratumProperties{}, fmt.Errorf("%w: %s", types.ErrDomainNotFound, domainName)
+		return nil, fmt.Errorf("%w: %s", types.ErrDomainNotFound, domainName)
 	}
 
 	stratum, found := k.GetStratum(ctx, types.Stratum(domain.Stratum))
 	if !found {
-		return types.StratumProperties{}, fmt.Errorf("%w: stratum %d for domain %s",
+		return nil, fmt.Errorf("%w: stratum %d for domain %s",
 			types.ErrInvalidStratum, domain.Stratum, domainName)
 	}
 
@@ -145,7 +145,7 @@ func (k Keeper) ArchiveDomain(ctx sdk.Context, domainName string) error {
 // and its claim/fact counts are added to the target. Both domains must exist.
 // For merge proposals, the target domain name is stored in proposal.Domain.Description
 // using the convention "merge_into:<target_name>".
-func (k Keeper) MergeDomains(ctx sdk.Context, proposal types.DomainProposal) error {
+func (k Keeper) MergeDomains(ctx sdk.Context, proposal *types.DomainProposal) error {
 	targetName := types.ParseMergeTarget(proposal.Domain.Description)
 	if targetName == "" {
 		return fmt.Errorf("merge proposal missing merge target (expected 'merge_into:<name>' in description)")

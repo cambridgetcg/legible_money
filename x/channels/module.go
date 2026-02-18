@@ -99,7 +99,7 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterFullMsgServer(cfg.MsgServer(), keeper.NewFullMsgServerImpl(am.keeper))
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 
 	migrator := keeper.NewMigrator(am.keeper)
@@ -132,8 +132,8 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 
 	// Auto-settle channels past their dispute/closing deadline
 	expiredChannels := am.keeper.GetExpiredChannels(ctx, currentBlock)
-	for _, ch := range expiredChannels {
-		am.keeper.AutoSettleChannel(ctx, ch)
+	for i := range expiredChannels {
+		am.keeper.AutoSettleChannel(ctx, expiredChannels[i])
 	}
 
 	return nil

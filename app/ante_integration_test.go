@@ -81,20 +81,20 @@ func (m mockCosmosAccountKeeperForAnte) GetAccount(_ context.Context, _ sdk.AccA
 
 // mockStakingKeeperForEmergency satisfies the emergency StakingKeeper interface.
 type mockStakingKeeperForEmergency struct {
-	validators map[string]stakingtypes.LegibleValidator
+	validators map[string]*stakingtypes.LegibleValidator
 }
 
 func newMockStakingKeeperForEmergency() *mockStakingKeeperForEmergency {
-	return &mockStakingKeeperForEmergency{validators: make(map[string]stakingtypes.LegibleValidator)}
+	return &mockStakingKeeperForEmergency{validators: make(map[string]*stakingtypes.LegibleValidator)}
 }
 
-func (m *mockStakingKeeperForEmergency) GetValidator(_ sdk.Context, addr string) (stakingtypes.LegibleValidator, bool) {
+func (m *mockStakingKeeperForEmergency) GetValidator(_ sdk.Context, addr string) (*stakingtypes.LegibleValidator, bool) {
 	v, ok := m.validators[addr]
 	return v, ok
 }
 
-func (m *mockStakingKeeperForEmergency) GetActiveValidatorSet(_ sdk.Context) []stakingtypes.LegibleValidator {
-	var result []stakingtypes.LegibleValidator
+func (m *mockStakingKeeperForEmergency) GetActiveValidatorSet(_ sdk.Context) []*stakingtypes.LegibleValidator {
+	var result []*stakingtypes.LegibleValidator
 	for _, v := range m.validators {
 		if v.IsActive {
 			result = append(result, v)
@@ -103,7 +103,7 @@ func (m *mockStakingKeeperForEmergency) GetActiveValidatorSet(_ sdk.Context) []s
 	return result
 }
 
-func (m *mockStakingKeeperForEmergency) IterateValidators(_ sdk.Context, cb func(stakingtypes.LegibleValidator) bool) {
+func (m *mockStakingKeeperForEmergency) IterateValidators(_ sdk.Context, cb func(*stakingtypes.LegibleValidator) bool) {
 	for _, v := range m.validators {
 		if cb(v) {
 			return
@@ -193,7 +193,8 @@ func setupBothKeepers(t *testing.T) (legibleauthkeeper.Keeper, emergencykeeper.K
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 500_000}, false, log.NewNopLogger())
 
 	// Set default auth params
-	if err := authKeeper.SetParams(ctx, legibleauthtypes.DefaultParams()); err != nil {
+	defaultAuthParams := legibleauthtypes.DefaultParams()
+	if err := authKeeper.SetParams(ctx, &defaultAuthParams); err != nil {
 		t.Fatalf("failed to set auth params: %v", err)
 	}
 

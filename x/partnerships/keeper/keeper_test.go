@@ -146,7 +146,7 @@ func TestParamsDefault(t *testing.T) {
 
 func TestParamsSetGet(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	custom := types.Params{
+	custom := &types.Params{
 		FormationWindowBlocks:      100,
 		CoolingPeriodBlocks:        500000,
 		CommonPotShareBps:          300000,
@@ -174,12 +174,13 @@ func TestParamsValidation(t *testing.T) {
 		params  types.Params
 		wantErr bool
 	}{
-		{"valid", types.DefaultParams(), false},
+		{"valid", *types.DefaultParams(), false},
 		{"zero formation window", types.Params{FormationWindowBlocks: 0, CoolingPeriodBlocks: 222222, CommonPotShareBps: 220000, SafetyFreezeDurationBlocks: 222, MaxFreezesPerEpoch: 3, CoercionReviewBlocks: 1111, BaseCooldownBlocks: 77, MaxCounterProposalDepth: 3, DefaultHumanSplitBps: 500000, DefaultAgentSplitBps: 500000}, true},
 		{"splits dont sum to 1000000", types.Params{FormationWindowBlocks: 77, CoolingPeriodBlocks: 222222, CommonPotShareBps: 220000, SafetyFreezeDurationBlocks: 222, MaxFreezesPerEpoch: 3, CoercionReviewBlocks: 1111, BaseCooldownBlocks: 77, MaxCounterProposalDepth: 3, DefaultHumanSplitBps: 600000, DefaultAgentSplitBps: 500000}, true},
 		{"zero common pot", types.Params{FormationWindowBlocks: 77, CoolingPeriodBlocks: 222222, CommonPotShareBps: 0, SafetyFreezeDurationBlocks: 222, MaxFreezesPerEpoch: 3, CoercionReviewBlocks: 1111, BaseCooldownBlocks: 77, MaxCounterProposalDepth: 3, DefaultHumanSplitBps: 500000, DefaultAgentSplitBps: 500000}, true},
 	}
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.params.Validate()
 			if tc.wantErr && err == nil {
@@ -219,7 +220,7 @@ func TestPartnershipCRUD(t *testing.T) {
 		CooperationScore: 5000,
 		FormedAtBlock:    100,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Get
 	got, found := k.GetPartnership(ctx, "p-1")
@@ -252,7 +253,7 @@ func TestPartnershipCRUD(t *testing.T) {
 	}
 
 	// Delete
-	k.DeletePartnership(ctx, p)
+	k.DeletePartnership(ctx, &p)
 	_, found = k.GetPartnership(ctx, "p-1")
 	if found {
 		t.Error("expected partnership to be deleted")
@@ -275,7 +276,7 @@ func TestPartnershipsByParticipant(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Human should find it
 	result := k.GetPartnershipsByParticipant(ctx, human)
@@ -316,7 +317,7 @@ func TestDistributeReward(t *testing.T) {
 		TotalEarned:      "0",
 		CooperationScore: 5000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Distribute 10000 with Trial tier (1.0x multiplier)
 	humanShare, agentShare, commonPotAdd, err := k.DistributeReward(ctx, &p, "10000", "verification")
@@ -365,7 +366,7 @@ func TestDistributeRewardEliteTier(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	humanShare, agentShare, commonPotAdd, err := k.DistributeReward(ctx, &p, "10000", "citation")
 	if err != nil {
@@ -403,7 +404,7 @@ func TestDistributeRewardAccumulates(t *testing.T) {
 		CommonPotBalance: "1000",
 		TotalEarned:      "5000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	_, _, potAdd, err := k.DistributeReward(ctx, &p, "10000", "service")
 	if err != nil {
@@ -449,7 +450,8 @@ func TestCalculateAmountTier(t *testing.T) {
 		{"exact 1% boundary", "100", "10000", types.AmountTierSmall},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			tier := k.CalculateAmountTier(tc.amount, tc.potBalance)
 			if tier != tc.expected {
@@ -476,7 +478,8 @@ func TestCalculateCooldown(t *testing.T) {
 		{20, 11111}, // capped
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(fmt.Sprintf("%d rejections", tc.rejections), func(t *testing.T) {
 			cooldown := k.CalculateCooldown(ctx, tc.rejections)
 			if cooldown != tc.expected {
@@ -494,13 +497,13 @@ func TestValidateCounterProposal(t *testing.T) {
 	op := types.ConsensusOperation{
 		Deliberation: &types.DeliberationState{ChainDepth: 2},
 	}
-	if err := k.ValidateCounterProposal(ctx, op); err != nil {
+	if err := k.ValidateCounterProposal(ctx, &op); err != nil {
 		t.Errorf("expected no error at depth 2, got: %v", err)
 	}
 
 	// Depth 3 should fail (cannot create depth 4)
 	op.Deliberation.ChainDepth = 3
-	if err := k.ValidateCounterProposal(ctx, op); err == nil {
+	if err := k.ValidateCounterProposal(ctx, &op); err == nil {
 		t.Error("expected error at depth 3")
 	}
 }
@@ -524,7 +527,7 @@ func TestSafetyFreeze(t *testing.T) {
 		TotalEarned:      "0",
 		CooperationScore: 5000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Apply first freeze
 	sf, err := k.HandleSafetyFreeze(ctx, "p-1", testAddr(1))
@@ -565,7 +568,7 @@ func TestSafetyFreezeMaxReached(t *testing.T) {
 		TotalEarned:      "0",
 		CooperationScore: 5000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Set freeze count to max
 	sf := types.SafetyFreeze{
@@ -573,7 +576,7 @@ func TestSafetyFreezeMaxReached(t *testing.T) {
 		FreezeCountThisEpoch: 3,
 		ExpiresAt:            50, // already expired
 	}
-	k.SetSafetyFreeze(ctx, sf)
+	k.SetSafetyFreeze(ctx, &sf)
 
 	_, err := k.HandleSafetyFreeze(ctx, "p-1", testAddr(1))
 	if err == nil {
@@ -596,7 +599,7 @@ func TestSafetyFreezeAlreadyActive(t *testing.T) {
 		TotalEarned:      "0",
 		CooperationScore: 5000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Set active freeze
 	sf := types.SafetyFreeze{
@@ -604,7 +607,7 @@ func TestSafetyFreezeAlreadyActive(t *testing.T) {
 		FreezeCountThisEpoch: 1,
 		ExpiresAt:            200, // still active (current=100)
 	}
-	k.SetSafetyFreeze(ctx, sf)
+	k.SetSafetyFreeze(ctx, &sf)
 
 	_, err := k.HandleSafetyFreeze(ctx, "p-1", testAddr(1))
 	if err == nil {
@@ -630,7 +633,7 @@ func TestCoercionSignal(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	cs, err := k.HandleCoercionSignal(ctx, "p-1", testAddr(1))
 	if err != nil {
@@ -664,7 +667,7 @@ func TestCoercionSignalAlreadyActive(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// First signal
 	_, err := k.HandleCoercionSignal(ctx, "p-1", testAddr(1))
@@ -697,7 +700,7 @@ func TestHandleExit(t *testing.T) {
 		CommonPotBalance: "10000",
 		TotalEarned:      "50000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	cooldownEnd, err := k.HandleExit(ctx, "p-1", testAddr(1))
 	if err != nil {
@@ -738,7 +741,7 @@ func TestHandleExitAlreadyDissolved(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	_, err := k.HandleExit(ctx, "p-1", testAddr(1))
 	if err == nil {
@@ -833,7 +836,7 @@ func TestMsgDistributeReward(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	srv := keeper.NewMsgServerImpl(k)
 	resp, err := srv.DistributeReward(ctx, &types.MsgDistributeReward{
@@ -899,7 +902,7 @@ func TestMsgUpdateParamsUnauthorized(t *testing.T) {
 	dp := types.DefaultParams()
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr(99),
-		Params:    &dp,
+		Params:    dp,
 	})
 	if err == nil {
 		t.Error("expected unauthorized error")
@@ -921,7 +924,7 @@ func TestMsgSafetyFreeze(t *testing.T) {
 		TotalEarned:      "0",
 		CooperationScore: 5000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	srv := keeper.NewMsgServerImpl(k)
 	resp, err := srv.SafetyFreeze(ctx, &types.MsgSafetyFreeze{
@@ -950,7 +953,7 @@ func TestMsgSafetyFreezeNotParticipant(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	srv := keeper.NewMsgServerImpl(k)
 	_, err := srv.SafetyFreeze(ctx, &types.MsgSafetyFreeze{
@@ -976,7 +979,7 @@ func TestMsgInitiateExit(t *testing.T) {
 		CommonPotBalance: "5000",
 		TotalEarned:      "20000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	srv := keeper.NewMsgServerImpl(k)
 	resp, err := srv.InitiateExit(ctx, &types.MsgInitiateExit{
@@ -1020,7 +1023,7 @@ func TestQueryPartnership(t *testing.T) {
 		CommonPotBalance: "1000",
 		TotalEarned:      "5000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.Partnership(ctx, &types.QueryPartnershipRequest{PartnershipId: "p-1"})
@@ -1055,7 +1058,7 @@ func TestQueryPartnershipsByParticipant(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.PartnershipsByParticipant(ctx, &types.QueryPartnershipsByParticipantRequest{Participant: human})
@@ -1096,7 +1099,7 @@ func TestGenesis(t *testing.T) {
 		CooperationScore: 7500,
 		FormedAtBlock:    50,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Export
 	genState := k.ExportGenesis(ctx)
@@ -1106,7 +1109,7 @@ func TestGenesis(t *testing.T) {
 
 	// Import into new keeper
 	k2, ctx2, _ := setupKeeper(t)
-	k2.InitGenesis(ctx2, *genState)
+	k2.InitGenesis(ctx2, genState)
 
 	got := k2.ExportGenesis(ctx2)
 	if len(got.Partnerships) != 1 {
@@ -1161,7 +1164,8 @@ func TestMsgInitiatePartnershipValidateBasic(t *testing.T) {
 		{"empty partner", types.MsgInitiatePartnership{Initiator: human, Partner: ""}, true},
 		{"self partnership", types.MsgInitiatePartnership{Initiator: human, Partner: human}, true},
 	}
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.msg.ValidateBasic()
 			if tc.wantErr && err == nil {
@@ -1189,7 +1193,8 @@ func TestMsgDistributeRewardValidateBasic(t *testing.T) {
 		{"invalid amount", types.MsgDistributeReward{Authority: authority, PartnershipId: "p-1", GrossAmount: "abc", SourceType: "verification"}, true},
 		{"empty source", types.MsgDistributeReward{Authority: authority, PartnershipId: "p-1", GrossAmount: "1000", SourceType: ""}, true},
 	}
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.msg.ValidateBasic()
 			if tc.wantErr && err == nil {
@@ -1206,21 +1211,21 @@ func TestMsgUpdateParamsValidateBasic(t *testing.T) {
 	authority := testAddr(1)
 
 	dp := types.DefaultParams()
-	valid := types.MsgUpdateParams{Authority: authority, Params: &dp}
+	valid := types.MsgUpdateParams{Authority: authority, Params: dp}
 	if err := valid.ValidateBasic(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	dp2 := types.DefaultParams()
-	invalid := types.MsgUpdateParams{Authority: "", Params: &dp2}
+	invalid := types.MsgUpdateParams{Authority: "", Params: dp2}
 	if err := invalid.ValidateBasic(); err == nil {
 		t.Error("expected error for empty authority")
 	}
 
-	ip := types.Params{FormationWindowBlocks: 0}
+	ip := &types.Params{FormationWindowBlocks: 0}
 	invalidParams := types.MsgUpdateParams{
 		Authority: authority,
-		Params:    &ip,
+		Params:    ip,
 	}
 	if err := invalidParams.ValidateBasic(); err == nil {
 		t.Error("expected error for invalid params")
@@ -1336,7 +1341,7 @@ func TestExitBlockedByUnexpiredLock(t *testing.T) {
 		CommonPotBalance: "5000",
 		TotalEarned:      "10000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	_, err := k.HandleExit(ctx, "p-lock", testAddr(1))
 	if err == nil {
@@ -1361,7 +1366,7 @@ func TestExitAllowedAfterLockExpires(t *testing.T) {
 		CommonPotBalance: "10000",
 		TotalEarned:      "20000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	cooldownEnd, err := k.HandleExit(ctx, "p-expired", testAddr(1))
 	if err != nil {
@@ -1390,7 +1395,7 @@ func TestExitAllowedDuringFreeze(t *testing.T) {
 		CommonPotBalance: "8000",
 		TotalEarned:      "30000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	_, err := k.HandleExit(ctx, "p-frozen", testAddr(1))
 	if err != nil {
@@ -1461,7 +1466,8 @@ func TestCalculateExitSettlement_AllTiers(t *testing.T) {
 		{5, true, "24590", "31850", "43560"},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		name := fmt.Sprintf("tier_%d", tc.tier)
 		t.Run(name, func(t *testing.T) {
 			humanAddr := "human"
@@ -1556,7 +1562,7 @@ func TestMsgDepositToPot(t *testing.T) {
 		CommonPotBalance: "1000",
 		TotalEarned:      "5000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Human deposits
 	_, err := srv.DepositToPot(ctx, &types.MsgDepositToPot{
@@ -1604,7 +1610,7 @@ func TestMsgDepositToPot_NotParticipant(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	_, err := srv.DepositToPot(ctx, &types.MsgDepositToPot{
 		Depositor:     testAddr(99),
@@ -1631,7 +1637,7 @@ func TestMsgDepositToPot_NotActive(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	_, err := srv.DepositToPot(ctx, &types.MsgDepositToPot{
 		Depositor:     testAddr(1),
@@ -1658,7 +1664,8 @@ func TestMsgDepositToPotValidateBasic(t *testing.T) {
 		{"negative amount", types.MsgDepositToPot{Depositor: depositor, PartnershipId: "p-1", Amount: "-100"}, true},
 		{"invalid amount", types.MsgDepositToPot{Depositor: depositor, PartnershipId: "p-1", Amount: "abc"}, true},
 	}
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.msg.ValidateBasic()
 			if tc.wantErr && err == nil {
@@ -1692,7 +1699,7 @@ func TestWithdrawalExecution(t *testing.T) {
 		CommonPotBalance: "10000",
 		TotalEarned:      "20000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Create a withdrawal operation proposed by human, already in approved window
 	currentBlock := uint64(ctx.BlockHeight()) // 100
@@ -1710,7 +1717,7 @@ func TestWithdrawalExecution(t *testing.T) {
 		},
 		CreatedAt: currentBlock - 50,
 	}
-	k.SetConsensusOperation(ctx, op)
+	k.SetConsensusOperation(ctx, &op)
 
 	// Agent approves
 	srv := keeper.NewMsgServerImpl(k)
@@ -1754,7 +1761,8 @@ func TestGetLockMultiplier_AllTiers(t *testing.T) {
 		{99, 1770000}, // capped at 5
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(fmt.Sprintf("tier_%d", tc.tier), func(t *testing.T) {
 			m := keeper.GetLockMultiplier(tc.tier)
 			if m.Uint64() != tc.expected {
@@ -1788,7 +1796,7 @@ func TestSettleCoolingPartnerships(t *testing.T) {
 			CooldownEnd: 90, // before current block (100)
 		},
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	k.SettleCoolingPartnerships(ctx)
 
@@ -1817,7 +1825,7 @@ func TestSettleCoolingPartnerships_NotYetExpired(t *testing.T) {
 			CooldownEnd: 200, // after current block (100)
 		},
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	k.SettleCoolingPartnerships(ctx)
 
@@ -1849,7 +1857,7 @@ func TestConsensusOperationCRUD(t *testing.T) {
 		},
 		CreatedAt: 100,
 	}
-	k.SetConsensusOperation(ctx, op)
+	k.SetConsensusOperation(ctx, &op)
 
 	got, found := k.GetConsensusOperation(ctx, "op-1")
 	if !found {

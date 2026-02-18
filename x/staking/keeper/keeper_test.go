@@ -698,7 +698,8 @@ func TestMsgDelegate_ValidateBasic(t *testing.T) {
 		}, true},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.msg.ValidateBasic()
 			if (err != nil) != tt.wantErr {
@@ -726,7 +727,8 @@ func TestMsgUndelegate_ValidateBasic(t *testing.T) {
 		}, true},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.msg.ValidateBasic()
 			if (err != nil) != tt.wantErr {
@@ -903,7 +905,8 @@ func TestMsgRedelegate_ValidateBasic(t *testing.T) {
 		}, true},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.msg.ValidateBasic()
 			if (err != nil) != tt.wantErr {
@@ -2464,7 +2467,7 @@ func TestRedelegationCooldownFromParams(t *testing.T) {
 	registerTestValidator(t, k, ctx, val2Addr, "did:lgm:val2_redel", "111000")
 
 	// Create delegation to val1
-	if err := k.SetDelegation(ctx, types.Delegation{
+	if err := k.SetDelegation(ctx, &types.Delegation{
 		DelegatorAddress:  delegatorAddr,
 		ValidatorAddress:  val1Addr,
 		Amount:            "50000",
@@ -2525,7 +2528,7 @@ func TestUpdateParamsWithTierConfigs(t *testing.T) {
 
 	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "authority",
-		Params:    &params,
+		Params:    params,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)

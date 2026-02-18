@@ -82,7 +82,7 @@ const (
 
 // --- Params Validation ---
 
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.MaxHomesPerAccount == 0 {
 		return fmt.Errorf("max homes per account must be positive")
 	}

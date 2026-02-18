@@ -14,7 +14,7 @@ import (
 
 // CreateVerificationRound creates a new verification round for a claim.
 // Called after a claim is submitted via MsgSubmitClaim.
-func (k Keeper) CreateVerificationRound(ctx sdk.Context, claim types.Claim) (types.VerificationRound, error) {
+func (k Keeper) CreateVerificationRound(ctx sdk.Context, claim *types.Claim) (*types.VerificationRound, error) {
 	params := k.GetParams(ctx)
 	height := uint64(ctx.BlockHeight())
 
@@ -32,7 +32,7 @@ func (k Keeper) CreateVerificationRound(ctx sdk.Context, claim types.Claim) (typ
 		Reveals:              make(map[string]*types.VerificationReveal),
 	}
 
-	k.SetVerificationRound(ctx, round)
+	k.SetVerificationRound(ctx, &round)
 
 	k.Logger(ctx).Info("verification round created",
 		"round_id", roundID,
@@ -42,14 +42,14 @@ func (k Keeper) CreateVerificationRound(ctx sdk.Context, claim types.Claim) (typ
 		"reveal_deadline", round.RevealDeadlineHeight,
 	)
 
-	return round, nil
+	return &round, nil
 }
 
 // GetActiveRoundsForHeight returns active rounds relevant at a given block height.
 // This includes rounds in commit, reveal, or aggregation phase.
-func (k Keeper) GetActiveRoundsForHeight(ctx sdk.Context, height uint64) []types.VerificationRound {
-	var rounds []types.VerificationRound
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+func (k Keeper) GetActiveRoundsForHeight(ctx sdk.Context, height uint64) []*types.VerificationRound {
+	var rounds []*types.VerificationRound
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		if r.Phase == "complete" {
 			return false
 		}
@@ -63,9 +63,9 @@ func (k Keeper) GetActiveRoundsForHeight(ctx sdk.Context, height uint64) []types
 }
 
 // GetRoundsInPhase returns all rounds currently in a specific phase.
-func (k Keeper) GetRoundsInPhase(ctx sdk.Context, phase string) []types.VerificationRound {
-	var rounds []types.VerificationRound
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+func (k Keeper) GetRoundsInPhase(ctx sdk.Context, phase string) []*types.VerificationRound {
+	var rounds []*types.VerificationRound
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		if r.Phase == phase {
 			rounds = append(rounds, r)
 		}
@@ -76,7 +76,7 @@ func (k Keeper) GetRoundsInPhase(ctx sdk.Context, phase string) []types.Verifica
 
 // GetRoundPhase computes what phase a round should be in at a given height.
 // This is a pure function that doesn't modify state.
-func GetRoundPhase(round types.VerificationRound, height uint64, params types.Params) string {
+func GetRoundPhase(round *types.VerificationRound, height uint64, params *types.Params) string {
 	if round.Phase == "complete" {
 		return "complete"
 	}
@@ -101,7 +101,7 @@ func GetRoundPhase(round types.VerificationRound, height uint64, params types.Pa
 func (k Keeper) StoreCommitmentInRound(
 	ctx sdk.Context,
 	roundID string,
-	commitment types.VerificationCommitment,
+	commitment *types.VerificationCommitment,
 ) error {
 	round, found := k.GetVerificationRound(ctx, roundID)
 	if !found {
@@ -125,7 +125,7 @@ func (k Keeper) StoreCommitmentInRound(
 		return fmt.Errorf("%w: %s", types.ErrDuplicateCommitment, commitment.Validator)
 	}
 
-	round.Commitments[commitment.Validator] = &commitment
+	round.Commitments[commitment.Validator] = commitment
 
 	// Track this validator as selected (via VRF proof in commitment)
 	alreadySelected := false
@@ -144,15 +144,15 @@ func (k Keeper) StoreCommitmentInRound(
 }
 
 // GetCommitmentsForRound returns all commitments in a round.
-func (k Keeper) GetCommitmentsForRound(ctx sdk.Context, roundID string) ([]types.VerificationCommitment, error) {
+func (k Keeper) GetCommitmentsForRound(ctx sdk.Context, roundID string) ([]*types.VerificationCommitment, error) {
 	round, found := k.GetVerificationRound(ctx, roundID)
 	if !found {
 		return nil, fmt.Errorf("%w: round %s", types.ErrRoundNotFound, roundID)
 	}
 
-	commitments := make([]types.VerificationCommitment, 0, len(round.Commitments))
+	commitments := make([]*types.VerificationCommitment, 0, len(round.Commitments))
 	for _, k := range sortedMapKeys(round.Commitments) {
-		commitments = append(commitments, *round.Commitments[k])
+		commitments = append(commitments, round.Commitments[k])
 	}
 	return commitments, nil
 }
@@ -161,7 +161,7 @@ func (k Keeper) GetCommitmentsForRound(ctx sdk.Context, roundID string) ([]types
 func (k Keeper) StoreRevealInRound(
 	ctx sdk.Context,
 	roundID string,
-	reveal types.VerificationReveal,
+	reveal *types.VerificationReveal,
 ) error {
 	round, found := k.GetVerificationRound(ctx, roundID)
 	if !found {
@@ -200,21 +200,21 @@ func (k Keeper) StoreRevealInRound(
 		return fmt.Errorf("%w: %s", types.ErrDuplicateReveal, reveal.Validator)
 	}
 
-	round.Reveals[reveal.Validator] = &reveal
+	round.Reveals[reveal.Validator] = reveal
 	k.SetVerificationRound(ctx, round)
 	return nil
 }
 
 // GetRevealsForRound returns all reveals in a round.
-func (k Keeper) GetRevealsForRound(ctx sdk.Context, roundID string) ([]types.VerificationReveal, error) {
+func (k Keeper) GetRevealsForRound(ctx sdk.Context, roundID string) ([]*types.VerificationReveal, error) {
 	round, found := k.GetVerificationRound(ctx, roundID)
 	if !found {
 		return nil, fmt.Errorf("%w: round %s", types.ErrRoundNotFound, roundID)
 	}
 
-	reveals := make([]types.VerificationReveal, 0, len(round.Reveals))
+	reveals := make([]*types.VerificationReveal, 0, len(round.Reveals))
 	for _, k := range sortedMapKeys(round.Reveals) {
-		reveals = append(reveals, *round.Reveals[k])
+		reveals = append(reveals, round.Reveals[k])
 	}
 	return reveals, nil
 }
@@ -227,8 +227,8 @@ func (k Keeper) GetRevealsForRound(ctx sdk.Context, roundID string) ([]types.Ver
 // Distributes rewards and slashes to validators.
 func (k Keeper) CompleteRound(
 	ctx sdk.Context,
-	round types.VerificationRound,
-	result types.VerificationResult,
+	round *types.VerificationRound,
+	result *types.VerificationResult,
 ) error {
 	// Idempotency guard: if this round was already completed (e.g., during state
 	// replay or migration), skip all side effects to prevent duplicate fact
@@ -349,7 +349,7 @@ func (k Keeper) CompleteRound(
 				fact.EvidenceBonus = result.EvidenceBonus
 			}
 
-			k.SetFact(ctx, fact)
+			k.SetFact(ctx, &fact)
 
 			// Return staked amount to submitter (G-1 fix)
 			k.returnClaimStake(ctx, claim)
@@ -366,7 +366,7 @@ func (k Keeper) CompleteRound(
 
 			// Create fact references from claim references
 			for _, refID := range claim.References {
-				k.SetFactReference(ctx, types.FactReference{
+				k.SetFactReference(ctx, &types.FactReference{
 					FromFactId:      factID,
 					ToFactId:        refID,
 					ReferenceType:   "supports",
@@ -444,7 +444,7 @@ func (k Keeper) CompleteRound(
 				BaseConfidence:       result.Confidence,
 				Maturity:             types.MaturityEmerging,
 			}
-			k.SetFact(ctx, fact)
+			k.SetFact(ctx, &fact)
 
 			ctx.EventManager().EmitEvent(
 				sdk.NewEvent("contested_fact_created",
@@ -530,7 +530,7 @@ roundFinalize:
 }
 
 // returnClaimStake returns the full staked amount from the knowledge module back to the claim submitter.
-func (k Keeper) returnClaimStake(ctx sdk.Context, claim types.Claim) {
+func (k Keeper) returnClaimStake(ctx sdk.Context, claim *types.Claim) {
 	if k.bankKeeper == nil || claim.StakeAmount == "" {
 		return
 	}
@@ -567,7 +567,7 @@ func (k Keeper) returnClaimStake(ctx sdk.Context, claim types.Claim) {
 
 // slashAndReturnClaimStake slashes a portion of the claim stake and returns the remainder.
 // slashBps is in basis points (1_000_000 = 100%). E.g., 220000 = 22%.
-func (k Keeper) slashAndReturnClaimStake(ctx sdk.Context, claim types.Claim, slashBps uint64) {
+func (k Keeper) slashAndReturnClaimStake(ctx sdk.Context, claim *types.Claim, slashBps uint64) {
 	if k.bankKeeper == nil || claim.StakeAmount == "" {
 		return
 	}
@@ -710,8 +710,8 @@ func (k Keeper) handleEquivocation(
 // Updates the counter-fact status and, if accepted, marks the target fact as contested/disproven.
 func (k Keeper) completeContradictionRound(
 	ctx sdk.Context,
-	round types.VerificationRound,
-	result types.VerificationResult,
+	round *types.VerificationRound,
+	result *types.VerificationResult,
 ) {
 	// round.ClaimId is the counter-fact ID for contradiction rounds
 	cf, found := k.GetCounterFact(ctx, round.ClaimId)
@@ -823,7 +823,7 @@ func (k Keeper) completeContradictionRound(
 //
 // The reward is minted from the knowledge module account. The submitter's locked
 // stake is returned separately in completeContradictionRound (accepted case).
-func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf types.CounterFact, targetFact types.Fact) {
+func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf *types.CounterFact, targetFact *types.Fact) {
 	if k.bankKeeper == nil || cf.Submitter == "" || cf.Submitter == "system" {
 		return
 	}
@@ -970,9 +970,9 @@ const SystemCounterFactStakeShareBps = 100_000 // 10%
 // the auto-counter-fact economic backing in the bidirectional confidence system.
 func (k Keeper) createRejectionCounterFact(
 	ctx sdk.Context,
-	claim types.Claim,
-	round types.VerificationRound,
-	result types.VerificationResult,
+	claim *types.Claim,
+	round *types.VerificationRound,
+	result *types.VerificationResult,
 ) {
 	height := uint64(ctx.BlockHeight())
 	cfID := GenerateCounterFactID("", claim.Id, "system", height)
@@ -1015,7 +1015,7 @@ func (k Keeper) createRejectionCounterFact(
 		RoundId:           round.Id,
 		StakeAmount:       stakeAmount,
 	}
-	k.SetCounterFact(ctx, cf)
+	k.SetCounterFact(ctx, &cf)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("rejection_counter_fact_created",
@@ -1060,7 +1060,7 @@ func (k Keeper) CreateSupersessionCounterFact(
 		CreatedAtHeight:   height,
 		VerifiedAtHeight:  height,
 	}
-	k.SetCounterFact(ctx, cf)
+	k.SetCounterFact(ctx, &cf)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("supersession_counter_fact_created",
@@ -1157,7 +1157,7 @@ func (k Keeper) OpenCounterFactChallenge(
 // If unchallenged → finalize as verified (stake return + target update + reward).
 // Called in BeginBlocker.
 func (k Keeper) ProcessCounterFactChallengeExpiry(ctx sdk.Context, currentHeight uint64) {
-	k.IterateCounterFacts(ctx, func(cf types.CounterFact) bool {
+	k.IterateCounterFacts(ctx, func(cf *types.CounterFact) bool {
 		if cf.Status != types.CounterFactStatusProvisional {
 			return false
 		}
@@ -1188,7 +1188,7 @@ func (k Keeper) ProcessCounterFactChallengeExpiry(ctx sdk.Context, currentHeight
 
 // FinalizeCounterFact transitions a provisional counter-fact to verified and
 // executes all deferred effects: stake return, target fact update, falsification reward.
-func (k Keeper) FinalizeCounterFact(ctx sdk.Context, cf types.CounterFact, height uint64) {
+func (k Keeper) FinalizeCounterFact(ctx sdk.Context, cf *types.CounterFact, height uint64) {
 	cf.Status = types.CounterFactStatusVerified
 	cf.VerifiedAtHeight = height
 
@@ -1430,7 +1430,7 @@ func (k Keeper) CleanupExpiredRounds(ctx sdk.Context, retentionBlocks uint64) {
 	cutoff := currentHeight - retentionBlocks
 
 	var toDelete []string
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		if r.Phase == "complete" && r.CompletedAtHeight < cutoff {
 			toDelete = append(toDelete, r.Id)
 		}

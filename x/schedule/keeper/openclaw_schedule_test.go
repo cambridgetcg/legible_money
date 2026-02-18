@@ -48,7 +48,7 @@ func TestOC_SCHED1_NonCreatorCancel(t *testing.T) {
 			},
 		},
 	}
-	k.SetProcess(ctx, process)
+	k.SetProcess(ctx, &process)
 
 	// ATTACK: Non-creator tries to cancel and steal refund
 	attackerAddr := sdk.AccAddress("attacker____________").String()
@@ -103,7 +103,7 @@ func TestOC_SCHED2_NonCreatorPause(t *testing.T) {
 			},
 		},
 	}
-	k.SetProcess(ctx, process)
+	k.SetProcess(ctx, &process)
 
 	// ATTACK: Non-creator tries to pause
 	attackerAddr := sdk.AccAddress("attacker____________").String()

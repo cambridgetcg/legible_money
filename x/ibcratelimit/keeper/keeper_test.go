@@ -88,7 +88,7 @@ func TestSetGetParams(t *testing.T) {
 		MaxInflowPerEpoch:  "600000",
 		TrackedDenom:       "uatom",
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 
 	got := k.GetParams(ctx)
 	if got.EpochLengthBlocks != 1000 {
@@ -115,7 +115,8 @@ func TestParamsValidation(t *testing.T) {
 		{"zero epoch", types.Params{EpochLengthBlocks: 0, TrackedDenom: "ulgm"}, true},
 		{"empty denom", types.Params{EpochLengthBlocks: 100, TrackedDenom: ""}, true},
 	}
-	for _, tc := range tests {
+	for i := range tests {
+		tc := &tests[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.params.Validate()
 			if (err != nil) != tc.wantErr {
@@ -139,7 +140,7 @@ func TestSetGetFlow(t *testing.T) {
 		InflowTotal:     "2000",
 		EpochStartBlock: 50,
 	}
-	k.SetFlow(ctx, flow)
+	k.SetFlow(ctx, &flow)
 
 	got, found := k.GetFlow(ctx, "channel-0")
 	if !found {
@@ -178,7 +179,7 @@ func TestDeleteFlow(t *testing.T) {
 		InflowTotal:     "200",
 		EpochStartBlock: 10,
 	}
-	k.SetFlow(ctx, flow)
+	k.SetFlow(ctx, &flow)
 
 	// Verify it exists
 	_, found := k.GetFlow(ctx, "channel-0")
@@ -202,12 +203,12 @@ func TestIterateFlows(t *testing.T) {
 		{ChannelId: "channel-1", Denom: "ulgm", OutflowTotal: "200", InflowTotal: "0", EpochStartBlock: 1},
 		{ChannelId: "channel-2", Denom: "ulgm", OutflowTotal: "300", InflowTotal: "0", EpochStartBlock: 1},
 	}
-	for _, f := range flows {
-		k.SetFlow(ctx, f)
+	for i := range flows {
+		k.SetFlow(ctx, &flows[i])
 	}
 
 	var count int
-	k.IterateFlows(ctx, func(flow types.ChannelFlow) bool {
+	k.IterateFlows(ctx, func(flow *types.ChannelFlow) bool {
 		count++
 		return false
 	})
@@ -249,7 +250,7 @@ func TestGetOrResetFlow_WithinEpoch(t *testing.T) {
 		InflowTotal:     "3000",
 		EpochStartBlock: 50,
 	}
-	k.SetFlow(ctx, flow)
+	k.SetFlow(ctx, &flow)
 
 	// Context is at block 100, epoch length is 34272, so epoch hasn't expired
 	got := k.GetOrResetFlow(ctx, "channel-0")
@@ -265,7 +266,7 @@ func TestGetOrResetFlow_EpochExpired(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Set params with short epoch
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "10000000000",
@@ -280,7 +281,7 @@ func TestGetOrResetFlow_EpochExpired(t *testing.T) {
 		InflowTotal:     "3000",
 		EpochStartBlock: 50,
 	}
-	k.SetFlow(ctx, flow)
+	k.SetFlow(ctx, &flow)
 
 	// Context at block 100, epoch length 10, so 50+10=60 < 100 → epoch expired
 	got := k.GetOrResetFlow(ctx, "channel-0")
@@ -299,7 +300,7 @@ func TestResetExpiredFlows(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Short epoch for testing
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "10000000000",
@@ -307,11 +308,11 @@ func TestResetExpiredFlows(t *testing.T) {
 	})
 
 	// One expired flow, one not expired
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId: "channel-expired", Denom: "ulgm",
 		OutflowTotal: "1000", InflowTotal: "2000", EpochStartBlock: 50,
 	})
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId: "channel-active", Denom: "ulgm",
 		OutflowTotal: "500", InflowTotal: "600", EpochStartBlock: 95,
 	})
@@ -388,7 +389,7 @@ func TestMsgUpdateParams_Authority(t *testing.T) {
 	// Valid authority
 	msg := &types.MsgUpdateParams{
 		Authority: k.GetAuthority(),
-		Params: types.Params{
+		Params: &types.Params{
 			EpochLengthBlocks:  100,
 			MaxOutflowPerEpoch: "999",
 			MaxInflowPerEpoch:  "888",
@@ -411,9 +412,10 @@ func TestMsgUpdateParams_Unauthorized(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	ms := keeper.NewMsgServerImpl(k)
 
+	dp := types.DefaultParams()
 	msg := &types.MsgUpdateParams{
 		Authority: "lgm1wrongauthority",
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	}
 	_, err := ms.UpdateParams(ctx, msg)
 	if err == nil {
@@ -427,7 +429,7 @@ func TestMsgUpdateParams_InvalidParams(t *testing.T) {
 
 	msg := &types.MsgUpdateParams{
 		Authority: k.GetAuthority(),
-		Params: types.Params{
+		Params: &types.Params{
 			EpochLengthBlocks: 0, // invalid
 			TrackedDenom:      "ulgm",
 		},
@@ -459,7 +461,7 @@ func TestQueryChannelFlow_Found(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "42",
@@ -510,7 +512,7 @@ func TestGetEffectiveOutflow_NoPreviousEpoch(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Set flow with no previous epoch data
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "500",
@@ -527,7 +529,7 @@ func TestGetEffectiveOutflow_NoPreviousEpoch(t *testing.T) {
 func TestGetEffectiveOutflow_WithPreviousEpoch(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "10000",
 		MaxInflowPerEpoch:  "10000",
@@ -535,7 +537,7 @@ func TestGetEffectiveOutflow_WithPreviousEpoch(t *testing.T) {
 	})
 
 	// Previous epoch had 1000 outflow
-	k.SetPreviousFlow(ctx, types.ChannelFlow{
+	k.SetPreviousFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "1000",
@@ -545,7 +547,7 @@ func TestGetEffectiveOutflow_WithPreviousEpoch(t *testing.T) {
 
 	// Current epoch started at block 100, we're at block 100 (ctx height)
 	// So elapsed = 0, remaining = 10, carry = 1000 * 10/10 = 1000
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "200",
@@ -563,7 +565,7 @@ func TestGetEffectiveOutflow_WithPreviousEpoch(t *testing.T) {
 func TestGetEffectiveOutflow_HalfwayThroughEpoch(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "10000",
 		MaxInflowPerEpoch:  "10000",
@@ -571,7 +573,7 @@ func TestGetEffectiveOutflow_HalfwayThroughEpoch(t *testing.T) {
 	})
 
 	// Previous epoch had 1000 outflow
-	k.SetPreviousFlow(ctx, types.ChannelFlow{
+	k.SetPreviousFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "1000",
@@ -581,7 +583,7 @@ func TestGetEffectiveOutflow_HalfwayThroughEpoch(t *testing.T) {
 
 	// Current epoch started at block 95, we're at block 100
 	// elapsed = 5, remaining = 5, carry = 1000 * 5/10 = 500
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "300",
@@ -599,7 +601,7 @@ func TestGetEffectiveOutflow_HalfwayThroughEpoch(t *testing.T) {
 func TestGetOrResetFlow_SavesPreviousEpoch(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "10000",
 		MaxInflowPerEpoch:  "10000",
@@ -607,7 +609,7 @@ func TestGetOrResetFlow_SavesPreviousEpoch(t *testing.T) {
 	})
 
 	// Set a flow that started at block 90 with accumulated values (exactly 1 epoch ago)
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "5000",
@@ -645,7 +647,7 @@ func TestGetOrResetFlow_SavesPreviousEpoch(t *testing.T) {
 func TestSlidingWindow_BoundaryAttack(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -653,7 +655,7 @@ func TestSlidingWindow_BoundaryAttack(t *testing.T) {
 	})
 
 	// Phase 1: Fill to 990 during first epoch (block 100, epoch starts at 100)
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "990",
@@ -669,7 +671,7 @@ func TestSlidingWindow_BoundaryAttack(t *testing.T) {
 	}
 
 	// Push to exactly at limit
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "1000",
@@ -719,7 +721,7 @@ func TestSlidingWindow_BoundaryAttack(t *testing.T) {
 func TestSlidingWindow_RapidEpochTransitions(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  5,
 		MaxOutflowPerEpoch: "10000",
 		MaxInflowPerEpoch:  "10000",
@@ -727,7 +729,7 @@ func TestSlidingWindow_RapidEpochTransitions(t *testing.T) {
 	})
 
 	// Epoch 1 (blocks 100-104): 800 outflow
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "800",
@@ -805,7 +807,7 @@ func TestSlidingWindow_RapidEpochTransitions(t *testing.T) {
 func TestSlidingWindow_QuietPeriodDecay(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -813,7 +815,7 @@ func TestSlidingWindow_QuietPeriodDecay(t *testing.T) {
 	})
 
 	// Fill 900 during epoch 1 (block 100)
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "900",
@@ -854,7 +856,7 @@ func TestSlidingWindow_QuietPeriodDecay(t *testing.T) {
 func TestSlidingWindow_ExactEpochBoundary(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -862,7 +864,7 @@ func TestSlidingWindow_ExactEpochBoundary(t *testing.T) {
 	})
 
 	// Fill 500 in epoch 1
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "500",
@@ -903,7 +905,7 @@ func TestSlidingWindow_ExactEpochBoundary(t *testing.T) {
 func TestSlidingWindow_PartialEpochDecay_Precision(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  100,
 		MaxOutflowPerEpoch: "100000",
 		MaxInflowPerEpoch:  "100000",
@@ -927,7 +929,7 @@ func TestSlidingWindow_PartialEpochDecay_Precision(t *testing.T) {
 			blockHeight := epochStart + tc.elapsed
 
 			// Set up current flow (empty — no traffic this epoch)
-			k.SetFlow(ctx, types.ChannelFlow{
+			k.SetFlow(ctx, &types.ChannelFlow{
 				ChannelId:       "channel-test",
 				Denom:           "ulgm",
 				OutflowTotal:    "0",
@@ -936,7 +938,7 @@ func TestSlidingWindow_PartialEpochDecay_Precision(t *testing.T) {
 			})
 
 			// Set up previous flow with 10000 outflow
-			k.SetPreviousFlow(ctx, types.ChannelFlow{
+			k.SetPreviousFlow(ctx, &types.ChannelFlow{
 				ChannelId:       "channel-test",
 				Denom:           "ulgm",
 				OutflowTotal:    "10000",
@@ -963,7 +965,7 @@ func TestSlidingWindow_PartialEpochDecay_Precision(t *testing.T) {
 func TestEpochReset_MultiEpochSkip_NoPreviousFlow(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -971,7 +973,7 @@ func TestEpochReset_MultiEpochSkip_NoPreviousFlow(t *testing.T) {
 	})
 
 	// Set up flow with history
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "500",
@@ -980,7 +982,7 @@ func TestEpochReset_MultiEpochSkip_NoPreviousFlow(t *testing.T) {
 	})
 
 	// Also set a stale previous flow
-	k.SetPreviousFlow(ctx, types.ChannelFlow{
+	k.SetPreviousFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "800",
@@ -1022,7 +1024,7 @@ func TestEpochReset_MultiEpochSkip_NoPreviousFlow(t *testing.T) {
 func TestEpochReset_AlignedBoundaries(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -1030,7 +1032,7 @@ func TestEpochReset_AlignedBoundaries(t *testing.T) {
 	})
 
 	// Epoch starts at block 100, expires at 110
-	k.SetFlow(ctx, types.ChannelFlow{
+	k.SetFlow(ctx, &types.ChannelFlow{
 		ChannelId:       "channel-0",
 		Denom:           "ulgm",
 		OutflowTotal:    "400",
@@ -1069,7 +1071,7 @@ func TestEpochReset_AlignedBoundaries(t *testing.T) {
 func TestEpochReset_FirstBlockAfterGenesis(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",

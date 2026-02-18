@@ -27,7 +27,7 @@ func (k queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := k.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }
 
 func (k queryServer) Partnership(goCtx context.Context, req *types.QueryPartnershipRequest) (*types.QueryPartnershipResponse, error) {
@@ -39,7 +39,7 @@ func (k queryServer) Partnership(goCtx context.Context, req *types.QueryPartners
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrPartnershipNotFound, req.PartnershipId)
 	}
-	return &types.QueryPartnershipResponse{Partnership: &p}, nil
+	return &types.QueryPartnershipResponse{Partnership: p}, nil
 }
 
 func (k queryServer) PartnershipsByParticipant(goCtx context.Context, req *types.QueryPartnershipsByParticipantRequest) (*types.QueryPartnershipsByParticipantResponse, error) {
@@ -48,9 +48,5 @@ func (k queryServer) PartnershipsByParticipant(goCtx context.Context, req *types
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	partnerships := k.GetPartnershipsByParticipant(ctx, req.Participant)
-	ptrs := make([]*types.Partnership, len(partnerships))
-	for i := range partnerships {
-		ptrs[i] = &partnerships[i]
-	}
-	return &types.QueryPartnershipsByParticipantResponse{Partnerships: ptrs}, nil
+	return &types.QueryPartnershipsByParticipantResponse{Partnerships: partnerships}, nil
 }

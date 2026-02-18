@@ -505,14 +505,14 @@ func TestOCD5_ArbiterAbstentionForcesInconclusive(t *testing.T) {
 		VotingDeadline: 500,
 		Arbiters:       []string{arbiter1, arbiter2, arbiter3},
 	}
-	k.SetDispute(ctx, dispute)
+	k.SetDispute(ctx, &dispute)
 
 	// Arbiter 1: uphold, Arbiter 2: overturn, Arbiter 3: abstain
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter2, Vote: "overturn", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter3, Vote: "abstain", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter2, Vote: "overturn", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter3, Vote: "abstain", Stake: "5000"})
 
-	outcome, err := k.TallyVotes(ctx, dispute)
+	outcome, err := k.TallyVotes(ctx, &dispute)
 	if err != nil {
 		t.Fatalf("tally failed: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestOCD6_CascadeAttack(t *testing.T) {
 
 	// All arbiters vote overturn
 	for _, arbiter := range dispute.Arbiters {
-		k.SetVote(ctx, types.DisputeVote{
+		k.SetVote(ctx, &types.DisputeVote{
 			DisputeId: dispute.Id, Arbiter: arbiter, Vote: "overturn", Stake: "5000",
 		})
 	}
@@ -658,22 +658,22 @@ func TestNCD2_QuorumBoundary(t *testing.T) {
 		Arbiters:       []string{testAddr(10), testAddr(11), testAddr(12)},
 		VotingDeadline: 500,
 	}
-	k.SetDispute(ctx, dispute)
+	k.SetDispute(ctx, &dispute)
 
 	// Only 1 arbiter votes
-	k.SetVote(ctx, types.DisputeVote{
+	k.SetVote(ctx, &types.DisputeVote{
 		DisputeId: dispute.Id, Arbiter: testAddr(10), Vote: "uphold", Stake: "5000",
 	})
 
-	outcome, err := k.TallyVotes(ctx, dispute)
+	outcome, err := k.TallyVotes(ctx, &dispute)
 	t.Logf("NCD-2 ONE VOTER: outcome=%s err=%v", outcome, err)
 
 	// Now test 2 of 3 (should meet quorum)
-	k.SetVote(ctx, types.DisputeVote{
+	k.SetVote(ctx, &types.DisputeVote{
 		DisputeId: dispute.Id, Arbiter: testAddr(11), Vote: "uphold", Stake: "5000",
 	})
 
-	outcome2, err2 := k.TallyVotes(ctx, dispute)
+	outcome2, err2 := k.TallyVotes(ctx, &dispute)
 	t.Logf("NCD-2 TWO VOTERS: outcome=%s err=%v", outcome2, err2)
 
 	if outcome == types.OutcomeInconclusive && outcome2 == types.OutcomeUpheld {
@@ -689,22 +689,22 @@ func TestNCD2_QuorumBoundary(t *testing.T) {
 		Arbiters: []string{testAddr(20), testAddr(21), testAddr(22), testAddr(23), testAddr(24), testAddr(25), testAddr(26)},
 		VotingDeadline: 500,
 	}
-	k.SetDispute(ctx, dispute2)
+	k.SetDispute(ctx, &dispute2)
 
 	// 4 of 7 vote → 57.1% < 66%
 	for i := 20; i < 24; i++ {
-		k.SetVote(ctx, types.DisputeVote{
+		k.SetVote(ctx, &types.DisputeVote{
 			DisputeId: dispute2.Id, Arbiter: testAddr(i), Vote: "uphold", Stake: "5000",
 		})
 	}
-	outcome3, _ := k.TallyVotes(ctx, dispute2)
+	outcome3, _ := k.TallyVotes(ctx, &dispute2)
 	t.Logf("NCD-2 TIER 2 (4/7 = 57.1%%): outcome=%s", outcome3)
 
 	// 5 of 7 vote → 71.4% > 66%
-	k.SetVote(ctx, types.DisputeVote{
+	k.SetVote(ctx, &types.DisputeVote{
 		DisputeId: dispute2.Id, Arbiter: testAddr(24), Vote: "uphold", Stake: "5000",
 	})
-	outcome4, _ := k.TallyVotes(ctx, dispute2)
+	outcome4, _ := k.TallyVotes(ctx, &dispute2)
 	t.Logf("NCD-2 TIER 2 (5/7 = 71.4%%): outcome=%s", outcome4)
 }
 
@@ -735,10 +735,10 @@ func TestZCD1_InconclusiveLoop(t *testing.T) {
 	k.SetDispute(ctx, dispute1)
 
 	for _, a := range dispute1.Arbiters[:2] {
-		k.SetVote(ctx, types.DisputeVote{DisputeId: dispute1.Id, Arbiter: a, Vote: "uphold", Stake: "5000"})
+		k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute1.Id, Arbiter: a, Vote: "uphold", Stake: "5000"})
 	}
 	if len(dispute1.Arbiters) > 2 {
-		k.SetVote(ctx, types.DisputeVote{DisputeId: dispute1.Id, Arbiter: dispute1.Arbiters[2], Vote: "overturn", Stake: "5000"})
+		k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute1.Id, Arbiter: dispute1.Arbiters[2], Vote: "overturn", Stake: "5000"})
 	}
 
 	// With 2 uphold + 1 overturn: uphold/(uphold+overturn)=66.7% < 77% → inconclusive
@@ -792,7 +792,7 @@ func TestZCD2_NonArbiterVoteAttempt(t *testing.T) {
 		VotingDeadline: 500,
 		Arbiters:       []string{arbiter}, // Only arbiter is selected
 	}
-	k.SetDispute(ctx, dispute)
+	k.SetDispute(ctx, &dispute)
 
 	err := k.CastVote(ctx, dispute.Id, attacker, "overturn", "I want to vote too")
 

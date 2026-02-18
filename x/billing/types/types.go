@@ -11,7 +11,7 @@ import (
 // Methods below attach to protobuf-generated types from state.pb.go and genesis.pb.go.
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	base := new(big.Int)
 	if _, ok := base.SetString(p.BaseCostPerFact, 10); !ok || base.Sign() <= 0 {
 		return fmt.Errorf("invalid base_cost_per_fact: %s", p.BaseCostPerFact)
@@ -50,8 +50,8 @@ func (p Params) Validate() error {
 }
 
 // DefaultParams returns default module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		BaseCostPerFact:       "1000000",
 		ConfidenceThreshold:   500000,
 		ConfidencePremiumBps:  200000,
@@ -70,15 +70,14 @@ func DefaultParams() Params {
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
-	p := DefaultParams()
 	return &GenesisState{
-		Params:    &p,
+		Params:    DefaultParams(),
 		Providers: []*Provider{},
 	}
 }
 
 // Validate validates the genesis state.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		if err := gs.Params.Validate(); err != nil {
 			return fmt.Errorf("invalid params: %w", err)

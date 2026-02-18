@@ -44,7 +44,7 @@ func (k Keeper) HandleSafetyFreeze(ctx sdk.Context, partnershipId string, freeze
 	}
 
 	// Create the freeze
-	sf := types.SafetyFreeze{
+	sf := &types.SafetyFreeze{
 		PartnershipId:        partnershipId,
 		FrozenBy:             freezer,
 		FrozenAt:             currentBlock,
@@ -83,7 +83,7 @@ func (k Keeper) HandleSafetyFreeze(ctx sdk.Context, partnershipId string, freeze
 		"expires_at", sf.ExpiresAt,
 	)
 
-	return &sf, nil
+	return sf, nil
 }
 
 // HandleCoercionSignal raises a coercion/duress flag on a partnership.
@@ -115,7 +115,7 @@ func (k Keeper) HandleCoercionSignal(ctx sdk.Context, partnershipId string, rais
 	seq := k.NextSequence(ctx)
 	signalId := fmt.Sprintf("coercion-%d", seq)
 
-	cs := types.CoercionSignal{
+	cs := &types.CoercionSignal{
 		SignalId:      signalId,
 		PartnershipId: partnershipId,
 		RaisedBy:      raiser,
@@ -145,7 +145,7 @@ func (k Keeper) HandleCoercionSignal(ctx sdk.Context, partnershipId string, rais
 		"raised_by", raiser,
 	)
 
-	return &cs, nil
+	return cs, nil
 }
 
 // LiftExpiredFreezes clears freezes that have expired and restores partnership status.

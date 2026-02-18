@@ -171,7 +171,7 @@ func DefaultDomains() []*Domain {
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		if err := gs.Params.Validate(); err != nil {
 			return fmt.Errorf("invalid params: %w", err)

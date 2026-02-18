@@ -9,8 +9,8 @@ import (
 	"github.com/legible-money/legible/x/knowledge/types"
 )
 
-func makeFacts(facts map[string]types.Fact) func(sdk.Context, string) (types.Fact, bool) {
-	return func(_ sdk.Context, id string) (types.Fact, bool) {
+func makeFacts(facts map[string]*types.Fact) func(sdk.Context, string) (*types.Fact, bool) {
+	return func(_ sdk.Context, id string) (*types.Fact, bool) {
 		f, ok := facts[id]
 		return f, ok
 	}
@@ -19,7 +19,7 @@ func makeFacts(facts map[string]types.Fact) func(sdk.Context, string) (types.Fac
 func TestEvaluateFactGraph_NoReferences(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
-	claim := types.Claim{Id: "c1"}
+	claim := &types.Claim{Id: "c1"}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	if result.Adjustment != 0 {
@@ -28,7 +28,7 @@ func TestEvaluateFactGraph_NoReferences(t *testing.T) {
 }
 
 func TestEvaluateFactGraph_VerifiedReferences(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000},
 		"f2": {Id: "f2", Status: types.FactStatusActive, Confidence: 700_000},
 	}
@@ -36,9 +36,9 @@ func TestEvaluateFactGraph_VerifiedReferences(t *testing.T) {
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:         "c1",
 		References: []string{"f1", "f2"},
 	}
@@ -51,10 +51,10 @@ func TestEvaluateFactGraph_VerifiedReferences(t *testing.T) {
 }
 
 func TestEvaluateFactGraph_SupportCapped(t *testing.T) {
-	facts := map[string]types.Fact{}
+	facts := map[string]*types.Fact{}
 	for i := 0; i < 10; i++ {
 		id := "f" + string(rune('0'+i))
-		facts[id] = types.Fact{Id: id, Status: types.FactStatusVerified}
+		facts[id] = &types.Fact{Id: id, Status: types.FactStatusVerified}
 	}
 
 	ctx := mockCtx()
@@ -65,9 +65,9 @@ func TestEvaluateFactGraph_SupportCapped(t *testing.T) {
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", References: refs}
+	claim := &types.Claim{Id: "c1", References: refs}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// 10 × 30,000 = 300,000 but capped at 150,000
@@ -77,7 +77,7 @@ func TestEvaluateFactGraph_SupportCapped(t *testing.T) {
 }
 
 func TestEvaluateFactGraph_DisprovenReferences(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusDisproven},
 		"f2": {Id: "f2", Status: types.FactStatusRevoked},
 	}
@@ -85,9 +85,9 @@ func TestEvaluateFactGraph_DisprovenReferences(t *testing.T) {
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", References: []string{"f1", "f2"}}
+	claim := &types.Claim{Id: "c1", References: []string{"f1", "f2"}}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// 2 × -50,000 = -100,000
@@ -100,9 +100,9 @@ func TestEvaluateFactGraph_BrokenReferences(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams: types.DefaultExtendedParams(),
-		GetFact:        func(_ sdk.Context, _ string) (types.Fact, bool) { return types.Fact{}, false },
+		GetFact:        func(_ sdk.Context, _ string) (*types.Fact, bool) { return nil, false },
 	}
-	claim := types.Claim{Id: "c1", References: []string{"nonexistent"}}
+	claim := &types.Claim{Id: "c1", References: []string{"nonexistent"}}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	if result.Adjustment != -int64(brokenRefPenalty) {
@@ -111,7 +111,7 @@ func TestEvaluateFactGraph_BrokenReferences(t *testing.T) {
 }
 
 func TestEvaluateFactGraph_HighConfidenceContradiction(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1":     {Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000},
 		"contra": {Id: "contra", Status: types.FactStatusActive, Confidence: 800_000},
 	}
@@ -119,16 +119,16 @@ func TestEvaluateFactGraph_HighConfidenceContradiction(t *testing.T) {
 	evalCtx := &EvaluationContext{
 		ExtendedParams: types.DefaultExtendedParams(),
 		GetFact:        makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, factId string) []types.FactReference {
+		GetContradictingFacts: func(_ sdk.Context, factId string) []*types.FactReference {
 			if factId == "f1" {
-				return []types.FactReference{
+				return []*types.FactReference{
 					{FromFactId: "contra", ToFactId: "f1", ReferenceType: "contradicts"},
 				}
 			}
 			return nil
 		},
 	}
-	claim := types.Claim{Id: "c1", References: []string{"f1"}}
+	claim := &types.Claim{Id: "c1", References: []string{"f1"}}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// +30,000 support - 50,000 contradiction = -20,000
@@ -140,16 +140,16 @@ func TestEvaluateFactGraph_HighConfidenceContradiction(t *testing.T) {
 // --- Domain Coherence Tests (AH-3) ---
 
 func TestDomainCoherence_SameDomain(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Domain: "physics"},
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}}
+	claim := &types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// Same domain → no incoherence penalty, just +30,000 support bonus
@@ -159,16 +159,16 @@ func TestDomainCoherence_SameDomain(t *testing.T) {
 }
 
 func TestDomainCoherence_SameStratum(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Domain: "astronomy"}, // physical stratum
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}} // physical stratum
+	claim := &types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}} // physical stratum
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// Same stratum penalty: +30,000 support - 5,000 same-stratum = 25,000
@@ -178,16 +178,16 @@ func TestDomainCoherence_SameStratum(t *testing.T) {
 }
 
 func TestDomainCoherence_DifferentStratum(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Domain: "sociology"}, // social stratum
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}} // physical stratum
+	claim := &types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}} // physical stratum
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// Different stratum penalty: +30,000 support - 20,000 diff-stratum = 10,000
@@ -197,7 +197,7 @@ func TestDomainCoherence_DifferentStratum(t *testing.T) {
 }
 
 func TestDomainCoherence_MultipleIncoherent(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Domain: "sociology"},  // social
 		"f2": {Id: "f2", Status: types.FactStatusVerified, Domain: "economics"},  // social
 		"f3": {Id: "f3", Status: types.FactStatusVerified, Domain: "psychology"}, // cognitive
@@ -206,9 +206,9 @@ func TestDomainCoherence_MultipleIncoherent(t *testing.T) {
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "physics", References: []string{"f1", "f2", "f3"}}
+	claim := &types.Claim{Id: "c1", Domain: "physics", References: []string{"f1", "f2", "f3"}}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// 3 × 30,000 support = 90,000
@@ -222,20 +222,20 @@ func TestDomainCoherence_MultipleIncoherent(t *testing.T) {
 }
 
 func TestDomainCoherence_Capped(t *testing.T) {
-	facts := map[string]types.Fact{}
+	facts := map[string]*types.Fact{}
 	refs := []string{}
 	for i := 0; i < 10; i++ {
 		id := fmt.Sprintf("f%d", i)
-		facts[id] = types.Fact{Id: id, Status: types.FactStatusVerified, Domain: "sociology"}
+		facts[id] = &types.Fact{Id: id, Status: types.FactStatusVerified, Domain: "sociology"}
 		refs = append(refs, id)
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "mathematics", References: refs}
+	claim := &types.Claim{Id: "c1", Domain: "mathematics", References: refs}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// 10 × 30,000 = 300,000 capped at 150,000 (support)
@@ -247,16 +247,16 @@ func TestDomainCoherence_Capped(t *testing.T) {
 }
 
 func TestDomainCoherence_EmptyDomain_NoCheck(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Domain: "sociology"},
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "", References: []string{"f1"}} // empty domain → skip check
+	claim := &types.Claim{Id: "c1", Domain: "", References: []string{"f1"}} // empty domain → skip check
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// No domain coherence check when claim domain is empty
@@ -266,16 +266,16 @@ func TestDomainCoherence_EmptyDomain_NoCheck(t *testing.T) {
 }
 
 func TestDomainCoherence_RefEmptyDomain_Skipped(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Domain: ""},
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
 		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
-		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
 	}
-	claim := types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}}
+	claim := &types.Claim{Id: "c1", Domain: "physics", References: []string{"f1"}}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
 	// Ref with empty domain → no penalty
@@ -285,7 +285,7 @@ func TestDomainCoherence_RefEmptyDomain_Skipped(t *testing.T) {
 }
 
 func TestDetectCycle_NoCycle(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", References: []string{"f2"}},
 		"f2": {Id: "f2", References: nil},
 	}
@@ -298,7 +298,7 @@ func TestDetectCycle_NoCycle(t *testing.T) {
 }
 
 func TestDetectCycle_WithCycle(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", References: []string{"f2"}},
 		"f2": {Id: "f2", References: []string{"f1"}}, // cycle back to f1
 	}
@@ -313,7 +313,7 @@ func TestDetectCycle_WithCycle(t *testing.T) {
 func TestDetectCycle_BeyondMaxDepth(t *testing.T) {
 	// ZD-K01: maxBFSDepth increased from 5 to 10.
 	// Create a chain longer than maxBFSDepth=10 that loops back.
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1":  {Id: "f1", References: []string{"f2"}},
 		"f2":  {Id: "f2", References: []string{"f3"}},
 		"f3":  {Id: "f3", References: []string{"f4"}},
@@ -336,7 +336,7 @@ func TestDetectCycle_BeyondMaxDepth(t *testing.T) {
 }
 
 func TestDetectCycle_SelfReference(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", References: []string{"f1"}}, // self-loop
 	}
 	ctx := mockCtx()

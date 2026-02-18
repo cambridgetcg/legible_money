@@ -115,7 +115,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &genState); err != nil {
 		panic("failed to unmarshal genesis: " + err.Error())
 	}
-	am.keeper.InitGenesis(ctx, genState)
+	am.keeper.InitGenesis(ctx, &genState)
 }
 
 // ExportGenesis exports the module's genesis state.
@@ -143,7 +143,7 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 	currentBlock := uint64(sdkCtx.BlockHeight())
 
 	var expiredQuoteIds []uint64
-	am.keeper.IterateQuotes(sdkCtx, func(quote types.APIQuote) bool {
+	am.keeper.IterateQuotes(sdkCtx, func(quote *types.APIQuote) bool {
 		if !quote.Executed && currentBlock > quote.ValidUntil {
 			expiredQuoteIds = append(expiredQuoteIds, quote.QuoteId)
 		}

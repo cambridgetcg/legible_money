@@ -74,7 +74,7 @@ func DefaultParams() Params {
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		return gs.Params.Validate()
 	}
@@ -82,7 +82,7 @@ func (gs GenesisState) Validate() error {
 }
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.CrossStratumDiscount > 1000000 {
 		return ErrInvalidConfidence
 	}

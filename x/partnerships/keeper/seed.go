@@ -21,9 +21,9 @@ const (
 // ---------- SeedPartnership CRUD ----------
 
 // SetSeedPartnership stores a seed partnership.
-func (k Keeper) SetSeedPartnership(ctx sdk.Context, sp types.SeedPartnership) {
+func (k Keeper) SetSeedPartnership(ctx sdk.Context, sp *types.SeedPartnership) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&sp)
+	bz, err := proto.Marshal(sp)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal seed partnership: %v", err))
 	}
@@ -35,21 +35,21 @@ func (k Keeper) SetSeedPartnership(ctx sdk.Context, sp types.SeedPartnership) {
 }
 
 // GetSeedPartnership retrieves a seed partnership by ID.
-func (k Keeper) GetSeedPartnership(ctx sdk.Context, id string) (types.SeedPartnership, bool) {
+func (k Keeper) GetSeedPartnership(ctx sdk.Context, id string) (*types.SeedPartnership, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(seedPartnershipKey(id))
 	if err != nil || bz == nil {
-		return types.SeedPartnership{}, false
+		return nil, false
 	}
 	var sp types.SeedPartnership
 	if err := proto.Unmarshal(bz, &sp); err != nil {
-		return types.SeedPartnership{}, false
+		return nil, false
 	}
-	return sp, true
+	return &sp, true
 }
 
 // DeleteSeedPartnership removes a seed partnership and its indexes.
-func (k Keeper) DeleteSeedPartnership(ctx sdk.Context, sp types.SeedPartnership) {
+func (k Keeper) DeleteSeedPartnership(ctx sdk.Context, sp *types.SeedPartnership) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	_ = kvStore.Delete(seedPartnershipKey(sp.Id))
 	_ = kvStore.Delete(byDIDSeedKey(sp.HumanAddr, sp.Id))

@@ -27,7 +27,7 @@ func (q queryServer) Contract(goCtx context.Context, req *types.QueryContractReq
 	if !found {
 		return nil, types.ErrContractNotFound
 	}
-	return &types.QueryContractResponse{Contract: &contract}, nil
+	return &types.QueryContractResponse{Contract: contract}, nil
 }
 
 // ContractsByCreator returns all contracts for a creator with pagination.
@@ -35,7 +35,7 @@ func (q queryServer) ContractsByCreator(goCtx context.Context, req *types.QueryC
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	contracts := q.Keeper.GetContractsByCreator(ctx, req.Creator)
 	if contracts == nil {
-		contracts = []types.DeployedContract{}
+		contracts = []*types.DeployedContract{}
 	}
 
 	total := uint64(len(contracts))
@@ -50,19 +50,14 @@ func (q queryServer) ContractsByCreator(goCtx context.Context, req *types.QueryC
 	if uint32(len(contracts)) > offset {
 		contracts = contracts[offset:]
 	} else {
-		contracts = []types.DeployedContract{}
+		contracts = []*types.DeployedContract{}
 	}
 	if uint32(len(contracts)) > limit {
 		contracts = contracts[:limit]
 	}
 
-	ptrs := make([]*types.DeployedContract, len(contracts))
-	for i := range contracts {
-		ptrs[i] = &contracts[i]
-	}
-
 	return &types.QueryContractsByCreatorResponse{
-		Contracts: ptrs,
+		Contracts: contracts,
 		Total:     total,
 	}, nil
 }
@@ -74,7 +69,7 @@ func (q queryServer) Code(goCtx context.Context, req *types.QueryCodeRequest) (*
 	if !found {
 		return nil, types.ErrCodeNotFound
 	}
-	return &types.QueryCodeResponse{Code: &code}, nil
+	return &types.QueryCodeResponse{Code: code}, nil
 }
 
 // ContractState returns a value from a contract's state.
@@ -94,12 +89,12 @@ func (q queryServer) Schedule(goCtx context.Context, req *types.QueryScheduleReq
 	if !found {
 		return nil, types.ErrScheduleNotFound
 	}
-	return &types.QueryScheduleResponse{Schedule: &schedule}, nil
+	return &types.QueryScheduleResponse{Schedule: schedule}, nil
 }
 
 // Params returns the module parameters.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }

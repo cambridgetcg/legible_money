@@ -77,7 +77,7 @@ func (k Keeper) GetDomainProposalById(ctx sdk.Context, id string) (*ktypes.Domai
 // GetAllDomainProposals returns all domain proposals.
 func (k Keeper) GetAllDomainProposals(ctx sdk.Context) []*ktypes.DomainProposal {
 	var result []*ktypes.DomainProposal
-	k.IterateProposals(ctx, func(p types.DomainProposal) bool {
+	k.IterateProposals(ctx, func(p *types.DomainProposal) bool {
 		result = append(result, ontologyProposalToKnowledge(p))
 		return false
 	})
@@ -87,7 +87,7 @@ func (k Keeper) GetAllDomainProposals(ctx sdk.Context) []*ktypes.DomainProposal 
 // ---------- Conversion helpers ----------
 
 // stratumPropsToDefinition converts ontology StratumProperties to knowledge StratumDefinition.
-func stratumPropsToDefinition(props types.StratumProperties) *ktypes.StratumDefinition {
+func stratumPropsToDefinition(props *types.StratumProperties) *ktypes.StratumDefinition {
 	id := stratumLevelToID[props.Stratum]
 	if id == "" {
 		id = fmt.Sprintf("stratum_%d", props.Stratum)
@@ -103,7 +103,7 @@ func stratumPropsToDefinition(props types.StratumProperties) *ktypes.StratumDefi
 }
 
 // domainToOntological converts ontology Domain to knowledge OntologicalDomain.
-func domainToOntological(d types.Domain) *ktypes.OntologicalDomain {
+func domainToOntological(d *types.Domain) *ktypes.OntologicalDomain {
 	return &ktypes.OntologicalDomain{
 		Name:            d.Name,
 		Description:     d.Description,
@@ -114,7 +114,7 @@ func domainToOntological(d types.Domain) *ktypes.OntologicalDomain {
 }
 
 // ontologyProposalToKnowledge converts ontology DomainProposal to knowledge DomainProposal.
-func ontologyProposalToKnowledge(p types.DomainProposal) *ktypes.DomainProposal {
+func ontologyProposalToKnowledge(p *types.DomainProposal) *ktypes.DomainProposal {
 	kp := &ktypes.DomainProposal{
 		Id:               p.Id,
 		Proposer:         p.Proposer,
@@ -127,7 +127,7 @@ func ontologyProposalToKnowledge(p types.DomainProposal) *ktypes.DomainProposal 
 	}
 
 	if p.Domain != nil {
-		kp.ProposedDomain = domainToOntological(*p.Domain)
+		kp.ProposedDomain = domainToOntological(p.Domain)
 	}
 
 	return kp

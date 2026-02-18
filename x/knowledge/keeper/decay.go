@@ -75,20 +75,20 @@ func calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince uint64
 
 // GetFactWithDecay retrieves a fact and applies lazy confidence decay.
 // The decayed confidence is returned but NOT persisted (lazy evaluation).
-func (k Keeper) GetFactWithDecay(ctx sdk.Context, factID string) (types.Fact, bool) {
-	fact, found := k.GetFact(ctx, factID)
+func (k Keeper) GetFactWithDecay(ctx sdk.Context, factID string) (*types.Fact, bool) {
+	factPtr, found := k.GetFact(ctx, factID)
 	if !found {
-		return fact, false
+		return nil, false
 	}
 
 	ep := k.GetExtendedParams(ctx)
 	currentHeight := uint64(ctx.BlockHeight())
-	fact = k.applyDecayToFact(fact, currentHeight, ep)
-	return fact, true
+	decayed := k.applyDecayToFact(factPtr, currentHeight, ep)
+	return decayed, true
 }
 
 // applyDecayToFact computes the current decayed confidence for a fact.
-func (k Keeper) applyDecayToFact(fact types.Fact, currentHeight uint64, ep types.ExtendedParams) types.Fact {
+func (k Keeper) applyDecayToFact(fact *types.Fact, currentHeight uint64, ep types.ExtendedParams) *types.Fact {
 	// Use BaseConfidence if set, otherwise use Confidence as the base
 	base := fact.BaseConfidence
 	if base == 0 {
@@ -135,7 +135,7 @@ func CalculateMaturity(confidence, ageBlocks, verificationCount uint64, ep types
 }
 
 // NeedsReverification checks if a fact's confidence has decayed below the reverification threshold.
-func NeedsReverification(fact types.Fact, currentHeight uint64, ep types.ExtendedParams) bool {
+func NeedsReverification(fact *types.Fact, currentHeight uint64, ep types.ExtendedParams) bool {
 	profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory)
 	if !ok || !profile.RequiresReverification {
 		return false
@@ -164,7 +164,7 @@ func NeedsReverification(fact types.Fact, currentHeight uint64, ep types.Extende
 }
 
 // ApplyReverificationBonus applies the category-specific reverification bonus.
-func ApplyReverificationBonus(fact types.Fact, ep types.ExtendedParams) types.Fact {
+func ApplyReverificationBonus(fact *types.Fact, ep types.ExtendedParams) *types.Fact {
 	profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory)
 	if !ok {
 		return fact

@@ -85,7 +85,8 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
-	k.SetParams(ctx, types.DefaultParams())
+	dp := types.DefaultParams()
+	k.SetParams(ctx, &dp)
 
 	return k, ctx
 }
@@ -131,7 +132,7 @@ func TestSequence(t *testing.T) {
 func TestSetGetProcess(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	process := types.ScheduleProcess{
+	process := &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -170,7 +171,7 @@ func TestGetProcessesByCreator(t *testing.T) {
 	creator := testCreator
 
 	for i := 1; i <= 3; i++ {
-		k.SetProcess(ctx, types.ScheduleProcess{
+		k.SetProcess(ctx, &types.ScheduleProcess{
 			Id:              fmt.Sprintf("sched-%d", i),
 			Creator:         creator,
 			Status:          types.StatusActive,
@@ -233,7 +234,7 @@ func TestProcessDueSchedules(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Create a process due at block 100 (current height)
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -248,8 +249,7 @@ func TestProcessDueSchedules(t *testing.T) {
 				ExecuteAtBlock: 100,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	executed := k.ProcessDueSchedules(ctx)
 	if executed != 1 {
@@ -275,7 +275,7 @@ func TestCancelScheduleRefund(t *testing.T) {
 
 	creator := testCreator
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         creator,
 		Status:          types.StatusActive,
@@ -289,8 +289,7 @@ func TestCancelScheduleRefund(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	resp, err := msgServer.CancelSchedule(ctx, &types.MsgCancelSchedule{
 		Creator:   creator,
@@ -318,7 +317,7 @@ func TestPauseSchedule(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -332,8 +331,7 @@ func TestPauseSchedule(t *testing.T) {
 				IntervalBlocks: 10,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.PauseSchedule(ctx, &types.MsgPauseSchedule{
 		Creator:   testCreator,
@@ -356,15 +354,14 @@ func TestPauseScheduleNotActive(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusCompleted,
 		RemainingFee:    "0",
 		FeePerExecution: "100",
 		CreatedAtBlock:  50,
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.PauseSchedule(ctx, &types.MsgPauseSchedule{
 		Creator:   testCreator,
@@ -381,7 +378,7 @@ func TestPauseScheduleUnauthorized(t *testing.T) {
 
 	otherAddr := sdk.AccAddress("other_address_______").String()
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -395,8 +392,7 @@ func TestPauseScheduleUnauthorized(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.PauseSchedule(ctx, &types.MsgPauseSchedule{
 		Creator:   otherAddr,
@@ -411,7 +407,7 @@ func TestResumeSchedule(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusPaused,
@@ -424,8 +420,7 @@ func TestResumeSchedule(t *testing.T) {
 				IntervalBlocks: 10,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.ResumeSchedule(ctx, &types.MsgResumeSchedule{
 		Creator:   testCreator,
@@ -451,7 +446,7 @@ func TestResumeScheduleNotPaused(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -465,8 +460,7 @@ func TestResumeScheduleNotPaused(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.ResumeSchedule(ctx, &types.MsgResumeSchedule{
 		Creator:   testCreator,
@@ -481,7 +475,7 @@ func TestPauseResumeLifecycle(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -495,8 +489,7 @@ func TestPauseResumeLifecycle(t *testing.T) {
 				IntervalBlocks: 10,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	// Pause
 	_, err := msgServer.PauseSchedule(ctx, &types.MsgPauseSchedule{
@@ -533,7 +526,7 @@ func TestAddFee(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -547,8 +540,7 @@ func TestAddFee(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.AddFee(ctx, &types.MsgAddFee{
 		Creator:   testCreator,
@@ -572,7 +564,7 @@ func TestAddFeeReactivatesExhausted(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusExhausted,
@@ -586,8 +578,7 @@ func TestAddFeeReactivatesExhausted(t *testing.T) {
 				IntervalBlocks: 10,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.AddFee(ctx, &types.MsgAddFee{
 		Creator:   testCreator,
@@ -619,7 +610,7 @@ func TestAddFeeUnauthorized(t *testing.T) {
 
 	otherAddr := sdk.AccAddress("other_address_______").String()
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -633,8 +624,7 @@ func TestAddFeeUnauthorized(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.AddFee(ctx, &types.MsgAddFee{
 		Creator:   otherAddr,
@@ -691,7 +681,7 @@ func TestProcessDueSchedulesExhausted(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Process with fee less than fee-per-execution
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -705,8 +695,7 @@ func TestProcessDueSchedulesExhausted(t *testing.T) {
 				ExecuteAtBlock: 100,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	executed := k.ProcessDueSchedules(ctx)
 	if executed != 0 {
@@ -725,7 +714,7 @@ func TestProcessDueSchedulesExhausted(t *testing.T) {
 func TestProcessDueSchedulesPeriodic(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -740,8 +729,7 @@ func TestProcessDueSchedulesPeriodic(t *testing.T) {
 				IntervalBlocks: 10,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	executed := k.ProcessDueSchedules(ctx)
 	if executed != 1 {
@@ -767,7 +755,7 @@ func TestProcessDueSchedulesPeriodic(t *testing.T) {
 func TestProcessDueSchedulesExpired(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -783,8 +771,7 @@ func TestProcessDueSchedulesExpired(t *testing.T) {
 				IntervalBlocks: 10,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	executed := k.ProcessDueSchedules(ctx)
 	if executed != 1 {
@@ -803,7 +790,7 @@ func TestProcessDueSchedulesExpired(t *testing.T) {
 func TestProcessDueSchedulesNotDue(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -817,8 +804,7 @@ func TestProcessDueSchedulesNotDue(t *testing.T) {
 				ExecuteAtBlock: 500,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	executed := k.ProcessDueSchedules(ctx)
 	if executed != 0 {
@@ -832,7 +818,7 @@ func TestCleanupExpiredProcesses(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Create a completed process from long ago
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-old",
 		Creator:         testCreator,
 		Status:          types.StatusCompleted,
@@ -840,8 +826,7 @@ func TestCleanupExpiredProcesses(t *testing.T) {
 		FeePerExecution: "100",
 		ExecutionCount:  1,
 		CreatedAtBlock:  1, // very old
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	// Advance context to high block height
 	ctx = ctx.WithBlockHeight(1000000)
@@ -859,7 +844,7 @@ func TestCleanupExpiredProcesses(t *testing.T) {
 func TestCleanupSkipsActive(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-active",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -873,8 +858,7 @@ func TestCleanupSkipsActive(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	ctx = ctx.WithBlockHeight(1000000)
 	cleaned := k.CleanupExpiredProcesses(ctx)
@@ -907,7 +891,7 @@ func TestQueryProcess(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	queryServer := keeper.NewQueryServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -921,8 +905,7 @@ func TestQueryProcess(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	resp, err := queryServer.Process(ctx, &types.QueryProcessRequest{ProcessId: "sched-1"})
 	if err != nil {
@@ -951,7 +934,7 @@ func TestQueryProcessesByCreator(t *testing.T) {
 	queryServer := keeper.NewQueryServerImpl(k)
 
 	for i := 1; i <= 3; i++ {
-		k.SetProcess(ctx, types.ScheduleProcess{
+		k.SetProcess(ctx, &types.ScheduleProcess{
 			Id:              fmt.Sprintf("sched-%d", i),
 			Creator:         testCreator,
 			Status:          types.StatusActive,
@@ -985,9 +968,9 @@ func TestGenesisRoundtrip(t *testing.T) {
 	// Create some state
 	params := types.DefaultParams()
 	params.MaxActivePerAccount = 50
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusActive,
@@ -1001,8 +984,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 				ExecuteAtBlock: 200,
 			},
 		},
-	}
-	k.SetProcess(ctx, process)
+	})
 	k.SetSequence(ctx, 5)
 
 	// Export
@@ -1022,7 +1004,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 
 	// Re-import into fresh keeper
 	k2, ctx2 := setupKeeper(t)
-	k2.InitGenesis(ctx2, *exported)
+	k2.InitGenesis(ctx2, exported)
 
 	// Verify restored state
 	restoredParams := k2.GetParams(ctx2)
@@ -1050,15 +1032,14 @@ func TestCancelScheduleAlreadyCancelled(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusCancelled,
 		RemainingFee:    "0",
 		FeePerExecution: "100",
 		CreatedAtBlock:  50,
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.CancelSchedule(ctx, &types.MsgCancelSchedule{
 		Creator:   testCreator,
@@ -1073,15 +1054,14 @@ func TestCancelScheduleAlreadyCompleted(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
-	process := types.ScheduleProcess{
+	k.SetProcess(ctx, &types.ScheduleProcess{
 		Id:              "sched-1",
 		Creator:         testCreator,
 		Status:          types.StatusCompleted,
 		RemainingFee:    "0",
 		FeePerExecution: "100",
 		CreatedAtBlock:  50,
-	}
-	k.SetProcess(ctx, process)
+	})
 
 	_, err := msgServer.CancelSchedule(ctx, &types.MsgCancelSchedule{
 		Creator:   testCreator,
@@ -1114,11 +1094,11 @@ func TestCreateScheduleMaxActiveExceeded(t *testing.T) {
 	// Set max to 2
 	params := types.DefaultParams()
 	params.MaxActivePerAccount = 2
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	// Create 2 active processes
 	for i := 1; i <= 2; i++ {
-		k.SetProcess(ctx, types.ScheduleProcess{
+		k.SetProcess(ctx, &types.ScheduleProcess{
 			Id:              fmt.Sprintf("sched-%d", i),
 			Creator:         testCreator,
 			Status:          types.StatusActive,
@@ -1182,7 +1162,7 @@ func TestCountActiveByCreator(t *testing.T) {
 	}
 
 	for i, status := range statuses {
-		k.SetProcess(ctx, types.ScheduleProcess{
+		k.SetProcess(ctx, &types.ScheduleProcess{
 			Id:              fmt.Sprintf("sched-%d", i),
 			Creator:         testCreator,
 			Status:          status,

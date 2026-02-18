@@ -11,7 +11,7 @@ import (
 )
 
 // RegisterOracle validates and stores a new oracle registration.
-func (k Keeper) RegisterOracle(ctx sdk.Context, oracle types.Oracle) error {
+func (k Keeper) RegisterOracle(ctx sdk.Context, oracle *types.Oracle) error {
 	params := k.GetParams(ctx)
 
 	// Check if operator already has an oracle registered
@@ -223,7 +223,7 @@ func (k Keeper) PruneInactiveOracles(ctx sdk.Context) {
 	params := k.GetParams(ctx)
 	currentHeight := uint64(ctx.BlockHeight())
 
-	k.IterateOracles(ctx, func(o types.Oracle) bool {
+	k.IterateOracles(ctx, func(o *types.Oracle) bool {
 		if !o.IsActive && o.DataPoints == 0 {
 			// Prune oracles registered more than 2 audit windows ago with no data
 			if currentHeight > o.RegisteredAt+(params.AuditWindow*2) {

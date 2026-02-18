@@ -28,19 +28,15 @@ func (qs queryServer) Qualification(goCtx context.Context, req *types.QueryQuali
 		return nil, fmt.Errorf("qualification not found for %s in %s", req.ValidatorAddr, req.Domain)
 	}
 	return &types.QueryQualificationResponse{
-		Qualification: &q,
+		Qualification: q,
 	}, nil
 }
 
 func (qs queryServer) QualificationsByValidator(goCtx context.Context, req *types.QueryQualificationsByValidatorRequest) (*types.QueryQualificationsByValidatorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	qualifications := qs.Keeper.GetQualificationsByValidator(ctx, req.ValidatorAddr)
-	ptrs := make([]*types.DomainQualification, len(qualifications))
-	for i := range qualifications {
-		ptrs[i] = &qualifications[i]
-	}
 	return &types.QueryQualificationsByValidatorResponse{
-		Qualifications: ptrs,
+		Qualifications: qualifications,
 	}, nil
 }
 
@@ -64,19 +60,15 @@ func (qs queryServer) Endorsement(goCtx context.Context, req *types.QueryEndorse
 		return nil, fmt.Errorf("endorsement not found: %s", id)
 	}
 	return &types.QueryEndorsementResponse{
-		Endorsement: &e,
+		Endorsement: e,
 	}, nil
 }
 
 func (qs queryServer) EndorsementsForValidator(goCtx context.Context, req *types.QueryEndorsementsForValidatorRequest) (*types.QueryEndorsementsForValidatorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	endorsements := qs.Keeper.GetEndorsementsForValidator(ctx, req.ValidatorAddr)
-	ptrs := make([]*types.QualificationEndorsement, len(endorsements))
-	for i := range endorsements {
-		ptrs[i] = &endorsements[i]
-	}
 	return &types.QueryEndorsementsForValidatorResponse{
-		Endorsements: ptrs,
+		Endorsements: endorsements,
 	}, nil
 }
 
@@ -84,6 +76,6 @@ func (qs queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest)
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := qs.Keeper.GetParams(ctx)
 	return &types.QueryParamsResponse{
-		Params: &params,
+		Params: params,
 	}, nil
 }

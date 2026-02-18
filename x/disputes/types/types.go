@@ -50,7 +50,7 @@ const (
 // ---------- Params Validation (method on proto-generated Params) ----------
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if len(p.TierConfigs) == 0 {
 		return fmt.Errorf("tier configs cannot be empty")
 	}

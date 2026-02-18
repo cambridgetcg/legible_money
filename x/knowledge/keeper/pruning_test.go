@@ -42,14 +42,14 @@ func TestCalculateKMS_HighContribution(t *testing.T) {
 	fact.CitationCount = 25
 	fact.LastCitedBlock = uint64(ctx.BlockHeight())
 	fact.LastUtilizedBlock = uint64(ctx.BlockHeight())
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	// Add 12 incoming support references to boost fundamentality
 	for i := 0; i < 12; i++ {
 		refID := "ref-" + string(rune('a'+i))
 		refFact := createTestFact(refID, "mathematics", "empirical", types.FactStatusVerified, 700_000)
-		k.SetFact(ctx, refFact)
-		k.SetFactReference(ctx, types.FactReference{
+		k.SetFact(ctx, &refFact)
+		k.SetFactReference(ctx, &types.FactReference{
 			FromFactId:      refID,
 			ToFactId:        fact.Id,
 			ReferenceType:   "supports",
@@ -58,7 +58,7 @@ func TestCalculateKMS_HighContribution(t *testing.T) {
 		})
 	}
 
-	kms := k.CalculateKMS(ctx, fact)
+	kms := k.CalculateKMS(ctx, &fact)
 	if kms < 300_000 {
 		t.Errorf("expected high KMS for well-cited fact, got %d", kms)
 	}
@@ -72,9 +72,9 @@ func TestCalculateKMS_ZeroUtilization(t *testing.T) {
 	fact.CitationCount = 0
 	fact.LastCitedBlock = 0
 	fact.LastUtilizedBlock = 0
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
-	kms := k.CalculateKMS(ctx, fact)
+	kms := k.CalculateKMS(ctx, &fact)
 	// Should have low utilization score but some maturity/trajectory
 	if kms > 500_000 {
 		t.Errorf("expected low KMS for never-cited fact, got %d", kms)
@@ -89,17 +89,17 @@ func TestCalculateKMS_DecayingTrajectory(t *testing.T) {
 	fact.BaseConfidence = 800_000
 	fact.CitationCount = 5
 	fact.LastCitedBlock = uint64(ctx.BlockHeight())
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	// Stable: confidence == base
 	stableFact := createTestFact("fact-stable", "mathematics", "empirical", types.FactStatusVerified, 800_000)
 	stableFact.BaseConfidence = 800_000
 	stableFact.CitationCount = 5
 	stableFact.LastCitedBlock = uint64(ctx.BlockHeight())
-	k.SetFact(ctx, stableFact)
+	k.SetFact(ctx, &stableFact)
 
-	kms := k.CalculateKMS(ctx, fact)
-	stableKms := k.CalculateKMS(ctx, stableFact)
+	kms := k.CalculateKMS(ctx, &fact)
+	stableKms := k.CalculateKMS(ctx, &stableFact)
 
 	if kms >= stableKms {
 		t.Errorf("decaying fact KMS (%d) should be less than stable fact KMS (%d)", kms, stableKms)
@@ -115,9 +115,9 @@ func TestCalculateKMS_MatureCanonical(t *testing.T) {
 	fact.CitationCount = 10
 	fact.LastCitedBlock = uint64(ctx.BlockHeight())
 	fact.CreatedAtHeight = 1 // very old
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
-	kms := k.CalculateKMS(ctx, fact)
+	kms := k.CalculateKMS(ctx, &fact)
 	if kms < 300_000 {
 		t.Errorf("expected high KMS for canonical mature fact, got %d", kms)
 	}
@@ -136,13 +136,14 @@ func TestCalculateKMS_PatronageBonusApplied(t *testing.T) {
 
 	fact := createTestFact("fact-patron", "mathematics", "empirical", types.FactStatusVerified, 600_000)
 	fact.PatronageBonus = 200_000
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
-	kmsWithBonus := k.CalculateKMS(ctx, fact)
+	kmsWithBonus := k.CalculateKMS(ctx, &fact)
 
-	factNoBonus := fact
+	factNoBonus := createTestFact("fact-patron", "mathematics", "empirical", types.FactStatusVerified, 600_000)
 	factNoBonus.PatronageBonus = 0
-	kmsWithout := k.CalculateKMS(ctx, factNoBonus)
+	k.SetFact(ctx, &factNoBonus)
+	kmsWithout := k.CalculateKMS(ctx, &factNoBonus)
 
 	if kmsWithBonus <= kmsWithout {
 		t.Errorf("patronage bonus should increase KMS: with=%d, without=%d", kmsWithBonus, kmsWithout)
@@ -161,8 +162,8 @@ func TestIsFactImmune_EternalCategory(t *testing.T) {
 
 	for _, category := range []string{"analytic", "formal", "protocol", "computational"} {
 		fact := createTestFact("fact-"+category, "mathematics", category, types.FactStatusVerified, 800_000)
-		k.SetFact(ctx, fact)
-		if !k.IsFactImmune(ctx, fact) {
+		k.SetFact(ctx, &fact)
+		if !k.IsFactImmune(ctx, &fact) {
 			t.Errorf("expected %s category to be immune", category)
 		}
 	}
@@ -173,9 +174,9 @@ func TestIsFactImmune_HighCitations(t *testing.T) {
 
 	fact := createTestFact("fact-cited", "mathematics", "empirical", types.FactStatusVerified, 600_000)
 	fact.CitationCount = 50
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
-	if !k.IsFactImmune(ctx, fact) {
+	if !k.IsFactImmune(ctx, &fact) {
 		t.Error("expected fact with 50+ citations to be immune")
 	}
 }
@@ -185,9 +186,9 @@ func TestIsFactImmune_EmpiricalNotImmune(t *testing.T) {
 
 	fact := createTestFact("fact-emp", "mathematics", "empirical", types.FactStatusVerified, 600_000)
 	fact.CitationCount = 5
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
-	if k.IsFactImmune(ctx, fact) {
+	if k.IsFactImmune(ctx, &fact) {
 		t.Error("expected empirical fact with low citations to NOT be immune")
 	}
 }
@@ -198,16 +199,16 @@ func TestIsFactImmune_TerminalStatus(t *testing.T) {
 	// Truly terminal statuses — no further processing needed
 	for _, status := range []string{types.FactStatusExpired, types.FactStatusDisproven, types.FactStatusRevoked} {
 		fact := createTestFact("fact-"+status, "mathematics", "empirical", status, 100_000)
-		k.SetFact(ctx, fact)
-		if !k.IsFactImmune(ctx, fact) {
+		k.SetFact(ctx, &fact)
+		if !k.IsFactImmune(ctx, &fact) {
 			t.Errorf("expected terminal status %s to be immune", status)
 		}
 	}
 
 	// Pruned is NOT immune — pruned facts still need hard-deletion processing
 	prunedFact := createTestFact("fact-pruned", "mathematics", "empirical", types.FactStatusPruned, 100_000)
-	k.SetFact(ctx, prunedFact)
-	if k.IsFactImmune(ctx, prunedFact) {
+	k.SetFact(ctx, &prunedFact)
+	if k.IsFactImmune(ctx, &prunedFact) {
 		t.Error("pruned facts should not be immune (they need hard-deletion processing)")
 	}
 }
@@ -230,7 +231,7 @@ func TestPruningLifecycle_AtRisk(t *testing.T) {
 	fact.CitationCount = 0
 	fact.LastCitedBlock = 0
 	fact.LastUtilizedBlock = 0
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	processed := k.PruneUnusedFactsInEndBlocker(ctx, 20)
 	if processed == 0 {
@@ -258,7 +259,7 @@ func TestPruningLifecycle_Rescue(t *testing.T) {
 	fact.CitationCount = 20
 	fact.LastCitedBlock = uint64(ctx.BlockHeight())
 	fact.LastUtilizedBlock = uint64(ctx.BlockHeight())
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	ep := types.DefaultExtendedParams()
 	ep.PruningEnabled = true
@@ -288,7 +289,7 @@ func TestPruningLifecycle_Archive(t *testing.T) {
 	fact.CitationCount = 0
 	fact.LastCitedBlock = 0
 	fact.LastUtilizedBlock = 0
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	// Move to a height past grace period
 	ctx = ctx.WithBlockHeight(2_000_000)
@@ -315,7 +316,7 @@ func TestPruningLifecycle_HardDelete(t *testing.T) {
 	// Pruned fact with archive retention expired
 	fact := createTestFact("fact-delete", "mathematics", "predictive", types.FactStatusPruned, 100_000)
 	fact.PruningGraceStart = 1
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	ep := types.DefaultExtendedParams()
 	ep.PruningEnabled = true
@@ -360,7 +361,7 @@ func TestPatronizeFact_Success(t *testing.T) {
 	fact := createTestFact("fact-atrisk", "mathematics", "empirical", types.FactStatusAtRisk, 600_000)
 	fact.PruningGraceStart = uint64(ctx.BlockHeight())
 	fact.CitationCount = 0
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	ms := keeper.NewMsgServerImpl(k)
 	resp, err := ms.PatronizeFact(sdk.WrapSDKContext(ctx), &types.MsgPatronizeFact{
@@ -394,7 +395,7 @@ func TestPatronizeFact_NotAtRisk(t *testing.T) {
 
 	// Verified fact (NOT at_risk)
 	fact := createTestFact("fact-active", "mathematics", "empirical", types.FactStatusVerified, 800_000)
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	ms := keeper.NewMsgServerImpl(k)
 	_, err := ms.PatronizeFact(sdk.WrapSDKContext(ctx), &types.MsgPatronizeFact{
@@ -423,7 +424,7 @@ func TestPatronizeFact_SettlementOnPrune(t *testing.T) {
 
 	// Create the fact
 	fact := createTestFact("fact-todie", "mathematics", "empirical", types.FactStatusPruned, 100_000)
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	// Hard delete triggers settlement
 	k.HardDeleteFact(ctx, "fact-todie")
@@ -459,7 +460,7 @@ func TestPruneEndBlocker_AmortizationCap(t *testing.T) {
 		)
 		fact.CitationCount = 0
 		fact.LastCitedBlock = 0
-		k.SetFact(ctx, fact)
+		k.SetFact(ctx, &fact)
 	}
 
 	processed := k.PruneUnusedFactsInEndBlocker(ctx, 3)
@@ -475,7 +476,7 @@ func TestPruneEndBlocker_DisabledByDefault(t *testing.T) {
 	k.SetExtendedParams(ctx, ep)
 
 	fact := createTestFact("fact-nopruning", "mathematics", "empirical", types.FactStatusVerified, 600_000)
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	processed := k.PruneUnusedFactsInEndBlocker(ctx, 20)
 	if processed != 0 {
@@ -501,7 +502,7 @@ func TestPruneEndBlocker_ImmuneFactsSkipped(t *testing.T) {
 
 	// Eternal category (immune)
 	fact := createTestFact("fact-analytic", "mathematics", "analytic", types.FactStatusVerified, 100_000)
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	k.PruneUnusedFactsInEndBlocker(ctx, 20)
 
@@ -522,7 +523,7 @@ func TestIncrementCitationCount_SetsLastUtilizedBlock(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	fact := createTestFact("fact-cite-util", "mathematics", "empirical", types.FactStatusVerified, 800_000)
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	ctx = ctx.WithBlockHeight(500)
 	err := k.IncrementCitationCount(ctx, "fact-cite-util")

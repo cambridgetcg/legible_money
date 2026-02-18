@@ -22,14 +22,7 @@ func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
-// NewFullMsgServerImpl returns a FullMsgServer implementation that includes
-// both protobuf service methods and supplemental methods (DepositChannel, UpdateState, ClaimExpired).
-func NewFullMsgServerImpl(keeper Keeper) types.FullMsgServer {
-	return &msgServer{Keeper: keeper}
-}
-
 var _ types.MsgServer = msgServer{}
-var _ types.FullMsgServer = msgServer{}
 
 // OpenChannel opens a new payment channel.
 func (m msgServer) OpenChannel(goCtx context.Context, msg *types.MsgOpenChannel) (*types.MsgOpenChannelResponse, error) {
@@ -82,7 +75,7 @@ func (m msgServer) OpenChannel(goCtx context.Context, msg *types.MsgOpenChannel)
 	settlementFreq := params.DefaultSettlementFreq
 
 	// Create channel
-	ch := types.PaymentChannel{
+	ch := &types.PaymentChannel{
 		ChannelId:           channelId,
 		Payer:               msg.Sender,
 		Provider:            msg.Receiver,
@@ -227,7 +220,7 @@ func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeCh
 	m.Keeper.SetChannel(ctx, ch)
 
 	// Create dispute record
-	dispute := types.ChannelDispute{
+	dispute := &types.ChannelDispute{
 		ChannelId:        msg.ChannelId,
 		Disputer:         msg.Disputer,
 		DisputedNonce:    msg.Sequence,
@@ -626,7 +619,7 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	m.Keeper.SetParams(ctx, *msg.Params)
+	m.Keeper.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"channels_params_updated",

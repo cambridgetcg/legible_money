@@ -4,9 +4,8 @@ import "fmt"
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
-	p := DefaultParams()
 	return &GenesisState{
-		Params: &p,
+		Params: DefaultParams(),
 	}
 }
 
@@ -47,8 +46,8 @@ func DefaultTierConfigs() []*TierConfig {
 }
 
 // DefaultParams returns the default module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		TierConfigs:       DefaultTierConfigs(),
 		MaxActiveDisputes: 3,      // max 3 active disputes per fact
 		EscalationDelay:   17136,  // ~0.5 day before escalation allowed
@@ -59,7 +58,7 @@ func DefaultParams() Params {
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params == nil {
 		return fmt.Errorf("params cannot be nil")
 	}

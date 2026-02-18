@@ -161,7 +161,7 @@ func (k Keeper) DetectCircularDependencies(ctx sdk.Context) []string {
 	var cycleFacts []string
 	cycleSet := make(map[string]bool)
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		if cycleSet[fact.Id] {
 			return false // already identified
 		}

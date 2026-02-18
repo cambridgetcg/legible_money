@@ -210,12 +210,12 @@ func (k Keeper) CountSessionKeys(ctx sdk.Context, owner string) uint32 {
 }
 
 // SetParams sets module parameters
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) error {
 	if err := params.Validate(); err != nil {
 		return err
 	}
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("failed to marshal params: %w", err)
 	}
@@ -226,18 +226,20 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 }
 
 // GetParams retrieves module parameters
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
-	return params
+	return &params
 }
 
 // SetLastRotation stores the block height of last key rotation
@@ -283,9 +285,9 @@ func (k Keeper) GetRecoveryConfig(ctx sdk.Context, address string) (*types.Recov
 }
 
 // SetRecoveryRequest stores a recovery request
-func (k Keeper) SetRecoveryRequest(ctx sdk.Context, req types.RecoveryRequest) {
+func (k Keeper) SetRecoveryRequest(ctx sdk.Context, req *types.RecoveryRequest) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&req)
+	bz, err := proto.Marshal(req)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal recovery request: %v", err))
 	}
@@ -295,17 +297,17 @@ func (k Keeper) SetRecoveryRequest(ctx sdk.Context, req types.RecoveryRequest) {
 }
 
 // GetRecoveryRequest retrieves a recovery request by account address
-func (k Keeper) GetRecoveryRequest(ctx sdk.Context, address string) (types.RecoveryRequest, bool) {
+func (k Keeper) GetRecoveryRequest(ctx sdk.Context, address string) (*types.RecoveryRequest, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.RecoveryRequestKey(address))
 	if err != nil || bz == nil {
-		return types.RecoveryRequest{}, false
+		return nil, false
 	}
 	var req types.RecoveryRequest
 	if err := proto.Unmarshal(bz, &req); err != nil {
-		return types.RecoveryRequest{}, false
+		return nil, false
 	}
-	return req, true
+	return &req, true
 }
 
 // DeleteRecoveryRequest removes a recovery request
@@ -315,7 +317,7 @@ func (k Keeper) DeleteRecoveryRequest(ctx sdk.Context, address string) {
 }
 
 // IterateRecoveryRequests iterates over all recovery requests
-func (k Keeper) IterateRecoveryRequests(ctx sdk.Context, cb func(types.RecoveryRequest) bool) {
+func (k Keeper) IterateRecoveryRequests(ctx sdk.Context, cb func(*types.RecoveryRequest) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.RecoveryRequestPrefix, prefixEndBytes(types.RecoveryRequestPrefix))
 	if err != nil {
@@ -328,7 +330,7 @@ func (k Keeper) IterateRecoveryRequests(ctx sdk.Context, cb func(types.RecoveryR
 		if err := proto.Unmarshal(iter.Value(), &req); err != nil {
 			continue
 		}
-		if cb(req) {
+		if cb(&req) {
 			break
 		}
 	}
@@ -381,7 +383,7 @@ func (k Keeper) CleanupExpiredSessions(ctx sdk.Context) {
 func (k Keeper) ProcessRecoveryTimeouts(ctx sdk.Context) {
 	currentHeight := uint64(ctx.BlockHeight())
 
-	k.IterateRecoveryRequests(ctx, func(req types.RecoveryRequest) bool {
+	k.IterateRecoveryRequests(ctx, func(req *types.RecoveryRequest) bool {
 		changed := false
 
 		switch req.Status {
@@ -515,14 +517,15 @@ func (k Keeper) IterateAccounts(ctx sdk.Context, cb func(*types.LegibleAccount) 
 }
 
 // InitGenesis initializes the module state from genesis
-func (k Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) error {
+func (k Keeper) InitGenesis(ctx sdk.Context, data *types.GenesisState) error {
 	// Set params
 	if data.Params != nil {
-		if err := k.SetParams(ctx, *data.Params); err != nil {
+		if err := k.SetParams(ctx, data.Params); err != nil {
 			return fmt.Errorf("failed to set params: %w", err)
 		}
 	} else {
-		if err := k.SetParams(ctx, types.DefaultParams()); err != nil {
+		p := types.DefaultParams()
+		if err := k.SetParams(ctx, &p); err != nil {
 			return fmt.Errorf("failed to set default params: %w", err)
 		}
 	}
@@ -560,7 +563,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) error {
 
 // ExportGenesis exports the module state for genesis
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	params := k.GetParams(ctx)
+	params := k.GetParams(ctx) // returns *types.Params
 
 	// Collect all accounts
 	var accounts []*types.LegibleAccount
@@ -607,7 +610,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	})
 
 	return &types.GenesisState{
-		Params:          &params,
+		Params:          params,
 		Accounts:        accounts,
 		DidMappings:     mappings,
 		SessionKeys:     sessions,

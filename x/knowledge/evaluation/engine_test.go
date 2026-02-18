@@ -10,23 +10,23 @@ import (
 
 // fullEvalCtx creates a complete EvaluationContext with configurable state.
 func fullEvalCtx(
-	facts map[string]types.Fact,
+	facts map[string]*types.Fact,
 	evidences map[string][]types.EvidenceRecord,
-	contradictions map[string][]types.FactReference,
+	contradictions map[string][]*types.FactReference,
 ) *EvaluationContext {
 	return &EvaluationContext{
 		ExtendedParams: types.DefaultExtendedParams(),
-		GetClaim: func(_ sdk.Context, id string) (types.Claim, bool) {
-			return types.Claim{}, false
+		GetClaim: func(_ sdk.Context, id string) (*types.Claim, bool) {
+			return nil, false
 		},
-		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
+		GetFact: func(_ sdk.Context, id string) (*types.Fact, bool) {
 			f, ok := facts[id]
 			return f, ok
 		},
-		GetSupportingFacts: func(_ sdk.Context, factId string) []types.FactReference {
+		GetSupportingFacts: func(_ sdk.Context, factId string) []*types.FactReference {
 			return nil
 		},
-		GetContradictingFacts: func(_ sdk.Context, factId string) []types.FactReference {
+		GetContradictingFacts: func(_ sdk.Context, factId string) []*types.FactReference {
 			if contradictions != nil {
 				return contradictions[factId]
 			}
@@ -73,7 +73,7 @@ func fullEvalCtx(
 
 func TestEvaluateClaim_ProtocolClaim_Accept(t *testing.T) {
 	ctx := mockCtx()
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Confidence: 900_000},
 	}
 	evidences := map[string][]types.EvidenceRecord{
@@ -83,7 +83,7 @@ func TestEvaluateClaim_ProtocolClaim_Accept(t *testing.T) {
 	}
 	evalCtx := fullEvalCtx(facts, evidences, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "The genesis block hash is 0xabc...",
 		EpistemicCategory: "protocol",
@@ -91,7 +91,7 @@ func TestEvaluateClaim_ProtocolClaim_Accept(t *testing.T) {
 		LogicZone:         "propositional",
 		References:        []string{"f1"},
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -113,12 +113,12 @@ func TestEvaluateClaim_EmptyClaim_Reject(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := fullEvalCtx(nil, nil, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "", // empty
 		EpistemicCategory: "protocol",
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestEvaluateClaim_GodelZone_Abstain(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := fullEvalCtx(nil, nil, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Peano claim without grounding",
 		EpistemicCategory: "formal",
@@ -142,7 +142,7 @@ func TestEvaluateClaim_GodelZone_Abstain(t *testing.T) {
 		LogicZone:         "peano",
 		References:        nil, // no grounding
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -156,13 +156,13 @@ func TestEvaluateClaim_GodelZone_Abstain(t *testing.T) {
 
 func TestEvaluateClaim_LowConfidence_Reject(t *testing.T) {
 	ctx := mockCtx()
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusDisproven},
 		"f2": {Id: "f2", Status: types.FactStatusDisproven},
 	}
 	evalCtx := fullEvalCtx(facts, nil, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Predictive claim with bad refs",
 		EpistemicCategory: "predictive",
@@ -170,7 +170,7 @@ func TestEvaluateClaim_LowConfidence_Reject(t *testing.T) {
 		LogicZone:         "empirical",
 		References:        []string{"f1", "f2"},
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestEvaluateClaim_LowConfidence_Reject(t *testing.T) {
 
 func TestEvaluateClaim_Determinism(t *testing.T) {
 	ctx := mockCtx()
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000},
 	}
 	evidences := map[string][]types.EvidenceRecord{
@@ -193,7 +193,7 @@ func TestEvaluateClaim_Determinism(t *testing.T) {
 	}
 	evalCtx := fullEvalCtx(facts, evidences, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Deterministic claim",
 		EpistemicCategory: "computational",
@@ -201,7 +201,7 @@ func TestEvaluateClaim_Determinism(t *testing.T) {
 		LogicZone:         "propositional",
 		References:        []string{"f1"},
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result1, _ := EvaluateClaim(ctx, evalCtx, round, claim)
 	result2, _ := EvaluateClaim(ctx, evalCtx, round, claim)
@@ -216,8 +216,8 @@ func TestEvaluateClaim_Determinism(t *testing.T) {
 
 func TestEvaluateClaim_NilContext(t *testing.T) {
 	ctx := mockCtx()
-	claim := types.Claim{Id: "c1", ClaimText: "test"}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	claim := &types.Claim{Id: "c1", ClaimText: "test"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	_, err := EvaluateClaim(ctx, nil, round, claim)
 	if err == nil {
@@ -229,7 +229,7 @@ func TestEvaluateClaim_SelfReferential_Abstain(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := fullEvalCtx(nil, nil, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "I am my own reference",
 		ContentHash:       "hash-xyz",
@@ -237,7 +237,7 @@ func TestEvaluateClaim_SelfReferential_Abstain(t *testing.T) {
 		Domain:            "logic",
 		References:        []string{"hash-xyz"}, // self-reference
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -251,7 +251,7 @@ func TestEvaluateClaim_SelfReferential_Abstain(t *testing.T) {
 
 func TestEvaluateClaim_AxiomContradiction_Reject(t *testing.T) {
 	ctx := mockCtx()
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"axiom-1": {
 			Id:             "axiom-1",
 			Status:         types.FactStatusDisproven,
@@ -261,7 +261,7 @@ func TestEvaluateClaim_AxiomContradiction_Reject(t *testing.T) {
 	}
 	evalCtx := fullEvalCtx(facts, nil, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Claim based on disproven axiom",
 		EpistemicCategory: "formal",
@@ -269,7 +269,7 @@ func TestEvaluateClaim_AxiomContradiction_Reject(t *testing.T) {
 		LogicZone:         "propositional",
 		References:        []string{"axiom-1"},
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -283,7 +283,7 @@ func TestEvaluateClaim_AxiomContradiction_Reject(t *testing.T) {
 
 func TestEvaluateClaim_EmpiricalWithEvidence_Accept(t *testing.T) {
 	ctx := mockCtx()
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000},
 		"f2": {Id: "f2", Status: types.FactStatusActive, Confidence: 750_000},
 	}
@@ -295,7 +295,7 @@ func TestEvaluateClaim_EmpiricalWithEvidence_Accept(t *testing.T) {
 	}
 	evalCtx := fullEvalCtx(facts, evidences, nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Well-supported empirical claim",
 		EpistemicCategory: "empirical",
@@ -303,7 +303,7 @@ func TestEvaluateClaim_EmpiricalWithEvidence_Accept(t *testing.T) {
 		LogicZone:         "empirical",
 		References:        []string{"f1", "f2"},
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {
@@ -328,7 +328,7 @@ func TestEvaluateClaim_InconclusiveRange_Abstain(t *testing.T) {
 	evalCtx := fullEvalCtx(nil, nil, nil)
 
 	// social base = 400,000, which is between RejectThreshold (300,000) and AcceptThreshold (600,000)
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Inconclusive social claim",
 		EpistemicCategory: "social",
@@ -336,7 +336,7 @@ func TestEvaluateClaim_InconclusiveRange_Abstain(t *testing.T) {
 		LogicZone:         "empirical",
 		References:        []string{"some-ref"}, // has ref so no edge case penalty
 	}
-	round := types.VerificationRound{Id: "r1", ClaimId: "c1"}
+	round := &types.VerificationRound{Id: "r1", ClaimId: "c1"}
 
 	result, err := EvaluateClaim(ctx, evalCtx, round, claim)
 	if err != nil {

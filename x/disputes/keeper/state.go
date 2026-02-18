@@ -12,10 +12,10 @@ import (
 // ---------- Dispute CRUD ----------
 
 // SetDispute stores a dispute in the KV store.
-func (k Keeper) SetDispute(ctx sdk.Context, dispute types.Dispute) {
+func (k Keeper) SetDispute(ctx sdk.Context, dispute *types.Dispute) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := disputeKey(dispute.Id)
-	bz, err := proto.Marshal(&dispute)
+	bz, err := proto.Marshal(dispute)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal dispute: %v", err))
 	}
@@ -37,18 +37,18 @@ func (k Keeper) SetDispute(ctx sdk.Context, dispute types.Dispute) {
 }
 
 // GetDispute retrieves a dispute by ID.
-func (k Keeper) GetDispute(ctx sdk.Context, id string) (types.Dispute, bool) {
+func (k Keeper) GetDispute(ctx sdk.Context, id string) (*types.Dispute, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := disputeKey(id)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.Dispute{}, false
+		return nil, false
 	}
 	var dispute types.Dispute
 	if err := proto.Unmarshal(bz, &dispute); err != nil {
-		return types.Dispute{}, false
+		return nil, false
 	}
-	return dispute, true
+	return &dispute, true
 }
 
 // DeleteDispute removes a dispute from the store.
@@ -64,7 +64,7 @@ func (k Keeper) DeleteDispute(ctx sdk.Context, id string) {
 }
 
 // IterateDisputes iterates over all disputes. Return true from cb to stop.
-func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(types.Dispute) bool) {
+func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(*types.Dispute) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.DisputeKeyPrefix, prefixEndBytes(types.DisputeKeyPrefix))
 	if err != nil {
@@ -77,14 +77,14 @@ func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(types.Dispute) bool) {
 		if err := proto.Unmarshal(iter.Value(), &dispute); err != nil {
 			continue
 		}
-		if cb(dispute) {
+		if cb(&dispute) {
 			break
 		}
 	}
 }
 
 // GetDisputesByFact returns all disputes for a given fact.
-func (k Keeper) GetDisputesByFact(ctx sdk.Context, factId string) []types.Dispute {
+func (k Keeper) GetDisputesByFact(ctx sdk.Context, factId string) []*types.Dispute {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.DisputeByFactPrefix, []byte(factId+":")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -93,7 +93,7 @@ func (k Keeper) GetDisputesByFact(ctx sdk.Context, factId string) []types.Disput
 	}
 	defer iter.Close()
 
-	var disputes []types.Dispute
+	var disputes []*types.Dispute
 	for ; iter.Valid(); iter.Next() {
 		disputeId := string(iter.Value())
 		dispute, found := k.GetDispute(ctx, disputeId)
@@ -105,7 +105,7 @@ func (k Keeper) GetDisputesByFact(ctx sdk.Context, factId string) []types.Disput
 }
 
 // GetActiveDisputes returns all non-resolved, non-expired disputes.
-func (k Keeper) GetActiveDisputes(ctx sdk.Context) []types.Dispute {
+func (k Keeper) GetActiveDisputes(ctx sdk.Context) []*types.Dispute {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ActiveDisputePrefix, prefixEndBytes(types.ActiveDisputePrefix))
 	if err != nil {
@@ -113,7 +113,7 @@ func (k Keeper) GetActiveDisputes(ctx sdk.Context) []types.Dispute {
 	}
 	defer iter.Close()
 
-	var disputes []types.Dispute
+	var disputes []*types.Dispute
 	for ; iter.Valid(); iter.Next() {
 		disputeId := string(iter.Value())
 		dispute, found := k.GetDispute(ctx, disputeId)
@@ -139,10 +139,10 @@ func (k Keeper) GetActiveDisputeCountForFact(ctx sdk.Context, factId string) uin
 // ---------- Evidence CRUD ----------
 
 // SetEvidence stores dispute evidence in the KV store.
-func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.DisputeEvidence) {
+func (k Keeper) SetEvidence(ctx sdk.Context, evidence *types.DisputeEvidence) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := evidenceKey(evidence.DisputeId, evidence.Id)
-	bz, err := proto.Marshal(&evidence)
+	bz, err := proto.Marshal(evidence)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence: %v", err))
 	}
@@ -150,22 +150,22 @@ func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.DisputeEvidence) {
 }
 
 // GetEvidence retrieves evidence by dispute ID and evidence ID.
-func (k Keeper) GetEvidence(ctx sdk.Context, disputeId, evidenceId string) (types.DisputeEvidence, bool) {
+func (k Keeper) GetEvidence(ctx sdk.Context, disputeId, evidenceId string) (*types.DisputeEvidence, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := evidenceKey(disputeId, evidenceId)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.DisputeEvidence{}, false
+		return nil, false
 	}
 	var evidence types.DisputeEvidence
 	if err := proto.Unmarshal(bz, &evidence); err != nil {
-		return types.DisputeEvidence{}, false
+		return nil, false
 	}
-	return evidence, true
+	return &evidence, true
 }
 
 // GetEvidenceByDispute returns all evidence for a dispute.
-func (k Keeper) GetEvidenceByDispute(ctx sdk.Context, disputeId string) []types.DisputeEvidence {
+func (k Keeper) GetEvidenceByDispute(ctx sdk.Context, disputeId string) []*types.DisputeEvidence {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.EvidenceKeyPrefix, []byte(disputeId+":")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -174,13 +174,13 @@ func (k Keeper) GetEvidenceByDispute(ctx sdk.Context, disputeId string) []types.
 	}
 	defer iter.Close()
 
-	var evidences []types.DisputeEvidence
+	var evidences []*types.DisputeEvidence
 	for ; iter.Valid(); iter.Next() {
 		var evidence types.DisputeEvidence
 		if err := proto.Unmarshal(iter.Value(), &evidence); err != nil {
 			continue
 		}
-		evidences = append(evidences, evidence)
+		evidences = append(evidences, &evidence)
 	}
 	return evidences
 }
@@ -188,10 +188,10 @@ func (k Keeper) GetEvidenceByDispute(ctx sdk.Context, disputeId string) []types.
 // ---------- Vote CRUD ----------
 
 // SetVote stores a dispute vote in the KV store.
-func (k Keeper) SetVote(ctx sdk.Context, vote types.DisputeVote) {
+func (k Keeper) SetVote(ctx sdk.Context, vote *types.DisputeVote) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := voteKey(vote.DisputeId, vote.Arbiter)
-	bz, err := proto.Marshal(&vote)
+	bz, err := proto.Marshal(vote)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal vote: %v", err))
 	}
@@ -199,22 +199,22 @@ func (k Keeper) SetVote(ctx sdk.Context, vote types.DisputeVote) {
 }
 
 // GetVote retrieves a vote by dispute ID and arbiter address.
-func (k Keeper) GetVote(ctx sdk.Context, disputeId, arbiter string) (types.DisputeVote, bool) {
+func (k Keeper) GetVote(ctx sdk.Context, disputeId, arbiter string) (*types.DisputeVote, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := voteKey(disputeId, arbiter)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.DisputeVote{}, false
+		return nil, false
 	}
 	var vote types.DisputeVote
 	if err := proto.Unmarshal(bz, &vote); err != nil {
-		return types.DisputeVote{}, false
+		return nil, false
 	}
-	return vote, true
+	return &vote, true
 }
 
 // GetVotes returns all votes for a dispute.
-func (k Keeper) GetVotes(ctx sdk.Context, disputeId string) []types.DisputeVote {
+func (k Keeper) GetVotes(ctx sdk.Context, disputeId string) []*types.DisputeVote {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.VoteKeyPrefix, []byte(disputeId+":")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -223,13 +223,13 @@ func (k Keeper) GetVotes(ctx sdk.Context, disputeId string) []types.DisputeVote 
 	}
 	defer iter.Close()
 
-	var votes []types.DisputeVote
+	var votes []*types.DisputeVote
 	for ; iter.Valid(); iter.Next() {
 		var vote types.DisputeVote
 		if err := proto.Unmarshal(iter.Value(), &vote); err != nil {
 			continue
 		}
-		votes = append(votes, vote)
+		votes = append(votes, &vote)
 	}
 	return votes
 }
@@ -263,9 +263,9 @@ func commitmentKey(disputeId, submitter string) []byte {
 // ---------- Evidence Commitment CRUD ----------
 
 // SetEvidenceCommitment stores an evidence commitment.
-func (k Keeper) SetEvidenceCommitment(ctx sdk.Context, commitment types.EvidenceCommitment) {
+func (k Keeper) SetEvidenceCommitment(ctx sdk.Context, commitment *types.EvidenceCommitment) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&commitment)
+	bz, err := proto.Marshal(commitment)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence commitment: %v", err))
 	}
@@ -273,25 +273,25 @@ func (k Keeper) SetEvidenceCommitment(ctx sdk.Context, commitment types.Evidence
 }
 
 // GetEvidenceCommitment retrieves an evidence commitment.
-func (k Keeper) GetEvidenceCommitment(ctx sdk.Context, disputeId, submitter string) (types.EvidenceCommitment, bool) {
+func (k Keeper) GetEvidenceCommitment(ctx sdk.Context, disputeId, submitter string) (*types.EvidenceCommitment, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(commitmentKey(disputeId, submitter))
 	if err != nil || bz == nil {
-		return types.EvidenceCommitment{}, false
+		return nil, false
 	}
 	var commitment types.EvidenceCommitment
 	if err := proto.Unmarshal(bz, &commitment); err != nil {
-		return types.EvidenceCommitment{}, false
+		return nil, false
 	}
-	return commitment, true
+	return &commitment, true
 }
 
 // GetUnrevealedCommitments returns all unrevealed commitments for a dispute.
-func (k Keeper) GetUnrevealedCommitments(ctx sdk.Context, disputeId string) []types.EvidenceCommitment {
+func (k Keeper) GetUnrevealedCommitments(ctx sdk.Context, disputeId string) []*types.EvidenceCommitment {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.EvidenceCommitmentPrefix, []byte(disputeId+":")...)
 
-	var commitments []types.EvidenceCommitment
+	var commitments []*types.EvidenceCommitment
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
 	if err != nil {
 		return nil
@@ -304,7 +304,7 @@ func (k Keeper) GetUnrevealedCommitments(ctx sdk.Context, disputeId string) []ty
 			continue
 		}
 		if !commitment.Revealed {
-			commitments = append(commitments, commitment)
+			commitments = append(commitments, &commitment)
 		}
 	}
 	return commitments

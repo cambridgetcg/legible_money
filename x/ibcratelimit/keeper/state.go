@@ -13,9 +13,9 @@ import (
 // --- Flow CRUD ---
 
 // SetFlow stores a channel flow record.
-func (k Keeper) SetFlow(ctx sdk.Context, flow types.ChannelFlow) {
+func (k Keeper) SetFlow(ctx sdk.Context, flow *types.ChannelFlow) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&flow)
+	bz, err := proto.Marshal(flow)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal channel flow: %v", err))
 	}
@@ -25,17 +25,17 @@ func (k Keeper) SetFlow(ctx sdk.Context, flow types.ChannelFlow) {
 }
 
 // GetFlow retrieves a channel flow record by channel ID.
-func (k Keeper) GetFlow(ctx sdk.Context, channelID string) (types.ChannelFlow, bool) {
+func (k Keeper) GetFlow(ctx sdk.Context, channelID string) (*types.ChannelFlow, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.FlowKey(channelID))
 	if err != nil || bz == nil {
-		return types.ChannelFlow{}, false
+		return nil, false
 	}
 	var flow types.ChannelFlow
 	if err := proto.Unmarshal(bz, &flow); err != nil {
-		return types.ChannelFlow{}, false
+		return nil, false
 	}
-	return flow, true
+	return &flow, true
 }
 
 // DeleteFlow removes a channel flow record.
@@ -45,7 +45,7 @@ func (k Keeper) DeleteFlow(ctx sdk.Context, channelID string) {
 }
 
 // IterateFlows iterates over all flow records. Return true from cb to stop.
-func (k Keeper) IterateFlows(ctx sdk.Context, cb func(types.ChannelFlow) bool) {
+func (k Keeper) IterateFlows(ctx sdk.Context, cb func(*types.ChannelFlow) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.FlowPrefix, prefixEndBytes(types.FlowPrefix))
 	if err != nil {
@@ -58,7 +58,7 @@ func (k Keeper) IterateFlows(ctx sdk.Context, cb func(types.ChannelFlow) bool) {
 		if err := proto.Unmarshal(iter.Value(), &flow); err != nil {
 			continue
 		}
-		if cb(flow) {
+		if cb(&flow) {
 			break
 		}
 	}
@@ -67,9 +67,9 @@ func (k Keeper) IterateFlows(ctx sdk.Context, cb func(types.ChannelFlow) bool) {
 // --- Previous Flow (for sliding window) ---
 
 // SetPreviousFlow stores the previous epoch's flow record for a channel.
-func (k Keeper) SetPreviousFlow(ctx sdk.Context, flow types.ChannelFlow) {
+func (k Keeper) SetPreviousFlow(ctx sdk.Context, flow *types.ChannelFlow) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&flow)
+	bz, err := proto.Marshal(flow)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal previous channel flow: %v", err))
 	}
@@ -79,17 +79,17 @@ func (k Keeper) SetPreviousFlow(ctx sdk.Context, flow types.ChannelFlow) {
 }
 
 // GetPreviousFlow retrieves the previous epoch's flow record for a channel.
-func (k Keeper) GetPreviousFlow(ctx sdk.Context, channelID string) (types.ChannelFlow, bool) {
+func (k Keeper) GetPreviousFlow(ctx sdk.Context, channelID string) (*types.ChannelFlow, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.PreviousFlowKey(channelID))
 	if err != nil || bz == nil {
-		return types.ChannelFlow{}, false
+		return nil, false
 	}
 	var flow types.ChannelFlow
 	if err := proto.Unmarshal(bz, &flow); err != nil {
-		return types.ChannelFlow{}, false
+		return nil, false
 	}
-	return flow, true
+	return &flow, true
 }
 
 // DeletePreviousFlow removes the previous epoch's flow record for a channel.
@@ -171,23 +171,25 @@ func (k Keeper) getEffectiveValue(ctx sdk.Context, channelID string, isOutflow b
 // --- Params ---
 
 // GetParams returns the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
-	return params
+	return &params
 }
 
 // SetParams sets the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -200,14 +202,14 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 
 // GetOrResetFlow retrieves a channel's flow record, resetting counters if the epoch has expired.
 // If no flow record exists, a new one is initialized with zero counters.
-func (k Keeper) GetOrResetFlow(ctx sdk.Context, channelID string) types.ChannelFlow {
+func (k Keeper) GetOrResetFlow(ctx sdk.Context, channelID string) *types.ChannelFlow {
 	params := k.GetParams(ctx)
 	currentBlock := uint64(ctx.BlockHeight())
 
 	flow, found := k.GetFlow(ctx, channelID)
 	if !found {
 		// Initialize new flow record
-		flow = types.ChannelFlow{
+		flow = &types.ChannelFlow{
 			ChannelId:       channelID,
 			Denom:           params.TrackedDenom,
 			OutflowTotal:    "0",
@@ -246,7 +248,7 @@ func (k Keeper) ResetExpiredFlows(ctx sdk.Context) {
 	params := k.GetParams(ctx)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	k.IterateFlows(ctx, func(flow types.ChannelFlow) bool {
+	k.IterateFlows(ctx, func(flow *types.ChannelFlow) bool {
 		if currentBlock >= flow.EpochStartBlock+params.EpochLengthBlocks {
 			epochsPassed := (currentBlock - flow.EpochStartBlock) / params.EpochLengthBlocks
 			if epochsPassed == 1 {

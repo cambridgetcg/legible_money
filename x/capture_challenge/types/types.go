@@ -64,7 +64,7 @@ const (
 // Params struct is defined in genesis.pb.go (proto-generated).
 
 // Validate performs basic param validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.EvidencePeriodBlocks == 0 {
 		return fmt.Errorf("evidence period blocks must be positive")
 	}

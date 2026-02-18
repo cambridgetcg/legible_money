@@ -49,7 +49,7 @@ func (k Keeper) SubmitChallenge(goCtx context.Context, msg *types.MsgSubmitChall
 	idHash := sha256.Sum256([]byte(idInput))
 	challengeId := fmt.Sprintf("challenge_%x", idHash[:8])
 
-	challenge := types.CaptureChallenge{
+	challenge := &types.CaptureChallenge{
 		Id:                challengeId,
 		Domain:            msg.Domain,
 		Challenger:        msg.Challenger,
@@ -137,7 +137,7 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 	pool := k.GetOrCreateBountyPool(ctx, challenge.Domain, currentBlock)
 	challengerReward := "0"
 
-	resolution := types.CaptureResolution{
+	resolution := &types.CaptureResolution{
 		Outcome:         msg.Outcome,
 		ResolvedAtBlock: currentBlock,
 		ResolvedBy:      "governance",
@@ -233,7 +233,7 @@ func (k Keeper) ResolveChallenge(goCtx context.Context, msg *types.MsgResolveCha
 		challenge.Status = string(types.ChallengePartial)
 	}
 
-	challenge.Resolution = &resolution
+	challenge.Resolution = resolution
 	k.SetChallenge(ctx, challenge)
 	pool.LastUpdatedBlock = currentBlock
 	k.SetBountyPool(ctx, pool)
@@ -257,7 +257,7 @@ func (k Keeper) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) 
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"capture_challenge_params_updated",

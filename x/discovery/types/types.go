@@ -21,8 +21,8 @@ func (p *Params) Validate() error {
 }
 
 // DefaultParams returns default module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		MinRegistrationStake:    "100000000", // 100 LGM
 		MaxCapabilitiesPerAgent: 50,
 		ProfileExpiryBlocks:     342720, // ~10 days at 2521ms blocks
@@ -33,9 +33,8 @@ func DefaultParams() Params {
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
-	p := DefaultParams()
 	return &GenesisState{
-		Params:   &p,
+		Params:   DefaultParams(),
 		Profiles: []*AgentProfile{},
 	}
 }

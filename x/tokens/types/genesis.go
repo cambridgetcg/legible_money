@@ -2,8 +2,8 @@ package types
 
 // DefaultParams returns default module parameters.
 // Expiration fields are zeroed — the period overlay has been removed.
-func DefaultParams() Params {
-	return Params{}
+func DefaultParams() *Params {
+	return &Params{}
 }
 
 // TokenGenesisEntry holds a token definition with its balances and allowances for genesis.
@@ -34,9 +34,8 @@ type WrapGenesisEntry struct {
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
-	p := DefaultParams()
 	return &GenesisState{
-		Params:   &p,
+		Params:   DefaultParams(),
 		Accounts: []*ExpirableAccount{},
 		Rai: &RAIHoldingAccount{
 			Balance:          "0",
@@ -48,6 +47,6 @@ func DefaultGenesis() *GenesisState {
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	return nil
 }

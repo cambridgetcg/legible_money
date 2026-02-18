@@ -65,38 +65,39 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	} else {
-		k.SetParams(ctx, types.DefaultParams())
+		p := types.DefaultParams()
+		k.SetParams(ctx, &p)
 	}
 
 	// Initialize strata
 	for _, stratum := range genState.Strata {
 		if stratum != nil {
-			k.SetStratum(ctx, *stratum)
+			k.SetStratum(ctx, stratum)
 		}
 	}
 
 	// Initialize domains
 	for _, domain := range genState.Domains {
 		if domain != nil {
-			k.SetDomain(ctx, *domain)
+			k.SetDomain(ctx, domain)
 		}
 	}
 
 	// Initialize proposals (if any from export)
 	for _, proposal := range genState.Proposals {
 		if proposal != nil {
-			k.SetProposal(ctx, *proposal)
+			k.SetProposal(ctx, proposal)
 		}
 	}
 
 	// Initialize cross-stratum links
 	for _, link := range genState.CrossLinks {
 		if link != nil {
-			k.SetLink(ctx, *link)
+			k.SetLink(ctx, link)
 		}
 	}
 
@@ -108,53 +109,20 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:     &params,
-		Strata:     toStratumPointers(k.GetAllStrata(ctx)),
-		Domains:    toDomainPointers(k.GetAllDomains(ctx)),
-		Proposals:  toProposalPointers(k.getAllProposals(ctx)),
-		CrossLinks: toLinkPointers(k.GetAllLinks(ctx)),
+		Params:     params,
+		Strata:     k.GetAllStrata(ctx),
+		Domains:    k.GetAllDomains(ctx),
+		Proposals:  k.getAllProposals(ctx),
+		CrossLinks: k.GetAllLinks(ctx),
 	}
 }
 
 // getAllProposals returns all proposals (used in ExportGenesis).
-func (k Keeper) getAllProposals(ctx sdk.Context) []types.DomainProposal {
-	var proposals []types.DomainProposal
-	k.IterateProposals(ctx, func(p types.DomainProposal) bool {
+func (k Keeper) getAllProposals(ctx sdk.Context) []*types.DomainProposal {
+	var proposals []*types.DomainProposal
+	k.IterateProposals(ctx, func(p *types.DomainProposal) bool {
 		proposals = append(proposals, p)
 		return false
 	})
 	return proposals
-}
-
-// Helper functions to convert value slices to pointer slices for proto compatibility.
-func toStratumPointers(strata []types.StratumProperties) []*types.StratumProperties {
-	result := make([]*types.StratumProperties, len(strata))
-	for i := range strata {
-		result[i] = &strata[i]
-	}
-	return result
-}
-
-func toDomainPointers(domains []types.Domain) []*types.Domain {
-	result := make([]*types.Domain, len(domains))
-	for i := range domains {
-		result[i] = &domains[i]
-	}
-	return result
-}
-
-func toProposalPointers(proposals []types.DomainProposal) []*types.DomainProposal {
-	result := make([]*types.DomainProposal, len(proposals))
-	for i := range proposals {
-		result[i] = &proposals[i]
-	}
-	return result
-}
-
-func toLinkPointers(links []types.CrossStratumLink) []*types.CrossStratumLink {
-	result := make([]*types.CrossStratumLink, len(links))
-	for i := range links {
-		result[i] = &links[i]
-	}
-	return result
 }

@@ -12,7 +12,7 @@ import (
 //  1. Explicit expiry: ExpiresAtBlock > 0 && currentBlock >= ExpiresAtBlock
 //  2. Confidence decay: decayed confidence < MinConfidenceThreshold (30%)
 //  3. Reverification staleness: age > StalenessMultiplier × halfLife without reverification
-func IsFactExpired(fact types.Fact, currentHeight uint64, ep types.ExtendedParams) (bool, string) {
+func IsFactExpired(fact *types.Fact, currentHeight uint64, ep types.ExtendedParams) (bool, string) {
 	// Condition 1: Explicit expiry
 	if fact.ExpiresAtBlock > 0 && currentHeight >= fact.ExpiresAtBlock {
 		return true, "explicit_expiry"
@@ -73,7 +73,7 @@ func (k Keeper) ExpireStaleFactsInEndBlocker(ctx sdk.Context, maxPerBlock int) i
 	ep := k.GetExtendedParams(ctx)
 	expired := 0
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		if expired >= maxPerBlock {
 			return true // stop iteration
 		}
@@ -109,12 +109,12 @@ func (k Keeper) ExpireStaleFactsInEndBlocker(ctx sdk.Context, maxPerBlock int) i
 }
 
 // GetFactsNeedingReverification returns facts below the reverification threshold.
-func (k Keeper) GetFactsNeedingReverification(ctx sdk.Context, maxResults int) []types.Fact {
+func (k Keeper) GetFactsNeedingReverification(ctx sdk.Context, maxResults int) []*types.Fact {
 	currentHeight := uint64(ctx.BlockHeight())
 	ep := k.GetExtendedParams(ctx)
-	var facts []types.Fact
+	var facts []*types.Fact
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		if len(facts) >= maxResults {
 			return true
 		}
@@ -145,7 +145,8 @@ func (k Keeper) ReverifyFact(ctx sdk.Context, factID string, newConfidence uint6
 
 	// Apply reverification bonus
 	ep := k.GetExtendedParams(ctx)
-	fact = ApplyReverificationBonus(fact, ep)
+	bonused := ApplyReverificationBonus(fact, ep)
+	fact = bonused
 
 	// If new verification confidence provided, use it
 	if newConfidence > 0 {

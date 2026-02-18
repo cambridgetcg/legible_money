@@ -19,7 +19,7 @@ func TestMarkFactChallenged_Verified(t *testing.T) {
 		Confidence: 800_000,
 		Submitter:  testSubmitterAddr,
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	err := k.MarkFactChallenged(ctx, "fact-challenge-1")
 	if err != nil {
@@ -43,7 +43,7 @@ func TestMarkFactChallenged_Active(t *testing.T) {
 		Domain: "physics",
 		Status: "active",
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	err := k.MarkFactChallenged(ctx, "fact-challenge-2")
 	if err != nil {
@@ -64,7 +64,7 @@ func TestMarkFactChallenged_InvalidStatus(t *testing.T) {
 		Domain: "physics",
 		Status: "contested",
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	err := k.MarkFactChallenged(ctx, "fact-challenge-3")
 	if err == nil {
@@ -92,7 +92,7 @@ func TestResolveFactDispute_Overturned(t *testing.T) {
 		Status:     "challenged",
 		Confidence: 800_000,
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	newConf, err := k.ResolveFactDispute(ctx, "fact-resolve-1", "overturned", 550_000)
 	if err != nil {
@@ -123,7 +123,7 @@ func TestResolveFactDispute_OverturnedRevoked(t *testing.T) {
 		Status:     "challenged",
 		Confidence: 150_000, // Low confidence
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	newConf, err := k.ResolveFactDispute(ctx, "fact-resolve-2", "overturned", 550_000)
 	if err != nil {
@@ -151,7 +151,7 @@ func TestResolveFactDispute_Upheld(t *testing.T) {
 		Status:     "challenged",
 		Confidence: 800_000,
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	newConf, err := k.ResolveFactDispute(ctx, "fact-resolve-3", "upheld", 0)
 	if err != nil {
@@ -179,7 +179,7 @@ func TestResolveFactDispute_UpheldCapped(t *testing.T) {
 		Status:     "contested",
 		Confidence: 950_000,
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	newConf, err := k.ResolveFactDispute(ctx, "fact-resolve-4", "upheld", 0)
 	if err != nil {
@@ -201,7 +201,7 @@ func TestResolveFactDispute_Inconclusive(t *testing.T) {
 		Status:     "challenged",
 		Confidence: 800_000,
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	newConf, err := k.ResolveFactDispute(ctx, "fact-resolve-5", "inconclusive", 0)
 	if err != nil {
@@ -240,7 +240,7 @@ func TestCascadeFactConfidence_MultiFact(t *testing.T) {
 		Status:     "revoked",
 		Confidence: 50_000,
 	}
-	k.SetFact(ctx, retracted)
+	k.SetFact(ctx, &retracted)
 
 	// Create two facts that reference the retracted one
 	referrer1 := types.Fact{
@@ -249,7 +249,7 @@ func TestCascadeFactConfidence_MultiFact(t *testing.T) {
 		Status:     "active",
 		Confidence: 700_000,
 	}
-	k.SetFact(ctx, referrer1)
+	k.SetFact(ctx, &referrer1)
 
 	referrer2 := types.Fact{
 		Id:         "fact-ref-2",
@@ -257,15 +257,15 @@ func TestCascadeFactConfidence_MultiFact(t *testing.T) {
 		Status:     "active",
 		Confidence: 500_000,
 	}
-	k.SetFact(ctx, referrer2)
+	k.SetFact(ctx, &referrer2)
 
 	// Set up references: referrer1 → retracted, referrer2 → retracted
-	k.SetFactReference(ctx, types.FactReference{
+	k.SetFactReference(ctx, &types.FactReference{
 		FromFactId:    "fact-ref-1",
 		ToFactId:      "fact-retracted",
 		ReferenceType: "supports",
 	})
-	k.SetFactReference(ctx, types.FactReference{
+	k.SetFactReference(ctx, &types.FactReference{
 		FromFactId:    "fact-ref-2",
 		ToFactId:      "fact-retracted",
 		ReferenceType: "supports",
@@ -305,7 +305,7 @@ func TestCascadeFactConfidence_SkipRevoked(t *testing.T) {
 		Domain: "physics",
 		Status: "revoked",
 	}
-	k.SetFact(ctx, retracted)
+	k.SetFact(ctx, &retracted)
 
 	alreadyRevoked := types.Fact{
 		Id:         "fact-already-revoked",
@@ -313,9 +313,9 @@ func TestCascadeFactConfidence_SkipRevoked(t *testing.T) {
 		Status:     "revoked",
 		Confidence: 50_000,
 	}
-	k.SetFact(ctx, alreadyRevoked)
+	k.SetFact(ctx, &alreadyRevoked)
 
-	k.SetFactReference(ctx, types.FactReference{
+	k.SetFactReference(ctx, &types.FactReference{
 		FromFactId:    "fact-already-revoked",
 		ToFactId:      "fact-retracted-2",
 		ReferenceType: "supports",
@@ -338,7 +338,7 @@ func TestCascadeFactConfidence_NoReferences(t *testing.T) {
 		Domain: "physics",
 		Status: "revoked",
 	}
-	k.SetFact(ctx, retracted)
+	k.SetFact(ctx, &retracted)
 
 	affected, err := k.CascadeFactConfidence(ctx, "fact-no-refs", 220_000)
 	if err != nil {

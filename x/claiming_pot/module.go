@@ -116,7 +116,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &gs); err != nil {
 		panic("failed to unmarshal claiming_pot genesis: " + err.Error())
 	}
-	am.keeper.InitGenesis(ctx, gs)
+	am.keeper.InitGenesis(ctx, &gs)
 }
 
 // ExportGenesis exports the module's genesis state.
@@ -137,7 +137,7 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	am.keeper.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+	am.keeper.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
 		if pot.Status == string(types.PotStatusActive) && pot.Config.ExpiresAtBlock > 0 && currentBlock > pot.Config.ExpiresAtBlock {
 			pot.Status = string(types.PotStatusExpired)
 			am.keeper.SetPot(ctx, pot)

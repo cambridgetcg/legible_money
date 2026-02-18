@@ -111,7 +111,7 @@ func TestSetParams_Custom(t *testing.T) {
 		LipStakeInterface:          "200000000",
 		LipStakeProcess:            "100000000",
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 	got := k.GetParams(ctx)
 	if got.VotingPeriodBlocks != 5000 {
 		t.Errorf("expected 5000, got %d", got.VotingPeriodBlocks)
@@ -632,7 +632,7 @@ func TestExecuteDisbursement_TimelockNotExpired(t *testing.T) {
 		OpposeWeight:    "0",
 		AbstainWeight:   "0",
 	}
-	k.SetDisbursement(ctx, disb)
+	k.SetDisbursement(ctx, &disb)
 	k.SetNextDisbNumber(ctx, 2)
 
 	// Try to execute at block 100 - timelock hasn't expired
@@ -659,7 +659,7 @@ func TestExecuteDisbursement_AfterTimelock(t *testing.T) {
 		ApprovedAtBlock: 50,
 		TimelockExpiry:  90, // expires at block 90
 	}
-	k.SetDisbursement(ctx, disb)
+	k.SetDisbursement(ctx, &disb)
 
 	// Execute at block 100 - timelock expired
 	_, err := ms.ExecuteDisbursement(ctx, &types.MsgExecuteDisbursement{
@@ -958,7 +958,8 @@ func TestValidateBasic_MsgSubmitLIP(t *testing.T) {
 		{"empty stake", types.MsgSubmitLIP{Proposer: testAddr("alice"), Title: "Test", Description: "Test", LipType: types.LIPType_LIP_TYPE_COMMUNITY, InitialStake: ""}, true},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.msg.ValidateBasic()
 			if (err != nil) != tt.wantErr {
@@ -981,7 +982,8 @@ func TestValidateBasic_MsgCastVote(t *testing.T) {
 		{"empty stake", types.MsgCastVote{Voter: testAddr("v"), ProposalId: "LIP-1", Option: types.VoteOption_VOTE_OPTION_YES, Stake: ""}, true},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.msg.ValidateBasic()
 			if (err != nil) != tt.wantErr {
@@ -1251,7 +1253,7 @@ func TestGenesisRoundtrip_LIPFields(t *testing.T) {
 
 	// Create a fresh keeper and import
 	k2, ctx2 := setupKeeper(t)
-	k2.InitGenesis(ctx2, *gs)
+	k2.InitGenesis(ctx2, gs)
 
 	// Verify fields survived roundtrip
 	lip, found := k2.GetLIP(ctx2, "LIP-1")
@@ -1294,7 +1296,7 @@ func TestGenesisRoundtrip_VoteFields(t *testing.T) {
 	// Export and reimport
 	gs := k.ExportGenesis(ctx)
 	k2, ctx2 := setupKeeper(t)
-	k2.InitGenesis(ctx2, *gs)
+	k2.InitGenesis(ctx2, gs)
 
 	// Verify votes survived
 	allVotes := k2.GetAllVotes(ctx2)
@@ -1323,7 +1325,7 @@ func TestGenesisRoundtrip_Disbursement(t *testing.T) {
 
 	gs := k.ExportGenesis(ctx)
 	k2, ctx2 := setupKeeper(t)
-	k2.InitGenesis(ctx2, *gs)
+	k2.InitGenesis(ctx2, gs)
 
 	disb, found := k2.GetDisbursement(ctx2, "DISB-1")
 	if !found {
@@ -1366,7 +1368,7 @@ func TestGenesisRoundtrip_Counters(t *testing.T) {
 
 	gs := k.ExportGenesis(ctx)
 	k2, ctx2 := setupKeeper(t)
-	k2.InitGenesis(ctx2, *gs)
+	k2.InitGenesis(ctx2, gs)
 
 	if k2.GetNextLIPNumber(ctx2) != 6 {
 		t.Errorf("LIP counter: got %d, want 6", k2.GetNextLIPNumber(ctx2))
@@ -1396,11 +1398,11 @@ func TestGenesisRoundtrip_Params(t *testing.T) {
 		LipStakeInterface:          "200000000",
 		LipStakeProcess:            "100000000",
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 
 	gs := k.ExportGenesis(ctx)
 	k2, ctx2 := setupKeeper(t)
-	k2.InitGenesis(ctx2, *gs)
+	k2.InitGenesis(ctx2, gs)
 
 	got := k2.GetParams(ctx2)
 	if got.VotingPeriodBlocks != 7777 {

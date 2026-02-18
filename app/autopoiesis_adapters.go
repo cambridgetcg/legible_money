@@ -54,7 +54,7 @@ func (a *AutopoiesisKnowledgeAdapter) GetActiveFactCount(ctx context.Context) ui
 func (a *AutopoiesisKnowledgeAdapter) GetFactsCreatedInRange(ctx context.Context, startHeight, endHeight uint64) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var count uint64
-	a.keeper.IterateFacts(sdkCtx, func(f knowledgetypes.Fact) bool {
+	a.keeper.IterateFacts(sdkCtx, func(f *knowledgetypes.Fact) bool {
 		if f.CreatedAtHeight >= startHeight && f.CreatedAtHeight <= endHeight {
 			count++
 		}
@@ -76,7 +76,7 @@ func (a *AutopoiesisKnowledgeAdapter) GetChallengeSuccessRate(_ context.Context)
 func (a *AutopoiesisKnowledgeAdapter) GetActiveDomains(ctx context.Context) []string {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var domains []string
-	a.keeper.IterateDomains(sdkCtx, func(d knowledgetypes.OntologicalDomain) bool {
+	a.keeper.IterateDomains(sdkCtx, func(d *knowledgetypes.OntologicalDomain) bool {
 		domains = append(domains, d.Name)
 		return false
 	})

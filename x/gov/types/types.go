@@ -72,7 +72,7 @@ const (
 // --- Params Validation ---
 
 // Validate performs basic param validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.VotingPeriodBlocks == 0 {
 		return fmt.Errorf("voting_period_blocks must be > 0")
 	}
@@ -89,7 +89,7 @@ func (p Params) Validate() error {
 }
 
 // GetLIPStake returns the required stake for a LIP category.
-func (p Params) GetLIPStake(category LIPCategory) string {
+func (p *Params) GetLIPStake(category LIPCategory) string {
 	switch category {
 	case CategoryConsensus:
 		return p.LipStakeConsensus
@@ -290,31 +290,31 @@ func (msg *MsgCancelDisbursement) GetSigners() []sdk.AccAddress {
 
 // MsgUpdateParams updates governance module params (authority only).
 type MsgUpdateParams struct {
-	Authority string `json:"authority"`
-	Params    Params `json:"params"`
+	Authority string  `json:"authority"`
+	Params    *Params `json:"params"`
 }
 
 type MsgUpdateParamsResponse struct{}
 
-func (msg MsgUpdateParams) GetSigners() []sdk.AccAddress {
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }
 
-func (msg MsgUpdateParams) ValidateBasic() error {
+func (msg *MsgUpdateParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
 	return msg.Params.Validate()
 }
 
-func (msg MsgUpdateParams) Reset()         {}
-func (msg MsgUpdateParams) String() string { return "MsgUpdateParams{}" }
-func (msg MsgUpdateParams) ProtoMessage()  {}
+func (msg *MsgUpdateParams) Reset()         {}
+func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams{}" }
+func (msg *MsgUpdateParams) ProtoMessage()  {}
 
-func (msg MsgUpdateParamsResponse) Reset()         {}
-func (msg MsgUpdateParamsResponse) String() string { return "MsgUpdateParamsResponse{}" }
-func (msg MsgUpdateParamsResponse) ProtoMessage()  {}
+func (msg *MsgUpdateParamsResponse) Reset()         {}
+func (msg *MsgUpdateParamsResponse) String() string { return "MsgUpdateParamsResponse{}" }
+func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
 
 // --- MsgAttachUpgradePlan is NOT in proto; keep hand-written ---
 
@@ -362,5 +362,5 @@ func (msg MsgAttachUpgradePlanResponse) ProtoMessage()  {}
 
 // --- Interface assertions ---
 
-var _ sdk.Msg = (*MsgUpdateParams)(nil)
+var _ sdk.Msg = &MsgUpdateParams{}
 var _ sdk.Msg = (*MsgAttachUpgradePlan)(nil)

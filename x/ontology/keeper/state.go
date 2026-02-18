@@ -14,9 +14,9 @@ import (
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -26,26 +26,28 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
-	return params
+	return &params
 }
 
 // ---------- Stratum Operations ----------
 
 // SetStratum stores stratum properties.
-func (k Keeper) SetStratum(ctx sdk.Context, props types.StratumProperties) {
+func (k Keeper) SetStratum(ctx sdk.Context, props *types.StratumProperties) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := stratumKey(types.Stratum(props.Stratum))
-	bz, err := proto.Marshal(&props)
+	bz, err := proto.Marshal(props)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal stratum: %v", err))
 	}
@@ -55,22 +57,22 @@ func (k Keeper) SetStratum(ctx sdk.Context, props types.StratumProperties) {
 }
 
 // GetStratum retrieves stratum properties by level.
-func (k Keeper) GetStratum(ctx sdk.Context, stratum types.Stratum) (types.StratumProperties, bool) {
+func (k Keeper) GetStratum(ctx sdk.Context, stratum types.Stratum) (*types.StratumProperties, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := stratumKey(stratum)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.StratumProperties{}, false
+		return nil, false
 	}
 	var props types.StratumProperties
 	if err := proto.Unmarshal(bz, &props); err != nil {
-		return types.StratumProperties{}, false
+		return nil, false
 	}
-	return props, true
+	return &props, true
 }
 
 // GetAllStrata returns all registered strata, sorted by stratum level.
-func (k Keeper) GetAllStrata(ctx sdk.Context) []types.StratumProperties {
+func (k Keeper) GetAllStrata(ctx sdk.Context) []*types.StratumProperties {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.StratumKeyPrefix, prefixEndBytes(types.StratumKeyPrefix))
 	if err != nil {
@@ -78,13 +80,13 @@ func (k Keeper) GetAllStrata(ctx sdk.Context) []types.StratumProperties {
 	}
 	defer iter.Close()
 
-	var strata []types.StratumProperties
+	var strata []*types.StratumProperties
 	for ; iter.Valid(); iter.Next() {
 		var props types.StratumProperties
 		if err := proto.Unmarshal(iter.Value(), &props); err != nil {
 			continue
 		}
-		strata = append(strata, props)
+		strata = append(strata, &props)
 	}
 	return strata
 }
@@ -92,10 +94,10 @@ func (k Keeper) GetAllStrata(ctx sdk.Context) []types.StratumProperties {
 // ---------- Domain Operations ----------
 
 // SetDomain stores a domain.
-func (k Keeper) SetDomain(ctx sdk.Context, domain types.Domain) {
+func (k Keeper) SetDomain(ctx sdk.Context, domain *types.Domain) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := domainKey(domain.Name)
-	bz, err := proto.Marshal(&domain)
+	bz, err := proto.Marshal(domain)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal domain: %v", err))
 	}
@@ -111,22 +113,22 @@ func (k Keeper) SetDomain(ctx sdk.Context, domain types.Domain) {
 }
 
 // GetDomain retrieves a domain by name.
-func (k Keeper) GetDomain(ctx sdk.Context, name string) (types.Domain, bool) {
+func (k Keeper) GetDomain(ctx sdk.Context, name string) (*types.Domain, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := domainKey(name)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.Domain{}, false
+		return nil, false
 	}
 	var domain types.Domain
 	if err := proto.Unmarshal(bz, &domain); err != nil {
-		return types.Domain{}, false
+		return nil, false
 	}
-	return domain, true
+	return &domain, true
 }
 
 // GetDomainsByStratum returns all domains belonging to a specific stratum.
-func (k Keeper) GetDomainsByStratum(ctx sdk.Context, stratum types.Stratum) []types.Domain {
+func (k Keeper) GetDomainsByStratum(ctx sdk.Context, stratum types.Stratum) []*types.Domain {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := domainByStratumPrefix(stratum)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -135,7 +137,7 @@ func (k Keeper) GetDomainsByStratum(ctx sdk.Context, stratum types.Stratum) []ty
 	}
 	defer iter.Close()
 
-	var domains []types.Domain
+	var domains []*types.Domain
 	for ; iter.Valid(); iter.Next() {
 		domainName := string(iter.Value())
 		domain, found := k.GetDomain(ctx, domainName)
@@ -147,7 +149,7 @@ func (k Keeper) GetDomainsByStratum(ctx sdk.Context, stratum types.Stratum) []ty
 }
 
 // GetAllDomains returns all registered domains.
-func (k Keeper) GetAllDomains(ctx sdk.Context) []types.Domain {
+func (k Keeper) GetAllDomains(ctx sdk.Context) []*types.Domain {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.DomainKeyPrefix, prefixEndBytes(types.DomainKeyPrefix))
 	if err != nil {
@@ -155,13 +157,13 @@ func (k Keeper) GetAllDomains(ctx sdk.Context) []types.Domain {
 	}
 	defer iter.Close()
 
-	var domains []types.Domain
+	var domains []*types.Domain
 	for ; iter.Valid(); iter.Next() {
 		var domain types.Domain
 		if err := proto.Unmarshal(iter.Value(), &domain); err != nil {
 			continue
 		}
-		domains = append(domains, domain)
+		domains = append(domains, &domain)
 	}
 	return domains
 }
@@ -180,10 +182,10 @@ func (k Keeper) DeleteDomain(ctx sdk.Context, name string) {
 // ---------- Proposal Operations ----------
 
 // SetProposal stores a domain proposal.
-func (k Keeper) SetProposal(ctx sdk.Context, proposal types.DomainProposal) {
+func (k Keeper) SetProposal(ctx sdk.Context, proposal *types.DomainProposal) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := proposalKey(proposal.Id)
-	bz, err := proto.Marshal(&proposal)
+	bz, err := proto.Marshal(proposal)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal proposal: %v", err))
 	}
@@ -193,18 +195,18 @@ func (k Keeper) SetProposal(ctx sdk.Context, proposal types.DomainProposal) {
 }
 
 // GetProposal retrieves a proposal by ID.
-func (k Keeper) GetProposal(ctx sdk.Context, id string) (types.DomainProposal, bool) {
+func (k Keeper) GetProposal(ctx sdk.Context, id string) (*types.DomainProposal, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := proposalKey(id)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.DomainProposal{}, false
+		return nil, false
 	}
 	var proposal types.DomainProposal
 	if err := proto.Unmarshal(bz, &proposal); err != nil {
-		return types.DomainProposal{}, false
+		return nil, false
 	}
-	return proposal, true
+	return &proposal, true
 }
 
 // DeleteProposal removes a proposal from the store.
@@ -214,7 +216,7 @@ func (k Keeper) DeleteProposal(ctx sdk.Context, id string) {
 }
 
 // IterateProposals iterates over all proposals. Return true from cb to stop.
-func (k Keeper) IterateProposals(ctx sdk.Context, cb func(types.DomainProposal) bool) {
+func (k Keeper) IterateProposals(ctx sdk.Context, cb func(*types.DomainProposal) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ProposalKeyPrefix, prefixEndBytes(types.ProposalKeyPrefix))
 	if err != nil {
@@ -227,7 +229,7 @@ func (k Keeper) IterateProposals(ctx sdk.Context, cb func(types.DomainProposal) 
 		if err := proto.Unmarshal(iter.Value(), &proposal); err != nil {
 			continue
 		}
-		if cb(proposal) {
+		if cb(&proposal) {
 			break
 		}
 	}
@@ -236,10 +238,10 @@ func (k Keeper) IterateProposals(ctx sdk.Context, cb func(types.DomainProposal) 
 // ---------- Cross-Stratum Link Operations ----------
 
 // SetLink stores a cross-stratum link.
-func (k Keeper) SetLink(ctx sdk.Context, link types.CrossStratumLink) {
+func (k Keeper) SetLink(ctx sdk.Context, link *types.CrossStratumLink) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := linkKey(link.SourceDomain, link.TargetDomain)
-	bz, err := proto.Marshal(&link)
+	bz, err := proto.Marshal(link)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal link: %v", err))
 	}
@@ -249,22 +251,22 @@ func (k Keeper) SetLink(ctx sdk.Context, link types.CrossStratumLink) {
 }
 
 // GetLink retrieves a cross-stratum link.
-func (k Keeper) GetLink(ctx sdk.Context, source, target string) (types.CrossStratumLink, bool) {
+func (k Keeper) GetLink(ctx sdk.Context, source, target string) (*types.CrossStratumLink, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := linkKey(source, target)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.CrossStratumLink{}, false
+		return nil, false
 	}
 	var link types.CrossStratumLink
 	if err := proto.Unmarshal(bz, &link); err != nil {
-		return types.CrossStratumLink{}, false
+		return nil, false
 	}
-	return link, true
+	return &link, true
 }
 
 // GetAllLinks returns all cross-stratum links.
-func (k Keeper) GetAllLinks(ctx sdk.Context) []types.CrossStratumLink {
+func (k Keeper) GetAllLinks(ctx sdk.Context) []*types.CrossStratumLink {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.LinkKeyPrefix, prefixEndBytes(types.LinkKeyPrefix))
 	if err != nil {
@@ -272,13 +274,13 @@ func (k Keeper) GetAllLinks(ctx sdk.Context) []types.CrossStratumLink {
 	}
 	defer iter.Close()
 
-	var links []types.CrossStratumLink
+	var links []*types.CrossStratumLink
 	for ; iter.Valid(); iter.Next() {
 		var link types.CrossStratumLink
 		if err := proto.Unmarshal(iter.Value(), &link); err != nil {
 			continue
 		}
-		links = append(links, link)
+		links = append(links, &link)
 	}
 	return links
 }
@@ -286,7 +288,7 @@ func (k Keeper) GetAllLinks(ctx sdk.Context) []types.CrossStratumLink {
 // ---------- Logic Zone Operations ----------
 
 // SetLogicZone stores logic zone properties.
-func (k Keeper) SetLogicZone(ctx sdk.Context, props types.LogicZoneProperties) {
+func (k Keeper) SetLogicZone(ctx sdk.Context, props *types.LogicZoneProperties) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := logicZoneKey(types.LogicZone(props.Zone))
 	bz, err := json.Marshal(props)
@@ -299,22 +301,22 @@ func (k Keeper) SetLogicZone(ctx sdk.Context, props types.LogicZoneProperties) {
 }
 
 // GetLogicZone retrieves logic zone properties by zone name.
-func (k Keeper) GetLogicZone(ctx sdk.Context, zone types.LogicZone) (types.LogicZoneProperties, bool) {
+func (k Keeper) GetLogicZone(ctx sdk.Context, zone types.LogicZone) (*types.LogicZoneProperties, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := logicZoneKey(zone)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.LogicZoneProperties{}, false
+		return nil, false
 	}
 	var props types.LogicZoneProperties
 	if err := json.Unmarshal(bz, &props); err != nil {
-		return types.LogicZoneProperties{}, false
+		return nil, false
 	}
-	return props, true
+	return &props, true
 }
 
 // GetAllLogicZones returns all registered logic zones.
-func (k Keeper) GetAllLogicZones(ctx sdk.Context) []types.LogicZoneProperties {
+func (k Keeper) GetAllLogicZones(ctx sdk.Context) []*types.LogicZoneProperties {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.LogicZoneKeyPrefix, prefixEndBytes(types.LogicZoneKeyPrefix))
 	if err != nil {
@@ -322,13 +324,13 @@ func (k Keeper) GetAllLogicZones(ctx sdk.Context) []types.LogicZoneProperties {
 	}
 	defer iter.Close()
 
-	var zones []types.LogicZoneProperties
+	var zones []*types.LogicZoneProperties
 	for ; iter.Valid(); iter.Next() {
 		var props types.LogicZoneProperties
 		if err := json.Unmarshal(iter.Value(), &props); err != nil {
 			continue
 		}
-		zones = append(zones, props)
+		zones = append(zones, &props)
 	}
 	return zones
 }

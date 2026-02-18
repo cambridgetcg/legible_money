@@ -22,7 +22,7 @@ const (
 // Reuses the formula from x/knowledge/keeper/confidence.go:computeEvidenceBonus.
 //
 // Stage 2 of the evaluation pipeline.
-func evaluateEvidence(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateEvidence(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "evidence_quality",
 	}

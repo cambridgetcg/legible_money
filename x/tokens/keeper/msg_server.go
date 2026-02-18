@@ -792,7 +792,7 @@ func (s *msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		if err := msg.Params.Validate(); err != nil {
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
-		s.SetParams(ctx, *msg.Params)
+		s.SetParams(ctx, msg.Params)
 	}
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(

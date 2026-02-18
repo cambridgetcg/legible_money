@@ -88,7 +88,7 @@ const (
 const TierSeed PartnershipTier = 255
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.FormationWindowBlocks == 0 {
 		return fmt.Errorf("formation_window_blocks must be positive")
 	}

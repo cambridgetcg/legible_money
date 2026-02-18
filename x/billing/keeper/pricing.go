@@ -119,13 +119,13 @@ func (k Keeper) CalculateQueryPrice(ctx sdk.Context, factIds []string, currentBl
 }
 
 // GenerateQuote creates an APIQuote with pricing breakdown.
-func (k Keeper) GenerateQuote(ctx sdk.Context, provider string, caller string, factIds []string, currentBlock uint64) types.APIQuote {
+func (k Keeper) GenerateQuote(ctx sdk.Context, provider string, caller string, factIds []string, currentBlock uint64) *types.APIQuote {
 	params := k.GetParams(ctx)
 	totalPrice, breakdown := k.CalculateQueryPrice(ctx, factIds, currentBlock)
 
 	quoteId := k.GetNextQuoteId(ctx)
 
-	quote := types.APIQuote{
+	quote := &types.APIQuote{
 		QuoteId:    quoteId,
 		Provider:   provider,
 		Caller:     caller,

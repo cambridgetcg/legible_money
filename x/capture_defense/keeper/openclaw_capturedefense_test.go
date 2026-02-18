@@ -34,7 +34,7 @@ func TestOC_CD1_ExpiredQualificationCheck(t *testing.T) {
 	domain := "quantum_mechanics"
 
 	// Create qualification that expires at block 100 (current block is 100)
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Pathway:             string(types.PathwayTrackRecord),
@@ -133,7 +133,7 @@ func TestOC_CD2_MinAccuracyThreshold(t *testing.T) {
 		CreatedAtBlock:   10,
 		LastUpdatedBlock: 90,
 	}
-	k.SetIsolatedReputation(ctx, rep)
+	k.SetIsolatedReputation(ctx, &rep)
 
 	// ATTACK: attempt track_record qualification with below-threshold accuracy
 	_, err := k.ProcessQualificationRequest(
@@ -177,7 +177,7 @@ func TestOC_CD2_MinAccuracyThreshold(t *testing.T) {
 		CreatedAtBlock:   10,
 		LastUpdatedBlock: 90,
 	}
-	k.SetIsolatedReputation(ctx, repAtThreshold)
+	k.SetIsolatedReputation(ctx, &repAtThreshold)
 
 	qual, err := k.ProcessQualificationRequest(
 		ctx, validatorAddr, domain,
@@ -248,7 +248,7 @@ func TestOC_CD3_DuplicateQualification(t *testing.T) {
 	// ATTACK 2: Duplicate via different pathway (cross_reference)
 	endorser1, endorser2, endorser3 := testAddr("e1_dup"), testAddr("e2_dup"), testAddr("e3_dup")
 	for _, e := range []string{endorser1, endorser2, endorser3} {
-		k.SetQualification(ctx, types.DomainQualification{
+		k.SetQualification(ctx, &types.DomainQualification{
 			ValidatorAddr: e,
 			Domain:        domain,
 			Pathway:       string(types.PathwayStakeCommitment),
@@ -321,7 +321,7 @@ func TestOC_CD4_SelfEndorsement(t *testing.T) {
 	endorser2 := testAddr("legit_e2")
 
 	for _, e := range []string{endorser1, endorser2} {
-		k.SetQualification(ctx, types.DomainQualification{
+		k.SetQualification(ctx, &types.DomainQualification{
 			ValidatorAddr: e,
 			Domain:        domain,
 			Pathway:       string(types.PathwayStakeCommitment),
@@ -331,7 +331,7 @@ func TestOC_CD4_SelfEndorsement(t *testing.T) {
 
 	// Also give the validator themselves a qualification so self-endorsement
 	// would "look" valid if the self-check were missing
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: validatorAddr,
 		Domain:        "other_domain", // Different domain so no ErrAlreadyQualified
 		Pathway:       string(types.PathwayStakeCommitment),
@@ -361,7 +361,7 @@ func TestOC_CD4_SelfEndorsement(t *testing.T) {
 
 	// Verify: with 3 legitimate (non-self) endorsers, it should succeed
 	endorser3 := testAddr("legit_e3")
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: endorser3,
 		Domain:        domain,
 		Pathway:       string(types.PathwayStakeCommitment),

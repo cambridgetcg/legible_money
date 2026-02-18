@@ -138,8 +138,8 @@ func IsTierEligibleForCategory(
 func GetEffectiveSelectionStake(
 	ctx sdk.Context,
 	k Keeper,
-	validator types.LegibleValidator,
-	params types.Params,
+	validator *types.LegibleValidator,
+	params *types.Params,
 ) string {
 	// R3: Minimum real stake check for VRF eligibility
 	minStake := params.GetMinStakeForVerification()
@@ -219,7 +219,7 @@ func CalculateTierSlash(
 func CheckTierUpgrade(
 	ctx sdk.Context,
 	k Keeper,
-	validator types.LegibleValidator,
+	validator *types.LegibleValidator,
 ) (types.ValidatorTier, bool) {
 	currentTier := types.ValidatorTierFromString(validator.Tier)
 	potentialTier := ComputeValidatorTier(
@@ -244,7 +244,7 @@ func CheckTierUpgrade(
 func CheckTierDowngrade(
 	ctx sdk.Context,
 	k Keeper,
-	validator types.LegibleValidator,
+	validator *types.LegibleValidator,
 ) (types.ValidatorTier, bool) {
 	currentTier := types.ValidatorTierFromString(validator.Tier)
 	potentialTier := ComputeValidatorTier(
@@ -266,11 +266,11 @@ func CheckTierDowngrade(
 }
 
 // GetTierRequirements returns the requirements for a specific tier (for UI/CLI)
-func GetTierRequirements(ctx sdk.Context, k Keeper, tier types.ValidatorTier) types.TierConfig {
+func GetTierRequirements(ctx sdk.Context, k Keeper, tier types.ValidatorTier) *types.TierConfig {
 	config, found := k.GetTierConfig(ctx, tier)
 	if !found {
 		// Return empty config if not found
-		return types.TierConfig{Tier: types.ValidatorTierString(tier)}
+		return &types.TierConfig{Tier: types.ValidatorTierString(tier)}
 	}
 	return config
 }
@@ -281,7 +281,7 @@ func ValidateTransition(
 	k Keeper,
 	fromTier types.ValidatorTier,
 	toTier types.ValidatorTier,
-	validator types.LegibleValidator,
+	validator *types.LegibleValidator,
 ) error {
 	// Can't skip tiers on upgrade (must be sequential)
 	if toTier > fromTier && toTier-fromTier > 1 {

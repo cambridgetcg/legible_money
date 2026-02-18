@@ -39,7 +39,7 @@ func (k msgServer) CreateSchedule(goCtx context.Context, msg *types.MsgCreateSch
 	if msg.Condition == nil {
 		return nil, types.ErrInvalidCondition
 	}
-	if err := validateCondition(*msg.Condition, currentHeight, params); err != nil {
+	if err := validateCondition(msg.Condition, currentHeight, params); err != nil {
 		return nil, err
 	}
 
@@ -76,9 +76,9 @@ func (k msgServer) CreateSchedule(goCtx context.Context, msg *types.MsgCreateSch
 	processId := fmt.Sprintf("sched-%d", seq)
 
 	// Calculate next execution block
-	nextExecAt := calculateNextExecuteAt(*msg.Condition, currentHeight)
+	nextExecAt := calculateNextExecuteAt(msg.Condition, currentHeight)
 
-	process := types.ScheduleProcess{
+	process := &types.ScheduleProcess{
 		Id:               processId,
 		Creator:          msg.Creator,
 		Condition:        msg.Condition,
@@ -168,7 +168,7 @@ func (k msgServer) ResumeSchedule(goCtx context.Context, msg *types.MsgResumeSch
 	// Recalculate next execution from current height
 	currentHeight := uint64(ctx.BlockHeight())
 	if process.Condition != nil {
-		process.NextExecuteAt = calculateNextExecuteAt(*process.Condition, currentHeight)
+		process.NextExecuteAt = calculateNextExecuteAt(process.Condition, currentHeight)
 	}
 
 	k.SetProcess(ctx, process)
@@ -275,7 +275,7 @@ func (k msgServer) AddFee(goCtx context.Context, msg *types.MsgAddFee) (*types.M
 		process.Status = types.StatusActive
 		currentHeight := uint64(ctx.BlockHeight())
 		if process.Condition != nil {
-			process.NextExecuteAt = calculateNextExecuteAt(*process.Condition, currentHeight)
+			process.NextExecuteAt = calculateNextExecuteAt(process.Condition, currentHeight)
 		}
 	}
 
@@ -295,7 +295,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	if msg.Params == nil {
 		return nil, fmt.Errorf("params cannot be nil")
 	}
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }
@@ -303,7 +303,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 // ---------- Helpers ----------
 
 // validateCondition validates a schedule condition against module params.
-func validateCondition(cond types.ScheduleCondition, currentHeight uint64, params types.Params) error {
+func validateCondition(cond *types.ScheduleCondition, currentHeight uint64, params *types.Params) error {
 	if cond.TimeCondition == nil && cond.LogicCondition == nil && cond.CompoundCondition == nil {
 		return types.ErrInvalidCondition
 	}
@@ -341,7 +341,7 @@ func validateCondition(cond types.ScheduleCondition, currentHeight uint64, param
 }
 
 // calculateNextExecuteAt determines the next block height for execution.
-func calculateNextExecuteAt(cond types.ScheduleCondition, currentHeight uint64) uint64 {
+func calculateNextExecuteAt(cond *types.ScheduleCondition, currentHeight uint64) uint64 {
 	if cond.TimeCondition != nil {
 		tc := cond.TimeCondition
 		switch tc.Type {

@@ -30,13 +30,13 @@ func TestGuardian_DeadmanAction_AlertGuardians(t *testing.T) {
 		CreatedAtBlock:  10,
 		LastActiveBlock: 50, // gap = 50 > 30 threshold at block 100
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	k.CheckDeadmanSwitches(ctx)
 
 	// Verify alert was created with correct type and priority
 	var alertFound bool
-	k.IterateAlerts(ctx, "home-alert-action", func(alert types.Alert) bool {
+	k.IterateAlerts(ctx, "home-alert-action", func(alert *types.Alert) bool {
 		if alert.Type == string(types.AlertDeadmanTriggered) {
 			alertFound = true
 			if alert.Priority != string(types.AlertPriorityCritical) {
@@ -87,13 +87,13 @@ func TestGuardian_DeadmanAction_TransferToBeneficiary(t *testing.T) {
 		CreatedAtBlock:  10,
 		LastActiveBlock: 50, // gap = 50 > 20
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	k.CheckDeadmanSwitches(ctx)
 
 	// Alert should still be created regardless of action type
 	var alertCount int
-	k.IterateAlerts(ctx, "home-transfer-action", func(alert types.Alert) bool {
+	k.IterateAlerts(ctx, "home-transfer-action", func(alert *types.Alert) bool {
 		if alert.Type == string(types.AlertDeadmanTriggered) {
 			alertCount++
 			if alert.Priority != string(types.AlertPriorityCritical) {
@@ -343,7 +343,7 @@ func TestHome_FullLifecycle_Integration(t *testing.T) {
 
 	// Verify deadman alert was created
 	var deadmanAlerts int
-	k.IterateAlerts(deadmanCtx, homeResp.HomeId, func(alert types.Alert) bool {
+	k.IterateAlerts(deadmanCtx, homeResp.HomeId, func(alert *types.Alert) bool {
 		if alert.Type == string(types.AlertDeadmanTriggered) {
 			deadmanAlerts++
 		}

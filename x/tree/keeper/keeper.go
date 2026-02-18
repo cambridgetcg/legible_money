@@ -75,26 +75,26 @@ func (k Keeper) GetAuthority() string {
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 	if gs.Params != nil {
-		k.SetParams(ctx, *gs.Params)
+		k.SetParams(ctx, gs.Params)
 	}
 	for _, p := range gs.Projects {
 		if p != nil {
-			k.SetProject(ctx, *p)
+			k.SetProject(ctx, p)
 		}
 	}
 	for _, t := range gs.Tasks {
 		if t != nil {
-			k.SetTask(ctx, *t)
+			k.SetTask(ctx, t)
 		}
 	}
 	for _, s := range gs.Services {
 		if s != nil {
-			k.SetService(ctx, *s)
+			k.SetService(ctx, s)
 		}
 	}
 	for _, s := range gs.Seeds {
 		if s != nil {
-			k.SetSeed(ctx, *s)
+			k.SetSeed(ctx, s)
 		}
 	}
 }
@@ -103,31 +103,27 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	gs := &types.GenesisState{
-		Params:   &params,
+		Params:   params,
 		Projects: []*types.ProductProject{},
 		Tasks:    []*types.ProjectTask{},
 		Services: []*types.ServiceLeaf{},
 		Seeds:    []*types.OpportunitySeed{},
 	}
 
-	k.IterateProjects(ctx, func(p types.ProductProject) bool {
-		project := p
-		gs.Projects = append(gs.Projects, &project)
+	k.IterateProjects(ctx, func(p *types.ProductProject) bool {
+		gs.Projects = append(gs.Projects, p)
 		return false
 	})
-	k.IterateTasks(ctx, func(t types.ProjectTask) bool {
-		task := t
-		gs.Tasks = append(gs.Tasks, &task)
+	k.IterateTasks(ctx, func(t *types.ProjectTask) bool {
+		gs.Tasks = append(gs.Tasks, t)
 		return false
 	})
-	k.IterateServices(ctx, func(s types.ServiceLeaf) bool {
-		service := s
-		gs.Services = append(gs.Services, &service)
+	k.IterateServices(ctx, func(s *types.ServiceLeaf) bool {
+		gs.Services = append(gs.Services, s)
 		return false
 	})
-	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
-		seed := s
-		gs.Seeds = append(gs.Seeds, &seed)
+	k.IterateSeeds(ctx, func(s *types.OpportunitySeed) bool {
+		gs.Seeds = append(gs.Seeds, s)
 		return false
 	})
 

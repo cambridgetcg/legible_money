@@ -13,9 +13,9 @@ import (
 // --- Channel CRUD ---
 
 // SetChannel stores a payment channel and updates indexes.
-func (k Keeper) SetChannel(ctx sdk.Context, ch types.PaymentChannel) {
+func (k Keeper) SetChannel(ctx sdk.Context, ch *types.PaymentChannel) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&ch)
+	bz, err := proto.Marshal(ch)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal payment channel: %v", err))
 	}
@@ -33,21 +33,21 @@ func (k Keeper) SetChannel(ctx sdk.Context, ch types.PaymentChannel) {
 }
 
 // GetChannel retrieves a payment channel by ID.
-func (k Keeper) GetChannel(ctx sdk.Context, channelId string) (types.PaymentChannel, bool) {
+func (k Keeper) GetChannel(ctx sdk.Context, channelId string) (*types.PaymentChannel, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ChannelKey(channelId))
 	if err != nil || bz == nil {
-		return types.PaymentChannel{}, false
+		return nil, false
 	}
 	var ch types.PaymentChannel
 	if err := proto.Unmarshal(bz, &ch); err != nil {
-		return types.PaymentChannel{}, false
+		return nil, false
 	}
-	return ch, true
+	return &ch, true
 }
 
 // DeleteChannel removes a payment channel and its indexes.
-func (k Keeper) DeleteChannel(ctx sdk.Context, ch types.PaymentChannel) {
+func (k Keeper) DeleteChannel(ctx sdk.Context, ch *types.PaymentChannel) {
 	store := k.storeService.OpenKVStore(ctx)
 	_ = store.Delete(types.ChannelKey(ch.ChannelId))
 	_ = store.Delete(types.PayerChannelKey(ch.Payer, ch.ChannelId))
@@ -55,7 +55,7 @@ func (k Keeper) DeleteChannel(ctx sdk.Context, ch types.PaymentChannel) {
 }
 
 // IterateChannels iterates over all channels. Return true from cb to stop.
-func (k Keeper) IterateChannels(ctx sdk.Context, cb func(types.PaymentChannel) bool) {
+func (k Keeper) IterateChannels(ctx sdk.Context, cb func(*types.PaymentChannel) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ChannelKeyPrefix, prefixEndBytes(types.ChannelKeyPrefix))
 	if err != nil {
@@ -68,14 +68,14 @@ func (k Keeper) IterateChannels(ctx sdk.Context, cb func(types.PaymentChannel) b
 		if err := proto.Unmarshal(iter.Value(), &ch); err != nil {
 			continue
 		}
-		if cb(ch) {
+		if cb(&ch) {
 			break
 		}
 	}
 }
 
 // GetChannelsByPayer returns all channels for a payer via index.
-func (k Keeper) GetChannelsByPayer(ctx sdk.Context, payer string) []types.PaymentChannel {
+func (k Keeper) GetChannelsByPayer(ctx sdk.Context, payer string) []*types.PaymentChannel {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.PayerChannelPrefix(payer)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -84,7 +84,7 @@ func (k Keeper) GetChannelsByPayer(ctx sdk.Context, payer string) []types.Paymen
 	}
 	defer iter.Close()
 
-	var channels []types.PaymentChannel
+	var channels []*types.PaymentChannel
 	for ; iter.Valid(); iter.Next() {
 		channelId := string(iter.Value())
 		ch, found := k.GetChannel(ctx, channelId)
@@ -96,7 +96,7 @@ func (k Keeper) GetChannelsByPayer(ctx sdk.Context, payer string) []types.Paymen
 }
 
 // GetChannelsByProvider returns all channels for a provider via index.
-func (k Keeper) GetChannelsByProvider(ctx sdk.Context, provider string) []types.PaymentChannel {
+func (k Keeper) GetChannelsByProvider(ctx sdk.Context, provider string) []*types.PaymentChannel {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.ProviderChannelPrefix(provider)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -105,7 +105,7 @@ func (k Keeper) GetChannelsByProvider(ctx sdk.Context, provider string) []types.
 	}
 	defer iter.Close()
 
-	var channels []types.PaymentChannel
+	var channels []*types.PaymentChannel
 	for ; iter.Valid(); iter.Next() {
 		channelId := string(iter.Value())
 		ch, found := k.GetChannel(ctx, channelId)
@@ -129,9 +129,9 @@ func (k Keeper) GetOpenChannelCountForPayer(ctx sdk.Context, payer string) uint6
 }
 
 // GetChannelsByStatus returns all channels with a given status string.
-func (k Keeper) GetChannelsByStatus(ctx sdk.Context, status string) []types.PaymentChannel {
-	var channels []types.PaymentChannel
-	k.IterateChannels(ctx, func(ch types.PaymentChannel) bool {
+func (k Keeper) GetChannelsByStatus(ctx sdk.Context, status string) []*types.PaymentChannel {
+	var channels []*types.PaymentChannel
+	k.IterateChannels(ctx, func(ch *types.PaymentChannel) bool {
 		if ch.Status == status {
 			channels = append(channels, ch)
 		}
@@ -143,9 +143,9 @@ func (k Keeper) GetChannelsByStatus(ctx sdk.Context, status string) []types.Paym
 // --- Dispute CRUD ---
 
 // SetDispute stores a channel dispute.
-func (k Keeper) SetDispute(ctx sdk.Context, d types.ChannelDispute) {
+func (k Keeper) SetDispute(ctx sdk.Context, d *types.ChannelDispute) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&d)
+	bz, err := proto.Marshal(d)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal channel dispute: %v", err))
 	}
@@ -155,17 +155,17 @@ func (k Keeper) SetDispute(ctx sdk.Context, d types.ChannelDispute) {
 }
 
 // GetDispute retrieves a dispute by channel ID.
-func (k Keeper) GetDispute(ctx sdk.Context, channelId string) (types.ChannelDispute, bool) {
+func (k Keeper) GetDispute(ctx sdk.Context, channelId string) (*types.ChannelDispute, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.DisputeKey(channelId))
 	if err != nil || bz == nil {
-		return types.ChannelDispute{}, false
+		return nil, false
 	}
 	var d types.ChannelDispute
 	if err := proto.Unmarshal(bz, &d); err != nil {
-		return types.ChannelDispute{}, false
+		return nil, false
 	}
-	return d, true
+	return &d, true
 }
 
 // DeleteDispute removes a dispute.
@@ -175,7 +175,7 @@ func (k Keeper) DeleteDispute(ctx sdk.Context, channelId string) {
 }
 
 // IterateDisputes iterates over all disputes. Return true from cb to stop.
-func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(types.ChannelDispute) bool) {
+func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(*types.ChannelDispute) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.DisputeKeyPrefix, prefixEndBytes(types.DisputeKeyPrefix))
 	if err != nil {
@@ -188,16 +188,16 @@ func (k Keeper) IterateDisputes(ctx sdk.Context, cb func(types.ChannelDispute) b
 		if err := proto.Unmarshal(iter.Value(), &d); err != nil {
 			continue
 		}
-		if cb(d) {
+		if cb(&d) {
 			break
 		}
 	}
 }
 
 // GetExpiredDisputes returns disputes past their deadline.
-func (k Keeper) GetExpiredDisputes(ctx sdk.Context, currentBlock uint64) []types.ChannelDispute {
-	var disputes []types.ChannelDispute
-	k.IterateDisputes(ctx, func(d types.ChannelDispute) bool {
+func (k Keeper) GetExpiredDisputes(ctx sdk.Context, currentBlock uint64) []*types.ChannelDispute {
+	var disputes []*types.ChannelDispute
+	k.IterateDisputes(ctx, func(d *types.ChannelDispute) bool {
 		if !d.Resolved && d.DeadlineBlock > 0 && currentBlock > d.DeadlineBlock {
 			disputes = append(disputes, d)
 		}
@@ -209,23 +209,23 @@ func (k Keeper) GetExpiredDisputes(ctx sdk.Context, currentBlock uint64) []types
 // --- Params ---
 
 // GetParams returns the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // SetParams sets the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}

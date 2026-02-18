@@ -44,8 +44,8 @@ func sortedMapKeys[T any](m map[string]T) []string {
 //  4. Calculate rewards/slashes for each participant
 func (k Keeper) AggregateVerificationResult(
 	ctx sdk.Context,
-	round types.VerificationRound,
-) (types.VerificationResult, error) {
+	round *types.VerificationRound,
+) (*types.VerificationResult, error) {
 	params := k.GetParams(ctx)
 
 	// Resolve domain from claim for reputation weighting
@@ -110,7 +110,7 @@ func (k Keeper) AggregateVerificationResult(
 
 	if totalWeight == 0 {
 		result.Verdict = "insufficient"
-		return result, nil
+		return &result, nil
 	}
 
 	// Participation ratio: reveals / selected validators
@@ -123,7 +123,7 @@ func (k Keeper) AggregateVerificationResult(
 	if participationRatio < params.QuorumThreshold {
 		result.Verdict = "insufficient"
 		result.Confidence = 0
-		return result, nil
+		return &result, nil
 	}
 
 	result.QuorumReached = true
@@ -217,7 +217,7 @@ func (k Keeper) AggregateVerificationResult(
 	// Calculate rewards and slashes
 	k.calculateRewardsAndSlashes(ctx, round, &result, stakeMap)
 
-	return result, nil
+	return &result, nil
 }
 
 // GetEffectiveStakeForValidator returns the effective stake for a validator,
@@ -235,7 +235,7 @@ func (k Keeper) GetEffectiveStakeForValidator(ctx sdk.Context, validatorAddr str
 //   - Missed reveal (committed but didn't reveal): missed_verification slash
 func (k Keeper) calculateRewardsAndSlashes(
 	ctx sdk.Context,
-	round types.VerificationRound,
+	round *types.VerificationRound,
 	result *types.VerificationResult,
 	stakeMap map[string]uint64,
 ) {
@@ -334,7 +334,7 @@ func (k Keeper) calculateRewardsAndSlashes(
 // P0-2 fix: contested flag propagated to verification hooks for Guardian tier tracking.
 func (k Keeper) ApplyRewardsAndSlashes(
 	ctx sdk.Context,
-	result types.VerificationResult,
+	result *types.VerificationResult,
 	contested bool,
 ) error {
 	params := k.GetParams(ctx)

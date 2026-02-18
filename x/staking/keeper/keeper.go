@@ -79,9 +79,9 @@ func prefixEndBytes(prefix []byte) []byte {
 // --- Validator Operations ---
 
 // SetValidator stores a validator
-func (k Keeper) SetValidator(ctx sdk.Context, validator types.LegibleValidator) error {
+func (k Keeper) SetValidator(ctx sdk.Context, validator *types.LegibleValidator) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&validator)
+	bz, err := proto.Marshal(validator)
 	if err != nil {
 		return err
 	}
@@ -97,31 +97,31 @@ func (k Keeper) SetValidator(ctx sdk.Context, validator types.LegibleValidator) 
 }
 
 // GetValidator retrieves a validator by operator address
-func (k Keeper) GetValidator(ctx sdk.Context, operatorAddr string) (types.LegibleValidator, bool) {
+func (k Keeper) GetValidator(ctx sdk.Context, operatorAddr string) (*types.LegibleValidator, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.ValidatorKey(operatorAddr)
 
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.LegibleValidator{}, false
+		return nil, false
 	}
 
 	var validator types.LegibleValidator
 	if err := proto.Unmarshal(bz, &validator); err != nil {
-		return types.LegibleValidator{}, false
+		return nil, false
 	}
 
-	return validator, true
+	return &validator, true
 }
 
 // GetValidatorByDID retrieves a validator by DID
-func (k Keeper) GetValidatorByDID(ctx sdk.Context, did string) (types.LegibleValidator, bool) {
+func (k Keeper) GetValidatorByDID(ctx sdk.Context, did string) (*types.LegibleValidator, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	didKey := types.ValidatorByDIDKey(did)
 
 	operatorAddrBz, err := store.Get(didKey)
 	if err != nil || operatorAddrBz == nil {
-		return types.LegibleValidator{}, false
+		return nil, false
 	}
 
 	return k.GetValidator(ctx, string(operatorAddrBz))
@@ -146,7 +146,7 @@ func (k Keeper) DeleteValidator(ctx sdk.Context, operatorAddr string) error {
 }
 
 // IterateValidators iterates over all validators
-func (k Keeper) IterateValidators(ctx sdk.Context, cb func(types.LegibleValidator) bool) {
+func (k Keeper) IterateValidators(ctx sdk.Context, cb func(*types.LegibleValidator) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.ValidatorKeyPrefix, prefixEndBytes(types.ValidatorKeyPrefix))
 	if err != nil {
@@ -160,7 +160,7 @@ func (k Keeper) IterateValidators(ctx sdk.Context, cb func(types.LegibleValidato
 		if err := proto.Unmarshal(iterator.Value(), &validator); err != nil {
 			continue
 		}
-		if cb(validator) {
+		if cb(&validator) {
 			break
 		}
 	}
@@ -169,7 +169,7 @@ func (k Keeper) IterateValidators(ctx sdk.Context, cb func(types.LegibleValidato
 // GetTotalBondedStake returns the sum of TotalStake across all active validators.
 func (k Keeper) GetTotalBondedStake(ctx sdk.Context) string {
 	total := new(big.Int)
-	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+	k.IterateValidators(ctx, func(v *types.LegibleValidator) bool {
 		if v.IsActive && v.TotalStake != "" {
 			stake := new(big.Int)
 			if _, ok := stake.SetString(v.TotalStake, 10); ok {
@@ -182,9 +182,9 @@ func (k Keeper) GetTotalBondedStake(ctx sdk.Context) string {
 }
 
 // GetActiveValidatorSet returns all active validators
-func (k Keeper) GetActiveValidatorSet(ctx sdk.Context) []types.LegibleValidator {
-	var validators []types.LegibleValidator
-	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+func (k Keeper) GetActiveValidatorSet(ctx sdk.Context) []*types.LegibleValidator {
+	var validators []*types.LegibleValidator
+	k.IterateValidators(ctx, func(v *types.LegibleValidator) bool {
 		if v.IsActive {
 			validators = append(validators, v)
 		}
@@ -197,7 +197,7 @@ func (k Keeper) GetActiveValidatorSet(ctx sdk.Context) []types.LegibleValidator 
 // for CometBFT block production. MaxValidators cap applies only to these.
 func (k Keeper) CountBlockProducers(ctx sdk.Context) uint32 {
 	var count uint32
-	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+	k.IterateValidators(ctx, func(v *types.LegibleValidator) bool {
 		tier := types.ValidatorTierFromString(v.Tier)
 		if tier >= types.TierBonded {
 			count++
@@ -210,9 +210,9 @@ func (k Keeper) CountBlockProducers(ctx sdk.Context) uint32 {
 // --- Delegation Operations ---
 
 // SetDelegation stores a delegation and maintains the validator→delegator reverse index.
-func (k Keeper) SetDelegation(ctx sdk.Context, delegation types.Delegation) error {
+func (k Keeper) SetDelegation(ctx sdk.Context, delegation *types.Delegation) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&delegation)
+	bz, err := proto.Marshal(delegation)
 	if err != nil {
 		return err
 	}
@@ -228,27 +228,27 @@ func (k Keeper) SetDelegation(ctx sdk.Context, delegation types.Delegation) erro
 }
 
 // GetDelegation retrieves a delegation
-func (k Keeper) GetDelegation(ctx sdk.Context, delegatorAddr, validatorAddr string) (types.Delegation, bool) {
+func (k Keeper) GetDelegation(ctx sdk.Context, delegatorAddr, validatorAddr string) (*types.Delegation, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.DelegationKey(delegatorAddr, validatorAddr)
 
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.Delegation{}, false
+		return nil, false
 	}
 
 	var delegation types.Delegation
 	if err := proto.Unmarshal(bz, &delegation); err != nil {
-		return types.Delegation{}, false
+		return nil, false
 	}
 
-	return delegation, true
+	return &delegation, true
 }
 
 // GetDelegationsForValidator returns all delegations to a validator.
 // P1-1 fix: Uses the reverse index (0x09 prefix) to find delegator addresses,
 // then looks up the actual delegation records from the primary store.
-func (k Keeper) GetDelegationsForValidator(ctx sdk.Context, validatorAddr string) []types.Delegation {
+func (k Keeper) GetDelegationsForValidator(ctx sdk.Context, validatorAddr string) []*types.Delegation {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.DelegationsByValidatorPrefix(validatorAddr)
 	iterator, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -258,7 +258,7 @@ func (k Keeper) GetDelegationsForValidator(ctx sdk.Context, validatorAddr string
 	}
 	defer iterator.Close()
 
-	var delegations []types.Delegation
+	var delegations []*types.Delegation
 	// The index key format is: [0x09] + validatorAddr + [0x00] + delegatorAddr
 	// We need to extract the delegatorAddr suffix after the separator.
 	prefixLen := len(prefix)
@@ -295,9 +295,9 @@ func (k Keeper) DeleteDelegation(ctx sdk.Context, delegatorAddr, validatorAddr s
 // --- Unbonding Operations ---
 
 // SetUnbonding stores an unbonding entry
-func (k Keeper) SetUnbonding(ctx sdk.Context, unbonding types.UnbondingEntry) error {
+func (k Keeper) SetUnbonding(ctx sdk.Context, unbonding *types.UnbondingEntry) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&unbonding)
+	bz, err := proto.Marshal(unbonding)
 	if err != nil {
 		return err
 	}
@@ -307,25 +307,25 @@ func (k Keeper) SetUnbonding(ctx sdk.Context, unbonding types.UnbondingEntry) er
 }
 
 // GetUnbonding retrieves an unbonding entry
-func (k Keeper) GetUnbonding(ctx sdk.Context, id string) (types.UnbondingEntry, bool) {
+func (k Keeper) GetUnbonding(ctx sdk.Context, id string) (*types.UnbondingEntry, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.UnbondingKey(id)
 
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.UnbondingEntry{}, false
+		return nil, false
 	}
 
 	var unbonding types.UnbondingEntry
 	if err := proto.Unmarshal(bz, &unbonding); err != nil {
-		return types.UnbondingEntry{}, false
+		return nil, false
 	}
 
-	return unbonding, true
+	return &unbonding, true
 }
 
 // GetMatureUnbondings returns unbondings that have completed
-func (k Keeper) GetMatureUnbondings(ctx sdk.Context, currentHeight uint64) []types.UnbondingEntry {
+func (k Keeper) GetMatureUnbondings(ctx sdk.Context, currentHeight uint64) []*types.UnbondingEntry {
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.UnbondingKeyPrefix, prefixEndBytes(types.UnbondingKeyPrefix))
 	if err != nil {
@@ -334,14 +334,14 @@ func (k Keeper) GetMatureUnbondings(ctx sdk.Context, currentHeight uint64) []typ
 	}
 	defer iterator.Close()
 
-	var mature []types.UnbondingEntry
+	var mature []*types.UnbondingEntry
 	for ; iterator.Valid(); iterator.Next() {
 		var unbonding types.UnbondingEntry
 		if err := proto.Unmarshal(iterator.Value(), &unbonding); err != nil {
 			continue
 		}
 		if unbonding.Status == "pending" && unbonding.CompletesAtHeight <= currentHeight {
-			mature = append(mature, unbonding)
+			mature = append(mature, &unbonding)
 		}
 	}
 
@@ -356,9 +356,9 @@ func (k Keeper) DeleteUnbonding(ctx sdk.Context, id string) error {
 }
 
 // GetUnbondingsForDelegator returns all unbonding entries for a delegator
-func (k Keeper) GetUnbondingsForDelegator(ctx sdk.Context, delegatorAddr string) []types.UnbondingEntry {
-	var entries []types.UnbondingEntry
-	k.IterateUnbondings(ctx, func(u types.UnbondingEntry) bool {
+func (k Keeper) GetUnbondingsForDelegator(ctx sdk.Context, delegatorAddr string) []*types.UnbondingEntry {
+	var entries []*types.UnbondingEntry
+	k.IterateUnbondings(ctx, func(u *types.UnbondingEntry) bool {
 		if u.DelegatorAddress == delegatorAddr {
 			entries = append(entries, u)
 		}
@@ -368,7 +368,7 @@ func (k Keeper) GetUnbondingsForDelegator(ctx sdk.Context, delegatorAddr string)
 }
 
 // IterateUnbondings iterates over all unbonding entries
-func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(types.UnbondingEntry) bool) {
+func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(*types.UnbondingEntry) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.UnbondingKeyPrefix, prefixEndBytes(types.UnbondingKeyPrefix))
 	if err != nil {
@@ -382,7 +382,7 @@ func (k Keeper) IterateUnbondings(ctx sdk.Context, cb func(types.UnbondingEntry)
 		if err := proto.Unmarshal(iterator.Value(), &unbonding); err != nil {
 			continue
 		}
-		if cb(unbonding) {
+		if cb(&unbonding) {
 			break
 		}
 	}
@@ -428,7 +428,7 @@ func (k Keeper) SetUnbondingSeq(ctx sdk.Context, seq uint64) {
 }
 
 // IterateDelegations iterates over all delegations
-func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bool) {
+func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(*types.Delegation) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iterator, err := store.Iterator(types.DelegationKeyPrefix, prefixEndBytes(types.DelegationKeyPrefix))
 	if err != nil {
@@ -442,7 +442,7 @@ func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bo
 		if err := proto.Unmarshal(iterator.Value(), &delegation); err != nil {
 			continue
 		}
-		if cb(delegation) {
+		if cb(&delegation) {
 			break
 		}
 	}
@@ -451,9 +451,9 @@ func (k Keeper) IterateDelegations(ctx sdk.Context, cb func(types.Delegation) bo
 // --- Tier Configuration ---
 
 // SetTierConfig stores a tier configuration
-func (k Keeper) SetTierConfig(ctx sdk.Context, config types.TierConfig) error {
+func (k Keeper) SetTierConfig(ctx sdk.Context, config *types.TierConfig) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&config)
+	bz, err := proto.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -463,26 +463,26 @@ func (k Keeper) SetTierConfig(ctx sdk.Context, config types.TierConfig) error {
 }
 
 // GetTierConfig retrieves a tier configuration
-func (k Keeper) GetTierConfig(ctx sdk.Context, tier types.ValidatorTier) (types.TierConfig, bool) {
+func (k Keeper) GetTierConfig(ctx sdk.Context, tier types.ValidatorTier) (*types.TierConfig, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.TierConfigKey(tier)
 
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.TierConfig{}, false
+		return nil, false
 	}
 
 	var config types.TierConfig
 	if err := proto.Unmarshal(bz, &config); err != nil {
-		return types.TierConfig{}, false
+		return nil, false
 	}
 
-	return config, true
+	return &config, true
 }
 
 // GetAllTierConfigs returns all tier configurations
-func (k Keeper) GetAllTierConfigs(ctx sdk.Context) []types.TierConfig {
-	configs := make([]types.TierConfig, 0, 4)
+func (k Keeper) GetAllTierConfigs(ctx sdk.Context) []*types.TierConfig {
+	configs := make([]*types.TierConfig, 0, 4)
 	for tier := types.TierApprentice; tier <= types.TierGuardian; tier++ {
 		if config, found := k.GetTierConfig(ctx, tier); found {
 			configs = append(configs, config)
@@ -499,7 +499,7 @@ func (k Keeper) ComputeValidatorTierSimple(ctx sdk.Context, stake string, verifi
 }
 
 // CheckTierTransition checks if validator should transition tiers
-func (k Keeper) CheckTierTransition(ctx sdk.Context, validator types.LegibleValidator) (types.ValidatorTier, bool) {
+func (k Keeper) CheckTierTransition(ctx sdk.Context, validator *types.LegibleValidator) (types.ValidatorTier, bool) {
 	newTier := ComputeValidatorTier(ctx, k, validator.TotalStake, validator.VerificationsCompleted, validator.VerificationsCorrect, validator.SlashCount, validator.ContestedVerificationsCorrect, validator.LastSlashedHeight)
 	return newTier, types.ValidatorTierString(newTier) != validator.Tier
 }
@@ -510,7 +510,7 @@ func (k Keeper) IsTierEligibleForCategory(ctx sdk.Context, tier types.ValidatorT
 }
 
 // GetEffectiveSelectionStake returns virtual/real stake for VRF selection
-func (k Keeper) GetEffectiveSelectionStake(ctx sdk.Context, validator types.LegibleValidator) string {
+func (k Keeper) GetEffectiveSelectionStake(ctx sdk.Context, validator *types.LegibleValidator) string {
 	params := k.GetParams(ctx)
 	return GetEffectiveSelectionStake(ctx, k, validator, params)
 }
@@ -732,9 +732,9 @@ func (k Keeper) GetLastRedelegationHeight(ctx sdk.Context, delegatorAddr string)
 // --- Params ---
 
 // SetParams stores module parameters and syncs tier configs to KVStore.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		return err
 	}
@@ -745,7 +745,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	// Sync tier configs to KVStore (fast-read cache, single-writer via SetParams)
 	for _, tc := range params.TierConfigs {
 		if tc != nil {
-			if err := k.SetTierConfig(ctx, *tc); err != nil {
+			if err := k.SetTierConfig(ctx, tc); err != nil {
 				return fmt.Errorf("failed to sync tier config %q: %w", tc.Tier, err)
 			}
 		}
@@ -755,7 +755,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 }
 
 // GetParams retrieves module parameters with backward-compat fill for pre-migration state.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -771,9 +771,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if len(params.TierConfigs) == 0 {
 		allConfigs := k.GetAllTierConfigs(ctx)
 		if len(allConfigs) > 0 {
-			for i := range allConfigs {
-				params.TierConfigs = append(params.TierConfigs, &allConfigs[i])
-			}
+			params.TierConfigs = append(params.TierConfigs, allConfigs...)
 		}
 	}
 
@@ -792,7 +790,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		params.RedelegationCooldownBlocks = defaults.RedelegationCooldownBlocks
 	}
 
-	return params
+	return &params
 }
 
 // --- Genesis ---
@@ -801,7 +799,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 	// Set params (SetParams syncs tier configs to KVStore if present in params)
 	if gs.Params != nil {
-		if err := k.SetParams(ctx, *gs.Params); err != nil {
+		if err := k.SetParams(ctx, gs.Params); err != nil {
 			return err
 		}
 	}
@@ -810,7 +808,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 	if gs.Params == nil || len(gs.Params.TierConfigs) == 0 {
 		for _, config := range gs.TierConfigs {
 			if config != nil {
-				if err := k.SetTierConfig(ctx, *config); err != nil {
+				if err := k.SetTierConfig(ctx, config); err != nil {
 					return err
 				}
 			}
@@ -820,7 +818,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 	// Set validators
 	for _, validator := range gs.Validators {
 		if validator != nil {
-			if err := k.SetValidator(ctx, *validator); err != nil {
+			if err := k.SetValidator(ctx, validator); err != nil {
 				return err
 			}
 		}
@@ -829,7 +827,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 	// Set delegations
 	for _, delegation := range gs.Delegations {
 		if delegation != nil {
-			if err := k.SetDelegation(ctx, *delegation); err != nil {
+			if err := k.SetDelegation(ctx, delegation); err != nil {
 				return err
 			}
 		}
@@ -838,7 +836,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 	// Set unbonding entries
 	for _, unbonding := range gs.UnbondingEntries {
 		if unbonding != nil {
-			if err := k.SetUnbonding(ctx, *unbonding); err != nil {
+			if err := k.SetUnbonding(ctx, unbonding); err != nil {
 				return err
 			}
 		}
@@ -857,25 +855,25 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx) // GetParams backward compat already fills TierConfigs
 
 	var validators []*types.LegibleValidator
-	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
-		validators = append(validators, &v)
+	k.IterateValidators(ctx, func(v *types.LegibleValidator) bool {
+		validators = append(validators, v)
 		return false
 	})
 
 	var delegations []*types.Delegation
-	k.IterateDelegations(ctx, func(d types.Delegation) bool {
-		delegations = append(delegations, &d)
+	k.IterateDelegations(ctx, func(d *types.Delegation) bool {
+		delegations = append(delegations, d)
 		return false
 	})
 
 	var unbondings []*types.UnbondingEntry
-	k.IterateUnbondings(ctx, func(u types.UnbondingEntry) bool {
-		unbondings = append(unbondings, &u)
+	k.IterateUnbondings(ctx, func(u *types.UnbondingEntry) bool {
+		unbondings = append(unbondings, u)
 		return false
 	})
 
 	return &types.GenesisState{
-		Params:           &params,
+		Params:           params,
 		Validators:       validators,
 		Delegations:      delegations,
 		UnbondingEntries: unbondings,
@@ -935,9 +933,9 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 	// Check if we're at an epoch boundary (every SlashDecayPeriodBlocks blocks)
 	decayPeriod := params.GetSlashDecayPeriodBlocks()
 	if decayPeriod > 0 && currentHeight > 0 && currentHeight%decayPeriod == 0 {
-		var updatedValidators []types.LegibleValidator
+		var updatedValidators []*types.LegibleValidator
 
-		k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+		k.IterateValidators(ctx, func(v *types.LegibleValidator) bool {
 			changed := false
 
 			// R1: Decay slashCount by 1 if no slash occurred this epoch
@@ -1021,9 +1019,9 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 func (k Keeper) EndBlocker(ctx sdk.Context) error {
 	// Check for tier transitions due to verification activity
 	// (most transitions happen immediately on RecordVerification, but this is a safety check)
-	var transitionedValidators []types.LegibleValidator
+	var transitionedValidators []*types.LegibleValidator
 
-	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+	k.IterateValidators(ctx, func(v *types.LegibleValidator) bool {
 		if newTier, changed := k.CheckTierTransition(ctx, v); changed {
 			oldTier := v.Tier
 			v.Tier = types.ValidatorTierString(newTier)

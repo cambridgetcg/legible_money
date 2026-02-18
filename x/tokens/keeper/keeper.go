@@ -55,9 +55,9 @@ func (k Keeper) GetAuthority() string {
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -65,7 +65,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -75,7 +75,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ---------- Genesis ----------
@@ -93,9 +93,9 @@ type genesisJSON struct {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 
 	// The proto GenesisState doesn't have token_entries, so we need to
@@ -206,9 +206,8 @@ func (k Keeper) InitGenesisWraps(ctx sdk.Context, data json.RawMessage) {
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	p := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:   &p,
+		Params:   k.GetParams(ctx),
 		Accounts: []*types.ExpirableAccount{},
 		Rai: &types.RAIHoldingAccount{
 			Balance:          "0",
@@ -221,7 +220,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 // ExportGenesisJSON exports the full genesis state including token entries as raw JSON.
 func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
-	p := k.GetParams(ctx)
+	params := k.GetParams(ctx)
 
 	var tokenEntries []types.TokenGenesisEntry
 	k.IterateTokens(ctx, func(token *types.TokenDefinition) bool {
@@ -309,7 +308,7 @@ func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
 	})
 
 	g := genesisJSON{
-		Params: &p,
+		Params: params,
 		Accounts: []*types.ExpirableAccount{},
 		Rai: &types.RAIHoldingAccount{
 			Balance:          "0",

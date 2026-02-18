@@ -47,7 +47,7 @@ func TestOC_PT1_NonParticipantDeposit(t *testing.T) {
 		CommonPotBalance: "10000",
 		TotalEarned:      "20000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Outsider attempts to deposit into the partnership pot.
 	_, err := srv.DepositToPot(ctx, &types.MsgDepositToPot{
@@ -95,7 +95,7 @@ func TestOC_PT2_ZeroAmountDeposit(t *testing.T) {
 		CommonPotBalance: "5000",
 		TotalEarned:      "10000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Attempt zero-amount deposit via ValidateBasic first.
 	msg := &types.MsgDepositToPot{
@@ -147,7 +147,7 @@ func TestOC_PT3_SelfApprovalOperation(t *testing.T) {
 		CommonPotBalance: "50000",
 		TotalEarned:      "100000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Human proposes a withdrawal operation.
 	propResp, err := srv.ProposeOperation(ctx, &types.MsgProposeOperation{
@@ -300,7 +300,7 @@ func TestOC_PT6_UnauthorizedDissolution(t *testing.T) {
 		CommonPotBalance: "30000",
 		TotalEarned:      "60000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Outsider tries to initiate exit.
 	_, err := srv.InitiateExit(ctx, &types.MsgInitiateExit{
@@ -352,7 +352,7 @@ func TestOC_PT7_FreezeSpamBypass(t *testing.T) {
 		TotalEarned:      "20000",
 		CooperationScore: 10000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Exhaust all 3 freezes in the epoch.
 	for i := 0; i < 3; i++ {
@@ -448,7 +448,7 @@ func TestOC_PT8_CoercionDuringFreeze(t *testing.T) {
 		TotalEarned:      "20000",
 		CooperationScore: 8000,
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Apply safety freeze.
 	_, err := k.HandleSafetyFreeze(ctx, "p-oc8", human)
@@ -509,7 +509,7 @@ func TestOC_PT9_RewardMultiplierOverflow(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Use a very large reward amount (near 2^63).
 	largeAmount := "9223372036854775807" // math.MaxInt64
@@ -575,7 +575,7 @@ func TestOC_PT10_SplitManipulation(t *testing.T) {
 		CommonPotBalance: "0",
 		TotalEarned:      "0",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// Verify splits sum to 1,000,000 BPS.
 	if p.SplitHumanBps+p.SplitAgentBps != 1000000 {
@@ -640,7 +640,7 @@ func TestOC_PT11_CoolingPeriodRace(t *testing.T) {
 		CommonPotBalance: "20000",
 		TotalEarned:      "40000",
 	}
-	k.SetPartnership(ctx, p)
+	k.SetPartnership(ctx, &p)
 
 	// First exit should succeed — enters cooling.
 	_, err := k.HandleExit(ctx, "p-oc11", human)
@@ -676,7 +676,7 @@ func TestOC_PT12_DeliberationDepthBomb(t *testing.T) {
 		op := types.ConsensusOperation{
 			Deliberation: &types.DeliberationState{ChainDepth: depth},
 		}
-		if err := k.ValidateCounterProposal(ctx, op); err != nil {
+		if err := k.ValidateCounterProposal(ctx, &op); err != nil {
 			t.Errorf("depth %d should be valid, got: %v", depth, err)
 		}
 	}
@@ -685,14 +685,14 @@ func TestOC_PT12_DeliberationDepthBomb(t *testing.T) {
 	op := types.ConsensusOperation{
 		Deliberation: &types.DeliberationState{ChainDepth: 3},
 	}
-	if err := k.ValidateCounterProposal(ctx, op); err == nil {
+	if err := k.ValidateCounterProposal(ctx, &op); err == nil {
 		t.Error("ATTACK SUCCEEDED: counter-proposal at depth 3 accepted; " +
 			"unlimited depth enables deliberation spam that blocks all operations")
 	}
 
 	// Depth 99 — definitely should fail.
 	op.Deliberation.ChainDepth = 99
-	if err := k.ValidateCounterProposal(ctx, op); err == nil {
+	if err := k.ValidateCounterProposal(ctx, &op); err == nil {
 		t.Error("ATTACK SUCCEEDED: counter-proposal at depth 99 accepted")
 	}
 }

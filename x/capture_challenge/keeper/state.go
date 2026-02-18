@@ -10,23 +10,23 @@ import (
 // --- Challenge CRUD ---
 
 // GetChallenge returns a challenge by ID.
-func (k Keeper) GetChallenge(ctx sdk.Context, challengeId string) (types.CaptureChallenge, bool) {
+func (k Keeper) GetChallenge(ctx sdk.Context, challengeId string) (*types.CaptureChallenge, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ChallengeKey(challengeId))
 	if err != nil || bz == nil {
-		return types.CaptureChallenge{}, false
+		return nil, false
 	}
 	var challenge types.CaptureChallenge
 	if err := proto.Unmarshal(bz, &challenge); err != nil {
-		return types.CaptureChallenge{}, false
+		return nil, false
 	}
-	return challenge, true
+	return &challenge, true
 }
 
 // SetChallenge stores a challenge.
-func (k Keeper) SetChallenge(ctx sdk.Context, challenge types.CaptureChallenge) {
+func (k Keeper) SetChallenge(ctx sdk.Context, challenge *types.CaptureChallenge) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&challenge)
+	bz, err := proto.Marshal(challenge)
 	if err != nil {
 		panic("failed to marshal challenge: " + err.Error())
 	}
@@ -44,7 +44,7 @@ func (k Keeper) DeleteChallenge(ctx sdk.Context, challengeId string) {
 }
 
 // IterateChallenges iterates over all challenges.
-func (k Keeper) IterateChallenges(ctx sdk.Context, cb func(types.CaptureChallenge) bool) {
+func (k Keeper) IterateChallenges(ctx sdk.Context, cb func(*types.CaptureChallenge) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ChallengeKeyPrefix, prefixEndBytes(types.ChallengeKeyPrefix))
 	if err != nil {
@@ -57,7 +57,7 @@ func (k Keeper) IterateChallenges(ctx sdk.Context, cb func(types.CaptureChalleng
 		if err := proto.Unmarshal(iter.Value(), &challenge); err != nil {
 			continue
 		}
-		if cb(challenge) {
+		if cb(&challenge) {
 			break
 		}
 	}
@@ -66,23 +66,23 @@ func (k Keeper) IterateChallenges(ctx sdk.Context, cb func(types.CaptureChalleng
 // --- Bounty Pool CRUD ---
 
 // GetBountyPool returns a domain's bounty pool.
-func (k Keeper) GetBountyPool(ctx sdk.Context, domain string) (types.DomainBountyPool, bool) {
+func (k Keeper) GetBountyPool(ctx sdk.Context, domain string) (*types.DomainBountyPool, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.BountyPoolKey(domain))
 	if err != nil || bz == nil {
-		return types.DomainBountyPool{}, false
+		return nil, false
 	}
 	var pool types.DomainBountyPool
 	if err := proto.Unmarshal(bz, &pool); err != nil {
-		return types.DomainBountyPool{}, false
+		return nil, false
 	}
-	return pool, true
+	return &pool, true
 }
 
 // SetBountyPool stores a domain's bounty pool.
-func (k Keeper) SetBountyPool(ctx sdk.Context, pool types.DomainBountyPool) {
+func (k Keeper) SetBountyPool(ctx sdk.Context, pool *types.DomainBountyPool) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&pool)
+	bz, err := proto.Marshal(pool)
 	if err != nil {
 		panic("failed to marshal bounty pool: " + err.Error())
 	}
@@ -92,12 +92,12 @@ func (k Keeper) SetBountyPool(ctx sdk.Context, pool types.DomainBountyPool) {
 }
 
 // GetOrCreateBountyPool returns existing pool or creates a new one.
-func (k Keeper) GetOrCreateBountyPool(ctx sdk.Context, domain string, currentBlock uint64) types.DomainBountyPool {
+func (k Keeper) GetOrCreateBountyPool(ctx sdk.Context, domain string, currentBlock uint64) *types.DomainBountyPool {
 	pool, found := k.GetBountyPool(ctx, domain)
 	if found {
 		return pool
 	}
-	return types.DomainBountyPool{
+	return &types.DomainBountyPool{
 		Domain:           domain,
 		Balance:          "0",
 		TotalRewardsPaid: "0",
@@ -107,7 +107,7 @@ func (k Keeper) GetOrCreateBountyPool(ctx sdk.Context, domain string, currentBlo
 }
 
 // IterateBountyPools iterates over all bounty pools.
-func (k Keeper) IterateBountyPools(ctx sdk.Context, cb func(types.DomainBountyPool) bool) {
+func (k Keeper) IterateBountyPools(ctx sdk.Context, cb func(*types.DomainBountyPool) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.BountyPoolKeyPrefix, prefixEndBytes(types.BountyPoolKeyPrefix))
 	if err != nil {
@@ -120,7 +120,7 @@ func (k Keeper) IterateBountyPools(ctx sdk.Context, cb func(types.DomainBountyPo
 		if err := proto.Unmarshal(iter.Value(), &pool); err != nil {
 			continue
 		}
-		if cb(pool) {
+		if cb(&pool) {
 			break
 		}
 	}
@@ -129,25 +129,23 @@ func (k Keeper) IterateBountyPools(ctx sdk.Context, cb func(types.DomainBountyPo
 // --- Params CRUD ---
 
 // GetParams returns the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKeyPrefix)
 	if err != nil || bz == nil {
-		p := types.DefaultParams()
-		return *p
+		return types.DefaultParams()
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		p := types.DefaultParams()
-		return *p
+		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // SetParams stores the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic("failed to marshal params: " + err.Error())
 	}

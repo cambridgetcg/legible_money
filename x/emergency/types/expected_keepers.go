@@ -8,7 +8,7 @@ import (
 
 // StakingKeeper defines the expected staking module keeper interface.
 type StakingKeeper interface {
-	GetValidator(ctx sdk.Context, operatorAddr string) (stakingtypes.LegibleValidator, bool)
-	GetActiveValidatorSet(ctx sdk.Context) []stakingtypes.LegibleValidator
-	IterateValidators(ctx sdk.Context, cb func(stakingtypes.LegibleValidator) bool)
+	GetValidator(ctx sdk.Context, operatorAddr string) (*stakingtypes.LegibleValidator, bool)
+	GetActiveValidatorSet(ctx sdk.Context) []*stakingtypes.LegibleValidator
+	IterateValidators(ctx sdk.Context, cb func(*stakingtypes.LegibleValidator) bool)
 }

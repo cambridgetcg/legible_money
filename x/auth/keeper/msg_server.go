@@ -14,15 +14,15 @@ import (
 	"github.com/legible-money/legible/x/auth/types"
 )
 
-var _ types.ExtendedMsgServer = msgServer{}
+var _ types.MsgServer = msgServer{}
 
 type msgServer struct {
 	types.UnimplementedMsgServer
 	Keeper
 }
 
-// NewMsgServerImpl returns an implementation of the ExtendedMsgServer interface
-func NewMsgServerImpl(keeper Keeper) types.ExtendedMsgServer {
+// NewMsgServerImpl returns an implementation of the MsgServer interface
+func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
@@ -458,7 +458,7 @@ func (ms msgServer) InitiateRecovery(goCtx context.Context, msg *types.MsgInitia
 		Status:             "pending",
 	}
 
-	ms.Keeper.SetRecoveryRequest(ctx, req)
+	ms.Keeper.SetRecoveryRequest(ctx, &req)
 
 	// Set account InRecovery flag
 	if account.Flags == nil {
@@ -535,7 +535,7 @@ func (ms msgServer) SubmitRecoveryShard(goCtx context.Context, msg *types.MsgSub
 		req.Status = "delayed"
 	}
 
-	ms.Keeper.SetRecoveryRequest(ctx, req)
+	ms.Keeper.SetRecoveryRequest(ctx, req) // req is already *types.RecoveryRequest
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -572,7 +572,7 @@ func (ms msgServer) ChallengeRecovery(goCtx context.Context, msg *types.MsgChall
 	req.Status = "cancelled"
 	req.ChallengerAddress = msg.Sender
 	req.ChallengeReason = msg.Reason
-	ms.Keeper.SetRecoveryRequest(ctx, req)
+	ms.Keeper.SetRecoveryRequest(ctx, req) // req is already *types.RecoveryRequest
 
 	// Clear InRecovery flag
 	if account, accFound := ms.GetAccount(ctx, msg.AccountAddress); accFound {
@@ -649,7 +649,7 @@ func (ms msgServer) ExecuteRecovery(goCtx context.Context, msg *types.MsgExecute
 
 	// Mark request as completed
 	req.Status = "completed"
-	ms.Keeper.SetRecoveryRequest(ctx, req)
+	ms.Keeper.SetRecoveryRequest(ctx, req) // req is already *types.RecoveryRequest
 
 	// H-2: Clean up stored recovery shards after recovery completes
 	ms.Keeper.DeleteRecoveryShards(ctx, msg.AccountAddress)
@@ -677,7 +677,7 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 	if msg.Params == nil {
 		return nil, fmt.Errorf("params cannot be nil")
 	}
-	if err := ms.Keeper.SetParams(ctx, *msg.Params); err != nil {
+	if err := ms.Keeper.SetParams(ctx, msg.Params); err != nil {
 		return nil, fmt.Errorf("failed to set params: %w", err)
 	}
 

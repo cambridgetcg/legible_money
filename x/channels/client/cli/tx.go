@@ -258,7 +258,7 @@ func NewUpdateStateCmd() *cobra.Command {
 			msg := &types.MsgUpdateState{
 				Sender:    clientCtx.GetFromAddress().String(),
 				ChannelId: args[0],
-				Update: types.ChannelStateUpdate{
+				Update: &types.ChannelStateUpdate{
 					ChannelId:         args[0],
 					Nonce:             nonce,
 					Spent:             args[2],

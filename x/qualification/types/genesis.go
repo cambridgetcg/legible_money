@@ -1,8 +1,8 @@
 package types
 
 // DefaultParams returns default qualification module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		StakeLeaf:              "22000000",   // 22 LGM in ulgm
 		StakeMid:               "222000000",  // 222 LGM in ulgm
 		StakeTop:               "2222000000", // 2222 LGM in ulgm
@@ -25,16 +25,15 @@ func DefaultParams() Params {
 
 // DefaultGenesisState returns the default genesis state.
 func DefaultGenesisState() *GenesisState {
-	params := DefaultParams()
 	return &GenesisState{
-		Params:         &params,
+		Params:         DefaultParams(),
 		Qualifications: []*DomainQualification{},
 		Endorsements:   []*QualificationEndorsement{},
 	}
 }
 
 // Validate validates the genesis state.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		return gs.Params.Validate()
 	}

@@ -21,10 +21,10 @@ var deterministicMarshal = proto.MarshalOptions{Deterministic: true}.Marshal
 // ---------- Fact Operations ----------
 
 // SetFact stores a fact in the KV store.
-func (k Keeper) SetFact(ctx sdk.Context, fact types.Fact) {
+func (k Keeper) SetFact(ctx sdk.Context, fact *types.Fact) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(fact.Id)
-	bz, err := deterministicMarshal(&fact)
+	bz, err := deterministicMarshal(fact)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact: %v", err))
 	}
@@ -40,18 +40,18 @@ func (k Keeper) SetFact(ctx sdk.Context, fact types.Fact) {
 }
 
 // GetFact retrieves a fact by ID.
-func (k Keeper) GetFact(ctx sdk.Context, factID string) (types.Fact, bool) {
+func (k Keeper) GetFact(ctx sdk.Context, factID string) (*types.Fact, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(factID)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.Fact{}, false
+		return nil, false
 	}
 	var fact types.Fact
 	if err := proto.Unmarshal(bz, &fact); err != nil {
-		return types.Fact{}, false
+		return nil, false
 	}
-	return fact, true
+	return &fact, true
 }
 
 // DeleteFact removes a fact from the store.
@@ -66,7 +66,7 @@ func (k Keeper) DeleteFact(ctx sdk.Context, factID string) {
 }
 
 // IterateFacts iterates over all facts. Return true from cb to stop.
-func (k Keeper) IterateFacts(ctx sdk.Context, cb func(types.Fact) bool) {
+func (k Keeper) IterateFacts(ctx sdk.Context, cb func(*types.Fact) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.FactKeyPrefix, prefixEndBytes(types.FactKeyPrefix))
 	if err != nil {
@@ -79,14 +79,14 @@ func (k Keeper) IterateFacts(ctx sdk.Context, cb func(types.Fact) bool) {
 		if err := proto.Unmarshal(iter.Value(), &fact); err != nil {
 			continue
 		}
-		if cb(fact) {
+		if cb(&fact) {
 			break
 		}
 	}
 }
 
 // GetFactsByDomain returns all facts in a domain.
-func (k Keeper) GetFactsByDomain(ctx sdk.Context, domain string) []types.Fact {
+func (k Keeper) GetFactsByDomain(ctx sdk.Context, domain string) []*types.Fact {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.DomainFactIndexPrefix, []byte(domain+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -95,7 +95,7 @@ func (k Keeper) GetFactsByDomain(ctx sdk.Context, domain string) []types.Fact {
 	}
 	defer iter.Close()
 
-	var facts []types.Fact
+	var facts []*types.Fact
 	for ; iter.Valid(); iter.Next() {
 		factID := string(iter.Value())
 		fact, found := k.GetFact(ctx, factID)
@@ -109,7 +109,7 @@ func (k Keeper) GetFactsByDomain(ctx sdk.Context, domain string) []types.Fact {
 // GetFactCount returns the total number of facts.
 func (k Keeper) GetFactCount(ctx sdk.Context) uint64 {
 	var count uint64
-	k.IterateFacts(ctx, func(_ types.Fact) bool {
+	k.IterateFacts(ctx, func(_ *types.Fact) bool {
 		count++
 		return false
 	})
@@ -119,10 +119,10 @@ func (k Keeper) GetFactCount(ctx sdk.Context) uint64 {
 // ---------- Claim Operations ----------
 
 // SetClaim stores a claim and maintains the content hash index.
-func (k Keeper) SetClaim(ctx sdk.Context, claim types.Claim) {
+func (k Keeper) SetClaim(ctx sdk.Context, claim *types.Claim) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claim.Id)
-	bz, err := deterministicMarshal(&claim)
+	bz, err := deterministicMarshal(claim)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim: %v", err))
 	}
@@ -139,26 +139,26 @@ func (k Keeper) SetClaim(ctx sdk.Context, claim types.Claim) {
 }
 
 // GetClaim retrieves a claim by ID.
-func (k Keeper) GetClaim(ctx sdk.Context, claimID string) (types.Claim, bool) {
+func (k Keeper) GetClaim(ctx sdk.Context, claimID string) (*types.Claim, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claimID)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.Claim{}, false
+		return nil, false
 	}
 	var claim types.Claim
 	if err := proto.Unmarshal(bz, &claim); err != nil {
-		return types.Claim{}, false
+		return nil, false
 	}
-	return claim, true
+	return &claim, true
 }
 
 // GetClaimByContentHash finds a claim by its content hash using an O(1) index lookup.
-func (k Keeper) GetClaimByContentHash(ctx sdk.Context, contentHash string) (types.Claim, bool) {
+func (k Keeper) GetClaimByContentHash(ctx sdk.Context, contentHash string) (*types.Claim, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	claimIDBytes, err := kvStore.Get(contentHashIndexKey(contentHash))
 	if err != nil || claimIDBytes == nil {
-		return types.Claim{}, false
+		return nil, false
 	}
 	return k.GetClaim(ctx, string(claimIDBytes))
 }
@@ -174,7 +174,7 @@ func (k Keeper) DeleteClaim(ctx sdk.Context, claimID string) {
 }
 
 // IterateClaims iterates over all claims. Return true from cb to stop.
-func (k Keeper) IterateClaims(ctx sdk.Context, cb func(types.Claim) bool) {
+func (k Keeper) IterateClaims(ctx sdk.Context, cb func(*types.Claim) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.ClaimKeyPrefix, prefixEndBytes(types.ClaimKeyPrefix))
 	if err != nil {
@@ -187,16 +187,16 @@ func (k Keeper) IterateClaims(ctx sdk.Context, cb func(types.Claim) bool) {
 		if err := proto.Unmarshal(iter.Value(), &claim); err != nil {
 			continue
 		}
-		if cb(claim) {
+		if cb(&claim) {
 			break
 		}
 	}
 }
 
 // GetPendingClaims returns claims awaiting verification.
-func (k Keeper) GetPendingClaims(ctx sdk.Context) []types.Claim {
-	var claims []types.Claim
-	k.IterateClaims(ctx, func(c types.Claim) bool {
+func (k Keeper) GetPendingClaims(ctx sdk.Context) []*types.Claim {
+	var claims []*types.Claim
+	k.IterateClaims(ctx, func(c *types.Claim) bool {
 		if c.Status == "pending" {
 			claims = append(claims, c)
 		}
@@ -208,10 +208,10 @@ func (k Keeper) GetPendingClaims(ctx sdk.Context) []types.Claim {
 // ---------- Verification Round Operations ----------
 
 // SetVerificationRound stores a verification round and maintains the claim→round index.
-func (k Keeper) SetVerificationRound(ctx sdk.Context, round types.VerificationRound) {
+func (k Keeper) SetVerificationRound(ctx sdk.Context, round *types.VerificationRound) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := roundKey(round.Id)
-	bz, err := deterministicMarshal(&round)
+	bz, err := deterministicMarshal(round)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal round: %v", err))
 	}
@@ -233,16 +233,16 @@ func (k Keeper) SetVerificationRound(ctx sdk.Context, round types.VerificationRo
 }
 
 // GetVerificationRound retrieves a round by ID.
-func (k Keeper) GetVerificationRound(ctx sdk.Context, roundID string) (types.VerificationRound, bool) {
+func (k Keeper) GetVerificationRound(ctx sdk.Context, roundID string) (*types.VerificationRound, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := roundKey(roundID)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.VerificationRound{}, false
+		return nil, false
 	}
 	var round types.VerificationRound
 	if err := proto.Unmarshal(bz, &round); err != nil {
-		return types.VerificationRound{}, false
+		return nil, false
 	}
 	// Proto maps may be nil after unmarshal; initialize to avoid nil map panics
 	if round.Commitments == nil {
@@ -251,15 +251,15 @@ func (k Keeper) GetVerificationRound(ctx sdk.Context, roundID string) (types.Ver
 	if round.Reveals == nil {
 		round.Reveals = make(map[string]*types.VerificationReveal)
 	}
-	return round, true
+	return &round, true
 }
 
 // GetVerificationRoundForClaim finds the active round for a claim using an O(1) index lookup.
-func (k Keeper) GetVerificationRoundForClaim(ctx sdk.Context, claimID string) (types.VerificationRound, bool) {
+func (k Keeper) GetVerificationRoundForClaim(ctx sdk.Context, claimID string) (*types.VerificationRound, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	roundIDBytes, err := kvStore.Get(claimRoundIndexKey(claimID))
 	if err != nil || roundIDBytes == nil {
-		return types.VerificationRound{}, false
+		return nil, false
 	}
 	return k.GetVerificationRound(ctx, string(roundIDBytes))
 }
@@ -275,7 +275,7 @@ func (k Keeper) DeleteVerificationRound(ctx sdk.Context, roundID string) {
 }
 
 // IterateVerificationRounds iterates over all rounds.
-func (k Keeper) IterateVerificationRounds(ctx sdk.Context, cb func(types.VerificationRound) bool) {
+func (k Keeper) IterateVerificationRounds(ctx sdk.Context, cb func(*types.VerificationRound) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.VerificationRoundKeyPrefix, prefixEndBytes(types.VerificationRoundKeyPrefix))
 	if err != nil {
@@ -288,16 +288,16 @@ func (k Keeper) IterateVerificationRounds(ctx sdk.Context, cb func(types.Verific
 		if err := proto.Unmarshal(iter.Value(), &round); err != nil {
 			continue
 		}
-		if cb(round) {
+		if cb(&round) {
 			break
 		}
 	}
 }
 
 // GetActiveRounds returns all non-complete rounds.
-func (k Keeper) GetActiveRounds(ctx sdk.Context) []types.VerificationRound {
-	var rounds []types.VerificationRound
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+func (k Keeper) GetActiveRounds(ctx sdk.Context) []*types.VerificationRound {
+	var rounds []*types.VerificationRound
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		if r.Phase != "complete" {
 			rounds = append(rounds, r)
 		}
@@ -307,9 +307,9 @@ func (k Keeper) GetActiveRounds(ctx sdk.Context) []types.VerificationRound {
 }
 
 // GetActiveRoundsForValidator returns rounds where a validator is selected.
-func (k Keeper) GetActiveRoundsForValidator(ctx sdk.Context, validatorAddr string) []types.VerificationRound {
-	var rounds []types.VerificationRound
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+func (k Keeper) GetActiveRoundsForValidator(ctx sdk.Context, validatorAddr string) []*types.VerificationRound {
+	var rounds []*types.VerificationRound
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		if r.Phase == "complete" {
 			return false
 		}
@@ -328,7 +328,7 @@ func (k Keeper) GetActiveRoundsForValidator(ctx sdk.Context, validatorAddr strin
 // Used to prevent creating duplicate reverification rounds.
 func (k Keeper) HasActiveRoundForClaim(ctx sdk.Context, claimId string) bool {
 	found := false
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		if r.ClaimId == claimId && r.Phase != "complete" {
 			found = true
 			return true // stop iteration
@@ -339,9 +339,9 @@ func (k Keeper) HasActiveRoundForClaim(ctx sdk.Context, claimId string) bool {
 }
 
 // GetExpiredRounds returns rounds that have passed their deadlines.
-func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.VerificationRound {
-	var rounds []types.VerificationRound
-	k.IterateVerificationRounds(ctx, func(r types.VerificationRound) bool {
+func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []*types.VerificationRound {
+	var rounds []*types.VerificationRound
+	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
 		switch r.Phase {
 		case "commit":
 			if currentHeight > r.CommitDeadlineHeight {
@@ -360,10 +360,10 @@ func (k Keeper) GetExpiredRounds(ctx sdk.Context, currentHeight uint64) []types.
 // ---------- Fact Reference Operations ----------
 
 // SetFactReference stores a fact-to-fact reference with bidirectional indexes.
-func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
+func (k Keeper) SetFactReference(ctx sdk.Context, ref *types.FactReference) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factRefKey(ref.FromFactId, ref.ToFactId)
-	bz, err := deterministicMarshal(&ref)
+	bz, err := deterministicMarshal(ref)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fact reference: %v", err))
 	}
@@ -379,7 +379,7 @@ func (k Keeper) SetFactReference(ctx sdk.Context, ref types.FactReference) {
 }
 
 // GetFactReferences returns all outgoing references from a fact.
-func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.FactReference {
+func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []*types.FactReference {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.FactReferenceKeyPrefix, []byte(fromFactID+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -388,19 +388,19 @@ func (k Keeper) GetFactReferences(ctx sdk.Context, fromFactID string) []types.Fa
 	}
 	defer iter.Close()
 
-	var refs []types.FactReference
+	var refs []*types.FactReference
 	for ; iter.Valid(); iter.Next() {
 		var ref types.FactReference
 		if err := proto.Unmarshal(iter.Value(), &ref); err != nil {
 			continue
 		}
-		refs = append(refs, ref)
+		refs = append(refs, &ref)
 	}
 	return refs
 }
 
 // GetIncomingReferences returns all references pointing TO a fact.
-func (k Keeper) GetIncomingReferences(ctx sdk.Context, toFactID string) []types.FactReference {
+func (k Keeper) GetIncomingReferences(ctx sdk.Context, toFactID string) []*types.FactReference {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.IncomingRefIndexPrefix, []byte(toFactID+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -409,21 +409,21 @@ func (k Keeper) GetIncomingReferences(ctx sdk.Context, toFactID string) []types.
 	}
 	defer iter.Close()
 
-	var refs []types.FactReference
+	var refs []*types.FactReference
 	for ; iter.Valid(); iter.Next() {
 		var ref types.FactReference
 		if err := proto.Unmarshal(iter.Value(), &ref); err != nil {
 			continue
 		}
-		refs = append(refs, ref)
+		refs = append(refs, &ref)
 	}
 	return refs
 }
 
 // GetSupportingFacts returns facts that support the given fact.
-func (k Keeper) GetSupportingFacts(ctx sdk.Context, factID string) []types.FactReference {
+func (k Keeper) GetSupportingFacts(ctx sdk.Context, factID string) []*types.FactReference {
 	incoming := k.GetIncomingReferences(ctx, factID)
-	var supporting []types.FactReference
+	var supporting []*types.FactReference
 	for _, ref := range incoming {
 		if ref.ReferenceType == "supports" {
 			supporting = append(supporting, ref)
@@ -433,9 +433,9 @@ func (k Keeper) GetSupportingFacts(ctx sdk.Context, factID string) []types.FactR
 }
 
 // GetContradictingFacts returns facts that contradict the given fact.
-func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []types.FactReference {
+func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []*types.FactReference {
 	incoming := k.GetIncomingReferences(ctx, factID)
-	var contradicting []types.FactReference
+	var contradicting []*types.FactReference
 	for _, ref := range incoming {
 		if ref.ReferenceType == "contradicts" {
 			contradicting = append(contradicting, ref)
@@ -447,10 +447,10 @@ func (k Keeper) GetContradictingFacts(ctx sdk.Context, factID string) []types.Fa
 // ---------- Domain Operations ----------
 
 // SetDomain stores an ontological domain (replacing the stub).
-func (k Keeper) SetDomain(ctx sdk.Context, domain types.OntologicalDomain) {
+func (k Keeper) SetDomain(ctx sdk.Context, domain *types.OntologicalDomain) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := domainKey(domain.Name)
-	bz, err := deterministicMarshal(&domain)
+	bz, err := deterministicMarshal(domain)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal domain: %v", err))
 	}
@@ -460,22 +460,22 @@ func (k Keeper) SetDomain(ctx sdk.Context, domain types.OntologicalDomain) {
 }
 
 // GetDomain retrieves a domain by name.
-func (k Keeper) GetDomain(ctx sdk.Context, name string) (types.OntologicalDomain, bool) {
+func (k Keeper) GetDomain(ctx sdk.Context, name string) (*types.OntologicalDomain, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := domainKey(name)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.OntologicalDomain{}, false
+		return nil, false
 	}
 	var domain types.OntologicalDomain
 	if err := proto.Unmarshal(bz, &domain); err != nil {
-		return types.OntologicalDomain{}, false
+		return nil, false
 	}
-	return domain, true
+	return &domain, true
 }
 
 // IterateDomains iterates over all domains.
-func (k Keeper) IterateDomains(ctx sdk.Context, cb func(types.OntologicalDomain) bool) {
+func (k Keeper) IterateDomains(ctx sdk.Context, cb func(*types.OntologicalDomain) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	// Domain keys use a separate prefix (0x07)
 	prefix := []byte{0x07}
@@ -490,7 +490,7 @@ func (k Keeper) IterateDomains(ctx sdk.Context, cb func(types.OntologicalDomain)
 		if err := proto.Unmarshal(iter.Value(), &domain); err != nil {
 			continue
 		}
-		if cb(domain) {
+		if cb(&domain) {
 			break
 		}
 	}
@@ -726,11 +726,11 @@ func GenerateCounterFactID(targetFactId, targetClaimId, submitter string, height
 }
 
 // SetCounterFact stores a counter-fact and maintains all indexes.
-func (k Keeper) SetCounterFact(ctx sdk.Context, cf types.CounterFact) {
+func (k Keeper) SetCounterFact(ctx sdk.Context, cf *types.CounterFact) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 
 	// Primary storage
-	bz, err := deterministicMarshal(&cf)
+	bz, err := deterministicMarshal(cf)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal counter-fact: %v", err))
 	}
@@ -759,17 +759,17 @@ func (k Keeper) SetCounterFact(ctx sdk.Context, cf types.CounterFact) {
 }
 
 // GetCounterFact retrieves a counter-fact by ID.
-func (k Keeper) GetCounterFact(ctx sdk.Context, id string) (types.CounterFact, bool) {
+func (k Keeper) GetCounterFact(ctx sdk.Context, id string) (*types.CounterFact, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(counterFactKey(id))
 	if err != nil || bz == nil {
-		return types.CounterFact{}, false
+		return nil, false
 	}
 	var cf types.CounterFact
 	if err := proto.Unmarshal(bz, &cf); err != nil {
-		return types.CounterFact{}, false
+		return nil, false
 	}
-	return cf, true
+	return &cf, true
 }
 
 // DeleteCounterFact removes a counter-fact and all its indexes.
@@ -790,7 +790,7 @@ func (k Keeper) DeleteCounterFact(ctx sdk.Context, id string) {
 }
 
 // GetCounterFactsByFact returns all counter-facts targeting a specific fact.
-func (k Keeper) GetCounterFactsByFact(ctx sdk.Context, factId string) []types.CounterFact {
+func (k Keeper) GetCounterFactsByFact(ctx sdk.Context, factId string) []*types.CounterFact {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.CounterFactByFactIndexPrefix, []byte(factId+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -799,7 +799,7 @@ func (k Keeper) GetCounterFactsByFact(ctx sdk.Context, factId string) []types.Co
 	}
 	defer iter.Close()
 
-	var results []types.CounterFact
+	var results []*types.CounterFact
 	for ; iter.Valid(); iter.Next() {
 		cfId := string(iter.Value())
 		cf, found := k.GetCounterFact(ctx, cfId)
@@ -811,7 +811,7 @@ func (k Keeper) GetCounterFactsByFact(ctx sdk.Context, factId string) []types.Co
 }
 
 // GetCounterFactsByDomain returns counter-facts in a domain.
-func (k Keeper) GetCounterFactsByDomain(ctx sdk.Context, domain string) []types.CounterFact {
+func (k Keeper) GetCounterFactsByDomain(ctx sdk.Context, domain string) []*types.CounterFact {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.CounterFactByDomainIndexPrefix, []byte(domain+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -820,7 +820,7 @@ func (k Keeper) GetCounterFactsByDomain(ctx sdk.Context, domain string) []types.
 	}
 	defer iter.Close()
 
-	var results []types.CounterFact
+	var results []*types.CounterFact
 	for ; iter.Valid(); iter.Next() {
 		cfId := string(iter.Value())
 		cf, found := k.GetCounterFact(ctx, cfId)
@@ -832,7 +832,7 @@ func (k Keeper) GetCounterFactsByDomain(ctx sdk.Context, domain string) []types.
 }
 
 // IterateCounterFacts iterates over all counter-facts. Return true from cb to stop.
-func (k Keeper) IterateCounterFacts(ctx sdk.Context, cb func(types.CounterFact) bool) {
+func (k Keeper) IterateCounterFacts(ctx sdk.Context, cb func(*types.CounterFact) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.CounterFactKeyPrefix, prefixEndBytes(types.CounterFactKeyPrefix))
 	if err != nil {
@@ -845,7 +845,7 @@ func (k Keeper) IterateCounterFacts(ctx sdk.Context, cb func(types.CounterFact) 
 		if err := proto.Unmarshal(iter.Value(), &cf); err != nil {
 			continue
 		}
-		if cb(cf) {
+		if cb(&cf) {
 			break
 		}
 	}
@@ -865,10 +865,10 @@ func (k Keeper) GetMaxFalsityConfidence(ctx sdk.Context, factId string) uint64 {
 }
 
 // GetBidirectionalConfidence computes the dual-track epistemic assessment for a fact.
-func (k Keeper) GetBidirectionalConfidence(ctx sdk.Context, factId string) types.BidirectionalConfidence {
+func (k Keeper) GetBidirectionalConfidence(ctx sdk.Context, factId string) *types.BidirectionalConfidence {
 	fact, found := k.GetFact(ctx, factId)
 	if !found {
-		return types.BidirectionalConfidence{FactId: factId, Status: "uncertain"}
+		return &types.BidirectionalConfidence{FactId: factId, Status: "uncertain"}
 	}
 
 	falsityConf := k.GetMaxFalsityConfidence(ctx, factId)
@@ -882,7 +882,7 @@ func (k Keeper) GetBidirectionalConfidence(ctx sdk.Context, factId string) types
 
 	net := int64(fact.Confidence) - int64(falsityConf)
 
-	return types.BidirectionalConfidence{
+	return &types.BidirectionalConfidence{
 		FactId:            factId,
 		TruthConfidence:   fact.Confidence,
 		FalsityConfidence: falsityConf,
@@ -1150,7 +1150,7 @@ func (k Keeper) GetFactCountByDomain(ctx sdk.Context, domain string) uint64 {
 // GetDomainCount returns the total number of registered domains.
 func (k Keeper) GetDomainCount(ctx sdk.Context) uint64 {
 	var count uint64
-	k.IterateDomains(ctx, func(_ types.OntologicalDomain) bool {
+	k.IterateDomains(ctx, func(_ *types.OntologicalDomain) bool {
 		count++
 		return false
 	})

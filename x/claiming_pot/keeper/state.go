@@ -13,9 +13,9 @@ import (
 // --- Pot CRUD ---
 
 // SetPot stores a claiming pot.
-func (k Keeper) SetPot(ctx sdk.Context, pot types.ClaimingPot) {
+func (k Keeper) SetPot(ctx sdk.Context, pot *types.ClaimingPot) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&pot)
+	bz, err := proto.Marshal(pot)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claiming pot: %v", err))
 	}
@@ -25,17 +25,17 @@ func (k Keeper) SetPot(ctx sdk.Context, pot types.ClaimingPot) {
 }
 
 // GetPot retrieves a claiming pot by ID.
-func (k Keeper) GetPot(ctx sdk.Context, potId string) (types.ClaimingPot, bool) {
+func (k Keeper) GetPot(ctx sdk.Context, potId string) (*types.ClaimingPot, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.PotKey(potId))
 	if err != nil || bz == nil {
-		return types.ClaimingPot{}, false
+		return nil, false
 	}
 	var pot types.ClaimingPot
 	if err := proto.Unmarshal(bz, &pot); err != nil {
-		return types.ClaimingPot{}, false
+		return nil, false
 	}
-	return pot, true
+	return &pot, true
 }
 
 // DeletePot removes a claiming pot.
@@ -45,7 +45,7 @@ func (k Keeper) DeletePot(ctx sdk.Context, potId string) {
 }
 
 // IteratePots iterates over all pots. Return true from cb to stop.
-func (k Keeper) IteratePots(ctx sdk.Context, cb func(types.ClaimingPot) bool) {
+func (k Keeper) IteratePots(ctx sdk.Context, cb func(*types.ClaimingPot) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.PotKeyPrefix, prefixEndBytes(types.PotKeyPrefix))
 	if err != nil {
@@ -58,16 +58,16 @@ func (k Keeper) IteratePots(ctx sdk.Context, cb func(types.ClaimingPot) bool) {
 		if err := proto.Unmarshal(iter.Value(), &pot); err != nil {
 			continue
 		}
-		if cb(pot) {
+		if cb(&pot) {
 			break
 		}
 	}
 }
 
 // GetPotsByStatus returns all pots with a given status.
-func (k Keeper) GetPotsByStatus(ctx sdk.Context, status types.PotStatus) []types.ClaimingPot {
-	var pots []types.ClaimingPot
-	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+func (k Keeper) GetPotsByStatus(ctx sdk.Context, status types.PotStatus) []*types.ClaimingPot {
+	var pots []*types.ClaimingPot
+	k.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
 		if pot.Status == string(status) {
 			pots = append(pots, pot)
 		}
@@ -77,9 +77,9 @@ func (k Keeper) GetPotsByStatus(ctx sdk.Context, status types.PotStatus) []types
 }
 
 // GetPotsByCreator returns all pots created by a specific address.
-func (k Keeper) GetPotsByCreator(ctx sdk.Context, creator string) []types.ClaimingPot {
-	var pots []types.ClaimingPot
-	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+func (k Keeper) GetPotsByCreator(ctx sdk.Context, creator string) []*types.ClaimingPot {
+	var pots []*types.ClaimingPot
+	k.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
 		if pot.Creator == creator {
 			pots = append(pots, pot)
 		}
@@ -91,9 +91,9 @@ func (k Keeper) GetPotsByCreator(ctx sdk.Context, creator string) []types.Claimi
 // --- Claim Record CRUD ---
 
 // SetClaimRecord stores a claim record.
-func (k Keeper) SetClaimRecord(ctx sdk.Context, record types.ClaimRecord) {
+func (k Keeper) SetClaimRecord(ctx sdk.Context, record *types.ClaimRecord) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&record)
+	bz, err := proto.Marshal(record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal claim record: %v", err))
 	}
@@ -103,21 +103,21 @@ func (k Keeper) SetClaimRecord(ctx sdk.Context, record types.ClaimRecord) {
 }
 
 // GetClaimRecord retrieves a claim record.
-func (k Keeper) GetClaimRecord(ctx sdk.Context, potId, claimer string) (types.ClaimRecord, bool) {
+func (k Keeper) GetClaimRecord(ctx sdk.Context, potId, claimer string) (*types.ClaimRecord, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ClaimRecordKey(potId, claimer))
 	if err != nil || bz == nil {
-		return types.ClaimRecord{}, false
+		return nil, false
 	}
 	var record types.ClaimRecord
 	if err := proto.Unmarshal(bz, &record); err != nil {
-		return types.ClaimRecord{}, false
+		return nil, false
 	}
-	return record, true
+	return &record, true
 }
 
 // IterateClaimRecords iterates over all claim records for a pot. Return true from cb to stop.
-func (k Keeper) IterateClaimRecords(ctx sdk.Context, potId string, cb func(types.ClaimRecord) bool) {
+func (k Keeper) IterateClaimRecords(ctx sdk.Context, potId string, cb func(*types.ClaimRecord) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := types.ClaimRecordPrefixKey(potId)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -131,16 +131,16 @@ func (k Keeper) IterateClaimRecords(ctx sdk.Context, potId string, cb func(types
 		if err := proto.Unmarshal(iter.Value(), &record); err != nil {
 			continue
 		}
-		if cb(record) {
+		if cb(&record) {
 			break
 		}
 	}
 }
 
 // GetAllClaimRecords returns all claim records for a pot.
-func (k Keeper) GetAllClaimRecords(ctx sdk.Context, potId string) []types.ClaimRecord {
-	var records []types.ClaimRecord
-	k.IterateClaimRecords(ctx, potId, func(record types.ClaimRecord) bool {
+func (k Keeper) GetAllClaimRecords(ctx sdk.Context, potId string) []*types.ClaimRecord {
+	var records []*types.ClaimRecord
+	k.IterateClaimRecords(ctx, potId, func(record *types.ClaimRecord) bool {
 		records = append(records, record)
 		return false
 	})
@@ -173,23 +173,23 @@ func (k Keeper) IncrementCreatorPotCount(ctx sdk.Context, creator string) {
 // --- Params ---
 
 // GetParams returns the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // SetParams sets the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}

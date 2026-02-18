@@ -122,10 +122,10 @@ func registerKnowledgeRoutes(app *LegibleApp, router *mux.Router) {
 		}
 		offset := parseUint32(r, "offset", 0)
 
-		var facts []knowledgetypes.Fact
+		var facts []*knowledgetypes.Fact
 		var total uint64
 		var skipped uint32
-		app.KnowledgeKeeper.IterateFacts(ctx, func(f knowledgetypes.Fact) bool {
+		app.KnowledgeKeeper.IterateFacts(ctx, func(f *knowledgetypes.Fact) bool {
 			total++
 			if skipped < offset {
 				skipped++
@@ -338,8 +338,8 @@ func registerLegibleStakingRoutes(app *LegibleApp, router *mux.Router) {
 		}
 		offset := parseUint32(r, "offset", 0)
 
-		var all []legiblestakingtypes.LegibleValidator
-		app.LegibleStakingKeeper.IterateValidators(ctx, func(v legiblestakingtypes.LegibleValidator) bool {
+		var all []*legiblestakingtypes.LegibleValidator
+		app.LegibleStakingKeeper.IterateValidators(ctx, func(v *legiblestakingtypes.LegibleValidator) bool {
 			all = append(all, v)
 			return false
 		})
@@ -347,7 +347,7 @@ func registerLegibleStakingRoutes(app *LegibleApp, router *mux.Router) {
 		total := uint32(len(all))
 		start := offset
 		if start >= total {
-			writeJSON(w, map[string]interface{}{"validators": []legiblestakingtypes.LegibleValidator{}, "total": total})
+			writeJSON(w, map[string]interface{}{"validators": []*legiblestakingtypes.LegibleValidator{}, "total": total})
 			return
 		}
 		end := start + limit
@@ -426,8 +426,8 @@ func registerHomeRoutes(app *LegibleApp, router *mux.Router) {
 		limit := parseUint32(r, "limit", 100)
 		offset := parseUint32(r, "offset", 0)
 
-		var all []hometypes.AgentHome
-		app.HomeKeeper.IterateHomes(ctx, func(home hometypes.AgentHome) bool {
+		var all []*hometypes.AgentHome
+		app.HomeKeeper.IterateHomes(ctx, func(home *hometypes.AgentHome) bool {
 			all = append(all, home)
 			return false
 		})
@@ -450,8 +450,8 @@ func registerHomeRoutes(app *LegibleApp, router *mux.Router) {
 			writeError(w, http.StatusServiceUnavailable, "state not available")
 			return
 		}
-		var sessions []hometypes.ActiveSession
-		app.HomeKeeper.IterateSessions(ctx, mux.Vars(r)["home_id"], func(s hometypes.ActiveSession) bool {
+		var sessions []*hometypes.ActiveSession
+		app.HomeKeeper.IterateSessions(ctx, mux.Vars(r)["home_id"], func(s *hometypes.ActiveSession) bool {
 			sessions = append(sessions, s)
 			return false
 		})
@@ -464,8 +464,8 @@ func registerHomeRoutes(app *LegibleApp, router *mux.Router) {
 			writeError(w, http.StatusServiceUnavailable, "state not available")
 			return
 		}
-		var alerts []hometypes.Alert
-		app.HomeKeeper.IterateAlerts(ctx, mux.Vars(r)["home_id"], func(a hometypes.Alert) bool {
+		var alerts []*hometypes.Alert
+		app.HomeKeeper.IterateAlerts(ctx, mux.Vars(r)["home_id"], func(a *hometypes.Alert) bool {
 			alerts = append(alerts, a)
 			return false
 		})
@@ -592,8 +592,8 @@ func registerEmergencyRoutes(app *LegibleApp, router *mux.Router) {
 		}
 		offset := parseUint32(r, "offset", 0)
 
-		var completed []emergencytypes.EmergencyCeremony
-		app.EmergencyKeeper.IterateCeremonies(ctx, func(c emergencytypes.EmergencyCeremony) bool {
+		var completed []*emergencytypes.EmergencyCeremony
+		app.EmergencyKeeper.IterateCeremonies(ctx, func(c *emergencytypes.EmergencyCeremony) bool {
 			completed = append(completed, c)
 			return false
 		})
@@ -1071,11 +1071,11 @@ func registerClaimingPotRoutes(app *LegibleApp, router *mux.Router) {
 		offset := parseUint32(r, "offset", 0)
 		status := r.URL.Query().Get("status")
 
-		var all []claimingpottypes.ClaimingPot
+		var all []*claimingpottypes.ClaimingPot
 		if status != "" {
 			all = app.ClaimingPotKeeper.GetPotsByStatus(ctx, claimingpottypes.PotStatus(status))
 		} else {
-			app.ClaimingPotKeeper.IteratePots(ctx, func(pot claimingpottypes.ClaimingPot) bool {
+			app.ClaimingPotKeeper.IteratePots(ctx, func(pot *claimingpottypes.ClaimingPot) bool {
 				all = append(all, pot)
 				return false
 			})
@@ -1447,8 +1447,8 @@ func registerCaptureChallengeRoutes(app *LegibleApp, router *mux.Router) {
 			return
 		}
 		domain := r.URL.Query().Get("domain")
-		var active []capturechallengetypes.CaptureChallenge
-		app.CaptureChallengeKeeper.IterateChallenges(ctx, func(ch capturechallengetypes.CaptureChallenge) bool {
+		var active []*capturechallengetypes.CaptureChallenge
+		app.CaptureChallengeKeeper.IterateChallenges(ctx, func(ch *capturechallengetypes.CaptureChallenge) bool {
 			if domain != "" && ch.Domain != domain {
 				return false
 			}
@@ -1698,8 +1698,8 @@ func registerResearchRoutes(app *LegibleApp, router *mux.Router) {
 		status := r.URL.Query().Get("status")
 		domain := r.URL.Query().Get("domain")
 
-		var results []researchtypes.Research
-		app.ResearchKeeper.IterateResearches(ctx, func(res researchtypes.Research) bool {
+		var results []*researchtypes.Research
+		app.ResearchKeeper.IterateResearches(ctx, func(res *researchtypes.Research) bool {
 			if status != "" && string(res.Status) != status {
 				return false
 			}

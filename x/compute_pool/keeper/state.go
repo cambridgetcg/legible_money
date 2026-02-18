@@ -15,7 +15,7 @@ import (
 // -----------------------------------------------------------------------
 
 // SetProvider stores a compute provider record.
-func (k Keeper) SetProvider(ctx sdk.Context, provider types.ComputeProvider) {
+func (k Keeper) SetProvider(ctx sdk.Context, provider *types.ComputeProvider) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerKey(provider.Address)
 	bz, err := json.Marshal(&provider)
@@ -26,18 +26,18 @@ func (k Keeper) SetProvider(ctx sdk.Context, provider types.ComputeProvider) {
 }
 
 // GetProvider retrieves a compute provider by address.
-func (k Keeper) GetProvider(ctx sdk.Context, address string) (types.ComputeProvider, bool) {
+func (k Keeper) GetProvider(ctx sdk.Context, address string) (*types.ComputeProvider, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerKey(address)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.ComputeProvider{}, false
+		return nil, false
 	}
 	var provider types.ComputeProvider
 	if err := json.Unmarshal(bz, &provider); err != nil {
-		return types.ComputeProvider{}, false
+		return nil, false
 	}
-	return provider, true
+	return &provider, true
 }
 
 // DeleteProvider removes a compute provider.
@@ -47,9 +47,9 @@ func (k Keeper) DeleteProvider(ctx sdk.Context, address string) {
 }
 
 // GetAllProviders returns all compute providers.
-func (k Keeper) GetAllProviders(ctx sdk.Context) []types.ComputeProvider {
-	var providers []types.ComputeProvider
-	k.IterateProviders(ctx, func(p types.ComputeProvider) bool {
+func (k Keeper) GetAllProviders(ctx sdk.Context) []*types.ComputeProvider {
+	var providers []*types.ComputeProvider
+	k.IterateProviders(ctx, func(p *types.ComputeProvider) bool {
 		providers = append(providers, p)
 		return false
 	})
@@ -57,7 +57,7 @@ func (k Keeper) GetAllProviders(ctx sdk.Context) []types.ComputeProvider {
 }
 
 // IterateProviders iterates over all providers. Return true from cb to stop.
-func (k Keeper) IterateProviders(ctx sdk.Context, cb func(types.ComputeProvider) bool) {
+func (k Keeper) IterateProviders(ctx sdk.Context, cb func(*types.ComputeProvider) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.ProviderKeyPrefix, prefixEndBytes(types.ProviderKeyPrefix))
 	if err != nil {
@@ -70,7 +70,7 @@ func (k Keeper) IterateProviders(ctx sdk.Context, cb func(types.ComputeProvider)
 		if err := json.Unmarshal(iter.Value(), &provider); err != nil {
 			continue
 		}
-		if cb(provider) {
+		if cb(&provider) {
 			break
 		}
 	}
@@ -81,7 +81,7 @@ func (k Keeper) IterateProviders(ctx sdk.Context, cb func(types.ComputeProvider)
 // -----------------------------------------------------------------------
 
 // SetCredit stores a validator's compute credit record.
-func (k Keeper) SetCredit(ctx sdk.Context, credit types.ComputeCredit) {
+func (k Keeper) SetCredit(ctx sdk.Context, credit *types.ComputeCredit) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := creditKey(credit.ValidatorAddr)
 	bz, err := json.Marshal(&credit)
@@ -92,24 +92,24 @@ func (k Keeper) SetCredit(ctx sdk.Context, credit types.ComputeCredit) {
 }
 
 // GetCredit retrieves a validator's compute credit balance.
-func (k Keeper) GetCredit(ctx sdk.Context, validatorAddr string) (types.ComputeCredit, bool) {
+func (k Keeper) GetCredit(ctx sdk.Context, validatorAddr string) (*types.ComputeCredit, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := creditKey(validatorAddr)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.ComputeCredit{}, false
+		return nil, false
 	}
 	var credit types.ComputeCredit
 	if err := json.Unmarshal(bz, &credit); err != nil {
-		return types.ComputeCredit{}, false
+		return nil, false
 	}
-	return credit, true
+	return &credit, true
 }
 
 // GetAllCredits returns all credit records.
-func (k Keeper) GetAllCredits(ctx sdk.Context) []types.ComputeCredit {
-	var credits []types.ComputeCredit
-	k.IterateCredits(ctx, func(c types.ComputeCredit) bool {
+func (k Keeper) GetAllCredits(ctx sdk.Context) []*types.ComputeCredit {
+	var credits []*types.ComputeCredit
+	k.IterateCredits(ctx, func(c *types.ComputeCredit) bool {
 		credits = append(credits, c)
 		return false
 	})
@@ -117,7 +117,7 @@ func (k Keeper) GetAllCredits(ctx sdk.Context) []types.ComputeCredit {
 }
 
 // IterateCredits iterates over all credit records. Return true from cb to stop.
-func (k Keeper) IterateCredits(ctx sdk.Context, cb func(types.ComputeCredit) bool) {
+func (k Keeper) IterateCredits(ctx sdk.Context, cb func(*types.ComputeCredit) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.CreditBalancePrefix, prefixEndBytes(types.CreditBalancePrefix))
 	if err != nil {
@@ -130,7 +130,7 @@ func (k Keeper) IterateCredits(ctx sdk.Context, cb func(types.ComputeCredit) boo
 		if err := json.Unmarshal(iter.Value(), &credit); err != nil {
 			continue
 		}
-		if cb(credit) {
+		if cb(&credit) {
 			break
 		}
 	}
@@ -141,7 +141,7 @@ func (k Keeper) IterateCredits(ctx sdk.Context, cb func(types.ComputeCredit) boo
 // -----------------------------------------------------------------------
 
 // SetTicket stores a redemption ticket.
-func (k Keeper) SetTicket(ctx sdk.Context, ticket types.RedemptionTicket) {
+func (k Keeper) SetTicket(ctx sdk.Context, ticket *types.RedemptionTicket) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := ticketKey(ticket.Id)
 	bz, err := json.Marshal(&ticket)
@@ -152,18 +152,18 @@ func (k Keeper) SetTicket(ctx sdk.Context, ticket types.RedemptionTicket) {
 }
 
 // GetTicket retrieves a redemption ticket by ID.
-func (k Keeper) GetTicket(ctx sdk.Context, ticketId uint64) (types.RedemptionTicket, bool) {
+func (k Keeper) GetTicket(ctx sdk.Context, ticketId uint64) (*types.RedemptionTicket, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := ticketKey(ticketId)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.RedemptionTicket{}, false
+		return nil, false
 	}
 	var ticket types.RedemptionTicket
 	if err := json.Unmarshal(bz, &ticket); err != nil {
-		return types.RedemptionTicket{}, false
+		return nil, false
 	}
-	return ticket, true
+	return &ticket, true
 }
 
 // DeleteTicket removes a redemption ticket.
@@ -173,7 +173,7 @@ func (k Keeper) DeleteTicket(ctx sdk.Context, ticketId uint64) {
 }
 
 // IterateTickets iterates over all redemption tickets. Return true from cb to stop.
-func (k Keeper) IterateTickets(ctx sdk.Context, cb func(types.RedemptionTicket) bool) {
+func (k Keeper) IterateTickets(ctx sdk.Context, cb func(*types.RedemptionTicket) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.RedemptionTicketPrefix, prefixEndBytes(types.RedemptionTicketPrefix))
 	if err != nil {
@@ -186,7 +186,7 @@ func (k Keeper) IterateTickets(ctx sdk.Context, cb func(types.RedemptionTicket) 
 		if err := json.Unmarshal(iter.Value(), &ticket); err != nil {
 			continue
 		}
-		if cb(ticket) {
+		if cb(&ticket) {
 			break
 		}
 	}
@@ -215,7 +215,7 @@ func (k Keeper) GetNextTicketId(ctx sdk.Context) uint64 {
 // -----------------------------------------------------------------------
 
 // SetUsageReport stores a confirmed usage report.
-func (k Keeper) SetUsageReport(ctx sdk.Context, report types.UsageReport) {
+func (k Keeper) SetUsageReport(ctx sdk.Context, report *types.UsageReport) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := usageReportKey(report.TicketId)
 	bz, err := json.Marshal(&report)
@@ -226,18 +226,18 @@ func (k Keeper) SetUsageReport(ctx sdk.Context, report types.UsageReport) {
 }
 
 // GetUsageReport retrieves a usage report by ticket ID.
-func (k Keeper) GetUsageReport(ctx sdk.Context, ticketId uint64) (types.UsageReport, bool) {
+func (k Keeper) GetUsageReport(ctx sdk.Context, ticketId uint64) (*types.UsageReport, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := usageReportKey(ticketId)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.UsageReport{}, false
+		return nil, false
 	}
 	var report types.UsageReport
 	if err := json.Unmarshal(bz, &report); err != nil {
-		return types.UsageReport{}, false
+		return nil, false
 	}
-	return report, true
+	return &report, true
 }
 
 // -----------------------------------------------------------------------
@@ -245,7 +245,7 @@ func (k Keeper) GetUsageReport(ctx sdk.Context, ticketId uint64) (types.UsageRep
 // -----------------------------------------------------------------------
 
 // SetEpochStats stores epoch statistics.
-func (k Keeper) SetEpochStats(ctx sdk.Context, stats types.EpochStats) {
+func (k Keeper) SetEpochStats(ctx sdk.Context, stats *types.EpochStats) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := epochStatsKey(stats.Epoch)
 	bz, err := json.Marshal(&stats)
@@ -256,27 +256,27 @@ func (k Keeper) SetEpochStats(ctx sdk.Context, stats types.EpochStats) {
 }
 
 // GetEpochStats retrieves epoch statistics.
-func (k Keeper) GetEpochStats(ctx sdk.Context, epoch uint64) (types.EpochStats, bool) {
+func (k Keeper) GetEpochStats(ctx sdk.Context, epoch uint64) (*types.EpochStats, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := epochStatsKey(epoch)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.EpochStats{}, false
+		return nil, false
 	}
 	var stats types.EpochStats
 	if err := json.Unmarshal(bz, &stats); err != nil {
-		return types.EpochStats{}, false
+		return nil, false
 	}
-	return stats, true
+	return &stats, true
 }
 
 // GetOrCreateEpochStats returns existing stats or creates a new entry.
-func (k Keeper) GetOrCreateEpochStats(ctx sdk.Context, epoch uint64) types.EpochStats {
+func (k Keeper) GetOrCreateEpochStats(ctx sdk.Context, epoch uint64) *types.EpochStats {
 	stats, found := k.GetEpochStats(ctx, epoch)
 	if found {
 		return stats
 	}
-	return types.EpochStats{
+	return &types.EpochStats{
 		Epoch:          epoch,
 		PoolInflow:     "0",
 		LgmDistributed: "0",
@@ -288,7 +288,7 @@ func (k Keeper) GetOrCreateEpochStats(ctx sdk.Context, epoch uint64) types.Epoch
 // -----------------------------------------------------------------------
 
 // SetProviderEpochFlow stores per-provider per-epoch flow data.
-func (k Keeper) SetProviderEpochFlow(ctx sdk.Context, flow types.ProviderEpochFlow) {
+func (k Keeper) SetProviderEpochFlow(ctx sdk.Context, flow *types.ProviderEpochFlow) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerEpochKey(flow.Epoch, flow.Provider)
 	bz, err := json.Marshal(&flow)
@@ -299,27 +299,27 @@ func (k Keeper) SetProviderEpochFlow(ctx sdk.Context, flow types.ProviderEpochFl
 }
 
 // GetProviderEpochFlow retrieves per-provider per-epoch flow data.
-func (k Keeper) GetProviderEpochFlow(ctx sdk.Context, epoch uint64, provider string) (types.ProviderEpochFlow, bool) {
+func (k Keeper) GetProviderEpochFlow(ctx sdk.Context, epoch uint64, provider string) (*types.ProviderEpochFlow, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerEpochKey(epoch, provider)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.ProviderEpochFlow{}, false
+		return nil, false
 	}
 	var flow types.ProviderEpochFlow
 	if err := json.Unmarshal(bz, &flow); err != nil {
-		return types.ProviderEpochFlow{}, false
+		return nil, false
 	}
-	return flow, true
+	return &flow, true
 }
 
 // GetOrCreateProviderEpochFlow returns existing flow or creates a new entry.
-func (k Keeper) GetOrCreateProviderEpochFlow(ctx sdk.Context, epoch uint64, provider string) types.ProviderEpochFlow {
+func (k Keeper) GetOrCreateProviderEpochFlow(ctx sdk.Context, epoch uint64, provider string) *types.ProviderEpochFlow {
 	flow, found := k.GetProviderEpochFlow(ctx, epoch, provider)
 	if found {
 		return flow
 	}
-	return types.ProviderEpochFlow{
+	return &types.ProviderEpochFlow{
 		Epoch:       epoch,
 		Provider:    provider,
 		LgmReceived: "0",

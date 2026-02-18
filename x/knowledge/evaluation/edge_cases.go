@@ -25,7 +25,7 @@ const substantiveEvidenceThreshold = 500_000
 //  2. Axiom contradiction (referenced fact is disproven but was axiomatic)
 //  3. No evidence AND no references for evidence-requiring categories
 //  4. Empty claim text
-func evaluateEdgeCases(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateEdgeCases(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "edge_cases",
 	}

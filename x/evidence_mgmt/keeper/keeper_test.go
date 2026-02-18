@@ -192,7 +192,7 @@ func TestSetGetEvidence(t *testing.T) {
 		SubmittedAt:  100,
 	}
 
-	k.SetEvidence(ctx, e)
+	k.SetEvidence(ctx, &e)
 	got, found := k.GetEvidence(ctx, "ev-1")
 	if !found {
 		t.Fatal("evidence not found")
@@ -209,7 +209,7 @@ func TestDeleteEvidence(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	e := types.Evidence{Id: "ev-1", ClaimId: "claim-1", Submitter: testAddr(1)}
-	k.SetEvidence(ctx, e)
+	k.SetEvidence(ctx, &e)
 
 	k.DeleteEvidence(ctx, "ev-1")
 	_, found := k.GetEvidence(ctx, "ev-1")
@@ -222,12 +222,12 @@ func TestGetEvidenceByClaimId(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	for i := 0; i < 3; i++ {
-		k.SetEvidence(ctx, types.Evidence{
+		k.SetEvidence(ctx, &types.Evidence{
 			Id:      fmt.Sprintf("ev-%d", i),
 			ClaimId: "claim-1",
 		})
 	}
-	k.SetEvidence(ctx, types.Evidence{Id: "ev-other", ClaimId: "claim-2"})
+	k.SetEvidence(ctx, &types.Evidence{Id: "ev-other", ClaimId: "claim-2"})
 
 	results := k.GetEvidenceByClaimId(ctx, "claim-1")
 	if len(results) != 3 {
@@ -239,7 +239,7 @@ func TestGetEvidenceCountForClaim(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	for i := 0; i < 5; i++ {
-		k.SetEvidence(ctx, types.Evidence{
+		k.SetEvidence(ctx, &types.Evidence{
 			Id:      fmt.Sprintf("ev-%d", i),
 			ClaimId: "claim-1",
 		})
@@ -253,14 +253,14 @@ func TestIterateEvidence(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	for i := 0; i < 4; i++ {
-		k.SetEvidence(ctx, types.Evidence{
+		k.SetEvidence(ctx, &types.Evidence{
 			Id:      fmt.Sprintf("ev-%d", i),
 			ClaimId: "claim-1",
 		})
 	}
 
 	var count int
-	k.IterateEvidence(ctx, func(e types.Evidence) bool {
+	k.IterateEvidence(ctx, func(e *types.Evidence) bool {
 		count++
 		return false
 	})
@@ -284,7 +284,7 @@ func TestSetGetAudit(t *testing.T) {
 		Status:     string(types.AuditStatusPending),
 	}
 
-	k.SetAudit(ctx, a)
+	k.SetAudit(ctx, &a)
 	got, found := k.GetAudit(ctx, "audit-1")
 	if !found {
 		t.Fatal("audit not found")
@@ -298,7 +298,7 @@ func TestDeleteAudit(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	a := types.EvidenceAudit{Id: "audit-1", EvidenceId: "ev-1", Auditor: testAddr(2)}
-	k.SetAudit(ctx, a)
+	k.SetAudit(ctx, &a)
 	k.DeleteAudit(ctx, "audit-1")
 
 	_, found := k.GetAudit(ctx, "audit-1")
@@ -311,7 +311,7 @@ func TestGetAuditsForEvidence(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	for i := 0; i < 3; i++ {
-		k.SetAudit(ctx, types.EvidenceAudit{
+		k.SetAudit(ctx, &types.EvidenceAudit{
 			Id:         fmt.Sprintf("audit-%d", i),
 			EvidenceId: "ev-1",
 			Auditor:    testAddr(i + 10),
@@ -337,7 +337,7 @@ func TestSetGetOracle(t *testing.T) {
 		IsActive: true,
 	}
 
-	k.SetOracle(ctx, o)
+	k.SetOracle(ctx, &o)
 	got, found := k.GetOracle(ctx, "oracle-1")
 	if !found {
 		t.Fatal("oracle not found")
@@ -350,7 +350,7 @@ func TestSetGetOracle(t *testing.T) {
 func TestDeleteOracle(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{Id: "oracle-1", Operator: testAddr(3), IsActive: true})
+	k.SetOracle(ctx, &types.Oracle{Id: "oracle-1", Operator: testAddr(3), IsActive: true})
 	k.SetActiveOracle(ctx, "oracle-1")
 	k.DeleteOracle(ctx, "oracle-1")
 
@@ -364,7 +364,7 @@ func TestGetOracleByOperator(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	addr := testAddr(4)
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:       "oracle-1",
 		Operator: addr,
 		Name:     "OperatorOracle",
@@ -383,11 +383,11 @@ func TestActiveOracles(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Add 3 oracles, 2 active, 1 inactive
-	k.SetOracle(ctx, types.Oracle{Id: "o1", Operator: testAddr(1), IsActive: true})
+	k.SetOracle(ctx, &types.Oracle{Id: "o1", Operator: testAddr(1), IsActive: true})
 	k.SetActiveOracle(ctx, "o1")
-	k.SetOracle(ctx, types.Oracle{Id: "o2", Operator: testAddr(2), IsActive: true})
+	k.SetOracle(ctx, &types.Oracle{Id: "o2", Operator: testAddr(2), IsActive: true})
 	k.SetActiveOracle(ctx, "o2")
-	k.SetOracle(ctx, types.Oracle{Id: "o3", Operator: testAddr(3), IsActive: false})
+	k.SetOracle(ctx, &types.Oracle{Id: "o3", Operator: testAddr(3), IsActive: false})
 
 	active := k.GetActiveOracles(ctx)
 	if len(active) != 2 {
@@ -406,7 +406,7 @@ func TestSetGetConsensus(t *testing.T) {
 		TotalStake:    "100000000",
 		AuditCount:    3,
 	}
-	k.SetConsensus(ctx, c)
+	k.SetConsensus(ctx, &c)
 
 	got, found := k.GetConsensus(ctx, "ev-1")
 	if !found {
@@ -466,7 +466,7 @@ func TestSubmitEvidence_Success(t *testing.T) {
 		SubmittedAt:  100,
 	}
 
-	if err := k.SubmitEvidence(ctx, e); err != nil {
+	if err := k.SubmitEvidence(ctx, &e); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -500,7 +500,7 @@ func TestSubmitEvidence_MaxReached(t *testing.T) {
 			Description:  "test",
 			SubmittedAt:  100,
 		}
-		if err := k.SubmitEvidence(ctx, e); err != nil {
+		if err := k.SubmitEvidence(ctx, &e); err != nil {
 			t.Fatalf("unexpected error on evidence %d: %v", i, err)
 		}
 	}
@@ -513,7 +513,7 @@ func TestSubmitEvidence_MaxReached(t *testing.T) {
 		ContentHash:  "hash2",
 		Description:  "test",
 	}
-	if err := k.SubmitEvidence(ctx, e); err == nil {
+	if err := k.SubmitEvidence(ctx, &e); err == nil {
 		t.Fatal("expected max evidence error")
 	}
 }
@@ -529,7 +529,7 @@ func TestSubmitEvidence_DuplicateHash(t *testing.T) {
 		Description:  "first",
 		SubmittedAt:  100,
 	}
-	if err := k.SubmitEvidence(ctx, e); err != nil {
+	if err := k.SubmitEvidence(ctx, &e); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -540,7 +540,7 @@ func TestSubmitEvidence_DuplicateHash(t *testing.T) {
 		ContentHash:  "samehash",
 		Description:  "second",
 	}
-	if err := k.SubmitEvidence(ctx, e2); err == nil {
+	if err := k.SubmitEvidence(ctx, &e2); err == nil {
 		t.Fatal("expected duplicate hash error")
 	}
 }
@@ -555,7 +555,7 @@ func TestSubmitEvidence_InvalidType(t *testing.T) {
 		ContentHash:  "hash1",
 		Description:  "test",
 	}
-	if err := k.SubmitEvidence(ctx, e); err == nil {
+	if err := k.SubmitEvidence(ctx, &e); err == nil {
 		t.Fatal("expected invalid type error")
 	}
 }
@@ -566,7 +566,7 @@ func TestSubmitAudit_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 
 	// Set up evidence in auditable state
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		ClaimId:     "claim-1",
 		Status:      string(types.EvidenceStatusSubmitted),
@@ -586,7 +586,7 @@ func TestSubmitAudit_Success(t *testing.T) {
 		SubmittedAt: 100,
 	}
 
-	if err := k.SubmitAudit(ctx, audit); err != nil {
+	if err := k.SubmitAudit(ctx, &audit); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -610,7 +610,7 @@ func TestSubmitAudit_EvidenceNotFound(t *testing.T) {
 		Score:      500000,
 		Rationale:  "test",
 	}
-	if err := k.SubmitAudit(ctx, audit); err == nil {
+	if err := k.SubmitAudit(ctx, &audit); err == nil {
 		t.Fatal("expected evidence not found error")
 	}
 }
@@ -619,7 +619,7 @@ func TestSubmitAudit_WindowClosed(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 
 	// Evidence submitted long ago — audit window has closed
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		ClaimId:     "claim-1",
 		Status:      string(types.EvidenceStatusSubmitted),
@@ -643,7 +643,7 @@ func TestSubmitAudit_WindowClosed(t *testing.T) {
 		Score:      500000,
 		Rationale:  "late",
 	}
-	if err := k.SubmitAudit(ctx, audit); err == nil {
+	if err := k.SubmitAudit(ctx, &audit); err == nil {
 		t.Fatal("expected audit window closed error")
 	}
 }
@@ -651,7 +651,7 @@ func TestSubmitAudit_WindowClosed(t *testing.T) {
 func TestSubmitAudit_InsufficientStake(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
@@ -668,7 +668,7 @@ func TestSubmitAudit_InsufficientStake(t *testing.T) {
 		Score:      500000,
 		Rationale:  "test",
 	}
-	if err := k.SubmitAudit(ctx, audit); err == nil {
+	if err := k.SubmitAudit(ctx, &audit); err == nil {
 		t.Fatal("expected insufficient stake error")
 	}
 }
@@ -676,7 +676,7 @@ func TestSubmitAudit_InsufficientStake(t *testing.T) {
 func TestSubmitAudit_DuplicateAuditor(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
@@ -693,7 +693,7 @@ func TestSubmitAudit_DuplicateAuditor(t *testing.T) {
 		Score:      700000,
 		Rationale:  "first",
 	}
-	if err := k.SubmitAudit(ctx, audit1); err != nil {
+	if err := k.SubmitAudit(ctx, &audit1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -705,7 +705,7 @@ func TestSubmitAudit_DuplicateAuditor(t *testing.T) {
 		Score:      800000,
 		Rationale:  "duplicate",
 	}
-	if err := k.SubmitAudit(ctx, audit2); err == nil {
+	if err := k.SubmitAudit(ctx, &audit2); err == nil {
 		t.Fatal("expected duplicate audit error")
 	}
 }
@@ -713,7 +713,7 @@ func TestSubmitAudit_DuplicateAuditor(t *testing.T) {
 func TestSubmitAudit_InvalidScore(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
@@ -730,7 +730,7 @@ func TestSubmitAudit_InvalidScore(t *testing.T) {
 		Score:      1000001, // Exceeds max
 		Rationale:  "test",
 	}
-	if err := k.SubmitAudit(ctx, audit); err == nil {
+	if err := k.SubmitAudit(ctx, &audit); err == nil {
 		t.Fatal("expected invalid score error")
 	}
 }
@@ -741,7 +741,7 @@ func TestComputeConsensus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Set up 3 audits with different stakes and scores
-	audits := []types.EvidenceAudit{
+	audits := []*types.EvidenceAudit{
 		{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: string(types.AuditStatusPending)},
 		{Id: "a2", EvidenceId: "ev-1", Stake: "200000000", Score: 600000, Status: string(types.AuditStatusPending)},
 		{Id: "a3", EvidenceId: "ev-1", Stake: "100000000", Score: 900000, Status: string(types.AuditStatusPending)},
@@ -768,8 +768,8 @@ func TestComputeConsensus(t *testing.T) {
 func TestComputeConsensus_SkipsExpired(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetAudit(ctx, types.EvidenceAudit{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: string(types.AuditStatusPending)})
-	k.SetAudit(ctx, types.EvidenceAudit{Id: "a2", EvidenceId: "ev-1", Stake: "100000000", Score: 200000, Status: string(types.AuditStatusExpired)})
+	k.SetAudit(ctx, &types.EvidenceAudit{Id: "a1", EvidenceId: "ev-1", Stake: "100000000", Score: 800000, Status: string(types.AuditStatusPending)})
+	k.SetAudit(ctx, &types.EvidenceAudit{Id: "a2", EvidenceId: "ev-1", Stake: "100000000", Score: 200000, Status: string(types.AuditStatusExpired)})
 
 	consensus, err := k.ComputeConsensus(ctx, "ev-1")
 	if err != nil {
@@ -814,7 +814,7 @@ func TestResolveAudits(t *testing.T) {
 	auditor2 := testAddr(2)
 
 	// Accurate audit (close to ground truth)
-	k.SetAudit(ctx, types.EvidenceAudit{
+	k.SetAudit(ctx, &types.EvidenceAudit{
 		Id:         "a1",
 		EvidenceId: "ev-1",
 		Auditor:    auditor1,
@@ -824,7 +824,7 @@ func TestResolveAudits(t *testing.T) {
 	})
 
 	// Inaccurate audit (far from ground truth)
-	k.SetAudit(ctx, types.EvidenceAudit{
+	k.SetAudit(ctx, &types.EvidenceAudit{
 		Id:         "a2",
 		EvidenceId: "ev-1",
 		Auditor:    auditor2,
@@ -864,7 +864,7 @@ func TestResolveEvidence_Verified(t *testing.T) {
 	params.AuditWindow = 10
 	k.SetParams(ctx, params)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		ClaimId:     "claim-1",
 		Status:      string(types.EvidenceStatusSubmitted),
@@ -873,7 +873,7 @@ func TestResolveEvidence_Verified(t *testing.T) {
 
 	// Add 3 audits (min required) with high scores → verified
 	for i := 0; i < 3; i++ {
-		k.SetAudit(ctx, types.EvidenceAudit{
+		k.SetAudit(ctx, &types.EvidenceAudit{
 			Id:         fmt.Sprintf("a%d", i),
 			EvidenceId: "ev-1",
 			Auditor:    testAddr(i + 10),
@@ -905,7 +905,7 @@ func TestResolveEvidence_Rejected(t *testing.T) {
 	params.AuditWindow = 10
 	k.SetParams(ctx, params)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
@@ -913,7 +913,7 @@ func TestResolveEvidence_Rejected(t *testing.T) {
 
 	// 3 audits with low scores → rejected
 	for i := 0; i < 3; i++ {
-		k.SetAudit(ctx, types.EvidenceAudit{
+		k.SetAudit(ctx, &types.EvidenceAudit{
 			Id:         fmt.Sprintf("a%d", i),
 			EvidenceId: "ev-1",
 			Auditor:    testAddr(i + 10),
@@ -940,14 +940,14 @@ func TestResolveEvidence_Expired_InsufficientAudits(t *testing.T) {
 	params.AuditWindow = 10
 	k.SetParams(ctx, params)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
 	})
 
 	// Only 1 audit, but min is 3
-	k.SetAudit(ctx, types.EvidenceAudit{
+	k.SetAudit(ctx, &types.EvidenceAudit{
 		Id:         "a1",
 		EvidenceId: "ev-1",
 		Stake:      "50000000",
@@ -969,7 +969,7 @@ func TestResolveEvidence_WindowStillOpen(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Evidence submitted recently — window still open (default 34272 blocks)
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 95, // 95 + 34272 >> 100
@@ -991,20 +991,20 @@ func TestResolveEvidence_WindowStillOpen(t *testing.T) {
 func TestComputeReliability(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:     "ev-1",
 		Status: string(types.EvidenceStatusSubmitted),
 	})
 
 	// Add 2 audits
-	k.SetAudit(ctx, types.EvidenceAudit{
+	k.SetAudit(ctx, &types.EvidenceAudit{
 		Id:         "a1",
 		EvidenceId: "ev-1",
 		Stake:      "100000000",
 		Score:      800000,
 		Status:     string(types.AuditStatusPending),
 	})
-	k.SetAudit(ctx, types.EvidenceAudit{
+	k.SetAudit(ctx, &types.EvidenceAudit{
 		Id:         "a2",
 		EvidenceId: "ev-1",
 		Stake:      "100000000",
@@ -1038,7 +1038,7 @@ func TestRegisterOracle_Success(t *testing.T) {
 		Stake:     "100000000",
 	}
 
-	if err := k.RegisterOracle(ctx, oracle); err != nil {
+	if err := k.RegisterOracle(ctx, &oracle); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1067,7 +1067,7 @@ func TestRegisterOracle_DuplicateOperator(t *testing.T) {
 		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:     "100000000",
 	}
-	if err := k.RegisterOracle(ctx, oracle1); err != nil {
+	if err := k.RegisterOracle(ctx, &oracle1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -1078,7 +1078,7 @@ func TestRegisterOracle_DuplicateOperator(t *testing.T) {
 		DataTypes: []string{string(types.EvidenceTypeComputation)},
 		Stake:     "100000000",
 	}
-	if err := k.RegisterOracle(ctx, oracle2); err == nil {
+	if err := k.RegisterOracle(ctx, &oracle2); err == nil {
 		t.Fatal("expected duplicate operator error")
 	}
 }
@@ -1096,7 +1096,7 @@ func TestRegisterOracle_InsufficientStake(t *testing.T) {
 		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
 		Stake:     "50000000", // Below 100000000 minimum
 	}
-	if err := k.RegisterOracle(ctx, oracle); err == nil {
+	if err := k.RegisterOracle(ctx, &oracle); err == nil {
 		t.Fatal("expected insufficient oracle stake error")
 	}
 }
@@ -1106,7 +1106,7 @@ func TestRegisterOracle_InsufficientStake(t *testing.T) {
 func TestRecordOracleSubmission(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:              "oracle-1",
 		Operator:        testAddr(1),
 		IsActive:        true,
@@ -1147,7 +1147,7 @@ func TestRecordOracleSubmission(t *testing.T) {
 func TestSlashOracle(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:       "oracle-1",
 		Operator: testAddr(1),
 		Stake:    "200000000",
@@ -1171,7 +1171,7 @@ func TestSlashOracle(t *testing.T) {
 func TestSlashOracle_Deactivated(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:       "oracle-1",
 		Operator: testAddr(1),
 		Stake:    "100000000", // Exactly at minimum
@@ -1202,7 +1202,7 @@ func TestExpireStaleEvidence(t *testing.T) {
 	k.SetParams(ctx, params)
 
 	// Evidence 1: stale (past window), no audits → expired
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 80,
@@ -1210,7 +1210,7 @@ func TestExpireStaleEvidence(t *testing.T) {
 	k.SetExpiryIndex(ctx, 80+params.AuditWindow, "ev-1") // expires at height 90
 
 	// Evidence 2: fresh (within window) → stays submitted
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-2",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 95,
@@ -1240,7 +1240,7 @@ func TestPruneInactiveOracles(t *testing.T) {
 	k.SetParams(ctx, params)
 
 	// Old inactive oracle with no data → should be pruned
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:           "old",
 		Operator:     testAddr(1),
 		IsActive:     false,
@@ -1249,7 +1249,7 @@ func TestPruneInactiveOracles(t *testing.T) {
 	})
 
 	// Active oracle → should not be pruned
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:       "active",
 		Operator: testAddr(2),
 		IsActive: true,
@@ -1273,7 +1273,7 @@ func TestPruneInactiveOracles(t *testing.T) {
 func TestUpdateEvidenceStatus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:     "ev-1",
 		Status: string(types.EvidenceStatusSubmitted),
 	})
@@ -1323,7 +1323,7 @@ func TestMsgServer_SubmitEvidence(t *testing.T) {
 func TestMsgServer_AuditEvidence(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 
-	k.SetEvidence(ctx, types.Evidence{
+	k.SetEvidence(ctx, &types.Evidence{
 		Id:          "ev-1",
 		Status:      string(types.EvidenceStatusSubmitted),
 		SubmittedAt: 50,
@@ -1373,7 +1373,7 @@ func TestMsgServer_RegisterOracle(t *testing.T) {
 func TestMsgServer_SubmitOracleData(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:        "oracle-1",
 		Operator:  testAddr(1),
 		Name:      "TestOracle",
@@ -1407,7 +1407,7 @@ func TestMsgServer_UpdateParams(t *testing.T) {
 	newParams.MinAuditsForConsensus = 5
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "lgm1authority",
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1422,7 +1422,7 @@ func TestMsgServer_UpdateParams(t *testing.T) {
 	badParams := types.DefaultParams()
 	_, err = srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "lgm1badactor",
-		Params:    &badParams,
+		Params:    badParams,
 	})
 	if err == nil {
 		t.Fatal("expected unauthorized error")
@@ -1435,7 +1435,7 @@ func TestQuery_Evidence(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetEvidence(ctx, types.Evidence{Id: "ev-1", ClaimId: "claim-1", Description: "test"})
+	k.SetEvidence(ctx, &types.Evidence{Id: "ev-1", ClaimId: "claim-1", Description: "test"})
 
 	resp, err := qs.Evidence(ctx, &types.QueryEvidenceRequest{EvidenceId: "ev-1"})
 	if err != nil {
@@ -1450,9 +1450,9 @@ func TestQuery_EvidenceByClaimId(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetEvidence(ctx, types.Evidence{Id: "ev-1", ClaimId: "claim-1"})
-	k.SetEvidence(ctx, types.Evidence{Id: "ev-2", ClaimId: "claim-1"})
-	k.SetEvidence(ctx, types.Evidence{Id: "ev-3", ClaimId: "claim-2"})
+	k.SetEvidence(ctx, &types.Evidence{Id: "ev-1", ClaimId: "claim-1"})
+	k.SetEvidence(ctx, &types.Evidence{Id: "ev-2", ClaimId: "claim-1"})
+	k.SetEvidence(ctx, &types.Evidence{Id: "ev-3", ClaimId: "claim-2"})
 
 	resp, err := qs.EvidenceByClaimId(ctx, &types.QueryEvidenceByClaimIdRequest{ClaimId: "claim-1"})
 	if err != nil {
@@ -1467,7 +1467,7 @@ func TestQuery_Audit(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetAudit(ctx, types.EvidenceAudit{Id: "audit-1", EvidenceId: "ev-1", Score: 800000})
+	k.SetAudit(ctx, &types.EvidenceAudit{Id: "audit-1", EvidenceId: "ev-1", Score: 800000})
 
 	resp, err := qs.Audit(ctx, &types.QueryAuditRequest{AuditId: "audit-1"})
 	if err != nil {
@@ -1482,7 +1482,7 @@ func TestQuery_AuditsForEvidence(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	for i := 0; i < 3; i++ {
-		k.SetAudit(ctx, types.EvidenceAudit{
+		k.SetAudit(ctx, &types.EvidenceAudit{
 			Id:         fmt.Sprintf("audit-%d", i),
 			EvidenceId: "ev-1",
 		})
@@ -1502,7 +1502,7 @@ func TestQuery_Oracle(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetOracle(ctx, types.Oracle{Id: "oracle-1", Name: "TestOracle"})
+	k.SetOracle(ctx, &types.Oracle{Id: "oracle-1", Name: "TestOracle"})
 
 	resp, err := qs.Oracle(ctx, &types.QueryOracleRequest{OracleId: "oracle-1"})
 	if err != nil {
@@ -1516,11 +1516,11 @@ func TestQuery_Oracle(t *testing.T) {
 func TestQuery_ActiveOracles(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{Id: "o1", IsActive: true})
+	k.SetOracle(ctx, &types.Oracle{Id: "o1", IsActive: true})
 	k.SetActiveOracle(ctx, "o1")
-	k.SetOracle(ctx, types.Oracle{Id: "o2", IsActive: true})
+	k.SetOracle(ctx, &types.Oracle{Id: "o2", IsActive: true})
 	k.SetActiveOracle(ctx, "o2")
-	k.SetOracle(ctx, types.Oracle{Id: "o3", IsActive: false})
+	k.SetOracle(ctx, &types.Oracle{Id: "o3", IsActive: false})
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.ActiveOracles(ctx, &types.QueryActiveOraclesRequest{})
@@ -1536,7 +1536,7 @@ func TestQuery_Consensus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetConsensus(ctx, types.AuditConsensus{
+	k.SetConsensus(ctx, &types.AuditConsensus{
 		EvidenceId:    "ev-1",
 		WeightedScore: 750000,
 		AuditCount:    3,
@@ -1589,7 +1589,7 @@ func TestInitExportGenesis(t *testing.T) {
 		},
 	}
 
-	k.InitGenesis(ctx, genState)
+	k.InitGenesis(ctx, &genState)
 
 	// Verify params
 	params := k.GetParams(ctx)
@@ -1713,7 +1713,7 @@ func TestFullEvidenceLifecycle(t *testing.T) {
 func TestOracleDataSubmission_InactiveOracle(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:        "oracle-1",
 		Operator:  testAddr(1),
 		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},
@@ -1735,7 +1735,7 @@ func TestOracleDataSubmission_InactiveOracle(t *testing.T) {
 func TestOracleDataSubmission_UnsupportedType(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetOracle(ctx, types.Oracle{
+	k.SetOracle(ctx, &types.Oracle{
 		Id:        "oracle-1",
 		Operator:  testAddr(1),
 		DataTypes: []string{string(types.EvidenceTypeOracleFeed)},

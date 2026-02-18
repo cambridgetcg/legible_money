@@ -11,7 +11,7 @@ import (
 )
 
 // SubmitAudit validates and stores a new audit submission.
-func (k Keeper) SubmitAudit(ctx sdk.Context, audit types.EvidenceAudit) error {
+func (k Keeper) SubmitAudit(ctx sdk.Context, audit *types.EvidenceAudit) error {
 	params := k.GetParams(ctx)
 
 	// Validate evidence exists and is in auditable state
@@ -101,10 +101,10 @@ func (k Keeper) SubmitAudit(ctx sdk.Context, audit types.EvidenceAudit) error {
 }
 
 // ComputeConsensus computes the stake-weighted average score for an evidence's audits.
-func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (types.AuditConsensus, error) {
+func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (*types.AuditConsensus, error) {
 	audits := k.GetAuditsForEvidence(ctx, evidenceId)
 	if len(audits) == 0 {
-		return types.AuditConsensus{}, fmt.Errorf("no audits for evidence %s", evidenceId)
+		return nil, fmt.Errorf("no audits for evidence %s", evidenceId)
 	}
 
 	totalStake := new(big.Int)
@@ -128,7 +128,7 @@ func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (types.Audi
 	}
 
 	if totalStake.Sign() == 0 {
-		return types.AuditConsensus{}, fmt.Errorf("zero total stake for evidence %s", evidenceId)
+		return nil, fmt.Errorf("zero total stake for evidence %s", evidenceId)
 	}
 
 	weightedScore := new(big.Int).Div(weightedSum, totalStake)
@@ -163,7 +163,7 @@ func (k Keeper) ComputeConsensus(ctx sdk.Context, evidenceId string) (types.Audi
 		varianceUint64 = variance.Uint64()
 	}
 
-	consensus := types.AuditConsensus{
+	consensus := &types.AuditConsensus{
 		EvidenceId:     evidenceId,
 		WeightedScore:  weightedScore.Uint64(),
 		TotalStake:     totalStake.String(),
@@ -193,7 +193,7 @@ func (k Keeper) ResolveAudits(ctx sdk.Context, evidenceId string, groundTruth ui
 	// Pass 2: Scale rewards to available funds, execute transfers
 
 	type auditResolution struct {
-		audit       types.EvidenceAudit
+		audit       *types.EvidenceAudit
 		accurate    bool
 		stakeAmount *big.Int
 		delta       uint64
@@ -204,7 +204,7 @@ func (k Keeper) ResolveAudits(ctx sdk.Context, evidenceId string, groundTruth ui
 		slashAmount *big.Int
 	}
 
-	var resolutions []auditResolution
+	var resolutions []*auditResolution
 	totalSlashed := new(big.Int)
 	totalRewards := new(big.Int)
 
@@ -235,7 +235,7 @@ func (k Keeper) ResolveAudits(ctx sdk.Context, evidenceId string, groundTruth ui
 
 		accurate := IsAccurate(audit.Score, groundTruth, params.AccuracyThreshold)
 
-		res := auditResolution{
+		res := &auditResolution{
 			audit:       audit,
 			accurate:    accurate,
 			stakeAmount: stakeAmount,

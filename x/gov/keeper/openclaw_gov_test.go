@@ -263,7 +263,7 @@ func TestOC_GOV7_DisbursementTimelockRace(t *testing.T) {
 		TimelockExpiry:  300,
 		SupportWeight:   "100",
 	}
-	k.SetDisbursement(ctx, disb)
+	k.SetDisbursement(ctx, &disb)
 	k.SetNextDisbNumber(ctx, 2)
 
 	executor := testAddr("tl_alice")
@@ -500,7 +500,7 @@ func TestOC_GOV12_DisbursementDoubleExecution(t *testing.T) {
 		TimelockExpiry:  90,
 		SupportWeight:   "100",
 	}
-	k.SetDisbursement(ctx, disb)
+	k.SetDisbursement(ctx, &disb)
 	k.SetNextDisbNumber(ctx, 2)
 
 	// First execution — succeeds

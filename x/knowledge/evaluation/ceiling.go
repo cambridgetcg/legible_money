@@ -10,7 +10,7 @@ import (
 // independent ceilings: zone, stratum, and category.
 //
 // Stage 5 of the evaluation pipeline.
-func applyCeilings(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim, zoneCeiling uint64) StageResult {
+func applyCeilings(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim, zoneCeiling uint64) StageResult {
 	result := StageResult{
 		Name: "ceiling_application",
 	}

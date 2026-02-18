@@ -56,7 +56,7 @@ func (ms msgServer) SubmitLIP(goCtx context.Context, msg *types.MsgSubmitLIP) (*
 	lipId := fmt.Sprintf("LIP-%d", number)
 	ms.SetNextLIPNumber(ctx, number+1)
 
-	lip := types.LIP{
+	lip := &types.LIP{
 		Id:             lipId,
 		Title:          msg.Title,
 		Abstract:       msg.Description,
@@ -224,7 +224,7 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 
 	// Create vote record
 	voteId := fmt.Sprintf("%s/%s", msg.ProposalId, msg.Voter)
-	vote := types.QuadraticVote{
+	vote := &types.QuadraticVote{
 		VoteId:         voteId,
 		Voter:          msg.Voter,
 		ProposalId:     msg.ProposalId,
@@ -238,13 +238,13 @@ func (ms msgServer) CastVote(goCtx context.Context, msg *types.MsgCastVote) (*ty
 	// Update proposal tallies with quadratic voting power (not raw stake)
 	if isLIP {
 		lip, _ := ms.GetLIP(ctx, msg.ProposalId)
-		lip = addVoteWeight(lip, direction, effectiveVotingPower)
+		addVoteWeight(lip, direction, effectiveVotingPower)
 		lip.UniqueVoters++
 		lip.UpdatedAtBlock = currentHeight
 		ms.SetLIP(ctx, lip)
 	} else {
 		disb, _ := ms.GetDisbursement(ctx, msg.ProposalId)
-		disb = addDisbVoteWeight(disb, direction, effectiveVotingPower)
+		addDisbVoteWeight(disb, direction, effectiveVotingPower)
 		disb.UniqueVoters++
 		ms.SetDisbursement(ctx, disb)
 	}
@@ -376,7 +376,7 @@ func (ms msgServer) SubmitDisbursement(goCtx context.Context, msg *types.MsgSubm
 	disbId := fmt.Sprintf("DISB-%d", number)
 	ms.SetNextDisbNumber(ctx, number+1)
 
-	disb := types.DisbursementProposal{
+	disb := &types.DisbursementProposal{
 		Id:             disbId,
 		Title:          msg.Title,
 		Description:    msg.Description,
@@ -550,8 +550,8 @@ func (ms msgServer) AttachUpgradePlan(goCtx context.Context, msg *types.MsgAttac
 
 // --- Helpers ---
 
-// addVoteWeight adds vote weight to a LIP's tally.
-func addVoteWeight(lip types.LIP, direction types.VoteDirection, weight string) types.LIP {
+// addVoteWeight adds vote weight to a LIP's tally (modifies in place).
+func addVoteWeight(lip *types.LIP, direction types.VoteDirection, weight string) {
 	switch direction {
 	case types.VoteSupport:
 		lip.SupportWeight = addBigInts(lip.SupportWeight, weight)
@@ -560,11 +560,10 @@ func addVoteWeight(lip types.LIP, direction types.VoteDirection, weight string) 
 	case types.VoteAbstain:
 		lip.AbstainWeight = addBigInts(lip.AbstainWeight, weight)
 	}
-	return lip
 }
 
-// addDisbVoteWeight adds vote weight to a disbursement's tally.
-func addDisbVoteWeight(disb types.DisbursementProposal, direction types.VoteDirection, weight string) types.DisbursementProposal {
+// addDisbVoteWeight adds vote weight to a disbursement's tally (modifies in place).
+func addDisbVoteWeight(disb *types.DisbursementProposal, direction types.VoteDirection, weight string) {
 	switch direction {
 	case types.VoteSupport:
 		disb.SupportWeight = addBigInts(disb.SupportWeight, weight)
@@ -573,7 +572,6 @@ func addDisbVoteWeight(disb types.DisbursementProposal, direction types.VoteDire
 	case types.VoteAbstain:
 		disb.AbstainWeight = addBigInts(disb.AbstainWeight, weight)
 	}
-	return disb
 }
 
 // addBigInts adds two big integer strings.

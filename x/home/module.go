@@ -61,7 +61,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 	if err := json.Unmarshal(bz, &gs); err != nil {
 		return err
 	}
-	return gs.Validate()
+	return (&gs).Validate()
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
@@ -117,7 +117,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &gs); err != nil {
 		panic("failed to unmarshal home genesis: " + err.Error())
 	}
-	am.keeper.InitGenesis(ctx, gs)
+	am.keeper.InitGenesis(ctx, &gs)
 }
 
 // ExportGenesis exports the module's genesis state.

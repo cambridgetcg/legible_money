@@ -47,7 +47,7 @@ func (k Keeper) FinalizeEpoch(ctx sdk.Context) {
 
 	// Count active providers and validators from the previous epoch
 	var activeProviders uint32
-	k.IterateProviders(ctx, func(p types.ComputeProvider) bool {
+	k.IterateProviders(ctx, func(p *types.ComputeProvider) bool {
 		if p.Status == string(types.ProviderStatusActive) {
 			activeProviders++
 		}
@@ -57,7 +57,7 @@ func (k Keeper) FinalizeEpoch(ctx sdk.Context) {
 
 	// Count validators with non-zero credit balances
 	var activeValidators uint32
-	k.IterateCredits(ctx, func(c types.ComputeCredit) bool {
+	k.IterateCredits(ctx, func(c *types.ComputeCredit) bool {
 		if c.EarnedTotal > 0 {
 			activeValidators++
 		}

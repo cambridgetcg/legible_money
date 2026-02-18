@@ -125,7 +125,7 @@ func (a *scheduleKeeperAdapter) CreateSchedule(contractAddr, caller, method, pay
 	}
 	counter := a.keeper.GetNextScheduleId(a.ctx)
 	scheduleId := fmt.Sprintf("sched-%d-%d", currentBlock, counter)
-	schedule := types.ContractSchedule{
+	schedule := &types.ContractSchedule{
 		ScheduleId:      scheduleId,
 		ContractAddress: contractAddr,
 		Caller:          caller,
@@ -155,6 +155,7 @@ func (a *scheduleKeeperAdapter) CancelScheduleByID(scheduleId, caller string) er
 	return nil
 }
 
+
 func (a *scheduleKeeperAdapter) ModifyScheduleBlock(scheduleId, caller string, newBlock uint64) error {
 	schedule, found := a.keeper.GetSchedule(a.ctx, scheduleId)
 	if !found {
@@ -173,6 +174,7 @@ func (a *scheduleKeeperAdapter) ModifyScheduleBlock(scheduleId, caller string, n
 	a.keeper.SetSchedule(a.ctx, schedule)
 	return nil
 }
+
 
 func (a *scheduleKeeperAdapter) CountActiveSchedules(contractAddr string) uint64 {
 	return a.keeper.CountContractSchedules(a.ctx, contractAddr)
@@ -437,7 +439,7 @@ func (m msgServer) DeployContract(goCtx context.Context, msg *types.MsgDeployCon
 		existingCode.RefCount++
 		m.SetCode(ctx, existingCode)
 	} else {
-		m.SetCode(ctx, types.ContractCode{
+		m.SetCode(ctx, &types.ContractCode{
 			CodeHash: codeHash,
 			Bytecode: msg.Bytecode,
 			RefCount: 1,
@@ -452,7 +454,7 @@ func (m msgServer) DeployContract(goCtx context.Context, msg *types.MsgDeployCon
 	contractAddress := fmt.Sprintf("lgm1contract%x", addrHash[:20])
 
 	// Store contract with current BVM version stamp
-	contract := types.DeployedContract{
+	contract := &types.DeployedContract{
 		Address:         contractAddress,
 		CodeHash:        codeHash,
 		Creator:         msg.Deployer,
@@ -717,7 +719,7 @@ func (m msgServer) ScheduleExecution(goCtx context.Context, msg *types.MsgSchedu
 	counter := m.GetNextScheduleId(ctx)
 	scheduleId := fmt.Sprintf("sched-%d-%d", currentBlock, counter)
 
-	schedule := types.ContractSchedule{
+	schedule := &types.ContractSchedule{
 		ScheduleId:      scheduleId,
 		ContractAddress: msg.ContractAddress,
 		Caller:          msg.Scheduler,
@@ -780,7 +782,7 @@ func (m msgServer) ScheduleContract(goCtx context.Context, msg *types.MsgSchedul
 	counter := m.GetNextScheduleId(ctx)
 	scheduleId := fmt.Sprintf("sched-%d-%d", currentBlock, counter)
 
-	schedule := types.ContractSchedule{
+	schedule := &types.ContractSchedule{
 		ScheduleId:      scheduleId,
 		ContractAddress: msg.ContractAddress,
 		Caller:          msg.Caller,
@@ -1076,7 +1078,7 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	m.SetParams(ctx, *msg.Params)
+	m.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"bvm_params_updated",

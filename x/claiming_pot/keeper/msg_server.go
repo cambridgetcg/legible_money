@@ -92,7 +92,7 @@ func (m msgServer) CreatePot(goCtx context.Context, msg *types.MsgCreatePot) (*t
 		Status:         string(types.PotStatusActive),
 	}
 
-	m.Keeper.SetPot(ctx, pot)
+	m.Keeper.SetPot(ctx, &pot)
 	m.Keeper.IncrementCreatorPotCount(ctx, msg.Creator)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -162,6 +162,8 @@ func (m msgServer) FundPot(goCtx context.Context, msg *types.MsgFundPot) (*types
 	return &types.MsgFundPotResponse{}, nil
 }
 
+
+
 // ClaimFromPot claims from an eligible pot.
 func (m msgServer) ClaimFromPot(goCtx context.Context, msg *types.MsgClaimFromPot) (*types.MsgClaimFromPotResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
@@ -187,7 +189,10 @@ func (m msgServer) ClaimFromPot(goCtx context.Context, msg *types.MsgClaimFromPo
 	}
 
 	// Check per-account claim limit
-	record, _ := m.Keeper.GetClaimRecord(ctx, msg.PotId, msg.Claimer)
+	record, foundRecord := m.Keeper.GetClaimRecord(ctx, msg.PotId, msg.Claimer)
+	if !foundRecord {
+		record = &types.ClaimRecord{}
+	}
 	if record.ClaimCount >= pot.Config.MaxClaimsPerAccount {
 		return nil, types.ErrAlreadyClaimed
 	}
@@ -315,7 +320,7 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	m.Keeper.SetParams(ctx, *msg.Params)
+	m.Keeper.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"claiming_pot_params_updated",

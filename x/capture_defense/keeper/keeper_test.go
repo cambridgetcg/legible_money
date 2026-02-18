@@ -149,7 +149,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper, 
 	)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
-	k.SetParams(ctx, *types.DefaultParams())
+	k.SetParams(ctx, types.DefaultParams())
 
 	return k, ctx, mockSK, mockOK
 }
@@ -192,7 +192,7 @@ func TestDomainQualificationRoundtrip(t *testing.T) {
 		InheritedFrom: "physics",
 	}
 
-	k.SetQualification(ctx, qual)
+	k.SetQualification(ctx, &qual)
 
 	got, found := k.GetQualification(ctx, testAddr("val1"), "mathematics")
 	if !found {
@@ -303,7 +303,7 @@ func TestIsolatedReputationRoundtrip(t *testing.T) {
 		LastUpdatedBlock: 90,
 	}
 
-	k.SetIsolatedReputation(ctx, rep)
+	k.SetIsolatedReputation(ctx, &rep)
 
 	got, found := k.GetIsolatedReputation(ctx, testAddr("val1"))
 	if !found {
@@ -519,7 +519,7 @@ func TestTrackRecordQualificationSuccess(t *testing.T) {
 		CreatedAtBlock:   10,
 		LastUpdatedBlock: 90,
 	}
-	k.SetIsolatedReputation(ctx, rep)
+	k.SetIsolatedReputation(ctx, &rep)
 
 	qual, err := k.ProcessQualificationRequest(
 		ctx, validatorAddr, domain,
@@ -580,7 +580,7 @@ func TestTrackRecordInsufficientVerifications(t *testing.T) {
 		CreatedAtBlock:   10,
 		LastUpdatedBlock: 90,
 	}
-	k.SetIsolatedReputation(ctx, rep)
+	k.SetIsolatedReputation(ctx, &rep)
 
 	_, err := k.ProcessQualificationRequest(
 		ctx, validatorAddr, domain,
@@ -611,7 +611,7 @@ func TestCrossReferenceQualificationSuccess(t *testing.T) {
 	endorser3 := testAddr("endorser3")
 
 	for _, e := range []string{endorser1, endorser2, endorser3} {
-		k.SetQualification(ctx, types.DomainQualification{
+		k.SetQualification(ctx, &types.DomainQualification{
 			ValidatorAddr: e,
 			Domain:        domain,
 			Pathway:       string(types.PathwayStakeCommitment),
@@ -659,7 +659,7 @@ func TestStratumInheritanceSuccess(t *testing.T) {
 	mockOK.parentDomains[childDomain] = parentDomain
 
 	// Create active qualification in parent domain
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              parentDomain,
 		Pathway:             string(types.PathwayStakeCommitment),
@@ -713,7 +713,7 @@ func TestQualificationExpiration(t *testing.T) {
 		InheritanceDiscount: 1_000_000,
 		Metrics:             &types.QualificationMetrics{EffectiveWeight: 1_000_000},
 	}
-	k.SetQualification(ctx, qual)
+	k.SetQualification(ctx, &qual)
 
 	// Verify it's active at current block
 	if !k.IsQualifiedForDomain(ctx, validatorAddr, domain, currentBlock) {
@@ -729,7 +729,7 @@ func TestQualificationExpiration(t *testing.T) {
 	}
 
 	// Simulate BeginBlock expiration logic: iterate and expire
-	k.IterateQualifications(expiredCtx, func(q types.DomainQualification) bool {
+	k.IterateQualifications(expiredCtx, func(q *types.DomainQualification) bool {
 		if q.ExpiresAtBlock > 0 && uint64(201) > q.ExpiresAtBlock {
 			if q.Status == string(types.StatusActive) || q.Status == string(types.StatusProbationary) {
 				q.Status = string(types.StatusExpired)
@@ -829,7 +829,7 @@ func TestEffectiveReputationFallback(t *testing.T) {
 		CreatedAtBlock:   10,
 		LastUpdatedBlock: currentBlock,
 	}
-	k.SetIsolatedReputation(ctx, rep1)
+	k.SetIsolatedReputation(ctx, &rep1)
 
 	result1 := k.GetEffectiveReputation(ctx, validator1, domain)
 	if result1.Source != string(types.SourceDomain) {
@@ -858,7 +858,7 @@ func TestEffectiveReputationFallback(t *testing.T) {
 		CreatedAtBlock:    10,
 		LastUpdatedBlock:  currentBlock,
 	}
-	k.SetIsolatedReputation(ctx, rep2)
+	k.SetIsolatedReputation(ctx, &rep2)
 
 	result2 := k.GetEffectiveReputation(ctx, validator2, domain)
 	if result2.Source != string(types.SourceStratum) {
@@ -877,7 +877,7 @@ func TestEffectiveReputationFallback(t *testing.T) {
 		CreatedAtBlock:     10,
 		LastUpdatedBlock:   currentBlock,
 	}
-	k.SetIsolatedReputation(ctx, rep3)
+	k.SetIsolatedReputation(ctx, &rep3)
 
 	result3 := k.GetEffectiveReputation(ctx, validator3, domain)
 	if result3.Source != string(types.SourceGlobal) {
@@ -914,7 +914,7 @@ func TestReputationTimeDecay(t *testing.T) {
 		CreatedAtBlock:     0,
 		LastUpdatedBlock:   0,
 	}
-	k.SetIsolatedReputation(ctx, rep)
+	k.SetIsolatedReputation(ctx, &rep)
 
 	// At block = halfLife (77777), global reputation falls back and applies decay
 	decayCtx := ctx.WithBlockHeight(int64(types.ReputationHalfLifeBlocks))
@@ -940,7 +940,7 @@ func TestUpdateAfterVerification(t *testing.T) {
 	mockOK.domainStrata[domain] = 3
 
 	// Create a probationary qualification
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Pathway:             string(types.PathwayStakeCommitment),
@@ -1025,7 +1025,7 @@ func TestGetReputationScore(t *testing.T) {
 		CreatedAtBlock:     currentBlock,
 		LastUpdatedBlock:   currentBlock,
 	}
-	k.SetIsolatedReputation(ctx, rep)
+	k.SetIsolatedReputation(ctx, &rep)
 
 	// GetReputationScore: (score * discount) / 1_000_000
 	// Global fallback: score=800 (no decay since lastUpdatedBlock == currentBlock), discount=GlobalReputationDiscount=500_000
@@ -1153,7 +1153,7 @@ func TestHHICalculation(t *testing.T) {
 	}
 
 	history := types.VerificationHistory{Domain: domain, Entries: entries}
-	k.SetVerificationHistory(ctx, history)
+	k.SetVerificationHistory(ctx, &history)
 
 	// Total participations: 12*1 + 8*2 = 28
 	// dominant: 20/28 = 0.714..., share^2 = 0.5102
@@ -1194,7 +1194,7 @@ func TestTimingCorrelation(t *testing.T) {
 	}
 
 	history := types.VerificationHistory{Domain: domain, Entries: entries}
-	k.SetVerificationHistory(ctx, history)
+	k.SetVerificationHistory(ctx, &history)
 
 	metrics := k.AnalyzeCaptureRisk(ctx, domain, 100)
 
@@ -1226,7 +1226,7 @@ func TestVerdictCorrelation(t *testing.T) {
 	}
 
 	history := types.VerificationHistory{Domain: domain, Entries: entries}
-	k.SetVerificationHistory(ctx, history)
+	k.SetVerificationHistory(ctx, &history)
 
 	metrics := k.AnalyzeCaptureRisk(ctx, domain, 100)
 
@@ -1256,7 +1256,7 @@ func TestAutoBountyThreshold(t *testing.T) {
 	}
 
 	history := types.VerificationHistory{Domain: domain, Entries: entries}
-	k.SetVerificationHistory(ctx, history)
+	k.SetVerificationHistory(ctx, &history)
 
 	metrics := k.AnalyzeCaptureRisk(ctx, domain, 100)
 

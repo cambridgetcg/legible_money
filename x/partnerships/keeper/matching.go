@@ -23,9 +23,9 @@ const (
 // ---------- PoolEntry CRUD ----------
 
 // SetPoolEntry stores a pool entry.
-func (k Keeper) SetPoolEntry(ctx sdk.Context, pe types.PoolEntry) {
+func (k Keeper) SetPoolEntry(ctx sdk.Context, pe *types.PoolEntry) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&pe)
+	bz, err := proto.Marshal(pe)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal pool entry: %v", err))
 	}
@@ -33,17 +33,17 @@ func (k Keeper) SetPoolEntry(ctx sdk.Context, pe types.PoolEntry) {
 }
 
 // GetPoolEntry retrieves a pool entry by address.
-func (k Keeper) GetPoolEntry(ctx sdk.Context, addr string) (types.PoolEntry, bool) {
+func (k Keeper) GetPoolEntry(ctx sdk.Context, addr string) (*types.PoolEntry, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(poolEntryKey(addr))
 	if err != nil || bz == nil {
-		return types.PoolEntry{}, false
+		return nil, false
 	}
 	var pe types.PoolEntry
 	if err := proto.Unmarshal(bz, &pe); err != nil {
-		return types.PoolEntry{}, false
+		return nil, false
 	}
-	return pe, true
+	return &pe, true
 }
 
 // DeletePoolEntry removes a pool entry.
@@ -72,8 +72,8 @@ func (k Keeper) CountActivePoolEntries(ctx sdk.Context) int {
 }
 
 // GetAllPoolEntries returns all pool entries.
-func (k Keeper) GetAllPoolEntries(ctx sdk.Context) []types.PoolEntry {
-	var entries []types.PoolEntry
+func (k Keeper) GetAllPoolEntries(ctx sdk.Context) []*types.PoolEntry {
+	var entries []*types.PoolEntry
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.PoolEntryKeyPrefix, prefixEndBytes(types.PoolEntryKeyPrefix))
 	if err != nil {
@@ -84,7 +84,7 @@ func (k Keeper) GetAllPoolEntries(ctx sdk.Context) []types.PoolEntry {
 	for ; iter.Valid(); iter.Next() {
 		var pe types.PoolEntry
 		if err := proto.Unmarshal(iter.Value(), &pe); err == nil {
-			entries = append(entries, pe)
+			entries = append(entries, &pe)
 		}
 	}
 	return entries
@@ -93,9 +93,9 @@ func (k Keeper) GetAllPoolEntries(ctx sdk.Context) []types.PoolEntry {
 // ---------- PartnershipIntent CRUD ----------
 
 // SetIntent stores a partnership intent.
-func (k Keeper) SetIntent(ctx sdk.Context, pi types.PartnershipIntent) {
+func (k Keeper) SetIntent(ctx sdk.Context, pi *types.PartnershipIntent) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&pi)
+	bz, err := proto.Marshal(pi)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal intent: %v", err))
 	}
@@ -104,21 +104,21 @@ func (k Keeper) SetIntent(ctx sdk.Context, pi types.PartnershipIntent) {
 }
 
 // GetIntent retrieves an intent by ID.
-func (k Keeper) GetIntent(ctx sdk.Context, id string) (types.PartnershipIntent, bool) {
+func (k Keeper) GetIntent(ctx sdk.Context, id string) (*types.PartnershipIntent, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(intentKey(id))
 	if err != nil || bz == nil {
-		return types.PartnershipIntent{}, false
+		return nil, false
 	}
 	var pi types.PartnershipIntent
 	if err := proto.Unmarshal(bz, &pi); err != nil {
-		return types.PartnershipIntent{}, false
+		return nil, false
 	}
-	return pi, true
+	return &pi, true
 }
 
 // DeleteIntent removes an intent.
-func (k Keeper) DeleteIntent(ctx sdk.Context, pi types.PartnershipIntent) {
+func (k Keeper) DeleteIntent(ctx sdk.Context, pi *types.PartnershipIntent) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	_ = kvStore.Delete(intentKey(pi.IntentId))
 	_ = kvStore.Delete(byDIDIntentKey(pi.Address, pi.IntentId))
@@ -147,9 +147,9 @@ func (k Keeper) CountPendingIntentsByDID(ctx sdk.Context, addr string) int {
 // ---------- MentorshipConfig CRUD ----------
 
 // SetMentorship stores a mentorship config.
-func (k Keeper) SetMentorship(ctx sdk.Context, mc types.MentorshipConfig) {
+func (k Keeper) SetMentorship(ctx sdk.Context, mc *types.MentorshipConfig) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&mc)
+	bz, err := proto.Marshal(mc)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal mentorship: %v", err))
 	}
@@ -158,17 +158,17 @@ func (k Keeper) SetMentorship(ctx sdk.Context, mc types.MentorshipConfig) {
 }
 
 // GetMentorship retrieves a mentorship config by partnership ID.
-func (k Keeper) GetMentorship(ctx sdk.Context, partnershipId string) (types.MentorshipConfig, bool) {
+func (k Keeper) GetMentorship(ctx sdk.Context, partnershipId string) (*types.MentorshipConfig, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(mentorshipKey(partnershipId))
 	if err != nil || bz == nil {
-		return types.MentorshipConfig{}, false
+		return nil, false
 	}
 	var mc types.MentorshipConfig
 	if err := proto.Unmarshal(bz, &mc); err != nil {
-		return types.MentorshipConfig{}, false
+		return nil, false
 	}
-	return mc, true
+	return &mc, true
 }
 
 // CountActiveMentorshipsBySponsor returns the number of active mentorships for a sponsor.

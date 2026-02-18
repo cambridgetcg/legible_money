@@ -231,7 +231,7 @@ func TestSetGetParams(t *testing.T) {
 		StorageWriteGasCost:     3_000,
 		StorageReadGasCost:      1_000,
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 	got := k.GetParams(ctx)
 	if got.MaxBytecodeSize != 512_000 {
 		t.Fatalf("expected MaxBytecodeSize 512000, got %d", got.MaxBytecodeSize)
@@ -252,7 +252,7 @@ func TestSetGetContract(t *testing.T) {
 		BytecodeSize:    256,
 		Label:           "test-contract",
 	}
-	k.SetContract(ctx, contract)
+	k.SetContract(ctx, &contract)
 	got, found := k.GetContract(ctx, "lgm1contractabc123")
 	if !found {
 		t.Fatal("contract not found")
@@ -276,13 +276,13 @@ func TestGetContractNotFound(t *testing.T) {
 func TestGetContractsByCreator(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	for i := 0; i < 3; i++ {
-		k.SetContract(ctx, types.DeployedContract{
+		k.SetContract(ctx, &types.DeployedContract{
 			Address:  testAddr("contract" + string(rune('A'+i))),
 			CodeHash: "hash",
 			Creator:  creator1,
 		})
 	}
-	k.SetContract(ctx, types.DeployedContract{
+	k.SetContract(ctx, &types.DeployedContract{
 		Address:  testAddr("other"),
 		CodeHash: "hash",
 		Creator:  creator2,
@@ -300,7 +300,7 @@ func TestSetGetCode(t *testing.T) {
 		Bytecode: []byte{0x01, 0x02, 0x03},
 		RefCount: 1,
 	}
-	k.SetCode(ctx, code)
+	k.SetCode(ctx, &code)
 	got, found := k.GetCode(ctx, "abc123")
 	if !found {
 		t.Fatal("code not found")
@@ -355,7 +355,7 @@ func TestSetGetSchedule(t *testing.T) {
 		ExecuteAtBlock:  200,
 		MaxGas:          50000,
 	}
-	k.SetSchedule(ctx, schedule)
+	k.SetSchedule(ctx, &schedule)
 	got, found := k.GetSchedule(ctx, "sched-100-0")
 	if !found {
 		t.Fatal("schedule not found")
@@ -369,7 +369,7 @@ func TestGetPendingSchedules(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Schedule at block 200
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-1",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -377,7 +377,7 @@ func TestGetPendingSchedules(t *testing.T) {
 		ExecuteAtBlock:  200,
 	})
 	// Schedule at block 300
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-2",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -385,7 +385,7 @@ func TestGetPendingSchedules(t *testing.T) {
 		ExecuteAtBlock:  300,
 	})
 	// Cancelled schedule at block 200
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-3",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -750,7 +750,7 @@ func TestCancelSchedule_AlreadyExecuted(t *testing.T) {
 		ExecuteAtBlock:  50,
 		Executed:        true,
 	}
-	k.SetSchedule(ctx, schedule)
+	k.SetSchedule(ctx, &schedule)
 
 	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.CancelSchedule(ctx, &types.MsgCancelSchedule{
@@ -946,7 +946,7 @@ func TestQuerySchedule(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	queryServer := keeper.NewQueryServerImpl(k)
 
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-test",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -1115,7 +1115,7 @@ func TestGetPendingSchedules_IncludesOverdue(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Schedule at block 150 (overdue if chain is at 200)
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-overdue",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -1123,7 +1123,7 @@ func TestGetPendingSchedules_IncludesOverdue(t *testing.T) {
 		ExecuteAtBlock:  150,
 	})
 	// Schedule at block 200 (on-time)
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-ontime",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -1131,7 +1131,7 @@ func TestGetPendingSchedules_IncludesOverdue(t *testing.T) {
 		ExecuteAtBlock:  200,
 	})
 	// Schedule at block 300 (future, should not be included)
-	k.SetSchedule(ctx, types.ContractSchedule{
+	k.SetSchedule(ctx, &types.ContractSchedule{
 		ScheduleId:      "sched-future",
 		ContractAddress: "contract1",
 		Caller:          creator1,
@@ -1584,7 +1584,7 @@ func TestP0_2_ScheduledGasBudget(t *testing.T) {
 
 	// Count how many were executed vs deferred
 	var executed, pending int
-	k.IterateSchedules(ctx, func(s types.ContractSchedule) bool {
+	k.IterateSchedules(ctx, func(s *types.ContractSchedule) bool {
 		if s.Executed {
 			executed++
 		} else if !s.Cancelled {
@@ -1988,7 +1988,7 @@ func TestP1_2_ScheduleExecution_BackwardsCompat(t *testing.T) {
 		Executed:        false,
 		Cancelled:       false,
 	}
-	k.SetSchedule(ctx, schedule)
+	k.SetSchedule(ctx, &schedule)
 
 	// Execute at block 200 — should use full caps for backwards compatibility
 	ctx = ctx.WithBlockHeight(200)

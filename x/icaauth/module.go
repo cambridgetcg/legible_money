@@ -94,7 +94,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &genState); err != nil {
 		panic("failed to unmarshal genesis: " + err.Error())
 	}
-	if err := am.keeper.InitGenesis(ctx, genState); err != nil {
+	if err := am.keeper.InitGenesis(ctx, &genState); err != nil {
 		panic("failed to init genesis: " + err.Error())
 	}
 }

@@ -12,26 +12,36 @@ import (
 
 // GetEligibleValidators returns all validators eligible to participate
 // in verification rounds. Filters by active status and minimum tier requirements.
-func (k Keeper) GetEligibleValidators(ctx sdk.Context) []types.ValidatorInfo {
-	return k.stakingKeeper.GetActiveValidatorInfos(ctx)
+func (k Keeper) GetEligibleValidators(ctx sdk.Context) []*types.ValidatorInfo {
+	all := k.stakingKeeper.GetActiveValidatorInfos(ctx)
+	result := make([]*types.ValidatorInfo, len(all))
+	for i := range all {
+		result[i] = &all[i]
+	}
+	return result
 }
 
 // GetEligibleValidatorsForDomain returns validators eligible to verify claims
 // in a specific domain. Filters by domain qualification when the qualification
 // keeper is available, falling back to all active validators otherwise.
-func (k Keeper) GetEligibleValidatorsForDomain(ctx sdk.Context, domain string) []types.ValidatorInfo {
+func (k Keeper) GetEligibleValidatorsForDomain(ctx sdk.Context, domain string) []*types.ValidatorInfo {
 	all := k.stakingKeeper.GetActiveValidatorInfos(ctx)
-	if k.qualificationKeeper == nil {
-		return all // graceful nil-safe fallback
+	// Convert value slice to pointer slice (avoids proto lock copy)
+	ptrs := make([]*types.ValidatorInfo, len(all))
+	for i := range all {
+		ptrs[i] = &all[i]
 	}
-	var qualified []types.ValidatorInfo
-	for _, v := range all {
-		if k.qualificationKeeper.IsQualified(ctx, v.Address, domain) {
-			qualified = append(qualified, v)
+	if k.qualificationKeeper == nil {
+		return ptrs // graceful nil-safe fallback
+	}
+	var qualified []*types.ValidatorInfo
+	for _, p := range ptrs {
+		if k.qualificationKeeper.IsQualified(ctx, p.Address, domain) {
+			qualified = append(qualified, p)
 		}
 	}
 	if len(qualified) == 0 {
-		return all // don't block verification if no one qualified
+		return ptrs // don't block verification if no one qualified
 	}
 	return qualified
 }
@@ -50,7 +60,7 @@ func (k Keeper) GetTotalStake(ctx sdk.Context) uint64 {
 // 3. Validator is active and eligible
 func (k Keeper) VerifyValidatorVRFSelection(
 	ctx sdk.Context,
-	round types.VerificationRound,
+	round *types.VerificationRound,
 	validatorAddr string,
 	vrfOutputHex string,
 	vrfProofHex string,

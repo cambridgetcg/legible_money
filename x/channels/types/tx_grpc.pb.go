@@ -24,6 +24,10 @@ const (
 	Msg_CloseChannel_FullMethodName   = "/legible.channels.v1.Msg/CloseChannel"
 	Msg_SettleChannel_FullMethodName  = "/legible.channels.v1.Msg/SettleChannel"
 	Msg_DisputeChannel_FullMethodName = "/legible.channels.v1.Msg/DisputeChannel"
+	Msg_DepositChannel_FullMethodName = "/legible.channels.v1.Msg/DepositChannel"
+	Msg_UpdateState_FullMethodName    = "/legible.channels.v1.Msg/UpdateState"
+	Msg_ClaimExpired_FullMethodName   = "/legible.channels.v1.Msg/ClaimExpired"
+	Msg_UpdateParams_FullMethodName   = "/legible.channels.v1.Msg/UpdateParams"
 )
 
 // MsgClient is the client API for Msg service.
@@ -37,6 +41,10 @@ type MsgClient interface {
 	CloseChannel(ctx context.Context, in *MsgCloseChannel, opts ...grpc.CallOption) (*MsgCloseChannelResponse, error)
 	SettleChannel(ctx context.Context, in *MsgSettleChannel, opts ...grpc.CallOption) (*MsgSettleChannelResponse, error)
 	DisputeChannel(ctx context.Context, in *MsgDisputeChannel, opts ...grpc.CallOption) (*MsgDisputeChannelResponse, error)
+	DepositChannel(ctx context.Context, in *MsgDepositChannel, opts ...grpc.CallOption) (*MsgDepositChannelResponse, error)
+	UpdateState(ctx context.Context, in *MsgUpdateState, opts ...grpc.CallOption) (*MsgUpdateStateResponse, error)
+	ClaimExpired(ctx context.Context, in *MsgClaimExpired, opts ...grpc.CallOption) (*MsgClaimExpiredResponse, error)
+	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 }
 
 type msgClient struct {
@@ -97,6 +105,46 @@ func (c *msgClient) DisputeChannel(ctx context.Context, in *MsgDisputeChannel, o
 	return out, nil
 }
 
+func (c *msgClient) DepositChannel(ctx context.Context, in *MsgDepositChannel, opts ...grpc.CallOption) (*MsgDepositChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgDepositChannelResponse)
+	err := c.cc.Invoke(ctx, Msg_DepositChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) UpdateState(ctx context.Context, in *MsgUpdateState, opts ...grpc.CallOption) (*MsgUpdateStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgUpdateStateResponse)
+	err := c.cc.Invoke(ctx, Msg_UpdateState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) ClaimExpired(ctx context.Context, in *MsgClaimExpired, opts ...grpc.CallOption) (*MsgClaimExpiredResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgClaimExpiredResponse)
+	err := c.cc.Invoke(ctx, Msg_ClaimExpired_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgUpdateParamsResponse)
+	err := c.cc.Invoke(ctx, Msg_UpdateParams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 // All implementations must embed UnimplementedMsgServer
 // for forward compatibility.
@@ -108,6 +156,10 @@ type MsgServer interface {
 	CloseChannel(context.Context, *MsgCloseChannel) (*MsgCloseChannelResponse, error)
 	SettleChannel(context.Context, *MsgSettleChannel) (*MsgSettleChannelResponse, error)
 	DisputeChannel(context.Context, *MsgDisputeChannel) (*MsgDisputeChannelResponse, error)
+	DepositChannel(context.Context, *MsgDepositChannel) (*MsgDepositChannelResponse, error)
+	UpdateState(context.Context, *MsgUpdateState) (*MsgUpdateStateResponse, error)
+	ClaimExpired(context.Context, *MsgClaimExpired) (*MsgClaimExpiredResponse, error)
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 	mustEmbedUnimplementedMsgServer()
 }
 
@@ -132,6 +184,18 @@ func (UnimplementedMsgServer) SettleChannel(context.Context, *MsgSettleChannel) 
 }
 func (UnimplementedMsgServer) DisputeChannel(context.Context, *MsgDisputeChannel) (*MsgDisputeChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DisputeChannel not implemented")
+}
+func (UnimplementedMsgServer) DepositChannel(context.Context, *MsgDepositChannel) (*MsgDepositChannelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DepositChannel not implemented")
+}
+func (UnimplementedMsgServer) UpdateState(context.Context, *MsgUpdateState) (*MsgUpdateStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateState not implemented")
+}
+func (UnimplementedMsgServer) ClaimExpired(context.Context, *MsgClaimExpired) (*MsgClaimExpiredResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimExpired not implemented")
+}
+func (UnimplementedMsgServer) UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateParams not implemented")
 }
 func (UnimplementedMsgServer) mustEmbedUnimplementedMsgServer() {}
 func (UnimplementedMsgServer) testEmbeddedByValue()             {}
@@ -244,6 +308,78 @@ func _Msg_DisputeChannel_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_DepositChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgDepositChannel)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).DepositChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_DepositChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).DepositChannel(ctx, req.(*MsgDepositChannel))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_UpdateState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateState)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_UpdateState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateState(ctx, req.(*MsgUpdateState))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_ClaimExpired_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgClaimExpired)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ClaimExpired(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_ClaimExpired_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ClaimExpired(ctx, req.(*MsgClaimExpired))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_UpdateParams_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Msg_ServiceDesc is the grpc.ServiceDesc for Msg service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -270,6 +406,22 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DisputeChannel",
 			Handler:    _Msg_DisputeChannel_Handler,
+		},
+		{
+			MethodName: "DepositChannel",
+			Handler:    _Msg_DepositChannel_Handler,
+		},
+		{
+			MethodName: "UpdateState",
+			Handler:    _Msg_UpdateState_Handler,
+		},
+		{
+			MethodName: "ClaimExpired",
+			Handler:    _Msg_ClaimExpired_Handler,
+		},
+		{
+			MethodName: "UpdateParams",
+			Handler:    _Msg_UpdateParams_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

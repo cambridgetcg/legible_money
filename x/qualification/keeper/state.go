@@ -13,9 +13,9 @@ import (
 // --- Qualifications ---
 
 // SetQualification stores a domain qualification and maintains indexes.
-func (k Keeper) SetQualification(ctx sdk.Context, q types.DomainQualification) {
+func (k Keeper) SetQualification(ctx sdk.Context, q *types.DomainQualification) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&q)
+	bz, err := proto.Marshal(q)
 	if err != nil {
 		panic("failed to marshal domain qualification: " + err.Error())
 	}
@@ -30,17 +30,17 @@ func (k Keeper) SetQualification(ctx sdk.Context, q types.DomainQualification) {
 }
 
 // GetQualification retrieves a domain qualification.
-func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) (types.DomainQualification, bool) {
+func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) (*types.DomainQualification, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.QualificationKey(validatorAddr, domain))
 	if err != nil || bz == nil {
-		return types.DomainQualification{}, false
+		return nil, false
 	}
 	var q types.DomainQualification
 	if err := proto.Unmarshal(bz, &q); err != nil {
-		return types.DomainQualification{}, false
+		return nil, false
 	}
-	return q, true
+	return &q, true
 }
 
 // DeleteQualification removes a domain qualification and its indexes.
@@ -51,7 +51,7 @@ func (k Keeper) DeleteQualification(ctx sdk.Context, validatorAddr, domain strin
 }
 
 // GetQualificationsByValidator returns all qualifications for a validator.
-func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr string) []types.DomainQualification {
+func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr string) []*types.DomainQualification {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.ValidatorQualificationPrefix(validatorAddr)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -60,13 +60,13 @@ func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr stri
 	}
 	defer iter.Close()
 
-	var qualifications []types.DomainQualification
+	var qualifications []*types.DomainQualification
 	for ; iter.Valid(); iter.Next() {
 		var q types.DomainQualification
 		if err := proto.Unmarshal(iter.Value(), &q); err != nil {
 			continue
 		}
-		qualifications = append(qualifications, q)
+		qualifications = append(qualifications, &q)
 	}
 	return qualifications
 }
@@ -74,9 +74,9 @@ func (k Keeper) GetQualificationsByValidator(ctx sdk.Context, validatorAddr stri
 // --- Endorsements ---
 
 // SetEndorsement stores an endorsement and maintains indexes.
-func (k Keeper) SetEndorsement(ctx sdk.Context, e types.QualificationEndorsement) {
+func (k Keeper) SetEndorsement(ctx sdk.Context, e *types.QualificationEndorsement) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&e)
+	bz, err := proto.Marshal(e)
 	if err != nil {
 		panic("failed to marshal endorsement: " + err.Error())
 	}
@@ -94,21 +94,21 @@ func (k Keeper) SetEndorsement(ctx sdk.Context, e types.QualificationEndorsement
 }
 
 // GetEndorsement retrieves an endorsement by ID.
-func (k Keeper) GetEndorsement(ctx sdk.Context, id string) (types.QualificationEndorsement, bool) {
+func (k Keeper) GetEndorsement(ctx sdk.Context, id string) (*types.QualificationEndorsement, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.EndorsementKey(id))
 	if err != nil || bz == nil {
-		return types.QualificationEndorsement{}, false
+		return nil, false
 	}
 	var e types.QualificationEndorsement
 	if err := proto.Unmarshal(bz, &e); err != nil {
-		return types.QualificationEndorsement{}, false
+		return nil, false
 	}
-	return e, true
+	return &e, true
 }
 
 // DeleteEndorsement removes an endorsement and its indexes.
-func (k Keeper) DeleteEndorsement(ctx sdk.Context, e types.QualificationEndorsement) {
+func (k Keeper) DeleteEndorsement(ctx sdk.Context, e *types.QualificationEndorsement) {
 	store := k.storeService.OpenKVStore(ctx)
 	_ = store.Delete(types.EndorsementKey(e.Id))
 	_ = store.Delete(types.EndorserIndexKey(e.EndorserAddr, e.Id))
@@ -116,7 +116,7 @@ func (k Keeper) DeleteEndorsement(ctx sdk.Context, e types.QualificationEndorsem
 }
 
 // GetEndorsementsForValidator returns all endorsements targeting a validator.
-func (k Keeper) GetEndorsementsForValidator(ctx sdk.Context, targetAddr string) []types.QualificationEndorsement {
+func (k Keeper) GetEndorsementsForValidator(ctx sdk.Context, targetAddr string) []*types.QualificationEndorsement {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.TargetValidatorPrefix(targetAddr)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -125,7 +125,7 @@ func (k Keeper) GetEndorsementsForValidator(ctx sdk.Context, targetAddr string) 
 	}
 	defer iter.Close()
 
-	var endorsements []types.QualificationEndorsement
+	var endorsements []*types.QualificationEndorsement
 	for ; iter.Valid(); iter.Next() {
 		// Value is empty (index entry). Extract endorsement ID from key.
 		key := iter.Key()
@@ -139,11 +139,11 @@ func (k Keeper) GetEndorsementsForValidator(ctx sdk.Context, targetAddr string) 
 }
 
 // GetEndorsementsForValidatorInDomain returns endorsements for a validator in a specific domain.
-func (k Keeper) GetEndorsementsForValidatorInDomain(ctx sdk.Context, targetAddr, domain string) []types.QualificationEndorsement {
+func (k Keeper) GetEndorsementsForValidatorInDomain(ctx sdk.Context, targetAddr, domain string) []*types.QualificationEndorsement {
 	all := k.GetEndorsementsForValidator(ctx, targetAddr)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	var filtered []types.QualificationEndorsement
+	var filtered []*types.QualificationEndorsement
 	for _, e := range all {
 		if e.Domain == domain && (e.ExpiresAtBlock == 0 || e.ExpiresAtBlock > currentBlock) {
 			filtered = append(filtered, e)
@@ -174,7 +174,7 @@ func (k Keeper) GetNextEndorsementId(ctx sdk.Context) string {
 // --- Params ---
 
 // GetParams returns the qualification module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -184,13 +184,13 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // SetParams stores the qualification module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic("failed to marshal qualification params: " + err.Error())
 	}

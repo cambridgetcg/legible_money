@@ -230,7 +230,7 @@ func (k Keeper) UpdateDomainReputation(
 
 // ApplyPeriodicDecay decays all reputations toward the base score.
 func (k Keeper) ApplyPeriodicDecay(ctx sdk.Context, currentBlock uint64) {
-	k.IterateReputations(ctx, func(rep types.IsolatedReputation) bool {
+	k.IterateReputations(ctx, func(rep *types.IsolatedReputation) bool {
 		changed := false
 
 		// Decay global

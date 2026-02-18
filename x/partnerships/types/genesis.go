@@ -3,8 +3,8 @@ package types
 import "fmt"
 
 // DefaultParams returns default module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		FormationWindowBlocks:      77,
 		CoolingPeriodBlocks:        222222,
 		CommonPotShareBps:          220000, // 22%
@@ -22,7 +22,7 @@ func DefaultParams() Params {
 func DefaultGenesis() *GenesisState {
 	p := DefaultParams()
 	return &GenesisState{
-		Params:              &p,
+		Params:              p,
 		Partnerships:        []*Partnership{},
 		ConsensusOperations: []*ConsensusOperation{},
 		SafetyFreezes:       []*SafetyFreeze{},
@@ -31,7 +31,7 @@ func DefaultGenesis() *GenesisState {
 }
 
 // Validate performs basic genesis state validation.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		if err := gs.Params.Validate(); err != nil {
 			return fmt.Errorf("invalid params: %w", err)

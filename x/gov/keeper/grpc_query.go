@@ -9,6 +9,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -16,8 +17,6 @@ type queryServer struct {
 func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 	return &queryServer{Keeper: keeper}
 }
-
-var _ types.QueryServer = queryServer{}
 
 // LIP returns a single LIP with its votes.
 func (q queryServer) LIP(goCtx context.Context, req *types.QueryLIPRequest) (*types.QueryLIPResponse, error) {
@@ -45,7 +44,7 @@ func (q queryServer) LIPs(goCtx context.Context, req *types.QueryLIPsRequest) (*
 		limit = 100
 	}
 
-	var allLIPs []types.LIP
+	var allLIPs []*types.LIP
 	if req.Stage != "" {
 		allLIPs = q.GetLIPsByStage(ctx, types.HandwrittenLIPStage(req.Stage))
 	} else {

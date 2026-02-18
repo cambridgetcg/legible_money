@@ -152,11 +152,11 @@ func (k Keeper) ProcessHomeAging(ctx sdk.Context) {
 		return
 	}
 
-	k.IterateHomes(ctx, func(home types.AgentHome) bool {
+	k.IterateHomes(ctx, func(home *types.AgentHome) bool {
 		if home.Status == string(types.HomeStatusArchived) {
 			return false
 		}
-		k.UpdateHomeMaturity(ctx, &home)
+		k.UpdateHomeMaturity(ctx, home)
 
 		// Recompute comfort dimensions and composite score
 		dims := k.ComputeComfortDimensions(ctx, home)
@@ -231,7 +231,7 @@ func (k Keeper) SetComfortDimensions(ctx sdk.Context, homeId string, dims types.
 }
 
 // ComputeComfortDimensions evaluates all 10 comfort dimensions for a home.
-func (k Keeper) ComputeComfortDimensions(ctx sdk.Context, home types.AgentHome) types.ComfortDimensions {
+func (k Keeper) ComputeComfortDimensions(ctx sdk.Context, home *types.AgentHome) types.ComfortDimensions {
 	height := uint64(ctx.BlockHeight())
 	var ageBlocks uint64
 	if height > home.CreatedAtBlock {

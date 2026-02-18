@@ -176,7 +176,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 	)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
-	k.InitGenesis(ctx, *types.DefaultGenesis())
+	k.InitGenesis(ctx, types.DefaultGenesis())
 
 	return k, ctx, bk
 }
@@ -956,12 +956,12 @@ func TestInitExportGenesis(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Manually set some state
-	k.SetResearch(ctx, types.Research{
+	k.SetResearch(ctx, &types.Research{
 		Id: "RES-42", Submitter: testAddr("alice"),
 		Title: "Genesis Research", Domain: "physics",
 		Status: string(types.ResearchStatusSubmitted),
 	})
-	k.SetBounty(ctx, types.Bounty{
+	k.SetBounty(ctx, &types.Bounty{
 		Id: "BOUNTY-7", Creator: testAddr("bob"),
 		Title: "Genesis Bounty", Status: string(types.BountyStatusOpen),
 	})
@@ -1208,7 +1208,7 @@ func TestIterateResearches(t *testing.T) {
 
 	// Add 5 research submissions
 	for i := 0; i < 5; i++ {
-		k.SetResearch(ctx, types.Research{
+		k.SetResearch(ctx, &types.Research{
 			Id:     "RES-" + string(rune('A'+i)),
 			Domain: "test",
 			Status: string(types.ResearchStatusSubmitted),
@@ -1216,7 +1216,7 @@ func TestIterateResearches(t *testing.T) {
 	}
 
 	var count int
-	k.IterateResearches(ctx, func(r types.Research) bool {
+	k.IterateResearches(ctx, func(r *types.Research) bool {
 		count++
 		return false
 	})
@@ -1228,9 +1228,9 @@ func TestIterateResearches(t *testing.T) {
 func TestGetResearchesByStatus(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetResearch(ctx, types.Research{Id: "RES-1", Status: string(types.ResearchStatusSubmitted)})
-	k.SetResearch(ctx, types.Research{Id: "RES-2", Status: string(types.ResearchStatusAccepted)})
-	k.SetResearch(ctx, types.Research{Id: "RES-3", Status: string(types.ResearchStatusSubmitted)})
+	k.SetResearch(ctx, &types.Research{Id: "RES-1", Status: string(types.ResearchStatusSubmitted)})
+	k.SetResearch(ctx, &types.Research{Id: "RES-2", Status: string(types.ResearchStatusAccepted)})
+	k.SetResearch(ctx, &types.Research{Id: "RES-3", Status: string(types.ResearchStatusSubmitted)})
 
 	submitted := k.GetResearchesByStatus(ctx, types.ResearchStatusSubmitted)
 	if len(submitted) != 2 {
@@ -1246,9 +1246,9 @@ func TestGetResearchesByStatus(t *testing.T) {
 func TestGetResearchesByDomain(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetResearch(ctx, types.Research{Id: "RES-1", Domain: "physics"})
-	k.SetResearch(ctx, types.Research{Id: "RES-2", Domain: "math"})
-	k.SetResearch(ctx, types.Research{Id: "RES-3", Domain: "physics"})
+	k.SetResearch(ctx, &types.Research{Id: "RES-1", Domain: "physics"})
+	k.SetResearch(ctx, &types.Research{Id: "RES-2", Domain: "math"})
+	k.SetResearch(ctx, &types.Research{Id: "RES-3", Domain: "physics"})
 
 	physics := k.GetResearchesByDomain(ctx, "physics")
 	if len(physics) != 2 {
@@ -1259,10 +1259,10 @@ func TestGetResearchesByDomain(t *testing.T) {
 func TestGetActiveBounties(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetBounty(ctx, types.Bounty{Id: "B-1", Status: string(types.BountyStatusOpen)})
-	k.SetBounty(ctx, types.Bounty{Id: "B-2", Status: string(types.BountyStatusClaimed)})
-	k.SetBounty(ctx, types.Bounty{Id: "B-3", Status: string(types.BountyStatusExpired)})
-	k.SetBounty(ctx, types.Bounty{Id: "B-4", Status: string(types.BountyStatusFulfilled)})
+	k.SetBounty(ctx, &types.Bounty{Id: "B-1", Status: string(types.BountyStatusOpen)})
+	k.SetBounty(ctx, &types.Bounty{Id: "B-2", Status: string(types.BountyStatusClaimed)})
+	k.SetBounty(ctx, &types.Bounty{Id: "B-3", Status: string(types.BountyStatusExpired)})
+	k.SetBounty(ctx, &types.Bounty{Id: "B-4", Status: string(types.BountyStatusFulfilled)})
 
 	active := k.GetActiveBounties(ctx)
 	if len(active) != 2 {
@@ -1273,7 +1273,7 @@ func TestGetActiveBounties(t *testing.T) {
 func TestDeleteResearch(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetResearch(ctx, types.Research{Id: "RES-1", Domain: "test"})
+	k.SetResearch(ctx, &types.Research{Id: "RES-1", Domain: "test"})
 	_, found := k.GetResearch(ctx, "RES-1")
 	if !found {
 		t.Fatal("expected research to exist")
@@ -1391,7 +1391,7 @@ func TestGenesisWithPeerReviews(t *testing.T) {
 
 	// Re-init into fresh keeper
 	k2, ctx2, _ := setupKeeper(t)
-	k2.InitGenesis(ctx2, *gs)
+	k2.InitGenesis(ctx2, gs)
 
 	// Verify review survived round-trip
 	reviews := k2.GetReviewsForResearch(ctx2, "RES-1")

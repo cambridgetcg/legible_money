@@ -256,7 +256,7 @@ func TestSetGetParams(t *testing.T) {
 		FraudPenaltyBps:       1000,
 		MaxChannelsPerPayer:   10,
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 	got := k.GetParams(ctx)
 	if got.MinDeposit != "500000" {
 		t.Errorf("expected min deposit 500000, got %s", got.MinDeposit)
@@ -280,7 +280,7 @@ func TestSetGetChannel(t *testing.T) {
 		Status:    types.ChannelStatusOpen,
 		Nonce:     0,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	got, found := k.GetChannel(ctx, "pc-100-1")
 	if !found {
@@ -305,8 +305,8 @@ func TestGetChannelNotFound(t *testing.T) {
 func TestDeleteChannel(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	ch := types.PaymentChannel{ChannelId: "pc-del", Payer: payer1, Provider: provider1}
-	k.SetChannel(ctx, ch)
-	k.DeleteChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
+	k.DeleteChannel(ctx, &ch)
 	_, found := k.GetChannel(ctx, "pc-del")
 	if found {
 		t.Error("channel should have been deleted")
@@ -315,9 +315,9 @@ func TestDeleteChannel(t *testing.T) {
 
 func TestGetChannelsByPayer(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-p1-a", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-p1-b", Payer: payer1, Provider: provider2, Status: types.ChannelStatusOpen})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-p2-a", Payer: payer2, Provider: provider1, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-p1-a", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-p1-b", Payer: payer1, Provider: provider2, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-p2-a", Payer: payer2, Provider: provider1, Status: types.ChannelStatusOpen})
 
 	channels := k.GetChannelsByPayer(ctx, payer1)
 	if len(channels) != 2 {
@@ -327,9 +327,9 @@ func TestGetChannelsByPayer(t *testing.T) {
 
 func TestGetChannelsByProvider(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-pr1-a", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-pr1-b", Payer: payer2, Provider: provider1, Status: types.ChannelStatusOpen})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-pr2-a", Payer: payer1, Provider: provider2, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-pr1-a", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-pr1-b", Payer: payer2, Provider: provider1, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-pr2-a", Payer: payer1, Provider: provider2, Status: types.ChannelStatusOpen})
 
 	channels := k.GetChannelsByProvider(ctx, provider1)
 	if len(channels) != 2 {
@@ -339,9 +339,9 @@ func TestGetChannelsByProvider(t *testing.T) {
 
 func TestGetOpenChannelCountForPayer(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-oc-1", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-oc-2", Payer: payer1, Provider: provider2, Status: types.ChannelStatusClosed})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-oc-3", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-oc-1", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-oc-2", Payer: payer1, Provider: provider2, Status: types.ChannelStatusClosed})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-oc-3", Payer: payer1, Provider: provider1, Status: types.ChannelStatusOpen})
 
 	count := k.GetOpenChannelCountForPayer(ctx, payer1)
 	if count != 2 {
@@ -360,7 +360,7 @@ func TestSetGetDispute(t *testing.T) {
 		DisputedSpent: "1000000",
 		DeadlineBlock: 200,
 	}
-	k.SetDispute(ctx, d)
+	k.SetDispute(ctx, &d)
 
 	got, found := k.GetDispute(ctx, "pc-100-1")
 	if !found {
@@ -374,7 +374,7 @@ func TestSetGetDispute(t *testing.T) {
 func TestDeleteDispute(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	d := types.ChannelDispute{ChannelId: "pc-dd"}
-	k.SetDispute(ctx, d)
+	k.SetDispute(ctx, &d)
 	k.DeleteDispute(ctx, "pc-dd")
 	_, found := k.GetDispute(ctx, "pc-dd")
 	if found {
@@ -384,9 +384,9 @@ func TestDeleteDispute(t *testing.T) {
 
 func TestGetExpiredDisputes(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetDispute(ctx, types.ChannelDispute{ChannelId: "pc-exp-1", DeadlineBlock: 50, Resolved: false})
-	k.SetDispute(ctx, types.ChannelDispute{ChannelId: "pc-exp-2", DeadlineBlock: 150, Resolved: false})
-	k.SetDispute(ctx, types.ChannelDispute{ChannelId: "pc-exp-3", DeadlineBlock: 50, Resolved: true})
+	k.SetDispute(ctx, &types.ChannelDispute{ChannelId: "pc-exp-1", DeadlineBlock: 50, Resolved: false})
+	k.SetDispute(ctx, &types.ChannelDispute{ChannelId: "pc-exp-2", DeadlineBlock: 150, Resolved: false})
+	k.SetDispute(ctx, &types.ChannelDispute{ChannelId: "pc-exp-3", DeadlineBlock: 50, Resolved: true})
 
 	expired := k.GetExpiredDisputes(ctx, 100)
 	if len(expired) != 1 {
@@ -414,7 +414,7 @@ func TestOpenChannel_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 10000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, err := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender:        payer1,
 		Receiver:      provider1,
@@ -447,7 +447,7 @@ func TestOpenChannel_InsufficientDeposit(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 10000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender:        payer1,
 		Receiver:      provider1,
@@ -463,7 +463,7 @@ func TestOpenChannel_DurationExceeded(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 10000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender:        payer1,
 		Receiver:      provider1,
@@ -479,7 +479,7 @@ func TestOpenChannel_SelfChannel(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 10000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender:        payer1,
 		Receiver:      payer1,
@@ -497,9 +497,9 @@ func TestOpenChannel_MaxChannelsExceeded(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.MaxChannelsPerPayer = 2
-	k.SetParams(ctx, *params)
+	k.SetParams(ctx, params)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	for i := 0; i < 2; i++ {
 		_, err := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 			Sender:        payer1,
@@ -529,7 +529,7 @@ func TestDepositChannel_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -557,7 +557,7 @@ func TestDepositChannel_NotPayer(t *testing.T) {
 	bk.setBalance(payer1, "ulgm", 20000000)
 	bk.setBalance(provider1, "ulgm", 5000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -578,9 +578,9 @@ func TestDepositChannel_ClosedChannel(t *testing.T) {
 		ChannelId: "pc-closed", Payer: payer1, Provider: provider1,
 		Status: types.ChannelStatusClosed, Deposited: "5000000", Spent: "0", Available: "5000000",
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.DepositChannel(ctx, &types.MsgDepositChannel{
 		Depositor: payer1, ChannelId: "pc-closed", Amount: "1000000",
 	})
@@ -595,7 +595,7 @@ func TestUpdateState_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -603,7 +603,7 @@ func TestUpdateState_Success(t *testing.T) {
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender:    payer1,
 		ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			ChannelId:         resp.ChannelId,
 			Nonce:             1,
 			Spent:             "2000000",
@@ -632,7 +632,7 @@ func TestUpdateState_MissingSignature(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -641,7 +641,7 @@ func TestUpdateState_MissingSignature(t *testing.T) {
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender:    payer1,
 		ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce: 1, Spent: "2000000",
 		},
 	})
@@ -654,7 +654,7 @@ func TestUpdateState_InvalidNonce(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -662,7 +662,7 @@ func TestUpdateState_InvalidNonce(t *testing.T) {
 	// Update with nonce 1
 	msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce:             1,
 			Spent:             "1000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "1000000"),
@@ -673,7 +673,7 @@ func TestUpdateState_InvalidNonce(t *testing.T) {
 	// Try nonce 1 again (not higher) — sig is valid but nonce check fails
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce:             1,
 			Spent:             "2000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "2000000"),
@@ -689,14 +689,14 @@ func TestUpdateState_SpentExceedsDeposit(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
 
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce:             1,
 			Spent:             "99999999",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "99999999"),
@@ -712,7 +712,7 @@ func TestUpdateState_NotParty(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -720,7 +720,7 @@ func TestUpdateState_NotParty(t *testing.T) {
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender:    payer2, // not a party
 		ChannelId: resp.ChannelId,
-		Update:    types.ChannelStateUpdate{Nonce: 1, Spent: "1000000"},
+		Update:    &types.ChannelStateUpdate{Nonce: 1, Spent: "1000000"},
 	})
 	if err == nil {
 		t.Error("expected not party error")
@@ -733,7 +733,7 @@ func TestDisputeChannel_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -768,7 +768,7 @@ func TestDisputeChannel_MissingSignature(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -789,7 +789,7 @@ func TestDisputeChannel_AlreadyDisputed(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -818,7 +818,7 @@ func TestSettleChannel_OpensClosingPeriod(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -826,7 +826,7 @@ func TestSettleChannel_OpensClosingPeriod(t *testing.T) {
 	// Update state with signatures
 	msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce:             1,
 			Spent:             "2000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "2000000"),
@@ -859,7 +859,7 @@ func TestSettleChannel_ClosingToFinal(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -867,7 +867,7 @@ func TestSettleChannel_ClosingToFinal(t *testing.T) {
 	// Update state
 	msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce:             1,
 			Spent:             "2000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "2000000"),
@@ -910,7 +910,7 @@ func TestSettleChannel_ClosingBeforeDeadline(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -933,7 +933,7 @@ func TestSettleChannel_AfterDispute(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -972,7 +972,7 @@ func TestCloseChannel_Cooperative(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1011,7 +1011,7 @@ func TestCloseChannel_MissingSignature(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1032,7 +1032,7 @@ func TestCloseChannel_WrongSignerAddress(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1056,7 +1056,7 @@ func TestClaimExpired_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 100,
 	})
@@ -1064,7 +1064,7 @@ func TestClaimExpired_Success(t *testing.T) {
 	// Update state with signatures
 	msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce:             1,
 			Spent:             "1000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "1000000"),
@@ -1099,7 +1099,7 @@ func TestClaimExpired_NotExpired(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 100000,
 	})
@@ -1117,7 +1117,7 @@ func TestClaimExpired_NotPayer(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 100,
 	})
@@ -1137,7 +1137,7 @@ func TestClaimExpired_NotPayer(t *testing.T) {
 
 func TestUpdateParams_Success(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 
 	newParams := &types.Params{
 		MinDeposit:            "500000",
@@ -1167,7 +1167,7 @@ func TestUpdateParams_Success(t *testing.T) {
 
 func TestUpdateParams_Unauthorized(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: payer1, // not the authority
@@ -1184,7 +1184,7 @@ func TestUpdateChannel_Success(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1216,7 +1216,7 @@ func TestUpdateChannel_MissingSignature(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1235,7 +1235,7 @@ func TestUpdateChannel_SpentExceedsDeposit(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1254,7 +1254,7 @@ func TestUpdateChannel_NotParty(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1274,7 +1274,7 @@ func TestDisputeChannel_HigherSequenceSupersedes(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1312,7 +1312,7 @@ func TestDisputeChannel_NotParty(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1334,9 +1334,9 @@ func TestSettleChannel_AlreadyClosed(t *testing.T) {
 		ChannelId: "pc-sc", Payer: payer1, Provider: provider1,
 		Status: types.ChannelStatusClosed, Deposited: "5000000", Spent: "0", Available: "5000000",
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	_, err := msgServer.SettleChannel(ctx, &types.MsgSettleChannel{
 		Authority: payer1, ChannelId: "pc-sc",
 	})
@@ -1349,7 +1349,7 @@ func TestSettleChannel_DisputePeriodStillActive(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1376,7 +1376,7 @@ func TestCloseChannel_SpentExceedsDeposit(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1395,7 +1395,7 @@ func TestCloseChannel_NotParty(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1413,9 +1413,9 @@ func TestCloseChannel_NotParty(t *testing.T) {
 
 func TestQueryChannelsByProvider(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qpr-1", Payer: payer1, Provider: provider1})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qpr-2", Payer: payer2, Provider: provider1})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qpr-3", Payer: payer1, Provider: provider2})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-qpr-1", Payer: payer1, Provider: provider1})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-qpr-2", Payer: payer2, Provider: provider1})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-qpr-3", Payer: payer1, Provider: provider2})
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.ChannelsByProvider(ctx, &types.QueryChannelsByProviderRequest{Provider: provider1})
@@ -1441,7 +1441,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 		FraudPenaltyBps:       750,
 		MaxChannelsPerPayer:   25,
 	}
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	ch1 := types.PaymentChannel{
 		ChannelId: "pc-gen-1", Payer: payer1, Provider: provider1,
@@ -1453,14 +1453,14 @@ func TestGenesisRoundtrip(t *testing.T) {
 		Deposited: "10000000", Spent: "0", Available: "10000000",
 		Status: types.ChannelStatusClosed, Nonce: 0,
 	}
-	k.SetChannel(ctx, ch1)
-	k.SetChannel(ctx, ch2)
+	k.SetChannel(ctx, &ch1)
+	k.SetChannel(ctx, &ch2)
 
 	d1 := types.ChannelDispute{
 		ChannelId: "pc-gen-1", Disputer: provider1,
 		DisputedNonce: 2, DisputedSpent: "500000", DeadlineBlock: 200,
 	}
-	k.SetDispute(ctx, d1)
+	k.SetDispute(ctx, &d1)
 
 	gs := k.ExportGenesis(ctx)
 	if len(gs.Channels) != 2 {
@@ -1498,7 +1498,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 func TestQueryChannel(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	ch := types.PaymentChannel{ChannelId: "pc-q-1", Payer: payer1, Provider: provider1, Deposited: "5000000"}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.Channel(ctx, &types.QueryChannelRequest{ChannelId: "pc-q-1"})
@@ -1521,8 +1521,8 @@ func TestQueryChannelNotFound(t *testing.T) {
 
 func TestQueryChannelsByPayer(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qp-1", Payer: payer1, Provider: provider1})
-	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qp-2", Payer: payer1, Provider: provider2})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-qp-1", Payer: payer1, Provider: provider1})
+	k.SetChannel(ctx, &types.PaymentChannel{ChannelId: "pc-qp-2", Payer: payer1, Provider: provider2})
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.ChannelsByPayer(ctx, &types.QueryChannelsByPayerRequest{Payer: payer1})
@@ -1537,7 +1537,7 @@ func TestQueryChannelsByPayer(t *testing.T) {
 func TestQueryActiveDispute(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	d := types.ChannelDispute{ChannelId: "pc-qd-1", DisputedNonce: 3, DeadlineBlock: 200}
-	k.SetDispute(ctx, d)
+	k.SetDispute(ctx, &d)
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.ActiveDispute(ctx, &types.QueryActiveDisputeRequest{ChannelId: "pc-qd-1"})
@@ -1575,14 +1575,14 @@ func TestBeginBlock_ResolvesExpiredDisputes(t *testing.T) {
 		Status: types.ChannelStatusDisputed, Nonce: 0,
 		DisputeDeadline: 150, DisputeNonce: 2,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	d := types.ChannelDispute{
 		ChannelId: "pc-bb-1", Disputer: provider1,
 		DisputedNonce: 2, DisputedSpent: "3000000",
 		DeadlineBlock: 150, Resolved: false,
 	}
-	k.SetDispute(ctx, d)
+	k.SetDispute(ctx, &d)
 
 	bk.moduleBalances[types.ModuleName] = map[string]int64{"ulgm": 5000000}
 	ctx = ctx.WithBlockHeight(200)
@@ -1630,7 +1630,7 @@ func TestSpendFromChannel_Success(t *testing.T) {
 		OpenedAtBlock:  100,
 		ExpiresAtBlock: 200,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	err := k.SpendFromChannel(ctx, "pc-spend-1", "3000", "tree")
 	if err != nil {
@@ -1673,7 +1673,7 @@ func TestSpendFromChannel_InsufficientBalance(t *testing.T) {
 		OpenedAtBlock:  100,
 		ExpiresAtBlock: 200,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	err := k.SpendFromChannel(ctx, "pc-spend-2", "500", "tree")
 	if err == nil {
@@ -1695,7 +1695,7 @@ func TestSpendFromChannel_ClosedChannel(t *testing.T) {
 		OpenedAtBlock:  100,
 		ExpiresAtBlock: 200,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	err := k.SpendFromChannel(ctx, "pc-spend-3", "1000", "tree")
 	if err == nil {
@@ -1724,7 +1724,7 @@ func TestGetChannelInfo_Success(t *testing.T) {
 		Available: "3000",
 		Status:    types.ChannelStatusOpen,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	payer, provider, available, status, found := k.GetChannelInfo(ctx, "pc-info-1")
 	if !found {
@@ -1832,7 +1832,7 @@ func TestStateMachine_DisputeDuringClosing(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1867,7 +1867,7 @@ func TestStateMachine_CannotUpdateDuringClosing(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1894,7 +1894,7 @@ func TestDisputeWindow_CannotSettleAtExactDeadline(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1935,7 +1935,7 @@ func TestReplay_SameChannelDifferentNonce(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -1943,7 +1943,7 @@ func TestReplay_SameChannelDifferentNonce(t *testing.T) {
 	// Valid update at nonce 5
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce: 5, Spent: "1000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 5, "1000000"),
 			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 5, "1000000"),
@@ -1956,7 +1956,7 @@ func TestReplay_SameChannelDifferentNonce(t *testing.T) {
 	// Replay the nonce-5 signature — sigs are valid but nonce guard rejects
 	_, err = msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce: 5, Spent: "1000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 5, "1000000"),
 			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 5, "1000000"),
@@ -1971,7 +1971,7 @@ func TestReplay_SameNonceDifferentChannel(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 30000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 
 	// Open channel A
 	respA, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
@@ -1989,7 +1989,7 @@ func TestReplay_SameNonceDifferentChannel(t *testing.T) {
 	// Try to use channel A's signatures on channel B — channelId is in payload
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: respB.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce: 1, Spent: "1000000",
 			PayerSignature:    payerSigA,
 			ProviderSignature: providerSigA,
@@ -2004,7 +2004,7 @@ func TestReplay_SameOperationDifferentChain(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -2027,7 +2027,7 @@ func TestReplay_UpdateStateDualSig(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -2039,7 +2039,7 @@ func TestReplay_UpdateStateDualSig(t *testing.T) {
 	// Try to use those sigs but with different spent amount — payload mismatch
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce: 1, Spent: "2000000", // different from what was signed (1000000)
 			PayerSignature:    payerSig1,
 			ProviderSignature: providerSig1,
@@ -2056,7 +2056,7 @@ func TestCooperativeClose_HappyPath(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -2064,7 +2064,7 @@ func TestCooperativeClose_HappyPath(t *testing.T) {
 	// Update state to reflect some spending
 	msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{
+		Update: &types.ChannelStateUpdate{
 			Nonce: 1, Spent: "2000000",
 			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "2000000"),
 			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 1, "2000000"),
@@ -2115,7 +2115,7 @@ func TestCooperativeClose_DisputeDuringClosing(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -2163,7 +2163,7 @@ func TestCooperativeClose_CounterpartyCanDispute(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -2215,7 +2215,7 @@ func TestCooperativeClose_FundsDistribution(t *testing.T) {
 	k, ctx, bk := setupKeeper(t)
 	bk.setBalance(payer1, "ulgm", 20000000)
 
-	msgServer := keeper.NewFullMsgServerImpl(k)
+	msgServer := keeper.NewMsgServerImpl(k)
 	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
@@ -2263,7 +2263,7 @@ func TestBeginBlock_AutoResolvesExpiredClosing(t *testing.T) {
 		Deposited: "5000000", Spent: "2000000", Available: "3000000",
 		Status: types.ChannelStatusClosing, DisputeDeadline: 150, Nonce: 3,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 	bk.moduleBalances[types.ModuleName] = map[string]int64{"ulgm": 5000000}
 
 	ctx = ctx.WithBlockHeight(200) // past deadline of 150
@@ -2302,14 +2302,14 @@ func TestBeginBlock_AutoResolvesExpiredDispute(t *testing.T) {
 		Status: types.ChannelStatusDisputed, DisputeDeadline: 150,
 		Nonce: 1, DisputeNonce: 3,
 	}
-	k.SetChannel(ctx, ch)
+	k.SetChannel(ctx, &ch)
 
 	d := types.ChannelDispute{
 		ChannelId: "pc-auto-2", Disputer: provider1,
 		DisputedNonce: 3, DisputedSpent: "3000000",
 		DeadlineBlock: 150, Resolved: false,
 	}
-	k.SetDispute(ctx, d)
+	k.SetDispute(ctx, &d)
 
 	bk.moduleBalances[types.ModuleName] = map[string]int64{"ulgm": 5000000}
 	ctx = ctx.WithBlockHeight(200) // past deadline

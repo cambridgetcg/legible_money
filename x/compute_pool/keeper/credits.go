@@ -32,7 +32,7 @@ func TierMultiplierBps(tier string) uint64 {
 //	credits = base_cu × (1 + 0.25 × evidence + 0.5 × crossDomain) × tier_multiplier
 //
 // All arithmetic is integer; multipliers are in bps (1000 = 1.0x).
-func CalculateCredits(params types.Params, tier string, evidenceCount, crossDomainRefs uint64) uint64 {
+func CalculateCredits(params *types.Params, tier string, evidenceCount, crossDomainRefs uint64) uint64 {
 	base := params.BaseCuPerVerification
 
 	// Complexity factor in bps: 1000000 + complexityBonusBps × evidence + crossDomainBonusBps × crossDomain
@@ -77,9 +77,9 @@ func (k Keeper) GrantCredits(ctx sdk.Context, validatorAddr string, claimId stri
 	}
 
 	// Get or create credit record
-	credit, _ := k.GetCredit(ctx, validatorAddr)
-	if credit.ValidatorAddr == "" {
-		credit.ValidatorAddr = validatorAddr
+	credit, found := k.GetCredit(ctx, validatorAddr)
+	if !found {
+		credit = &types.ComputeCredit{ValidatorAddr: validatorAddr}
 	}
 
 	// Check if existing credits have expired
@@ -129,9 +129,9 @@ func (k Keeper) ExpireCredits(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
 	epoch := height / types.BlocksPerEpoch
 
-	var toExpire []types.ComputeCredit
+	var toExpire []*types.ComputeCredit
 
-	k.IterateCredits(ctx, func(credit types.ComputeCredit) bool {
+	k.IterateCredits(ctx, func(credit *types.ComputeCredit) bool {
 		if credit.Balance > 0 && height > credit.ExpiresAt {
 			toExpire = append(toExpire, credit)
 		}

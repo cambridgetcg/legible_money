@@ -28,7 +28,7 @@ func (k msgServer) SubmitEvidence(goCtx context.Context, msg *types.MsgSubmitEvi
 
 	evidenceId := GenerateEvidenceID(msg.Submitter, msg.ClaimId, msg.ContentHash, height)
 
-	evidence := types.Evidence{
+	evidence := &types.Evidence{
 		Id:           evidenceId,
 		ClaimId:      msg.ClaimId,
 		Submitter:    msg.Submitter,
@@ -66,7 +66,7 @@ func (k msgServer) AuditEvidence(goCtx context.Context, msg *types.MsgAuditEvide
 
 	auditId := GenerateAuditID(msg.Auditor, msg.EvidenceId, height)
 
-	audit := types.EvidenceAudit{
+	audit := &types.EvidenceAudit{
 		Id:          auditId,
 		EvidenceId:  msg.EvidenceId,
 		Auditor:     msg.Auditor,
@@ -103,7 +103,7 @@ func (k msgServer) RegisterOracle(goCtx context.Context, msg *types.MsgRegisterO
 
 	oracleId := GenerateOracleID(msg.Operator, msg.Name, height)
 
-	oracle := types.Oracle{
+	oracle := &types.Oracle{
 		Id:           oracleId,
 		Operator:     msg.Operator,
 		Name:         msg.Name,
@@ -158,7 +158,7 @@ func (k msgServer) SubmitOracleData(goCtx context.Context, msg *types.MsgSubmitO
 	// Create evidence from oracle data
 	evidenceId := GenerateEvidenceID(oracle.Operator, msg.ClaimId, msg.ContentHash, height)
 
-	evidence := types.Evidence{
+	evidence := &types.Evidence{
 		Id:           evidenceId,
 		ClaimId:      msg.ClaimId,
 		Submitter:    oracle.Operator,
@@ -197,6 +197,6 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	if msg.Params == nil {
 		return nil, fmt.Errorf("params cannot be nil")
 	}
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 	return &types.MsgUpdateParamsResponse{}, nil
 }

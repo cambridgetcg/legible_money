@@ -27,7 +27,7 @@ func (q queryServer) Project(goCtx context.Context, req *types.QueryProjectReque
 	if !found {
 		return nil, types.ErrProjectNotFound
 	}
-	return &types.QueryProjectResponse{Project: &project}, nil
+	return &types.QueryProjectResponse{Project: project}, nil
 }
 
 // ProjectsByFounder returns all projects for a founder with pagination.
@@ -53,14 +53,8 @@ func (q queryServer) ProjectsByFounder(goCtx context.Context, req *types.QueryPr
 		projects = projects[:limit]
 	}
 
-	// Convert []ProductProject to []*ProductProject for proto
-	ptrs := make([]*types.ProductProject, len(projects))
-	for i := range projects {
-		ptrs[i] = &projects[i]
-	}
-
 	return &types.QueryProjectsByFounderResponse{
-		Projects: ptrs,
+		Projects: projects,
 		Total:    total,
 	}, nil
 }
@@ -72,7 +66,7 @@ func (q queryServer) Task(goCtx context.Context, req *types.QueryTaskRequest) (*
 	if !found {
 		return nil, types.ErrTaskNotFound
 	}
-	return &types.QueryTaskResponse{Task: &task}, nil
+	return &types.QueryTaskResponse{Task: task}, nil
 }
 
 // TasksByProject returns all tasks for a project with pagination.
@@ -98,14 +92,8 @@ func (q queryServer) TasksByProject(goCtx context.Context, req *types.QueryTasks
 		tasks = tasks[:limit]
 	}
 
-	// Convert []ProjectTask to []*ProjectTask for proto
-	ptrs := make([]*types.ProjectTask, len(tasks))
-	for i := range tasks {
-		ptrs[i] = &tasks[i]
-	}
-
 	return &types.QueryTasksByProjectResponse{
-		Tasks: ptrs,
+		Tasks: tasks,
 		Total: total,
 	}, nil
 }
@@ -117,7 +105,7 @@ func (q queryServer) Service(goCtx context.Context, req *types.QueryServiceReque
 	if !found {
 		return nil, types.ErrServiceNotFound
 	}
-	return &types.QueryServiceResponse{Service: &service}, nil
+	return &types.QueryServiceResponse{Service: service}, nil
 }
 
 // Seed returns a specific opportunity seed.
@@ -127,12 +115,12 @@ func (q queryServer) Seed(goCtx context.Context, req *types.QuerySeedRequest) (*
 	if !found {
 		return nil, types.ErrSeedNotFound
 	}
-	return &types.QuerySeedResponse{Seed: &seed}, nil
+	return &types.QuerySeedResponse{Seed: seed}, nil
 }
 
 // Params returns the module parameters.
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }

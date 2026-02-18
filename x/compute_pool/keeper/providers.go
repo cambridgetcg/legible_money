@@ -50,7 +50,7 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 
 	height := uint64(ctx.BlockHeight())
 
-	provider := types.ComputeProvider{
+	provider := &types.ComputeProvider{
 		Address:       msg.Sender,
 		Did:           msg.Did,
 		ServiceType:   msg.ServiceType,
@@ -187,7 +187,7 @@ func (k Keeper) CheckProviderLiveness(ctx sdk.Context) {
 	var toSuspend []string
 	var toComplete []string
 
-	k.IterateProviders(ctx, func(p types.ComputeProvider) bool {
+	k.IterateProviders(ctx, func(p *types.ComputeProvider) bool {
 		// Check liveness for active providers
 		if p.Status == string(types.ProviderStatusActive) {
 			if height-p.LastHeartbeat > params.HeartbeatIntervalBlocks {
@@ -226,7 +226,7 @@ func (k Keeper) CheckProviderLiveness(ctx sdk.Context) {
 func (k Keeper) ApplyPendingPriceChanges(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
 
-	k.IterateProviders(ctx, func(p types.ComputeProvider) bool {
+	k.IterateProviders(ctx, func(p *types.ComputeProvider) bool {
 		if p.PendingPrice != "" && height >= p.PriceChangeAt {
 			p.PricePerCu = p.PendingPrice
 			p.PendingPrice = ""
@@ -274,9 +274,9 @@ func (k Keeper) completeUnbonding(ctx sdk.Context, address string) {
 }
 
 // GetActiveProvidersByType returns all active providers of a given service type.
-func (k Keeper) GetActiveProvidersByType(ctx sdk.Context, serviceType string) []types.ComputeProvider {
-	var result []types.ComputeProvider
-	k.IterateProviders(ctx, func(p types.ComputeProvider) bool {
+func (k Keeper) GetActiveProvidersByType(ctx sdk.Context, serviceType string) []*types.ComputeProvider {
+	var result []*types.ComputeProvider
+	k.IterateProviders(ctx, func(p *types.ComputeProvider) bool {
 		if p.Status == string(types.ProviderStatusActive) {
 			if serviceType == "" || p.ServiceType == serviceType {
 				result = append(result, p)

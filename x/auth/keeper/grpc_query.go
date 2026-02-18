@@ -62,5 +62,5 @@ func (qs queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest)
 
 	params := qs.GetParams(ctx)
 
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }

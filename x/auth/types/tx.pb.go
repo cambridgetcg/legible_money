@@ -423,6 +423,782 @@ func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
 	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{7}
 }
 
+// MsgRegisterAccount registers a new Legible account with DID mapping.
+type MsgRegisterAccount struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Sender             string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	Did                string                 `protobuf:"bytes,2,opt,name=did,proto3" json:"did,omitempty"`
+	PublicKey          string                 `protobuf:"bytes,3,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	AccountType        string                 `protobuf:"bytes,4,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
+	OperationalKeyHash string                 `protobuf:"bytes,5,opt,name=operational_key_hash,json=operationalKeyHash,proto3" json:"operational_key_hash,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *MsgRegisterAccount) Reset() {
+	*x = MsgRegisterAccount{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgRegisterAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgRegisterAccount) ProtoMessage() {}
+
+func (x *MsgRegisterAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgRegisterAccount.ProtoReflect.Descriptor instead.
+func (*MsgRegisterAccount) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MsgRegisterAccount) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgRegisterAccount) GetDid() string {
+	if x != nil {
+		return x.Did
+	}
+	return ""
+}
+
+func (x *MsgRegisterAccount) GetPublicKey() string {
+	if x != nil {
+		return x.PublicKey
+	}
+	return ""
+}
+
+func (x *MsgRegisterAccount) GetAccountType() string {
+	if x != nil {
+		return x.AccountType
+	}
+	return ""
+}
+
+func (x *MsgRegisterAccount) GetOperationalKeyHash() string {
+	if x != nil {
+		return x.OperationalKeyHash
+	}
+	return ""
+}
+
+type MsgRegisterAccountResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgRegisterAccountResponse) Reset() {
+	*x = MsgRegisterAccountResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgRegisterAccountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgRegisterAccountResponse) ProtoMessage() {}
+
+func (x *MsgRegisterAccountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgRegisterAccountResponse.ProtoReflect.Descriptor instead.
+func (*MsgRegisterAccountResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{9}
+}
+
+// MsgFreezeAccount freezes an account.
+type MsgFreezeAccount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sender        string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgFreezeAccount) Reset() {
+	*x = MsgFreezeAccount{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgFreezeAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgFreezeAccount) ProtoMessage() {}
+
+func (x *MsgFreezeAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgFreezeAccount.ProtoReflect.Descriptor instead.
+func (*MsgFreezeAccount) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MsgFreezeAccount) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgFreezeAccount) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *MsgFreezeAccount) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type MsgFreezeAccountResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgFreezeAccountResponse) Reset() {
+	*x = MsgFreezeAccountResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgFreezeAccountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgFreezeAccountResponse) ProtoMessage() {}
+
+func (x *MsgFreezeAccountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgFreezeAccountResponse.ProtoReflect.Descriptor instead.
+func (*MsgFreezeAccountResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{11}
+}
+
+// MsgUnfreezeAccount unfreezes a frozen account.
+type MsgUnfreezeAccount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authority     string                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUnfreezeAccount) Reset() {
+	*x = MsgUnfreezeAccount{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUnfreezeAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUnfreezeAccount) ProtoMessage() {}
+
+func (x *MsgUnfreezeAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUnfreezeAccount.ProtoReflect.Descriptor instead.
+func (*MsgUnfreezeAccount) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MsgUnfreezeAccount) GetAuthority() string {
+	if x != nil {
+		return x.Authority
+	}
+	return ""
+}
+
+func (x *MsgUnfreezeAccount) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+type MsgUnfreezeAccountResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUnfreezeAccountResponse) Reset() {
+	*x = MsgUnfreezeAccountResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUnfreezeAccountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUnfreezeAccountResponse) ProtoMessage() {}
+
+func (x *MsgUnfreezeAccountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUnfreezeAccountResponse.ProtoReflect.Descriptor instead.
+func (*MsgUnfreezeAccountResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{13}
+}
+
+// MsgSetRecoveryConfig sets recovery configuration for an account.
+type MsgSetRecoveryConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sender        string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	Config        *RecoveryConfig        `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgSetRecoveryConfig) Reset() {
+	*x = MsgSetRecoveryConfig{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgSetRecoveryConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgSetRecoveryConfig) ProtoMessage() {}
+
+func (x *MsgSetRecoveryConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgSetRecoveryConfig.ProtoReflect.Descriptor instead.
+func (*MsgSetRecoveryConfig) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MsgSetRecoveryConfig) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgSetRecoveryConfig) GetConfig() *RecoveryConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+type MsgSetRecoveryConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgSetRecoveryConfigResponse) Reset() {
+	*x = MsgSetRecoveryConfigResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgSetRecoveryConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgSetRecoveryConfigResponse) ProtoMessage() {}
+
+func (x *MsgSetRecoveryConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgSetRecoveryConfigResponse.ProtoReflect.Descriptor instead.
+func (*MsgSetRecoveryConfigResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{15}
+}
+
+// MsgInitiateRecovery begins account recovery.
+type MsgInitiateRecovery struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Sender            string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	AccountAddress    string                 `protobuf:"bytes,2,opt,name=account_address,json=accountAddress,proto3" json:"account_address,omitempty"`
+	NewOperationalKey string                 `protobuf:"bytes,3,opt,name=new_operational_key,json=newOperationalKey,proto3" json:"new_operational_key,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *MsgInitiateRecovery) Reset() {
+	*x = MsgInitiateRecovery{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgInitiateRecovery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgInitiateRecovery) ProtoMessage() {}
+
+func (x *MsgInitiateRecovery) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgInitiateRecovery.ProtoReflect.Descriptor instead.
+func (*MsgInitiateRecovery) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MsgInitiateRecovery) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgInitiateRecovery) GetAccountAddress() string {
+	if x != nil {
+		return x.AccountAddress
+	}
+	return ""
+}
+
+func (x *MsgInitiateRecovery) GetNewOperationalKey() string {
+	if x != nil {
+		return x.NewOperationalKey
+	}
+	return ""
+}
+
+type MsgInitiateRecoveryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgInitiateRecoveryResponse) Reset() {
+	*x = MsgInitiateRecoveryResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgInitiateRecoveryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgInitiateRecoveryResponse) ProtoMessage() {}
+
+func (x *MsgInitiateRecoveryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgInitiateRecoveryResponse.ProtoReflect.Descriptor instead.
+func (*MsgInitiateRecoveryResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{17}
+}
+
+// MsgSubmitRecoveryShard provides a shard to an active recovery request.
+type MsgSubmitRecoveryShard struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Sender         string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	AccountAddress string                 `protobuf:"bytes,2,opt,name=account_address,json=accountAddress,proto3" json:"account_address,omitempty"`
+	ShardIndex     uint32                 `protobuf:"varint,3,opt,name=shard_index,json=shardIndex,proto3" json:"shard_index,omitempty"`
+	EncryptedShard []byte                 `protobuf:"bytes,4,opt,name=encrypted_shard,json=encryptedShard,proto3" json:"encrypted_shard,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MsgSubmitRecoveryShard) Reset() {
+	*x = MsgSubmitRecoveryShard{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgSubmitRecoveryShard) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgSubmitRecoveryShard) ProtoMessage() {}
+
+func (x *MsgSubmitRecoveryShard) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgSubmitRecoveryShard.ProtoReflect.Descriptor instead.
+func (*MsgSubmitRecoveryShard) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *MsgSubmitRecoveryShard) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgSubmitRecoveryShard) GetAccountAddress() string {
+	if x != nil {
+		return x.AccountAddress
+	}
+	return ""
+}
+
+func (x *MsgSubmitRecoveryShard) GetShardIndex() uint32 {
+	if x != nil {
+		return x.ShardIndex
+	}
+	return 0
+}
+
+func (x *MsgSubmitRecoveryShard) GetEncryptedShard() []byte {
+	if x != nil {
+		return x.EncryptedShard
+	}
+	return nil
+}
+
+type MsgSubmitRecoveryShardResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgSubmitRecoveryShardResponse) Reset() {
+	*x = MsgSubmitRecoveryShardResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgSubmitRecoveryShardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgSubmitRecoveryShardResponse) ProtoMessage() {}
+
+func (x *MsgSubmitRecoveryShardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgSubmitRecoveryShardResponse.ProtoReflect.Descriptor instead.
+func (*MsgSubmitRecoveryShardResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{19}
+}
+
+// MsgChallengeRecovery challenges an active recovery request.
+type MsgChallengeRecovery struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Sender         string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	AccountAddress string                 `protobuf:"bytes,2,opt,name=account_address,json=accountAddress,proto3" json:"account_address,omitempty"`
+	Reason         string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MsgChallengeRecovery) Reset() {
+	*x = MsgChallengeRecovery{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgChallengeRecovery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgChallengeRecovery) ProtoMessage() {}
+
+func (x *MsgChallengeRecovery) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgChallengeRecovery.ProtoReflect.Descriptor instead.
+func (*MsgChallengeRecovery) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *MsgChallengeRecovery) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgChallengeRecovery) GetAccountAddress() string {
+	if x != nil {
+		return x.AccountAddress
+	}
+	return ""
+}
+
+func (x *MsgChallengeRecovery) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type MsgChallengeRecoveryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgChallengeRecoveryResponse) Reset() {
+	*x = MsgChallengeRecoveryResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgChallengeRecoveryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgChallengeRecoveryResponse) ProtoMessage() {}
+
+func (x *MsgChallengeRecoveryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgChallengeRecoveryResponse.ProtoReflect.Descriptor instead.
+func (*MsgChallengeRecoveryResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{21}
+}
+
+// MsgExecuteRecovery completes a recovery after delay + challenge period.
+type MsgExecuteRecovery struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Sender         string                 `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	AccountAddress string                 `protobuf:"bytes,2,opt,name=account_address,json=accountAddress,proto3" json:"account_address,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MsgExecuteRecovery) Reset() {
+	*x = MsgExecuteRecovery{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgExecuteRecovery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgExecuteRecovery) ProtoMessage() {}
+
+func (x *MsgExecuteRecovery) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgExecuteRecovery.ProtoReflect.Descriptor instead.
+func (*MsgExecuteRecovery) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *MsgExecuteRecovery) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *MsgExecuteRecovery) GetAccountAddress() string {
+	if x != nil {
+		return x.AccountAddress
+	}
+	return ""
+}
+
+type MsgExecuteRecoveryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgExecuteRecoveryResponse) Reset() {
+	*x = MsgExecuteRecoveryResponse{}
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgExecuteRecoveryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgExecuteRecoveryResponse) ProtoMessage() {}
+
+func (x *MsgExecuteRecoveryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_tx_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgExecuteRecoveryResponse.ProtoReflect.Descriptor instead.
+func (*MsgExecuteRecoveryResponse) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_tx_proto_rawDescGZIP(), []int{23}
+}
+
 var File_legible_auth_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_auth_v1_tx_proto_rawDesc = "" +
@@ -452,12 +1228,62 @@ const file_legible_auth_v1_tx_proto_rawDesc = "" +
 	"\x0fMsgUpdateParams\x12\x1c\n" +
 	"\tauthority\x18\x01 \x01(\tR\tauthority\x12/\n" +
 	"\x06params\x18\x02 \x01(\v2\x17.legible.auth.v1.ParamsR\x06params:\x0e\x82\xe7\xb0*\tauthority\"\x19\n" +
-	"\x17MsgUpdateParamsResponse2\xf9\x02\n" +
+	"\x17MsgUpdateParamsResponse\"\xbf\x01\n" +
+	"\x12MsgRegisterAccount\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x10\n" +
+	"\x03did\x18\x02 \x01(\tR\x03did\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x03 \x01(\tR\tpublicKey\x12!\n" +
+	"\faccount_type\x18\x04 \x01(\tR\vaccountType\x120\n" +
+	"\x14operational_key_hash\x18\x05 \x01(\tR\x12operationalKeyHash:\v\x82\xe7\xb0*\x06sender\"\x1c\n" +
+	"\x1aMsgRegisterAccountResponse\"i\n" +
+	"\x10MsgFreezeAccount\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason:\v\x82\xe7\xb0*\x06sender\"\x1a\n" +
+	"\x18MsgFreezeAccountResponse\"\\\n" +
+	"\x12MsgUnfreezeAccount\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\tR\tauthority\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress:\x0e\x82\xe7\xb0*\tauthority\"\x1c\n" +
+	"\x1aMsgUnfreezeAccountResponse\"t\n" +
+	"\x14MsgSetRecoveryConfig\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x127\n" +
+	"\x06config\x18\x02 \x01(\v2\x1f.legible.auth.v1.RecoveryConfigR\x06config:\v\x82\xe7\xb0*\x06sender\"\x1e\n" +
+	"\x1cMsgSetRecoveryConfigResponse\"\x93\x01\n" +
+	"\x13MsgInitiateRecovery\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12'\n" +
+	"\x0faccount_address\x18\x02 \x01(\tR\x0eaccountAddress\x12.\n" +
+	"\x13new_operational_key\x18\x03 \x01(\tR\x11newOperationalKey:\v\x82\xe7\xb0*\x06sender\"\x1d\n" +
+	"\x1bMsgInitiateRecoveryResponse\"\xb0\x01\n" +
+	"\x16MsgSubmitRecoveryShard\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12'\n" +
+	"\x0faccount_address\x18\x02 \x01(\tR\x0eaccountAddress\x12\x1f\n" +
+	"\vshard_index\x18\x03 \x01(\rR\n" +
+	"shardIndex\x12'\n" +
+	"\x0fencrypted_shard\x18\x04 \x01(\fR\x0eencryptedShard:\v\x82\xe7\xb0*\x06sender\" \n" +
+	"\x1eMsgSubmitRecoveryShardResponse\"|\n" +
+	"\x14MsgChallengeRecovery\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12'\n" +
+	"\x0faccount_address\x18\x02 \x01(\tR\x0eaccountAddress\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason:\v\x82\xe7\xb0*\x06sender\"\x1e\n" +
+	"\x1cMsgChallengeRecoveryResponse\"b\n" +
+	"\x12MsgExecuteRecovery\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12'\n" +
+	"\x0faccount_address\x18\x02 \x01(\tR\x0eaccountAddress:\v\x82\xe7\xb0*\x06sender\"\x1c\n" +
+	"\x1aMsgExecuteRecoveryResponse2\xb6\t\n" +
 	"\x03Msg\x12Q\n" +
 	"\tRotateKey\x12\x1d.legible.auth.v1.MsgRotateKey\x1a%.legible.auth.v1.MsgRotateKeyResponse\x12]\n" +
 	"\rCreateSession\x12!.legible.auth.v1.MsgCreateSession\x1a).legible.auth.v1.MsgCreateSessionResponse\x12]\n" +
 	"\rRevokeSession\x12!.legible.auth.v1.MsgRevokeSession\x1a).legible.auth.v1.MsgRevokeSessionResponse\x12Z\n" +
-	"\fUpdateParams\x12 .legible.auth.v1.MsgUpdateParams\x1a(.legible.auth.v1.MsgUpdateParamsResponse\x1a\x05\x80\xe7\xb0*\x01B/Z-github.com/legible-money/legible/x/auth/typesb\x06proto3"
+	"\fUpdateParams\x12 .legible.auth.v1.MsgUpdateParams\x1a(.legible.auth.v1.MsgUpdateParamsResponse\x12c\n" +
+	"\x0fRegisterAccount\x12#.legible.auth.v1.MsgRegisterAccount\x1a+.legible.auth.v1.MsgRegisterAccountResponse\x12]\n" +
+	"\rFreezeAccount\x12!.legible.auth.v1.MsgFreezeAccount\x1a).legible.auth.v1.MsgFreezeAccountResponse\x12c\n" +
+	"\x0fUnfreezeAccount\x12#.legible.auth.v1.MsgUnfreezeAccount\x1a+.legible.auth.v1.MsgUnfreezeAccountResponse\x12i\n" +
+	"\x11SetRecoveryConfig\x12%.legible.auth.v1.MsgSetRecoveryConfig\x1a-.legible.auth.v1.MsgSetRecoveryConfigResponse\x12f\n" +
+	"\x10InitiateRecovery\x12$.legible.auth.v1.MsgInitiateRecovery\x1a,.legible.auth.v1.MsgInitiateRecoveryResponse\x12o\n" +
+	"\x13SubmitRecoveryShard\x12'.legible.auth.v1.MsgSubmitRecoveryShard\x1a/.legible.auth.v1.MsgSubmitRecoveryShardResponse\x12i\n" +
+	"\x11ChallengeRecovery\x12%.legible.auth.v1.MsgChallengeRecovery\x1a-.legible.auth.v1.MsgChallengeRecoveryResponse\x12c\n" +
+	"\x0fExecuteRecovery\x12#.legible.auth.v1.MsgExecuteRecovery\x1a+.legible.auth.v1.MsgExecuteRecoveryResponse\x1a\x05\x80\xe7\xb0*\x01B/Z-github.com/legible-money/legible/x/auth/typesb\x06proto3"
 
 var (
 	file_legible_auth_v1_tx_proto_rawDescOnce sync.Once
@@ -471,35 +1297,69 @@ func file_legible_auth_v1_tx_proto_rawDescGZIP() []byte {
 	return file_legible_auth_v1_tx_proto_rawDescData
 }
 
-var file_legible_auth_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_legible_auth_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_legible_auth_v1_tx_proto_goTypes = []any{
-	(*MsgRotateKey)(nil),             // 0: legible.auth.v1.MsgRotateKey
-	(*MsgRotateKeyResponse)(nil),     // 1: legible.auth.v1.MsgRotateKeyResponse
-	(*MsgCreateSession)(nil),         // 2: legible.auth.v1.MsgCreateSession
-	(*MsgCreateSessionResponse)(nil), // 3: legible.auth.v1.MsgCreateSessionResponse
-	(*MsgRevokeSession)(nil),         // 4: legible.auth.v1.MsgRevokeSession
-	(*MsgRevokeSessionResponse)(nil), // 5: legible.auth.v1.MsgRevokeSessionResponse
-	(*MsgUpdateParams)(nil),          // 6: legible.auth.v1.MsgUpdateParams
-	(*MsgUpdateParamsResponse)(nil),  // 7: legible.auth.v1.MsgUpdateParamsResponse
-	(*SessionCapabilities)(nil),      // 8: legible.auth.v1.SessionCapabilities
-	(*Params)(nil),                   // 9: legible.auth.v1.Params
+	(*MsgRotateKey)(nil),                   // 0: legible.auth.v1.MsgRotateKey
+	(*MsgRotateKeyResponse)(nil),           // 1: legible.auth.v1.MsgRotateKeyResponse
+	(*MsgCreateSession)(nil),               // 2: legible.auth.v1.MsgCreateSession
+	(*MsgCreateSessionResponse)(nil),       // 3: legible.auth.v1.MsgCreateSessionResponse
+	(*MsgRevokeSession)(nil),               // 4: legible.auth.v1.MsgRevokeSession
+	(*MsgRevokeSessionResponse)(nil),       // 5: legible.auth.v1.MsgRevokeSessionResponse
+	(*MsgUpdateParams)(nil),                // 6: legible.auth.v1.MsgUpdateParams
+	(*MsgUpdateParamsResponse)(nil),        // 7: legible.auth.v1.MsgUpdateParamsResponse
+	(*MsgRegisterAccount)(nil),             // 8: legible.auth.v1.MsgRegisterAccount
+	(*MsgRegisterAccountResponse)(nil),     // 9: legible.auth.v1.MsgRegisterAccountResponse
+	(*MsgFreezeAccount)(nil),               // 10: legible.auth.v1.MsgFreezeAccount
+	(*MsgFreezeAccountResponse)(nil),       // 11: legible.auth.v1.MsgFreezeAccountResponse
+	(*MsgUnfreezeAccount)(nil),             // 12: legible.auth.v1.MsgUnfreezeAccount
+	(*MsgUnfreezeAccountResponse)(nil),     // 13: legible.auth.v1.MsgUnfreezeAccountResponse
+	(*MsgSetRecoveryConfig)(nil),           // 14: legible.auth.v1.MsgSetRecoveryConfig
+	(*MsgSetRecoveryConfigResponse)(nil),   // 15: legible.auth.v1.MsgSetRecoveryConfigResponse
+	(*MsgInitiateRecovery)(nil),            // 16: legible.auth.v1.MsgInitiateRecovery
+	(*MsgInitiateRecoveryResponse)(nil),    // 17: legible.auth.v1.MsgInitiateRecoveryResponse
+	(*MsgSubmitRecoveryShard)(nil),         // 18: legible.auth.v1.MsgSubmitRecoveryShard
+	(*MsgSubmitRecoveryShardResponse)(nil), // 19: legible.auth.v1.MsgSubmitRecoveryShardResponse
+	(*MsgChallengeRecovery)(nil),           // 20: legible.auth.v1.MsgChallengeRecovery
+	(*MsgChallengeRecoveryResponse)(nil),   // 21: legible.auth.v1.MsgChallengeRecoveryResponse
+	(*MsgExecuteRecovery)(nil),             // 22: legible.auth.v1.MsgExecuteRecovery
+	(*MsgExecuteRecoveryResponse)(nil),     // 23: legible.auth.v1.MsgExecuteRecoveryResponse
+	(*SessionCapabilities)(nil),            // 24: legible.auth.v1.SessionCapabilities
+	(*Params)(nil),                         // 25: legible.auth.v1.Params
+	(*RecoveryConfig)(nil),                 // 26: legible.auth.v1.RecoveryConfig
 }
 var file_legible_auth_v1_tx_proto_depIdxs = []int32{
-	8, // 0: legible.auth.v1.MsgCreateSession.capabilities:type_name -> legible.auth.v1.SessionCapabilities
-	9, // 1: legible.auth.v1.MsgUpdateParams.params:type_name -> legible.auth.v1.Params
-	0, // 2: legible.auth.v1.Msg.RotateKey:input_type -> legible.auth.v1.MsgRotateKey
-	2, // 3: legible.auth.v1.Msg.CreateSession:input_type -> legible.auth.v1.MsgCreateSession
-	4, // 4: legible.auth.v1.Msg.RevokeSession:input_type -> legible.auth.v1.MsgRevokeSession
-	6, // 5: legible.auth.v1.Msg.UpdateParams:input_type -> legible.auth.v1.MsgUpdateParams
-	1, // 6: legible.auth.v1.Msg.RotateKey:output_type -> legible.auth.v1.MsgRotateKeyResponse
-	3, // 7: legible.auth.v1.Msg.CreateSession:output_type -> legible.auth.v1.MsgCreateSessionResponse
-	5, // 8: legible.auth.v1.Msg.RevokeSession:output_type -> legible.auth.v1.MsgRevokeSessionResponse
-	7, // 9: legible.auth.v1.Msg.UpdateParams:output_type -> legible.auth.v1.MsgUpdateParamsResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	24, // 0: legible.auth.v1.MsgCreateSession.capabilities:type_name -> legible.auth.v1.SessionCapabilities
+	25, // 1: legible.auth.v1.MsgUpdateParams.params:type_name -> legible.auth.v1.Params
+	26, // 2: legible.auth.v1.MsgSetRecoveryConfig.config:type_name -> legible.auth.v1.RecoveryConfig
+	0,  // 3: legible.auth.v1.Msg.RotateKey:input_type -> legible.auth.v1.MsgRotateKey
+	2,  // 4: legible.auth.v1.Msg.CreateSession:input_type -> legible.auth.v1.MsgCreateSession
+	4,  // 5: legible.auth.v1.Msg.RevokeSession:input_type -> legible.auth.v1.MsgRevokeSession
+	6,  // 6: legible.auth.v1.Msg.UpdateParams:input_type -> legible.auth.v1.MsgUpdateParams
+	8,  // 7: legible.auth.v1.Msg.RegisterAccount:input_type -> legible.auth.v1.MsgRegisterAccount
+	10, // 8: legible.auth.v1.Msg.FreezeAccount:input_type -> legible.auth.v1.MsgFreezeAccount
+	12, // 9: legible.auth.v1.Msg.UnfreezeAccount:input_type -> legible.auth.v1.MsgUnfreezeAccount
+	14, // 10: legible.auth.v1.Msg.SetRecoveryConfig:input_type -> legible.auth.v1.MsgSetRecoveryConfig
+	16, // 11: legible.auth.v1.Msg.InitiateRecovery:input_type -> legible.auth.v1.MsgInitiateRecovery
+	18, // 12: legible.auth.v1.Msg.SubmitRecoveryShard:input_type -> legible.auth.v1.MsgSubmitRecoveryShard
+	20, // 13: legible.auth.v1.Msg.ChallengeRecovery:input_type -> legible.auth.v1.MsgChallengeRecovery
+	22, // 14: legible.auth.v1.Msg.ExecuteRecovery:input_type -> legible.auth.v1.MsgExecuteRecovery
+	1,  // 15: legible.auth.v1.Msg.RotateKey:output_type -> legible.auth.v1.MsgRotateKeyResponse
+	3,  // 16: legible.auth.v1.Msg.CreateSession:output_type -> legible.auth.v1.MsgCreateSessionResponse
+	5,  // 17: legible.auth.v1.Msg.RevokeSession:output_type -> legible.auth.v1.MsgRevokeSessionResponse
+	7,  // 18: legible.auth.v1.Msg.UpdateParams:output_type -> legible.auth.v1.MsgUpdateParamsResponse
+	9,  // 19: legible.auth.v1.Msg.RegisterAccount:output_type -> legible.auth.v1.MsgRegisterAccountResponse
+	11, // 20: legible.auth.v1.Msg.FreezeAccount:output_type -> legible.auth.v1.MsgFreezeAccountResponse
+	13, // 21: legible.auth.v1.Msg.UnfreezeAccount:output_type -> legible.auth.v1.MsgUnfreezeAccountResponse
+	15, // 22: legible.auth.v1.Msg.SetRecoveryConfig:output_type -> legible.auth.v1.MsgSetRecoveryConfigResponse
+	17, // 23: legible.auth.v1.Msg.InitiateRecovery:output_type -> legible.auth.v1.MsgInitiateRecoveryResponse
+	19, // 24: legible.auth.v1.Msg.SubmitRecoveryShard:output_type -> legible.auth.v1.MsgSubmitRecoveryShardResponse
+	21, // 25: legible.auth.v1.Msg.ChallengeRecovery:output_type -> legible.auth.v1.MsgChallengeRecoveryResponse
+	23, // 26: legible.auth.v1.Msg.ExecuteRecovery:output_type -> legible.auth.v1.MsgExecuteRecoveryResponse
+	15, // [15:27] is the sub-list for method output_type
+	3,  // [3:15] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_legible_auth_v1_tx_proto_init() }
@@ -515,7 +1375,7 @@ func file_legible_auth_v1_tx_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_auth_v1_tx_proto_rawDesc), len(file_legible_auth_v1_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

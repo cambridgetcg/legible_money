@@ -110,7 +110,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &gs); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal %s genesis: %v", types.ModuleName, err))
 	}
-	am.keeper.InitGenesis(ctx, gs)
+	am.keeper.InitGenesis(ctx, &gs)
 }
 
 // ExportGenesis exports the module's genesis state.

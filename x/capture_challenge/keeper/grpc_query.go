@@ -29,7 +29,7 @@ func (k queryServer) Challenge(goCtx context.Context, req *types.QueryChallengeR
 		return &types.QueryChallengeResponse{Found: false}, nil
 	}
 	return &types.QueryChallengeResponse{
-		Challenge: &ch,
+		Challenge: ch,
 		Found:     true,
 	}, nil
 }
@@ -39,7 +39,7 @@ func (k queryServer) ActiveChallenges(goCtx context.Context, req *types.QueryAct
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	var active []*types.CaptureChallenge
-	k.IterateChallenges(ctx, func(ch types.CaptureChallenge) bool {
+	k.IterateChallenges(ctx, func(ch *types.CaptureChallenge) bool {
 		// Filter by domain if specified
 		if req.Domain != "" && ch.Domain != req.Domain {
 			return false
@@ -47,8 +47,7 @@ func (k queryServer) ActiveChallenges(goCtx context.Context, req *types.QueryAct
 		// Only active statuses
 		switch types.ChallengeStatus(ch.Status) {
 		case types.ChallengeSubmitted, types.ChallengeEvidencePeriod, types.ChallengeUnderReview:
-			c := ch // copy for pointer
-			active = append(active, &c)
+			active = append(active, ch)
 		}
 		return false
 	})
@@ -65,7 +64,7 @@ func (k queryServer) BountyPool(goCtx context.Context, req *types.QueryBountyPoo
 		return &types.QueryBountyPoolResponse{Found: false}, nil
 	}
 	return &types.QueryBountyPoolResponse{
-		Pool:  &pool,
+		Pool:  pool,
 		Found: true,
 	}, nil
 }

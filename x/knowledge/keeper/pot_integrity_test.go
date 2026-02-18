@@ -42,9 +42,9 @@ func TestPoT_HappyPath_CommitRevealFinalize(t *testing.T) {
 		StakeAmount:       "1000000",
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
-	round, err := k.CreateVerificationRound(ctx, claim)
+	round, err := k.CreateVerificationRound(ctx, &claim)
 	if err != nil {
 		t.Fatalf("CreateVerificationRound failed: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestPoT_HappyPath_CommitRevealFinalize(t *testing.T) {
 		if len(hash) != 64 {
 			t.Fatalf("commitment hash for %s has wrong length: %d (expected 64)", v, len(hash))
 		}
-		if err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
+		if err := k.StoreCommitmentInRound(ctx, round.Id, &types.VerificationCommitment{
 			Validator:         v,
 			CommitmentHash:    hash,
 			SubmittedAtHeight: 11,
@@ -87,7 +87,7 @@ func TestPoT_HappyPath_CommitRevealFinalize(t *testing.T) {
 
 	// Reveals must use the same verdict/confidence/salt as the commitment
 	for _, v := range validators {
-		if err := k.StoreRevealInRound(ctx, round.Id, types.VerificationReveal{
+		if err := k.StoreRevealInRound(ctx, round.Id, &types.VerificationReveal{
 			Validator:         v,
 			Verdict:           verdicts[v],
 			Confidence:        confs[v],
@@ -162,9 +162,9 @@ func TestPoT_ProposerOmitsOneVote_ReducedParticipation(t *testing.T) {
 		Domain:    "physics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// 3 validators selected, but proposer only injects 2 commitments (censors lgmvaloper1ghi)
 	selected := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
@@ -173,7 +173,7 @@ func TestPoT_ProposerOmitsOneVote_ReducedParticipation(t *testing.T) {
 	// Store commitments for only the 2 included validators
 	for _, v := range included {
 		hash := types.ComputeCommitmentHash(round.Id, "accept", 800000, "salt-"+v)
-		if err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
+		if err := k.StoreCommitmentInRound(ctx, round.Id, &types.VerificationCommitment{
 			Validator:         v,
 			CommitmentHash:    hash,
 			SubmittedAtHeight: 11,
@@ -190,7 +190,7 @@ func TestPoT_ProposerOmitsOneVote_ReducedParticipation(t *testing.T) {
 
 	// Only 2 reveals (censored validator never reveals)
 	for _, v := range included {
-		if err := k.StoreRevealInRound(ctx, round.Id, types.VerificationReveal{
+		if err := k.StoreRevealInRound(ctx, round.Id, &types.VerificationReveal{
 			Validator:  v,
 			Verdict:    "accept",
 			Confidence: 800000,
@@ -247,9 +247,9 @@ func TestPoT_TamperedRevealRejectedByHashCheck(t *testing.T) {
 		Domain:    "physics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// Validator committed to "reject" with confidence 850000
 	originalVerdict := "reject"
@@ -257,7 +257,7 @@ func TestPoT_TamperedRevealRejectedByHashCheck(t *testing.T) {
 	salt := "honest-salt-abc"
 	hash := types.ComputeCommitmentHash(round.Id, originalVerdict, originalConf, salt)
 
-	if err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
+	if err := k.StoreCommitmentInRound(ctx, round.Id, &types.VerificationCommitment{
 		Validator:         "lgmvaloper1abc",
 		CommitmentHash:    hash,
 		SubmittedAtHeight: 11,
@@ -272,7 +272,7 @@ func TestPoT_TamperedRevealRejectedByHashCheck(t *testing.T) {
 
 	// === ATTACK: proposer changes verdict from "reject" to "accept" ===
 	tamperedVerdict := "accept"
-	err := k.StoreRevealInRound(ctx, round.Id, types.VerificationReveal{
+	err := k.StoreRevealInRound(ctx, round.Id, &types.VerificationReveal{
 		Validator:  "lgmvaloper1abc",
 		Verdict:    tamperedVerdict, // Changed by proposer
 		Confidence: originalConf,
@@ -292,7 +292,7 @@ func TestPoT_TamperedRevealRejectedByHashCheck(t *testing.T) {
 	}
 
 	// === VERIFY: correct reveal (matching commitment) is accepted ===
-	err = k.StoreRevealInRound(ctx, round.Id, types.VerificationReveal{
+	err = k.StoreRevealInRound(ctx, round.Id, &types.VerificationReveal{
 		Validator:  "lgmvaloper1abc",
 		Verdict:    originalVerdict, // Original, unmodified verdict
 		Confidence: originalConf,
@@ -326,14 +326,14 @@ func TestPoT_CrossRoundReplay_CommitmentHashMismatch(t *testing.T) {
 		Domain:    "physics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim1)
-	k.SetClaim(ctx, claim2)
+	k.SetClaim(ctx, &claim1)
+	k.SetClaim(ctx, &claim2)
 
-	round1, _ := k.CreateVerificationRound(ctx, claim1)
+	round1, _ := k.CreateVerificationRound(ctx, &claim1)
 
 	// Advance height so round2 gets different start height
 	ctx2 := ctx.WithBlockHeight(20)
-	round2, _ := k.CreateVerificationRound(ctx2, claim2)
+	round2, _ := k.CreateVerificationRound(ctx2, &claim2)
 
 	// Commitment generated for round1 with specific verdict/salt
 	verdict := "accept"
@@ -352,7 +352,7 @@ func TestPoT_CrossRoundReplay_CommitmentHashMismatch(t *testing.T) {
 	}
 
 	// Store commitment for round1
-	if err := k.StoreCommitmentInRound(ctx, round1.Id, types.VerificationCommitment{
+	if err := k.StoreCommitmentInRound(ctx, round1.Id, &types.VerificationCommitment{
 		Validator:         "lgmvaloper1abc",
 		CommitmentHash:    hashForRound1,
 		SubmittedAtHeight: 11,
@@ -367,7 +367,7 @@ func TestPoT_CrossRoundReplay_CommitmentHashMismatch(t *testing.T) {
 
 	// === ATTACK: replay round1's reveal data in round2 (store commitment for round2 with round1 hash) ===
 	// Store commitment for round2 using round1's hash
-	if err := k.StoreCommitmentInRound(ctx, round2.Id, types.VerificationCommitment{
+	if err := k.StoreCommitmentInRound(ctx, round2.Id, &types.VerificationCommitment{
 		Validator:         "lgmvaloper1abc",
 		CommitmentHash:    hashForRound1, // Using round1's hash in round2
 		SubmittedAtHeight: 11,
@@ -383,7 +383,7 @@ func TestPoT_CrossRoundReplay_CommitmentHashMismatch(t *testing.T) {
 	// Attacker tries to reveal in round2 with the same data as round1
 	// This should fail: StoreRevealInRound verifies hash(round2.Id, verdict, confidence, salt)
 	// but the stored commitment hash is hash(round1.Id, verdict, confidence, salt)
-	err := k.StoreRevealInRound(ctx, round2.Id, types.VerificationReveal{
+	err := k.StoreRevealInRound(ctx, round2.Id, &types.VerificationReveal{
 		Validator:  "lgmvaloper1abc",
 		Verdict:    verdict,
 		Confidence: confidence,
@@ -414,22 +414,22 @@ func TestPoT_DuplicateCommitment_IdempotentVsEquivocation(t *testing.T) {
 		Domain:    "mathematics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
 	// === SCENARIO A: Same hash twice (idempotent) ===
-	round1, _ := k.CreateVerificationRound(ctx, claim)
+	round1, _ := k.CreateVerificationRound(ctx, &claim)
 
 	hash := types.ComputeCommitmentHash(round1.Id, "accept", 800000, "salt-a")
 
 	// First commitment succeeds
-	if err := k.StoreCommitmentInRound(ctx, round1.Id, types.VerificationCommitment{
+	if err := k.StoreCommitmentInRound(ctx, round1.Id, &types.VerificationCommitment{
 		Validator: "lgmvaloper1abc", CommitmentHash: hash, SubmittedAtHeight: 11,
 	}); err != nil {
 		t.Fatalf("first commitment should succeed: %v", err)
 	}
 
 	// Same hash again — should be idempotent (not equivocation)
-	err := k.StoreCommitmentInRound(ctx, round1.Id, types.VerificationCommitment{
+	err := k.StoreCommitmentInRound(ctx, round1.Id, &types.VerificationCommitment{
 		Validator: "lgmvaloper1abc", CommitmentHash: hash, SubmittedAtHeight: 12,
 	})
 	if err == nil {
@@ -446,14 +446,14 @@ func TestPoT_DuplicateCommitment_IdempotentVsEquivocation(t *testing.T) {
 
 	// === SCENARIO B: Different hash = equivocation ===
 	claim2 := types.Claim{Id: "pot-equivoc-claim", ClaimText: "Equivocation test", Domain: "general", Status: "pending"}
-	k.SetClaim(ctx, claim2)
-	round2, _ := k.CreateVerificationRound(ctx, claim2)
+	k.SetClaim(ctx, &claim2)
+	round2, _ := k.CreateVerificationRound(ctx, &claim2)
 
 	hash1 := types.ComputeCommitmentHash(round2.Id, "accept", 800000, "salt-first")
 	hash2 := types.ComputeCommitmentHash(round2.Id, "reject", 800000, "salt-second") // Different
 
 	// First commitment
-	if err := k.StoreCommitmentInRound(ctx, round2.Id, types.VerificationCommitment{
+	if err := k.StoreCommitmentInRound(ctx, round2.Id, &types.VerificationCommitment{
 		Validator: "lgmvaloper1abc", CommitmentHash: hash1, SubmittedAtHeight: 11,
 	}); err != nil {
 		t.Fatalf("first commitment for equivocation test should succeed: %v", err)
@@ -462,7 +462,7 @@ func TestPoT_DuplicateCommitment_IdempotentVsEquivocation(t *testing.T) {
 	slashCountBefore := len(mockSK.slashes)
 
 	// Conflicting commitment = equivocation
-	err = k.StoreCommitmentInRound(ctx, round2.Id, types.VerificationCommitment{
+	err = k.StoreCommitmentInRound(ctx, round2.Id, &types.VerificationCommitment{
 		Validator: "lgmvaloper1abc", CommitmentHash: hash2, SubmittedAtHeight: 12,
 	})
 	if err == nil {
@@ -497,9 +497,9 @@ func TestPoT_AllRevealTamperingVectorsRejected(t *testing.T) {
 		Domain:    "physics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// Honest commitment: accept, 800000, "honest-salt"
 	trueVerdict := "accept"
@@ -507,7 +507,7 @@ func TestPoT_AllRevealTamperingVectorsRejected(t *testing.T) {
 	trueSalt := "honest-salt"
 	hash := types.ComputeCommitmentHash(round.Id, trueVerdict, trueConf, trueSalt)
 
-	if err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
+	if err := k.StoreCommitmentInRound(ctx, round.Id, &types.VerificationCommitment{
 		Validator: "lgmvaloper1abc", CommitmentHash: hash, SubmittedAtHeight: 11,
 	}); err != nil {
 		t.Fatalf("StoreCommitmentInRound failed: %v", err)
@@ -537,11 +537,11 @@ func TestPoT_AllRevealTamperingVectorsRejected(t *testing.T) {
 			Domain:    "general",
 			Status:    "pending",
 		}
-		k.SetClaim(ctx, claimN)
-		rN, _ := k.CreateVerificationRound(ctx, claimN)
+		k.SetClaim(ctx, &claimN)
+		rN, _ := k.CreateVerificationRound(ctx, &claimN)
 
 		hashN := types.ComputeCommitmentHash(rN.Id, trueVerdict, trueConf, trueSalt)
-		if err := k.StoreCommitmentInRound(ctx, rN.Id, types.VerificationCommitment{
+		if err := k.StoreCommitmentInRound(ctx, rN.Id, &types.VerificationCommitment{
 			Validator: "lgmvaloper1abc", CommitmentHash: hashN, SubmittedAtHeight: 11,
 		}); err != nil {
 			t.Fatalf("[%s] store commitment failed: %v", tc.name, err)
@@ -552,7 +552,7 @@ func TestPoT_AllRevealTamperingVectorsRejected(t *testing.T) {
 		rNUpdated.Phase = "reveal"
 		k.SetVerificationRound(ctx, rNUpdated)
 
-		err := k.StoreRevealInRound(ctx, rN.Id, types.VerificationReveal{
+		err := k.StoreRevealInRound(ctx, rN.Id, &types.VerificationReveal{
 			Validator:  "lgmvaloper1abc",
 			Verdict:    tc.verdict,
 			Confidence: tc.confidence,
@@ -580,9 +580,9 @@ func TestPoT_RoundCompletionIdempotency(t *testing.T) {
 		Domain:    "physics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// Set up reveals directly (bypassing commit for speed)
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
@@ -632,10 +632,10 @@ func TestPoT_AggregationDeterminism_ReorderingCannotChangeOutcome(t *testing.T) 
 		Domain:    "physics",
 		Status:    "pending",
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
 	// === ARRANGEMENT 1: abc, def, ghi ===
-	round1, _ := k.CreateVerificationRound(ctx, claim)
+	round1, _ := k.CreateVerificationRound(ctx, &claim)
 	round1.SelectedValidators = []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	round1.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
 	round1.Commitments["lgmvaloper1def"] = &types.VerificationCommitment{Validator: "lgmvaloper1def"}
@@ -647,8 +647,8 @@ func TestPoT_AggregationDeterminism_ReorderingCannotChangeOutcome(t *testing.T) 
 
 	// === ARRANGEMENT 2: Same data, "inserted" in reverse order ===
 	claim2 := types.Claim{Id: "pot-determinism-2", ClaimText: claim.ClaimText, Domain: claim.Domain, Status: "pending"}
-	k.SetClaim(ctx, claim2)
-	round2, _ := k.CreateVerificationRound(ctx, claim2)
+	k.SetClaim(ctx, &claim2)
+	round2, _ := k.CreateVerificationRound(ctx, &claim2)
 	round2.SelectedValidators = []string{"lgmvaloper1ghi", "lgmvaloper1def", "lgmvaloper1abc"}
 	round2.Commitments["lgmvaloper1ghi"] = &types.VerificationCommitment{Validator: "lgmvaloper1ghi"}
 	round2.Commitments["lgmvaloper1def"] = &types.VerificationCommitment{Validator: "lgmvaloper1def"}

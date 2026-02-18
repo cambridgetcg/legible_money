@@ -964,7 +964,7 @@ func TestGenesisRoundTrip(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Set some state
-	k.SetProvider(ctx, types.ComputeProvider{
+	k.SetProvider(ctx, &types.ComputeProvider{
 		Address:     "addr1",
 		ServiceType: "ai_inference",
 		Status:      "active",
@@ -972,7 +972,7 @@ func TestGenesisRoundTrip(t *testing.T) {
 		PricePerCu:  "5000",
 	})
 
-	k.SetCredit(ctx, types.ComputeCredit{
+	k.SetCredit(ctx, &types.ComputeCredit{
 		ValidatorAddr: "val1",
 		Balance:       500,
 		EarnedTotal:   1000,
@@ -990,7 +990,7 @@ func TestGenesisRoundTrip(t *testing.T) {
 
 	// Clear and reimport
 	k2, ctx2, _, _ := setupKeeper(t)
-	k2.InitGenesis(ctx2, *genState)
+	k2.InitGenesis(ctx2, genState)
 
 	// Verify
 	provider, found := k2.GetProvider(ctx2, "addr1")
@@ -1087,30 +1087,30 @@ func TestMsgRegisterValidateBasic(t *testing.T) {
 	}
 
 	// Missing sender
-	bad := *msg
-	bad.Sender = ""
-	if err := bad.ValidateBasic(); err == nil {
+	if err := (&types.MsgRegisterComputeProvider{
+		Sender: "", ServiceType: msg.ServiceType, Endpoint: msg.Endpoint, PricePerCu: msg.PricePerCu, Stake: msg.Stake,
+	}).ValidateBasic(); err == nil {
 		t.Error("expected error for missing sender")
 	}
 
 	// Invalid service type
-	bad = *msg
-	bad.ServiceType = "invalid"
-	if err := bad.ValidateBasic(); err == nil {
+	if err := (&types.MsgRegisterComputeProvider{
+		Sender: msg.Sender, ServiceType: "invalid", Endpoint: msg.Endpoint, PricePerCu: msg.PricePerCu, Stake: msg.Stake,
+	}).ValidateBasic(); err == nil {
 		t.Error("expected error for invalid service type")
 	}
 
 	// Missing endpoint
-	bad = *msg
-	bad.Endpoint = ""
-	if err := bad.ValidateBasic(); err == nil {
+	if err := (&types.MsgRegisterComputeProvider{
+		Sender: msg.Sender, ServiceType: msg.ServiceType, Endpoint: "", PricePerCu: msg.PricePerCu, Stake: msg.Stake,
+	}).ValidateBasic(); err == nil {
 		t.Error("expected error for missing endpoint")
 	}
 
 	// Zero stake
-	bad = *msg
-	bad.Stake = "0"
-	if err := bad.ValidateBasic(); err == nil {
+	if err := (&types.MsgRegisterComputeProvider{
+		Sender: msg.Sender, ServiceType: msg.ServiceType, Endpoint: msg.Endpoint, PricePerCu: msg.PricePerCu, Stake: "0",
+	}).ValidateBasic(); err == nil {
 		t.Error("expected error for zero stake")
 	}
 }
@@ -1126,9 +1126,9 @@ func TestMsgRedeemCreditsValidateBasic(t *testing.T) {
 	}
 
 	// Zero CU
-	bad := *msg
-	bad.Cu = 0
-	if err := bad.ValidateBasic(); err == nil {
+	if err := (&types.MsgRedeemCredits{
+		Sender: msg.Sender, Provider: msg.Provider, Cu: 0,
+	}).ValidateBasic(); err == nil {
 		t.Error("expected error for zero CU amount")
 	}
 }
@@ -1146,7 +1146,7 @@ func TestUpdateParamsAuth(t *testing.T) {
 	dp := types.DefaultParams()
 	_, err := ms.UpdateComputeParams(sdk.WrapSDKContext(ctx), &types.MsgUpdateComputeParams{
 		Authority: "wrong_addr",
-		Params:    &dp,
+		Params:    dp,
 	})
 	if err == nil {
 		t.Error("expected error for wrong authority")
@@ -1181,7 +1181,7 @@ func TestFinalizeEpochUnderutilized(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Epoch 0: inflow=1000000, outflow=50000 (5% utilization, well below 20% target low)
-	epoch0Stats := types.EpochStats{
+	epoch0Stats := &types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
 		LgmDistributed: "50000", // 5% utilization
@@ -1215,7 +1215,7 @@ func TestFinalizeEpochOverutilized(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Epoch 0: 95% utilization (above 80% target high)
-	epoch0Stats := types.EpochStats{
+	epoch0Stats := &types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
 		LgmDistributed: "950000", // 95%
@@ -1236,7 +1236,7 @@ func TestFinalizeEpochSteadyState(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Epoch 0: 50% utilization (within 20%-80% target range)
-	epoch0Stats := types.EpochStats{
+	epoch0Stats := &types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
 		LgmDistributed: "500000", // 50%
@@ -1257,7 +1257,7 @@ func TestFinalizeEpochZeroInflow(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Epoch 0: zero inflow — factor should stay unchanged
-	epoch0Stats := types.EpochStats{
+	epoch0Stats := &types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "0",
 		LgmDistributed: "0",
@@ -1280,7 +1280,7 @@ func TestAdjustmentFactorClampedAtMin(t *testing.T) {
 	k.SetAdjustmentFactor(ctx, types.DefaultMinAdjustmentFactorBps+1)
 
 	// Epoch 0: 100% utilization — maximal pressure to decrease
-	epoch0Stats := types.EpochStats{
+	epoch0Stats := &types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
 		LgmDistributed: "1000000",
@@ -1303,7 +1303,7 @@ func TestAdjustmentFactorClampedAtMax(t *testing.T) {
 	k.SetAdjustmentFactor(ctx, types.DefaultMaxAdjustmentFactorBps-1)
 
 	// Epoch 0: 0% utilization — maximal pressure to increase
-	epoch0Stats := types.EpochStats{
+	epoch0Stats := &types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
 		LgmDistributed: "0",
@@ -1383,7 +1383,7 @@ func TestMultiEpochAdjustmentConvergence(t *testing.T) {
 
 	// Simulate 5 epochs of underutilization — factor should steadily increase
 	for epoch := uint64(0); epoch < 5; epoch++ {
-		stats := types.EpochStats{
+		stats := &types.EpochStats{
 			Epoch:          epoch,
 			PoolInflow:     "1000000",
 			LgmDistributed: "100000", // 10% utilization
@@ -1404,7 +1404,7 @@ func TestMultiEpochAdjustmentConvergence(t *testing.T) {
 	// Now simulate 5 epochs of overutilization — should decrease
 	startFactor := factor
 	for epoch := uint64(5); epoch < 10; epoch++ {
-		stats := types.EpochStats{
+		stats := &types.EpochStats{
 			Epoch:          epoch,
 			PoolInflow:     "1000000",
 			LgmDistributed: "950000", // 95% utilization

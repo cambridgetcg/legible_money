@@ -21,7 +21,6 @@ func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 }
 
 var _ types.MsgServer = msgServer{}
-var _ types.MsgServerUpdateParams = msgServer{}
 
 // ProposeHalt handles a Guardian's proposal to halt the chain.
 func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt) (*types.MsgProposeHaltResponse, error) {
@@ -80,7 +79,7 @@ func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt)
 	}
 
 	// 9. Create ceremony
-	ceremony, err := k.CreateHaltCeremony(ctx, proposal)
+	ceremony, err := k.CreateHaltCeremony(ctx, &proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +93,7 @@ func (k msgServer) ProposeHalt(goCtx context.Context, msg *types.MsgProposeHalt)
 	k.SetLastProposalBlock(ctx, currentBlock)
 
 	// 12. Audit
-	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+	k.AddAuditEntry(ctx, &types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: currentBlock,
 		Action:      string(types.AuditHaltProposed),
@@ -140,7 +139,7 @@ func (k msgServer) VoteHalt(goCtx context.Context, msg *types.MsgVoteHalt) (*typ
 	// Determine whether this is a prevote or precommit based on ceremony phase.
 	// In the proto schema there is no IsPrecommit field — the phase determines the action.
 	if ceremony.Phase == string(types.PhasePrecommit) {
-		err := k.AddPrecommit(ctx, msg.ProposalId, types.EmergencyPrecommit{
+		err := k.AddPrecommit(ctx, msg.ProposalId, &types.EmergencyPrecommit{
 			Voter: msg.Voter,
 		})
 		if err != nil {
@@ -148,7 +147,7 @@ func (k msgServer) VoteHalt(goCtx context.Context, msg *types.MsgVoteHalt) (*typ
 		}
 		k.addVoteAudit(ctx, types.AuditHaltPrecommit, msg.Voter, msg.ProposalId)
 	} else {
-		err := k.AddPrevote(ctx, msg.ProposalId, types.EmergencyVote{
+		err := k.AddPrevote(ctx, msg.ProposalId, &types.EmergencyVote{
 			Voter:   msg.Voter,
 			Approve: msg.Approve,
 		})
@@ -208,14 +207,14 @@ func (k msgServer) ProposeRevert(goCtx context.Context, msg *types.MsgProposeRev
 		Justification:     msg.Justification,
 	}
 
-	ceremony, err := k.CreateRevertCeremony(ctx, proposal)
+	ceremony, err := k.CreateRevertCeremony(ctx, &proposal)
 	if err != nil {
 		return nil, err
 	}
 
 	k.SetEmergencyStatus(ctx, types.StatusRevertVoting)
 
-	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+	k.AddAuditEntry(ctx, &types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: currentBlock,
 		Action:      string(types.AuditRevertProposed),
@@ -259,7 +258,7 @@ func (k msgServer) VoteRevert(goCtx context.Context, msg *types.MsgVoteRevert) (
 
 	// Phase-based prevote/precommit determination
 	if ceremony.Phase == string(types.PhasePrecommit) {
-		err := k.AddPrecommit(ctx, msg.ProposalId, types.EmergencyPrecommit{
+		err := k.AddPrecommit(ctx, msg.ProposalId, &types.EmergencyPrecommit{
 			Voter: msg.Voter,
 		})
 		if err != nil {
@@ -267,7 +266,7 @@ func (k msgServer) VoteRevert(goCtx context.Context, msg *types.MsgVoteRevert) (
 		}
 		k.addVoteAudit(ctx, types.AuditRevertPrecommit, msg.Voter, msg.ProposalId)
 	} else {
-		err := k.AddPrevote(ctx, msg.ProposalId, types.EmergencyVote{
+		err := k.AddPrevote(ctx, msg.ProposalId, &types.EmergencyVote{
 			Voter:   msg.Voter,
 			Approve: msg.Approve,
 		})
@@ -315,14 +314,14 @@ func (k msgServer) ProposeResume(goCtx context.Context, msg *types.MsgProposeRes
 		Proposer: msg.Proposer,
 	}
 
-	ceremony, err := k.CreateResumeCeremony(ctx, proposal)
+	ceremony, err := k.CreateResumeCeremony(ctx, &proposal)
 	if err != nil {
 		return nil, err
 	}
 
 	k.SetEmergencyStatus(ctx, types.StatusResumeVoting)
 
-	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+	k.AddAuditEntry(ctx, &types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: uint64(ctx.BlockHeight()),
 		Action:      string(types.AuditResumeProposed),
@@ -365,7 +364,7 @@ func (k msgServer) VoteResume(goCtx context.Context, msg *types.MsgVoteResume) (
 
 	// Phase-based prevote/precommit determination
 	if ceremony.Phase == string(types.PhasePrecommit) {
-		err := k.AddPrecommit(ctx, msg.ProposalId, types.EmergencyPrecommit{
+		err := k.AddPrecommit(ctx, msg.ProposalId, &types.EmergencyPrecommit{
 			Voter: msg.Voter,
 		})
 		if err != nil {
@@ -373,7 +372,7 @@ func (k msgServer) VoteResume(goCtx context.Context, msg *types.MsgVoteResume) (
 		}
 		k.addVoteAudit(ctx, types.AuditResumePrecommit, msg.Voter, msg.ProposalId)
 	} else {
-		err := k.AddPrevote(ctx, msg.ProposalId, types.EmergencyVote{
+		err := k.AddPrevote(ctx, msg.ProposalId, &types.EmergencyVote{
 			Voter:   msg.Voter,
 			Approve: msg.Approve,
 		})
@@ -405,6 +404,9 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
 	k.SetParams(ctx, msg.Params)
 
 	ctx.EventManager().EmitEvent(
@@ -420,7 +422,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 // --- Helpers ---
 
 func (k msgServer) addVoteAudit(ctx sdk.Context, action types.AuditAction, voter, ceremonyId string) {
-	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+	k.AddAuditEntry(ctx, &types.EmergencyAuditEntry{
 		Timestamp:   ctx.BlockTime().Unix(),
 		BlockNumber: uint64(ctx.BlockHeight()),
 		Action:      string(action),

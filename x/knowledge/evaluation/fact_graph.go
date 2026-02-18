@@ -33,7 +33,7 @@ const (
 
 // evaluateFactGraph analyzes the claim's references against the fact graph.
 // Stage 3 of the evaluation pipeline.
-func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "fact_graph",
 	}

@@ -56,7 +56,7 @@ func (m msgServer) SubmitResearch(
 
 	// Create research submission
 	researchId := m.Keeper.nextResearchId(ctx)
-	research := types.Research{
+	research := &types.Research{
 		Id:          researchId,
 		Submitter:   msg.Submitter,
 		Title:       msg.Title,
@@ -173,7 +173,7 @@ func (m msgServer) ReviewResearch(
 
 	// Create peer review
 	reviewId := m.Keeper.nextReviewId(ctx)
-	review := types.PeerReview{
+	review := &types.PeerReview{
 		Id:         reviewId,
 		ResearchId: msg.ResearchId,
 		Reviewer:   msg.Reviewer,
@@ -346,7 +346,7 @@ func (m msgServer) CreateBounty(
 	}
 
 	bountyId := m.Keeper.nextBountyId(ctx)
-	bounty := types.Bounty{
+	bounty := &types.Bounty{
 		Id:             bountyId,
 		Creator:        msg.Creator,
 		Title:          msg.Title,
@@ -499,7 +499,7 @@ func (m msgServer) UpdateParams(
 	}
 
 	if msg.Params != nil {
-		m.Keeper.SetParams(ctx, *msg.Params)
+		m.Keeper.SetParams(ctx, msg.Params)
 	}
 
 	ctx.EventManager().EmitEvent(

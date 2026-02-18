@@ -13,7 +13,7 @@ import (
 
 // PromoteProbationary promotes a probationary qualification to active if the
 // probationary period has elapsed.
-func (k Keeper) PromoteProbationary(ctx sdk.Context, q types.DomainQualification) bool {
+func (k Keeper) PromoteProbationary(ctx sdk.Context, q *types.DomainQualification) bool {
 	if q.Status != string(types.StatusProbationary) {
 		return false
 	}

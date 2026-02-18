@@ -13,7 +13,7 @@ import (
 // Called from BeginBlocker.
 func (k Keeper) CheckDeadmanSwitches(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
-	k.IterateHomes(ctx, func(home types.AgentHome) bool {
+	k.IterateHomes(ctx, func(home *types.AgentHome) bool {
 		if home.Guardian == nil || home.Guardian.Deadman == nil || !home.Guardian.Deadman.Enabled {
 			return false
 		}
@@ -29,7 +29,7 @@ func (k Keeper) CheckDeadmanSwitches(ctx sdk.Context) {
 }
 
 // triggerDeadman executes the configured deadman action.
-func (k Keeper) triggerDeadman(ctx sdk.Context, home types.AgentHome) {
+func (k Keeper) triggerDeadman(ctx sdk.Context, home *types.AgentHome) {
 	threshold := uint64(0)
 	action := ""
 	if home.Guardian != nil && home.Guardian.Deadman != nil {
@@ -62,8 +62,8 @@ func (k Keeper) CleanupExpiredSessions(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
 	params := k.GetParams(ctx)
 
-	k.IterateHomes(ctx, func(home types.AgentHome) bool {
-		k.IterateSessions(ctx, home.HomeId, func(session types.ActiveSession) bool {
+	k.IterateHomes(ctx, func(home *types.AgentHome) bool {
+		k.IterateSessions(ctx, home.HomeId, func(session *types.ActiveSession) bool {
 			maxExpiry := session.StartedAt + params.SessionMaxDuration
 			if height > session.ExpiresAt || height > maxExpiry {
 				k.DeleteSession(ctx, home.HomeId, session.SessionId)
@@ -84,8 +84,8 @@ func (k Keeper) CleanupOldAlerts(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
 	params := k.GetParams(ctx)
 
-	k.IterateHomes(ctx, func(home types.AgentHome) bool {
-		k.IterateAlerts(ctx, home.HomeId, func(alert types.Alert) bool {
+	k.IterateHomes(ctx, func(home *types.AgentHome) bool {
+		k.IterateAlerts(ctx, home.HomeId, func(alert *types.Alert) bool {
 			if alert.Acknowledged && height > alert.CreatedAt+params.AlertRetentionBlocks {
 				k.DeleteAlert(ctx, home.HomeId, alert.AlertId)
 			}
@@ -175,7 +175,7 @@ func (k Keeper) GetRemainingSpendingLimit(ctx sdk.Context, homeId, keyType strin
 // ProcessTreasuryAutomation runs automated treasury actions for homes with automation enabled.
 // Called from BeginBlocker.
 func (k Keeper) ProcessTreasuryAutomation(ctx sdk.Context) {
-	k.IterateHomes(ctx, func(home types.AgentHome) bool {
+	k.IterateHomes(ctx, func(home *types.AgentHome) bool {
 		if home.Status != string(types.HomeStatusActive) {
 			return false
 		}
@@ -200,7 +200,7 @@ func (k Keeper) ProcessTreasuryAutomation(ctx sdk.Context) {
 
 // autoCompoundRewards compounds pending rewards by emitting an event.
 // Actual reward claiming requires x/staking integration.
-func (k Keeper) autoCompoundRewards(ctx sdk.Context, home types.AgentHome) {
+func (k Keeper) autoCompoundRewards(ctx sdk.Context, home *types.AgentHome) {
 	// Emit event signaling auto-compound intent.
 	// The staking module's BeginBlocker handles actual reward distribution.
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -211,7 +211,7 @@ func (k Keeper) autoCompoundRewards(ctx sdk.Context, home types.AgentHome) {
 }
 
 // checkMinLiquidBalance alerts if the home owner's balance drops below the configured minimum.
-func (k Keeper) checkMinLiquidBalance(ctx sdk.Context, home types.AgentHome) {
+func (k Keeper) checkMinLiquidBalance(ctx sdk.Context, home *types.AgentHome) {
 	if k.bankKeeper == nil {
 		return
 	}
@@ -246,7 +246,7 @@ func (k Keeper) CreateAlert(ctx sdk.Context, homeId string, alertType types.Aler
 	// created in the same block (P1 fix).
 	alertId := fmt.Sprintf("alert-%s-%d-%d", homeId, ctx.BlockHeight(), pendingCount)
 
-	alert := types.Alert{
+	alert := &types.Alert{
 		AlertId:      alertId,
 		HomeId:       homeId,
 		Type:         string(alertType),

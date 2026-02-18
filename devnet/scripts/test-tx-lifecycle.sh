@@ -90,7 +90,7 @@ legbled_tx() {
         --home "$NODE_HOME" \
         --gas-prices "$GAS_PRICES" \
         --gas auto \
-        --gas-adjustment 1.5 \
+        --gas-adjustment 2.0 \
         -y \
         --output json 2>/dev/null
 }
@@ -123,7 +123,7 @@ get_addr() {
 # Output: tx result JSON (or empty on timeout)
 wait_for_tx() {
     local txhash="$1"
-    local max_attempts=6
+    local max_attempts=10
     local attempt=0
 
     while [ $attempt -lt $max_attempts ]; do

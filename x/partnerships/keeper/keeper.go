@@ -71,9 +71,9 @@ func (k Keeper) GetAuthority() string {
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -81,7 +81,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -91,7 +91,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ---------- Formation Expiry ----------
@@ -133,63 +133,41 @@ func (k Keeper) ExpireFormations(ctx sdk.Context) {
 // ---------- Genesis ----------
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 
 	for _, p := range genState.Partnerships {
 		if p != nil {
-			k.SetPartnership(ctx, *p)
+			k.SetPartnership(ctx, p)
 		}
 	}
 	for _, op := range genState.ConsensusOperations {
 		if op != nil {
-			k.SetConsensusOperation(ctx, *op)
+			k.SetConsensusOperation(ctx, op)
 		}
 	}
 	for _, sf := range genState.SafetyFreezes {
 		if sf != nil {
-			k.SetSafetyFreeze(ctx, *sf)
+			k.SetSafetyFreeze(ctx, sf)
 		}
 	}
 	for _, cs := range genState.CoercionSignals {
 		if cs != nil {
-			k.SetCoercionSignal(ctx, *cs)
+			k.SetCoercionSignal(ctx, cs)
 		}
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	partnerships := k.GetAllPartnerships(ctx)
-	ops := k.GetAllConsensusOperations(ctx)
-	freezes := k.GetAllSafetyFreezes(ctx)
-	signals := k.GetAllCoercionSignals(ctx)
-
-	pPtrs := make([]*types.Partnership, len(partnerships))
-	for i := range partnerships {
-		pPtrs[i] = &partnerships[i]
-	}
-	opPtrs := make([]*types.ConsensusOperation, len(ops))
-	for i := range ops {
-		opPtrs[i] = &ops[i]
-	}
-	fPtrs := make([]*types.SafetyFreeze, len(freezes))
-	for i := range freezes {
-		fPtrs[i] = &freezes[i]
-	}
-	sPtrs := make([]*types.CoercionSignal, len(signals))
-	for i := range signals {
-		sPtrs[i] = &signals[i]
-	}
-
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:              &params,
-		Partnerships:        pPtrs,
-		ConsensusOperations: opPtrs,
-		SafetyFreezes:       fPtrs,
-		CoercionSignals:     sPtrs,
+		Params:              params,
+		Partnerships:        k.GetAllPartnerships(ctx),
+		ConsensusOperations: k.GetAllConsensusOperations(ctx),
+		SafetyFreezes:       k.GetAllSafetyFreezes(ctx),
+		CoercionSignals:     k.GetAllCoercionSignals(ctx),
 	}
 }

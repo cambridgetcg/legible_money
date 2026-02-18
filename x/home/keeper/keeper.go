@@ -67,16 +67,17 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 	if gs.Params != nil {
-		k.SetParams(ctx, *gs.Params)
+		k.SetParams(ctx, gs.Params)
 	} else {
-		k.SetParams(ctx, types.DefaultParams())
+		dp := types.DefaultParams()
+		k.SetParams(ctx, &dp)
 	}
 
 	for _, home := range gs.Homes {
 		if home != nil {
-			k.SetHome(ctx, *home)
+			k.SetHome(ctx, home)
 		}
 	}
 }
@@ -84,8 +85,8 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var homes []*types.AgentHome
-	k.IterateHomes(ctx, func(home types.AgentHome) bool {
-		homes = append(homes, &home)
+	k.IterateHomes(ctx, func(home *types.AgentHome) bool {
+		homes = append(homes, home)
 		return false
 	})
 
@@ -102,7 +103,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params: &params,
+		Params: params,
 		Homes:  homes,
 	}
 }
@@ -110,23 +111,25 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 // --- Params ---
 
 // GetParams returns the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		dp := types.DefaultParams()
+		return &dp
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		dp := types.DefaultParams()
+		return &dp
 	}
-	return params
+	return &params
 }
 
 // SetParams sets the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}

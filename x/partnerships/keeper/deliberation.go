@@ -89,7 +89,7 @@ func (k Keeper) CalculateCooldown(ctx sdk.Context, rejectionCount uint32) uint64
 
 // ValidateCounterProposal checks that the counter-proposal chain depth
 // does not exceed the maximum allowed depth.
-func (k Keeper) ValidateCounterProposal(ctx sdk.Context, parentOp types.ConsensusOperation) error {
+func (k Keeper) ValidateCounterProposal(ctx sdk.Context, parentOp *types.ConsensusOperation) error {
 	params := k.GetParams(ctx)
 	if parentOp.Deliberation.ChainDepth >= params.MaxCounterProposalDepth {
 		return types.ErrCounterProposalDepth
@@ -105,12 +105,12 @@ func (k Keeper) CreateDeliberationState(
 	rationale string,
 	counterProposalOf string,
 	chainDepth uint32,
-) types.DeliberationState {
+) *types.DeliberationState {
 	tier := k.CalculateAmountTier(amount, potBalance)
 	window := k.GetDeliberationWindow(tier)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	return types.DeliberationState{
+	return &types.DeliberationState{
 		AmountTier:        tier,
 		FloorEndsAt:       currentBlock + window/2, // floor = half window
 		WindowEndsAt:      currentBlock + window,

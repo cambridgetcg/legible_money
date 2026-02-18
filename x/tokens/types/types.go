@@ -15,7 +15,7 @@ import (
 // proto schema but are unused — the period overlay has been removed.
 
 // Validate performs parameter validation. No-op since expiration params are unused.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	return nil
 }
 

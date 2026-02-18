@@ -25,6 +25,7 @@ CHAIN_ID="lgm-devnet-1"
 DENOM="ulgm"
 IMAGE="legbled:latest"
 NUM_VALIDATORS=3
+COMPOSE_PROJECT="lgm-devnet"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="$SCRIPT_DIR/.devnet-data"
 
@@ -44,15 +45,10 @@ command -v docker &>/dev/null || err "docker is required"
 command -v jq &>/dev/null || err "jq is required"
 docker image inspect "$IMAGE" &>/dev/null || err "Image '$IMAGE' not found. Build it first: docker build -f deployment/docker/Dockerfile.cosmos -t legbled ."
 
-# Helper: run legbled inside a temp container
-legbled() {
-  docker run --rm -v "$1:/root/.legbled" "$IMAGE" "$@" 2>/dev/null
-}
-
-# Shorthand that also specifies --home (positional args after volume)
+# Shorthand: run legbled inside a temp container, bypassing entrypoint
 run_legbled() {
   local vol="$1"; shift
-  docker run --rm -v "$vol:/root/.legbled" "$IMAGE" legbled "$@" --home /root/.legbled
+  docker run --rm --entrypoint legbled -v "$vol:/root/.legbled" "$IMAGE" "$@" --home /root/.legbled
 }
 
 echo ""
@@ -74,7 +70,7 @@ mkdir -p "$DATA_DIR"
 
 # Also remove Docker volumes from previous runs
 for i in $(seq 1 $NUM_VALIDATORS); do
-  docker volume rm "docker_validator-${i}-data" 2>/dev/null || true
+  docker volume rm "${COMPOSE_PROJECT}_validator-${i}-data" 2>/dev/null || true
 done
 
 # ──── 1. Initialize each validator node ────
@@ -95,13 +91,13 @@ for i in $(seq 1 $NUM_VALIDATORS); do
   run_legbled "$NODE_DIR" keys add "$MONIKER" --keyring-backend test 2>/dev/null
 
   # Get address
-  ADDR=$(docker run --rm -v "$NODE_DIR:/root/.legbled" "$IMAGE" \
-    legbled keys show "$MONIKER" -a --keyring-backend test --home /root/.legbled 2>/dev/null)
+  ADDR=$(docker run --rm --entrypoint legbled -v "$NODE_DIR:/root/.legbled" "$IMAGE" \
+    keys show "$MONIKER" -a --keyring-backend test --home /root/.legbled 2>/dev/null)
   ADDRESSES+=("$ADDR")
 
   # Get node ID
-  NODE_ID=$(docker run --rm -v "$NODE_DIR:/root/.legbled" "$IMAGE" \
-    legbled tendermint show-node-id --home /root/.legbled 2>/dev/null)
+  NODE_ID=$(docker run --rm --entrypoint legbled -v "$NODE_DIR:/root/.legbled" "$IMAGE" \
+    tendermint show-node-id --home /root/.legbled 2>&1 | tail -1)
   PEER_IDS+=("$NODE_ID")
 
   ok "$MONIKER: addr=$ADDR node_id=$NODE_ID"
@@ -119,14 +115,14 @@ done
 
 # Add faucet + test accounts (create keys on node1)
 run_legbled "$NODE1_DIR" keys add faucet --keyring-backend test 2>/dev/null
-FAUCET_ADDR=$(docker run --rm -v "$NODE1_DIR:/root/.legbled" "$IMAGE" \
-  legbled keys show faucet -a --keyring-backend test --home /root/.legbled 2>/dev/null)
+FAUCET_ADDR=$(docker run --rm --entrypoint legbled -v "$NODE1_DIR:/root/.legbled" "$IMAGE" \
+  keys show faucet -a --keyring-backend test --home /root/.legbled 2>/dev/null)
 run_legbled "$NODE1_DIR" add-genesis-account "$FAUCET_ADDR" "${FAUCET_BALANCE}${DENOM}"
 
 for name in test1 test2 test3; do
   run_legbled "$NODE1_DIR" keys add "$name" --keyring-backend test 2>/dev/null
-  TADDR=$(docker run --rm -v "$NODE1_DIR:/root/.legbled" "$IMAGE" \
-    legbled keys show "$name" -a --keyring-backend test --home /root/.legbled 2>/dev/null)
+  TADDR=$(docker run --rm --entrypoint legbled -v "$NODE1_DIR:/root/.legbled" "$IMAGE" \
+    keys show "$name" -a --keyring-backend test --home /root/.legbled 2>/dev/null)
   run_legbled "$NODE1_DIR" add-genesis-account "$TADDR" "${TEST_BALANCE}${DENOM}"
 done
 
@@ -206,8 +202,10 @@ done
 for i in $(seq 1 $NUM_VALIDATORS); do
   NODE_DIR="$DATA_DIR/validator-$i"
 
-  # Copy final genesis to all nodes
-  cp "$NODE1_DIR/config/genesis.json" "$NODE_DIR/config/genesis.json"
+  # Copy final genesis to all nodes (skip self-copy for validator-1)
+  if [ "$NODE_DIR" != "$NODE1_DIR" ]; then
+    cp "$NODE1_DIR/config/genesis.json" "$NODE_DIR/config/genesis.json"
+  fi
 
   # Set persistent peers (exclude self)
   SELF_PEERS=""
@@ -234,9 +232,9 @@ for i in $(seq 1 $NUM_VALIDATORS); do
 
   # app.toml: API + gRPC
   APP="$NODE_DIR/config/app.toml"
-  sed -i.bak '/^\[api\]/,/^\[/{s/^enable = false/enable = true/}' "$APP"
+  sed -i.bak '/^\[api\]/,/^\[/s/^enable = false/enable = true/' "$APP"
   sed -i.bak 's|address = "tcp://localhost:1317"|address = "tcp://0.0.0.0:1317"|' "$APP"
-  sed -i.bak '/^\[grpc\]/,/^\[/{s/^enable = false/enable = true/}' "$APP"
+  sed -i.bak '/^\[grpc\]/,/^\[/s/^enable = false/enable = true/' "$APP"
   sed -i.bak 's|address = "localhost:9090"|address = "0.0.0.0:9090"|' "$APP"
   sed -i.bak 's/^enabled-unsafe-cors = false/enabled-unsafe-cors = true/' "$APP"
 
@@ -250,7 +248,7 @@ done
 info "Copying data into Docker volumes..."
 
 for i in $(seq 1 $NUM_VALIDATORS); do
-  VOL_NAME="docker_validator-${i}-data"
+  VOL_NAME="${COMPOSE_PROJECT}_validator-${i}-data"
   NODE_DIR="$DATA_DIR/validator-$i"
 
   # Create volume and copy data

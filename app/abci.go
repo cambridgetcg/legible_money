@@ -469,7 +469,7 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 			SubmittedAtHeight: height,
 		}
 
-		if err := app.KnowledgeKeeper.StoreCommitmentInRound(ctx, c.RoundID, commitment); err != nil {
+		if err := app.KnowledgeKeeper.StoreCommitmentInRound(ctx, c.RoundID, &commitment); err != nil {
 			if errors.Is(err, knowledgetypes.ErrEquivocation) {
 				// Equivocation already handled (slashed + evidence stored) inside keeper
 				logger.Error("EQUIVOCATION in vote extension commitment",
@@ -500,7 +500,7 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 			SubmittedAtHeight: height,
 		}
 
-		if err := app.KnowledgeKeeper.StoreRevealInRound(ctx, r.RoundID, reveal); err != nil {
+		if err := app.KnowledgeKeeper.StoreRevealInRound(ctx, r.RoundID, &reveal); err != nil {
 			if errors.Is(err, knowledgetypes.ErrEquivocation) {
 				// Equivocation already handled (slashed + evidence stored) inside keeper
 				logger.Error("EQUIVOCATION in vote extension reveal",

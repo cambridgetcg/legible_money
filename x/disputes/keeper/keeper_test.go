@@ -256,7 +256,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper, *mo
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
 	// Initialize genesis
-	k.InitGenesis(ctx, *types.DefaultGenesis())
+	k.InitGenesis(ctx, types.DefaultGenesis())
 
 	return k, ctx, bk, kk, sk
 }
@@ -311,7 +311,7 @@ func TestSetGetParams(t *testing.T) {
 func TestSetGetDispute(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-001",
 		FactId:     "fact-001",
 		Challenger: testAddr(1),
@@ -343,7 +343,7 @@ func TestGetDisputeNotFound(t *testing.T) {
 func TestDeleteDispute(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:     "dispute-del",
 		FactId: "fact-del",
 		Status: string(types.DisputeStatusEvidence),
@@ -361,7 +361,7 @@ func TestIterateDisputes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	for i := 0; i < 5; i++ {
-		k.SetDispute(ctx, types.Dispute{
+		k.SetDispute(ctx, &types.Dispute{
 			Id:     fmt.Sprintf("dispute-%03d", i),
 			FactId: "fact-001",
 			Status: string(types.DisputeStatusEvidence),
@@ -369,7 +369,7 @@ func TestIterateDisputes(t *testing.T) {
 	}
 
 	var count int
-	k.IterateDisputes(ctx, func(d types.Dispute) bool {
+	k.IterateDisputes(ctx, func(d *types.Dispute) bool {
 		count++
 		return false
 	})
@@ -381,9 +381,9 @@ func TestIterateDisputes(t *testing.T) {
 func TestGetDisputesByFact(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	k.SetDispute(ctx, types.Dispute{Id: "d1", FactId: "fact-A", Status: string(types.DisputeStatusEvidence)})
-	k.SetDispute(ctx, types.Dispute{Id: "d2", FactId: "fact-A", Status: string(types.DisputeStatusVoting)})
-	k.SetDispute(ctx, types.Dispute{Id: "d3", FactId: "fact-B", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "d1", FactId: "fact-A", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "d2", FactId: "fact-A", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, &types.Dispute{Id: "d3", FactId: "fact-B", Status: string(types.DisputeStatusEvidence)})
 
 	disputes := k.GetDisputesByFact(ctx, "fact-A")
 	if len(disputes) != 2 {
@@ -394,10 +394,10 @@ func TestGetDisputesByFact(t *testing.T) {
 func TestGetActiveDisputes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	k.SetDispute(ctx, types.Dispute{Id: "active-1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
-	k.SetDispute(ctx, types.Dispute{Id: "active-2", FactId: "f2", Status: string(types.DisputeStatusVoting)})
-	k.SetDispute(ctx, types.Dispute{Id: "resolved", FactId: "f3", Status: string(types.DisputeStatusResolved)})
-	k.SetDispute(ctx, types.Dispute{Id: "expired", FactId: "f4", Status: string(types.DisputeStatusExpired)})
+	k.SetDispute(ctx, &types.Dispute{Id: "active-1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "active-2", FactId: "f2", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, &types.Dispute{Id: "resolved", FactId: "f3", Status: string(types.DisputeStatusResolved)})
+	k.SetDispute(ctx, &types.Dispute{Id: "expired", FactId: "f4", Status: string(types.DisputeStatusExpired)})
 
 	active := k.GetActiveDisputes(ctx)
 	if len(active) != 2 {
@@ -408,9 +408,9 @@ func TestGetActiveDisputes(t *testing.T) {
 func TestGetActiveDisputeCountForFact(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	k.SetDispute(ctx, types.Dispute{Id: "d1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
-	k.SetDispute(ctx, types.Dispute{Id: "d2", FactId: "f1", Status: string(types.DisputeStatusResolved)})
-	k.SetDispute(ctx, types.Dispute{Id: "d3", FactId: "f1", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, &types.Dispute{Id: "d1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "d2", FactId: "f1", Status: string(types.DisputeStatusResolved)})
+	k.SetDispute(ctx, &types.Dispute{Id: "d3", FactId: "f1", Status: string(types.DisputeStatusVoting)})
 
 	count := k.GetActiveDisputeCountForFact(ctx, "f1")
 	if count != 2 {
@@ -423,7 +423,7 @@ func TestGetActiveDisputeCountForFact(t *testing.T) {
 func TestSetGetEvidence(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	evidence := types.DisputeEvidence{
+	evidence := &types.DisputeEvidence{
 		Id:        "ev-001",
 		DisputeId: "dispute-001",
 		Submitter: testAddr(1),
@@ -445,13 +445,13 @@ func TestGetEvidenceByDispute(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	for i := 0; i < 3; i++ {
-		k.SetEvidence(ctx, types.DisputeEvidence{
+		k.SetEvidence(ctx, &types.DisputeEvidence{
 			Id:        fmt.Sprintf("ev-%d", i),
 			DisputeId: "dispute-001",
 			Submitter: testAddr(i),
 		})
 	}
-	k.SetEvidence(ctx, types.DisputeEvidence{
+	k.SetEvidence(ctx, &types.DisputeEvidence{
 		Id:        "ev-other",
 		DisputeId: "dispute-002",
 		Submitter: testAddr(0),
@@ -468,7 +468,7 @@ func TestGetEvidenceByDispute(t *testing.T) {
 func TestSetGetVote(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	vote := types.DisputeVote{
+	vote := &types.DisputeVote{
 		DisputeId: "dispute-001",
 		Arbiter:   testAddr(10),
 		Vote:      "uphold",
@@ -490,7 +490,7 @@ func TestGetVotes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	for i := 0; i < 3; i++ {
-		k.SetVote(ctx, types.DisputeVote{
+		k.SetVote(ctx, &types.DisputeVote{
 			DisputeId: "dispute-001",
 			Arbiter:   testAddr(i + 10),
 			Vote:      "uphold",
@@ -617,7 +617,7 @@ func TestCastVote(t *testing.T) {
 	}
 
 	// Create a dispute in voting phase
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:             "dispute-vote",
 		FactId:         "fact-001",
 		Status:         string(types.DisputeStatusVoting),
@@ -644,7 +644,7 @@ func TestCastVote(t *testing.T) {
 func TestCastVoteNotArbiter(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:             "dispute-v2",
 		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 200,
@@ -664,7 +664,7 @@ func TestCastVoteAlreadyVoted(t *testing.T) {
 	arbiter := testAddr(10)
 	sk.validators = []types.ValidatorInfo{{Address: arbiter, Stake: 5000, Tier: 2}}
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:             "dispute-dup",
 		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 200,
@@ -682,7 +682,7 @@ func TestCastVoteAlreadyVoted(t *testing.T) {
 func TestCastVoteNotInVotingPhase(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:       "dispute-phase",
 		Status:   string(types.DisputeStatusEvidence),
 		Arbiters: []string{testAddr(10)},
@@ -699,7 +699,7 @@ func TestCastVoteDeadlinePassed(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	arbiter := testAddr(10)
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:             "dispute-late",
 		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 50, // already passed (block height = 100)
@@ -718,7 +718,7 @@ func TestCastVoteDeadlinePassed(t *testing.T) {
 func TestTallyVotesUpheld(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:       "dispute-tally",
 		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
@@ -727,7 +727,7 @@ func TestTallyVotesUpheld(t *testing.T) {
 
 	// All 3 vote uphold with high stake
 	for _, addr := range dispute.Arbiters {
-		k.SetVote(ctx, types.DisputeVote{
+		k.SetVote(ctx, &types.DisputeVote{
 			DisputeId: "dispute-tally",
 			Arbiter:   addr,
 			Vote:      "uphold",
@@ -747,7 +747,7 @@ func TestTallyVotesUpheld(t *testing.T) {
 func TestTallyVotesOverturned(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:       "dispute-overturn",
 		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
@@ -756,7 +756,7 @@ func TestTallyVotesOverturned(t *testing.T) {
 
 	// All vote overturn
 	for _, addr := range dispute.Arbiters {
-		k.SetVote(ctx, types.DisputeVote{
+		k.SetVote(ctx, &types.DisputeVote{
 			DisputeId: "dispute-overturn",
 			Arbiter:   addr,
 			Vote:      "overturn",
@@ -776,7 +776,7 @@ func TestTallyVotesOverturned(t *testing.T) {
 func TestTallyVotesInconclusive(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:       "dispute-split",
 		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
@@ -784,9 +784,9 @@ func TestTallyVotesInconclusive(t *testing.T) {
 	k.SetDispute(ctx, dispute)
 
 	// Split vote: 1 uphold, 1 overturn, 1 abstain (equal stake)
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-split", Arbiter: testAddr(10), Vote: "uphold", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-split", Arbiter: testAddr(11), Vote: "overturn", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-split", Arbiter: testAddr(12), Vote: "abstain", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-split", Arbiter: testAddr(10), Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-split", Arbiter: testAddr(11), Vote: "overturn", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-split", Arbiter: testAddr(12), Vote: "abstain", Stake: "5000"})
 
 	outcome, err := k.TallyVotes(ctx, dispute)
 	if err != nil {
@@ -800,7 +800,7 @@ func TestTallyVotesInconclusive(t *testing.T) {
 func TestTallyVotesQuorumNotMet(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:       "dispute-quorum",
 		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
@@ -808,7 +808,7 @@ func TestTallyVotesQuorumNotMet(t *testing.T) {
 	k.SetDispute(ctx, dispute)
 
 	// Only 1 of 3 votes (33% < 66% quorum threshold)
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-quorum", Arbiter: testAddr(10), Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-quorum", Arbiter: testAddr(10), Vote: "uphold", Stake: "5000"})
 
 	outcome, err := k.TallyVotes(ctx, dispute)
 	if err != nil {
@@ -822,7 +822,7 @@ func TestTallyVotesQuorumNotMet(t *testing.T) {
 func TestTallyVotesStakeWeighted(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:       "dispute-weighted",
 		Tier:     uint32(types.TierBasic),
 		Arbiters: []string{testAddr(10), testAddr(11), testAddr(12)},
@@ -832,9 +832,9 @@ func TestTallyVotesStakeWeighted(t *testing.T) {
 	// 2 vote uphold with low stake, 1 votes overturn with high stake
 	// uphold total: 2*1000 = 2000, overturn total: 8000
 	// overturn ratio = 8000/10000 = 80% >= 77% majority
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-weighted", Arbiter: testAddr(10), Vote: "uphold", Stake: "1000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-weighted", Arbiter: testAddr(11), Vote: "uphold", Stake: "1000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dispute-weighted", Arbiter: testAddr(12), Vote: "overturn", Stake: "8000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-weighted", Arbiter: testAddr(10), Vote: "uphold", Stake: "1000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-weighted", Arbiter: testAddr(11), Vote: "uphold", Stake: "1000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dispute-weighted", Arbiter: testAddr(12), Vote: "overturn", Stake: "8000"})
 
 	outcome, err := k.TallyVotes(ctx, dispute)
 	if err != nil {
@@ -855,7 +855,7 @@ func TestResolveDisputeOverturned(t *testing.T) {
 	setupVerifiedFact(kk, "fact-res", defender)
 	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-resolve-ot",
 		FactId:     "fact-res",
 		Challenger: challenger,
@@ -901,7 +901,7 @@ func TestResolveDisputeUpheld(t *testing.T) {
 
 	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-resolve-up",
 		FactId:     "fact-up",
 		Challenger: testAddr(1),
@@ -928,7 +928,7 @@ func TestResolveDisputeInconclusive(t *testing.T) {
 
 	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-resolve-inc",
 		FactId:     "fact-inc",
 		Challenger: testAddr(1),
@@ -952,7 +952,7 @@ func TestResolveDisputeInconclusive(t *testing.T) {
 func TestResolveDisputeAlreadyResolved(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:     "dispute-done",
 		Status: string(types.DisputeStatusResolved),
 	}
@@ -973,7 +973,7 @@ func TestEscalateDispute(t *testing.T) {
 	bk.fundAccount(requester, sdkmath.NewIntWithDecimal(1, 12))
 	setupValidators(sk, testAddr(1), testAddr(2))
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-esc",
 		FactId:     "fact-esc",
 		Challenger: testAddr(1),
@@ -1016,7 +1016,7 @@ func TestEscalateDispute(t *testing.T) {
 func TestEscalateDisputeMaxTier(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:     "dispute-max",
 		Status: string(types.DisputeStatusVoting),
 		Tier:   uint32(types.TierFinal),
@@ -1032,7 +1032,7 @@ func TestEscalateDisputeMaxTier(t *testing.T) {
 func TestEscalateDisputeTooEarly(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:        "dispute-early",
 		Status:    string(types.DisputeStatusEvidence),
 		Tier:      uint32(types.TierBasic),
@@ -1051,7 +1051,7 @@ func TestEscalateDisputeTooEarly(t *testing.T) {
 func TestTransitionToVoting(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:     "dispute-transition",
 		Status: string(types.DisputeStatusEvidence),
 	}
@@ -1071,7 +1071,7 @@ func TestTransitionToVoting(t *testing.T) {
 func TestTransitionToVotingWrongPhase(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:     "dispute-wrong",
 		Status: string(types.DisputeStatusVoting),
 	}
@@ -1088,7 +1088,7 @@ func TestTransitionToVotingWrongPhase(t *testing.T) {
 func TestProcessExpiredDisputesEvidenceToVoting(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:               "dispute-exp-ev",
 		FactId:           "f1",
 		Status:           string(types.DisputeStatusEvidence),
@@ -1111,7 +1111,8 @@ func TestProcessExpiredDisputesVotingToResolved(t *testing.T) {
 
 	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
 
-	dispute := types.Dispute{
+	arbiters := []string{testAddr(10), testAddr(11), testAddr(12)}
+	dispute := &types.Dispute{
 		Id:             "dispute-exp-vote",
 		FactId:         "f2",
 		Challenger:     testAddr(1),
@@ -1119,13 +1120,13 @@ func TestProcessExpiredDisputesVotingToResolved(t *testing.T) {
 		Tier:           uint32(types.TierBasic),
 		VotingDeadline: 80, // already passed
 		Bond:           "111000000",
-		Arbiters:       []string{testAddr(10), testAddr(11), testAddr(12)},
+		Arbiters:       arbiters,
 	}
 	k.SetDispute(ctx, dispute)
 
 	// Add votes so tally works (all uphold)
-	for _, addr := range dispute.Arbiters {
-		k.SetVote(ctx, types.DisputeVote{
+	for _, addr := range arbiters {
+		k.SetVote(ctx, &types.DisputeVote{
 			DisputeId: "dispute-exp-vote",
 			Arbiter:   addr,
 			Vote:      "uphold",
@@ -1292,7 +1293,7 @@ func TestMsgSubmitEvidence(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	challenger := testAddr(1)
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:               "dispute-ev-msg",
 		FactId:           "fact-001",
 		Challenger:       challenger,
@@ -1326,7 +1327,7 @@ func TestMsgSubmitEvidence(t *testing.T) {
 func TestMsgSubmitEvidenceWrongSide(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:               "dispute-ev-wrong",
 		Challenger:       testAddr(1),
 		Defender:         testAddr(2),
@@ -1353,7 +1354,7 @@ func TestMsgVoteDispute(t *testing.T) {
 	arbiter := testAddr(10)
 	sk.validators = []types.ValidatorInfo{{Address: arbiter, Stake: 5000, Tier: 2}}
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:             "dispute-vote-msg",
 		Status:         string(types.DisputeStatusVoting),
 		VotingDeadline: 200,
@@ -1380,7 +1381,7 @@ func TestMsgEscalateDispute(t *testing.T) {
 	bk.fundAccount(requester, sdkmath.NewIntWithDecimal(1, 12))
 	setupValidators(sk, testAddr(1), testAddr(2))
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-esc-msg",
 		Challenger: testAddr(1),
 		Defender:   testAddr(2),
@@ -1412,7 +1413,7 @@ func TestQueryDispute(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	dispute := types.Dispute{Id: "q-dispute-1", FactId: "f1", Status: string(types.DisputeStatusEvidence)}
+	dispute := &types.Dispute{Id: "q-dispute-1", FactId: "f1", Status: string(types.DisputeStatusEvidence)}
 	k.SetDispute(ctx, dispute)
 
 	resp, err := qs.Dispute(ctx, &types.QueryDisputeRequest{DisputeId: "q-dispute-1"})
@@ -1438,9 +1439,9 @@ func TestQueryDisputesByFact(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetDispute(ctx, types.Dispute{Id: "qd1", FactId: "qf1", Status: string(types.DisputeStatusEvidence)})
-	k.SetDispute(ctx, types.Dispute{Id: "qd2", FactId: "qf1", Status: string(types.DisputeStatusVoting)})
-	k.SetDispute(ctx, types.Dispute{Id: "qd3", FactId: "qf2", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "qd1", FactId: "qf1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "qd2", FactId: "qf1", Status: string(types.DisputeStatusVoting)})
+	k.SetDispute(ctx, &types.Dispute{Id: "qd3", FactId: "qf2", Status: string(types.DisputeStatusEvidence)})
 
 	resp, err := qs.DisputesByFact(ctx, &types.QueryDisputesByFactRequest{FactId: "qf1"})
 	if err != nil {
@@ -1455,8 +1456,8 @@ func TestQueryActiveDisputes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetDispute(ctx, types.Dispute{Id: "qa1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
-	k.SetDispute(ctx, types.Dispute{Id: "qa2", FactId: "f2", Status: string(types.DisputeStatusResolved)})
+	k.SetDispute(ctx, &types.Dispute{Id: "qa1", FactId: "f1", Status: string(types.DisputeStatusEvidence)})
+	k.SetDispute(ctx, &types.Dispute{Id: "qa2", FactId: "f2", Status: string(types.DisputeStatusResolved)})
 
 	resp, err := qs.ActiveDisputes(ctx, &types.QueryActiveDisputesRequest{})
 	if err != nil {
@@ -1471,8 +1472,8 @@ func TestQueryEvidence(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetEvidence(ctx, types.DisputeEvidence{Id: "e1", DisputeId: "d1", Content: "ev1"})
-	k.SetEvidence(ctx, types.DisputeEvidence{Id: "e2", DisputeId: "d1", Content: "ev2"})
+	k.SetEvidence(ctx, &types.DisputeEvidence{Id: "e1", DisputeId: "d1", Content: "ev1"})
+	k.SetEvidence(ctx, &types.DisputeEvidence{Id: "e2", DisputeId: "d1", Content: "ev2"})
 
 	resp, err := qs.Evidence(ctx, &types.QueryEvidenceRequest{DisputeId: "d1"})
 	if err != nil {
@@ -1487,8 +1488,8 @@ func TestQueryVotes(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 	qs := keeper.NewQueryServerImpl(k)
 
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dv1", Arbiter: testAddr(10), Vote: "uphold", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: "dv1", Arbiter: testAddr(11), Vote: "overturn", Stake: "4000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dv1", Arbiter: testAddr(10), Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: "dv1", Arbiter: testAddr(11), Vote: "overturn", Stake: "4000"})
 
 	resp, err := qs.Votes(ctx, &types.QueryVotesRequest{DisputeId: "dv1"})
 	if err != nil {
@@ -1518,18 +1519,18 @@ func TestGenesisExportImport(t *testing.T) {
 	k, ctx, _, _, _ := setupKeeper(t)
 
 	// Create some state
-	k.SetDispute(ctx, types.Dispute{
+	k.SetDispute(ctx, &types.Dispute{
 		Id:     "gen-d1",
 		FactId: "gen-f1",
 		Status: string(types.DisputeStatusEvidence),
 		Bond:   "111000000",
 	})
-	k.SetEvidence(ctx, types.DisputeEvidence{
+	k.SetEvidence(ctx, &types.DisputeEvidence{
 		Id:        "gen-e1",
 		DisputeId: "gen-d1",
 		Content:   "test evidence",
 	})
-	k.SetVote(ctx, types.DisputeVote{
+	k.SetVote(ctx, &types.DisputeVote{
 		DisputeId: "gen-d1",
 		Arbiter:   testAddr(10),
 		Vote:      "uphold",
@@ -1549,7 +1550,7 @@ func TestGenesisExportImport(t *testing.T) {
 
 	// Re-initialize with exported state
 	k2, ctx2, _, _, _ := setupKeeper(t)
-	k2.InitGenesis(ctx2, *exported)
+	k2.InitGenesis(ctx2, exported)
 
 	d, found := k2.GetDispute(ctx2, "gen-d1")
 	if !found || d.Bond != "111000000" {
@@ -1578,7 +1579,7 @@ func TestMsgUpdateParams(t *testing.T) {
 
 	resp, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: authority,
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err != nil {
 		t.Fatalf("update params failed: %v", err)
@@ -1603,7 +1604,7 @@ func TestMsgUpdateParamsUnauthorized(t *testing.T) {
 	newParams := types.DefaultParams()
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr(1), // not the authority
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized UpdateParams")
@@ -1617,7 +1618,7 @@ func TestCommitRevealEvidenceFlow(t *testing.T) {
 
 	challenger := testAddr(1)
 	defender := testAddr(2)
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:               "dispute-cr",
 		FactId:           "fact-cr",
 		Challenger:       challenger,
@@ -1629,7 +1630,7 @@ func TestCommitRevealEvidenceFlow(t *testing.T) {
 
 	// 1. Commit evidence hash
 	contentHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" // sha256 of empty
-	commitment := types.EvidenceCommitment{
+	commitment := &types.EvidenceCommitment{
 		DisputeId:   "dispute-cr",
 		Submitter:   challenger,
 		Side:        "challenger",
@@ -1690,7 +1691,7 @@ func TestResolveDisputeArbiterRewards(t *testing.T) {
 	bk.fundAccount(arbiter2, sdkmath.ZeroInt())
 	bk.fundAccount(arbiter3, sdkmath.ZeroInt())
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-arb-reward",
 		FactId:     "fact-arb",
 		Challenger: challenger,
@@ -1703,9 +1704,9 @@ func TestResolveDisputeArbiterRewards(t *testing.T) {
 	k.SetDispute(ctx, dispute)
 
 	// arbiter1 and arbiter2 vote uphold (correct), arbiter3 votes overturn (wrong)
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter2, Vote: "uphold", Stake: "5000"})
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter3, Vote: "overturn", Stake: "3000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter2, Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter3, Vote: "overturn", Stake: "3000"})
 
 	err := k.ResolveDispute(ctx, dispute, types.OutcomeUpheld)
 	if err != nil {
@@ -1744,7 +1745,7 @@ func TestResolveDisputeNonVoterSlash(t *testing.T) {
 
 	bk.fundModule(types.ModuleName, sdkmath.NewIntWithDecimal(1, 12))
 
-	dispute := types.Dispute{
+	dispute := &types.Dispute{
 		Id:         "dispute-nonvoter",
 		FactId:     "fact-nv",
 		Challenger: challenger,
@@ -1757,7 +1758,7 @@ func TestResolveDisputeNonVoterSlash(t *testing.T) {
 	k.SetDispute(ctx, dispute)
 
 	// Only arbiter1 votes, arbiterNoVote doesn't
-	k.SetVote(ctx, types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
+	k.SetVote(ctx, &types.DisputeVote{DisputeId: dispute.Id, Arbiter: arbiter1, Vote: "uphold", Stake: "5000"})
 
 	moduleBefore := bk.modules[types.ModuleName]
 	err := k.ResolveDispute(ctx, dispute, types.OutcomeUpheld)

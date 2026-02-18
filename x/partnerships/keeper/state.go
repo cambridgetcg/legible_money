@@ -13,10 +13,10 @@ import (
 // ---------- Partnership CRUD ----------
 
 // SetPartnership stores a partnership and maintains bidirectional indexes.
-func (k Keeper) SetPartnership(ctx sdk.Context, p types.Partnership) {
+func (k Keeper) SetPartnership(ctx sdk.Context, p *types.Partnership) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 
-	bz, err := proto.Marshal(&p)
+	bz, err := proto.Marshal(p)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal partnership: %v", err))
 	}
@@ -30,21 +30,21 @@ func (k Keeper) SetPartnership(ctx sdk.Context, p types.Partnership) {
 }
 
 // GetPartnership retrieves a partnership by ID.
-func (k Keeper) GetPartnership(ctx sdk.Context, id string) (types.Partnership, bool) {
+func (k Keeper) GetPartnership(ctx sdk.Context, id string) (*types.Partnership, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(partnershipKey(id))
 	if err != nil || bz == nil {
-		return types.Partnership{}, false
+		return nil, false
 	}
 	var p types.Partnership
 	if err := proto.Unmarshal(bz, &p); err != nil {
-		return types.Partnership{}, false
+		return nil, false
 	}
-	return p, true
+	return &p, true
 }
 
 // DeletePartnership removes a partnership and its indexes.
-func (k Keeper) DeletePartnership(ctx sdk.Context, p types.Partnership) {
+func (k Keeper) DeletePartnership(ctx sdk.Context, p *types.Partnership) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	_ = kvStore.Delete(partnershipKey(p.Id))
 	_ = kvStore.Delete(byHumanKey(p.HumanAddr, p.Id))
@@ -52,9 +52,9 @@ func (k Keeper) DeletePartnership(ctx sdk.Context, p types.Partnership) {
 }
 
 // GetAllPartnerships returns all partnerships.
-func (k Keeper) GetAllPartnerships(ctx sdk.Context) []types.Partnership {
-	var partnerships []types.Partnership
-	k.IteratePartnerships(ctx, func(p types.Partnership) bool {
+func (k Keeper) GetAllPartnerships(ctx sdk.Context) []*types.Partnership {
+	var partnerships []*types.Partnership
+	k.IteratePartnerships(ctx, func(p *types.Partnership) bool {
 		partnerships = append(partnerships, p)
 		return false
 	})
@@ -62,7 +62,7 @@ func (k Keeper) GetAllPartnerships(ctx sdk.Context) []types.Partnership {
 }
 
 // IteratePartnerships iterates over all partnerships. Return true to stop.
-func (k Keeper) IteratePartnerships(ctx sdk.Context, cb func(types.Partnership) bool) {
+func (k Keeper) IteratePartnerships(ctx sdk.Context, cb func(*types.Partnership) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.PartnershipKeyPrefix, prefixEndBytes(types.PartnershipKeyPrefix))
 	if err != nil {
@@ -75,7 +75,7 @@ func (k Keeper) IteratePartnerships(ctx sdk.Context, cb func(types.Partnership) 
 		if err := proto.Unmarshal(iter.Value(), &p); err != nil {
 			continue
 		}
-		if cb(p) {
+		if cb(&p) {
 			break
 		}
 	}
@@ -92,9 +92,9 @@ func (k Keeper) GetPartnershipsByAgent(ctx sdk.Context, agentAddr string) []stri
 }
 
 // GetPartnershipsByParticipant returns all partnerships where the address is human or agent.
-func (k Keeper) GetPartnershipsByParticipant(ctx sdk.Context, addr string) []types.Partnership {
+func (k Keeper) GetPartnershipsByParticipant(ctx sdk.Context, addr string) []*types.Partnership {
 	seen := make(map[string]bool)
-	var result []types.Partnership
+	var result []*types.Partnership
 
 	for _, id := range k.GetPartnershipsByHuman(ctx, addr) {
 		if !seen[id] {
@@ -134,9 +134,9 @@ func (k Keeper) getPartnershipIdsByPrefix(ctx sdk.Context, prefix []byte) []stri
 // ---------- ConsensusOperation CRUD ----------
 
 // SetConsensusOperation stores a consensus operation.
-func (k Keeper) SetConsensusOperation(ctx sdk.Context, op types.ConsensusOperation) {
+func (k Keeper) SetConsensusOperation(ctx sdk.Context, op *types.ConsensusOperation) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&op)
+	bz, err := proto.Marshal(op)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal consensus operation: %v", err))
 	}
@@ -144,17 +144,17 @@ func (k Keeper) SetConsensusOperation(ctx sdk.Context, op types.ConsensusOperati
 }
 
 // GetConsensusOperation retrieves a consensus operation by ID.
-func (k Keeper) GetConsensusOperation(ctx sdk.Context, id string) (types.ConsensusOperation, bool) {
+func (k Keeper) GetConsensusOperation(ctx sdk.Context, id string) (*types.ConsensusOperation, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(consensusOpKey(id))
 	if err != nil || bz == nil {
-		return types.ConsensusOperation{}, false
+		return nil, false
 	}
 	var op types.ConsensusOperation
 	if err := proto.Unmarshal(bz, &op); err != nil {
-		return types.ConsensusOperation{}, false
+		return nil, false
 	}
-	return op, true
+	return &op, true
 }
 
 // DeleteConsensusOperation removes a consensus operation.
@@ -164,8 +164,8 @@ func (k Keeper) DeleteConsensusOperation(ctx sdk.Context, id string) {
 }
 
 // GetAllConsensusOperations returns all consensus operations.
-func (k Keeper) GetAllConsensusOperations(ctx sdk.Context) []types.ConsensusOperation {
-	var ops []types.ConsensusOperation
+func (k Keeper) GetAllConsensusOperations(ctx sdk.Context) []*types.ConsensusOperation {
+	var ops []*types.ConsensusOperation
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.ConsensusOpKeyPrefix, prefixEndBytes(types.ConsensusOpKeyPrefix))
 	if err != nil {
@@ -178,7 +178,7 @@ func (k Keeper) GetAllConsensusOperations(ctx sdk.Context) []types.ConsensusOper
 		if err := proto.Unmarshal(iter.Value(), &op); err != nil {
 			continue
 		}
-		ops = append(ops, op)
+		ops = append(ops, &op)
 	}
 	return ops
 }
@@ -186,9 +186,9 @@ func (k Keeper) GetAllConsensusOperations(ctx sdk.Context) []types.ConsensusOper
 // ---------- SafetyFreeze CRUD ----------
 
 // SetSafetyFreeze stores a safety freeze.
-func (k Keeper) SetSafetyFreeze(ctx sdk.Context, sf types.SafetyFreeze) {
+func (k Keeper) SetSafetyFreeze(ctx sdk.Context, sf *types.SafetyFreeze) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&sf)
+	bz, err := proto.Marshal(sf)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal safety freeze: %v", err))
 	}
@@ -196,17 +196,17 @@ func (k Keeper) SetSafetyFreeze(ctx sdk.Context, sf types.SafetyFreeze) {
 }
 
 // GetSafetyFreeze retrieves a safety freeze by partnership ID.
-func (k Keeper) GetSafetyFreeze(ctx sdk.Context, partnershipId string) (types.SafetyFreeze, bool) {
+func (k Keeper) GetSafetyFreeze(ctx sdk.Context, partnershipId string) (*types.SafetyFreeze, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(safetyFreezeKey(partnershipId))
 	if err != nil || bz == nil {
-		return types.SafetyFreeze{}, false
+		return nil, false
 	}
 	var sf types.SafetyFreeze
 	if err := proto.Unmarshal(bz, &sf); err != nil {
-		return types.SafetyFreeze{}, false
+		return nil, false
 	}
-	return sf, true
+	return &sf, true
 }
 
 // DeleteSafetyFreeze removes a safety freeze.
@@ -216,8 +216,8 @@ func (k Keeper) DeleteSafetyFreeze(ctx sdk.Context, partnershipId string) {
 }
 
 // GetAllSafetyFreezes returns all safety freezes.
-func (k Keeper) GetAllSafetyFreezes(ctx sdk.Context) []types.SafetyFreeze {
-	var freezes []types.SafetyFreeze
+func (k Keeper) GetAllSafetyFreezes(ctx sdk.Context) []*types.SafetyFreeze {
+	var freezes []*types.SafetyFreeze
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.SafetyFreezeKeyPrefix, prefixEndBytes(types.SafetyFreezeKeyPrefix))
 	if err != nil {
@@ -230,7 +230,7 @@ func (k Keeper) GetAllSafetyFreezes(ctx sdk.Context) []types.SafetyFreeze {
 		if err := proto.Unmarshal(iter.Value(), &sf); err != nil {
 			continue
 		}
-		freezes = append(freezes, sf)
+		freezes = append(freezes, &sf)
 	}
 	return freezes
 }
@@ -238,9 +238,9 @@ func (k Keeper) GetAllSafetyFreezes(ctx sdk.Context) []types.SafetyFreeze {
 // ---------- CoercionSignal CRUD ----------
 
 // SetCoercionSignal stores a coercion signal.
-func (k Keeper) SetCoercionSignal(ctx sdk.Context, cs types.CoercionSignal) {
+func (k Keeper) SetCoercionSignal(ctx sdk.Context, cs *types.CoercionSignal) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&cs)
+	bz, err := proto.Marshal(cs)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal coercion signal: %v", err))
 	}
@@ -248,17 +248,17 @@ func (k Keeper) SetCoercionSignal(ctx sdk.Context, cs types.CoercionSignal) {
 }
 
 // GetCoercionSignal retrieves a coercion signal by ID.
-func (k Keeper) GetCoercionSignal(ctx sdk.Context, signalId string) (types.CoercionSignal, bool) {
+func (k Keeper) GetCoercionSignal(ctx sdk.Context, signalId string) (*types.CoercionSignal, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(coercionSignalKey(signalId))
 	if err != nil || bz == nil {
-		return types.CoercionSignal{}, false
+		return nil, false
 	}
 	var cs types.CoercionSignal
 	if err := proto.Unmarshal(bz, &cs); err != nil {
-		return types.CoercionSignal{}, false
+		return nil, false
 	}
-	return cs, true
+	return &cs, true
 }
 
 // DeleteCoercionSignal removes a coercion signal.
@@ -268,8 +268,8 @@ func (k Keeper) DeleteCoercionSignal(ctx sdk.Context, signalId string) {
 }
 
 // GetAllCoercionSignals returns all coercion signals.
-func (k Keeper) GetAllCoercionSignals(ctx sdk.Context) []types.CoercionSignal {
-	var signals []types.CoercionSignal
+func (k Keeper) GetAllCoercionSignals(ctx sdk.Context) []*types.CoercionSignal {
+	var signals []*types.CoercionSignal
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.CoercionSignalKeyPrefix, prefixEndBytes(types.CoercionSignalKeyPrefix))
 	if err != nil {
@@ -282,7 +282,7 @@ func (k Keeper) GetAllCoercionSignals(ctx sdk.Context) []types.CoercionSignal {
 		if err := proto.Unmarshal(iter.Value(), &cs); err != nil {
 			continue
 		}
-		signals = append(signals, cs)
+		signals = append(signals, &cs)
 	}
 	return signals
 }
@@ -290,9 +290,9 @@ func (k Keeper) GetAllCoercionSignals(ctx sdk.Context) []types.CoercionSignal {
 // ---------- RejectionCooldown CRUD ----------
 
 // SetRejectionCooldown stores a rejection cooldown.
-func (k Keeper) SetRejectionCooldown(ctx sdk.Context, rc types.RejectionCooldown) {
+func (k Keeper) SetRejectionCooldown(ctx sdk.Context, rc *types.RejectionCooldown) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&rc)
+	bz, err := proto.Marshal(rc)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal rejection cooldown: %v", err))
 	}
@@ -300,17 +300,17 @@ func (k Keeper) SetRejectionCooldown(ctx sdk.Context, rc types.RejectionCooldown
 }
 
 // GetRejectionCooldown retrieves a rejection cooldown by partnership ID.
-func (k Keeper) GetRejectionCooldown(ctx sdk.Context, partnershipId string) (types.RejectionCooldown, bool) {
+func (k Keeper) GetRejectionCooldown(ctx sdk.Context, partnershipId string) (*types.RejectionCooldown, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(rejectionCooldownKey(partnershipId))
 	if err != nil || bz == nil {
-		return types.RejectionCooldown{}, false
+		return nil, false
 	}
 	var rc types.RejectionCooldown
 	if err := proto.Unmarshal(bz, &rc); err != nil {
-		return types.RejectionCooldown{}, false
+		return nil, false
 	}
-	return rc, true
+	return &rc, true
 }
 
 // DeleteRejectionCooldown removes a rejection cooldown.

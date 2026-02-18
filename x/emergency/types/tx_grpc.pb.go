@@ -25,6 +25,7 @@ const (
 	Msg_VoteRevert_FullMethodName    = "/legible.emergency.v1.Msg/VoteRevert"
 	Msg_ProposeResume_FullMethodName = "/legible.emergency.v1.Msg/ProposeResume"
 	Msg_VoteResume_FullMethodName    = "/legible.emergency.v1.Msg/VoteResume"
+	Msg_UpdateParams_FullMethodName  = "/legible.emergency.v1.Msg/UpdateParams"
 )
 
 // MsgClient is the client API for Msg service.
@@ -41,6 +42,7 @@ type MsgClient interface {
 	VoteRevert(ctx context.Context, in *MsgVoteRevert, opts ...grpc.CallOption) (*MsgVoteRevertResponse, error)
 	ProposeResume(ctx context.Context, in *MsgProposeResume, opts ...grpc.CallOption) (*MsgProposeResumeResponse, error)
 	VoteResume(ctx context.Context, in *MsgVoteResume, opts ...grpc.CallOption) (*MsgVoteResumeResponse, error)
+	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 }
 
 type msgClient struct {
@@ -111,6 +113,16 @@ func (c *msgClient) VoteResume(ctx context.Context, in *MsgVoteResume, opts ...g
 	return out, nil
 }
 
+func (c *msgClient) UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgUpdateParamsResponse)
+	err := c.cc.Invoke(ctx, Msg_UpdateParams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 // All implementations must embed UnimplementedMsgServer
 // for forward compatibility.
@@ -125,6 +137,7 @@ type MsgServer interface {
 	VoteRevert(context.Context, *MsgVoteRevert) (*MsgVoteRevertResponse, error)
 	ProposeResume(context.Context, *MsgProposeResume) (*MsgProposeResumeResponse, error)
 	VoteResume(context.Context, *MsgVoteResume) (*MsgVoteResumeResponse, error)
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 	mustEmbedUnimplementedMsgServer()
 }
 
@@ -152,6 +165,9 @@ func (UnimplementedMsgServer) ProposeResume(context.Context, *MsgProposeResume) 
 }
 func (UnimplementedMsgServer) VoteResume(context.Context, *MsgVoteResume) (*MsgVoteResumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VoteResume not implemented")
+}
+func (UnimplementedMsgServer) UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateParams not implemented")
 }
 func (UnimplementedMsgServer) mustEmbedUnimplementedMsgServer() {}
 func (UnimplementedMsgServer) testEmbeddedByValue()             {}
@@ -282,6 +298,24 @@ func _Msg_VoteResume_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_UpdateParams_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Msg_ServiceDesc is the grpc.ServiceDesc for Msg service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -312,6 +346,10 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VoteResume",
 			Handler:    _Msg_VoteResume_Handler,
+		},
+		{
+			MethodName: "UpdateParams",
+			Handler:    _Msg_UpdateParams_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

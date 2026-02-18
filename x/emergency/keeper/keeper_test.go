@@ -24,17 +24,17 @@ import (
 // ---------- Mock StakingKeeper ----------
 
 type mockStakingKeeper struct {
-	validators map[string]stakingtypes.LegibleValidator
+	validators map[string]*stakingtypes.LegibleValidator
 }
 
 func newMockStakingKeeper() *mockStakingKeeper {
 	return &mockStakingKeeper{
-		validators: make(map[string]stakingtypes.LegibleValidator),
+		validators: make(map[string]*stakingtypes.LegibleValidator),
 	}
 }
 
 func (m *mockStakingKeeper) addGuardian(addr string, totalStake string) {
-	m.validators[addr] = stakingtypes.LegibleValidator{
+	m.validators[addr] = &stakingtypes.LegibleValidator{
 		OperatorAddress:        addr,
 		TotalStake:             totalStake,
 		Tier:                   stakingtypes.TierGuardian.String(),
@@ -45,7 +45,7 @@ func (m *mockStakingKeeper) addGuardian(addr string, totalStake string) {
 }
 
 func (m *mockStakingKeeper) addBonded(addr string, totalStake string) {
-	m.validators[addr] = stakingtypes.LegibleValidator{
+	m.validators[addr] = &stakingtypes.LegibleValidator{
 		OperatorAddress: addr,
 		TotalStake:      totalStake,
 		Tier:            stakingtypes.TierBonded.String(),
@@ -53,13 +53,16 @@ func (m *mockStakingKeeper) addBonded(addr string, totalStake string) {
 	}
 }
 
-func (m *mockStakingKeeper) GetValidator(_ sdk.Context, operatorAddr string) (stakingtypes.LegibleValidator, bool) {
+func (m *mockStakingKeeper) GetValidator(_ sdk.Context, operatorAddr string) (*stakingtypes.LegibleValidator, bool) {
 	v, ok := m.validators[operatorAddr]
-	return v, ok
+	if !ok {
+		return nil, false
+	}
+	return v, true
 }
 
-func (m *mockStakingKeeper) GetActiveValidatorSet(_ sdk.Context) []stakingtypes.LegibleValidator {
-	var result []stakingtypes.LegibleValidator
+func (m *mockStakingKeeper) GetActiveValidatorSet(_ sdk.Context) []*stakingtypes.LegibleValidator {
+	var result []*stakingtypes.LegibleValidator
 	for _, v := range m.validators {
 		if v.IsActive {
 			result = append(result, v)
@@ -68,7 +71,7 @@ func (m *mockStakingKeeper) GetActiveValidatorSet(_ sdk.Context) []stakingtypes.
 	return result
 }
 
-func (m *mockStakingKeeper) IterateValidators(_ sdk.Context, cb func(stakingtypes.LegibleValidator) bool) {
+func (m *mockStakingKeeper) IterateValidators(_ sdk.Context, cb func(*stakingtypes.LegibleValidator) bool) {
 	for _, v := range m.validators {
 		if cb(v) {
 			return
@@ -116,7 +119,8 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
 	// Set default params
-	k.SetParams(ctx, types.DefaultParams())
+	p := types.DefaultParams()
+	k.SetParams(ctx, &p)
 
 	return k, ctx, mockSK
 }
@@ -154,7 +158,7 @@ func TestIsGuardian_CouncilMemberDuringBootstrap(t *testing.T) {
 	params.GenesisCouncil = []string{"council1", "council2"}
 	params.CouncilExpiryBlock = 1000 // Active until block 1000
 	params.CouncilVirtualStake = "11111000000000000000000"
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	if !k.IsGuardian(ctx, "council1") {
 		t.Error("expected council member to be guardian during bootstrap")
@@ -167,7 +171,7 @@ func TestIsGuardian_CouncilMemberAfterExpiry(t *testing.T) {
 	params := types.DefaultParams()
 	params.GenesisCouncil = []string{"council1"}
 	params.CouncilExpiryBlock = 50 // Already expired (current height = 100)
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	if k.IsGuardian(ctx, "council1") {
 		t.Error("expected council member to NOT be guardian after expiry")
@@ -791,7 +795,7 @@ func TestGenesisRoundtrip(t *testing.T) {
 	params := types.DefaultParams()
 	params.GenesisCouncil = []string{"council1", "council2"}
 	params.CouncilExpiryBlock = 50000
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	// Export
 	genState := k.ExportGenesis(ctx)
@@ -804,8 +808,8 @@ func TestGenesisRoundtrip(t *testing.T) {
 
 	// Clear and re-init
 	k.SetEmergencyStatus(ctx, "")
-	k.SetParams(ctx, types.Params{})
-	k.InitGenesis(ctx, *genState)
+	k.SetParams(ctx, &types.Params{})
+	k.InitGenesis(ctx, genState)
 
 	// Verify restored
 	if k.GetEmergencyStatus(ctx) != types.StatusNormal {
@@ -830,7 +834,7 @@ func TestQueryStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query Status failed: %v", err)
 	}
-	if resp.Status != types.StatusNormal {
+	if resp.Status != string(types.StatusNormal) {
 		t.Errorf("expected normal status, got %s", resp.Status)
 	}
 	if resp.IsHalted {
@@ -896,7 +900,7 @@ func TestQueryAuditLog(t *testing.T) {
 	queryServer := keeper.NewQueryServerImpl(k)
 
 	// Add an audit entry
-	k.AddAuditEntry(ctx, types.EmergencyAuditEntry{
+	k.AddAuditEntry(ctx, &types.EmergencyAuditEntry{
 		BlockNumber: 100,
 		Action:      string(types.AuditHaltProposed),
 		Actor:       "guardian1",

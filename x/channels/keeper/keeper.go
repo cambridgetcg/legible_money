@@ -68,34 +68,32 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	k.SetParams(ctx, *gs.Params)
+	k.SetParams(ctx, gs.Params)
 	for _, ch := range gs.Channels {
-		k.SetChannel(ctx, *ch)
+		k.SetChannel(ctx, ch)
 	}
 	for _, d := range gs.Disputes {
-		k.SetDispute(ctx, *d)
+		k.SetDispute(ctx, d)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var channels []*types.PaymentChannel
-	k.IterateChannels(ctx, func(ch types.PaymentChannel) bool {
-		c := ch
-		channels = append(channels, &c)
+	k.IterateChannels(ctx, func(ch *types.PaymentChannel) bool {
+		channels = append(channels, ch)
 		return false
 	})
 
 	var disputes []*types.ChannelDispute
-	k.IterateDisputes(ctx, func(d types.ChannelDispute) bool {
-		dd := d
-		disputes = append(disputes, &dd)
+	k.IterateDisputes(ctx, func(d *types.ChannelDispute) bool {
+		disputes = append(disputes, d)
 		return false
 	})
 
 	params := k.GetParams(ctx)
 	gs := &types.GenesisState{
-		Params:   &params,
+		Params:   params,
 		Channels: channels,
 		Disputes: disputes,
 	}
@@ -161,9 +159,9 @@ func (k Keeper) SpendFromChannel(goCtx context.Context, channelId string, amount
 }
 
 // GetExpiredChannels returns channels in closing or disputed status past their deadline.
-func (k Keeper) GetExpiredChannels(ctx sdk.Context, currentBlock uint64) []types.PaymentChannel {
-	var channels []types.PaymentChannel
-	k.IterateChannels(ctx, func(ch types.PaymentChannel) bool {
+func (k Keeper) GetExpiredChannels(ctx sdk.Context, currentBlock uint64) []*types.PaymentChannel {
+	var channels []*types.PaymentChannel
+	k.IterateChannels(ctx, func(ch *types.PaymentChannel) bool {
 		if (ch.Status == types.ChannelStatusClosing || ch.Status == types.ChannelStatusDisputed) &&
 			ch.DisputeDeadline > 0 && currentBlock > ch.DisputeDeadline {
 			channels = append(channels, ch)
@@ -175,7 +173,7 @@ func (k Keeper) GetExpiredChannels(ctx sdk.Context, currentBlock uint64) []types
 
 // AutoSettleChannel distributes funds and closes a channel that has passed its deadline.
 // For disputed channels, uses the disputed state. For closing channels, uses the last agreed state.
-func (k Keeper) AutoSettleChannel(ctx sdk.Context, ch types.PaymentChannel) {
+func (k Keeper) AutoSettleChannel(ctx sdk.Context, ch *types.PaymentChannel) {
 	deposited, _ := new(big.Int).SetString(ch.Deposited, 10)
 	spent, _ := new(big.Int).SetString(ch.Spent, 10)
 	if spent == nil {

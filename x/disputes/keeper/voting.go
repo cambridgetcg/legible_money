@@ -48,7 +48,7 @@ func (k Keeper) CastVote(ctx sdk.Context, disputeId, arbiter, vote, rationale st
 	// Get arbiter's effective stake
 	stake := k.stakingKeeper.GetEffectiveStake(ctx, arbiter)
 
-	disputeVote := types.DisputeVote{
+	disputeVote := &types.DisputeVote{
 		DisputeId: disputeId,
 		Arbiter:   arbiter,
 		Vote:      vote,
@@ -79,7 +79,7 @@ func (k Keeper) CastVote(ctx sdk.Context, disputeId, arbiter, vote, rationale st
 
 // TallyVotes computes the outcome of a dispute from the cast votes.
 // Uses stake-weighted voting with quorum and majority thresholds.
-func (k Keeper) TallyVotes(ctx sdk.Context, dispute types.Dispute) (string, error) {
+func (k Keeper) TallyVotes(ctx sdk.Context, dispute *types.Dispute) (string, error) {
 	params := k.GetParams(ctx)
 	tierConfig, err := k.GetTierConfig(params, types.EscalationTier(dispute.Tier))
 	if err != nil {
@@ -164,7 +164,7 @@ func (k Keeper) TallyVotes(ctx sdk.Context, dispute types.Dispute) (string, erro
 }
 
 // ResolveDispute finalizes a dispute with the given outcome and distributes rewards/slashes.
-func (k Keeper) ResolveDispute(ctx sdk.Context, dispute types.Dispute, outcome string) error {
+func (k Keeper) ResolveDispute(ctx sdk.Context, dispute *types.Dispute, outcome string) error {
 	if dispute.Status == string(types.DisputeStatusResolved) {
 		return fmt.Errorf("%w: %s", types.ErrDisputeAlreadyResolved, dispute.Id)
 	}
@@ -489,7 +489,7 @@ func (k Keeper) resolveFactOutcome(ctx sdk.Context, factId string, outcome strin
 // after a dispute has been resolved. This is the extension point for:
 // 1. Confidence cascade to dependent facts (overturned → reduce referencing facts)
 // 2. Structured event emission for other modules (evidence_mgmt, reputation, etc.)
-func (k Keeper) processPostResolution(ctx sdk.Context, dispute types.Dispute, outcome string) {
+func (k Keeper) processPostResolution(ctx sdk.Context, dispute *types.Dispute, outcome string) {
 	// 1. Cascade confidence reduction to facts referencing a retracted fact
 	if outcome == types.OutcomeOverturned {
 		k.cascadeConfidenceReduction(ctx, dispute.FactId)

@@ -70,16 +70,16 @@ func (k Keeper) GetAuthority() string {
 
 // InitGenesis initializes the module's state from genesis.
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	k.SetParams(ctx, *gs.Params)
+	k.SetParams(ctx, gs.Params)
 
 	for _, contract := range gs.Contracts {
-		k.SetContract(ctx, *contract)
+		k.SetContract(ctx, contract)
 	}
 	for _, code := range gs.Code {
-		k.SetCode(ctx, *code)
+		k.SetCode(ctx, code)
 	}
 	for _, schedule := range gs.Schedules {
-		k.SetSchedule(ctx, *schedule)
+		k.SetSchedule(ctx, schedule)
 	}
 	for _, entry := range gs.State {
 		k.SetContractState(ctx, entry.ContractAddress, entry.Key, entry.Value)
@@ -90,23 +90,23 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	p := k.GetParams(ctx)
 	gs := &types.GenesisState{
-		Params:    &p,
+		Params:    p,
 		Contracts: []*types.DeployedContract{},
 		Code:      []*types.ContractCode{},
 		Schedules: []*types.ContractSchedule{},
 		State:     []*types.ContractStateEntry{},
 	}
 
-	k.IterateContracts(ctx, func(c types.DeployedContract) bool {
-		gs.Contracts = append(gs.Contracts, &c)
+	k.IterateContracts(ctx, func(c *types.DeployedContract) bool {
+		gs.Contracts = append(gs.Contracts, c)
 		return false
 	})
-	k.IterateCode(ctx, func(c types.ContractCode) bool {
-		gs.Code = append(gs.Code, &c)
+	k.IterateCode(ctx, func(c *types.ContractCode) bool {
+		gs.Code = append(gs.Code, c)
 		return false
 	})
-	k.IterateSchedules(ctx, func(s types.ContractSchedule) bool {
-		gs.Schedules = append(gs.Schedules, &s)
+	k.IterateSchedules(ctx, func(s *types.ContractSchedule) bool {
+		gs.Schedules = append(gs.Schedules, s)
 		return false
 	})
 

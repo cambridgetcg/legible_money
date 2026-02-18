@@ -27,7 +27,7 @@ var _ types.QueryServer = queryServer{}
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }
 
 // Fact returns a single fact by ID.
@@ -42,7 +42,7 @@ func (q queryServer) Fact(goCtx context.Context, req *types.QueryFactRequest) (*
 		return nil, fmt.Errorf("%w: %s", types.ErrFactNotFound, req.FactId)
 	}
 
-	return &types.QueryFactResponse{Fact: &fact}, nil
+	return &types.QueryFactResponse{Fact: fact}, nil
 }
 
 // Facts returns a paginated list of all facts.
@@ -59,7 +59,7 @@ func (q queryServer) Facts(goCtx context.Context, req *types.QueryFactsRequest) 
 	var total uint64
 	var skipped uint32
 
-	q.IterateFacts(ctx, func(f types.Fact) bool {
+	q.IterateFacts(ctx, func(f *types.Fact) bool {
 		total++
 		if skipped < offset {
 			skipped++
@@ -68,8 +68,8 @@ func (q queryServer) Facts(goCtx context.Context, req *types.QueryFactsRequest) 
 		if uint32(len(facts)) >= limit {
 			return false // Continue counting total but stop collecting
 		}
-		fc := f // copy to avoid aliasing
-		facts = append(facts, &fc)
+		fc := f // already a pointer from iterator
+		facts = append(facts, fc)
 		return false
 	})
 
@@ -89,7 +89,7 @@ func (q queryServer) FactsByDomain(goCtx context.Context, req *types.QueryFactsB
 	rawFacts := q.GetFactsByDomain(ctx, req.Domain)
 	facts := make([]*types.Fact, len(rawFacts))
 	for i := range rawFacts {
-		facts[i] = &rawFacts[i]
+		facts[i] = rawFacts[i]
 	}
 
 	return &types.QueryFactsByDomainResponse{Facts: facts}, nil
@@ -107,7 +107,7 @@ func (q queryServer) Claim(goCtx context.Context, req *types.QueryClaimRequest) 
 		return nil, fmt.Errorf("%w: %s", types.ErrClaimNotFound, req.ClaimId)
 	}
 
-	return &types.QueryClaimResponse{Claim: &claim}, nil
+	return &types.QueryClaimResponse{Claim: claim}, nil
 }
 
 // VerificationRound returns a single round by ID.
@@ -122,17 +122,13 @@ func (q queryServer) VerificationRound(goCtx context.Context, req *types.QueryVe
 		return nil, fmt.Errorf("%w: %s", types.ErrRoundNotFound, req.RoundId)
 	}
 
-	return &types.QueryVerificationRoundResponse{Round: &round}, nil
+	return &types.QueryVerificationRoundResponse{Round: round}, nil
 }
 
 // ActiveRounds returns all non-complete verification rounds.
 func (q queryServer) ActiveRounds(goCtx context.Context, _ *types.QueryActiveRoundsRequest) (*types.QueryActiveRoundsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	rawRounds := q.GetActiveRounds(ctx)
-	rounds := make([]*types.VerificationRound, len(rawRounds))
-	for i := range rawRounds {
-		rounds[i] = &rawRounds[i]
-	}
+	rounds := q.GetActiveRounds(ctx)
 	return &types.QueryActiveRoundsResponse{Rounds: rounds}, nil
 }
 
@@ -148,7 +144,7 @@ func (q queryServer) Domain(goCtx context.Context, req *types.QueryDomainRequest
 		return nil, fmt.Errorf("%w: %s", types.ErrDomainNotFound, req.DomainId)
 	}
 
-	return &types.QueryDomainResponse{Domain: &domain}, nil
+	return &types.QueryDomainResponse{Domain: domain}, nil
 }
 
 // ---------- Negative Knowledge Queries ----------
@@ -186,7 +182,7 @@ func (q queryServer) CounterFactsByFact(goCtx context.Context, req *types.QueryC
 	rawCFs := q.GetCounterFactsByFact(ctx, req.FactId)
 	counterFacts := make([]*types.CounterFact, len(rawCFs))
 	for i := range rawCFs {
-		counterFacts[i] = &rawCFs[i]
+		counterFacts[i] = rawCFs[i]
 	}
 
 	return &types.QueryCounterFactsByFactResponse{CounterFacts: counterFacts}, nil
@@ -207,7 +203,7 @@ func (q queryServer) BidirectionalConfidence(goCtx context.Context, req *types.Q
 	}
 
 	bidir := q.GetBidirectionalConfidence(ctx, req.FactId)
-	return &types.QueryBidirectionalConfidenceResponse{BidirectionalConfidence: &bidir}, nil
+	return &types.QueryBidirectionalConfidenceResponse{BidirectionalConfidence: bidir}, nil
 }
 
 // CounterFactsByDomain returns counter-facts in a specific domain.
@@ -220,7 +216,7 @@ func (q queryServer) CounterFactsByDomain(goCtx context.Context, req *types.Quer
 	rawCFs := q.GetCounterFactsByDomain(ctx, req.Domain)
 	counterFacts := make([]*types.CounterFact, len(rawCFs))
 	for i := range rawCFs {
-		counterFacts[i] = &rawCFs[i]
+		counterFacts[i] = rawCFs[i]
 	}
 
 	return &types.QueryCounterFactsByDomainResponse{CounterFacts: counterFacts}, nil
@@ -253,9 +249,8 @@ func (q queryServer) Domains(goCtx context.Context, req *types.QueryDomainsReque
 		return &types.QueryDomainsResponse{}, nil
 	} else {
 		// No stratum filter — iterate local knowledge domains.
-		q.IterateDomains(ctx, func(d types.OntologicalDomain) bool {
-			dc := d
-			candidates = append(candidates, &dc)
+		q.IterateDomains(ctx, func(d *types.OntologicalDomain) bool {
+			candidates = append(candidates, d)
 			return false
 		})
 	}
@@ -338,16 +333,14 @@ func (q queryServer) DomainChildren(goCtx context.Context, req *types.QueryDomai
 		}
 	} else {
 		// Fallback: iterate local knowledge domains.
-		q.IterateDomains(ctx, func(d types.OntologicalDomain) bool {
+		q.IterateDomains(ctx, func(d *types.OntologicalDomain) bool {
 			if req.IncludeDescendants {
 				if strings.HasPrefix(d.Name, prefix) {
-					dc := d
-					children = append(children, &dc)
+					children = append(children, d)
 				}
 			} else {
 				if isDirectChild(d.Name, req.DomainId) {
-					dc := d
-					children = append(children, &dc)
+					children = append(children, d)
 				}
 			}
 			return false
@@ -373,8 +366,7 @@ func (q queryServer) DomainPath(goCtx context.Context, req *types.QueryDomainPat
 		// Try local knowledge domains first.
 		domain, found := q.GetDomainFromState(ctx, name)
 		if found {
-			dc := domain
-			path = append(path, &dc)
+			path = append(path, domain)
 			continue
 		}
 		// Placeholder for unregistered path segments.

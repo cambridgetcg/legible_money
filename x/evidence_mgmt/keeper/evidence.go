@@ -10,7 +10,7 @@ import (
 )
 
 // SubmitEvidence validates and stores a new evidence submission.
-func (k Keeper) SubmitEvidence(ctx sdk.Context, evidence types.Evidence) error {
+func (k Keeper) SubmitEvidence(ctx sdk.Context, evidence *types.Evidence) error {
 	params := k.GetParams(ctx)
 
 	// Validate that the claim exists in x/knowledge

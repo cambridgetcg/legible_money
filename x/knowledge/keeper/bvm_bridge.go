@@ -83,10 +83,10 @@ func (k Keeper) SubmitClaimFromBVM(
 			{EvidenceType: "bvm_hash", ContentHash: evidenceHash},
 		},
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
 	// Create verification round
-	round, err := k.CreateVerificationRound(ctx, claim)
+	round, err := k.CreateVerificationRound(ctx, &claim)
 	if err != nil {
 		return "", fmt.Errorf("failed to create verification round: %w", err)
 	}
@@ -269,7 +269,7 @@ func (k Keeper) ChallengeFactFromBVM(
 		Commitments:          make(map[string]*types.VerificationCommitment),
 		Reveals:              make(map[string]*types.VerificationReveal),
 	}
-	k.SetVerificationRound(ctx, round)
+	k.SetVerificationRound(ctx, &round)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"fact_challenged",

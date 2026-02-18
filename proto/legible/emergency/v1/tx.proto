@@ -4,6 +4,7 @@ package legible.emergency.v1;
 option go_package = "github.com/legible-money/legible/x/emergency/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/emergency/v1/genesis.proto";
 
 // Msg defines the emergency kill switch module's transaction service.
 // 3-phase BFT protocol: Halt → Revert → Resume.
@@ -17,6 +18,8 @@ service Msg {
   rpc VoteRevert(MsgVoteRevert) returns (MsgVoteRevertResponse);
   rpc ProposeResume(MsgProposeResume) returns (MsgProposeResumeResponse);
   rpc VoteResume(MsgVoteResume) returns (MsgVoteResumeResponse);
+
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
 // ============================================================================
@@ -95,6 +98,14 @@ message MsgVoteResumeResponse {
 // ============================================================================
 // Enums (used by Msg types, not duplicated in state.proto or genesis.proto)
 // ============================================================================
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params = 2;
+}
+
+message MsgUpdateParamsResponse {}
 
 enum EmergencyCategory {
   EMERGENCY_CATEGORY_UNSPECIFIED = 0;

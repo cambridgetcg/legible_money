@@ -79,7 +79,7 @@ func (k Keeper) DistributeReward(
 	partnership.TotalEarned = currentEarned.String()
 
 	// Persist updated partnership
-	k.SetPartnership(ctx, *partnership)
+	k.SetPartnership(ctx, partnership)
 
 	k.Logger(ctx).Info("partnership reward distributed",
 		"partnership_id", partnership.Id,

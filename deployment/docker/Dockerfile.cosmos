@@ -4,16 +4,17 @@
 # Run:   docker run -v legbled-data:/root/.legbled -p 26657:26657 -p 1317:1317 -p 9090:9090 -p 26656:26656 legbled
 
 # ──── Stage 1: Builder ────
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache make git gcc musl-dev linux-headers
 
 WORKDIR /src
 COPY go.mod go.sum ./
+COPY tools/agent-sdk/go.mod ./tools/agent-sdk/
 RUN go mod download
 
 COPY . .
-RUN go build -o /usr/local/bin/legbled -ldflags="-s -w" ./cmd/legbled
+RUN CGO_ENABLED=1 go build -o /usr/local/bin/legbled -ldflags="-s -w" ./cmd/legbled
 
 # ──── Stage 2: Runtime ────
 FROM alpine:3.20

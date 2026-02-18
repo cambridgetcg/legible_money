@@ -133,7 +133,7 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockBankKeeper) {
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
 	// Initialize genesis
-	k.InitGenesis(ctx, *types.DefaultGenesis())
+	k.InitGenesis(ctx, types.DefaultGenesis())
 
 	return k, ctx, bk
 }
@@ -174,7 +174,7 @@ func TestUpdateParams(t *testing.T) {
 		MaxDomainsPerStratum: 50,
 		AllowNewStrata:       true,
 	}
-	k.SetParams(ctx, newParams)
+	k.SetParams(ctx, &newParams)
 
 	got := k.GetParams(ctx)
 	if got.MinProposalStake != "5000000" {
@@ -472,7 +472,7 @@ func TestActivateDomain(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Create a proposed domain
-	k.SetDomain(ctx, types.Domain{
+	k.SetDomain(ctx, &types.Domain{
 		Name:    "biology",
 		Stratum: uint32(types.StratumEmpirical),
 		Status:  "proposed",
@@ -522,7 +522,7 @@ func TestCreateProposal(t *testing.T) {
 		ExpiresAt:    100 + 34272,
 	}
 
-	err := k.CreateProposal(ctx, proposal)
+	err := k.CreateProposal(ctx, &proposal)
 	if err != nil {
 		t.Fatalf("failed to create proposal: %v", err)
 	}
@@ -558,7 +558,7 @@ func TestCreateProposalDuplicateDomain(t *testing.T) {
 		ProposalType: "add",
 	}
 
-	err := k.CreateProposal(ctx, proposal)
+	err := k.CreateProposal(ctx, &proposal)
 	if err == nil {
 		t.Error("expected error for duplicate domain")
 	}
@@ -576,7 +576,7 @@ func TestCreateProposalInvalidStratum(t *testing.T) {
 		ProposalType: "add",
 	}
 
-	err := k.CreateProposal(ctx, proposal)
+	err := k.CreateProposal(ctx, &proposal)
 	if err == nil {
 		t.Error("expected error for invalid stratum")
 	}
@@ -599,7 +599,7 @@ func TestVoteProposal(t *testing.T) {
 		CreatedAt:    100,
 		ExpiresAt:    100 + 34272,
 	}
-	err := k.CreateProposal(ctx, proposal)
+	err := k.CreateProposal(ctx, &proposal)
 	if err != nil {
 		t.Fatalf("failed to create proposal: %v", err)
 	}
@@ -642,7 +642,7 @@ func TestVoteProposalDuplicate(t *testing.T) {
 		Voters:       []string{},
 		ExpiresAt:    200,
 	}
-	_ = k.CreateProposal(ctx, proposal)
+	_ = k.CreateProposal(ctx, &proposal)
 
 	// First vote
 	_ = k.VoteProposal(ctx, "dup-vote-test", testAddr("bob"), true)
@@ -669,7 +669,7 @@ func TestVoteProposalReachesQuorum(t *testing.T) {
 		Voters:       []string{},
 		ExpiresAt:    200,
 	}
-	_ = k.CreateProposal(ctx, proposal)
+	_ = k.CreateProposal(ctx, &proposal)
 
 	// Need MinEndorsements=3 votes for passage
 	_ = k.VoteProposal(ctx, "quorum-test", testAddr("v1"), true)
@@ -706,7 +706,7 @@ func TestVoteProposalExpired(t *testing.T) {
 		Voters:       []string{},
 		ExpiresAt:    50, // already expired at height 100
 	}
-	_ = k.CreateProposal(ctx, proposal)
+	_ = k.CreateProposal(ctx, &proposal)
 
 	err := k.VoteProposal(ctx, "expired-test", testAddr("bob"), true)
 	if err == nil {
@@ -731,7 +731,7 @@ func TestProcessExpiredProposals(t *testing.T) {
 		CreatedAt:    50,
 		ExpiresAt:    90, // expired at height 100
 	}
-	_ = k.CreateProposal(ctx, proposal)
+	_ = k.CreateProposal(ctx, &proposal)
 
 	// Process expired proposals (called by EndBlocker)
 	err := k.ProcessExpiredProposals(ctx)
@@ -762,7 +762,7 @@ func TestExecuteProposalDeprecate(t *testing.T) {
 		ProposalType: "deprecate",
 	}
 
-	err := k.ExecuteProposal(ctx, proposal)
+	err := k.ExecuteProposal(ctx, &proposal)
 	if err != nil {
 		t.Fatalf("failed to execute deprecate: %v", err)
 	}
@@ -785,7 +785,7 @@ func TestExecuteProposalModify(t *testing.T) {
 		ProposalType: "modify",
 	}
 
-	err := k.ExecuteProposal(ctx, proposal)
+	err := k.ExecuteProposal(ctx, &proposal)
 	if err != nil {
 		t.Fatalf("failed to execute modify: %v", err)
 	}
@@ -824,7 +824,7 @@ func TestSetGetLink(t *testing.T) {
 		Discount:     50000, // 5% discount
 	}
 
-	k.SetLink(ctx, link)
+	k.SetLink(ctx, &link)
 
 	got, found := k.GetLink(ctx, "physics", "mathematics")
 	if !found {
@@ -841,13 +841,13 @@ func TestSetGetLink(t *testing.T) {
 func TestGetAllLinks(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
-	k.SetLink(ctx, types.CrossStratumLink{
+	k.SetLink(ctx, &types.CrossStratumLink{
 		SourceDomain: "physics",
 		TargetDomain: "mathematics",
 		LinkType:     "depends_on",
 		Discount:     50000,
 	})
-	k.SetLink(ctx, types.CrossStratumLink{
+	k.SetLink(ctx, &types.CrossStratumLink{
 		SourceDomain: "computer_science",
 		TargetDomain: "mathematics",
 		LinkType:     "generalizes",
@@ -1210,7 +1210,7 @@ func TestExportImportGenesis(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	// Add a link to make the state non-default
-	k.SetLink(ctx, types.CrossStratumLink{
+	k.SetLink(ctx, &types.CrossStratumLink{
 		SourceDomain: "physics",
 		TargetDomain: "mathematics",
 		LinkType:     "depends_on",
@@ -1238,7 +1238,7 @@ func TestExportImportGenesis(t *testing.T) {
 	k2 := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), nil, "authority")
 	ctx2 := sdk.NewContext(stateStore, cmtproto.Header{Height: 200}, false, log.NewNopLogger())
 
-	k2.InitGenesis(ctx2, *exported)
+	k2.InitGenesis(ctx2, exported)
 
 	// Verify re-imported state
 	domains := k2.GetAllDomains(ctx2)
@@ -1373,7 +1373,7 @@ func TestMaxDomainsPerStratumEnforced(t *testing.T) {
 	k.SetParams(ctx, params)
 
 	// Can add one more
-	err := k.CreateProposal(ctx, types.DomainProposal{
+	err := k.CreateProposal(ctx, &types.DomainProposal{
 		Id: "add-biology",
 		Domain: &types.Domain{
 			Name:    "biology",
@@ -1386,7 +1386,7 @@ func TestMaxDomainsPerStratumEnforced(t *testing.T) {
 	}
 
 	// Fourth should be rejected
-	err = k.CreateProposal(ctx, types.DomainProposal{
+	err = k.CreateProposal(ctx, &types.DomainProposal{
 		Id: "add-chemistry",
 		Domain: &types.Domain{
 			Name:    "chemistry",
@@ -1778,7 +1778,7 @@ func TestLogicZonesExportImport(t *testing.T) {
 	k2 := keeper.NewKeeper(cdc, runtime.NewKVStoreService(storeKey), nil, "authority")
 	ctx2 := sdk.NewContext(stateStore, cmtproto.Header{Height: 200}, false, log.NewNopLogger())
 
-	k2.InitGenesis(ctx2, *exported)
+	k2.InitGenesis(ctx2, exported)
 
 	zones = k2.GetAllLogicZones(ctx2)
 	if len(zones) != 5 {
@@ -1928,7 +1928,7 @@ func TestMergeDomains(t *testing.T) {
 		ProposalType: "merge",
 	}
 
-	err := k.ExecuteProposal(ctx, proposal)
+	err := k.ExecuteProposal(ctx, &proposal)
 	if err != nil {
 		t.Fatalf("merge failed: %v", err)
 	}
@@ -1960,7 +1960,7 @@ func TestMergeDomainsNoTarget(t *testing.T) {
 		ProposalType: "merge",
 	}
 
-	err := k.ExecuteProposal(ctx, proposal)
+	err := k.ExecuteProposal(ctx, &proposal)
 	if err == nil {
 		t.Error("expected error for merge without target")
 	}
@@ -1977,7 +1977,7 @@ func TestMergeDomainsTargetNotFound(t *testing.T) {
 		ProposalType: "merge",
 	}
 
-	err := k.ExecuteProposal(ctx, proposal)
+	err := k.ExecuteProposal(ctx, &proposal)
 	if err == nil {
 		t.Error("expected error when merge target doesn't exist")
 	}
@@ -1995,7 +1995,7 @@ func TestExecuteProposalArchive(t *testing.T) {
 		ProposalType: "archive",
 	}
 
-	err := k.ExecuteProposal(ctx, proposal)
+	err := k.ExecuteProposal(ctx, &proposal)
 	if err != nil {
 		t.Fatalf("failed to execute archive: %v", err)
 	}

@@ -1,13 +1,11 @@
 package types
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
 // --- Enums ---
@@ -81,14 +79,14 @@ func (c *EmergencyCeremony) GetPrevote(voter string) (*EmergencyVote, bool) {
 }
 
 // SetPrevote sets or replaces a prevote for a given voter.
-func (c *EmergencyCeremony) SetPrevote(voter string, vote EmergencyVote) {
+func (c *EmergencyCeremony) SetPrevote(voter string, vote *EmergencyVote) {
 	for _, entry := range c.Prevotes {
 		if entry != nil && entry.Key == voter {
-			entry.Value = &vote
+			entry.Value = vote
 			return
 		}
 	}
-	c.Prevotes = append(c.Prevotes, &PrevoteEntry{Key: voter, Value: &vote})
+	c.Prevotes = append(c.Prevotes, &PrevoteEntry{Key: voter, Value: vote})
 }
 
 // GetPrecommit returns the precommit for a given voter, and whether it exists.
@@ -102,18 +100,18 @@ func (c *EmergencyCeremony) GetPrecommit(voter string) (*EmergencyPrecommit, boo
 }
 
 // SetPrecommit sets or replaces a precommit for a given voter.
-func (c *EmergencyCeremony) SetPrecommit(voter string, precommit EmergencyPrecommit) {
+func (c *EmergencyCeremony) SetPrecommit(voter string, precommit *EmergencyPrecommit) {
 	for _, entry := range c.Precommits {
 		if entry != nil && entry.Key == voter {
-			entry.Value = &precommit
+			entry.Value = precommit
 			return
 		}
 	}
-	c.Precommits = append(c.Precommits, &PrecommitEntry{Key: voter, Value: &precommit})
+	c.Precommits = append(c.Precommits, &PrecommitEntry{Key: voter, Value: precommit})
 }
 
 // Validate performs basic param validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.HaltQuorum == 0 || p.HaltQuorum > 1000000 {
 		return fmt.Errorf("halt quorum must be between 1 and 1000000")
 	}
@@ -239,23 +237,15 @@ func (m *MsgVoteResume) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 
-// --- MsgUpdateParams (hand-written, not in proto) ---
+// --- MsgUpdateParams validation (struct is proto-generated in tx.pb.go) ---
 
-// MsgUpdateParams updates module parameters (governance-gated).
-type MsgUpdateParams struct {
-	Authority string `json:"authority"` // gov module address
-	Params    Params `json:"params"`
-}
-
-func (msg *MsgUpdateParams) Reset()         {}
-func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams" }
-func (msg *MsgUpdateParams) ProtoMessage()  {}
-
+// GetSigners returns the expected signers for MsgUpdateParams.
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }
 
+// ValidateBasic validates MsgUpdateParams fields.
 func (msg *MsgUpdateParams) ValidateBasic() error {
 	if msg.Authority == "" {
 		return fmt.Errorf("authority cannot be empty")
@@ -263,58 +253,10 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
+	if msg.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return msg.Params.Validate()
-}
-
-// MsgUpdateParamsResponse is the response for MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (msg *MsgUpdateParamsResponse) Reset()         {}
-func (msg *MsgUpdateParamsResponse) String() string { return "" }
-func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// --- Query Server Interface ---
-// (No query_grpc.pb.go exists, so hand-written QueryServer is needed.)
-
-// QueryServer defines the emergency module's query server interface.
-type QueryServer interface {
-	Status(context.Context, *QueryStatusRequest) (*QueryStatusResponse, error)
-	ActiveCeremony(context.Context, *QueryActiveCeremonyRequest) (*QueryActiveCeremonyResponse, error)
-	CompletedCeremonies(context.Context, *QueryCompletedCeremoniesRequest) (*QueryCompletedCeremoniesResponse, error)
-	AuditLog(context.Context, *QueryAuditLogRequest) (*QueryAuditLogResponse, error)
-}
-
-// --- Query Types ---
-
-type QueryStatusRequest struct{}
-type QueryStatusResponse struct {
-	Status               EmergencyStatus `json:"status"`
-	IsHalted             bool            `json:"is_halted"`
-	ActiveHaltCeremonyId string          `json:"active_halt_ceremony_id"`
-}
-
-type QueryActiveCeremonyRequest struct{}
-type QueryActiveCeremonyResponse struct {
-	Ceremony *EmergencyCeremony `json:"ceremony,omitempty"`
-	Found    bool               `json:"found"`
-}
-
-type QueryCompletedCeremoniesRequest struct {
-	Limit  uint32 `json:"limit"`
-	Offset uint32 `json:"offset"`
-}
-type QueryCompletedCeremoniesResponse struct {
-	Ceremonies []EmergencyCeremony `json:"ceremonies"`
-	Total      uint64              `json:"total"`
-}
-
-type QueryAuditLogRequest struct {
-	Limit  uint32 `json:"limit"`
-	Offset uint32 `json:"offset"`
-}
-type QueryAuditLogResponse struct {
-	Entries []EmergencyAuditEntry `json:"entries"`
-	Total   uint64                `json:"total"`
 }
 
 // --- IsEmergencyMsg ---
@@ -357,106 +299,3 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	)
 }
 
-// gRPC service descriptors for query server
-// (No query_grpc.pb.go exists, so keep hand-written query service registration.)
-var _Query_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.emergency.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Status", Handler: _Query_Status_Handler},
-		{MethodName: "ActiveCeremony", Handler: _Query_ActiveCeremony_Handler},
-		{MethodName: "CompletedCeremonies", Handler: _Query_CompletedCeremonies_Handler},
-		{MethodName: "AuditLog", Handler: _Query_AuditLog_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
-}
-
-func _Query_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryStatusRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Status(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.emergency.v1.Query/Status"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Status(ctx, req.(*QueryStatusRequest))
-	})
-}
-
-func _Query_ActiveCeremony_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryActiveCeremonyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).ActiveCeremony(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.emergency.v1.Query/ActiveCeremony"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ActiveCeremony(ctx, req.(*QueryActiveCeremonyRequest))
-	})
-}
-
-func _Query_CompletedCeremonies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryCompletedCeremoniesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).CompletedCeremonies(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.emergency.v1.Query/CompletedCeremonies"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).CompletedCeremonies(ctx, req.(*QueryCompletedCeremoniesRequest))
-	})
-}
-
-func _Query_AuditLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryAuditLogRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).AuditLog(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.emergency.v1.Query/AuditLog"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).AuditLog(ctx, req.(*QueryAuditLogRequest))
-	})
-}
-
-// RegisterQueryServer registers the emergency query server.
-func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, srv)
-}
-
-// --- MsgUpdateParams gRPC handler (hand-written extension to proto-generated Msg service) ---
-
-// MsgServerUpdateParams extends the proto-generated MsgServer with UpdateParams.
-// Implementations that support governance param updates should implement this interface.
-type MsgServerUpdateParams interface {
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
-}
-
-func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServerUpdateParams).UpdateParams(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.emergency.v1.Msg/UpdateParams"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServerUpdateParams).UpdateParams(ctx, req.(*MsgUpdateParams))
-	})
-}
-
-func init() {
-	Msg_ServiceDesc.Methods = append(Msg_ServiceDesc.Methods, grpc.MethodDesc{
-		MethodName: "UpdateParams",
-		Handler:    _Msg_UpdateParams_Handler,
-	})
-}

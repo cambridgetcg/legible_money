@@ -38,7 +38,7 @@ const (
 
 // --- Params Validation ---
 
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.MinVerifications == 0 {
 		return fmt.Errorf("min verifications must be positive")
 	}

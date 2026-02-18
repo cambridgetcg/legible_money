@@ -143,7 +143,7 @@ func (k msgServer) UpdateComputeParams(goCtx context.Context, msg *types.MsgUpda
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	if msg.Params != nil {
-		k.SetParams(ctx, *msg.Params)
+		k.SetParams(ctx, msg.Params)
 	}
 
 	k.Logger(ctx).Info("compute pool params updated",

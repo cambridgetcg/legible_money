@@ -27,7 +27,7 @@ func (q queryServer) Home(goCtx context.Context, req *types.QueryHomeRequest) (*
 		return &types.QueryHomeResponse{Home: nil, Found: false}, nil
 	}
 
-	return &types.QueryHomeResponse{Home: &home, Found: true}, nil
+	return &types.QueryHomeResponse{Home: home, Found: true}, nil
 }
 
 // Homes returns a list of homes, optionally filtered by owner or status.
@@ -35,15 +35,14 @@ func (q queryServer) Homes(goCtx context.Context, req *types.QueryHomesRequest) 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	var all []*types.AgentHome
-	q.Keeper.IterateHomes(ctx, func(home types.AgentHome) bool {
+	q.Keeper.IterateHomes(ctx, func(home *types.AgentHome) bool {
 		if req.Owner != "" && home.OwnerAddress != req.Owner {
 			return false
 		}
 		if req.Status != "" && home.Status != req.Status {
 			return false
 		}
-		h := home // copy for pointer
-		all = append(all, &h)
+		all = append(all, home)
 		return false
 	})
 
@@ -79,9 +78,8 @@ func (q queryServer) Sessions(goCtx context.Context, req *types.QuerySessionsReq
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	var sessions []*types.ActiveSession
-	q.Keeper.IterateSessions(ctx, req.HomeId, func(session types.ActiveSession) bool {
-		s := session
-		sessions = append(sessions, &s)
+	q.Keeper.IterateSessions(ctx, req.HomeId, func(session *types.ActiveSession) bool {
+		sessions = append(sessions, session)
 		return false
 	})
 
@@ -93,12 +91,11 @@ func (q queryServer) Alerts(goCtx context.Context, req *types.QueryAlertsRequest
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	var alerts []*types.Alert
-	q.Keeper.IterateAlerts(ctx, req.HomeId, func(alert types.Alert) bool {
+	q.Keeper.IterateAlerts(ctx, req.HomeId, func(alert *types.Alert) bool {
 		if req.Acknowledged && !alert.Acknowledged {
 			return false
 		}
-		a := alert
-		alerts = append(alerts, &a)
+		alerts = append(alerts, alert)
 		return false
 	})
 
@@ -109,5 +106,5 @@ func (q queryServer) Alerts(goCtx context.Context, req *types.QueryAlertsRequest
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }

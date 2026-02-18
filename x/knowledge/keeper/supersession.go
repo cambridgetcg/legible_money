@@ -45,7 +45,7 @@ func (k Keeper) SupersedeFact(ctx sdk.Context, oldFactID, newFactID string) erro
 	k.SetFact(ctx, oldFact)
 
 	// Create "extends" reference from new fact to old fact
-	k.SetFactReference(ctx, types.FactReference{
+	k.SetFactReference(ctx, &types.FactReference{
 		FromFactId:      newFactID,
 		ToFactId:        oldFactID,
 		ReferenceType:   "extends",
@@ -83,8 +83,8 @@ func (k Keeper) SupersedeFact(ctx sdk.Context, oldFactID, newFactID string) erro
 
 // GetSupersessionChain returns the chain of supersessions for a fact.
 // Follows SupersededBy links until reaching a non-superseded fact.
-func (k Keeper) GetSupersessionChain(ctx sdk.Context, factID string) []types.Fact {
-	var chain []types.Fact
+func (k Keeper) GetSupersessionChain(ctx sdk.Context, factID string) []*types.Fact {
+	var chain []*types.Fact
 	visited := make(map[string]bool)
 	currentID := factID
 
@@ -111,10 +111,10 @@ func (k Keeper) GetSupersessionChain(ctx sdk.Context, factID string) []types.Fac
 
 // GetLatestVersion returns the most current version of a fact by following
 // the supersession chain to its end.
-func (k Keeper) GetLatestVersion(ctx sdk.Context, factID string) (types.Fact, bool) {
+func (k Keeper) GetLatestVersion(ctx sdk.Context, factID string) (*types.Fact, bool) {
 	chain := k.GetSupersessionChain(ctx, factID)
 	if len(chain) == 0 {
-		return types.Fact{}, false
+		return nil, false
 	}
 	return chain[len(chain)-1], true
 }
@@ -198,7 +198,7 @@ func (k Keeper) TriggerReverificationScan(ctx sdk.Context, maxPerBlock int) int 
 
 // ensureReverificationClaim creates or retrieves a claim for reverification of a fact.
 // If the fact's original claim still exists, reuse it. Otherwise, create a synthetic one.
-func (k Keeper) ensureReverificationClaim(ctx sdk.Context, fact types.Fact) string {
+func (k Keeper) ensureReverificationClaim(ctx sdk.Context, fact *types.Fact) string {
 	// Try original claim first
 	if fact.OriginalClaimId != "" {
 		if _, found := k.GetClaim(ctx, fact.OriginalClaimId); found {
@@ -223,7 +223,7 @@ func (k Keeper) ensureReverificationClaim(ctx sdk.Context, fact types.Fact) stri
 		References:           fact.References,
 		ReverificationFactId: fact.Id,
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
 	return claimId
 }

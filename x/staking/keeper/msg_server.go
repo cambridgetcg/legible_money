@@ -67,7 +67,7 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 	}
 
 	// Create validator
-	validator := types.LegibleValidator{
+	validator := &types.LegibleValidator{
 		OperatorAddress:        msg.ValidatorAddress,
 		Did:                    did,
 		ConsensusPubkey:        string(msg.PubKey),
@@ -94,7 +94,7 @@ func (k Keeper) RegisterValidator(ctx sdk.Context, msg *types.MsgRegisterValidat
 		}
 
 		// Create self-delegation
-		delegation := types.Delegation{
+		delegation := &types.Delegation{
 			DelegatorAddress:  msg.ValidatorAddress,
 			ValidatorAddress:  msg.ValidatorAddress,
 			Amount:            initialStake.String(),
@@ -156,7 +156,7 @@ func (k Keeper) Delegate(ctx sdk.Context, msg *types.MsgDelegate) (*types.MsgDel
 	// Update or create delegation
 	delegation, found := k.GetDelegation(ctx, msg.Delegator, msg.Validator)
 	if !found {
-		delegation = types.Delegation{
+		delegation = &types.Delegation{
 			DelegatorAddress:  msg.Delegator,
 			ValidatorAddress:  msg.Validator,
 			Amount:            amountInt.String(),
@@ -257,7 +257,7 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 	seq := k.NextUnbondingSeq(ctx)
 	unbondingId := fmt.Sprintf("%s_%s_%d_%d", msg.Delegator, msg.Validator, currentHeight, seq)
 
-	unbonding := types.UnbondingEntry{
+	unbonding := &types.UnbondingEntry{
 		Id:                unbondingId,
 		DelegatorAddress:  msg.Delegator,
 		ValidatorAddress:  msg.Validator,
@@ -376,7 +376,7 @@ func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.Ms
 	// Increase destination delegation
 	dstDelegation, found := k.GetDelegation(ctx, msg.Delegator, msg.DstValidator)
 	if !found {
-		dstDelegation = types.Delegation{
+		dstDelegation = &types.Delegation{
 			DelegatorAddress:  msg.Delegator,
 			ValidatorAddress:  msg.DstValidator,
 			Amount:            amountInt.String(),
@@ -482,7 +482,7 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 		delegation, found := k.GetDelegation(ctx, msg.Validator, msg.Validator)
 		if !found {
 			// Create new self-delegation
-			delegation = types.Delegation{
+			delegation = &types.Delegation{
 				DelegatorAddress:  msg.Validator,
 				ValidatorAddress:  msg.Validator,
 				Amount:            amountInt.String(),
@@ -512,7 +512,7 @@ func (k Keeper) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValida
 		seq := k.NextUnbondingSeq(ctx)
 		unbondingId := fmt.Sprintf("%s_%d_%d", msg.Validator, ctx.BlockHeight(), seq)
 
-		unbonding := types.UnbondingEntry{
+		unbonding := &types.UnbondingEntry{
 			Id:                unbondingId,
 			DelegatorAddress:  msg.Validator,
 			ValidatorAddress:  msg.Validator,
@@ -598,7 +598,7 @@ func (k Keeper) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*type
 		return nil, fmt.Errorf("params cannot be nil")
 	}
 
-	if err := k.SetParams(ctx, *msg.Params); err != nil {
+	if err := k.SetParams(ctx, msg.Params); err != nil {
 		return nil, fmt.Errorf("failed to set params: %w", err)
 	}
 

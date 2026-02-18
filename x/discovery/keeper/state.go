@@ -12,9 +12,9 @@ import (
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -24,7 +24,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -34,18 +34,18 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ---------- Profile CRUD ----------
 
 // SetProfile stores an agent profile with all indexes.
-func (k Keeper) SetProfile(ctx sdk.Context, profile types.AgentProfile) {
+func (k Keeper) SetProfile(ctx sdk.Context, profile *types.AgentProfile) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	// Primary key
 	key := profileKey(profile.Address)
-	bz, err := proto.Marshal(&profile)
+	bz, err := proto.Marshal(profile)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal profile: %v", err))
 	}
@@ -71,22 +71,22 @@ func (k Keeper) SetProfile(ctx sdk.Context, profile types.AgentProfile) {
 }
 
 // GetProfile retrieves a profile by address.
-func (k Keeper) GetProfile(ctx sdk.Context, address string) (types.AgentProfile, bool) {
+func (k Keeper) GetProfile(ctx sdk.Context, address string) (*types.AgentProfile, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := profileKey(address)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.AgentProfile{}, false
+		return nil, false
 	}
 	var profile types.AgentProfile
 	if err := proto.Unmarshal(bz, &profile); err != nil {
-		return types.AgentProfile{}, false
+		return nil, false
 	}
-	return profile, true
+	return &profile, true
 }
 
 // DeleteProfile removes a profile and its indexes.
-func (k Keeper) DeleteProfile(ctx sdk.Context, profile types.AgentProfile) {
+func (k Keeper) DeleteProfile(ctx sdk.Context, profile *types.AgentProfile) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	_ = store.Delete(profileKey(profile.Address))
@@ -103,7 +103,7 @@ func (k Keeper) DeleteProfile(ctx sdk.Context, profile types.AgentProfile) {
 }
 
 // IterateProfiles iterates all profiles. Return true from cb to stop.
-func (k Keeper) IterateProfiles(ctx sdk.Context, cb func(types.AgentProfile) bool) {
+func (k Keeper) IterateProfiles(ctx sdk.Context, cb func(*types.AgentProfile) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.AgentProfileKeyPrefix, prefixEndBytes(types.AgentProfileKeyPrefix))
 	if err != nil {
@@ -116,14 +116,14 @@ func (k Keeper) IterateProfiles(ctx sdk.Context, cb func(types.AgentProfile) boo
 		if err := proto.Unmarshal(iter.Value(), &profile); err != nil {
 			continue
 		}
-		if cb(profile) {
+		if cb(&profile) {
 			break
 		}
 	}
 }
 
 // GetProfilesByDomain returns all active profiles in a given domain.
-func (k Keeper) GetProfilesByDomain(ctx sdk.Context, domain string) []types.AgentProfile {
+func (k Keeper) GetProfilesByDomain(ctx sdk.Context, domain string) []*types.AgentProfile {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.ByDomainIndexPrefix, []byte(domain+":")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -132,7 +132,7 @@ func (k Keeper) GetProfilesByDomain(ctx sdk.Context, domain string) []types.Agen
 	}
 	defer iter.Close()
 
-	var profiles []types.AgentProfile
+	var profiles []*types.AgentProfile
 	for ; iter.Valid(); iter.Next() {
 		addr := string(iter.Value())
 		profile, found := k.GetProfile(ctx, addr)
@@ -144,7 +144,7 @@ func (k Keeper) GetProfilesByDomain(ctx sdk.Context, domain string) []types.Agen
 }
 
 // GetProfilesByCapability returns all active profiles with a given capability type.
-func (k Keeper) GetProfilesByCapability(ctx sdk.Context, capabilityType string) []types.AgentProfile {
+func (k Keeper) GetProfilesByCapability(ctx sdk.Context, capabilityType string) []*types.AgentProfile {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.ByCapabilityIndexPrefix, []byte(capabilityType+":")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -153,7 +153,7 @@ func (k Keeper) GetProfilesByCapability(ctx sdk.Context, capabilityType string) 
 	}
 	defer iter.Close()
 
-	var profiles []types.AgentProfile
+	var profiles []*types.AgentProfile
 	for ; iter.Valid(); iter.Next() {
 		addr := string(iter.Value())
 		profile, found := k.GetProfile(ctx, addr)

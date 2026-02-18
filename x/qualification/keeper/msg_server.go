@@ -115,7 +115,7 @@ func (ms msgServer) EndorseValidator(goCtx context.Context, msg *types.MsgEndors
 	currentBlock := uint64(ctx.BlockHeight())
 	endorsementId := ms.Keeper.GetNextEndorsementId(ctx)
 
-	endorsement := types.QualificationEndorsement{
+	endorsement := &types.QualificationEndorsement{
 		Id:              endorsementId,
 		EndorserAddr:    msg.EndorserAddr,
 		TargetValidator: msg.TargetValidator,
@@ -189,6 +189,6 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		return nil, err
 	}
 
-	ms.Keeper.SetParams(ctx, *msg.Params)
+	ms.Keeper.SetParams(ctx, msg.Params)
 	return &types.MsgUpdateParamsResponse{}, nil
 }

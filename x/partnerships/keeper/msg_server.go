@@ -62,7 +62,7 @@ func (k msgServer) InitiatePartnership(goCtx context.Context, msg *types.MsgInit
 	}
 	lockDuration := types.LockTiers[msg.LockTier].MinBlocks
 
-	partnership := types.Partnership{
+	partnership := &types.Partnership{
 		Id:               partnershipId,
 		HumanAddr:        msg.Initiator,
 		AgentAddr:        msg.Partner,
@@ -239,7 +239,7 @@ func (k msgServer) DistributeReward(goCtx context.Context, msg *types.MsgDistrib
 		return nil, fmt.Errorf("%w: partnership must be active for rewards", types.ErrInvalidStatus)
 	}
 
-	humanShare, agentShare, commonPotAdd, err := k.Keeper.DistributeReward(ctx, &partnership, msg.GrossAmount, msg.SourceType)
+	humanShare, agentShare, commonPotAdd, err := k.Keeper.DistributeReward(ctx, partnership, msg.GrossAmount, msg.SourceType)
 	if err != nil {
 		return nil, err
 	}
@@ -283,14 +283,14 @@ func (k msgServer) ProposeOperation(goCtx context.Context, msg *types.MsgPropose
 	seq := k.NextSequence(ctx)
 	opId := fmt.Sprintf("op-%d", seq)
 
-	op := types.ConsensusOperation{
+	op := &types.ConsensusOperation{
 		Id:            opId,
 		PartnershipId: msg.PartnershipId,
 		Type:          msg.OperationType,
 		ProposedBy:    msg.Proposer,
 		Amount:        msg.Amount,
 		Status:        types.OpStatusProposed,
-		Deliberation:  &delib,
+		Deliberation:  delib,
 		CreatedAt:     currentBlock,
 	}
 	k.SetConsensusOperation(ctx, op)
@@ -423,7 +423,7 @@ func (k msgServer) RejectOperation(goCtx context.Context, msg *types.MsgRejectOp
 	// Update rejection cooldown (exponential)
 	rc, found := k.GetRejectionCooldown(ctx, op.PartnershipId)
 	if !found {
-		rc = types.RejectionCooldown{PartnershipId: op.PartnershipId}
+		rc = &types.RejectionCooldown{PartnershipId: op.PartnershipId}
 	}
 	rc.RejectionCount++
 	cooldown := k.CalculateCooldown(ctx, rc.RejectionCount)
@@ -455,14 +455,14 @@ func (k msgServer) RejectOperation(goCtx context.Context, msg *types.MsgRejectOp
 			seq := k.NextSequence(ctx)
 			counterOpId := fmt.Sprintf("op-%d", seq)
 
-			counterOp := types.ConsensusOperation{
+			counterOp := &types.ConsensusOperation{
 				Id:            counterOpId,
 				PartnershipId: op.PartnershipId,
 				Type:          op.Type,
 				ProposedBy:    msg.Rejecter,
 				Amount:        msg.CounterAmount,
 				Status:        types.OpStatusProposed,
-				Deliberation:  &delib,
+				Deliberation:  delib,
 				CreatedAt:     currentBlock,
 			}
 			k.SetConsensusOperation(ctx, counterOp)
@@ -574,7 +574,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	if msg.Params == nil {
 		return nil, fmt.Errorf("params cannot be nil")
 	}
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

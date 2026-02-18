@@ -27,11 +27,15 @@ type StageResult struct {
 // EvaluationContext provides access to on-chain state for claim evaluation.
 // All functions are wired from keeper methods, making the engine testable
 // with mock implementations.
+//
+// Proto-generated types (Claim, Fact, FactReference, CounterFact,
+// BidirectionalConfidence) are passed and returned by pointer to avoid
+// copying the embedded sync.Mutex in protoimpl.MessageState.
 type EvaluationContext struct {
-	GetClaim                  func(ctx sdk.Context, claimId string) (types.Claim, bool)
-	GetFact                   func(ctx sdk.Context, factId string) (types.Fact, bool)
-	GetSupportingFacts        func(ctx sdk.Context, factId string) []types.FactReference
-	GetContradictingFacts     func(ctx sdk.Context, factId string) []types.FactReference
+	GetClaim                  func(ctx sdk.Context, claimId string) (*types.Claim, bool)
+	GetFact                   func(ctx sdk.Context, factId string) (*types.Fact, bool)
+	GetSupportingFacts        func(ctx sdk.Context, factId string) []*types.FactReference
+	GetContradictingFacts     func(ctx sdk.Context, factId string) []*types.FactReference
 	GetEvidenceByClaimId      func(ctx sdk.Context, claimId string) []types.EvidenceRecord
 	GetZoneConfidenceCeiling  func(ctx sdk.Context, zone string) uint64
 	RequiresIncompletenessAck func(ctx sdk.Context, zone string) bool
@@ -39,8 +43,8 @@ type EvaluationContext struct {
 	GetSubmitterCalibration   func(ctx sdk.Context, submitter string) (types.CalibrationRecord, bool)
 
 	// Negative knowledge lookups (Stage 8)
-	GetCounterFactsByFact      func(ctx sdk.Context, factId string) []types.CounterFact
-	GetBidirectionalConfidence func(ctx sdk.Context, factId string) types.BidirectionalConfidence
+	GetCounterFactsByFact      func(ctx sdk.Context, factId string) []*types.CounterFact
+	GetBidirectionalConfidence func(ctx sdk.Context, factId string) *types.BidirectionalConfidence
 
 	// Novelty assessment lookups (Stage 5.5)
 	GetFactCountByDomain        func(ctx sdk.Context, domain string) uint64

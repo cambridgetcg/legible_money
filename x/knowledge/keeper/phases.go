@@ -141,7 +141,7 @@ func (k Keeper) AdvanceRoundPhases(ctx sdk.Context, currentHeight uint64) error 
 
 // transitionToReveal marks a round as entering the reveal phase.
 // Validators who committed can now reveal their verdicts.
-func (k Keeper) transitionToReveal(ctx sdk.Context, round types.VerificationRound) error {
+func (k Keeper) transitionToReveal(ctx sdk.Context, round *types.VerificationRound) error {
 	if round.Phase != "commit" {
 		return fmt.Errorf("cannot transition to reveal from %s phase", round.Phase)
 	}
@@ -167,7 +167,7 @@ func (k Keeper) transitionToReveal(ctx sdk.Context, round types.VerificationRoun
 
 // transitionToAggregation marks a round as entering the aggregation phase.
 // No more reveals accepted — the system aggregates results.
-func (k Keeper) transitionToAggregation(ctx sdk.Context, round types.VerificationRound) error {
+func (k Keeper) transitionToAggregation(ctx sdk.Context, round *types.VerificationRound) error {
 	if round.Phase != "reveal" {
 		return fmt.Errorf("cannot transition to aggregation from %s phase", round.Phase)
 	}
@@ -183,7 +183,7 @@ func (k Keeper) transitionToAggregation(ctx sdk.Context, round types.Verificatio
 			ParticipantCount: uint32(len(round.Reveals)),
 		}
 
-		return k.CompleteRound(ctx, round, result)
+		return k.CompleteRound(ctx, round, &result)
 	}
 
 	round.Phase = "aggregation"
@@ -207,7 +207,7 @@ func (k Keeper) transitionToAggregation(ctx sdk.Context, round types.Verificatio
 
 // handleExpiredRound handles a round that has passed all deadlines.
 // If still in aggregation, perform final aggregation. Otherwise mark as expired.
-func (k Keeper) handleExpiredRound(ctx sdk.Context, round types.VerificationRound) error {
+func (k Keeper) handleExpiredRound(ctx sdk.Context, round *types.VerificationRound) error {
 	switch round.Phase {
 	case "commit":
 		// No commitments received or deadline expired during commit
@@ -216,7 +216,7 @@ func (k Keeper) handleExpiredRound(ctx sdk.Context, round types.VerificationRoun
 			Confidence:       0,
 			ParticipantCount: 0,
 		}
-		return k.CompleteRound(ctx, round, result)
+		return k.CompleteRound(ctx, round, &result)
 
 	case "reveal":
 		// Reveal deadline passed — aggregate whatever reveals we have.
@@ -228,7 +228,7 @@ func (k Keeper) handleExpiredRound(ctx sdk.Context, round types.VerificationRoun
 				Confidence:       0,
 				ParticipantCount: 0,
 			}
-			return k.CompleteRound(ctx, round, result)
+			return k.CompleteRound(ctx, round, &result)
 		}
 
 		return k.performAggregation(ctx, round)
@@ -245,7 +245,7 @@ func (k Keeper) handleExpiredRound(ctx sdk.Context, round types.VerificationRoun
 
 // performAggregation runs the stake-weighted confidence aggregation engine
 // and completes the round. Delegates to AggregateVerificationResult in confidence.go.
-func (k Keeper) performAggregation(ctx sdk.Context, round types.VerificationRound) error {
+func (k Keeper) performAggregation(ctx sdk.Context, round *types.VerificationRound) error {
 	result, err := k.AggregateVerificationResult(ctx, round)
 	if err != nil {
 		return fmt.Errorf("aggregation failed for round %s: %w", round.Id, err)

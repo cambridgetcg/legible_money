@@ -87,20 +87,20 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
-	k.SetParams(ctx, *gs.Params)
+func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
+	k.SetParams(ctx, gs.Params)
 	k.SetNextLIPNumber(ctx, gs.NextLipNumber)
 	k.SetNextDisbNumber(ctx, gs.NextDisbNumber)
 
 	for _, lip := range gs.Lips {
-		k.SetLIP(ctx, *lip)
+		k.SetLIP(ctx, lip)
 	}
 	for _, vote := range gs.Votes {
-		k.SetVote(ctx, *vote)
+		k.SetVote(ctx, vote)
 		k.SetVoteDedupe(ctx, vote.ProposalId, vote.Voter)
 	}
 	for _, disb := range gs.Disbursements {
-		k.SetDisbursement(ctx, *disb)
+		k.SetDisbursement(ctx, disb)
 	}
 
 	// Initialize sybil detection with defaults.
@@ -110,27 +110,11 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	p := k.GetParams(ctx)
-	lips := k.GetAllLIPs(ctx)
-	lipPtrs := make([]*types.LIP, len(lips))
-	for i := range lips {
-		lipPtrs[i] = &lips[i]
-	}
-	votes := k.GetAllVotes(ctx)
-	votePtrs := make([]*types.QuadraticVote, len(votes))
-	for i := range votes {
-		votePtrs[i] = &votes[i]
-	}
-	disbs := k.GetAllDisbursements(ctx)
-	disbPtrs := make([]*types.DisbursementProposal, len(disbs))
-	for i := range disbs {
-		disbPtrs[i] = &disbs[i]
-	}
 	return &types.GenesisState{
-		Params:         &p,
-		Lips:           lipPtrs,
-		Votes:          votePtrs,
-		Disbursements:  disbPtrs,
+		Params:         k.GetParams(ctx),
+		Lips:           k.GetAllLIPs(ctx),
+		Votes:          k.GetAllVotes(ctx),
+		Disbursements:  k.GetAllDisbursements(ctx),
 		NextLipNumber:  k.GetNextLIPNumber(ctx),
 		NextDisbNumber: k.GetNextDisbNumber(ctx),
 	}

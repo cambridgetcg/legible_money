@@ -133,7 +133,7 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		RoundId:           roundID,
 		Evidence:          msg.Evidence,
 	}
-	k.SetClaim(ctx, claim)
+	k.SetClaim(ctx, &claim)
 
 	// Notify home module of claim submission for epistemic stats
 	if k.homeKeeper != nil {
@@ -167,7 +167,7 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	}
 
 	// Legacy mode: create verification round
-	round, err := k.CreateVerificationRound(ctx, claim)
+	round, err := k.CreateVerificationRound(ctx, &claim)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create verification round: %w", err)
 	}
@@ -398,7 +398,7 @@ func (k msgServer) ChallengeFact(goCtx context.Context, msg *types.MsgChallengeF
 		Commitments:          make(map[string]*types.VerificationCommitment),
 		Reveals:              make(map[string]*types.VerificationReveal),
 	}
-	k.SetVerificationRound(ctx, round)
+	k.SetVerificationRound(ctx, &round)
 
 	// Notify home module of challenge for epistemic stats
 	if k.homeKeeper != nil {
@@ -484,11 +484,11 @@ func (k msgServer) AddFact(goCtx context.Context, msg *types.MsgAddFact) (*types
 		LastConfidenceUpdate: height,
 		BaseConfidence:       msg.Confidence,
 	}
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	// Set references
 	for _, refID := range msg.References {
-		k.SetFactReference(ctx, types.FactReference{
+		k.SetFactReference(ctx, &types.FactReference{
 			FromFactId:      factID,
 			ToFactId:        refID,
 			ReferenceType:   "supports",
@@ -545,7 +545,7 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 		Challenges:      0,
 		CreatedAtHeight: uint64(ctx.BlockHeight()),
 	}
-	k.Keeper.SetDomainInState(ctx, domain)
+	k.Keeper.SetDomainInState(ctx, &domain)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -639,7 +639,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	if msg.Params != nil {
-		k.SetParams(ctx, *msg.Params)
+		k.SetParams(ctx, msg.Params)
 	}
 	return &types.MsgUpdateParamsResponse{}, nil
 }
@@ -763,7 +763,7 @@ func (k msgServer) SubmitContradiction(goCtx context.Context, msg *types.MsgSubm
 		IncompletenessAck: msg.IncompletenessAck,
 		StakeAmount:       msg.Stake,
 	}
-	k.SetCounterFact(ctx, counterFact)
+	k.SetCounterFact(ctx, &counterFact)
 
 	// Increment rate limit counter
 	k.IncrementContradictionCount(ctx, msg.Submitter, epoch)
@@ -784,11 +784,11 @@ func (k msgServer) SubmitContradiction(goCtx context.Context, msg *types.MsgSubm
 		Commitments:          make(map[string]*types.VerificationCommitment),
 		Reveals:              make(map[string]*types.VerificationReveal),
 	}
-	k.SetVerificationRound(ctx, round)
+	k.SetVerificationRound(ctx, &round)
 
 	// Update counter-fact with round ID
 	counterFact.RoundId = roundID
-	k.SetCounterFact(ctx, counterFact)
+	k.SetCounterFact(ctx, &counterFact)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("contradiction_submitted",
@@ -890,7 +890,7 @@ func (k msgServer) PatronizeFact(goCtx context.Context, msg *types.MsgPatronizeF
 	// Check if KMS + patronage_bonus now exceeds threshold → rescue
 	kms := k.Keeper.CalculateKMS(ctx, fact)
 	if kms >= ep.PruningThresholdBps {
-		k.Keeper.RescueFact(ctx, &fact, "patronage")
+		k.Keeper.RescueFact(ctx, fact, "patronage")
 		k.Keeper.SettlePatronageOnRescue(ctx, msg.FactId)
 	} else {
 		k.SetFact(ctx, fact)

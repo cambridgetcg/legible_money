@@ -29,7 +29,7 @@ func (k queryServer) Qualification(goCtx context.Context, req *types.QueryQualif
 		return &types.QueryQualificationResponse{Found: false}, nil
 	}
 	return &types.QueryQualificationResponse{
-		Qualification: &qual,
+		Qualification: qual,
 		Found:         true,
 	}, nil
 }
@@ -39,12 +39,8 @@ func (k queryServer) ValidatorQualifications(goCtx context.Context, req *types.Q
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	quals := k.GetValidatorQualifications(ctx, req.ValidatorAddr)
-	qualPtrs := make([]*types.DomainQualification, len(quals))
-	for i := range quals {
-		qualPtrs[i] = &quals[i]
-	}
 	return &types.QueryValidatorQualificationsResponse{
-		Qualifications: qualPtrs,
+		Qualifications: quals,
 	}, nil
 }
 
@@ -67,7 +63,7 @@ func (k queryServer) CaptureRisk(goCtx context.Context, req *types.QueryCaptureR
 		return &types.QueryCaptureRiskResponse{Found: false}, nil
 	}
 	return &types.QueryCaptureRiskResponse{
-		Metrics: &metrics,
+		Metrics: metrics,
 		Found:   true,
 	}, nil
 }

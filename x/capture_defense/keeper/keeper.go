@@ -81,56 +81,53 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 }
 
 // InitGenesis initializes the module from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	for _, qual := range genState.Qualifications {
 		if qual == nil {
 			continue
 		}
-		k.SetQualification(ctx, *qual)
+		k.SetQualification(ctx, qual)
 	}
 	for _, rep := range genState.Reputations {
 		if rep == nil {
 			continue
 		}
-		k.SetIsolatedReputation(ctx, *rep)
+		k.SetIsolatedReputation(ctx, rep)
 	}
 	for _, m := range genState.Metrics {
 		if m == nil {
 			continue
 		}
-		k.SetCaptureMetrics(ctx, *m)
+		k.SetCaptureMetrics(ctx, m)
 	}
 }
 
 // ExportGenesis exports the module's genesis state.
-func (k Keeper) ExportGenesis(ctx sdk.Context) types.GenesisState {
+func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var qualPtrs []*types.DomainQualification
-	k.IterateQualifications(ctx, func(q types.DomainQualification) bool {
-		qCopy := q
-		qualPtrs = append(qualPtrs, &qCopy)
+	k.IterateQualifications(ctx, func(q *types.DomainQualification) bool {
+		qualPtrs = append(qualPtrs, q)
 		return false
 	})
 
 	var repPtrs []*types.IsolatedReputation
-	k.IterateReputations(ctx, func(r types.IsolatedReputation) bool {
-		rCopy := r
-		repPtrs = append(repPtrs, &rCopy)
+	k.IterateReputations(ctx, func(r *types.IsolatedReputation) bool {
+		repPtrs = append(repPtrs, r)
 		return false
 	})
 
 	var metricPtrs []*types.CaptureMetrics
-	k.IterateCaptureMetrics(ctx, func(m types.CaptureMetrics) bool {
-		mCopy := m
-		metricPtrs = append(metricPtrs, &mCopy)
+	k.IterateCaptureMetrics(ctx, func(m *types.CaptureMetrics) bool {
+		metricPtrs = append(metricPtrs, m)
 		return false
 	})
 
 	params := k.GetParams(ctx)
-	return types.GenesisState{
-		Params:         &params,
+	return &types.GenesisState{
+		Params:         params,
 		Qualifications: qualPtrs,
 		Reputations:    repPtrs,
 		Metrics:        metricPtrs,
@@ -149,22 +146,22 @@ func (k Keeper) ProcessQualificationRequest(
 	stake string,
 	endorsers []string,
 	inheritFrom string,
-) (types.DomainQualification, error) {
+) (*types.DomainQualification, error) {
 	currentBlock := uint64(ctx.BlockHeight())
 
 	// Check domain exists via ontology keeper
 	if k.ontologyKeeper != nil && !k.ontologyKeeper.DomainExists(ctx, domain) {
-		return types.DomainQualification{}, types.ErrDomainNotFound
+		return nil, types.ErrDomainNotFound
 	}
 
 	// Check not already qualified
 	if existing, found := k.GetQualification(ctx, validatorAddr, domain); found {
 		if existing.Status == string(types.StatusActive) || existing.Status == string(types.StatusProbationary) {
-			return types.DomainQualification{}, types.ErrAlreadyQualified
+			return nil, types.ErrAlreadyQualified
 		}
 	}
 
-	var qual types.DomainQualification
+	var qual *types.DomainQualification
 	var err error
 
 	switch pathway {
@@ -177,11 +174,11 @@ func (k Keeper) ProcessQualificationRequest(
 	case types.PathwayStratumInheritance:
 		qual, err = k.qualifyByInheritance(ctx, validatorAddr, domain, inheritFrom, currentBlock)
 	default:
-		return types.DomainQualification{}, types.ErrInvalidPathway
+		return nil, types.ErrInvalidPathway
 	}
 
 	if err != nil {
-		return types.DomainQualification{}, err
+		return nil, err
 	}
 
 	k.SetQualification(ctx, qual)
@@ -193,7 +190,7 @@ func (k Keeper) qualifyByStake(
 	ctx sdk.Context,
 	validatorAddr, domain, stake string,
 	currentBlock uint64,
-) (types.DomainQualification, error) {
+) (*types.DomainQualification, error) {
 	requiredStake := k.getRequiredStakeForDomain(ctx, domain)
 
 	stakeInt := new(big.Int)
@@ -202,13 +199,13 @@ func (k Keeper) qualifyByStake(
 	reqInt.SetString(requiredStake, 10)
 
 	if stakeInt.Cmp(reqInt) < 0 {
-		return types.DomainQualification{}, types.ErrInsufficientStake
+		return nil, types.ErrInsufficientStake
 	}
 
 	params := k.GetParams(ctx)
 	stratum := k.getDomainStratum(ctx, domain)
 
-	return types.DomainQualification{
+	return &types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Stratum:             stratum,
@@ -228,22 +225,22 @@ func (k Keeper) qualifyByTrackRecord(
 	ctx sdk.Context,
 	validatorAddr, domain string,
 	currentBlock uint64,
-) (types.DomainQualification, error) {
+) (*types.DomainQualification, error) {
 	params := k.GetParams(ctx)
 	rep := k.GetOrCreateReputation(ctx, validatorAddr, currentBlock)
 
 	domainRep := findDomainReputation(rep.DomainReputations, domain)
 	if domainRep == nil || domainRep.TotalVerifications < params.MinVerificationsForQual {
-		return types.DomainQualification{}, types.ErrInsufficientTrackRecord
+		return nil, types.ErrInsufficientTrackRecord
 	}
 
 	if domainRep.Accuracy < params.MinAccuracyForQual {
-		return types.DomainQualification{}, types.ErrInsufficientTrackRecord
+		return nil, types.ErrInsufficientTrackRecord
 	}
 
 	stratum := k.getDomainStratum(ctx, domain)
 
-	return types.DomainQualification{
+	return &types.DomainQualification{
 		ValidatorAddr:  validatorAddr,
 		Domain:         domain,
 		Stratum:        stratum,
@@ -267,11 +264,11 @@ func (k Keeper) qualifyByCrossReference(
 	validatorAddr, domain string,
 	endorsers []string,
 	currentBlock uint64,
-) (types.DomainQualification, error) {
+) (*types.DomainQualification, error) {
 	params := k.GetParams(ctx)
 
 	if uint64(len(endorsers)) < params.MinEndorsersForQual {
-		return types.DomainQualification{}, types.ErrInsufficientEndorsers
+		return nil, types.ErrInsufficientEndorsers
 	}
 
 	// Verify each endorser is qualified for the domain
@@ -288,12 +285,12 @@ func (k Keeper) qualifyByCrossReference(
 	}
 
 	if uint64(len(validEndorsers)) < params.MinEndorsersForQual {
-		return types.DomainQualification{}, types.ErrInsufficientEndorsers
+		return nil, types.ErrInsufficientEndorsers
 	}
 
 	stratum := k.getDomainStratum(ctx, domain)
 
-	return types.DomainQualification{
+	return &types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Stratum:             stratum,
@@ -312,23 +309,23 @@ func (k Keeper) qualifyByInheritance(
 	ctx sdk.Context,
 	validatorAddr, domain, inheritFrom string,
 	currentBlock uint64,
-) (types.DomainQualification, error) {
+) (*types.DomainQualification, error) {
 	if inheritFrom == "" {
 		// Try to find inheritable qualification automatically
 		inheritFrom = k.findInheritableQualification(ctx, validatorAddr, domain)
 		if inheritFrom == "" {
-			return types.DomainQualification{}, types.ErrNoInheritableQualification
+			return nil, types.ErrNoInheritableQualification
 		}
 	}
 
 	parentQual, found := k.GetQualification(ctx, validatorAddr, inheritFrom)
 	if !found || parentQual.Status != string(types.StatusActive) {
-		return types.DomainQualification{}, types.ErrNoInheritableQualification
+		return nil, types.ErrNoInheritableQualification
 	}
 
 	stratum := k.getDomainStratum(ctx, domain)
 
-	return types.DomainQualification{
+	return &types.DomainQualification{
 		ValidatorAddr:       validatorAddr,
 		Domain:              domain,
 		Stratum:             stratum,
@@ -473,6 +470,7 @@ func (k Keeper) UpdateQualificationMetrics(
 	k.SetQualification(ctx, qual)
 }
 
+
 // UpdateAfterVerification updates both qualification and reputation after a verification round.
 func (k Keeper) UpdateAfterVerification(
 	ctx sdk.Context,
@@ -492,7 +490,7 @@ func (k Keeper) UpdateAfterVerification(
 }
 
 // RecordVerificationHistory records a verification round entry for capture analysis.
-func (k Keeper) RecordVerificationHistory(ctx sdk.Context, domain string, entry types.VerificationHistoryEntry) error {
+func (k Keeper) RecordVerificationHistory(ctx sdk.Context, domain string, entry *types.VerificationHistoryEntry) error {
 	k.AppendVerificationHistoryEntry(ctx, domain, entry)
 	return nil
 }

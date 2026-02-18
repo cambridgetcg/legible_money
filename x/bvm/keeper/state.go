@@ -14,9 +14,9 @@ import (
 // --- Contract CRUD ---
 
 // SetContract stores a deployed contract and maintains the creator index.
-func (k Keeper) SetContract(ctx sdk.Context, contract types.DeployedContract) {
+func (k Keeper) SetContract(ctx sdk.Context, contract *types.DeployedContract) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&contract)
+	bz, err := proto.Marshal(contract)
 	if err != nil {
 		panic(err)
 	}
@@ -31,22 +31,22 @@ func (k Keeper) SetContract(ctx sdk.Context, contract types.DeployedContract) {
 }
 
 // GetContract retrieves a deployed contract by address.
-func (k Keeper) GetContract(ctx sdk.Context, address string) (types.DeployedContract, bool) {
+func (k Keeper) GetContract(ctx sdk.Context, address string) (*types.DeployedContract, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ContractKey(address))
 	if err != nil || bz == nil {
-		return types.DeployedContract{}, false
+		return nil, false
 	}
 	var contract types.DeployedContract
 	if err := proto.Unmarshal(bz, &contract); err != nil {
 		panic(err)
 	}
-	return contract, true
+	return &contract, true
 }
 
 // DeleteContract removes a deployed contract and decrements the shared code's
 // RefCount. If RefCount reaches zero, the code entry is garbage-collected.
-func (k Keeper) DeleteContract(ctx sdk.Context, contract types.DeployedContract) {
+func (k Keeper) DeleteContract(ctx sdk.Context, contract *types.DeployedContract) {
 	store := k.storeService.OpenKVStore(ctx)
 	if err := store.Delete(types.ContractKey(contract.Address)); err != nil {
 		panic(fmt.Sprintf("failed to delete contract: %v", err))
@@ -70,7 +70,7 @@ func (k Keeper) DeleteContract(ctx sdk.Context, contract types.DeployedContract)
 }
 
 // IterateContracts iterates over all contracts.
-func (k Keeper) IterateContracts(ctx sdk.Context, cb func(types.DeployedContract) bool) {
+func (k Keeper) IterateContracts(ctx sdk.Context, cb func(*types.DeployedContract) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ContractKeyPrefix, prefixEndBytes(types.ContractKeyPrefix))
 	if err != nil {
@@ -83,14 +83,14 @@ func (k Keeper) IterateContracts(ctx sdk.Context, cb func(types.DeployedContract
 		if err := proto.Unmarshal(iter.Value(), &contract); err != nil {
 			panic(err)
 		}
-		if cb(contract) {
+		if cb(&contract) {
 			break
 		}
 	}
 }
 
 // GetContractsByCreator returns all contracts created by a given address.
-func (k Keeper) GetContractsByCreator(ctx sdk.Context, creator string) []types.DeployedContract {
+func (k Keeper) GetContractsByCreator(ctx sdk.Context, creator string) []*types.DeployedContract {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.ContractCreatorPrefix(creator)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -99,7 +99,7 @@ func (k Keeper) GetContractsByCreator(ctx sdk.Context, creator string) []types.D
 	}
 	defer iter.Close()
 
-	var contracts []types.DeployedContract
+	var contracts []*types.DeployedContract
 	for ; iter.Valid(); iter.Next() {
 		// Extract contract address from index key: prefix + creator + "/" + address
 		key := iter.Key()
@@ -132,9 +132,9 @@ func (k Keeper) GetNextContractNonce(ctx sdk.Context) uint64 {
 // --- Code CRUD ---
 
 // SetCode stores contract code keyed by its hash.
-func (k Keeper) SetCode(ctx sdk.Context, code types.ContractCode) {
+func (k Keeper) SetCode(ctx sdk.Context, code *types.ContractCode) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&code)
+	bz, err := proto.Marshal(code)
 	if err != nil {
 		panic(err)
 	}
@@ -144,17 +144,17 @@ func (k Keeper) SetCode(ctx sdk.Context, code types.ContractCode) {
 }
 
 // GetCode retrieves contract code by hash.
-func (k Keeper) GetCode(ctx sdk.Context, codeHash string) (types.ContractCode, bool) {
+func (k Keeper) GetCode(ctx sdk.Context, codeHash string) (*types.ContractCode, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.CodeKey(codeHash))
 	if err != nil || bz == nil {
-		return types.ContractCode{}, false
+		return nil, false
 	}
 	var code types.ContractCode
 	if err := proto.Unmarshal(bz, &code); err != nil {
 		panic(err)
 	}
-	return code, true
+	return &code, true
 }
 
 // DeleteCode removes contract code by hash.
@@ -166,7 +166,7 @@ func (k Keeper) DeleteCode(ctx sdk.Context, codeHash string) {
 }
 
 // IterateCode iterates over all stored code.
-func (k Keeper) IterateCode(ctx sdk.Context, cb func(types.ContractCode) bool) {
+func (k Keeper) IterateCode(ctx sdk.Context, cb func(*types.ContractCode) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.CodeKeyPrefix, prefixEndBytes(types.CodeKeyPrefix))
 	if err != nil {
@@ -179,7 +179,7 @@ func (k Keeper) IterateCode(ctx sdk.Context, cb func(types.ContractCode) bool) {
 		if err := proto.Unmarshal(iter.Value(), &code); err != nil {
 			panic(err)
 		}
-		if cb(code) {
+		if cb(&code) {
 			break
 		}
 	}
@@ -245,9 +245,9 @@ func (k Keeper) CountContractState(ctx sdk.Context, contractAddress string) uint
 // --- Schedule CRUD ---
 
 // SetSchedule stores a contract schedule and maintains the block index.
-func (k Keeper) SetSchedule(ctx sdk.Context, schedule types.ContractSchedule) {
+func (k Keeper) SetSchedule(ctx sdk.Context, schedule *types.ContractSchedule) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&schedule)
+	bz, err := proto.Marshal(schedule)
 	if err != nil {
 		panic(err)
 	}
@@ -264,21 +264,21 @@ func (k Keeper) SetSchedule(ctx sdk.Context, schedule types.ContractSchedule) {
 }
 
 // GetSchedule retrieves a schedule by ID.
-func (k Keeper) GetSchedule(ctx sdk.Context, scheduleId string) (types.ContractSchedule, bool) {
+func (k Keeper) GetSchedule(ctx sdk.Context, scheduleId string) (*types.ContractSchedule, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ScheduleKey(scheduleId))
 	if err != nil || bz == nil {
-		return types.ContractSchedule{}, false
+		return nil, false
 	}
 	var schedule types.ContractSchedule
 	if err := proto.Unmarshal(bz, &schedule); err != nil {
 		panic(err)
 	}
-	return schedule, true
+	return &schedule, true
 }
 
 // DeleteSchedule removes a schedule.
-func (k Keeper) DeleteSchedule(ctx sdk.Context, schedule types.ContractSchedule) {
+func (k Keeper) DeleteSchedule(ctx sdk.Context, schedule *types.ContractSchedule) {
 	store := k.storeService.OpenKVStore(ctx)
 	if err := store.Delete(types.ScheduleKey(schedule.ScheduleId)); err != nil {
 		panic(fmt.Sprintf("failed to delete schedule: %v", err))
@@ -289,7 +289,7 @@ func (k Keeper) DeleteSchedule(ctx sdk.Context, schedule types.ContractSchedule)
 }
 
 // IterateSchedules iterates over all schedules.
-func (k Keeper) IterateSchedules(ctx sdk.Context, cb func(types.ContractSchedule) bool) {
+func (k Keeper) IterateSchedules(ctx sdk.Context, cb func(*types.ContractSchedule) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ScheduleKeyPrefix, prefixEndBytes(types.ScheduleKeyPrefix))
 	if err != nil {
@@ -302,7 +302,7 @@ func (k Keeper) IterateSchedules(ctx sdk.Context, cb func(types.ContractSchedule
 		if err := proto.Unmarshal(iter.Value(), &schedule); err != nil {
 			panic(err)
 		}
-		if cb(schedule) {
+		if cb(&schedule) {
 			break
 		}
 	}
@@ -310,7 +310,7 @@ func (k Keeper) IterateSchedules(ctx sdk.Context, cb func(types.ContractSchedule
 
 // GetPendingSchedules returns all schedules due at or before the given block.
 // Uses a range iterator to catch overdue schedules from chain halts.
-func (k Keeper) GetPendingSchedules(ctx sdk.Context, upToBlock uint64) []types.ContractSchedule {
+func (k Keeper) GetPendingSchedules(ctx sdk.Context, upToBlock uint64) []*types.ContractSchedule {
 	store := k.storeService.OpenKVStore(ctx)
 
 	// Range: [ScheduleBlockIndexPrefix, ScheduleBlockIndexPrefix + Uint64ToBytes(upToBlock+1))
@@ -330,7 +330,7 @@ func (k Keeper) GetPendingSchedules(ctx sdk.Context, upToBlock uint64) []types.C
 	// Key format: 0x11 + 8-byte block + scheduleId
 	prefixLen := len(types.ScheduleBlockIndexPrefix) + 8
 
-	var schedules []types.ContractSchedule
+	var schedules []*types.ContractSchedule
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
 		if len(key) <= prefixLen {
@@ -365,7 +365,7 @@ func (k Keeper) GetNextScheduleId(ctx sdk.Context) uint64 {
 // CountContractSchedules counts the number of active (non-executed, non-cancelled) schedules for a contract.
 func (k Keeper) CountContractSchedules(ctx sdk.Context, contractAddress string) uint64 {
 	var count uint64
-	k.IterateSchedules(ctx, func(s types.ContractSchedule) bool {
+	k.IterateSchedules(ctx, func(s *types.ContractSchedule) bool {
 		if s.ContractAddress == contractAddress && !s.Executed && !s.Cancelled {
 			count++
 		}
@@ -437,9 +437,9 @@ func (k Keeper) GetGasSchedule(ctx sdk.Context) map[string]uint64 {
 // --- Params ---
 
 // SetParams stores the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(err)
 	}
@@ -449,15 +449,16 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams retrieves the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		panic(err)
 	}
-	return params
+	return &params
 }

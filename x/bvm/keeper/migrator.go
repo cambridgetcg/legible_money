@@ -20,7 +20,7 @@ func NewMigrator(keeper Keeper) Migrator {
 // Sets BvmVersion=1 on all existing contracts that have BvmVersion==0
 // (deployed before the versioning upgrade).
 func (m Migrator) Migrate1to2(ctx sdk.Context) error {
-	m.keeper.IterateContracts(ctx, func(contract types.DeployedContract) bool {
+	m.keeper.IterateContracts(ctx, func(contract *types.DeployedContract) bool {
 		if contract.BvmVersion == 0 {
 			contract.BvmVersion = 1
 			m.keeper.SetContract(ctx, contract)

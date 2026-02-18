@@ -83,7 +83,7 @@ func TestOC_HM2_SessionLimitExceeded(t *testing.T) {
 	// Set a tight session limit for testing
 	params := types.DefaultParams()
 	params.MaxSessionsPerHome = 2
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	// Create home and register multiple keys (each key at different block
 	// heights produces a unique session ID: ses-{keyHash[:8]}-{blockHeight})
@@ -265,7 +265,7 @@ func TestOC_HM4_DuplicateHomeCreation(t *testing.T) {
 	// Set max homes to 1 for tight testing
 	params := types.DefaultParams()
 	params.MaxHomesPerAccount = 1
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	// Owner A creates the first home — should succeed
 	resp, err := msgServer.CreateHome(ctx, &types.MsgCreateHome{
@@ -325,10 +325,10 @@ func TestOC_HM5_AlertFloodDrop(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.MaxAlertsPerHome = 5 // Small cap for testing
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	homeId := "home-flood"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Alert Flood",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
@@ -376,7 +376,7 @@ func TestOC_HM6_AlertIdCollision(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-collision"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Collision Test",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
@@ -415,14 +415,14 @@ func TestOC_HM7_SpendingLimitBypass(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-spend-bypass"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Spend Bypass",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
 	// Set spending limit: 1000 per 100 blocks.
-	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+	k.SetSpendingLimit(ctx, homeId, &types.SpendingLimit{
 		KeyType: "operator", MaxAmount: "1000",
 		PeriodBlocks: 100, SpentInPeriod: "0", PeriodStart: 100,
 	})
@@ -469,7 +469,7 @@ func TestOC_HM8_DeadmanOnArchivedHome(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-archived-deadman"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Archived Deadman",
 		Status: string(types.HomeStatusArchived),
 		Guardian: &types.HomeGuardian{
@@ -593,26 +593,26 @@ func TestOC_HM11_SessionExpiryCleanup(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-ses-cleanup"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Session Cleanup",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
 	// Expired session 1.
-	k.SetSession(ctx, types.ActiveSession{
+	k.SetSession(ctx, &types.ActiveSession{
 		SessionId: "exp-1", HomeId: homeId,
 		StartedAt: 10, ExpiresAt: 50, KeyHash: "k1",
 	})
 
 	// Expired session 2.
-	k.SetSession(ctx, types.ActiveSession{
+	k.SetSession(ctx, &types.ActiveSession{
 		SessionId: "exp-2", HomeId: homeId,
 		StartedAt: 20, ExpiresAt: 60, KeyHash: "k2",
 	})
 
 	// Valid session (not expired).
-	k.SetSession(ctx, types.ActiveSession{
+	k.SetSession(ctx, &types.ActiveSession{
 		SessionId: "valid-1", HomeId: homeId,
 		StartedAt: 90, ExpiresAt: 200, KeyHash: "k3",
 	})
@@ -635,7 +635,7 @@ func TestOC_HM11_SessionExpiryCleanup(t *testing.T) {
 
 	// Verify alerts were created for expired sessions.
 	var alertCount uint32
-	k.IterateAlerts(ctx, homeId, func(alert types.Alert) bool {
+	k.IterateAlerts(ctx, homeId, func(alert *types.Alert) bool {
 		if alert.Type == string(types.AlertSessionExpired) {
 			alertCount++
 		}
@@ -657,12 +657,12 @@ func TestOC_HM12_SpendingLimitZeroAmount(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-zero-spend"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Zero Spend",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
-	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+	k.SetSpendingLimit(ctx, homeId, &types.SpendingLimit{
 		KeyType: "operator", MaxAmount: "5000",
 		PeriodBlocks: 100, SpentInPeriod: "0", PeriodStart: 100,
 	})

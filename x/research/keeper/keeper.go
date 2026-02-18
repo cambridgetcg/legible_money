@@ -68,9 +68,9 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	if genState.TreasuryBalance != nil {
 		k.SetTreasuryBalance(ctx, genState.TreasuryBalance.Balance)
@@ -78,17 +78,17 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 
 	for _, sub := range genState.Researches {
 		if sub != nil {
-			k.SetResearch(ctx, *sub)
+			k.SetResearch(ctx, sub)
 		}
 	}
 	for _, bounty := range genState.Bounties {
 		if bounty != nil {
-			k.SetBounty(ctx, *bounty)
+			k.SetBounty(ctx, bounty)
 		}
 	}
 	for _, review := range genState.PeerReviews {
 		if review != nil {
-			k.SetPeerReview(ctx, *review)
+			k.SetPeerReview(ctx, review)
 		}
 	}
 }
@@ -96,33 +96,28 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var researches []*types.Research
-	k.IterateResearches(ctx, func(r types.Research) bool {
-		rCopy := r
-		researches = append(researches, &rCopy)
+	k.IterateResearches(ctx, func(r *types.Research) bool {
+		researches = append(researches, r)
 		return false
 	})
 
 	var bounties []*types.Bounty
-	k.IterateBounties(ctx, func(b types.Bounty) bool {
-		bCopy := b
-		bounties = append(bounties, &bCopy)
+	k.IterateBounties(ctx, func(b *types.Bounty) bool {
+		bounties = append(bounties, b)
 		return false
 	})
 
 	// Collect all peer reviews for each research
 	var peerReviews []*types.PeerReview
-	k.IterateResearches(ctx, func(r types.Research) bool {
+	k.IterateResearches(ctx, func(r *types.Research) bool {
 		reviews := k.GetReviewsForResearch(ctx, r.Id)
-		for i := range reviews {
-			rCopy := reviews[i]
-			peerReviews = append(peerReviews, &rCopy)
-		}
+		peerReviews = append(peerReviews, reviews...)
 		return false
 	})
 
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:          &params,
+		Params:          params,
 		Researches:      researches,
 		Bounties:        bounties,
 		PeerReviews:     peerReviews,

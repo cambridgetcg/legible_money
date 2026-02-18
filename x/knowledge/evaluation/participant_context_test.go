@@ -25,7 +25,7 @@ func TestParticipantContext_DerivableCategory_NoAdjustment(t *testing.T) {
 
 	for _, cat := range []string{"analytic", "formal", "protocol", "computational"} {
 		evalCtx := makeEvalCtxWithEvidence(nil)
-		claim := types.Claim{
+		claim := &types.Claim{
 			Id:                "c1",
 			ClaimText:         "Derivable claim",
 			EpistemicCategory: cat,
@@ -55,7 +55,7 @@ func TestParticipantContext_ObservableWithHumanEvidence_Bonus(t *testing.T) {
 	}
 	evalCtx := makeEvalCtxWithEvidence(evidences)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Empirical claim with human evidence",
 		EpistemicCategory: "empirical",
@@ -87,7 +87,7 @@ func TestParticipantContext_ObservableWithHumanEvidence_CappedBonus(t *testing.T
 	}
 	evalCtx := makeEvalCtxWithEvidence(evidences)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Well-grounded empirical claim",
 		EpistemicCategory: "historical",
@@ -110,7 +110,7 @@ func TestParticipantContext_ObservableWithOnlyAgentEvidence_PenaltyAndCeiling(t 
 	}
 	evalCtx := makeEvalCtxWithEvidence(evidences)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Empirical claim with only agent evidence",
 		EpistemicCategory: "empirical",
@@ -138,7 +138,7 @@ func TestParticipantContext_ObservableWithMixedEvidence_Bonus(t *testing.T) {
 	}
 	evalCtx := makeEvalCtxWithEvidence(evidences)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Empirical claim with mixed evidence",
 		EpistemicCategory: "social",
@@ -160,7 +160,7 @@ func TestParticipantContext_ObservableWithNoEvidence_Deferred(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := makeEvalCtxWithEvidence(nil)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Empirical claim without evidence",
 		EpistemicCategory: "empirical",
@@ -187,7 +187,7 @@ func TestParticipantContext_AllEvidenceRejected_Deferred(t *testing.T) {
 	}
 	evalCtx := makeEvalCtxWithEvidence(evidences)
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Claim with rejected evidence",
 		EpistemicCategory: "replicated",
@@ -207,7 +207,7 @@ func TestParticipantContext_NilEvalCtxEvidenceFunc(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{} // GetEvidenceByClaimId is nil
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "Observable claim",
 		EpistemicCategory: "predictive",
@@ -232,7 +232,7 @@ func TestParticipantContext_AllObservableCategories(t *testing.T) {
 
 	// All observable categories should get the penalty when only agent evidence
 	for _, cat := range []string{"empirical", "historical", "predictive", "social", "replicated"} {
-		claim := types.Claim{
+		claim := &types.Claim{
 			Id:                "c1",
 			ClaimText:         "Observable claim",
 			EpistemicCategory: cat,

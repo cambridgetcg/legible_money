@@ -178,7 +178,7 @@ func (ms *msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePar
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", ms.k.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	if err := ms.k.SetParams(ctx, *msg.Params); err != nil {
+	if err := ms.k.SetParams(ctx, msg.Params); err != nil {
 		return nil, fmt.Errorf("failed to set params: %w", err)
 	}
 	ctx.EventManager().EmitEvent(

@@ -68,7 +68,7 @@ func (cc *CompoundCondition) Depth() int {
 }
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.MaxActivePerAccount == 0 {
 		return fmt.Errorf("max_active_per_account must be positive")
 	}

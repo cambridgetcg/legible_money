@@ -20,7 +20,7 @@ func TestDetectPropheticFacts_BarelyAcceptedWithCitations(t *testing.T) {
 	fact.BaseConfidence = 620_000 // barely above 600k accept threshold
 	fact.CitationCount = 15       // above PropheticCitationThreshold (10)
 	fact.CreatedAtHeight = 10
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	k.DetectPropheticFacts(ctx, 100_000) // well after creation
 
@@ -46,7 +46,7 @@ func TestDetectPropheticFacts_HighConfidenceNotProphetic(t *testing.T) {
 	fact := createTestFact("fact-strong", "physics", "empirical", types.FactStatusVerified, 800_000)
 	fact.BaseConfidence = 800_000
 	fact.CitationCount = 50
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	k.DetectPropheticFacts(ctx, 100_000)
 
@@ -63,7 +63,7 @@ func TestDetectPropheticFacts_LowCitationsNotProphetic(t *testing.T) {
 	fact := createTestFact("fact-lonely", "physics", "empirical", types.FactStatusVerified, 610_000)
 	fact.BaseConfidence = 610_000
 	fact.CitationCount = 3 // below threshold
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	k.DetectPropheticFacts(ctx, 100_000)
 
@@ -81,7 +81,7 @@ func TestDetectPropheticFacts_AlreadyPropheticSkipped(t *testing.T) {
 	fact.CitationCount = 20
 	fact.IsProphetic = true // already marked
 	fact.Confidence = 800_000
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	k.DetectPropheticFacts(ctx, 200_000)
 
@@ -103,11 +103,11 @@ func TestApplyPropheticGrowth_DoublesGrowth(t *testing.T) {
 	propheticFact := createTestFact("fact-p", "physics", "empirical", types.FactStatusVerified, 700_000)
 	propheticFact.IsProphetic = true
 	propheticFact.IsProvisional = false
-	k.SetFact(ctx, propheticFact)
+	k.SetFact(ctx, &propheticFact)
 
 	normalFact := createTestFact("fact-n", "physics", "empirical", types.FactStatusVerified, 700_000)
 	normalFact.IsProvisional = false
-	k.SetFact(ctx, normalFact)
+	k.SetFact(ctx, &normalFact)
 
 	height := uint64(100_000)
 
@@ -133,7 +133,7 @@ func TestApplyPropheticGrowth_CappedAtPropheticCap(t *testing.T) {
 
 	fact := createTestFact("fact-capped", "physics", "empirical", types.FactStatusVerified, 910_000)
 	fact.IsProphetic = true
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
 	k.ApplyPropheticGrowth(ctx, 100_000)
 
@@ -153,9 +153,9 @@ func TestIsFactImmune_PropheticFact(t *testing.T) {
 	fact := createTestFact("fact-immune-prophetic", "physics", "empirical", types.FactStatusVerified, 700_000)
 	fact.IsProphetic = true
 	fact.CitationCount = 5 // below normal immunity threshold
-	k.SetFact(ctx, fact)
+	k.SetFact(ctx, &fact)
 
-	if !k.IsFactImmune(ctx, fact) {
+	if !k.IsFactImmune(ctx, &fact) {
 		t.Error("prophetic facts should be immune from pruning")
 	}
 }
@@ -167,8 +167,8 @@ func TestGetGracePeriodForFact_NovelExtended(t *testing.T) {
 	novelFact := createTestFact("fact-novel", "physics", "empirical", types.FactStatusVerified, 600_000)
 	novelFact.NoveltyScore = 600_000 // above NoveltyImmunityThreshold (500k)
 
-	normalGrace := k.GetGracePeriodForFact(ctx, normalFact)
-	novelGrace := k.GetGracePeriodForFact(ctx, novelFact)
+	normalGrace := k.GetGracePeriodForFact(ctx, &normalFact)
+	novelGrace := k.GetGracePeriodForFact(ctx, &novelFact)
 
 	if novelGrace <= normalGrace {
 		t.Errorf("novel fact grace (%d) should exceed normal grace (%d)", novelGrace, normalGrace)
@@ -186,8 +186,8 @@ func TestGetGracePeriodForFact_PropheticExtended(t *testing.T) {
 
 	normalFact := createTestFact("fact-baseline", "physics", "empirical", types.FactStatusVerified, 600_000)
 
-	propheticGrace := k.GetGracePeriodForFact(ctx, fact)
-	normalGrace := k.GetGracePeriodForFact(ctx, normalFact)
+	propheticGrace := k.GetGracePeriodForFact(ctx, &fact)
+	normalGrace := k.GetGracePeriodForFact(ctx, &normalFact)
 
 	if propheticGrace <= normalGrace {
 		t.Errorf("prophetic fact grace (%d) should exceed normal (%d)", propheticGrace, normalGrace)
@@ -202,8 +202,8 @@ func TestGetGracePeriodForFact_LowNoveltyNotExtended(t *testing.T) {
 
 	normalFact := createTestFact("fact-no-novelty", "physics", "empirical", types.FactStatusVerified, 600_000)
 
-	novelGrace := k.GetGracePeriodForFact(ctx, fact)
-	normalGrace := k.GetGracePeriodForFact(ctx, normalFact)
+	novelGrace := k.GetGracePeriodForFact(ctx, &fact)
+	normalGrace := k.GetGracePeriodForFact(ctx, &normalFact)
 
 	if novelGrace != normalGrace {
 		t.Errorf("low-novelty fact should not get extended grace: novel=%d normal=%d", novelGrace, normalGrace)
@@ -220,16 +220,16 @@ func TestCalculateKMS_NoveltyBoost(t *testing.T) {
 	// Two facts identical except for novelty score
 	normalFact := createTestFact("fact-normal-kms", "physics", "empirical", types.FactStatusVerified, 600_000)
 	normalFact.CitationCount = 5
-	k.SetFact(ctx, normalFact)
+	k.SetFact(ctx, &normalFact)
 
 	novelFact := createTestFact("fact-novel-kms", "physics", "empirical", types.FactStatusVerified, 600_000)
 	novelFact.CitationCount = 5
 	novelFact.NoveltyScore = 800_000 // high novelty
 	novelFact.BridgeScore = 50_000   // some bridge value
-	k.SetFact(ctx, novelFact)
+	k.SetFact(ctx, &novelFact)
 
-	normalKMS := k.CalculateKMS(ctx, normalFact)
-	novelKMS := k.CalculateKMS(ctx, novelFact)
+	normalKMS := k.CalculateKMS(ctx, &normalFact)
+	novelKMS := k.CalculateKMS(ctx, &novelFact)
 
 	if novelKMS <= normalKMS {
 		t.Errorf("novel fact KMS (%d) should exceed normal (%d)", novelKMS, normalKMS)
@@ -240,14 +240,14 @@ func TestCalculateKMS_PropheticBoost(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 
 	normalFact := createTestFact("fact-normal-p", "physics", "empirical", types.FactStatusVerified, 600_000)
-	k.SetFact(ctx, normalFact)
+	k.SetFact(ctx, &normalFact)
 
 	propheticFact := createTestFact("fact-prophetic-p", "physics", "empirical", types.FactStatusVerified, 600_000)
 	propheticFact.IsProphetic = true
-	k.SetFact(ctx, propheticFact)
+	k.SetFact(ctx, &propheticFact)
 
-	normalKMS := k.CalculateKMS(ctx, normalFact)
-	propheticKMS := k.CalculateKMS(ctx, propheticFact)
+	normalKMS := k.CalculateKMS(ctx, &normalFact)
+	propheticKMS := k.CalculateKMS(ctx, &propheticFact)
 
 	if propheticKMS <= normalKMS {
 		t.Errorf("prophetic fact KMS (%d) should exceed normal (%d)", propheticKMS, normalKMS)

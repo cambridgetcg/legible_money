@@ -9,6 +9,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -23,7 +24,7 @@ var _ types.QueryServer = queryServer{}
 func (q queryServer) Status(goCtx context.Context, _ *types.QueryStatusRequest) (*types.QueryStatusResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	return &types.QueryStatusResponse{
-		Status:               q.GetEmergencyStatus(ctx),
+		Status:               string(q.GetEmergencyStatus(ctx)),
 		IsHalted:             q.IsHalted(ctx),
 		ActiveHaltCeremonyId: q.GetActiveHaltCeremonyId(ctx),
 	}, nil
@@ -37,7 +38,7 @@ func (q queryServer) ActiveCeremony(goCtx context.Context, _ *types.QueryActiveC
 		return &types.QueryActiveCeremonyResponse{Found: false}, nil
 	}
 	return &types.QueryActiveCeremonyResponse{
-		Ceremony: &ceremony,
+		Ceremony: ceremony,
 		Found:    true,
 	}, nil
 }
@@ -51,10 +52,10 @@ func (q queryServer) CompletedCeremonies(goCtx context.Context, req *types.Query
 		limit = 100
 	}
 
-	var completed []types.EmergencyCeremony
+	var completed []*types.EmergencyCeremony
 	var total uint64
 
-	q.IterateCeremonies(ctx, func(c types.EmergencyCeremony) bool {
+	q.IterateCeremonies(ctx, func(c *types.EmergencyCeremony) bool {
 		if c.Phase == string(types.PhaseFinalized) || c.Phase == string(types.PhaseFailed) {
 			total++
 			if total > uint64(req.Offset) && uint32(len(completed)) < limit {

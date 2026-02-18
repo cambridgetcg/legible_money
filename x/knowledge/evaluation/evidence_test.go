@@ -20,7 +20,7 @@ func TestEvaluateEvidence_NoEvidence_RequiringCategory(t *testing.T) {
 			return nil
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "claim-1",
 		EpistemicCategory: "empirical",
 		References:        nil, // no references either
@@ -40,7 +40,7 @@ func TestEvaluateEvidence_NoEvidence_NonRequiringCategory(t *testing.T) {
 			return nil
 		},
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "claim-1",
 		EpistemicCategory: "analytic", // doesn't require evidence
 	}
@@ -66,7 +66,7 @@ func TestEvaluateEvidence_WithOnChainEvidence(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{Id: "claim-1", EpistemicCategory: "protocol"}
+	claim := &types.Claim{Id: "claim-1", EpistemicCategory: "protocol"}
 
 	result := evaluateEvidence(ctx, evalCtx, claim)
 
@@ -90,7 +90,7 @@ func TestEvaluateEvidence_RejectedEvidenceSkipped(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{Id: "claim-1", EpistemicCategory: "protocol"}
+	claim := &types.Claim{Id: "claim-1", EpistemicCategory: "protocol"}
 
 	result := evaluateEvidence(ctx, evalCtx, claim)
 	if result.Adjustment != 0 {
@@ -108,7 +108,7 @@ func TestEvaluateEvidence_UnauditedEvidence(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{Id: "claim-1", EpistemicCategory: "historical"}
+	claim := &types.Claim{Id: "claim-1", EpistemicCategory: "historical"}
 
 	result := evaluateEvidence(ctx, evalCtx, claim)
 
@@ -125,7 +125,7 @@ func TestEvaluateEvidence_NilEvidenceKeeper(t *testing.T) {
 		ExtendedParams:       types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: nil, // no evidence keeper
 	}
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "claim-1",
 		EpistemicCategory: "empirical",
 		References:        []string{"ref-1"},
@@ -149,7 +149,7 @@ func TestEvaluateEvidence_MultipleEvidences(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{Id: "claim-1", EpistemicCategory: "empirical"}
+	claim := &types.Claim{Id: "claim-1", EpistemicCategory: "empirical"}
 
 	result := evaluateEvidence(ctx, evalCtx, claim)
 
@@ -171,7 +171,7 @@ func TestEvaluateEvidence_UnknownType(t *testing.T) {
 			}
 		},
 	}
-	claim := types.Claim{Id: "claim-1", EpistemicCategory: "protocol"}
+	claim := &types.Claim{Id: "claim-1", EpistemicCategory: "protocol"}
 
 	result := evaluateEvidence(ctx, evalCtx, claim)
 

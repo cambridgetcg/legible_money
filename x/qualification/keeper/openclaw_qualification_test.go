@@ -59,7 +59,7 @@ func TestOC_QUAL2_StratumInheritanceWrongDirection(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Qualify in higher stratum (physics = stratum 4)
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -94,7 +94,7 @@ func TestOC_QUAL3_RenewRevokedQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Set up a revoked qualification
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusRevoked),

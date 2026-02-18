@@ -4,6 +4,8 @@ package legible.channels.v1;
 option go_package = "github.com/legible-money/legible/x/channels/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/channels/v1/state.proto";
+import "legible/channels/v1/genesis.proto";
 
 // Msg defines the payment channels module's transaction service.
 service Msg {
@@ -14,6 +16,11 @@ service Msg {
   rpc CloseChannel(MsgCloseChannel) returns (MsgCloseChannelResponse);
   rpc SettleChannel(MsgSettleChannel) returns (MsgSettleChannelResponse);
   rpc DisputeChannel(MsgDisputeChannel) returns (MsgDisputeChannelResponse);
+
+  rpc DepositChannel(MsgDepositChannel) returns (MsgDepositChannelResponse);
+  rpc UpdateState(MsgUpdateState) returns (MsgUpdateStateResponse);
+  rpc ClaimExpired(MsgClaimExpired) returns (MsgClaimExpiredResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
 // ============================================================================
@@ -78,6 +85,42 @@ message MsgDisputeChannel {
 }
 
 message MsgDisputeChannelResponse {}
+
+message MsgDepositChannel {
+  option (cosmos.msg.v1.signer) = "depositor";
+  string depositor = 1;
+  string channel_id = 2;
+  string amount = 3;
+}
+
+message MsgDepositChannelResponse {}
+
+message MsgUpdateState {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string channel_id = 2;
+  ChannelStateUpdate update = 3;
+}
+
+message MsgUpdateStateResponse {}
+
+message MsgClaimExpired {
+  option (cosmos.msg.v1.signer) = "claimer";
+  string claimer = 1;
+  string channel_id = 2;
+}
+
+message MsgClaimExpiredResponse {
+  string refunded_amount = 1;
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params = 2;
+}
+
+message MsgUpdateParamsResponse {}
 
 // ChannelStatus enum used by transaction processing.
 enum ChannelStatus {

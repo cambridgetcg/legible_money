@@ -36,7 +36,7 @@ func (m msgServer) CreateHome(goCtx context.Context, msg *types.MsgCreateHome) (
 	homeId := m.Keeper.GetNextHomeId(ctx)
 
 	// Create home
-	home := types.AgentHome{
+	home := &types.AgentHome{
 		HomeId:       homeId,
 		OwnerDid:     "", // Set by ante decorator or caller
 		OwnerAddress: msg.Owner,
@@ -209,7 +209,7 @@ func (m msgServer) StartSession(goCtx context.Context, msg *types.MsgStartSessio
 	// Generate session ID
 	sessionId := fmt.Sprintf("ses-%s-%d", msg.KeyHash[:8], height)
 
-	session := types.ActiveSession{
+	session := &types.ActiveSession{
 		SessionId:   sessionId,
 		HomeId:      msg.HomeId,
 		KeyHash:     msg.KeyHash,
@@ -301,7 +301,7 @@ func (m msgServer) RegisterKey(goCtx context.Context, msg *types.MsgRegisterKey)
 	}
 
 	height := uint64(ctx.BlockHeight())
-	reg := types.KeyRegistration{
+	reg := &types.KeyRegistration{
 		KeyHash:      msg.KeyHash,
 		KeyType:      msg.KeyType,
 		Role:         msg.Role,
@@ -355,7 +355,7 @@ func (m msgServer) RevokeKey(goCtx context.Context, msg *types.MsgRevokeKey) (*t
 	m.Keeper.SetKeyRegistration(ctx, msg.HomeId, reg)
 
 	// Terminate all sessions using this key
-	m.Keeper.IterateSessions(ctx, msg.HomeId, func(session types.ActiveSession) bool {
+	m.Keeper.IterateSessions(ctx, msg.HomeId, func(session *types.ActiveSession) bool {
 		if session.KeyHash == msg.KeyHash {
 			m.Keeper.DeleteSession(ctx, msg.HomeId, session.SessionId)
 		}
@@ -440,7 +440,7 @@ func (m msgServer) AcknowledgeAlert(goCtx context.Context, msg *types.MsgAcknowl
 	if !isOwner {
 		// Check if signer has any active session on this home
 		hasSession := false
-		m.Keeper.IterateSessions(ctx, msg.HomeId, func(_ types.ActiveSession) bool {
+		m.Keeper.IterateSessions(ctx, msg.HomeId, func(_ *types.ActiveSession) bool {
 			hasSession = true
 			return true // Found one, stop
 		})
@@ -480,7 +480,7 @@ func (m msgServer) SetSpendingLimit(goCtx context.Context, msg *types.MsgSetSpen
 	}
 
 	height := uint64(ctx.BlockHeight())
-	limit := types.SpendingLimit{
+	limit := &types.SpendingLimit{
 		KeyType:       msg.KeyType,
 		MaxAmount:     msg.MaxAmount,
 		PeriodBlocks:  msg.PeriodBlocks,
@@ -510,7 +510,7 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	m.Keeper.SetParams(ctx, *msg.Params)
+	m.Keeper.SetParams(ctx, msg.Params)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"home_params_updated",

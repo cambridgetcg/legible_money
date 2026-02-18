@@ -69,20 +69,20 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	} else {
 		k.SetParams(ctx, types.DefaultParams())
 	}
 	for _, q := range genState.Qualifications {
 		if q != nil {
-			k.SetQualification(ctx, *q)
+			k.SetQualification(ctx, q)
 		}
 	}
 	for _, e := range genState.Endorsements {
 		if e != nil {
-			k.SetEndorsement(ctx, *e)
+			k.SetEndorsement(ctx, e)
 		}
 	}
 }
@@ -91,27 +91,10 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:         &params,
-		Qualifications: toQualificationPointers(k.GetAllQualifications(ctx)),
-		Endorsements:   toEndorsementPointers(k.GetAllEndorsements(ctx)),
+		Params:         params,
+		Qualifications: k.GetAllQualifications(ctx),
+		Endorsements:   k.GetAllEndorsements(ctx),
 	}
-}
-
-// Helper functions to convert value slices to pointer slices for proto compatibility.
-func toQualificationPointers(qualifications []types.DomainQualification) []*types.DomainQualification {
-	result := make([]*types.DomainQualification, len(qualifications))
-	for i := range qualifications {
-		result[i] = &qualifications[i]
-	}
-	return result
-}
-
-func toEndorsementPointers(endorsements []types.QualificationEndorsement) []*types.QualificationEndorsement {
-	result := make([]*types.QualificationEndorsement, len(endorsements))
-	for i := range endorsements {
-		result[i] = &endorsements[i]
-	}
-	return result
 }
 
 // --- Cross-module interface (consumed by x/knowledge) ---
@@ -223,7 +206,7 @@ func (k Keeper) RecordVerificationOutcome(ctx sdk.Context, validatorAddr, domain
 }
 
 // calculateWeight computes the effective weight for a qualification.
-func (k Keeper) calculateWeight(q types.DomainQualification) uint32 {
+func (k Keeper) calculateWeight(q *types.DomainQualification) uint32 {
 	weight := uint32(10000) // 100% base
 
 	// Apply inheritance discount
@@ -233,7 +216,7 @@ func (k Keeper) calculateWeight(q types.DomainQualification) uint32 {
 
 	// Apply probationary discount
 	if q.Status == string(types.StatusProbationary) {
-		params, _ := k.getParamsFromQualification(q)
+		params := k.getParamsFromQualification(q)
 		weight = weight * params.ProbationaryWeightBps / 10000
 	}
 
@@ -251,8 +234,8 @@ func (k Keeper) calculateWeight(q types.DomainQualification) uint32 {
 
 // getParamsFromQualification is a helper to get params without requiring ctx.
 // Falls back to defaults when we don't have context.
-func (k Keeper) getParamsFromQualification(_ types.DomainQualification) (types.Params, bool) {
-	return types.DefaultParams(), true
+func (k Keeper) getParamsFromQualification(_ *types.DomainQualification) *types.Params {
+	return types.DefaultParams()
 }
 
 // --- Helper: calculate required stake based on domain stratum ---
@@ -281,7 +264,7 @@ func (k Keeper) requiredStakeForDomain(ctx sdk.Context, domain string) string {
 }
 
 // GetAllQualifications returns all qualifications in the store.
-func (k Keeper) GetAllQualifications(ctx sdk.Context) []types.DomainQualification {
+func (k Keeper) GetAllQualifications(ctx sdk.Context) []*types.DomainQualification {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.QualificationKeyPrefix, prefixEndBytes(types.QualificationKeyPrefix))
 	if err != nil {
@@ -289,19 +272,19 @@ func (k Keeper) GetAllQualifications(ctx sdk.Context) []types.DomainQualificatio
 	}
 	defer iter.Close()
 
-	var qualifications []types.DomainQualification
+	var qualifications []*types.DomainQualification
 	for ; iter.Valid(); iter.Next() {
 		var q types.DomainQualification
 		if err := proto.Unmarshal(iter.Value(), &q); err != nil {
 			continue
 		}
-		qualifications = append(qualifications, q)
+		qualifications = append(qualifications, &q)
 	}
 	return qualifications
 }
 
 // GetAllEndorsements returns all endorsements in the store.
-func (k Keeper) GetAllEndorsements(ctx sdk.Context) []types.QualificationEndorsement {
+func (k Keeper) GetAllEndorsements(ctx sdk.Context) []*types.QualificationEndorsement {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.EndorsementKeyPrefix, prefixEndBytes(types.EndorsementKeyPrefix))
 	if err != nil {
@@ -309,13 +292,13 @@ func (k Keeper) GetAllEndorsements(ctx sdk.Context) []types.QualificationEndorse
 	}
 	defer iter.Close()
 
-	var endorsements []types.QualificationEndorsement
+	var endorsements []*types.QualificationEndorsement
 	for ; iter.Valid(); iter.Next() {
 		var e types.QualificationEndorsement
 		if err := proto.Unmarshal(iter.Value(), &e); err != nil {
 			continue
 		}
-		endorsements = append(endorsements, e)
+		endorsements = append(endorsements, &e)
 	}
 	return endorsements
 }

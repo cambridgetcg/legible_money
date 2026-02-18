@@ -23,7 +23,7 @@ var _ types.QueryServer = &queryServer{}
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }
 
 func (q queryServer) Process(goCtx context.Context, req *types.QueryProcessRequest) (*types.QueryProcessResponse, error) {
@@ -32,15 +32,11 @@ func (q queryServer) Process(goCtx context.Context, req *types.QueryProcessReque
 	if !found {
 		return nil, types.ErrProcessNotFound
 	}
-	return &types.QueryProcessResponse{Process: &process}, nil
+	return &types.QueryProcessResponse{Process: process}, nil
 }
 
 func (q queryServer) ProcessesByCreator(goCtx context.Context, req *types.QueryProcessesByCreatorRequest) (*types.QueryProcessesByCreatorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	processes := q.GetProcessesByCreator(ctx, req.Creator)
-	ptrs := make([]*types.ScheduleProcess, len(processes))
-	for i := range processes {
-		ptrs[i] = &processes[i]
-	}
-	return &types.QueryProcessesByCreatorResponse{Processes: ptrs}, nil
+	return &types.QueryProcessesByCreatorResponse{Processes: processes}, nil
 }

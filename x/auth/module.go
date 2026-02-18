@@ -105,7 +105,7 @@ func (AppModule) Name() string {
 
 // RegisterServices registers module services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterExtendedMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 
 	migrator := keeper.NewMigrator(am.keeper)
@@ -126,7 +126,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 		panic("failed to unmarshal genesis: " + err.Error())
 	}
 
-	if err := am.keeper.InitGenesis(ctx, genesisState); err != nil {
+	if err := am.keeper.InitGenesis(ctx, &genesisState); err != nil {
 		panic(fmt.Sprintf("failed to initialize %s genesis state: %v", types.ModuleName, err))
 	}
 }

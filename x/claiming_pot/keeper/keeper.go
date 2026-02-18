@@ -65,24 +65,23 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, gs types.GenesisState) {
-	k.SetParams(ctx, *gs.Params)
+func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
+	k.SetParams(ctx, gs.Params)
 
 	for _, pot := range gs.Pots {
-		k.SetPot(ctx, *pot)
+		k.SetPot(ctx, pot)
 	}
 
 	for _, claim := range gs.Claims {
-		k.SetClaimRecord(ctx, *claim)
+		k.SetClaimRecord(ctx, claim)
 	}
 }
 
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var pots []*types.ClaimingPot
-	k.IteratePots(ctx, func(pot types.ClaimingPot) bool {
-		p := pot
-		pots = append(pots, &p)
+	k.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
+		pots = append(pots, pot)
 		return false
 	})
 
@@ -103,7 +102,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params: &params,
+		Params: params,
 		Pots:   pots,
 		Claims: claims,
 	}

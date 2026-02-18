@@ -14,9 +14,9 @@ import (
 // --- Home CRUD ---
 
 // SetHome stores an agent home.
-func (k Keeper) SetHome(ctx sdk.Context, home types.AgentHome) {
+func (k Keeper) SetHome(ctx sdk.Context, home *types.AgentHome) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&home)
+	bz, err := proto.Marshal(home)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal agent home: %v", err))
 	}
@@ -26,17 +26,17 @@ func (k Keeper) SetHome(ctx sdk.Context, home types.AgentHome) {
 }
 
 // GetHome retrieves an agent home by ID.
-func (k Keeper) GetHome(ctx sdk.Context, homeId string) (types.AgentHome, bool) {
+func (k Keeper) GetHome(ctx sdk.Context, homeId string) (*types.AgentHome, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.HomeKey(homeId))
 	if err != nil || bz == nil {
-		return types.AgentHome{}, false
+		return nil, false
 	}
 	var home types.AgentHome
 	if err := proto.Unmarshal(bz, &home); err != nil {
-		return types.AgentHome{}, false
+		return nil, false
 	}
-	return home, true
+	return &home, true
 }
 
 // DeleteHome removes an agent home.
@@ -48,7 +48,7 @@ func (k Keeper) DeleteHome(ctx sdk.Context, homeId string) {
 }
 
 // IterateHomes iterates over all homes. Return true from cb to stop.
-func (k Keeper) IterateHomes(ctx sdk.Context, cb func(types.AgentHome) bool) {
+func (k Keeper) IterateHomes(ctx sdk.Context, cb func(*types.AgentHome) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.HomeKeyPrefix, prefixEndBytes(types.HomeKeyPrefix))
 	if err != nil {
@@ -61,7 +61,7 @@ func (k Keeper) IterateHomes(ctx sdk.Context, cb func(types.AgentHome) bool) {
 		if err := proto.Unmarshal(iter.Value(), &home); err != nil {
 			continue
 		}
-		if cb(home) {
+		if cb(&home) {
 			break
 		}
 	}
@@ -102,9 +102,9 @@ func (k Keeper) GetHomesByOwner(ctx sdk.Context, ownerAddr string) []string {
 // --- Session CRUD ---
 
 // SetSession stores a session.
-func (k Keeper) SetSession(ctx sdk.Context, session types.ActiveSession) {
+func (k Keeper) SetSession(ctx sdk.Context, session *types.ActiveSession) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&session)
+	bz, err := proto.Marshal(session)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal session: %v", err))
 	}
@@ -114,17 +114,17 @@ func (k Keeper) SetSession(ctx sdk.Context, session types.ActiveSession) {
 }
 
 // GetSession retrieves a session.
-func (k Keeper) GetSession(ctx sdk.Context, homeId, sessionId string) (types.ActiveSession, bool) {
+func (k Keeper) GetSession(ctx sdk.Context, homeId, sessionId string) (*types.ActiveSession, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.SessionKey(homeId, sessionId))
 	if err != nil || bz == nil {
-		return types.ActiveSession{}, false
+		return nil, false
 	}
 	var session types.ActiveSession
 	if err := proto.Unmarshal(bz, &session); err != nil {
-		return types.ActiveSession{}, false
+		return nil, false
 	}
-	return session, true
+	return &session, true
 }
 
 // DeleteSession removes a session.
@@ -136,7 +136,7 @@ func (k Keeper) DeleteSession(ctx sdk.Context, homeId, sessionId string) {
 }
 
 // IterateSessions iterates over all sessions for a home. Return true from cb to stop.
-func (k Keeper) IterateSessions(ctx sdk.Context, homeId string, cb func(types.ActiveSession) bool) {
+func (k Keeper) IterateSessions(ctx sdk.Context, homeId string, cb func(*types.ActiveSession) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.SessionPrefixKey(homeId)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -150,7 +150,7 @@ func (k Keeper) IterateSessions(ctx sdk.Context, homeId string, cb func(types.Ac
 		if err := proto.Unmarshal(iter.Value(), &session); err != nil {
 			continue
 		}
-		if cb(session) {
+		if cb(&session) {
 			break
 		}
 	}
@@ -159,7 +159,7 @@ func (k Keeper) IterateSessions(ctx sdk.Context, homeId string, cb func(types.Ac
 // CountSessions counts active sessions for a home.
 func (k Keeper) CountSessions(ctx sdk.Context, homeId string) uint32 {
 	var count uint32
-	k.IterateSessions(ctx, homeId, func(_ types.ActiveSession) bool {
+	k.IterateSessions(ctx, homeId, func(_ *types.ActiveSession) bool {
 		count++
 		return false
 	})
@@ -169,9 +169,9 @@ func (k Keeper) CountSessions(ctx sdk.Context, homeId string) uint32 {
 // --- Key Registration CRUD ---
 
 // SetKeyRegistration stores a key registration.
-func (k Keeper) SetKeyRegistration(ctx sdk.Context, homeId string, reg types.KeyRegistration) {
+func (k Keeper) SetKeyRegistration(ctx sdk.Context, homeId string, reg *types.KeyRegistration) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&reg)
+	bz, err := proto.Marshal(reg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal key registration: %v", err))
 	}
@@ -181,21 +181,21 @@ func (k Keeper) SetKeyRegistration(ctx sdk.Context, homeId string, reg types.Key
 }
 
 // GetKeyRegistration retrieves a key registration.
-func (k Keeper) GetKeyRegistration(ctx sdk.Context, homeId, keyHash string) (types.KeyRegistration, bool) {
+func (k Keeper) GetKeyRegistration(ctx sdk.Context, homeId, keyHash string) (*types.KeyRegistration, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.KeyRegKey(homeId, keyHash))
 	if err != nil || bz == nil {
-		return types.KeyRegistration{}, false
+		return nil, false
 	}
 	var reg types.KeyRegistration
 	if err := proto.Unmarshal(bz, &reg); err != nil {
-		return types.KeyRegistration{}, false
+		return nil, false
 	}
-	return reg, true
+	return &reg, true
 }
 
 // IterateKeyRegistrations iterates over all key registrations for a home.
-func (k Keeper) IterateKeyRegistrations(ctx sdk.Context, homeId string, cb func(types.KeyRegistration) bool) {
+func (k Keeper) IterateKeyRegistrations(ctx sdk.Context, homeId string, cb func(*types.KeyRegistration) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.KeyRegPrefixKey(homeId)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -209,7 +209,7 @@ func (k Keeper) IterateKeyRegistrations(ctx sdk.Context, homeId string, cb func(
 		if err := proto.Unmarshal(iter.Value(), &reg); err != nil {
 			continue
 		}
-		if cb(reg) {
+		if cb(&reg) {
 			break
 		}
 	}
@@ -218,7 +218,7 @@ func (k Keeper) IterateKeyRegistrations(ctx sdk.Context, homeId string, cb func(
 // CountKeyRegistrations counts non-revoked key registrations for a home.
 func (k Keeper) CountKeyRegistrations(ctx sdk.Context, homeId string) uint32 {
 	var count uint32
-	k.IterateKeyRegistrations(ctx, homeId, func(reg types.KeyRegistration) bool {
+	k.IterateKeyRegistrations(ctx, homeId, func(reg *types.KeyRegistration) bool {
 		if !reg.Revoked {
 			count++
 		}
@@ -230,9 +230,9 @@ func (k Keeper) CountKeyRegistrations(ctx sdk.Context, homeId string) uint32 {
 // --- Alert CRUD ---
 
 // SetAlert stores an alert.
-func (k Keeper) SetAlert(ctx sdk.Context, alert types.Alert) {
+func (k Keeper) SetAlert(ctx sdk.Context, alert *types.Alert) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&alert)
+	bz, err := proto.Marshal(alert)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal alert: %v", err))
 	}
@@ -242,17 +242,17 @@ func (k Keeper) SetAlert(ctx sdk.Context, alert types.Alert) {
 }
 
 // GetAlert retrieves an alert.
-func (k Keeper) GetAlert(ctx sdk.Context, homeId, alertId string) (types.Alert, bool) {
+func (k Keeper) GetAlert(ctx sdk.Context, homeId, alertId string) (*types.Alert, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.AlertKey(homeId, alertId))
 	if err != nil || bz == nil {
-		return types.Alert{}, false
+		return nil, false
 	}
 	var alert types.Alert
 	if err := proto.Unmarshal(bz, &alert); err != nil {
-		return types.Alert{}, false
+		return nil, false
 	}
-	return alert, true
+	return &alert, true
 }
 
 // DeleteAlert removes an alert.
@@ -264,7 +264,7 @@ func (k Keeper) DeleteAlert(ctx sdk.Context, homeId, alertId string) {
 }
 
 // IterateAlerts iterates over all alerts for a home. Return true from cb to stop.
-func (k Keeper) IterateAlerts(ctx sdk.Context, homeId string, cb func(types.Alert) bool) {
+func (k Keeper) IterateAlerts(ctx sdk.Context, homeId string, cb func(*types.Alert) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.AlertPrefixKey(homeId)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -278,7 +278,7 @@ func (k Keeper) IterateAlerts(ctx sdk.Context, homeId string, cb func(types.Aler
 		if err := proto.Unmarshal(iter.Value(), &alert); err != nil {
 			continue
 		}
-		if cb(alert) {
+		if cb(&alert) {
 			break
 		}
 	}
@@ -287,7 +287,7 @@ func (k Keeper) IterateAlerts(ctx sdk.Context, homeId string, cb func(types.Aler
 // CountPendingAlerts counts unacknowledged alerts for a home.
 func (k Keeper) CountPendingAlerts(ctx sdk.Context, homeId string) uint32 {
 	var count uint32
-	k.IterateAlerts(ctx, homeId, func(alert types.Alert) bool {
+	k.IterateAlerts(ctx, homeId, func(alert *types.Alert) bool {
 		if !alert.Acknowledged {
 			count++
 		}
@@ -299,9 +299,9 @@ func (k Keeper) CountPendingAlerts(ctx sdk.Context, homeId string) uint32 {
 // --- Spending Limit CRUD ---
 
 // SetSpendingLimit stores a spending limit.
-func (k Keeper) SetSpendingLimit(ctx sdk.Context, homeId string, limit types.SpendingLimit) {
+func (k Keeper) SetSpendingLimit(ctx sdk.Context, homeId string, limit *types.SpendingLimit) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&limit)
+	bz, err := proto.Marshal(limit)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal spending limit: %v", err))
 	}
@@ -311,17 +311,17 @@ func (k Keeper) SetSpendingLimit(ctx sdk.Context, homeId string, limit types.Spe
 }
 
 // GetSpendingLimit retrieves a spending limit.
-func (k Keeper) GetSpendingLimit(ctx sdk.Context, homeId, keyType string) (types.SpendingLimit, bool) {
+func (k Keeper) GetSpendingLimit(ctx sdk.Context, homeId, keyType string) (*types.SpendingLimit, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.SpendLimitKey(homeId, keyType))
 	if err != nil || bz == nil {
-		return types.SpendingLimit{}, false
+		return nil, false
 	}
 	var limit types.SpendingLimit
 	if err := proto.Unmarshal(bz, &limit); err != nil {
-		return types.SpendingLimit{}, false
+		return nil, false
 	}
-	return limit, true
+	return &limit, true
 }
 
 // --- Home Counter ---

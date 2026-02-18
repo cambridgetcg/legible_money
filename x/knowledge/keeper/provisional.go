@@ -14,8 +14,8 @@ import (
 // EvaluatePendingClaims runs the deterministic structural evaluation engine
 // on all claims with status "pending_evaluation". Called in BeginBlocker.
 func (k Keeper) EvaluatePendingClaims(ctx sdk.Context, currentHeight uint64) {
-	var pendingClaims []types.Claim
-	k.IterateClaims(ctx, func(c types.Claim) bool {
+	var pendingClaims []*types.Claim
+	k.IterateClaims(ctx, func(c *types.Claim) bool {
 		if c.Status == types.ClaimStatusPendingEvaluation {
 			pendingClaims = append(pendingClaims, c)
 		}
@@ -36,7 +36,7 @@ func (k Keeper) EvaluatePendingClaims(ctx sdk.Context, currentHeight uint64) {
 //   - score < RejectThreshold (300k): REJECTED — slash 22%, return rest
 //   - 300k ≤ score < ProvisionalThreshold (500k): EVALUATED — challenge window, no provisional fact
 //   - score ≥ ProvisionalThreshold (500k): PROVISIONAL — create provisional fact, challenge window
-func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, params types.Params, currentHeight uint64) error {
+func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim *types.Claim, params *types.Params, currentHeight uint64) error {
 	// Run the deterministic 6-stage evaluation engine using the same API
 	// as vote_extensions.go — all validators produce identical results.
 	evalCtx := k.BuildEvaluationContext(ctx)
@@ -50,7 +50,7 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, pa
 		StartHeight: currentHeight,
 	}
 
-	evalResult, err := evaluation.EvaluateClaim(ctx, evalCtx, syntheticRound, claim)
+	evalResult, err := evaluation.EvaluateClaim(ctx, evalCtx, &syntheticRound, claim)
 	if err != nil {
 		return fmt.Errorf("evaluation failed for claim %s: %w", claim.Id, err)
 	}
@@ -109,7 +109,7 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, pa
 			ChallengeWindowEnd:   claim.ChallengeWindowEnd,
 			OriginalClaimId:      claim.Id,
 		}
-		k.SetFact(ctx, fact)
+		k.SetFact(ctx, &fact)
 
 		claim.Status = types.ClaimStatusProvisional
 		claim.ProvisionalFactId = factID
@@ -143,7 +143,7 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, pa
 // ProcessChallengeWindowExpiry checks claims whose challenge window has closed
 // and transitions them to verified (or final rejection). Called in BeginBlocker.
 func (k Keeper) ProcessChallengeWindowExpiry(ctx sdk.Context, currentHeight uint64) {
-	k.IterateClaims(ctx, func(claim types.Claim) bool {
+	k.IterateClaims(ctx, func(claim *types.Claim) bool {
 		// Only process claims in challenge window
 		if claim.Status != types.ClaimStatusProvisional && claim.Status != types.ClaimStatusEvaluated {
 			return false
@@ -167,7 +167,7 @@ func (k Keeper) ProcessChallengeWindowExpiry(ctx sdk.Context, currentHeight uint
 
 // TransitionToVerified transitions a claim from provisional/evaluated to verified
 // after its challenge window closes without successful challenges.
-func (k Keeper) TransitionToVerified(ctx sdk.Context, claim types.Claim, currentHeight uint64) error {
+func (k Keeper) TransitionToVerified(ctx sdk.Context, claim *types.Claim, currentHeight uint64) error {
 	if claim.Status == types.ClaimStatusProvisional {
 		// Upgrade provisional fact to verified
 		fact, found := k.GetFact(ctx, claim.ProvisionalFactId)
@@ -180,7 +180,7 @@ func (k Keeper) TransitionToVerified(ctx sdk.Context, claim types.Claim, current
 
 			// Create fact references from claim references
 			for _, refID := range claim.References {
-				k.SetFactReference(ctx, types.FactReference{
+				k.SetFactReference(ctx, &types.FactReference{
 					FromFactId:      fact.Id,
 					ToFactId:        refID,
 					ReferenceType:   "supports",
@@ -223,11 +223,11 @@ func (k Keeper) TransitionToVerified(ctx sdk.Context, claim types.Claim, current
 			Maturity:             types.MaturityEmerging,
 			OriginalClaimId:      claim.Id,
 		}
-		k.SetFact(ctx, fact)
+		k.SetFact(ctx, &fact)
 		claim.ProvisionalFactId = factID
 
 		for _, refID := range claim.References {
-			k.SetFactReference(ctx, types.FactReference{
+			k.SetFactReference(ctx, &types.FactReference{
 				FromFactId:      factID,
 				ToFactId:        refID,
 				ReferenceType:   "supports",
@@ -257,7 +257,7 @@ func (k Keeper) TransitionToVerified(ctx sdk.Context, claim types.Claim, current
 }
 
 // calculateChallengeWindow determines the challenge window duration based on epistemic category.
-func (k Keeper) calculateChallengeWindow(ctx sdk.Context, category, logicZone string, score uint64, params types.Params) uint64 {
+func (k Keeper) calculateChallengeWindow(ctx sdk.Context, category, logicZone string, score uint64, params *types.Params) uint64 {
 	baseDuration := params.BaseChallengeDuration
 	if baseDuration == 0 {
 		baseDuration = 34_272 // default ~1 day

@@ -27,7 +27,7 @@ func (q queryServer) Channel(goCtx context.Context, req *types.QueryChannelReque
 	if !found {
 		return nil, types.ErrChannelNotFound
 	}
-	return &types.QueryChannelResponse{Channel: &ch}, nil
+	return &types.QueryChannelResponse{Channel: ch}, nil
 }
 
 // ChannelsByPayer returns all channels for a payer.
@@ -54,14 +54,8 @@ func (q queryServer) ChannelsByPayer(goCtx context.Context, req *types.QueryChan
 		channels = channels[:limit]
 	}
 
-	// Convert []PaymentChannel to []*PaymentChannel for proto
-	ptrs := make([]*types.PaymentChannel, len(channels))
-	for i := range channels {
-		ptrs[i] = &channels[i]
-	}
-
 	return &types.QueryChannelsByPayerResponse{
-		Channels: ptrs,
+		Channels: channels,
 		Total:    total,
 	}, nil
 }
@@ -90,14 +84,8 @@ func (q queryServer) ChannelsByProvider(goCtx context.Context, req *types.QueryC
 		channels = channels[:limit]
 	}
 
-	// Convert []PaymentChannel to []*PaymentChannel for proto
-	ptrs := make([]*types.PaymentChannel, len(channels))
-	for i := range channels {
-		ptrs[i] = &channels[i]
-	}
-
 	return &types.QueryChannelsByProviderResponse{
-		Channels: ptrs,
+		Channels: channels,
 		Total:    total,
 	}, nil
 }
@@ -110,7 +98,7 @@ func (q queryServer) ActiveDispute(goCtx context.Context, req *types.QueryActive
 		return &types.QueryActiveDisputeResponse{Found: false}, nil
 	}
 	return &types.QueryActiveDisputeResponse{
-		Dispute: &dispute,
+		Dispute: dispute,
 		Found:   true,
 	}, nil
 }
@@ -119,5 +107,5 @@ func (q queryServer) ActiveDispute(goCtx context.Context, req *types.QueryActive
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }

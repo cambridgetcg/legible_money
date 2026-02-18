@@ -12,9 +12,9 @@ import (
 // ======================== Project CRUD ========================
 
 // SetProject stores a project and updates indexes.
-func (k Keeper) SetProject(ctx sdk.Context, project types.ProductProject) {
+func (k Keeper) SetProject(ctx sdk.Context, project *types.ProductProject) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&project)
+	bz, err := proto.Marshal(project)
 	if err != nil {
 		panic(err)
 	}
@@ -37,24 +37,24 @@ func (k Keeper) SetProject(ctx sdk.Context, project types.ProductProject) {
 }
 
 // GetProject retrieves a project by ID.
-func (k Keeper) GetProject(ctx sdk.Context, projectId string) (types.ProductProject, bool) {
+func (k Keeper) GetProject(ctx sdk.Context, projectId string) (*types.ProductProject, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ProjectKey(projectId))
 	if err != nil {
 		panic(err)
 	}
 	if bz == nil {
-		return types.ProductProject{}, false
+		return nil, false
 	}
 	var project types.ProductProject
 	if err := proto.Unmarshal(bz, &project); err != nil {
 		panic(err)
 	}
-	return project, true
+	return &project, true
 }
 
 // DeleteProject removes a project and its indexes.
-func (k Keeper) DeleteProject(ctx sdk.Context, project types.ProductProject) {
+func (k Keeper) DeleteProject(ctx sdk.Context, project *types.ProductProject) {
 	store := k.storeService.OpenKVStore(ctx)
 	if err := store.Delete(types.ProjectKey(project.Id)); err != nil {
 		panic(err)
@@ -73,7 +73,7 @@ func (k Keeper) DeleteProject(ctx sdk.Context, project types.ProductProject) {
 }
 
 // IterateProjects iterates all projects. Return true from cb to stop.
-func (k Keeper) IterateProjects(ctx sdk.Context, cb func(types.ProductProject) bool) {
+func (k Keeper) IterateProjects(ctx sdk.Context, cb func(*types.ProductProject) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ProjectKeyPrefix, prefixEndBytes(types.ProjectKeyPrefix))
 	if err != nil {
@@ -86,14 +86,14 @@ func (k Keeper) IterateProjects(ctx sdk.Context, cb func(types.ProductProject) b
 		if err := proto.Unmarshal(iter.Value(), &project); err != nil {
 			panic(err)
 		}
-		if cb(project) {
+		if cb(&project) {
 			break
 		}
 	}
 }
 
 // GetProjectsByFounder returns all projects for a given founder address.
-func (k Keeper) GetProjectsByFounder(ctx sdk.Context, founder string) []types.ProductProject {
+func (k Keeper) GetProjectsByFounder(ctx sdk.Context, founder string) []*types.ProductProject {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.ProjectFounderIndexPrefix, []byte(founder+"/")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -102,7 +102,7 @@ func (k Keeper) GetProjectsByFounder(ctx sdk.Context, founder string) []types.Pr
 	}
 	defer iter.Close()
 
-	var projects []types.ProductProject
+	var projects []*types.ProductProject
 	for ; iter.Valid(); iter.Next() {
 		// Extract projectId from index key: prefix | founder/ | projectId
 		key := iter.Key()
@@ -136,9 +136,9 @@ func (k Keeper) GetNextProjectId(ctx sdk.Context) uint64 {
 // ======================== Task CRUD ========================
 
 // SetTask stores a task and updates indexes.
-func (k Keeper) SetTask(ctx sdk.Context, task types.ProjectTask) {
+func (k Keeper) SetTask(ctx sdk.Context, task *types.ProjectTask) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&task)
+	bz, err := proto.Marshal(task)
 	if err != nil {
 		panic(err)
 	}
@@ -161,24 +161,24 @@ func (k Keeper) SetTask(ctx sdk.Context, task types.ProjectTask) {
 }
 
 // GetTask retrieves a task by ID.
-func (k Keeper) GetTask(ctx sdk.Context, taskId string) (types.ProjectTask, bool) {
+func (k Keeper) GetTask(ctx sdk.Context, taskId string) (*types.ProjectTask, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.TaskKey(taskId))
 	if err != nil {
 		panic(err)
 	}
 	if bz == nil {
-		return types.ProjectTask{}, false
+		return nil, false
 	}
 	var task types.ProjectTask
 	if err := proto.Unmarshal(bz, &task); err != nil {
 		panic(err)
 	}
-	return task, true
+	return &task, true
 }
 
 // DeleteTask removes a task and its indexes.
-func (k Keeper) DeleteTask(ctx sdk.Context, task types.ProjectTask) {
+func (k Keeper) DeleteTask(ctx sdk.Context, task *types.ProjectTask) {
 	store := k.storeService.OpenKVStore(ctx)
 	if err := store.Delete(types.TaskKey(task.Id)); err != nil {
 		panic(err)
@@ -197,7 +197,7 @@ func (k Keeper) DeleteTask(ctx sdk.Context, task types.ProjectTask) {
 }
 
 // IterateTasks iterates all tasks.
-func (k Keeper) IterateTasks(ctx sdk.Context, cb func(types.ProjectTask) bool) {
+func (k Keeper) IterateTasks(ctx sdk.Context, cb func(*types.ProjectTask) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.TaskKeyPrefix, prefixEndBytes(types.TaskKeyPrefix))
 	if err != nil {
@@ -210,14 +210,14 @@ func (k Keeper) IterateTasks(ctx sdk.Context, cb func(types.ProjectTask) bool) {
 		if err := proto.Unmarshal(iter.Value(), &task); err != nil {
 			panic(err)
 		}
-		if cb(task) {
+		if cb(&task) {
 			break
 		}
 	}
 }
 
 // GetTasksByProject returns all tasks for a given project.
-func (k Keeper) GetTasksByProject(ctx sdk.Context, projectId string) []types.ProjectTask {
+func (k Keeper) GetTasksByProject(ctx sdk.Context, projectId string) []*types.ProjectTask {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.TaskProjectIndexPrefix, []byte(projectId+"/")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -226,7 +226,7 @@ func (k Keeper) GetTasksByProject(ctx sdk.Context, projectId string) []types.Pro
 	}
 	defer iter.Close()
 
-	var tasks []types.ProjectTask
+	var tasks []*types.ProjectTask
 	for ; iter.Valid(); iter.Next() {
 		key := iter.Key()
 		taskId := string(key[len(prefix):])
@@ -259,9 +259,9 @@ func (k Keeper) GetNextTaskId(ctx sdk.Context) uint64 {
 // ======================== Service CRUD ========================
 
 // SetService stores a service and updates indexes.
-func (k Keeper) SetService(ctx sdk.Context, service types.ServiceLeaf) {
+func (k Keeper) SetService(ctx sdk.Context, service *types.ServiceLeaf) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&service)
+	bz, err := proto.Marshal(service)
 	if err != nil {
 		panic(err)
 	}
@@ -277,24 +277,24 @@ func (k Keeper) SetService(ctx sdk.Context, service types.ServiceLeaf) {
 }
 
 // GetService retrieves a service by ID.
-func (k Keeper) GetService(ctx sdk.Context, serviceId string) (types.ServiceLeaf, bool) {
+func (k Keeper) GetService(ctx sdk.Context, serviceId string) (*types.ServiceLeaf, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ServiceKey(serviceId))
 	if err != nil {
 		panic(err)
 	}
 	if bz == nil {
-		return types.ServiceLeaf{}, false
+		return nil, false
 	}
 	var service types.ServiceLeaf
 	if err := proto.Unmarshal(bz, &service); err != nil {
 		panic(err)
 	}
-	return service, true
+	return &service, true
 }
 
 // IterateServices iterates all services.
-func (k Keeper) IterateServices(ctx sdk.Context, cb func(types.ServiceLeaf) bool) {
+func (k Keeper) IterateServices(ctx sdk.Context, cb func(*types.ServiceLeaf) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ServiceKeyPrefix, prefixEndBytes(types.ServiceKeyPrefix))
 	if err != nil {
@@ -307,7 +307,7 @@ func (k Keeper) IterateServices(ctx sdk.Context, cb func(types.ServiceLeaf) bool
 		if err := proto.Unmarshal(iter.Value(), &service); err != nil {
 			panic(err)
 		}
-		if cb(service) {
+		if cb(&service) {
 			break
 		}
 	}
@@ -334,9 +334,9 @@ func (k Keeper) GetNextServiceId(ctx sdk.Context) uint64 {
 // ======================== Seed CRUD ========================
 
 // SetSeed stores an opportunity seed and updates indexes.
-func (k Keeper) SetSeed(ctx sdk.Context, seed types.OpportunitySeed) {
+func (k Keeper) SetSeed(ctx sdk.Context, seed *types.OpportunitySeed) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&seed)
+	bz, err := proto.Marshal(seed)
 	if err != nil {
 		panic(err)
 	}
@@ -352,24 +352,24 @@ func (k Keeper) SetSeed(ctx sdk.Context, seed types.OpportunitySeed) {
 }
 
 // GetSeed retrieves a seed by ID.
-func (k Keeper) GetSeed(ctx sdk.Context, seedId string) (types.OpportunitySeed, bool) {
+func (k Keeper) GetSeed(ctx sdk.Context, seedId string) (*types.OpportunitySeed, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.SeedKey(seedId))
 	if err != nil {
 		panic(err)
 	}
 	if bz == nil {
-		return types.OpportunitySeed{}, false
+		return nil, false
 	}
 	var seed types.OpportunitySeed
 	if err := proto.Unmarshal(bz, &seed); err != nil {
 		panic(err)
 	}
-	return seed, true
+	return &seed, true
 }
 
 // IterateSeeds iterates all seeds.
-func (k Keeper) IterateSeeds(ctx sdk.Context, cb func(types.OpportunitySeed) bool) {
+func (k Keeper) IterateSeeds(ctx sdk.Context, cb func(*types.OpportunitySeed) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.SeedKeyPrefix, prefixEndBytes(types.SeedKeyPrefix))
 	if err != nil {
@@ -382,7 +382,7 @@ func (k Keeper) IterateSeeds(ctx sdk.Context, cb func(types.OpportunitySeed) boo
 		if err := proto.Unmarshal(iter.Value(), &seed); err != nil {
 			panic(err)
 		}
-		if cb(seed) {
+		if cb(&seed) {
 			break
 		}
 	}
@@ -407,9 +407,9 @@ func (k Keeper) GetNextSeedId(ctx sdk.Context) uint64 {
 }
 
 // GetExpiredSeeds returns all seeds past their expiry block.
-func (k Keeper) GetExpiredSeeds(ctx sdk.Context, currentBlock uint64) []types.OpportunitySeed {
-	var expired []types.OpportunitySeed
-	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
+func (k Keeper) GetExpiredSeeds(ctx sdk.Context, currentBlock uint64) []*types.OpportunitySeed {
+	var expired []*types.OpportunitySeed
+	k.IterateSeeds(ctx, func(s *types.OpportunitySeed) bool {
 		if s.Status != string(types.SeedExpired) && s.ExpiresAtBlock > 0 && currentBlock >= s.ExpiresAtBlock {
 			expired = append(expired, s)
 		}
@@ -503,9 +503,9 @@ func (k Keeper) HasActiveSubscription(ctx sdk.Context, serviceId, subscriber str
 // ======================== Params ========================
 
 // SetParams stores module params.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(err)
 	}
@@ -515,20 +515,20 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams retrieves module params.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
 	if bz == nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ======================== Phase Transition Validation ========================
@@ -560,7 +560,7 @@ func IsValidPhaseTransition(from, to types.ProjectPhase) bool {
 }
 
 // IsContributor checks if an address is a contributor to the project.
-func IsContributor(project types.ProductProject, addr string) bool {
+func IsContributor(project *types.ProductProject, addr string) bool {
 	for _, c := range project.Contributors {
 		if c.Did == addr {
 			return true
@@ -570,7 +570,7 @@ func IsContributor(project types.ProductProject, addr string) bool {
 }
 
 // IsFounderOrContributor checks if an address is the founder or a contributor.
-func IsFounderOrContributor(project types.ProductProject, addr string) bool {
+func IsFounderOrContributor(project *types.ProductProject, addr string) bool {
 	if project.Founder == addr {
 		return true
 	}
@@ -613,7 +613,7 @@ func (k Keeper) DeletePendingAbandon(ctx sdk.Context, projectId string) {
 
 // ContributorMajorityConsented returns true if >50% of contributors (excluding founder)
 // have consented to the abandon proposal.
-func ContributorMajorityConsented(project types.ProductProject, pa types.PendingAbandon) bool {
+func ContributorMajorityConsented(project *types.ProductProject, pa types.PendingAbandon) bool {
 	// Count non-founder contributors
 	nonFounderCount := 0
 	for _, c := range project.Contributors {

@@ -13,10 +13,10 @@ import (
 // ---------- Provider Operations ----------
 
 // SetProvider stores a provider in the KV store.
-func (k Keeper) SetProvider(ctx sdk.Context, provider types.Provider) {
+func (k Keeper) SetProvider(ctx sdk.Context, provider *types.Provider) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerKey(provider.Address)
-	bz, err := proto.Marshal(&provider)
+	bz, err := proto.Marshal(provider)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal provider: %v", err))
 	}
@@ -24,18 +24,18 @@ func (k Keeper) SetProvider(ctx sdk.Context, provider types.Provider) {
 }
 
 // GetProvider retrieves a provider by address.
-func (k Keeper) GetProvider(ctx sdk.Context, address string) (types.Provider, bool) {
+func (k Keeper) GetProvider(ctx sdk.Context, address string) (*types.Provider, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := providerKey(address)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.Provider{}, false
+		return nil, false
 	}
 	var provider types.Provider
 	if err := proto.Unmarshal(bz, &provider); err != nil {
-		return types.Provider{}, false
+		return nil, false
 	}
-	return provider, true
+	return &provider, true
 }
 
 // DeleteProvider removes a provider from the store.
@@ -45,9 +45,9 @@ func (k Keeper) DeleteProvider(ctx sdk.Context, address string) {
 }
 
 // GetAllProviders returns all providers.
-func (k Keeper) GetAllProviders(ctx sdk.Context) []types.Provider {
-	var providers []types.Provider
-	k.IterateProviders(ctx, func(p types.Provider) bool {
+func (k Keeper) GetAllProviders(ctx sdk.Context) []*types.Provider {
+	var providers []*types.Provider
+	k.IterateProviders(ctx, func(p *types.Provider) bool {
 		providers = append(providers, p)
 		return false
 	})
@@ -55,7 +55,7 @@ func (k Keeper) GetAllProviders(ctx sdk.Context) []types.Provider {
 }
 
 // IterateProviders iterates over all providers. Return true from cb to stop.
-func (k Keeper) IterateProviders(ctx sdk.Context, cb func(types.Provider) bool) {
+func (k Keeper) IterateProviders(ctx sdk.Context, cb func(*types.Provider) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.ProviderKeyPrefix, prefixEndBytes(types.ProviderKeyPrefix))
 	if err != nil {
@@ -68,7 +68,7 @@ func (k Keeper) IterateProviders(ctx sdk.Context, cb func(types.Provider) bool) 
 		if err := proto.Unmarshal(iter.Value(), &provider); err != nil {
 			continue
 		}
-		if cb(provider) {
+		if cb(&provider) {
 			break
 		}
 	}
@@ -127,10 +127,10 @@ func (k Keeper) GetNextQuoteId(ctx sdk.Context) uint64 {
 }
 
 // SetQuote stores a quote in the KV store.
-func (k Keeper) SetQuote(ctx sdk.Context, quote types.APIQuote) {
+func (k Keeper) SetQuote(ctx sdk.Context, quote *types.APIQuote) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := quoteKey(quote.QuoteId)
-	bz, err := proto.Marshal(&quote)
+	bz, err := proto.Marshal(quote)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal quote: %v", err))
 	}
@@ -138,18 +138,18 @@ func (k Keeper) SetQuote(ctx sdk.Context, quote types.APIQuote) {
 }
 
 // GetQuote retrieves a quote by ID.
-func (k Keeper) GetQuote(ctx sdk.Context, quoteId uint64) (types.APIQuote, bool) {
+func (k Keeper) GetQuote(ctx sdk.Context, quoteId uint64) (*types.APIQuote, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := quoteKey(quoteId)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.APIQuote{}, false
+		return nil, false
 	}
 	var quote types.APIQuote
 	if err := proto.Unmarshal(bz, &quote); err != nil {
-		return types.APIQuote{}, false
+		return nil, false
 	}
-	return quote, true
+	return &quote, true
 }
 
 // DeleteQuote removes a quote from the store.
@@ -159,7 +159,7 @@ func (k Keeper) DeleteQuote(ctx sdk.Context, quoteId uint64) {
 }
 
 // IterateQuotes iterates over all quotes. Return true from cb to stop.
-func (k Keeper) IterateQuotes(ctx sdk.Context, cb func(types.APIQuote) bool) {
+func (k Keeper) IterateQuotes(ctx sdk.Context, cb func(*types.APIQuote) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.QuoteKeyPrefix, prefixEndBytes(types.QuoteKeyPrefix))
 	if err != nil {
@@ -172,7 +172,7 @@ func (k Keeper) IterateQuotes(ctx sdk.Context, cb func(types.APIQuote) bool) {
 		if err := proto.Unmarshal(iter.Value(), &quote); err != nil {
 			continue
 		}
-		if cb(quote) {
+		if cb(&quote) {
 			break
 		}
 	}
@@ -198,10 +198,10 @@ func (k Keeper) GetNextCallRecordId(ctx sdk.Context) uint64 {
 }
 
 // SetCallRecord stores a call record in the KV store.
-func (k Keeper) SetCallRecord(ctx sdk.Context, record types.CallRecord) {
+func (k Keeper) SetCallRecord(ctx sdk.Context, record *types.CallRecord) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := callRecordKey(record.RecordId)
-	bz, err := proto.Marshal(&record)
+	bz, err := proto.Marshal(record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal call record: %v", err))
 	}
@@ -209,22 +209,22 @@ func (k Keeper) SetCallRecord(ctx sdk.Context, record types.CallRecord) {
 }
 
 // GetCallRecord retrieves a call record by ID.
-func (k Keeper) GetCallRecord(ctx sdk.Context, recordId uint64) (types.CallRecord, bool) {
+func (k Keeper) GetCallRecord(ctx sdk.Context, recordId uint64) (*types.CallRecord, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := callRecordKey(recordId)
 	bz, err := kvStore.Get(key)
 	if err != nil || bz == nil {
-		return types.CallRecord{}, false
+		return nil, false
 	}
 	var record types.CallRecord
 	if err := proto.Unmarshal(bz, &record); err != nil {
-		return types.CallRecord{}, false
+		return nil, false
 	}
-	return record, true
+	return &record, true
 }
 
 // IterateCallRecords iterates over all call records. Return true from cb to stop.
-func (k Keeper) IterateCallRecords(ctx sdk.Context, cb func(types.CallRecord) bool) {
+func (k Keeper) IterateCallRecords(ctx sdk.Context, cb func(*types.CallRecord) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.CallRecordKeyPrefix, prefixEndBytes(types.CallRecordKeyPrefix))
 	if err != nil {
@@ -237,7 +237,7 @@ func (k Keeper) IterateCallRecords(ctx sdk.Context, cb func(types.CallRecord) bo
 		if err := proto.Unmarshal(iter.Value(), &record); err != nil {
 			continue
 		}
-		if cb(record) {
+		if cb(&record) {
 			break
 		}
 	}

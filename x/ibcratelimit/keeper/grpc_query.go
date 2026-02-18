@@ -24,7 +24,7 @@ var _ types.QueryServer = queryServer{}
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: &params}, nil
+	return &types.QueryParamsResponse{Params: params}, nil
 }
 
 // ChannelFlow returns the flow record for a specific IBC channel.
@@ -40,7 +40,7 @@ func (q queryServer) ChannelFlow(goCtx context.Context, req *types.QueryChannelF
 		return &types.QueryChannelFlowResponse{Found: false}, nil
 	}
 	return &types.QueryChannelFlowResponse{
-		Flow:  &flow,
+		Flow:  flow,
 		Found: true,
 	}, nil
 }

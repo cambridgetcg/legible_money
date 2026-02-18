@@ -120,7 +120,7 @@ func TestMiddleware_OnRecvPacket_WithinLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Set small inflow limit
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "1000",
@@ -157,7 +157,7 @@ func TestMiddleware_OnRecvPacket_WithinLimit(t *testing.T) {
 func TestMiddleware_OnRecvPacket_ExceedsLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "100",
@@ -232,7 +232,7 @@ func TestMiddleware_OnRecvPacket_NonTransferPacket(t *testing.T) {
 func TestMiddleware_OnRecvPacket_CumulativeInflow(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "1000",
@@ -272,7 +272,7 @@ func TestMiddleware_OnRecvPacket_CumulativeInflow(t *testing.T) {
 func TestICS4Wrapper_SendPacket_WithinLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "5000",
 		MaxInflowPerEpoch:  "10000000000",
@@ -299,7 +299,7 @@ func TestICS4Wrapper_SendPacket_WithinLimit(t *testing.T) {
 func TestICS4Wrapper_SendPacket_ExceedsLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "100",
 		MaxInflowPerEpoch:  "10000000000",
@@ -492,7 +492,7 @@ func TestMiddleware_OnTimeoutPacket_Delegates(t *testing.T) {
 func TestMiddleware_OnRecvPacket_NonTrackedDenom_NowLimited(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "100", // very low limit
@@ -524,7 +524,7 @@ func TestMiddleware_OnRecvPacket_NonTrackedDenom_NowLimited(t *testing.T) {
 func TestICS4Wrapper_SendPacket_NonTrackedDenom_NowLimited(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "100", // very low limit
 		MaxInflowPerEpoch:  "10000000000",
@@ -554,7 +554,7 @@ func TestSlidingWindow_EpochBoundary_NoDoubleBurst(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	// Short epoch for testing (10 blocks)
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -598,7 +598,7 @@ func TestSlidingWindow_EpochBoundary_NoDoubleBurst(t *testing.T) {
 func TestSlidingWindow_DecayOverTime(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -637,7 +637,7 @@ func TestSlidingWindow_DecayOverTime(t *testing.T) {
 func TestSlidingWindow_FullEpochLater_NoCarryOver(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  10,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "1000",
@@ -681,7 +681,7 @@ func TestSlidingWindow_FullEpochLater_NoCarryOver(t *testing.T) {
 func TestMultiDenom_AggregateLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "1000",
@@ -739,7 +739,7 @@ func TestMultiDenom_AggregateLimit(t *testing.T) {
 func TestMultiDenom_DifferentChannels(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "1000",
@@ -809,7 +809,7 @@ func TestMultiDenom_DifferentChannels(t *testing.T) {
 func TestMultiDenom_NativeToken(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "500",
@@ -847,7 +847,7 @@ func TestMultiDenom_NativeToken(t *testing.T) {
 func TestMultiDenom_IBCDenom(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "10000000000",
 		MaxInflowPerEpoch:  "500",
@@ -900,7 +900,7 @@ func TestMultiDenom_IBCDenom(t *testing.T) {
 func TestICA_TransferThroughRateLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "10000000000",
@@ -954,7 +954,7 @@ func TestICA_TransferThroughRateLimit(t *testing.T) {
 func TestICA_ExceedsLimit_Rejected(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "500",
 		MaxInflowPerEpoch:  "10000000000",
@@ -981,7 +981,7 @@ func TestICA_ExceedsLimit_Rejected(t *testing.T) {
 func TestICA_AndDirectTransfer_SharedLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
-	k.SetParams(ctx, types.Params{
+	k.SetParams(ctx, &types.Params{
 		EpochLengthBlocks:  34272,
 		MaxOutflowPerEpoch: "1000",
 		MaxInflowPerEpoch:  "10000000000",

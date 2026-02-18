@@ -29,18 +29,18 @@ func (q queryServer) Pot(goCtx context.Context, req *types.QueryPotRequest) (*ty
 		return nil, types.ErrPotNotFound
 	}
 
-	return &types.QueryPotResponse{Pot: &pot}, nil
+	return &types.QueryPotResponse{Pot: pot}, nil
 }
 
 // Pots returns pots with optional status filter and pagination.
 func (q queryServer) Pots(goCtx context.Context, req *types.QueryPotsRequest) (*types.QueryPotsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	var all []types.ClaimingPot
+	var all []*types.ClaimingPot
 	if req.Status != "" {
 		all = q.Keeper.GetPotsByStatus(ctx, types.PotStatus(req.Status))
 	} else {
-		q.Keeper.IteratePots(ctx, func(pot types.ClaimingPot) bool {
+		q.Keeper.IteratePots(ctx, func(pot *types.ClaimingPot) bool {
 			all = append(all, pot)
 			return false
 		})
@@ -62,14 +62,8 @@ func (q queryServer) Pots(goCtx context.Context, req *types.QueryPotsRequest) (*
 		end = total
 	}
 
-	slice := all[start:end]
-	ptrs := make([]*types.ClaimingPot, len(slice))
-	for i := range slice {
-		ptrs[i] = &slice[i]
-	}
-
 	return &types.QueryPotsResponse{
-		Pots:  ptrs,
+		Pots:  all[start:end],
 		Total: total,
 	}, nil
 }
@@ -96,14 +90,8 @@ func (q queryServer) PotsByCreator(goCtx context.Context, req *types.QueryPotsBy
 		end = total
 	}
 
-	slice := all[start:end]
-	ptrs := make([]*types.ClaimingPot, len(slice))
-	for i := range slice {
-		ptrs[i] = &slice[i]
-	}
-
 	return &types.QueryPotsByCreatorResponse{
-		Pots:  ptrs,
+		Pots:  all[start:end],
 		Total: total,
 	}, nil
 }
@@ -147,14 +135,8 @@ func (q queryServer) ClaimRecords(goCtx context.Context, req *types.QueryClaimRe
 		end = total
 	}
 
-	slice := all[start:end]
-	ptrs := make([]*types.ClaimRecord, len(slice))
-	for i := range slice {
-		ptrs[i] = &slice[i]
-	}
-
 	return &types.QueryClaimRecordsResponse{
-		Records: ptrs,
+		Records: all[start:end],
 		Total:   total,
 	}, nil
 }
@@ -165,6 +147,6 @@ func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) 
 	params := q.Keeper.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
-		Params: &params,
+		Params: params,
 	}, nil
 }

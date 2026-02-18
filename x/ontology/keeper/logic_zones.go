@@ -11,7 +11,9 @@ import (
 // InitializeDefaultZones pre-populates the 5 default logic zones.
 // Called from InitGenesis to ensure zones are always available.
 func (k Keeper) InitializeDefaultZones(ctx sdk.Context) {
-	for _, zone := range types.DefaultLogicZones() {
+	defaults := types.DefaultLogicZones()
+	for i := range defaults {
+		zone := &defaults[i]
 		// Only set if not already registered (preserves governance overrides)
 		if _, found := k.GetLogicZone(ctx, types.LogicZone(zone.Zone)); !found {
 			k.SetLogicZone(ctx, zone)

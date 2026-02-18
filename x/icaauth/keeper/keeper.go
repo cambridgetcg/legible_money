@@ -67,9 +67,9 @@ func prefixEndBytes(prefix []byte) []byte {
 // --- State Operations ---
 
 // SetRecord stores an InterchainAccountRecord for a DID.
-func (k Keeper) SetRecord(ctx sdk.Context, record types.InterchainAccountRecord) {
+func (k Keeper) SetRecord(ctx sdk.Context, record *types.InterchainAccountRecord) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&record)
+	bz, err := proto.Marshal(record)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal ICA record: %v", err))
 	}
@@ -79,17 +79,17 @@ func (k Keeper) SetRecord(ctx sdk.Context, record types.InterchainAccountRecord)
 }
 
 // GetRecord retrieves an InterchainAccountRecord for a DID.
-func (k Keeper) GetRecord(ctx sdk.Context, did string) (types.InterchainAccountRecord, bool) {
+func (k Keeper) GetRecord(ctx sdk.Context, did string) (*types.InterchainAccountRecord, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.InterchainAccountKey(did))
 	if err != nil || bz == nil {
-		return types.InterchainAccountRecord{}, false
+		return nil, false
 	}
 	var record types.InterchainAccountRecord
 	if err := proto.Unmarshal(bz, &record); err != nil {
-		return types.InterchainAccountRecord{}, false
+		return nil, false
 	}
-	return record, true
+	return &record, true
 }
 
 // GetRemoteAccountsForDID returns all remote accounts for a DID.
@@ -106,7 +106,7 @@ func (k Keeper) AddRemoteAccount(ctx sdk.Context, did string, account *types.Rem
 	params := k.GetParams(ctx)
 	record, found := k.GetRecord(ctx, did)
 	if !found {
-		record = types.InterchainAccountRecord{
+		record = &types.InterchainAccountRecord{
 			Did:      did,
 			Accounts: []*types.RemoteAccount{},
 		}
@@ -161,12 +161,12 @@ func (k Keeper) UpdateRemoteAccountAddress(ctx sdk.Context, did, connectionId, r
 // --- Params ---
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) error {
 	if err := params.Validate(); err != nil {
 		return err
 	}
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("failed to marshal params: %w", err)
 	}
@@ -174,31 +174,33 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 }
 
 // GetParams retrieves module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
-	return params
+	return &params
 }
 
 // --- Genesis ---
 
 // InitGenesis initializes the module state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) error {
+func (k Keeper) InitGenesis(ctx sdk.Context, data *types.GenesisState) error {
 	if data.Params != nil {
-		if err := k.SetParams(ctx, *data.Params); err != nil {
+		if err := k.SetParams(ctx, data.Params); err != nil {
 			return fmt.Errorf("failed to set params: %w", err)
 		}
 	}
 	for _, record := range data.Records {
 		if record != nil {
-			k.SetRecord(ctx, *record)
+			k.SetRecord(ctx, record)
 		}
 	}
 	return nil
@@ -210,7 +212,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.InterchainAccountPrefix, prefixEndBytes(types.InterchainAccountPrefix))
 	if err != nil {
-		return &types.GenesisState{Params: &params}
+		return &types.GenesisState{Params: params}
 	}
 	defer iter.Close()
 
@@ -224,7 +226,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	}
 
 	return &types.GenesisState{
-		Params:  &params,
+		Params:  params,
 		Records: records,
 	}
 }

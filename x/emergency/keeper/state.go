@@ -44,9 +44,9 @@ func (k Keeper) IsHalted(ctx sdk.Context) bool {
 // --- Ceremonies ---
 
 // SetCeremony stores a ceremony by ID.
-func (k Keeper) SetCeremony(ctx sdk.Context, ceremony types.EmergencyCeremony) error {
+func (k Keeper) SetCeremony(ctx sdk.Context, ceremony *types.EmergencyCeremony) error {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&ceremony)
+	bz, err := proto.Marshal(ceremony)
 	if err != nil {
 		return fmt.Errorf("failed to marshal emergency ceremony: %w", err)
 	}
@@ -57,17 +57,17 @@ func (k Keeper) SetCeremony(ctx sdk.Context, ceremony types.EmergencyCeremony) e
 }
 
 // GetCeremony retrieves a ceremony by ID.
-func (k Keeper) GetCeremony(ctx sdk.Context, id string) (types.EmergencyCeremony, bool) {
+func (k Keeper) GetCeremony(ctx sdk.Context, id string) (*types.EmergencyCeremony, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.CeremonyKey(id))
 	if err != nil || bz == nil {
-		return types.EmergencyCeremony{}, false
+		return nil, false
 	}
 	var ceremony types.EmergencyCeremony
 	if err := proto.Unmarshal(bz, &ceremony); err != nil {
-		return types.EmergencyCeremony{}, false
+		return nil, false
 	}
-	return ceremony, true
+	return &ceremony, true
 }
 
 // DeleteCeremony removes a ceremony by ID.
@@ -79,24 +79,25 @@ func (k Keeper) DeleteCeremony(ctx sdk.Context, id string) {
 }
 
 // GetActiveCeremony returns the currently active (non-terminal) ceremony, if any.
-func (k Keeper) GetActiveCeremony(ctx sdk.Context) (types.EmergencyCeremony, bool) {
-	var active types.EmergencyCeremony
-	found := false
-	k.IterateCeremonies(ctx, func(c types.EmergencyCeremony) bool {
+func (k Keeper) GetActiveCeremony(ctx sdk.Context) (*types.EmergencyCeremony, bool) {
+	var active *types.EmergencyCeremony
+	k.IterateCeremonies(ctx, func(c *types.EmergencyCeremony) bool {
 		if c.Phase != string(types.PhaseFinalized) && c.Phase != string(types.PhaseFailed) {
 			active = c
-			found = true
 			return true // stop iteration
 		}
 		return false
 	})
-	return active, found
+	if active == nil {
+		return nil, false
+	}
+	return active, true
 }
 
 // GetAllCeremonies returns all stored ceremonies.
-func (k Keeper) GetAllCeremonies(ctx sdk.Context) []types.EmergencyCeremony {
-	var ceremonies []types.EmergencyCeremony
-	k.IterateCeremonies(ctx, func(c types.EmergencyCeremony) bool {
+func (k Keeper) GetAllCeremonies(ctx sdk.Context) []*types.EmergencyCeremony {
+	var ceremonies []*types.EmergencyCeremony
+	k.IterateCeremonies(ctx, func(c *types.EmergencyCeremony) bool {
 		ceremonies = append(ceremonies, c)
 		return false
 	})
@@ -104,7 +105,7 @@ func (k Keeper) GetAllCeremonies(ctx sdk.Context) []types.EmergencyCeremony {
 }
 
 // IterateCeremonies iterates over all ceremonies. Return true from cb to stop.
-func (k Keeper) IterateCeremonies(ctx sdk.Context, cb func(types.EmergencyCeremony) bool) {
+func (k Keeper) IterateCeremonies(ctx sdk.Context, cb func(*types.EmergencyCeremony) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.CeremonyKeyPrefix, prefixEndBytes(types.CeremonyKeyPrefix))
 	if err != nil {
@@ -117,7 +118,7 @@ func (k Keeper) IterateCeremonies(ctx sdk.Context, cb func(types.EmergencyCeremo
 		if err := proto.Unmarshal(iter.Value(), &ceremony); err != nil {
 			continue
 		}
-		if cb(ceremony) {
+		if cb(&ceremony) {
 			break
 		}
 	}
@@ -174,7 +175,7 @@ func (k Keeper) ClearHaltStartBlock(ctx sdk.Context) {
 // --- Audit Log ---
 
 // AddAuditEntry appends an audit entry to the log.
-func (k Keeper) AddAuditEntry(ctx sdk.Context, entry types.EmergencyAuditEntry) {
+func (k Keeper) AddAuditEntry(ctx sdk.Context, entry *types.EmergencyAuditEntry) {
 	store := k.storeService.OpenKVStore(ctx)
 	height := entry.BlockNumber
 	// Find next available index for this height
@@ -183,7 +184,7 @@ func (k Keeper) AddAuditEntry(ctx sdk.Context, entry types.EmergencyAuditEntry) 
 		key := types.AuditLogKey(height, index)
 		bz, err := store.Get(key)
 		if err != nil || bz == nil {
-			data, err := proto.Marshal(&entry)
+			data, err := proto.Marshal(entry)
 			if err != nil {
 				return
 			}
@@ -195,8 +196,8 @@ func (k Keeper) AddAuditEntry(ctx sdk.Context, entry types.EmergencyAuditEntry) 
 }
 
 // GetAuditLog returns all audit entries.
-func (k Keeper) GetAuditLog(ctx sdk.Context) []types.EmergencyAuditEntry {
-	var entries []types.EmergencyAuditEntry
+func (k Keeper) GetAuditLog(ctx sdk.Context) []*types.EmergencyAuditEntry {
+	var entries []*types.EmergencyAuditEntry
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.AuditLogKeyPrefix, prefixEndBytes(types.AuditLogKeyPrefix))
 	if err != nil {
@@ -209,7 +210,7 @@ func (k Keeper) GetAuditLog(ctx sdk.Context) []types.EmergencyAuditEntry {
 		if err := proto.Unmarshal(iter.Value(), &entry); err != nil {
 			continue
 		}
-		entries = append(entries, entry)
+		entries = append(entries, &entry)
 	}
 	return entries
 }
@@ -344,23 +345,25 @@ func (k Keeper) ClearRevertTarget(ctx sdk.Context) {
 // --- Params ---
 
 // GetParams returns the emergency module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
-	return params
+	return &params
 }
 
 // SetParams stores the emergency module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic("failed to marshal emergency params: " + err.Error())
 	}

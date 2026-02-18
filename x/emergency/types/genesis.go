@@ -41,7 +41,7 @@ func DefaultGenesisState() *GenesisState {
 }
 
 // Validate validates the genesis state.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params == nil {
 		return fmt.Errorf("params cannot be nil")
 	}

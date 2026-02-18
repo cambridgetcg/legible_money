@@ -71,7 +71,7 @@ func (k Keeper) DistributeCitationRewards(
 
 	for level := 0; level < int(ep.MaxPropagationDepth) && levelShare > 0; level++ {
 		// Find facts at this level
-		var levelRefs []types.FactReference
+		var levelRefs []*types.FactReference
 		if level == 0 {
 			// Level 0: direct references from the new fact
 			for _, ref := range refs {

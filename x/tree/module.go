@@ -60,7 +60,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 	if err := json.Unmarshal(bz, &gs); err != nil {
 		return fmt.Errorf("failed to unmarshal tree genesis: %w", err)
 	}
-	return gs.Validate()
+	return (&gs).Validate()
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
@@ -132,9 +132,9 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 
 	// Expire seeds past their expiry block
 	expiredSeeds := am.keeper.GetExpiredSeeds(ctx, currentBlock)
-	for _, seed := range expiredSeeds {
-		seed.Status = string(types.SeedExpired)
-		am.keeper.SetSeed(ctx, seed)
+	for i := range expiredSeeds {
+		expiredSeeds[i].Status = string(types.SeedExpired)
+		am.keeper.SetSeed(ctx, expiredSeeds[i])
 	}
 
 	return nil

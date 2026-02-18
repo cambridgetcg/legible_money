@@ -69,7 +69,7 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 	height := uint64(ctx.BlockHeight())
 	proposalID := GenerateProposalID(msg.Proposer, msg.Name, height)
 
-	proposal := types.DomainProposal{
+	proposal := &types.DomainProposal{
 		Id: proposalID,
 		Domain: &types.Domain{
 			Name:        msg.Name,
@@ -172,7 +172,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
 
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -201,7 +201,7 @@ func (k msgServer) RegisterLogicZone(goCtx context.Context, msg *types.MsgRegist
 		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneExists, msg.ZoneProperties.Zone)
 	}
 
-	k.SetLogicZone(ctx, *msg.ZoneProperties)
+	k.SetLogicZone(ctx, msg.ZoneProperties)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

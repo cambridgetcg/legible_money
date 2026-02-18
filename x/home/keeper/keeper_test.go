@@ -52,7 +52,8 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
 
 	// Set default params
-	k.SetParams(ctx, types.DefaultParams())
+	dp := types.DefaultParams()
+	k.SetParams(ctx, &dp)
 
 	return k, ctx
 }
@@ -125,7 +126,7 @@ func TestCreateHomeDuplicate(t *testing.T) {
 	// Set max homes to 2
 	params := types.DefaultParams()
 	params.MaxHomesPerAccount = 2
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	// Create 2 homes
 	for i := 0; i < 2; i++ {
@@ -433,7 +434,7 @@ func TestMaxKeysEnforced(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.MaxKeysPerHome = 3
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
 		Owner: owner1,
@@ -553,7 +554,7 @@ func TestDeadmanSwitch(t *testing.T) {
 		CreatedAtBlock:  10,
 		LastActiveBlock: 50, // Last active at block 50, current is 100 (gap = 50 > 30)
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	// Also create a home that should NOT trigger
 	activeHome := types.AgentHome{
@@ -571,7 +572,7 @@ func TestDeadmanSwitch(t *testing.T) {
 		CreatedAtBlock:  10,
 		LastActiveBlock: 90, // Gap = 10 < 30
 	}
-	k.SetHome(ctx, activeHome)
+	k.SetHome(ctx, &activeHome)
 
 	// Run deadman check
 	k.CheckDeadmanSwitches(ctx)
@@ -605,7 +606,7 @@ func TestAcknowledgeAlert(t *testing.T) {
 
 	// Find the alert
 	var alertId string
-	k.IterateAlerts(ctx, homeResp.HomeId, func(alert types.Alert) bool {
+	k.IterateAlerts(ctx, homeResp.HomeId, func(alert *types.Alert) bool {
 		alertId = alert.AlertId
 		return true
 	})
@@ -700,7 +701,7 @@ func TestParamsGenesis(t *testing.T) {
 		},
 	}
 
-	k.InitGenesis(ctx, gs)
+	k.InitGenesis(ctx, &gs)
 
 	// Verify params
 	params := k.GetParams(ctx)
@@ -800,7 +801,7 @@ func TestCheckAndDebitSpendingLimit_ExceedsLimit(t *testing.T) {
 
 	// Verify alert was created
 	var alertCount uint32
-	k.IterateAlerts(ctx, homeResp.HomeId, func(alert types.Alert) bool {
+	k.IterateAlerts(ctx, homeResp.HomeId, func(alert *types.Alert) bool {
 		if alert.Type == string(types.AlertSpendingLimitHit) {
 			alertCount++
 		}
@@ -815,14 +816,14 @@ func TestCheckAndDebitSpendingLimit_PeriodReset(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-period-reset"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Period Reset",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
 	// Set limit with period starting at block 50, period of 20 blocks
-	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+	k.SetSpendingLimit(ctx, homeId, &types.SpendingLimit{
 		KeyType: "operator", MaxAmount: "5000000",
 		PeriodBlocks: 20, SpentInPeriod: "4000000", PeriodStart: 50,
 	})
@@ -846,7 +847,7 @@ func TestCheckAndDebitSpendingLimit_NoLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-no-limit"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "No Limit",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
@@ -863,13 +864,13 @@ func TestCheckAndDebitSpendingLimit_InvalidAmount(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-invalid-amt"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Invalid Amt",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
-	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+	k.SetSpendingLimit(ctx, homeId, &types.SpendingLimit{
 		KeyType: "operator", MaxAmount: "5000000",
 		PeriodBlocks: 34272, SpentInPeriod: "0", PeriodStart: 100,
 	})
@@ -897,7 +898,7 @@ func TestGetRemainingSpendingLimit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-remaining"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Remaining",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
@@ -910,7 +911,7 @@ func TestGetRemainingSpendingLimit(t *testing.T) {
 	}
 
 	// Set limit: max 10, spent 3, period still active
-	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+	k.SetSpendingLimit(ctx, homeId, &types.SpendingLimit{
 		KeyType: "operator", MaxAmount: "10000000",
 		PeriodBlocks: 34272, SpentInPeriod: "3000000", PeriodStart: 90,
 	})
@@ -921,7 +922,7 @@ func TestGetRemainingSpendingLimit(t *testing.T) {
 	}
 
 	// Period expired — should return full max amount
-	k.SetSpendingLimit(ctx, homeId, types.SpendingLimit{
+	k.SetSpendingLimit(ctx, homeId, &types.SpendingLimit{
 		KeyType: "operator", MaxAmount: "10000000",
 		PeriodBlocks: 5, SpentInPeriod: "8000000", PeriodStart: 50,
 	})
@@ -949,7 +950,7 @@ func TestProcessTreasuryAutomation_AutoCompound(t *testing.T) {
 			},
 		},
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	// Run automation — should emit event (no bank keeper needed)
 	k.ProcessTreasuryAutomation(ctx)
@@ -984,7 +985,7 @@ func TestProcessTreasuryAutomation_SkipsDormant(t *testing.T) {
 			Automation: &types.TreasuryAutomation{AutoCompoundRewards: true},
 		},
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	k.ProcessTreasuryAutomation(ctx)
 
@@ -1007,7 +1008,7 @@ func TestProcessTreasuryAutomation_NoAutomation(t *testing.T) {
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 		Treasury: &types.HomeTreasury{ReservedBalance: "0"},
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	// Should not panic and not emit events
 	k.ProcessTreasuryAutomation(ctx)
@@ -1123,7 +1124,7 @@ func TestUpdateHomeMaturity(t *testing.T) {
 		CreatedAtBlock: 10,
 		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	changed := k.UpdateHomeMaturity(ctx, &home)
 	// Stage is fresh, default is also fresh → no change
@@ -1144,7 +1145,7 @@ func TestUpdateHomeMaturity(t *testing.T) {
 		CreatedAtBlock: 0,
 		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	}
-	k.SetHome(oldCtx, oldHome)
+	k.SetHome(oldCtx, &oldHome)
 
 	changed = k.UpdateHomeMaturity(oldCtx, &oldHome)
 	if !changed {
@@ -1183,7 +1184,7 @@ func TestUpdateHomeMaturity_AllStages(t *testing.T) {
 			CreatedAtBlock: tc.created,
 			Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 		}
-		k.SetHome(stageCtx, home)
+		k.SetHome(stageCtx, &home)
 		k.UpdateHomeMaturity(stageCtx, &home)
 
 		got := k.GetHomeMaturity(stageCtx, homeId)
@@ -1221,7 +1222,7 @@ func TestProcessHomeAging_Periodic(t *testing.T) {
 		CreatedAtBlock: 0,
 		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
 	// Block 100 — 100 % 1428 != 0, so aging should NOT run
 	k.ProcessHomeAging(ctx)
@@ -1261,7 +1262,7 @@ func TestProcessHomeAging_SkipsArchived(t *testing.T) {
 		Guardian:       &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	}
 	archivedCtx := ctx.WithBlockHeight(int64(keeper.ThresholdEstablished) + 1428)
-	k.SetHome(archivedCtx, home)
+	k.SetHome(archivedCtx, &home)
 
 	// Run at periodic block
 	blockHeight := int64(keeper.ThresholdEstablished) + 1428
@@ -1339,20 +1340,20 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	homeId := "home-session-cleanup"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Session Cleanup",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
 	// Create an expired session (expires at block 50, current is 100)
-	k.SetSession(ctx, types.ActiveSession{
+	k.SetSession(ctx, &types.ActiveSession{
 		SessionId: "expired-1", HomeId: homeId,
 		StartedAt: 40, ExpiresAt: 50, KeyHash: "key1",
 	})
 
 	// Create a valid session (expires at block 200)
-	k.SetSession(ctx, types.ActiveSession{
+	k.SetSession(ctx, &types.ActiveSession{
 		SessionId: "valid-1", HomeId: homeId,
 		StartedAt: 90, ExpiresAt: 200, KeyHash: "key2",
 	})
@@ -1379,29 +1380,29 @@ func TestCleanupOldAlerts(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.AlertRetentionBlocks = 50
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 
 	homeId := "home-alert-cleanup"
-	k.SetHome(ctx, types.AgentHome{
+	k.SetHome(ctx, &types.AgentHome{
 		HomeId: homeId, OwnerAddress: owner1, Name: "Alert Cleanup",
 		Status:   string(types.HomeStatusActive),
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 	})
 
 	// Old acknowledged alert (created at block 10, retention 50, current 100: 10+50=60 < 100)
-	k.SetAlert(ctx, types.Alert{
+	k.SetAlert(ctx, &types.Alert{
 		AlertId: "old-ack", HomeId: homeId, Type: string(types.AlertDefenseActivated),
 		Priority: string(types.AlertPriorityLow), CreatedAt: 10, Acknowledged: true,
 	})
 
 	// Recent acknowledged alert (created at block 80, 80+50=130 > 100)
-	k.SetAlert(ctx, types.Alert{
+	k.SetAlert(ctx, &types.Alert{
 		AlertId: "recent-ack", HomeId: homeId, Type: string(types.AlertDefenseActivated),
 		Priority: string(types.AlertPriorityLow), CreatedAt: 80, Acknowledged: true,
 	})
 
 	// Old unacknowledged alert — should NOT be cleaned up
-	k.SetAlert(ctx, types.Alert{
+	k.SetAlert(ctx, &types.Alert{
 		AlertId: "old-unack", HomeId: homeId, Type: string(types.AlertDefenseActivated),
 		Priority: string(types.AlertPriorityHigh), CreatedAt: 10, Acknowledged: false,
 	})
@@ -1439,9 +1440,9 @@ func TestComfortDimensions_DefaultHome(t *testing.T) {
 		Guardian: &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
 		Treasury: &types.HomeTreasury{ReservedBalance: "0"},
 	}
-	k.SetHome(ctx, home)
+	k.SetHome(ctx, &home)
 
-	dims := k.ComputeComfortDimensions(ctx, home)
+	dims := k.ComputeComfortDimensions(ctx, &home)
 
 	// Sanctuary: active=80, no autodefend → 80
 	if dims.Sanctuary != 80 {
@@ -1661,7 +1662,7 @@ func TestUpdateParams(t *testing.T) {
 	newParams := types.DefaultParams()
 	newParams.MaxHomesPerAccount = 10
 	newParams.MaxKeysPerHome = 50
-	k.SetParams(ctx, newParams)
+	k.SetParams(ctx, &newParams)
 
 	got := k.GetParams(ctx)
 	if got.MaxHomesPerAccount != 10 {

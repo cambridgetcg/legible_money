@@ -58,7 +58,7 @@ func (k Keeper) QualifyViaStakeCommitment(ctx sdk.Context, validatorAddr, domain
 	params := k.GetParams(ctx)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	q := types.DomainQualification{
+	q := &types.DomainQualification{
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
@@ -73,7 +73,7 @@ func (k Keeper) QualifyViaStakeCommitment(ctx sdk.Context, validatorAddr, domain
 	}
 
 	k.SetQualification(ctx, q)
-	return &q, nil
+	return q, nil
 }
 
 // QualifyViaTrackRecord qualifies a validator based on their verification history in a parent/adjacent domain.
@@ -111,7 +111,7 @@ func (k Keeper) QualifyViaTrackRecord(ctx sdk.Context, validatorAddr, domain str
 
 	currentBlock := uint64(ctx.BlockHeight())
 
-	q := types.DomainQualification{
+	q := &types.DomainQualification{
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
@@ -124,7 +124,7 @@ func (k Keeper) QualifyViaTrackRecord(ctx sdk.Context, validatorAddr, domain str
 	}
 
 	k.SetQualification(ctx, q)
-	return &q, nil
+	return q, nil
 }
 
 // QualifyViaCrossReference qualifies a validator based on endorsements from qualified validators.
@@ -162,7 +162,7 @@ func (k Keeper) QualifyViaCrossReference(ctx sdk.Context, validatorAddr, domain 
 
 	currentBlock := uint64(ctx.BlockHeight())
 
-	q := types.DomainQualification{
+	q := &types.DomainQualification{
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
@@ -176,7 +176,7 @@ func (k Keeper) QualifyViaCrossReference(ctx sdk.Context, validatorAddr, domain 
 	}
 
 	k.SetQualification(ctx, q)
-	return &q, nil
+	return q, nil
 }
 
 // QualifyViaStratumInheritance qualifies a validator in a domain based on qualification
@@ -213,7 +213,7 @@ func (k Keeper) QualifyViaStratumInheritance(ctx sdk.Context, validatorAddr, dom
 	params := k.GetParams(ctx)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	q := types.DomainQualification{
+	q := &types.DomainQualification{
 		ValidatorAddr:          validatorAddr,
 		Domain:                 domain,
 		Stratum:                stratum,
@@ -227,7 +227,7 @@ func (k Keeper) QualifyViaStratumInheritance(ctx sdk.Context, validatorAddr, dom
 	}
 
 	k.SetQualification(ctx, q)
-	return &q, nil
+	return q, nil
 }
 
 // --- Helpers ---

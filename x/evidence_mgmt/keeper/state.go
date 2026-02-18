@@ -14,10 +14,10 @@ import (
 // ---------- Evidence KV Operations ----------
 
 // SetEvidence stores an evidence record in the KV store.
-func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.Evidence) {
+func (k Keeper) SetEvidence(ctx sdk.Context, evidence *types.Evidence) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := evidenceKey(evidence.Id)
-	bz, err := proto.Marshal(&evidence)
+	bz, err := proto.Marshal(evidence)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal evidence: %v", err))
 	}
@@ -33,17 +33,17 @@ func (k Keeper) SetEvidence(ctx sdk.Context, evidence types.Evidence) {
 }
 
 // GetEvidence retrieves an evidence record by ID.
-func (k Keeper) GetEvidence(ctx sdk.Context, id string) (types.Evidence, bool) {
+func (k Keeper) GetEvidence(ctx sdk.Context, id string) (*types.Evidence, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(evidenceKey(id))
 	if err != nil || bz == nil {
-		return types.Evidence{}, false
+		return nil, false
 	}
 	var evidence types.Evidence
 	if err := proto.Unmarshal(bz, &evidence); err != nil {
-		return types.Evidence{}, false
+		return nil, false
 	}
-	return evidence, true
+	return &evidence, true
 }
 
 // DeleteEvidence removes an evidence record from the store.
@@ -58,7 +58,7 @@ func (k Keeper) DeleteEvidence(ctx sdk.Context, id string) {
 }
 
 // IterateEvidence iterates over all evidence. Return true from cb to stop.
-func (k Keeper) IterateEvidence(ctx sdk.Context, cb func(types.Evidence) bool) {
+func (k Keeper) IterateEvidence(ctx sdk.Context, cb func(*types.Evidence) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.EvidenceKeyPrefix, prefixEndBytes(types.EvidenceKeyPrefix))
 	if err != nil {
@@ -71,14 +71,14 @@ func (k Keeper) IterateEvidence(ctx sdk.Context, cb func(types.Evidence) bool) {
 		if err := proto.Unmarshal(iter.Value(), &evidence); err != nil {
 			continue
 		}
-		if cb(evidence) {
+		if cb(&evidence) {
 			break
 		}
 	}
 }
 
 // GetEvidenceByClaimId returns all evidence for a given claim.
-func (k Keeper) GetEvidenceByClaimId(ctx sdk.Context, claimId string) []types.Evidence {
+func (k Keeper) GetEvidenceByClaimId(ctx sdk.Context, claimId string) []*types.Evidence {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.EvidenceByClaimPrefix, []byte(claimId+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -87,7 +87,7 @@ func (k Keeper) GetEvidenceByClaimId(ctx sdk.Context, claimId string) []types.Ev
 	}
 	defer iter.Close()
 
-	var evidences []types.Evidence
+	var evidences []*types.Evidence
 	for ; iter.Valid(); iter.Next() {
 		evidenceId := string(iter.Value())
 		evidence, found := k.GetEvidence(ctx, evidenceId)
@@ -106,10 +106,10 @@ func (k Keeper) GetEvidenceCountForClaim(ctx sdk.Context, claimId string) uint32
 // ---------- Audit KV Operations ----------
 
 // SetAudit stores an audit record in the KV store.
-func (k Keeper) SetAudit(ctx sdk.Context, audit types.EvidenceAudit) {
+func (k Keeper) SetAudit(ctx sdk.Context, audit *types.EvidenceAudit) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := auditKey(audit.Id)
-	bz, err := proto.Marshal(&audit)
+	bz, err := proto.Marshal(audit)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal audit: %v", err))
 	}
@@ -125,17 +125,17 @@ func (k Keeper) SetAudit(ctx sdk.Context, audit types.EvidenceAudit) {
 }
 
 // GetAudit retrieves an audit record by ID.
-func (k Keeper) GetAudit(ctx sdk.Context, id string) (types.EvidenceAudit, bool) {
+func (k Keeper) GetAudit(ctx sdk.Context, id string) (*types.EvidenceAudit, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(auditKey(id))
 	if err != nil || bz == nil {
-		return types.EvidenceAudit{}, false
+		return nil, false
 	}
 	var audit types.EvidenceAudit
 	if err := proto.Unmarshal(bz, &audit); err != nil {
-		return types.EvidenceAudit{}, false
+		return nil, false
 	}
-	return audit, true
+	return &audit, true
 }
 
 // DeleteAudit removes an audit record from the store.
@@ -150,7 +150,7 @@ func (k Keeper) DeleteAudit(ctx sdk.Context, id string) {
 }
 
 // IterateAudits iterates over all audits. Return true from cb to stop.
-func (k Keeper) IterateAudits(ctx sdk.Context, cb func(types.EvidenceAudit) bool) {
+func (k Keeper) IterateAudits(ctx sdk.Context, cb func(*types.EvidenceAudit) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.AuditKeyPrefix, prefixEndBytes(types.AuditKeyPrefix))
 	if err != nil {
@@ -163,14 +163,14 @@ func (k Keeper) IterateAudits(ctx sdk.Context, cb func(types.EvidenceAudit) bool
 		if err := proto.Unmarshal(iter.Value(), &audit); err != nil {
 			continue
 		}
-		if cb(audit) {
+		if cb(&audit) {
 			break
 		}
 	}
 }
 
 // GetAuditsForEvidence returns all audits for a given evidence ID.
-func (k Keeper) GetAuditsForEvidence(ctx sdk.Context, evidenceId string) []types.EvidenceAudit {
+func (k Keeper) GetAuditsForEvidence(ctx sdk.Context, evidenceId string) []*types.EvidenceAudit {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.AuditByEvidencePrefix, []byte(evidenceId+":")...)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -179,7 +179,7 @@ func (k Keeper) GetAuditsForEvidence(ctx sdk.Context, evidenceId string) []types
 	}
 	defer iter.Close()
 
-	var audits []types.EvidenceAudit
+	var audits []*types.EvidenceAudit
 	for ; iter.Valid(); iter.Next() {
 		auditId := string(iter.Value())
 		audit, found := k.GetAudit(ctx, auditId)
@@ -193,7 +193,7 @@ func (k Keeper) GetAuditsForEvidence(ctx sdk.Context, evidenceId string) []types
 // ---------- Consensus KV Operations ----------
 
 // IterateConsensus iterates over all audit consensus records. Return true from cb to stop.
-func (k Keeper) IterateConsensus(ctx sdk.Context, cb func(types.AuditConsensus) bool) {
+func (k Keeper) IterateConsensus(ctx sdk.Context, cb func(*types.AuditConsensus) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.ConsensusKeyPrefix, prefixEndBytes(types.ConsensusKeyPrefix))
 	if err != nil {
@@ -206,17 +206,17 @@ func (k Keeper) IterateConsensus(ctx sdk.Context, cb func(types.AuditConsensus) 
 		if err := proto.Unmarshal(iter.Value(), &consensus); err != nil {
 			continue
 		}
-		if cb(consensus) {
+		if cb(&consensus) {
 			break
 		}
 	}
 }
 
 // SetConsensus stores an audit consensus record.
-func (k Keeper) SetConsensus(ctx sdk.Context, consensus types.AuditConsensus) {
+func (k Keeper) SetConsensus(ctx sdk.Context, consensus *types.AuditConsensus) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := consensusKey(consensus.EvidenceId)
-	bz, err := proto.Marshal(&consensus)
+	bz, err := proto.Marshal(consensus)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal consensus: %v", err))
 	}
@@ -226,17 +226,17 @@ func (k Keeper) SetConsensus(ctx sdk.Context, consensus types.AuditConsensus) {
 }
 
 // GetConsensus retrieves the audit consensus for an evidence ID.
-func (k Keeper) GetConsensus(ctx sdk.Context, evidenceId string) (types.AuditConsensus, bool) {
+func (k Keeper) GetConsensus(ctx sdk.Context, evidenceId string) (*types.AuditConsensus, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(consensusKey(evidenceId))
 	if err != nil || bz == nil {
-		return types.AuditConsensus{}, false
+		return nil, false
 	}
 	var consensus types.AuditConsensus
 	if err := proto.Unmarshal(bz, &consensus); err != nil {
-		return types.AuditConsensus{}, false
+		return nil, false
 	}
-	return consensus, true
+	return &consensus, true
 }
 
 // ---------- Expiry Index Operations ----------
@@ -283,10 +283,10 @@ func (k Keeper) IterateExpiredEvidence(ctx sdk.Context, currentHeight uint64, cb
 // ---------- Oracle KV Operations ----------
 
 // SetOracle stores an oracle record in the KV store.
-func (k Keeper) SetOracle(ctx sdk.Context, oracle types.Oracle) {
+func (k Keeper) SetOracle(ctx sdk.Context, oracle *types.Oracle) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := oracleKey(oracle.Id)
-	bz, err := proto.Marshal(&oracle)
+	bz, err := proto.Marshal(oracle)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal oracle: %v", err))
 	}
@@ -296,17 +296,17 @@ func (k Keeper) SetOracle(ctx sdk.Context, oracle types.Oracle) {
 }
 
 // GetOracle retrieves an oracle by ID.
-func (k Keeper) GetOracle(ctx sdk.Context, id string) (types.Oracle, bool) {
+func (k Keeper) GetOracle(ctx sdk.Context, id string) (*types.Oracle, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(oracleKey(id))
 	if err != nil || bz == nil {
-		return types.Oracle{}, false
+		return nil, false
 	}
 	var oracle types.Oracle
 	if err := proto.Unmarshal(bz, &oracle); err != nil {
-		return types.Oracle{}, false
+		return nil, false
 	}
-	return oracle, true
+	return &oracle, true
 }
 
 // DeleteOracle removes an oracle from the store.
@@ -317,7 +317,7 @@ func (k Keeper) DeleteOracle(ctx sdk.Context, id string) {
 }
 
 // IterateOracles iterates over all oracles. Return true from cb to stop.
-func (k Keeper) IterateOracles(ctx sdk.Context, cb func(types.Oracle) bool) {
+func (k Keeper) IterateOracles(ctx sdk.Context, cb func(*types.Oracle) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.OracleKeyPrefix, prefixEndBytes(types.OracleKeyPrefix))
 	if err != nil {
@@ -330,7 +330,7 @@ func (k Keeper) IterateOracles(ctx sdk.Context, cb func(types.Oracle) bool) {
 		if err := proto.Unmarshal(iter.Value(), &oracle); err != nil {
 			continue
 		}
-		if cb(oracle) {
+		if cb(&oracle) {
 			break
 		}
 	}
@@ -351,7 +351,7 @@ func (k Keeper) RemoveActiveOracle(ctx sdk.Context, oracleId string) {
 }
 
 // GetActiveOracles returns all active oracles.
-func (k Keeper) GetActiveOracles(ctx sdk.Context) []types.Oracle {
+func (k Keeper) GetActiveOracles(ctx sdk.Context) []*types.Oracle {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.ActiveOraclePrefix, prefixEndBytes(types.ActiveOraclePrefix))
 	if err != nil {
@@ -359,7 +359,7 @@ func (k Keeper) GetActiveOracles(ctx sdk.Context) []types.Oracle {
 	}
 	defer iter.Close()
 
-	var oracles []types.Oracle
+	var oracles []*types.Oracle
 	for ; iter.Valid(); iter.Next() {
 		oracleId := string(iter.Value())
 		oracle, found := k.GetOracle(ctx, oracleId)
@@ -371,10 +371,10 @@ func (k Keeper) GetActiveOracles(ctx sdk.Context) []types.Oracle {
 }
 
 // GetOracleByOperator finds an oracle by its operator address.
-func (k Keeper) GetOracleByOperator(ctx sdk.Context, operator string) (types.Oracle, bool) {
-	var found types.Oracle
+func (k Keeper) GetOracleByOperator(ctx sdk.Context, operator string) (*types.Oracle, bool) {
+	var found *types.Oracle
 	var exists bool
-	k.IterateOracles(ctx, func(o types.Oracle) bool {
+	k.IterateOracles(ctx, func(o *types.Oracle) bool {
 		if o.Operator == operator {
 			found = o
 			exists = true

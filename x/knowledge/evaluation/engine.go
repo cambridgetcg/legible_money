@@ -25,8 +25,8 @@ import (
 func EvaluateClaim(
 	ctx sdk.Context,
 	evalCtx *EvaluationContext,
-	round types.VerificationRound,
-	claim types.Claim,
+	round *types.VerificationRound,
+	claim *types.Claim,
 ) (EvaluationResult, error) {
 	if evalCtx == nil {
 		return EvaluationResult{Verdict: "abstain", Confidence: 0}, fmt.Errorf("nil evaluation context")

@@ -65,7 +65,7 @@ const (
 )
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.AccuracyThreshold > 1000000 {
 		return fmt.Errorf("%w: accuracy_threshold cannot exceed 1000000", ErrInvalidParams)
 	}

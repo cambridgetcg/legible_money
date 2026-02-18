@@ -59,7 +59,7 @@ const (
 // -----------------------------------------------------------------------
 
 // Validate performs parameter validation.
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.ComputePoolShareBps > 1000000 {
 		return fmt.Errorf("compute_pool_share_bps must be <= 1000000")
 	}
@@ -108,8 +108,8 @@ func (p Params) Validate() error {
 }
 
 // DefaultParams returns the default module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		ComputePoolShareBps:        DefaultComputePoolShareBps,
 		BaseCuPerVerification:      DefaultBaseCUPerVerification,
 		ComplexityBonusBps:         DefaultComplexityBonusBps,
@@ -138,16 +138,15 @@ func DefaultParams() Params {
 
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
-	p := DefaultParams()
 	return &GenesisState{
-		Params:    &p,
+		Params:    DefaultParams(),
 		Providers: []*ComputeProvider{},
 		Credits:   []*ComputeCredit{},
 	}
 }
 
 // Validate validates the genesis state.
-func (gs GenesisState) Validate() error {
+func (gs *GenesisState) Validate() error {
 	if gs.Params != nil {
 		if err := gs.Params.Validate(); err != nil {
 			return fmt.Errorf("invalid params: %w", err)

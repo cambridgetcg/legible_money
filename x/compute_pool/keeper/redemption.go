@@ -77,7 +77,7 @@ func (k Keeper) CreateRedemptionTicket(ctx sdk.Context, validatorAddr, providerA
 		ExpiresAt: height + params.RedemptionExpiryBlocks,
 	}
 
-	k.SetTicket(ctx, ticket)
+	k.SetTicket(ctx, &ticket)
 
 	// Update epoch stats
 	stats := k.GetOrCreateEpochStats(ctx, epoch)
@@ -173,7 +173,7 @@ func (k Keeper) ConfirmRedemption(ctx sdk.Context, validatorAddr string, ticketI
 		LgmPaid:     actualPayment.String(),
 		ConfirmedAt: height,
 	}
-	k.SetUsageReport(ctx, report)
+	k.SetUsageReport(ctx, &report)
 
 	// Update provider metrics
 	provider.TasksServed++
@@ -270,9 +270,9 @@ func (k Keeper) ExpireRedemptionTickets(ctx sdk.Context) {
 	height := uint64(ctx.BlockHeight())
 	params := k.GetParams(ctx)
 
-	var toExpire []types.RedemptionTicket
+	var toExpire []*types.RedemptionTicket
 
-	k.IterateTickets(ctx, func(ticket types.RedemptionTicket) bool {
+	k.IterateTickets(ctx, func(ticket *types.RedemptionTicket) bool {
 		if ticket.Status == string(types.TicketStatusPending) && height > ticket.ExpiresAt {
 			toExpire = append(toExpire, ticket)
 		}
@@ -308,7 +308,7 @@ func (k Keeper) ExpireRedemptionTickets(ctx sdk.Context) {
 
 // checkProviderEpochCap ensures a provider doesn't receive more than MaxProviderShareBps
 // of the pool's epoch inflow.
-func (k Keeper) checkProviderEpochCap(ctx sdk.Context, params types.Params, epoch uint64, providerAddr string, cuAmount uint64, pricePerCU string) error {
+func (k Keeper) checkProviderEpochCap(ctx sdk.Context, params *types.Params, epoch uint64, providerAddr string, cuAmount uint64, pricePerCU string) error {
 	// Get epoch pool inflow
 	stats := k.GetOrCreateEpochStats(ctx, epoch)
 	poolInflow := new(big.Int)

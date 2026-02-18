@@ -135,7 +135,7 @@ var _ alignmenttypes.KnowledgeKeeper = (*AlignmentKnowledgeAdapter)(nil)
 func (a *AlignmentKnowledgeAdapter) GetVerifiedFactCount(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var count uint64
-	a.keeper.IterateFacts(sdkCtx, func(f knowledgetypes.Fact) bool {
+	a.keeper.IterateFacts(sdkCtx, func(f *knowledgetypes.Fact) bool {
 		if f.Status == knowledgetypes.FactStatusVerified {
 			count++
 		}
@@ -147,7 +147,7 @@ func (a *AlignmentKnowledgeAdapter) GetVerifiedFactCount(ctx context.Context) ui
 func (a *AlignmentKnowledgeAdapter) GetSupersededFactCount(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var count uint64
-	a.keeper.IterateFacts(sdkCtx, func(f knowledgetypes.Fact) bool {
+	a.keeper.IterateFacts(sdkCtx, func(f *knowledgetypes.Fact) bool {
 		if f.Status == knowledgetypes.FactStatusSuperseded {
 			count++
 		}
@@ -174,7 +174,7 @@ func (a *AlignmentKnowledgeAdapter) GetChallengesByTopValidators(_ context.Conte
 func (a *AlignmentKnowledgeAdapter) GetUnanimousRoundCount(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var count uint64
-	a.keeper.IterateVerificationRounds(sdkCtx, func(r knowledgetypes.VerificationRound) bool {
+	a.keeper.IterateVerificationRounds(sdkCtx, func(r *knowledgetypes.VerificationRound) bool {
 		if r.Phase != "complete" {
 			return false
 		}
@@ -206,7 +206,7 @@ func (a *AlignmentKnowledgeAdapter) GetUnanimousRoundCount(ctx context.Context) 
 func (a *AlignmentKnowledgeAdapter) GetTotalRoundCount(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var count uint64
-	a.keeper.IterateVerificationRounds(sdkCtx, func(r knowledgetypes.VerificationRound) bool {
+	a.keeper.IterateVerificationRounds(sdkCtx, func(r *knowledgetypes.VerificationRound) bool {
 		if r.Phase == "complete" {
 			count++
 		}
@@ -218,7 +218,7 @@ func (a *AlignmentKnowledgeAdapter) GetTotalRoundCount(ctx context.Context) uint
 func (a *AlignmentKnowledgeAdapter) GetCounterFactCount(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	var count uint64
-	a.keeper.IterateCounterFacts(sdkCtx, func(_ knowledgetypes.CounterFact) bool {
+	a.keeper.IterateCounterFacts(sdkCtx, func(_ *knowledgetypes.CounterFact) bool {
 		count++
 		return false
 	})
@@ -242,7 +242,7 @@ func (a *AlignmentKnowledgeAdapter) GetOrphanFactCount(ctx context.Context) uint
 	// Count facts that have no outgoing references (no domain).
 	// Approximation: facts with empty domain are orphans.
 	var count uint64
-	a.keeper.IterateFacts(sdkCtx, func(f knowledgetypes.Fact) bool {
+	a.keeper.IterateFacts(sdkCtx, func(f *knowledgetypes.Fact) bool {
 		if f.Domain == "" {
 			count++
 		}
@@ -282,7 +282,7 @@ func (a *AlignmentKnowledgeAdapter) GetDomainFactDistribution(ctx context.Contex
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	// Collect domains and their fact counts
 	var result []alignmenttypes.DomainFactCount
-	a.keeper.IterateDomains(sdkCtx, func(d knowledgetypes.OntologicalDomain) bool {
+	a.keeper.IterateDomains(sdkCtx, func(d *knowledgetypes.OntologicalDomain) bool {
 		count := a.keeper.GetFactCountByDomain(sdkCtx, d.Name)
 		if count > 0 {
 			result = append(result, alignmenttypes.DomainFactCount{
@@ -321,7 +321,7 @@ func (a *AlignmentStakingAdapter) GetValidatorRewardDistribution(ctx context.Con
 	// Use total stake as a proxy for reward distribution (actual per-epoch
 	// reward tracking not yet available).
 	var rewards []alignmenttypes.ValidatorReward
-	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingtypes.LegibleValidator) bool {
+	a.keeper.IterateValidators(sdkCtx, func(v *legiblestakingtypes.LegibleValidator) bool {
 		stake, ok := new(big.Int).SetString(v.TotalStake, 10)
 		if !ok || stake.Sign() <= 0 {
 			return false
@@ -349,7 +349,7 @@ func (a *AlignmentStakingAdapter) GetTop10StakeRatio(ctx context.Context) uint64
 		stake *big.Int
 	}
 	var vals []valStake
-	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingtypes.LegibleValidator) bool {
+	a.keeper.IterateValidators(sdkCtx, func(v *legiblestakingtypes.LegibleValidator) bool {
 		s, ok := new(big.Int).SetString(v.TotalStake, 10)
 		if ok && s.Sign() > 0 {
 			vals = append(vals, valStake{stake: s})
@@ -392,7 +392,7 @@ func (a *AlignmentStakingAdapter) GetTop10StakeRatio(ctx context.Context) uint64
 func (a *AlignmentStakingAdapter) GetTotalStake(ctx context.Context) uint64 {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	total := new(big.Int)
-	a.keeper.IterateValidators(sdkCtx, func(v legiblestakingtypes.LegibleValidator) bool {
+	a.keeper.IterateValidators(sdkCtx, func(v *legiblestakingtypes.LegibleValidator) bool {
 		s, ok := new(big.Int).SetString(v.TotalStake, 10)
 		if ok && s.Sign() > 0 {
 			total.Add(total, s)

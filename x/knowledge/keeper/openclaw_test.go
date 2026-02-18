@@ -47,8 +47,8 @@ func TestOC1_WhaleDomination(t *testing.T) {
 		StakeAmount:       "1000000",
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// Whale accepts, minorities reject
 	round.Commitments["lgmvaloper1whale"] = &types.VerificationCommitment{Validator: "lgmvaloper1whale"}
@@ -114,8 +114,8 @@ func TestOC2_GriefByRejection(t *testing.T) {
 		StakeAmount:       fmt.Sprintf("%d", submitterStake),
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// All 3 validators collude to reject
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
@@ -188,8 +188,8 @@ func TestOC3_AbstainToAvoidSlash(t *testing.T) {
 		StakeAmount:       "1000000",
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	round.Commitments["lgmvaloper1abc"] = &types.VerificationCommitment{Validator: "lgmvaloper1abc"}
 	round.Commitments["lgmvaloper1def"] = &types.VerificationCommitment{Validator: "lgmvaloper1def"}
@@ -264,9 +264,9 @@ func TestOC4_MinimumStakeSpam(t *testing.T) {
 			Status:            "pending",
 			SubmittedAtHeight: uint64(10 + i),
 		}
-		k.SetClaim(ctx, claim)
+		k.SetClaim(ctx, &claim)
 
-		_, err := k.CreateVerificationRound(ctx, claim)
+		_, err := k.CreateVerificationRound(ctx, &claim)
 		if err != nil {
 			failCount++
 		} else {
@@ -324,8 +324,8 @@ func TestOC5_Tier0RewardViability(t *testing.T) {
 		StakeAmount:       "1000000",
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// All accept (newbie included)
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1newbie"}
@@ -420,14 +420,14 @@ func TestOC6_CounterFactProfitMaximization(t *testing.T) {
 			cfID := fmt.Sprintf("cfact-oc6-%d", i)
 			roundID := fmt.Sprintf("r-oc6-%d", i)
 
-			k.SetFact(ctx, types.Fact{
+			k.SetFact(ctx, &types.Fact{
 				Id: factID, ClaimText: "Target fact", Domain: "physics",
 				EpistemicCategory: "empirical", Status: types.FactStatusVerified,
 				Submitter: "lgm1other", OriginalStake: sc.targetStake,
 				Confidence: 800000,
 			})
 
-			k.SetCounterFact(ctx, types.CounterFact{
+			k.SetCounterFact(ctx, &types.CounterFact{
 				Id:           cfID,
 				TargetFactId: factID,
 				NegationType: types.NegationTypeContradiction,
@@ -436,7 +436,7 @@ func TestOC6_CounterFactProfitMaximization(t *testing.T) {
 				Status:       types.CounterFactStatusPending,
 			})
 
-			k.SetVerificationRound(ctx, types.VerificationRound{
+			k.SetVerificationRound(ctx, &types.VerificationRound{
 				Id: roundID, ClaimId: cfID, Type: types.RoundTypeContradiction,
 				Phase: "reveal",
 				Reveals: map[string]*types.VerificationReveal{
@@ -444,13 +444,13 @@ func TestOC6_CounterFactProfitMaximization(t *testing.T) {
 				},
 			})
 
-			_ = k.CompleteRound(ctx, types.VerificationRound{
+			_ = k.CompleteRound(ctx, &types.VerificationRound{
 				Id: roundID, ClaimId: cfID, Type: types.RoundTypeContradiction,
 				Phase: "reveal",
 				Reveals: map[string]*types.VerificationReveal{
 					"val1": {Verdict: "accepted", Confidence: sc.confidence},
 				},
-			}, types.VerificationResult{
+			}, &types.VerificationResult{
 				Verdict: "accepted", Confidence: sc.confidence,
 			})
 
@@ -508,8 +508,8 @@ func TestOC7_SplitVerdictStakeLock(t *testing.T) {
 		StakeAmount:       "5000000", // 5 LGM locked
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// Honest validators accept; attacker validators reject to create split
 	round.Commitments["lgmvaloper1a"] = &types.VerificationCommitment{Validator: "lgmvaloper1a"}
@@ -590,8 +590,8 @@ func TestOC8_DifficultyBonusExploitation(t *testing.T) {
 			StakeAmount:       "1000000",
 			Status:            "pending",
 		}
-		k.SetClaim(ctx, claim)
-		round, _ := k.CreateVerificationRound(ctx, claim)
+		k.SetClaim(ctx, &claim)
+		round, _ := k.CreateVerificationRound(ctx, &claim)
 
 		validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 		for _, v := range validators {
@@ -661,7 +661,7 @@ func TestOC10_EquivocationRiskReward(t *testing.T) {
 	k, ctx, mockSK, _, _ := setupKeeperWithTracking(t)
 
 	validatorStake := uint64(10_000_000) // 10 LGM
-	mockSK.validators["lgmvaloper1abc"] = types.ValidatorInfo{
+	mockSK.validators["lgmvaloper1abc"] = &types.ValidatorInfo{
 		Address: "lgmvaloper1abc", Stake: validatorStake, Tier: 2,
 		PublicKey: []byte("pubkey_lgmvaloper1abc"), Reputation: 800000,
 	}
@@ -675,11 +675,11 @@ func TestOC10_EquivocationRiskReward(t *testing.T) {
 		StakeAmount:       "1000000",
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// First commitment succeeds
-	err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
+	err := k.StoreCommitmentInRound(ctx, round.Id, &types.VerificationCommitment{
 		Validator:      "lgmvaloper1abc",
 		CommitmentHash: "aaaa" + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	})
@@ -688,7 +688,7 @@ func TestOC10_EquivocationRiskReward(t *testing.T) {
 	}
 
 	// Second commitment should be rejected (equivocation attempt)
-	err = k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
+	err = k.StoreCommitmentInRound(ctx, round.Id, &types.VerificationCommitment{
 		Validator:      "lgmvaloper1abc",
 		CommitmentHash: "cccc" + "dddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 	})
@@ -732,8 +732,8 @@ func TestOC11_QuorumManipulation(t *testing.T) {
 		StakeAmount:       "5000000",
 		Status:            "pending",
 	}
-	k.SetClaim(ctx, claim)
-	round, _ := k.CreateVerificationRound(ctx, claim)
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
 
 	// All 5 commit, but attackers don't reveal
 	allVals := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi", "lgmvaloper1atk1", "lgmvaloper1atk2"}

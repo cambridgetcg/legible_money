@@ -66,7 +66,7 @@ func (k msgServer) RegisterProvider(goCtx context.Context, msg *types.MsgRegiste
 	}
 
 	// Create provider record
-	provider := types.Provider{
+	provider := &types.Provider{
 		Address:      msg.Sender,
 		Domains:      msg.Domains,
 		StakeAmount:  msg.Stake,
@@ -177,7 +177,7 @@ func (k msgServer) RequestQuote(goCtx context.Context, msg *types.MsgRequestQuot
 		),
 	)
 
-	return &types.MsgRequestQuoteResponse{Quote: &quote}, nil
+	return &types.MsgRequestQuoteResponse{Quote: quote}, nil
 }
 
 // ExecutePayment handles MsgExecutePayment -- execute a quoted knowledge payment.
@@ -271,7 +271,7 @@ func (k msgServer) ExecutePayment(goCtx context.Context, msg *types.MsgExecutePa
 
 	// Record the call
 	recordId := k.GetNextCallRecordId(ctx)
-	record := types.CallRecord{
+	record := &types.CallRecord{
 		RecordId:  recordId,
 		QuoteId:   quoteId,
 		Caller:    msg.Sender,
@@ -312,7 +312,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	if msg.Params == nil {
 		return nil, fmt.Errorf("params cannot be nil")
 	}
-	k.SetParams(ctx, *msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

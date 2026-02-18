@@ -13,9 +13,9 @@ import (
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -25,17 +25,19 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
-	return params
+	return &params
 }
 
 // ---------- Sequence ----------
@@ -70,12 +72,12 @@ func (k Keeper) NextSequence(ctx sdk.Context) uint64 {
 // ---------- Process CRUD ----------
 
 // SetProcess stores a schedule process with all indexes.
-func (k Keeper) SetProcess(ctx sdk.Context, process types.ScheduleProcess) {
+func (k Keeper) SetProcess(ctx sdk.Context, process *types.ScheduleProcess) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	// Primary key
 	key := processKey(process.Id)
-	bz, err := proto.Marshal(&process)
+	bz, err := proto.Marshal(process)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal process: %v", err))
 	}
@@ -113,22 +115,22 @@ func (k Keeper) SetProcess(ctx sdk.Context, process types.ScheduleProcess) {
 }
 
 // GetProcess retrieves a process by ID.
-func (k Keeper) GetProcess(ctx sdk.Context, id string) (types.ScheduleProcess, bool) {
+func (k Keeper) GetProcess(ctx sdk.Context, id string) (*types.ScheduleProcess, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	key := processKey(id)
 	bz, err := store.Get(key)
 	if err != nil || bz == nil {
-		return types.ScheduleProcess{}, false
+		return nil, false
 	}
 	var process types.ScheduleProcess
 	if err := proto.Unmarshal(bz, &process); err != nil {
-		return types.ScheduleProcess{}, false
+		return nil, false
 	}
-	return process, true
+	return &process, true
 }
 
 // DeleteProcess removes a process and its indexes.
-func (k Keeper) DeleteProcess(ctx sdk.Context, process types.ScheduleProcess) {
+func (k Keeper) DeleteProcess(ctx sdk.Context, process *types.ScheduleProcess) {
 	store := k.storeService.OpenKVStore(ctx)
 
 	_ = store.Delete(processKey(process.Id))
@@ -157,7 +159,7 @@ func (k Keeper) RemoveStatusIndex(ctx sdk.Context, status string, processId stri
 }
 
 // IterateProcesses iterates all processes. Return true from cb to stop.
-func (k Keeper) IterateProcesses(ctx sdk.Context, cb func(types.ScheduleProcess) bool) {
+func (k Keeper) IterateProcesses(ctx sdk.Context, cb func(*types.ScheduleProcess) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.ProcessKeyPrefix, prefixEndBytes(types.ProcessKeyPrefix))
 	if err != nil {
@@ -170,14 +172,14 @@ func (k Keeper) IterateProcesses(ctx sdk.Context, cb func(types.ScheduleProcess)
 		if err := proto.Unmarshal(iter.Value(), &process); err != nil {
 			continue
 		}
-		if cb(process) {
+		if cb(&process) {
 			break
 		}
 	}
 }
 
 // GetProcessesByCreator returns all processes for a creator.
-func (k Keeper) GetProcessesByCreator(ctx sdk.Context, creator string) []types.ScheduleProcess {
+func (k Keeper) GetProcessesByCreator(ctx sdk.Context, creator string) []*types.ScheduleProcess {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := append(types.ByAccountIndexPrefix, []byte(creator+":")...)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -186,7 +188,7 @@ func (k Keeper) GetProcessesByCreator(ctx sdk.Context, creator string) []types.S
 	}
 	defer iter.Close()
 
-	var processes []types.ScheduleProcess
+	var processes []*types.ScheduleProcess
 	for ; iter.Valid(); iter.Next() {
 		processId := string(iter.Value())
 		process, found := k.GetProcess(ctx, processId)

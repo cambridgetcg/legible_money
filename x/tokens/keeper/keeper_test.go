@@ -120,7 +120,7 @@ func TestInitExportGenesis(t *testing.T) {
 	k, ctx := setupKeeper(t)
 
 	genState := types.DefaultGenesis()
-	k.InitGenesis(ctx, *genState)
+	k.InitGenesis(ctx, genState)
 
 	exported := k.ExportGenesis(ctx)
 	if exported.Params == nil {

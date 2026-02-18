@@ -200,7 +200,7 @@ func (k Keeper) HandleExit(ctx sdk.Context, partnershipId string, initiator stri
 func (k Keeper) SettleCoolingPartnerships(ctx sdk.Context) {
 	currentBlock := uint64(ctx.BlockHeight())
 
-	k.IteratePartnerships(ctx, func(p types.Partnership) bool {
+	k.IteratePartnerships(ctx, func(p *types.Partnership) bool {
 		if p.Status == types.StatusCooling && p.ExitState != nil && p.ExitState.CooldownEnd <= currentBlock {
 			p.Status = types.StatusDissolved
 			k.SetPartnership(ctx, p)

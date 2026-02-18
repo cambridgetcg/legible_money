@@ -114,7 +114,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 	if err := json.Unmarshal(data, &genState); err != nil {
 		panic("failed to unmarshal genesis: " + err.Error())
 	}
-	am.keeper.InitGenesis(ctx, genState)
+	am.keeper.InitGenesis(ctx, &genState)
 }
 
 // ExportGenesis exports the module's genesis state.
@@ -138,7 +138,7 @@ func (am AppModule) BeginBlock(goCtx context.Context) error {
 
 	// Expire qualifications (amortized, max per block)
 	expired := uint64(0)
-	am.keeper.IterateQualifications(ctx, func(qual types.DomainQualification) bool {
+	am.keeper.IterateQualifications(ctx, func(qual *types.DomainQualification) bool {
 		if expired >= params.MaxExpirationsPerBlock {
 			return true
 		}

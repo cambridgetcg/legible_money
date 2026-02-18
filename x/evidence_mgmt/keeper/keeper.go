@@ -73,9 +73,9 @@ func (k Keeper) GetAuthority() string {
 }
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -85,7 +85,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -95,32 +95,32 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	for _, evidence := range genState.EvidenceItems {
 		if evidence != nil {
-			k.SetEvidence(ctx, *evidence)
+			k.SetEvidence(ctx, evidence)
 		}
 	}
 	for _, audit := range genState.Audits {
 		if audit != nil {
-			k.SetAudit(ctx, *audit)
+			k.SetAudit(ctx, audit)
 		}
 	}
 	for _, consensus := range genState.ConsensusRecords {
 		if consensus != nil {
-			k.SetConsensus(ctx, *consensus)
+			k.SetConsensus(ctx, consensus)
 		}
 	}
 	for _, oracle := range genState.Oracles {
 		if oracle != nil {
-			k.SetOracle(ctx, *oracle)
+			k.SetOracle(ctx, oracle)
 			if oracle.IsActive {
 				k.SetActiveOracle(ctx, oracle.Id)
 			}
@@ -131,32 +131,32 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var evidences []*types.Evidence
-	k.IterateEvidence(ctx, func(e types.Evidence) bool {
-		evidences = append(evidences, &e)
+	k.IterateEvidence(ctx, func(e *types.Evidence) bool {
+		evidences = append(evidences, e)
 		return false
 	})
 
 	var audits []*types.EvidenceAudit
-	k.IterateAudits(ctx, func(a types.EvidenceAudit) bool {
-		audits = append(audits, &a)
+	k.IterateAudits(ctx, func(a *types.EvidenceAudit) bool {
+		audits = append(audits, a)
 		return false
 	})
 
 	var consensusRecords []*types.AuditConsensus
-	k.IterateConsensus(ctx, func(c types.AuditConsensus) bool {
-		consensusRecords = append(consensusRecords, &c)
+	k.IterateConsensus(ctx, func(c *types.AuditConsensus) bool {
+		consensusRecords = append(consensusRecords, c)
 		return false
 	})
 
 	var oracles []*types.Oracle
-	k.IterateOracles(ctx, func(o types.Oracle) bool {
-		oracles = append(oracles, &o)
+	k.IterateOracles(ctx, func(o *types.Oracle) bool {
+		oracles = append(oracles, o)
 		return false
 	})
 
 	p := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:           &p,
+		Params:           p,
 		EvidenceItems:    evidences,
 		Audits:           audits,
 		ConsensusRecords: consensusRecords,

@@ -107,7 +107,7 @@ func TestOC_COMP3_UpdateParamsAuthBypass(t *testing.T) {
 	dp := types.DefaultParams()
 	_, err := srv.UpdateComputeParams(ctx, &types.MsgUpdateComputeParams{
 		Authority: attackerAddr,
-		Params:    &dp,
+		Params:    dp,
 	})
 	if err == nil {
 		t.Fatal("OC-COMP-3 FAIL: unauthorized user was able to update params!")

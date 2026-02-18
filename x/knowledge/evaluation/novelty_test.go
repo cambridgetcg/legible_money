@@ -9,7 +9,7 @@ import (
 )
 
 func noveltyEvalCtx(
-	facts map[string]types.Fact,
+	facts map[string]*types.Fact,
 	domainFactCount map[string]uint64,
 	totalDomains uint64,
 ) *EvaluationContext {
@@ -31,14 +31,14 @@ func noveltyEvalCtx(
 // ==========================================================================
 
 func TestInformationGain_SparseDomain(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "mathematics", Status: types.FactStatusVerified, Confidence: 800_000},
 	}
 	domainCounts := map[string]uint64{
 		"quantum_topology": 2, // very sparse
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "quantum_topology",
 		References: []string{"f1"},
 	}
@@ -57,14 +57,14 @@ func TestInformationGain_SparseDomain(t *testing.T) {
 }
 
 func TestInformationGain_DenseDomain(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "physics", Status: types.FactStatusVerified, Confidence: 800_000},
 	}
 	domainCounts := map[string]uint64{
 		"physics": 100, // fully saturated
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "physics",
 		References: []string{"f1"},
 	}
@@ -75,11 +75,11 @@ func TestInformationGain_DenseDomain(t *testing.T) {
 	gain := calculateInformationGain(ctx, evalCtx, claim)
 	// Dense domain → low sparsity (10% floor), but geometric mean with ref novelty
 	// could push it up. Key: it should be lower than sparse domain.
-	sparseFacts := map[string]types.Fact{
+	sparseFacts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "physics", Status: types.FactStatusVerified, Confidence: 800_000},
 	}
 	sparseCtx := noveltyEvalCtx(sparseFacts, map[string]uint64{"rare_field": 2}, 10)
-	sparseClaim := types.Claim{Domain: "rare_field", References: []string{"f1"}}
+	sparseClaim := &types.Claim{Domain: "rare_field", References: []string{"f1"}}
 	sparseGain := calculateInformationGain(ctx, sparseCtx, sparseClaim)
 	if gain >= sparseGain {
 		t.Errorf("dense domain gain (%d) should be less than sparse (%d)", gain, sparseGain)
@@ -87,7 +87,7 @@ func TestInformationGain_DenseDomain(t *testing.T) {
 }
 
 func TestInformationGain_CrossDomainRefs(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "mathematics", Status: types.FactStatusVerified, Confidence: 800_000},
 		"f2": {Id: "f2", Domain: "physics", Status: types.FactStatusVerified, Confidence: 800_000},
 		"f3": {Id: "f3", Domain: "biology", Status: types.FactStatusVerified, Confidence: 800_000},
@@ -96,7 +96,7 @@ func TestInformationGain_CrossDomainRefs(t *testing.T) {
 		"chemistry": 10,
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "chemistry",
 		References: []string{"f1", "f2", "f3"}, // 3 unique domains from 3 refs
 	}
@@ -116,7 +116,7 @@ func TestInformationGain_NoRefs(t *testing.T) {
 		"new_domain": 0,
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "new_domain",
 		References: []string{},
 	}
@@ -136,12 +136,12 @@ func TestInformationGain_NoRefs(t *testing.T) {
 // ==========================================================================
 
 func TestBridgeScore_VerifiedCrossDomain(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "mathematics", Status: types.FactStatusVerified, Confidence: 800_000},
 		"f2": {Id: "f2", Domain: "physics", Status: types.FactStatusVerified, Confidence: 900_000},
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "chemistry",
 		References: []string{"f1", "f2"},
 	}
@@ -160,11 +160,11 @@ func TestBridgeScore_VerifiedCrossDomain(t *testing.T) {
 }
 
 func TestBridgeScore_UnverifiedCrossDomain(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "mathematics", Status: types.FactStatusVerified, Confidence: 400_000}, // below threshold
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "chemistry",
 		References: []string{"f1"},
 	}
@@ -179,11 +179,11 @@ func TestBridgeScore_UnverifiedCrossDomain(t *testing.T) {
 }
 
 func TestBridgeScore_SameDomain(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "mathematics", Status: types.FactStatusVerified, Confidence: 900_000},
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "mathematics",
 		References: []string{"f1"},
 	}
@@ -199,18 +199,18 @@ func TestBridgeScore_SameDomain(t *testing.T) {
 
 func TestBridgeScore_CappedAtMax(t *testing.T) {
 	// Create many verified cross-domain refs
-	facts := map[string]types.Fact{}
+	facts := map[string]*types.Fact{}
 	refs := []string{}
 	domains := []string{"biology", "physics", "chemistry", "geology", "astronomy", "ecology", "paleontology", "meteorology", "oceanography", "seismology"}
 	for _, d := range domains {
 		id := "fact-" + d
-		facts[id] = types.Fact{
+		facts[id] = &types.Fact{
 			Id: id, Domain: d, Status: types.FactStatusVerified, Confidence: 900_000,
 		}
 		refs = append(refs, id)
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "mathematics",
 		References: refs,
 	}
@@ -229,7 +229,7 @@ func TestBridgeScore_CappedAtMax(t *testing.T) {
 // ==========================================================================
 
 func TestNoveltyStage_EvidenceGate(t *testing.T) {
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain: "mathematics",
 	}
 
@@ -244,14 +244,14 @@ func TestNoveltyStage_EvidenceGate(t *testing.T) {
 }
 
 func TestNoveltyStage_WithGoodEvidence(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "physics", Status: types.FactStatusVerified, Confidence: 800_000},
 	}
 	domainCounts := map[string]uint64{
 		"chemistry": 5,
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "chemistry",
 		References: []string{"f1"},
 	}
@@ -268,7 +268,7 @@ func TestNoveltyStage_WithGoodEvidence(t *testing.T) {
 
 func TestNoveltyStage_CappedAtMax(t *testing.T) {
 	// Create scenario that maximizes both info gain and bridge
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "physics", Status: types.FactStatusVerified, Confidence: 950_000},
 		"f2": {Id: "f2", Domain: "biology", Status: types.FactStatusVerified, Confidence: 950_000},
 		"f3": {Id: "f3", Domain: "chemistry", Status: types.FactStatusVerified, Confidence: 950_000},
@@ -277,7 +277,7 @@ func TestNoveltyStage_CappedAtMax(t *testing.T) {
 		"new_interdisciplinary_field": 0,
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "new_interdisciplinary_field",
 		References: []string{"f1", "f2", "f3"},
 	}
@@ -292,7 +292,7 @@ func TestNoveltyStage_CappedAtMax(t *testing.T) {
 }
 
 func TestNoveltyStage_NoRefsNoDomain(t *testing.T) {
-	claim := types.Claim{}
+	claim := &types.Claim{}
 
 	ctx := mockCtx()
 	evalCtx := noveltyEvalCtx(nil, nil, 0)
@@ -309,12 +309,12 @@ func TestNoveltyStage_NoRefsNoDomain(t *testing.T) {
 // ==========================================================================
 
 func TestFactGraph_VerifiedBridgeSkipsPenalty(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		// Cross-domain but well-verified → should skip AH-3 penalty
 		"f1": {Id: "f1", Domain: "biology", Status: types.FactStatusVerified, Confidence: 800_000},
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "chemistry",
 		References: []string{"f1"},
 	}
@@ -330,12 +330,12 @@ func TestFactGraph_VerifiedBridgeSkipsPenalty(t *testing.T) {
 }
 
 func TestFactGraph_UnverifiedCrossDomainStillPenalized(t *testing.T) {
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		// Cross-domain and low-confidence → still gets AH-3 penalty
 		"f1": {Id: "f1", Domain: "biology", Status: types.FactStatusVerified, Confidence: 400_000},
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Domain:     "chemistry",
 		References: []string{"f1"},
 	}
@@ -347,7 +347,7 @@ func TestFactGraph_UnverifiedCrossDomainStillPenalized(t *testing.T) {
 	// Low-confidence cross-domain ref: gets support bonus but also AH-3 penalty
 	// Net might be positive (support > penalty) but penalty was applied
 	// Compare with same-domain to verify penalty was applied
-	sameDomainFacts := map[string]types.Fact{
+	sameDomainFacts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "chemistry", Status: types.FactStatusVerified, Confidence: 400_000},
 	}
 	sameDomainCtx := fullEvalCtx(sameDomainFacts, nil, nil)
@@ -366,7 +366,7 @@ func TestFactGraph_UnverifiedCrossDomainStillPenalized(t *testing.T) {
 func TestNoveltyStage_InPipeline(t *testing.T) {
 	ctx := mockCtx()
 
-	facts := map[string]types.Fact{
+	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", Domain: "physics", Status: types.FactStatusVerified, Confidence: 900_000},
 	}
 	evidences := map[string][]types.EvidenceRecord{
@@ -381,7 +381,7 @@ func TestNoveltyStage_InPipeline(t *testing.T) {
 		return evidences[claimId]
 	}
 
-	claim := types.Claim{
+	claim := &types.Claim{
 		Id:                "c1",
 		ClaimText:         "chemistry bridges physics through quantum mechanics",
 		Domain:            "chemistry",
@@ -390,7 +390,7 @@ func TestNoveltyStage_InPipeline(t *testing.T) {
 		LogicZone:         "empirical",
 	}
 
-	result, err := EvaluateClaim(ctx, evalCtx, types.VerificationRound{}, claim)
+	result, err := EvaluateClaim(ctx, evalCtx, &types.VerificationRound{}, claim)
 	if err != nil {
 		t.Fatalf("EvaluateClaim failed: %v", err)
 	}

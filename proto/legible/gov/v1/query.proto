@@ -1,0 +1,50 @@
+syntax = "proto3";
+package legible.gov.v1;
+
+option go_package = "github.com/legible-money/legible/x/gov/types";
+
+import "legible/gov/v1/state.proto";
+import "legible/gov/v1/genesis.proto";
+
+// Query defines the governance module's query service.
+service Query {
+  rpc LIP(QueryLIPRequest) returns (QueryLIPResponse);
+  rpc LIPs(QueryLIPsRequest) returns (QueryLIPsResponse);
+  rpc Disbursement(QueryDisbursementRequest) returns (QueryDisbursementResponse);
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse);
+}
+
+message QueryLIPRequest {
+  string lip_id = 1;
+}
+
+message QueryLIPResponse {
+  LIP lip = 1;
+  repeated QuadraticVote votes = 2;
+}
+
+message QueryLIPsRequest {
+  string stage = 1;
+  uint32 limit = 2;
+  uint32 offset = 3;
+}
+
+message QueryLIPsResponse {
+  repeated LIP lips = 1;
+  uint64 total = 2;
+}
+
+message QueryDisbursementRequest {
+  string disbursement_id = 1;
+}
+
+message QueryDisbursementResponse {
+  DisbursementProposal disbursement = 1;
+  repeated QuadraticVote votes = 2;
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1;
+}

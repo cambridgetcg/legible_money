@@ -34,7 +34,7 @@ func (k Keeper) ApplyConfidenceGrowth(ctx sdk.Context, currentHeight uint64) {
 		maxSurvival = types.MaxSurvivalConfidenceDefault
 	}
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		// Skip non-verified facts
 		if fact.Status != types.FactStatusVerified && fact.Status != types.FactStatusActive {
 			return false
@@ -108,7 +108,7 @@ func (k Keeper) DecayStaleContestedFacts(ctx sdk.Context, currentHeight uint64) 
 	growthEpoch := ep.ConfidenceGrowthEpochBlocks
 	staleThreshold := ep.StaleContestedDecayEpochs * growthEpoch
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		if fact.Status != types.FactStatusContested {
 			return false
 		}
@@ -174,7 +174,7 @@ func (k Keeper) DetectPropheticFacts(ctx sdk.Context, currentHeight uint64) {
 	citationThreshold := ep.PropheticCitationThreshold
 	propheticCap := ep.PropheticConfidenceCapBps
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		// Skip if already prophetic or not verified
 		if fact.IsProphetic {
 			return false
@@ -253,7 +253,7 @@ func (k Keeper) ApplyPropheticGrowth(ctx sdk.Context, currentHeight uint64) {
 		growthPerEpoch = types.ConfidenceGrowthPerEpochDefault
 	}
 
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		if !fact.IsProphetic {
 			return false
 		}
@@ -302,7 +302,7 @@ func (k Keeper) ApplyPropheticGrowth(ctx sdk.Context, currentHeight uint64) {
 //   - citation_count (being cited = passive verification)
 func (k Keeper) AdvanceMaturityLevels(ctx sdk.Context, currentHeight uint64) {
 	ep := k.GetExtendedParams(ctx)
-	k.IterateFacts(ctx, func(fact types.Fact) bool {
+	k.IterateFacts(ctx, func(fact *types.Fact) bool {
 		if fact.Status != types.FactStatusVerified && fact.Status != types.FactStatusActive {
 			return false
 		}

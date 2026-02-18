@@ -32,24 +32,24 @@ func init() {
 // ---------- Mock OntologyKeeper ----------
 
 type mockOntologyKeeper struct {
-	domains map[string]ontologytypes.Domain
+	domains map[string]*ontologytypes.Domain
 }
 
 func newMockOntologyKeeper() *mockOntologyKeeper {
 	return &mockOntologyKeeper{
-		domains: make(map[string]ontologytypes.Domain),
+		domains: make(map[string]*ontologytypes.Domain),
 	}
 }
 
 func (m *mockOntologyKeeper) addDomain(name string, stratum ontologytypes.Stratum) {
-	m.domains[name] = ontologytypes.Domain{
+	m.domains[name] = &ontologytypes.Domain{
 		Name:    name,
 		Stratum: uint32(stratum),
 		Status:  "active",
 	}
 }
 
-func (m *mockOntologyKeeper) GetDomain(_ sdk.Context, name string) (ontologytypes.Domain, bool) {
+func (m *mockOntologyKeeper) GetDomain(_ sdk.Context, name string) (*ontologytypes.Domain, bool) {
 	d, ok := m.domains[name]
 	return d, ok
 }
@@ -57,17 +57,17 @@ func (m *mockOntologyKeeper) GetDomain(_ sdk.Context, name string) (ontologytype
 // ---------- Mock StakingKeeper ----------
 
 type mockStakingKeeper struct {
-	validators map[string]stakingtypes.LegibleValidator
+	validators map[string]*stakingtypes.LegibleValidator
 }
 
 func newMockStakingKeeper() *mockStakingKeeper {
 	return &mockStakingKeeper{
-		validators: make(map[string]stakingtypes.LegibleValidator),
+		validators: make(map[string]*stakingtypes.LegibleValidator),
 	}
 }
 
 func (m *mockStakingKeeper) addValidator(addr string, tier stakingtypes.ValidatorTier, verifications, correct uint64) {
-	m.validators[addr] = stakingtypes.LegibleValidator{
+	m.validators[addr] = &stakingtypes.LegibleValidator{
 		OperatorAddress:        addr,
 		TotalStake:             "5000000000000000000000",
 		Tier:                   tier.String(),
@@ -77,13 +77,16 @@ func (m *mockStakingKeeper) addValidator(addr string, tier stakingtypes.Validato
 	}
 }
 
-func (m *mockStakingKeeper) GetValidator(_ sdk.Context, operatorAddr string) (stakingtypes.LegibleValidator, bool) {
+func (m *mockStakingKeeper) GetValidator(_ sdk.Context, operatorAddr string) (*stakingtypes.LegibleValidator, bool) {
 	v, ok := m.validators[operatorAddr]
-	return v, ok
+	if !ok {
+		return nil, false
+	}
+	return v, true
 }
 
-func (m *mockStakingKeeper) GetActiveValidatorSet(_ sdk.Context) []stakingtypes.LegibleValidator {
-	var result []stakingtypes.LegibleValidator
+func (m *mockStakingKeeper) GetActiveValidatorSet(_ sdk.Context) []*stakingtypes.LegibleValidator {
+	var result []*stakingtypes.LegibleValidator
 	for _, v := range m.validators {
 		if v.IsActive {
 			result = append(result, v)
@@ -150,7 +153,7 @@ func TestSetGetQualification(t *testing.T) {
 		EarnedAtBlock: 100,
 	}
 
-	k.SetQualification(ctx, q)
+	k.SetQualification(ctx, &q)
 	got, found := k.GetQualification(ctx, "lgmvaloper1abc", "mathematics")
 	if !found {
 		t.Fatal("expected qualification to be found")
@@ -183,7 +186,7 @@ func TestDeleteQualification(t *testing.T) {
 		Domain:        "mathematics",
 		Status:        string(types.StatusActive),
 	}
-	k.SetQualification(ctx, q)
+	k.SetQualification(ctx, &q)
 
 	k.DeleteQualification(ctx, "lgmvaloper1abc", "mathematics")
 	_, found := k.GetQualification(ctx, "lgmvaloper1abc", "mathematics")
@@ -195,17 +198,17 @@ func TestDeleteQualification(t *testing.T) {
 func TestGetQualificationsByValidator(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
 		Status:        string(types.StatusActive),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusProbationary),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1def",
 		Domain:        "mathematics",
 		Status:        string(types.StatusActive),
@@ -230,7 +233,7 @@ func TestSetGetEndorsement(t *testing.T) {
 		ExpiresAtBlock:  100000,
 	}
 
-	k.SetEndorsement(ctx, e)
+	k.SetEndorsement(ctx, &e)
 	got, found := k.GetEndorsement(ctx, "endorse_1")
 	if !found {
 		t.Fatal("expected endorsement to be found")
@@ -246,15 +249,15 @@ func TestSetGetEndorsement(t *testing.T) {
 func TestGetEndorsementsForValidator(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e1", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
 		Domain: "mathematics", EndorsedAtBlock: 100, ExpiresAtBlock: 200000,
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e2", EndorserAddr: "lgmvaloper1ghi", TargetValidator: "lgmvaloper1def",
 		Domain: "mathematics", EndorsedAtBlock: 100, ExpiresAtBlock: 200000,
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e3", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1ghi",
 		Domain: "physics", EndorsedAtBlock: 100, ExpiresAtBlock: 200000,
 	})
@@ -400,32 +403,32 @@ func TestQualifyViaCrossReference_Success(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// First, qualify 3 endorsers in the domain
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1ghi",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1jkl",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
 	})
 
 	// Create endorsements
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e1", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 200000,
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e2", EndorserAddr: "lgmvaloper1ghi", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 200000,
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e3", EndorserAddr: "lgmvaloper1jkl", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 200000,
 	})
@@ -446,12 +449,12 @@ func TestQualifyViaCrossReference_InsufficientEndorsements(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Only 1 qualified endorser (need 3)
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e1", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 200000,
 	})
@@ -467,21 +470,21 @@ func TestQualifyViaCrossReference_ExpiredEndorsementsNotCounted(t *testing.T) {
 
 	// Qualify 3 endorsers
 	for _, addr := range []string{"lgmvaloper1abc", "lgmvaloper1ghi", "lgmvaloper1jkl"} {
-		k.SetQualification(ctx, types.DomainQualification{
+		k.SetQualification(ctx, &types.DomainQualification{
 			ValidatorAddr: addr, Domain: "physics", Status: string(types.StatusActive),
 		})
 	}
 
 	// 2 valid + 1 expired endorsement
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e1", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 200000,
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e2", EndorserAddr: "lgmvaloper1ghi", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 200000,
 	})
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "e3", EndorserAddr: "lgmvaloper1jkl", TargetValidator: "lgmvaloper1def",
 		Domain: "physics", EndorsedAtBlock: 50, ExpiresAtBlock: 50, // already expired at block 100
 	})
@@ -496,7 +499,7 @@ func TestQualifyViaStratumInheritance_Success(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Qualify in lower stratum domain first (mathematics = stratum 0)
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
 		Status:        string(types.StatusActive),
@@ -522,7 +525,7 @@ func TestQualifyViaStratumInheritance_WrongDirection(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Qualify in higher stratum domain first (physics = stratum 4)
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -550,7 +553,7 @@ func TestQualifyViaStratumInheritance_NoSourceQualification(t *testing.T) {
 func TestIsQualified_ActiveQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "mathematics",
 		Status:         string(types.StatusActive),
@@ -565,7 +568,7 @@ func TestIsQualified_ActiveQualification(t *testing.T) {
 func TestIsQualified_ProbationaryQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "mathematics",
 		Status:         string(types.StatusProbationary),
@@ -580,7 +583,7 @@ func TestIsQualified_ProbationaryQualification(t *testing.T) {
 func TestIsQualified_SuspendedNotQualified(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
 		Status:        string(types.StatusSuspended),
@@ -594,7 +597,7 @@ func TestIsQualified_SuspendedNotQualified(t *testing.T) {
 func TestIsQualified_ExpiredByBlock(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "mathematics",
 		Status:         string(types.StatusActive),
@@ -617,7 +620,7 @@ func TestIsQualified_NotFound(t *testing.T) {
 func TestGetQualificationWeight_Active(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:          "lgmvaloper1abc",
 		Domain:                 "mathematics",
 		Status:                 string(types.StatusActive),
@@ -636,7 +639,7 @@ func TestGetQualificationWeight_Active(t *testing.T) {
 func TestGetQualificationWeight_Suspended(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "mathematics",
 		Status:        string(types.StatusSuspended),
@@ -651,17 +654,17 @@ func TestGetQualificationWeight_Suspended(t *testing.T) {
 func TestGetQualifiedValidators(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1def",
 		Domain:        "physics",
 		Status:        string(types.StatusProbationary),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1ghi",
 		Domain:        "physics",
 		Status:        string(types.StatusSuspended), // should NOT be counted
@@ -676,7 +679,7 @@ func TestGetQualifiedValidators(t *testing.T) {
 func TestRecordVerificationOutcome_Correct(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -703,7 +706,7 @@ func TestRecordVerificationOutcome_Correct(t *testing.T) {
 func TestRecordVerificationOutcome_Incorrect(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -732,7 +735,7 @@ func TestRecordVerificationOutcome_Incorrect(t *testing.T) {
 func TestRecordVerificationOutcome_SuspensionByConsecutive(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -768,7 +771,7 @@ func TestRecordVerificationOutcome_NoQualification(t *testing.T) {
 func TestPromoteProbationary(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	q := types.DomainQualification{
+	q := &types.DomainQualification{
 		ValidatorAddr:          "lgmvaloper1abc",
 		Domain:                 "physics",
 		Status:                 string(types.StatusProbationary),
@@ -802,7 +805,7 @@ func TestPromoteProbationary(t *testing.T) {
 func TestRenewQualification_Active(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
 		Status:         string(types.StatusActive),
@@ -824,7 +827,7 @@ func TestRenewQualification_Active(t *testing.T) {
 func TestRenewQualification_Expired(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
 		Status:         string(types.StatusExpired),
@@ -845,7 +848,7 @@ func TestRenewQualification_Expired(t *testing.T) {
 func TestRenewQualification_Revoked(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusRevoked),
@@ -869,7 +872,7 @@ func TestRenewQualification_NotFound(t *testing.T) {
 func TestWithdrawQualification_Success(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
 		Status:         string(types.StatusActive),
@@ -900,7 +903,7 @@ func TestWithdrawQualification_NotFound(t *testing.T) {
 func TestRecordChallenge_Revocation(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -926,7 +929,7 @@ func TestCheckAndExpireQualifications(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Active but expired
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
 		Status:         string(types.StatusActive),
@@ -934,7 +937,7 @@ func TestCheckAndExpireQualifications(t *testing.T) {
 	})
 
 	// Probationary, should promote (earned at block 0, period = 777, now at 1000)
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:          "lgmvaloper1def",
 		Domain:                 "mathematics",
 		Status:                 string(types.StatusProbationary),
@@ -965,7 +968,7 @@ func TestInitExportGenesis(t *testing.T) {
 
 	defaultParams := types.DefaultParams()
 	genState := types.GenesisState{
-		Params: &defaultParams,
+		Params: defaultParams,
 		Qualifications: []*types.DomainQualification{
 			{
 				ValidatorAddr: "lgmvaloper1abc",
@@ -984,7 +987,7 @@ func TestInitExportGenesis(t *testing.T) {
 		},
 	}
 
-	k.InitGenesis(ctx, genState)
+	k.InitGenesis(ctx, &genState)
 
 	// Verify qualification was stored
 	q, found := k.GetQualification(ctx, "lgmvaloper1abc", "mathematics")
@@ -1069,7 +1072,7 @@ func TestMsgEndorseValidator(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Qualify endorser first
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -1107,7 +1110,7 @@ func TestMsgEndorseValidator_NotQualified(t *testing.T) {
 func TestMsgRenewQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr:  "lgmvaloper1abc",
 		Domain:         "physics",
 		Status:         string(types.StatusActive),
@@ -1127,7 +1130,7 @@ func TestMsgRenewQualification(t *testing.T) {
 func TestMsgWithdrawQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -1157,7 +1160,7 @@ func TestMsgUpdateParams(t *testing.T) {
 
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "authority",
-		Params:    &newParams,
+		Params:    newParams,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1176,7 +1179,7 @@ func TestMsgUpdateParams_Unauthorized(t *testing.T) {
 	defaultParams := types.DefaultParams()
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "not_authority",
-		Params:    &defaultParams,
+		Params:    defaultParams,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized params update")
@@ -1188,7 +1191,7 @@ func TestMsgUpdateParams_Unauthorized(t *testing.T) {
 func TestQueryQualification(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
 		Status:        string(types.StatusActive),
@@ -1213,10 +1216,10 @@ func TestQueryQualification(t *testing.T) {
 func TestQueryQualificationsByValidator(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc", Domain: "physics", Status: string(types.StatusActive),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc", Domain: "mathematics", Status: string(types.StatusActive),
 	})
 
@@ -1235,10 +1238,10 @@ func TestQueryQualificationsByValidator(t *testing.T) {
 func TestQueryQualifiedValidators(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1abc", Domain: "physics", Status: string(types.StatusActive),
 	})
-	k.SetQualification(ctx, types.DomainQualification{
+	k.SetQualification(ctx, &types.DomainQualification{
 		ValidatorAddr: "lgmvaloper1def", Domain: "physics", Status: string(types.StatusActive),
 	})
 
@@ -1257,7 +1260,7 @@ func TestQueryQualifiedValidators(t *testing.T) {
 func TestQueryEndorsement(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	k.SetEndorsement(ctx, types.QualificationEndorsement{
+	k.SetEndorsement(ctx, &types.QualificationEndorsement{
 		Id: "lgmvaloper1abc/lgmvaloper1def/physics", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
 		Domain: "physics",
 	})

@@ -52,7 +52,7 @@ func (k Keeper) ProcessDueSchedules(ctx sdk.Context) int {
 
 		// Evaluate non-time conditions before executing.
 		// Logic and compound conditions are checked each block but only fire when satisfied.
-		if process.Condition != nil && !evaluateCondition(ctx, *process.Condition, k) {
+		if process.Condition != nil && !evaluateCondition(ctx, process.Condition, k) {
 			// Condition not met — re-index for next block check without deducting fee
 			k.RemoveTimeIndex(ctx, process.NextExecuteAt, process.Id)
 			process.NextExecuteAt = currentHeight + 1
@@ -116,7 +116,7 @@ func (k Keeper) ProcessDueSchedules(ctx sdk.Context) int {
 
 		// Schedule next execution
 		if process.Condition != nil {
-			process.NextExecuteAt = calculateNextPeriodicExecution(*process.Condition, currentHeight)
+			process.NextExecuteAt = calculateNextPeriodicExecution(process.Condition, currentHeight)
 		}
 		k.SetProcess(ctx, process)
 		executed++
@@ -131,7 +131,7 @@ func (k Keeper) CleanupExpiredProcesses(ctx sdk.Context) int {
 	currentHeight := uint64(ctx.BlockHeight())
 	cleaned := 0
 
-	k.IterateProcesses(ctx, func(p types.ScheduleProcess) bool {
+	k.IterateProcesses(ctx, func(p *types.ScheduleProcess) bool {
 		if p.Status != types.StatusCompleted && p.Status != types.StatusCancelled {
 			return false
 		}
@@ -147,7 +147,7 @@ func (k Keeper) CleanupExpiredProcesses(ctx sdk.Context) int {
 }
 
 // calculateNextPeriodicExecution computes the next fire time for periodic schedules.
-func calculateNextPeriodicExecution(cond types.ScheduleCondition, currentHeight uint64) uint64 {
+func calculateNextPeriodicExecution(cond *types.ScheduleCondition, currentHeight uint64) uint64 {
 	if cond.TimeCondition != nil && cond.TimeCondition.Type == types.TimePeriodic {
 		tc := cond.TimeCondition
 		next := currentHeight + tc.IntervalBlocks
@@ -164,7 +164,7 @@ func calculateNextPeriodicExecution(cond types.ScheduleCondition, currentHeight 
 // Time conditions are implicitly satisfied (they fire when due via the time index).
 // Logic conditions compare on-chain state against a target value.
 // Compound conditions combine sub-conditions with AND/OR.
-func evaluateCondition(ctx sdk.Context, cond types.ScheduleCondition, k Keeper) bool {
+func evaluateCondition(ctx sdk.Context, cond *types.ScheduleCondition, k Keeper) bool {
 	// Pure time conditions: always satisfied when due (time index handles scheduling)
 	if cond.TimeCondition != nil && cond.LogicCondition == nil && cond.CompoundCondition == nil {
 		return true
@@ -240,14 +240,14 @@ func evaluateCompoundCondition(ctx sdk.Context, cc *types.CompoundCondition, k K
 	switch cc.Operator {
 	case types.CompoundAnd:
 		for _, sub := range cc.Conditions {
-			if !evaluateCondition(ctx, *sub, k) {
+			if !evaluateCondition(ctx, sub, k) {
 				return false
 			}
 		}
 		return true
 	case types.CompoundOr:
 		for _, sub := range cc.Conditions {
-			if evaluateCondition(ctx, *sub, k) {
+			if evaluateCondition(ctx, sub, k) {
 				return true
 			}
 		}

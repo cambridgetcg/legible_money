@@ -82,9 +82,9 @@ func (k Keeper) GetAuthority() string {
 // ---------- Params ----------
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal params: %v", err))
 	}
@@ -94,7 +94,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
 	if err != nil || bz == nil {
@@ -104,30 +104,30 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // ---------- Genesis ----------
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 
 	for _, dispute := range genState.Disputes {
 		if dispute != nil {
-			k.SetDispute(ctx, *dispute)
+			k.SetDispute(ctx, dispute)
 		}
 	}
 	for _, evidence := range genState.Evidence {
 		if evidence != nil {
-			k.SetEvidence(ctx, *evidence)
+			k.SetEvidence(ctx, evidence)
 		}
 	}
 	for _, vote := range genState.Votes {
 		if vote != nil {
-			k.SetVote(ctx, *vote)
+			k.SetVote(ctx, vote)
 		}
 	}
 }
@@ -135,25 +135,20 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var disputes []*types.Dispute
-	k.IterateDisputes(ctx, func(d types.Dispute) bool {
-		disputes = append(disputes, &d)
+	k.IterateDisputes(ctx, func(d *types.Dispute) bool {
+		disputes = append(disputes, d)
 		return false
 	})
 
 	var allEvidence []*types.DisputeEvidence
 	var allVotes []*types.DisputeVote
 	for _, d := range disputes {
-		for _, e := range k.GetEvidenceByDispute(ctx, d.Id) {
-			allEvidence = append(allEvidence, &e)
-		}
-		for _, v := range k.GetVotes(ctx, d.Id) {
-			allVotes = append(allVotes, &v)
-		}
+		allEvidence = append(allEvidence, k.GetEvidenceByDispute(ctx, d.Id)...)
+		allVotes = append(allVotes, k.GetVotes(ctx, d.Id)...)
 	}
 
-	p := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:   &p,
+		Params:   k.GetParams(ctx),
 		Disputes: disputes,
 		Evidence: allEvidence,
 		Votes:    allVotes,

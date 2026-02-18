@@ -194,7 +194,7 @@ func TestSetGetRecord(t *testing.T) {
 			},
 		},
 	}
-	k.SetRecord(ctx, record)
+	k.SetRecord(ctx, &record)
 
 	got, found := k.GetRecord(ctx, testDID)
 	if !found {
@@ -248,7 +248,7 @@ func TestAddRemoteAccount_MaxReached(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	// Set max to 2 for testing
-	err := k.SetParams(ctx, types.Params{
+	err := k.SetParams(ctx, &types.Params{
 		MaxRemoteAccountsPerDid: 2,
 		RegistrationCooldown:    100,
 	})
@@ -355,7 +355,7 @@ func TestSetGetParams(t *testing.T) {
 		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
 		RegistrationCooldown:    50,
 	}
-	if err := k.SetParams(ctx, params); err != nil {
+	if err := k.SetParams(ctx, &params); err != nil {
 		t.Fatalf("failed to set params: %v", err)
 	}
 
@@ -371,7 +371,7 @@ func TestSetGetParams(t *testing.T) {
 func TestSetParams_Invalid(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	err := k.SetParams(ctx, types.Params{
+	err := k.SetParams(ctx, &types.Params{
 		MaxRemoteAccountsPerDid: 0, // invalid
 		RegistrationCooldown:    100,
 	})
@@ -413,7 +413,7 @@ func TestInitExportGenesis(t *testing.T) {
 		Records: []*types.InterchainAccountRecord{record},
 	}
 
-	if err := k.InitGenesis(ctx, gs); err != nil {
+	if err := k.InitGenesis(ctx, &gs); err != nil {
 		t.Fatalf("InitGenesis failed: %v", err)
 	}
 
@@ -436,7 +436,7 @@ func TestEmptyGenesis(t *testing.T) {
 		Params:  nil,
 		Records: nil,
 	}
-	if err := k.InitGenesis(ctx, gs); err != nil {
+	if err := k.InitGenesis(ctx, &gs); err != nil {
 		t.Fatalf("InitGenesis with empty state failed: %v", err)
 	}
 
@@ -508,7 +508,7 @@ func TestMsgRegisterInterchainAccount_MaxAccountsReached(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	// Set max to 1
-	_ = k.SetParams(ctx, types.Params{
+	_ = k.SetParams(ctx, &types.Params{
 		MaxRemoteAccountsPerDid: 1,
 		RegistrationCooldown:    100,
 	})
@@ -595,7 +595,7 @@ func TestMsgSendICATransaction_Success(t *testing.T) {
 	}
 
 	// Set params with the allowed msg type
-	_ = k.SetParams(ctx, types.Params{
+	_ = k.SetParams(ctx, &types.Params{
 		MaxRemoteAccountsPerDid: 10,
 		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
 		RegistrationCooldown:    100,
@@ -783,7 +783,7 @@ func TestMsgSendICATransaction_DisallowedMsgType(t *testing.T) {
 	}
 
 	// Set global params to only allow MsgSend
-	_ = k.SetParams(ctx, types.Params{
+	_ = k.SetParams(ctx, &types.Params{
 		MaxRemoteAccountsPerDid: 10,
 		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
 		RegistrationCooldown:    100,
@@ -823,7 +823,7 @@ func TestMsgSendICATransaction_GlobalAllowlistBlock(t *testing.T) {
 	}
 
 	// Global allows only MsgSend, per-account allows MsgDelegate
-	_ = k.SetParams(ctx, types.Params{
+	_ = k.SetParams(ctx, &types.Params{
 		MaxRemoteAccountsPerDid: 10,
 		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
 		RegistrationCooldown:    100,

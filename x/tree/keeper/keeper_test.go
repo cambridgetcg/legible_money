@@ -162,7 +162,7 @@ func TestSetGetParams(t *testing.T) {
 		SeedExpiryBlocks:       100000,
 		MinContributorsToStart: 2,
 	}
-	k.SetParams(ctx, custom)
+	k.SetParams(ctx, &custom)
 	got := k.GetParams(ctx)
 	if got.MaxTasksPerProject != 50 {
 		t.Errorf("expected MaxTasksPerProject=50, got %d", got.MaxTasksPerProject)
@@ -188,7 +188,7 @@ func TestSetGetProject(t *testing.T) {
 		ServiceIds:      []string{},
 		Contributors:    []*types.ContributorRecord{},
 	}
-	k.SetProject(ctx, project)
+	k.SetProject(ctx, &project)
 
 	got, found := k.GetProject(ctx, "proj-1")
 	if !found {
@@ -212,9 +212,9 @@ func TestGetProjectNotFound(t *testing.T) {
 
 func TestGetProjectsByFounder(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetProject(ctx, types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
-	k.SetProject(ctx, types.ProductProject{Id: "p2", Founder: founder1, KnowledgeDomain: "physics", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
-	k.SetProject(ctx, types.ProductProject{Id: "p3", Founder: founder2, KnowledgeDomain: "cs", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
+	k.SetProject(ctx, &types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
+	k.SetProject(ctx, &types.ProductProject{Id: "p2", Founder: founder1, KnowledgeDomain: "physics", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
+	k.SetProject(ctx, &types.ProductProject{Id: "p3", Founder: founder2, KnowledgeDomain: "cs", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}})
 
 	projects := k.GetProjectsByFounder(ctx, founder1)
 	if len(projects) != 2 {
@@ -225,8 +225,8 @@ func TestGetProjectsByFounder(t *testing.T) {
 func TestDeleteProject(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	project := types.ProductProject{Id: "p1", Founder: founder1, KnowledgeDomain: "math", TaskIds: []string{}, ServiceIds: []string{}, Contributors: []*types.ContributorRecord{}}
-	k.SetProject(ctx, project)
-	k.DeleteProject(ctx, project)
+	k.SetProject(ctx, &project)
+	k.DeleteProject(ctx, &project)
 
 	_, found := k.GetProject(ctx, "p1")
 	if found {
@@ -245,7 +245,7 @@ func TestSetGetTask(t *testing.T) {
 		Status:    string(types.TaskOpen),
 		Reviewers: []string{},
 	}
-	k.SetTask(ctx, task)
+	k.SetTask(ctx, &task)
 
 	got, found := k.GetTask(ctx, "task-1")
 	if !found {
@@ -258,9 +258,9 @@ func TestSetGetTask(t *testing.T) {
 
 func TestGetTasksByProject(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetTask(ctx, types.ProjectTask{Id: "t1", ProjectId: "proj-1", Status: string(types.TaskOpen), Reviewers: []string{}})
-	k.SetTask(ctx, types.ProjectTask{Id: "t2", ProjectId: "proj-1", Status: string(types.TaskOpen), Reviewers: []string{}})
-	k.SetTask(ctx, types.ProjectTask{Id: "t3", ProjectId: "proj-2", Status: string(types.TaskOpen), Reviewers: []string{}})
+	k.SetTask(ctx, &types.ProjectTask{Id: "t1", ProjectId: "proj-1", Status: string(types.TaskOpen), Reviewers: []string{}})
+	k.SetTask(ctx, &types.ProjectTask{Id: "t2", ProjectId: "proj-1", Status: string(types.TaskOpen), Reviewers: []string{}})
+	k.SetTask(ctx, &types.ProjectTask{Id: "t3", ProjectId: "proj-2", Status: string(types.TaskOpen), Reviewers: []string{}})
 
 	tasks := k.GetTasksByProject(ctx, "proj-1")
 	if len(tasks) != 2 {
@@ -278,7 +278,7 @@ func TestSetGetSeed(t *testing.T) {
 		Status:          string(types.SeedDetected),
 		ExpiresAtBlock:  200,
 	}
-	k.SetSeed(ctx, seed)
+	k.SetSeed(ctx, &seed)
 
 	got, found := k.GetSeed(ctx, "seed-1")
 	if !found {
@@ -291,9 +291,9 @@ func TestSetGetSeed(t *testing.T) {
 
 func TestGetExpiredSeeds(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
-	k.SetSeed(ctx, types.OpportunitySeed{Id: "s1", KnowledgeDomain: "math", Status: string(types.SeedDetected), ExpiresAtBlock: 50})
-	k.SetSeed(ctx, types.OpportunitySeed{Id: "s2", KnowledgeDomain: "math", Status: string(types.SeedDetected), ExpiresAtBlock: 150})
-	k.SetSeed(ctx, types.OpportunitySeed{Id: "s3", KnowledgeDomain: "math", Status: string(types.SeedExpired), ExpiresAtBlock: 50}) // already expired
+	k.SetSeed(ctx, &types.OpportunitySeed{Id: "s1", KnowledgeDomain: "math", Status: string(types.SeedDetected), ExpiresAtBlock: 50})
+	k.SetSeed(ctx, &types.OpportunitySeed{Id: "s2", KnowledgeDomain: "math", Status: string(types.SeedDetected), ExpiresAtBlock: 150})
+	k.SetSeed(ctx, &types.OpportunitySeed{Id: "s3", KnowledgeDomain: "math", Status: string(types.SeedExpired), ExpiresAtBlock: 50}) // already expired
 
 	expired := k.GetExpiredSeeds(ctx, 100)
 	if len(expired) != 1 {
@@ -314,7 +314,7 @@ func TestSetGetService(t *testing.T) {
 		Name:      "API Service",
 		Status:    string(types.ServiceActive),
 	}
-	k.SetService(ctx, svc)
+	k.SetService(ctx, &svc)
 
 	got, found := k.GetService(ctx, "svc-1")
 	if !found {
@@ -1615,8 +1615,8 @@ func TestBeginSeeding(t *testing.T) {
 	}
 
 	// Verify an opportunity seed was created
-	var seeds []types.OpportunitySeed
-	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
+	var seeds []*types.OpportunitySeed
+	k.IterateSeeds(ctx, func(s *types.OpportunitySeed) bool {
 		seeds = append(seeds, s)
 		return false
 	})
@@ -1653,8 +1653,8 @@ func TestBeginSeeding_DefaultDomain(t *testing.T) {
 		t.Fatalf("begin seeding: %v", err)
 	}
 
-	var seeds []types.OpportunitySeed
-	k.IterateSeeds(ctx, func(s types.OpportunitySeed) bool {
+	var seeds []*types.OpportunitySeed
+	k.IterateSeeds(ctx, func(s *types.OpportunitySeed) bool {
 		seeds = append(seeds, s)
 		return false
 	})
@@ -2194,7 +2194,7 @@ func TestUpdateParams(t *testing.T) {
 	newParams := types.DefaultParams()
 	newParams.MaxTasksPerProject = 42
 	newParams.MaxRejections = 7
-	k.SetParams(ctx, *newParams)
+	k.SetParams(ctx, newParams)
 
 	got := k.GetParams(ctx)
 	if got.MaxTasksPerProject != 42 {

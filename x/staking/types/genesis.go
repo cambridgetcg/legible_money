@@ -3,8 +3,8 @@ package types
 import "fmt"
 
 // DefaultParams returns default staking module parameters.
-func DefaultParams() Params {
-	return Params{
+func DefaultParams() *Params {
+	return &Params{
 		MaxApprenticeValidators: 0,          // deprecated: Sybil defense via MinSelfDelegation
 		UnbondingPeriod:         268560,     // ~7 days
 		VirtualStake:            "11000000", // 11 LGM in ulgm (H-3 fix)
@@ -29,7 +29,7 @@ func DefaultParams() Params {
 func DefaultGenesisState() *GenesisState {
 	p := DefaultParams()
 	return &GenesisState{
-		Params:           &p,
+		Params:           p,
 		Validators:       []*LegibleValidator{},
 		Delegations:      []*Delegation{},
 		UnbondingEntries: []*UnbondingEntry{},

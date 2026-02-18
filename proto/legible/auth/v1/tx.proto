@@ -23,6 +23,30 @@ service Msg {
 
   // UpdateParams updates module parameters. Authority (governance) only.
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // RegisterAccount registers a new Legible account with DID mapping.
+  rpc RegisterAccount(MsgRegisterAccount) returns (MsgRegisterAccountResponse);
+
+  // FreezeAccount freezes an account (self-freeze or authority).
+  rpc FreezeAccount(MsgFreezeAccount) returns (MsgFreezeAccountResponse);
+
+  // UnfreezeAccount unfreezes a frozen account (authority only).
+  rpc UnfreezeAccount(MsgUnfreezeAccount) returns (MsgUnfreezeAccountResponse);
+
+  // SetRecoveryConfig sets recovery configuration for an account.
+  rpc SetRecoveryConfig(MsgSetRecoveryConfig) returns (MsgSetRecoveryConfigResponse);
+
+  // InitiateRecovery begins account recovery.
+  rpc InitiateRecovery(MsgInitiateRecovery) returns (MsgInitiateRecoveryResponse);
+
+  // SubmitRecoveryShard provides a shard to an active recovery request.
+  rpc SubmitRecoveryShard(MsgSubmitRecoveryShard) returns (MsgSubmitRecoveryShardResponse);
+
+  // ChallengeRecovery challenges an active recovery request.
+  rpc ChallengeRecovery(MsgChallengeRecovery) returns (MsgChallengeRecoveryResponse);
+
+  // ExecuteRecovery completes a recovery after delay + challenge period.
+  rpc ExecuteRecovery(MsgExecuteRecovery) returns (MsgExecuteRecoveryResponse);
 }
 
 // MsgRotateKey rotates the operational key for an account.
@@ -72,3 +96,83 @@ message MsgUpdateParams {
 }
 
 message MsgUpdateParamsResponse {}
+
+// MsgRegisterAccount registers a new Legible account with DID mapping.
+message MsgRegisterAccount {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string did = 2;
+  string public_key = 3;
+  string account_type = 4;
+  string operational_key_hash = 5;
+}
+
+message MsgRegisterAccountResponse {}
+
+// MsgFreezeAccount freezes an account.
+message MsgFreezeAccount {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string address = 2;
+  string reason = 3;
+}
+
+message MsgFreezeAccountResponse {}
+
+// MsgUnfreezeAccount unfreezes a frozen account.
+message MsgUnfreezeAccount {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string address = 2;
+}
+
+message MsgUnfreezeAccountResponse {}
+
+// MsgSetRecoveryConfig sets recovery configuration for an account.
+message MsgSetRecoveryConfig {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  RecoveryConfig config = 2;
+}
+
+message MsgSetRecoveryConfigResponse {}
+
+// MsgInitiateRecovery begins account recovery.
+message MsgInitiateRecovery {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string account_address = 2;
+  string new_operational_key = 3;
+}
+
+message MsgInitiateRecoveryResponse {}
+
+// MsgSubmitRecoveryShard provides a shard to an active recovery request.
+message MsgSubmitRecoveryShard {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string account_address = 2;
+  uint32 shard_index = 3;
+  bytes encrypted_shard = 4;
+}
+
+message MsgSubmitRecoveryShardResponse {}
+
+// MsgChallengeRecovery challenges an active recovery request.
+message MsgChallengeRecovery {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string account_address = 2;
+  string reason = 3;
+}
+
+message MsgChallengeRecoveryResponse {}
+
+// MsgExecuteRecovery completes a recovery after delay + challenge period.
+message MsgExecuteRecovery {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  string account_address = 2;
+}
+
+message MsgExecuteRecoveryResponse {}

@@ -14,21 +14,22 @@ import (
 
 // ---------- Params ----------
 
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := proto.Marshal(&params)
+	bz, _ := proto.Marshal(params)
 	_ = kvStore.Set(types.ParamsKey, bz)
 }
 
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		p := types.DefaultParams()
+		return &p
 	}
 	var params types.Params
 	proto.Unmarshal(bz, &params)
-	return params
+	return &params
 }
 
 // ---------- Research Submissions ----------
@@ -37,21 +38,21 @@ func submissionKey(id string) []byte {
 	return append(types.SubmissionKeyPrefix, []byte(id)...)
 }
 
-func (k Keeper) SetResearch(ctx sdk.Context, r types.Research) {
+func (k Keeper) SetResearch(ctx sdk.Context, r *types.Research) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := proto.Marshal(&r)
+	bz, _ := proto.Marshal(r)
 	_ = kvStore.Set(submissionKey(r.Id), bz)
 }
 
-func (k Keeper) GetResearch(ctx sdk.Context, id string) (types.Research, bool) {
+func (k Keeper) GetResearch(ctx sdk.Context, id string) (*types.Research, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(submissionKey(id))
 	if err != nil || bz == nil {
-		return types.Research{}, false
+		return nil, false
 	}
 	var r types.Research
 	proto.Unmarshal(bz, &r)
-	return r, true
+	return &r, true
 }
 
 func (k Keeper) DeleteResearch(ctx sdk.Context, id string) {
@@ -59,7 +60,7 @@ func (k Keeper) DeleteResearch(ctx sdk.Context, id string) {
 	_ = kvStore.Delete(submissionKey(id))
 }
 
-func (k Keeper) IterateResearches(ctx sdk.Context, cb func(types.Research) bool) {
+func (k Keeper) IterateResearches(ctx sdk.Context, cb func(*types.Research) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.SubmissionKeyPrefix, prefixEndBytes(types.SubmissionKeyPrefix))
 	if err != nil {
@@ -69,15 +70,15 @@ func (k Keeper) IterateResearches(ctx sdk.Context, cb func(types.Research) bool)
 	for ; iter.Valid(); iter.Next() {
 		var r types.Research
 		proto.Unmarshal(iter.Value(), &r)
-		if cb(r) {
+		if cb(&r) {
 			break
 		}
 	}
 }
 
-func (k Keeper) GetResearchesByStatus(ctx sdk.Context, status types.ResearchStatus) []types.Research {
-	var results []types.Research
-	k.IterateResearches(ctx, func(r types.Research) bool {
+func (k Keeper) GetResearchesByStatus(ctx sdk.Context, status types.ResearchStatus) []*types.Research {
+	var results []*types.Research
+	k.IterateResearches(ctx, func(r *types.Research) bool {
 		if r.Status == string(status) {
 			results = append(results, r)
 		}
@@ -86,9 +87,9 @@ func (k Keeper) GetResearchesByStatus(ctx sdk.Context, status types.ResearchStat
 	return results
 }
 
-func (k Keeper) GetResearchesByDomain(ctx sdk.Context, domain string) []types.Research {
-	var results []types.Research
-	k.IterateResearches(ctx, func(r types.Research) bool {
+func (k Keeper) GetResearchesByDomain(ctx sdk.Context, domain string) []*types.Research {
+	var results []*types.Research
+	k.IterateResearches(ctx, func(r *types.Research) bool {
 		if r.Domain == domain {
 			results = append(results, r)
 		}
@@ -103,21 +104,21 @@ func bountyKey(id string) []byte {
 	return append(types.BountyKeyPrefix, []byte(id)...)
 }
 
-func (k Keeper) SetBounty(ctx sdk.Context, b types.Bounty) {
+func (k Keeper) SetBounty(ctx sdk.Context, b *types.Bounty) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := proto.Marshal(&b)
+	bz, _ := proto.Marshal(b)
 	_ = kvStore.Set(bountyKey(b.Id), bz)
 }
 
-func (k Keeper) GetBounty(ctx sdk.Context, id string) (types.Bounty, bool) {
+func (k Keeper) GetBounty(ctx sdk.Context, id string) (*types.Bounty, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(bountyKey(id))
 	if err != nil || bz == nil {
-		return types.Bounty{}, false
+		return nil, false
 	}
 	var b types.Bounty
 	proto.Unmarshal(bz, &b)
-	return b, true
+	return &b, true
 }
 
 func (k Keeper) DeleteBounty(ctx sdk.Context, id string) {
@@ -125,7 +126,7 @@ func (k Keeper) DeleteBounty(ctx sdk.Context, id string) {
 	_ = kvStore.Delete(bountyKey(id))
 }
 
-func (k Keeper) IterateBounties(ctx sdk.Context, cb func(types.Bounty) bool) {
+func (k Keeper) IterateBounties(ctx sdk.Context, cb func(*types.Bounty) bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(types.BountyKeyPrefix, prefixEndBytes(types.BountyKeyPrefix))
 	if err != nil {
@@ -135,15 +136,15 @@ func (k Keeper) IterateBounties(ctx sdk.Context, cb func(types.Bounty) bool) {
 	for ; iter.Valid(); iter.Next() {
 		var b types.Bounty
 		proto.Unmarshal(iter.Value(), &b)
-		if cb(b) {
+		if cb(&b) {
 			break
 		}
 	}
 }
 
-func (k Keeper) GetActiveBounties(ctx sdk.Context) []types.Bounty {
-	var results []types.Bounty
-	k.IterateBounties(ctx, func(b types.Bounty) bool {
+func (k Keeper) GetActiveBounties(ctx sdk.Context) []*types.Bounty {
+	var results []*types.Bounty
+	k.IterateBounties(ctx, func(b *types.Bounty) bool {
 		if b.Status == string(types.BountyStatusOpen) || b.Status == string(types.BountyStatusClaimed) {
 			results = append(results, b)
 		}
@@ -156,7 +157,7 @@ func (k Keeper) GetActiveBounties(ctx sdk.Context) []types.Bounty {
 // Claimed bounties past deadline are reopened so another agent can claim them.
 func (k Keeper) ExpireBounties(ctx sdk.Context) {
 	currentBlock := uint64(ctx.BlockHeight())
-	k.IterateBounties(ctx, func(b types.Bounty) bool {
+	k.IterateBounties(ctx, func(b *types.Bounty) bool {
 		if currentBlock <= b.DeadlineHeight {
 			return false
 		}
@@ -217,24 +218,24 @@ func reviewPrefixForResearch(researchId string) []byte {
 	return append(types.PeerReviewKeyPrefix, []byte(researchId+"/")...)
 }
 
-func (k Keeper) SetPeerReview(ctx sdk.Context, r types.PeerReview) {
+func (k Keeper) SetPeerReview(ctx sdk.Context, r *types.PeerReview) {
 	kvStore := k.storeService.OpenKVStore(ctx)
-	bz, _ := proto.Marshal(&r)
+	bz, _ := proto.Marshal(r)
 	_ = kvStore.Set(reviewKey(r.ResearchId, r.Id), bz)
 }
 
-func (k Keeper) GetPeerReview(ctx sdk.Context, researchId, reviewId string) (types.PeerReview, bool) {
+func (k Keeper) GetPeerReview(ctx sdk.Context, researchId, reviewId string) (*types.PeerReview, bool) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(reviewKey(researchId, reviewId))
 	if err != nil || bz == nil {
-		return types.PeerReview{}, false
+		return nil, false
 	}
 	var r types.PeerReview
 	proto.Unmarshal(bz, &r)
-	return r, true
+	return &r, true
 }
 
-func (k Keeper) GetReviewsForResearch(ctx sdk.Context, researchId string) []types.PeerReview {
+func (k Keeper) GetReviewsForResearch(ctx sdk.Context, researchId string) []*types.PeerReview {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	prefix := reviewPrefixForResearch(researchId)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
@@ -243,11 +244,11 @@ func (k Keeper) GetReviewsForResearch(ctx sdk.Context, researchId string) []type
 	}
 	defer iter.Close()
 
-	var results []types.PeerReview
+	var results []*types.PeerReview
 	for ; iter.Valid(); iter.Next() {
 		var r types.PeerReview
 		proto.Unmarshal(iter.Value(), &r)
-		results = append(results, r)
+		results = append(results, &r)
 	}
 	return results
 }

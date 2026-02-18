@@ -68,6 +68,62 @@ for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
   echo "  Node ${i} initialized at ${NODE_HOME}"
 done
 
+# ---------------------------------------------------------------------------
+# Patch genesis.json (node0 is the canonical genesis source)
+# ---------------------------------------------------------------------------
+NODE0_HOME="${HOME}/.legbled-devnet/node0"
+GENESIS="${NODE0_HOME}/config/genesis.json"
+
+echo ""
+echo "--- Patching genesis.json ---"
+
+jq '
+# CRITICAL: Enable vote extensions for PoT VRF at block 1
+.consensus.params.abci.vote_extensions_enable_height = "1" |
+
+# Staking bond denom
+.app_state.staking.params.bond_denom = "ulgm" |
+
+# Knowledge module: compatible with 3-node devnet
+.app_state.knowledge.params.min_verifiers = 1 |
+
+# Bank: denom metadata
+.app_state.bank.denom_metadata = [{
+    "description": "The native staking token of Legible Money",
+    "denom_units": [
+        {"denom": "ulgm",  "exponent": 0, "aliases": ["microlegible"]},
+        {"denom": "mlgm",  "exponent": 3, "aliases": ["millilegible"]},
+        {"denom": "lgm",   "exponent": 6, "aliases": ["legible"]}
+    ],
+    "base": "ulgm",
+    "display": "lgm",
+    "name": "Legible Money",
+    "symbol": "LGM"
+}] |
+
+# Governance: fast voting for devnet
+.app_state.gov.params.voting_period = "60s" |
+.app_state.gov.params.expedited_voting_period = "30s" |
+.app_state.gov.params.max_deposit_period = "60s" |
+.app_state.gov.params.min_deposit = [{"denom": "ulgm", "amount": "10000000"}] |
+
+# Slashing: lenient for devnet
+.app_state.slashing.params.signed_blocks_window = "100" |
+.app_state.slashing.params.slash_fraction_downtime = "0.010000000000000000"
+' "${GENESIS}" > "${GENESIS}.tmp" && mv "${GENESIS}.tmp" "${GENESIS}"
+
+echo "  Genesis patched (vote extensions, denom metadata, governance, slashing)"
+
+# Copy patched genesis to other nodes
+for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
+  cp "${GENESIS}" "${HOME}/.legbled-devnet/node${i}/config/genesis.json"
+  echo "  Genesis copied to node${i}"
+done
+
+# Validate genesis
+${BINARY} validate-genesis --home ${NODE0_HOME} 2>&1
+echo "  Genesis validated"
+
 echo ""
 echo "=== Devnet Initialization Complete ==="
 echo ""

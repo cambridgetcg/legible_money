@@ -279,7 +279,7 @@ func TestParamsDefault(t *testing.T) {
 
 func TestParamsSetGet(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
-	custom := types.Params{
+	custom := &types.Params{
 		BaseCostPerFact:       "2000000",
 		ConfidenceThreshold:   600000,
 		ConfidencePremiumBps:  300000,
@@ -317,7 +317,7 @@ func TestProviderCRUD(t *testing.T) {
 	}
 
 	// Set
-	provider := types.Provider{
+	provider := &types.Provider{
 		Address:      addr,
 		Domains:      []string{"mathematics", "physics"},
 		StakeAmount:  "100000000",
@@ -351,7 +351,7 @@ func TestProviderCRUD(t *testing.T) {
 func TestGetAllProviders(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 	for i := 0; i < 3; i++ {
-		k.SetProvider(ctx, types.Provider{
+		k.SetProvider(ctx, &types.Provider{
 			Address:      testAddr(i),
 			Domains:      []string{"test"},
 			StakeAmount:  "100000000",
@@ -731,7 +731,7 @@ func TestQueryParams(t *testing.T) {
 func TestQueryProvider(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 	addr := testAddr(1)
-	k.SetProvider(ctx, types.Provider{
+	k.SetProvider(ctx, &types.Provider{
 		Address:      addr,
 		Domains:      []string{"test"},
 		StakeAmount:  "100000000",
@@ -827,7 +827,7 @@ func TestUpdateParamsUnauthorized(t *testing.T) {
 	defaultParams := types.DefaultParams()
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr(99),
-		Params:    &defaultParams,
+		Params:    defaultParams,
 	})
 	if err == nil {
 		t.Error("expected unauthorized error")
@@ -843,11 +843,11 @@ func TestGenesis(t *testing.T) {
 
 	addr1 := testAddr(1)
 	addr2 := testAddr(2)
-	k.SetProvider(ctx, types.Provider{
+	k.SetProvider(ctx, &types.Provider{
 		Address: addr1, Domains: []string{"math"}, StakeAmount: "100000000",
 		Active: true, TotalRevenue: "0",
 	})
-	k.SetProvider(ctx, types.Provider{
+	k.SetProvider(ctx, &types.Provider{
 		Address: addr2, Domains: []string{"physics"}, StakeAmount: "200000000",
 		Active: true, TotalRevenue: "0",
 	})
@@ -860,7 +860,7 @@ func TestGenesis(t *testing.T) {
 
 	// New keeper, import
 	k2, ctx2, _, _ := setupKeeper(t)
-	k2.InitGenesis(ctx2, *genState)
+	k2.InitGenesis(ctx2, genState)
 
 	got := k2.ExportGenesis(ctx2)
 	if len(got.Providers) != 2 {
@@ -931,7 +931,7 @@ func TestGetEffectiveResearchShareBps(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			params := types.Params{
+			params := &types.Params{
 				ResearchShareBps:   tc.maxBps,
 				ResearchMinBps:     tc.minBps,
 				ResearchRampBlocks: tc.rampBlocks,

@@ -24,7 +24,7 @@ import (
 //
 // Stage 3 of the 9-stage evaluation pipeline (between calibration and
 // evidence quality).
-func evaluateParticipantContext(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Claim) StageResult {
+func evaluateParticipantContext(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.Claim) StageResult {
 	result := StageResult{
 		Name: "participant_context",
 	}

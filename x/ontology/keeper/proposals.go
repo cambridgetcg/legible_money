@@ -12,7 +12,7 @@ import (
 )
 
 // CreateProposal creates a new domain proposal and stores it.
-func (k Keeper) CreateProposal(ctx sdk.Context, proposal types.DomainProposal) error {
+func (k Keeper) CreateProposal(ctx sdk.Context, proposal *types.DomainProposal) error {
 	// Validate the domain doesn't already exist
 	if _, found := k.GetDomain(ctx, proposal.Domain.Name); found {
 		return fmt.Errorf("%w: %s", types.ErrDomainExists, proposal.Domain.Name)
@@ -37,7 +37,7 @@ func (k Keeper) CreateProposal(ctx sdk.Context, proposal types.DomainProposal) e
 	// Also store the domain in "proposed" status
 	proposal.Domain.Status = "proposed"
 	proposal.Domain.CreatedAt = uint64(ctx.BlockHeight())
-	k.SetDomain(ctx, *proposal.Domain)
+	k.SetDomain(ctx, proposal.Domain)
 
 	k.Logger(ctx).Info("domain proposal created",
 		"proposal_id", proposal.Id,
@@ -125,9 +125,9 @@ func (k Keeper) VoteProposal(ctx sdk.Context, proposalId string, voter string, a
 func (k Keeper) ProcessExpiredProposals(ctx sdk.Context) error {
 	currentHeight := uint64(ctx.BlockHeight())
 
-	var toExpire []types.DomainProposal
+	var toExpire []*types.DomainProposal
 
-	k.IterateProposals(ctx, func(p types.DomainProposal) bool {
+	k.IterateProposals(ctx, func(p *types.DomainProposal) bool {
 		if p.Status == "active" && currentHeight > p.ExpiresAt {
 			toExpire = append(toExpire, p)
 		}
@@ -164,7 +164,7 @@ func (k Keeper) ProcessExpiredProposals(ctx sdk.Context) error {
 }
 
 // ExecuteProposal activates or modifies a domain based on the proposal type.
-func (k Keeper) ExecuteProposal(ctx sdk.Context, proposal types.DomainProposal) error {
+func (k Keeper) ExecuteProposal(ctx sdk.Context, proposal *types.DomainProposal) error {
 	switch proposal.ProposalType {
 	case "add":
 		return k.ActivateDomain(ctx, proposal.Domain.Name)
@@ -196,7 +196,7 @@ func (k Keeper) ExecuteProposal(ctx sdk.Context, proposal types.DomainProposal) 
 
 // RefundProposalStake returns the staked tokens to the proposer.
 // Called when a proposal is resolved (passed or expired).
-func (k Keeper) RefundProposalStake(ctx sdk.Context, proposal types.DomainProposal) error {
+func (k Keeper) RefundProposalStake(ctx sdk.Context, proposal *types.DomainProposal) error {
 	if proposal.Stake == "" || proposal.Stake == "0" || proposal.Proposer == "" {
 		return nil
 	}

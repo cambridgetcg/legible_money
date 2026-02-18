@@ -65,15 +65,15 @@ func (k Keeper) GetAuthority() string {
 }
 
 // InitGenesis initializes the module's state from genesis.
-func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	if genState.Params != nil {
-		k.SetParams(ctx, *genState.Params)
+		k.SetParams(ctx, genState.Params)
 	}
 	k.SetSequence(ctx, genState.Sequence)
 
 	for _, process := range genState.Processes {
 		if process != nil {
-			k.SetProcess(ctx, *process)
+			k.SetProcess(ctx, process)
 		}
 	}
 }
@@ -81,15 +81,14 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 // ExportGenesis exports the module's state.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 	var processes []*types.ScheduleProcess
-	k.IterateProcesses(ctx, func(p types.ScheduleProcess) bool {
-		pCopy := p
-		processes = append(processes, &pCopy)
+	k.IterateProcesses(ctx, func(p *types.ScheduleProcess) bool {
+		processes = append(processes, p)
 		return false
 	})
 
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
-		Params:    &params,
+		Params:    params,
 		Processes: processes,
 		Sequence:  k.GetSequence(ctx),
 	}

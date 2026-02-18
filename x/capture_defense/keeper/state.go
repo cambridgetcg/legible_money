@@ -34,23 +34,23 @@ func (k Keeper) IsDomainPaused(ctx sdk.Context, domain string) bool {
 // --- Qualification CRUD ---
 
 // GetQualification returns a validator's qualification for a domain.
-func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) (types.DomainQualification, bool) {
+func (k Keeper) GetQualification(ctx sdk.Context, validatorAddr, domain string) (*types.DomainQualification, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.QualificationKey(validatorAddr, domain))
 	if err != nil || bz == nil {
-		return types.DomainQualification{}, false
+		return nil, false
 	}
 	var qual types.DomainQualification
 	if err := proto.Unmarshal(bz, &qual); err != nil {
-		return types.DomainQualification{}, false
+		return nil, false
 	}
-	return qual, true
+	return &qual, true
 }
 
 // SetQualification stores a validator's qualification for a domain.
-func (k Keeper) SetQualification(ctx sdk.Context, qual types.DomainQualification) {
+func (k Keeper) SetQualification(ctx sdk.Context, qual *types.DomainQualification) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&qual)
+	bz, err := proto.Marshal(qual)
 	if err != nil {
 		panic("failed to marshal qualification: " + err.Error())
 	}
@@ -68,7 +68,7 @@ func (k Keeper) DeleteQualification(ctx sdk.Context, validatorAddr, domain strin
 }
 
 // GetValidatorQualifications returns all qualifications for a validator.
-func (k Keeper) GetValidatorQualifications(ctx sdk.Context, validatorAddr string) []types.DomainQualification {
+func (k Keeper) GetValidatorQualifications(ctx sdk.Context, validatorAddr string) []*types.DomainQualification {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.QualificationsByValidatorPrefix(validatorAddr)
 	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
@@ -77,19 +77,19 @@ func (k Keeper) GetValidatorQualifications(ctx sdk.Context, validatorAddr string
 	}
 	defer iter.Close()
 
-	var quals []types.DomainQualification
+	var quals []*types.DomainQualification
 	for ; iter.Valid(); iter.Next() {
 		var qual types.DomainQualification
 		if err := proto.Unmarshal(iter.Value(), &qual); err != nil {
 			continue
 		}
-		quals = append(quals, qual)
+		quals = append(quals, &qual)
 	}
 	return quals
 }
 
 // IterateQualifications iterates over all qualifications.
-func (k Keeper) IterateQualifications(ctx sdk.Context, cb func(types.DomainQualification) bool) {
+func (k Keeper) IterateQualifications(ctx sdk.Context, cb func(*types.DomainQualification) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.QualificationKeyPrefix, prefixEndBytes(types.QualificationKeyPrefix))
 	if err != nil {
@@ -102,7 +102,7 @@ func (k Keeper) IterateQualifications(ctx sdk.Context, cb func(types.DomainQuali
 		if err := proto.Unmarshal(iter.Value(), &qual); err != nil {
 			continue
 		}
-		if cb(qual) {
+		if cb(&qual) {
 			break
 		}
 	}
@@ -111,23 +111,23 @@ func (k Keeper) IterateQualifications(ctx sdk.Context, cb func(types.DomainQuali
 // --- Reputation CRUD ---
 
 // GetIsolatedReputation returns a validator's isolated reputation.
-func (k Keeper) GetIsolatedReputation(ctx sdk.Context, validatorAddr string) (types.IsolatedReputation, bool) {
+func (k Keeper) GetIsolatedReputation(ctx sdk.Context, validatorAddr string) (*types.IsolatedReputation, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.GlobalReputationKey(validatorAddr))
 	if err != nil || bz == nil {
-		return types.IsolatedReputation{}, false
+		return nil, false
 	}
 	var rep types.IsolatedReputation
 	if err := proto.Unmarshal(bz, &rep); err != nil {
-		return types.IsolatedReputation{}, false
+		return nil, false
 	}
-	return rep, true
+	return &rep, true
 }
 
 // SetIsolatedReputation stores a validator's isolated reputation.
-func (k Keeper) SetIsolatedReputation(ctx sdk.Context, rep types.IsolatedReputation) {
+func (k Keeper) SetIsolatedReputation(ctx sdk.Context, rep *types.IsolatedReputation) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&rep)
+	bz, err := proto.Marshal(rep)
 	if err != nil {
 		panic("failed to marshal reputation: " + err.Error())
 	}
@@ -137,12 +137,12 @@ func (k Keeper) SetIsolatedReputation(ctx sdk.Context, rep types.IsolatedReputat
 }
 
 // GetOrCreateReputation returns existing reputation or creates a new one.
-func (k Keeper) GetOrCreateReputation(ctx sdk.Context, validatorAddr string, currentBlock uint64) types.IsolatedReputation {
+func (k Keeper) GetOrCreateReputation(ctx sdk.Context, validatorAddr string, currentBlock uint64) *types.IsolatedReputation {
 	rep, found := k.GetIsolatedReputation(ctx, validatorAddr)
 	if found {
 		return rep
 	}
-	return types.IsolatedReputation{
+	return &types.IsolatedReputation{
 		ValidatorAddr:      validatorAddr,
 		GlobalReputation:   &types.GlobalReputation{Score: types.BaseScore},
 		StratumReputations: nil,
@@ -153,7 +153,7 @@ func (k Keeper) GetOrCreateReputation(ctx sdk.Context, validatorAddr string, cur
 }
 
 // IterateReputations iterates over all reputations.
-func (k Keeper) IterateReputations(ctx sdk.Context, cb func(types.IsolatedReputation) bool) {
+func (k Keeper) IterateReputations(ctx sdk.Context, cb func(*types.IsolatedReputation) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.GlobalReputationKeyPrefix, prefixEndBytes(types.GlobalReputationKeyPrefix))
 	if err != nil {
@@ -166,7 +166,7 @@ func (k Keeper) IterateReputations(ctx sdk.Context, cb func(types.IsolatedReputa
 		if err := proto.Unmarshal(iter.Value(), &rep); err != nil {
 			continue
 		}
-		if cb(rep) {
+		if cb(&rep) {
 			break
 		}
 	}
@@ -175,23 +175,23 @@ func (k Keeper) IterateReputations(ctx sdk.Context, cb func(types.IsolatedReputa
 // --- Verification History CRUD ---
 
 // GetVerificationHistory returns the verification history for a domain.
-func (k Keeper) GetVerificationHistory(ctx sdk.Context, domain string) types.VerificationHistory {
+func (k Keeper) GetVerificationHistory(ctx sdk.Context, domain string) *types.VerificationHistory {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.VerificationHistoryKey(domain))
 	if err != nil || bz == nil {
-		return types.VerificationHistory{Domain: domain, Entries: nil}
+		return &types.VerificationHistory{Domain: domain, Entries: nil}
 	}
 	var history types.VerificationHistory
 	if err := proto.Unmarshal(bz, &history); err != nil {
-		return types.VerificationHistory{Domain: domain, Entries: nil}
+		return &types.VerificationHistory{Domain: domain, Entries: nil}
 	}
-	return history
+	return &history
 }
 
 // SetVerificationHistory stores the verification history for a domain.
-func (k Keeper) SetVerificationHistory(ctx sdk.Context, history types.VerificationHistory) {
+func (k Keeper) SetVerificationHistory(ctx sdk.Context, history *types.VerificationHistory) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&history)
+	bz, err := proto.Marshal(history)
 	if err != nil {
 		panic("failed to marshal verification history: " + err.Error())
 	}
@@ -201,9 +201,9 @@ func (k Keeper) SetVerificationHistory(ctx sdk.Context, history types.Verificati
 }
 
 // AppendVerificationHistoryEntry adds an entry and maintains a max of 100 entries per domain.
-func (k Keeper) AppendVerificationHistoryEntry(ctx sdk.Context, domain string, entry types.VerificationHistoryEntry) {
+func (k Keeper) AppendVerificationHistoryEntry(ctx sdk.Context, domain string, entry *types.VerificationHistoryEntry) {
 	history := k.GetVerificationHistory(ctx, domain)
-	history.Entries = append(history.Entries, &entry)
+	history.Entries = append(history.Entries, entry)
 	if len(history.Entries) > 100 {
 		history.Entries = history.Entries[len(history.Entries)-100:]
 	}
@@ -213,23 +213,23 @@ func (k Keeper) AppendVerificationHistoryEntry(ctx sdk.Context, domain string, e
 // --- Capture Metrics CRUD ---
 
 // GetCaptureMetrics returns the capture metrics for a domain.
-func (k Keeper) GetCaptureMetrics(ctx sdk.Context, domain string) (types.CaptureMetrics, bool) {
+func (k Keeper) GetCaptureMetrics(ctx sdk.Context, domain string) (*types.CaptureMetrics, bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.CaptureMetricsKey(domain))
 	if err != nil || bz == nil {
-		return types.CaptureMetrics{}, false
+		return nil, false
 	}
 	var metrics types.CaptureMetrics
 	if err := proto.Unmarshal(bz, &metrics); err != nil {
-		return types.CaptureMetrics{}, false
+		return nil, false
 	}
-	return metrics, true
+	return &metrics, true
 }
 
 // SetCaptureMetrics stores the capture metrics for a domain.
-func (k Keeper) SetCaptureMetrics(ctx sdk.Context, metrics types.CaptureMetrics) {
+func (k Keeper) SetCaptureMetrics(ctx sdk.Context, metrics *types.CaptureMetrics) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&metrics)
+	bz, err := proto.Marshal(metrics)
 	if err != nil {
 		panic("failed to marshal capture metrics: " + err.Error())
 	}
@@ -239,7 +239,7 @@ func (k Keeper) SetCaptureMetrics(ctx sdk.Context, metrics types.CaptureMetrics)
 }
 
 // IterateCaptureMetrics iterates over all capture metrics.
-func (k Keeper) IterateCaptureMetrics(ctx sdk.Context, cb func(types.CaptureMetrics) bool) {
+func (k Keeper) IterateCaptureMetrics(ctx sdk.Context, cb func(*types.CaptureMetrics) bool) {
 	store := k.storeService.OpenKVStore(ctx)
 	iter, err := store.Iterator(types.CaptureMetricsKeyPrefix, prefixEndBytes(types.CaptureMetricsKeyPrefix))
 	if err != nil {
@@ -252,7 +252,7 @@ func (k Keeper) IterateCaptureMetrics(ctx sdk.Context, cb func(types.CaptureMetr
 		if err := proto.Unmarshal(iter.Value(), &m); err != nil {
 			continue
 		}
-		if cb(m) {
+		if cb(&m) {
 			break
 		}
 	}
@@ -261,23 +261,23 @@ func (k Keeper) IterateCaptureMetrics(ctx sdk.Context, cb func(types.CaptureMetr
 // --- Params CRUD ---
 
 // GetParams returns the module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKeyPrefix)
 	if err != nil || bz == nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
 	var params types.Params
 	if err := proto.Unmarshal(bz, &params); err != nil {
-		return *types.DefaultParams()
+		return types.DefaultParams()
 	}
-	return params
+	return &params
 }
 
 // SetParams stores the module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
-	bz, err := proto.Marshal(&params)
+	bz, err := proto.Marshal(params)
 	if err != nil {
 		panic("failed to marshal params: " + err.Error())
 	}

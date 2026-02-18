@@ -718,11 +718,99 @@ func (x *MsgVoteResumeResponse) GetChainResumed() bool {
 	return false
 }
 
+type MsgUpdateParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authority     string                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	Params        *Params                `protobuf:"bytes,2,opt,name=params,proto3" json:"params,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParams) Reset() {
+	*x = MsgUpdateParams{}
+	mi := &file_legible_emergency_v1_tx_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParams) ProtoMessage() {}
+
+func (x *MsgUpdateParams) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_emergency_v1_tx_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParams.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParams) Descriptor() ([]byte, []int) {
+	return file_legible_emergency_v1_tx_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MsgUpdateParams) GetAuthority() string {
+	if x != nil {
+		return x.Authority
+	}
+	return ""
+}
+
+func (x *MsgUpdateParams) GetParams() *Params {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+type MsgUpdateParamsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParamsResponse) Reset() {
+	*x = MsgUpdateParamsResponse{}
+	mi := &file_legible_emergency_v1_tx_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParamsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParamsResponse) ProtoMessage() {}
+
+func (x *MsgUpdateParamsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_emergency_v1_tx_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParamsResponse.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
+	return file_legible_emergency_v1_tx_proto_rawDescGZIP(), []int{13}
+}
+
 var File_legible_emergency_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_emergency_v1_tx_proto_rawDesc = "" +
 	"\n" +
-	"\x1dlegible/emergency/v1/tx.proto\x12\x14legible.emergency.v1\x1a\x17cosmos/msg/v1/msg.proto\"\x98\x01\n" +
+	"\x1dlegible/emergency/v1/tx.proto\x12\x14legible.emergency.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a\"legible/emergency/v1/genesis.proto\"\x98\x01\n" +
 	"\x0eMsgProposeHalt\x12\x1a\n" +
 	"\bproposer\x18\x01 \x01(\tR\bproposer\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12C\n" +
@@ -769,13 +857,17 @@ const file_legible_emergency_v1_tx_proto_rawDesc = "" +
 	"\x82\xe7\xb0*\x05voter\"c\n" +
 	"\x15MsgVoteResumeResponse\x12%\n" +
 	"\x0equorum_reached\x18\x01 \x01(\bR\rquorumReached\x12#\n" +
-	"\rchain_resumed\x18\x02 \x01(\bR\fchainResumed*\xdb\x01\n" +
+	"\rchain_resumed\x18\x02 \x01(\bR\fchainResumed\"u\n" +
+	"\x0fMsgUpdateParams\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\tR\tauthority\x124\n" +
+	"\x06params\x18\x02 \x01(\v2\x1c.legible.emergency.v1.ParamsR\x06params:\x0e\x82\xe7\xb0*\tauthority\"\x19\n" +
+	"\x17MsgUpdateParamsResponse*\xdb\x01\n" +
 	"\x11EmergencyCategory\x12\"\n" +
 	"\x1eEMERGENCY_CATEGORY_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"EMERGENCY_CATEGORY_SECURITY_BREACH\x10\x01\x12(\n" +
 	"$EMERGENCY_CATEGORY_CONSENSUS_FAILURE\x10\x02\x12'\n" +
 	"#EMERGENCY_CATEGORY_ECONOMIC_EXPLOIT\x10\x03\x12'\n" +
-	"#EMERGENCY_CATEGORY_STATE_CORRUPTION\x10\x042\xdb\x04\n" +
+	"#EMERGENCY_CATEGORY_STATE_CORRUPTION\x10\x042\xc1\x05\n" +
 	"\x03Msg\x12a\n" +
 	"\vProposeHalt\x12$.legible.emergency.v1.MsgProposeHalt\x1a,.legible.emergency.v1.MsgProposeHaltResponse\x12X\n" +
 	"\bVoteHalt\x12!.legible.emergency.v1.MsgVoteHalt\x1a).legible.emergency.v1.MsgVoteHaltResponse\x12g\n" +
@@ -784,7 +876,8 @@ const file_legible_emergency_v1_tx_proto_rawDesc = "" +
 	"VoteRevert\x12#.legible.emergency.v1.MsgVoteRevert\x1a+.legible.emergency.v1.MsgVoteRevertResponse\x12g\n" +
 	"\rProposeResume\x12&.legible.emergency.v1.MsgProposeResume\x1a..legible.emergency.v1.MsgProposeResumeResponse\x12^\n" +
 	"\n" +
-	"VoteResume\x12#.legible.emergency.v1.MsgVoteResume\x1a+.legible.emergency.v1.MsgVoteResumeResponse\x1a\x05\x80\xe7\xb0*\x01B4Z2github.com/legible-money/legible/x/emergency/typesb\x06proto3"
+	"VoteResume\x12#.legible.emergency.v1.MsgVoteResume\x1a+.legible.emergency.v1.MsgVoteResumeResponse\x12d\n" +
+	"\fUpdateParams\x12%.legible.emergency.v1.MsgUpdateParams\x1a-.legible.emergency.v1.MsgUpdateParamsResponse\x1a\x05\x80\xe7\xb0*\x01B4Z2github.com/legible-money/legible/x/emergency/typesb\x06proto3"
 
 var (
 	file_legible_emergency_v1_tx_proto_rawDescOnce sync.Once
@@ -799,7 +892,7 @@ func file_legible_emergency_v1_tx_proto_rawDescGZIP() []byte {
 }
 
 var file_legible_emergency_v1_tx_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_legible_emergency_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_legible_emergency_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_legible_emergency_v1_tx_proto_goTypes = []any{
 	(EmergencyCategory)(0),           // 0: legible.emergency.v1.EmergencyCategory
 	(*MsgProposeHalt)(nil),           // 1: legible.emergency.v1.MsgProposeHalt
@@ -814,26 +907,32 @@ var file_legible_emergency_v1_tx_proto_goTypes = []any{
 	(*MsgProposeResumeResponse)(nil), // 10: legible.emergency.v1.MsgProposeResumeResponse
 	(*MsgVoteResume)(nil),            // 11: legible.emergency.v1.MsgVoteResume
 	(*MsgVoteResumeResponse)(nil),    // 12: legible.emergency.v1.MsgVoteResumeResponse
+	(*MsgUpdateParams)(nil),          // 13: legible.emergency.v1.MsgUpdateParams
+	(*MsgUpdateParamsResponse)(nil),  // 14: legible.emergency.v1.MsgUpdateParamsResponse
+	(*Params)(nil),                   // 15: legible.emergency.v1.Params
 }
 var file_legible_emergency_v1_tx_proto_depIdxs = []int32{
 	0,  // 0: legible.emergency.v1.MsgProposeHalt.category:type_name -> legible.emergency.v1.EmergencyCategory
-	1,  // 1: legible.emergency.v1.Msg.ProposeHalt:input_type -> legible.emergency.v1.MsgProposeHalt
-	3,  // 2: legible.emergency.v1.Msg.VoteHalt:input_type -> legible.emergency.v1.MsgVoteHalt
-	5,  // 3: legible.emergency.v1.Msg.ProposeRevert:input_type -> legible.emergency.v1.MsgProposeRevert
-	7,  // 4: legible.emergency.v1.Msg.VoteRevert:input_type -> legible.emergency.v1.MsgVoteRevert
-	9,  // 5: legible.emergency.v1.Msg.ProposeResume:input_type -> legible.emergency.v1.MsgProposeResume
-	11, // 6: legible.emergency.v1.Msg.VoteResume:input_type -> legible.emergency.v1.MsgVoteResume
-	2,  // 7: legible.emergency.v1.Msg.ProposeHalt:output_type -> legible.emergency.v1.MsgProposeHaltResponse
-	4,  // 8: legible.emergency.v1.Msg.VoteHalt:output_type -> legible.emergency.v1.MsgVoteHaltResponse
-	6,  // 9: legible.emergency.v1.Msg.ProposeRevert:output_type -> legible.emergency.v1.MsgProposeRevertResponse
-	8,  // 10: legible.emergency.v1.Msg.VoteRevert:output_type -> legible.emergency.v1.MsgVoteRevertResponse
-	10, // 11: legible.emergency.v1.Msg.ProposeResume:output_type -> legible.emergency.v1.MsgProposeResumeResponse
-	12, // 12: legible.emergency.v1.Msg.VoteResume:output_type -> legible.emergency.v1.MsgVoteResumeResponse
-	7,  // [7:13] is the sub-list for method output_type
-	1,  // [1:7] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	15, // 1: legible.emergency.v1.MsgUpdateParams.params:type_name -> legible.emergency.v1.Params
+	1,  // 2: legible.emergency.v1.Msg.ProposeHalt:input_type -> legible.emergency.v1.MsgProposeHalt
+	3,  // 3: legible.emergency.v1.Msg.VoteHalt:input_type -> legible.emergency.v1.MsgVoteHalt
+	5,  // 4: legible.emergency.v1.Msg.ProposeRevert:input_type -> legible.emergency.v1.MsgProposeRevert
+	7,  // 5: legible.emergency.v1.Msg.VoteRevert:input_type -> legible.emergency.v1.MsgVoteRevert
+	9,  // 6: legible.emergency.v1.Msg.ProposeResume:input_type -> legible.emergency.v1.MsgProposeResume
+	11, // 7: legible.emergency.v1.Msg.VoteResume:input_type -> legible.emergency.v1.MsgVoteResume
+	13, // 8: legible.emergency.v1.Msg.UpdateParams:input_type -> legible.emergency.v1.MsgUpdateParams
+	2,  // 9: legible.emergency.v1.Msg.ProposeHalt:output_type -> legible.emergency.v1.MsgProposeHaltResponse
+	4,  // 10: legible.emergency.v1.Msg.VoteHalt:output_type -> legible.emergency.v1.MsgVoteHaltResponse
+	6,  // 11: legible.emergency.v1.Msg.ProposeRevert:output_type -> legible.emergency.v1.MsgProposeRevertResponse
+	8,  // 12: legible.emergency.v1.Msg.VoteRevert:output_type -> legible.emergency.v1.MsgVoteRevertResponse
+	10, // 13: legible.emergency.v1.Msg.ProposeResume:output_type -> legible.emergency.v1.MsgProposeResumeResponse
+	12, // 14: legible.emergency.v1.Msg.VoteResume:output_type -> legible.emergency.v1.MsgVoteResumeResponse
+	14, // 15: legible.emergency.v1.Msg.UpdateParams:output_type -> legible.emergency.v1.MsgUpdateParamsResponse
+	9,  // [9:16] is the sub-list for method output_type
+	2,  // [2:9] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_legible_emergency_v1_tx_proto_init() }
@@ -841,13 +940,14 @@ func file_legible_emergency_v1_tx_proto_init() {
 	if File_legible_emergency_v1_tx_proto != nil {
 		return
 	}
+	file_legible_emergency_v1_genesis_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_emergency_v1_tx_proto_rawDesc), len(file_legible_emergency_v1_tx_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
