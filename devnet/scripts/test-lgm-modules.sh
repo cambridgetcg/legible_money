@@ -300,8 +300,8 @@ test_knowledge_module() {
     local claim_id=""
     if [ -n "$tx_result" ]; then
         claim_id=$(echo "$tx_result" | jq -r '
-            [.events[] | select(.type == "submit_claim" or .type == "knowledge_claim_submitted") |
-             .attributes[] | select(.key == "claim_id" or .key == "id") | .value] | first // empty' 2>/dev/null)
+            [.events[] | select(.type == "claim_submitted") |
+             .attributes[] | select(.key == "claim_id") | .value] | first // empty' 2>/dev/null)
     fi
     if [ -z "$claim_id" ]; then
         # Try querying active rounds to find the claim
@@ -517,8 +517,8 @@ test_tokens_module() {
     local token_id=""
     if [ -n "$tx_result" ]; then
         token_id=$(echo "$tx_result" | jq -r '
-            [.events[] | select(.type == "create_token" or .type == "token_created") |
-             .attributes[] | select(.key == "token_id" or .key == "id") | .value] | first // empty' 2>/dev/null)
+            [.events[] | select(.type == "create_token") |
+             .attributes[] | select(.key == "token_id") | .value] | first // empty' 2>/dev/null)
     fi
     info "  Token ID: ${token_id:-unknown}"
 
@@ -653,8 +653,8 @@ test_home_module() {
     local home_id=""
     if [ "$code" = "0" ] && [ -n "$tx_result" ]; then
         home_id=$(echo "$tx_result" | jq -r '
-            [.events[] | select(.type == "create_home" or .type == "home_created") |
-             .attributes[] | select(.key == "home_id" or .key == "did" or .key == "id") | .value] | first // empty' 2>/dev/null)
+            [.events[] | select(.type == "create_home") |
+             .attributes[] | select(.key == "home_id") | .value] | first // empty' 2>/dev/null)
     fi
     # Fallback: use first existing home from query
     if [ -z "$home_id" ]; then
@@ -760,8 +760,8 @@ test_lgm_gov_module() {
     local lip_id=""
     if [ -n "$tx_result" ]; then
         lip_id=$(echo "$tx_result" | jq -r '
-            [.events[] | select(.type == "submit_lip" or .type == "lip_submitted") |
-             .attributes[] | select(.key == "lip_id" or .key == "id" or .key == "proposal_id") | .value] | first // empty' 2>/dev/null)
+            [.events[] | select(.type == "lip_submitted") |
+             .attributes[] | select(.key == "lip_id") | .value] | first // empty' 2>/dev/null)
     fi
     info "  LIP ID: ${lip_id:-unknown}"
 
