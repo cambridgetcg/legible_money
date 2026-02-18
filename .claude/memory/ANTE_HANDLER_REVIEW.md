@@ -331,3 +331,21 @@ return sdk.ChainAnteDecorators(
 ## 9. Key Insight for Future Work
 
 The ante handler chain is the **single point of transaction validation** for the entire Legible Money chain. Every transaction — knowledge claims, staking, governance, disputes, payments — flows through these 18 decorators. The chain currently has no test coverage, and two of the three custom pre-auth decorators have semantic issues (dead fee routing, unauthenticated state reads). Fixing these is prerequisite to any mainnet launch.
+
+---
+
+## 10. Delta Review (2026-02-18)
+
+> See `reports/ANTE-CHAIN.md` for full audit report.
+
+### Chain now has 21 decorators (was 18)
+New additions: BootstrapGasFreeDecorator (#3), EmergencyHaltDecorator (#4), SybilFundingDecorator (#18).
+
+### P0: `msgWithSigners` interface bypass (CRITICAL — UNFIXED)
+SDK v0.50.10 removed `GetSigners() []sdk.AccAddress` from proto-generated types. `LegibleAccountDecorator` and `LegibleCapabilityDecorator` use `msg.(msgWithSigners)` which FAILS for all standard SDK messages (MsgSend, MsgDelegate, MsgVote).
+- **Frozen accounts can send MsgSend** (freeze is bypassed)
+- **Session keys bypass capability checks** for standard SDK messages
+- **Fix**: Extract signers from tx signatures, not per-message GetSigners
+
+### P1: ICA type URL mismatch
+`isICAMsg()` uses gRPC path format (`/Msg/Register...`) but `sdk.MsgTypeURL` returns proto name format (`.MsgRegister...`). `CanIca` capability is dead code (fail-closed, so secure but broken).

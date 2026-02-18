@@ -133,10 +133,10 @@ func (m msgServer) UpdateChannel(goCtx context.Context, msg *types.MsgUpdateChan
 		return nil, types.ErrInvalidNonce
 	}
 
-	// Parse new balance receiver as spent
+	// Parse new balance receiver as spent — reject negative values
 	spent, ok := new(big.Int).SetString(msg.NewBalanceReceiver, 10)
-	if !ok {
-		return nil, fmt.Errorf("invalid new balance receiver amount")
+	if !ok || spent.Sign() < 0 {
+		return nil, fmt.Errorf("invalid new balance receiver amount: must be non-negative")
 	}
 	deposited, _ := new(big.Int).SetString(ch.Deposited, 10)
 	if spent.Cmp(deposited) > 0 {
@@ -177,6 +177,16 @@ func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeCh
 	// Verify disputer is payer or provider
 	if msg.Disputer != ch.Payer && msg.Disputer != ch.Provider {
 		return nil, types.ErrNotChannelParty
+	}
+
+	// Validate claimed balance: must be non-negative and <= deposited
+	claimedSpent, ok := new(big.Int).SetString(msg.ClaimedBalanceReceiver, 10)
+	if !ok || claimedSpent.Sign() < 0 {
+		return nil, types.ErrSpentExceedsDeposit.Wrap("claimed balance must be a non-negative integer")
+	}
+	deposited, _ := new(big.Int).SetString(ch.Deposited, 10)
+	if deposited != nil && claimedSpent.Cmp(deposited) > 0 {
+		return nil, types.ErrSpentExceedsDeposit.Wrap("claimed balance exceeds channel deposit")
 	}
 
 	// Check no active dispute (or sequence must be higher)
@@ -245,7 +255,7 @@ func (m msgServer) SettleChannel(goCtx context.Context, msg *types.MsgSettleChan
 			ch.Spent = dispute.DisputedSpent
 			ch.Nonce = dispute.DisputedNonce
 			dispute.Resolved = true
-			dispute.Resolution = "provider_wins" // default: disputer's state accepted
+			dispute.Resolution = "disputed_state_accepted" // disputer's claimed state used for settlement
 			m.Keeper.SetDispute(ctx, dispute)
 		}
 	}
@@ -316,10 +326,10 @@ func (m msgServer) CloseChannel(goCtx context.Context, msg *types.MsgCloseChanne
 		return nil, types.ErrNotChannelParty
 	}
 
-	// Use final balance receiver as spent amount
+	// Use final balance receiver as spent amount — reject negative values
 	spent, ok := new(big.Int).SetString(msg.FinalBalanceReceiver, 10)
-	if !ok {
-		spent = new(big.Int)
+	if !ok || spent.Sign() < 0 {
+		return nil, fmt.Errorf("invalid final balance: must be non-negative")
 	}
 	deposited, _ := new(big.Int).SetString(ch.Deposited, 10)
 	if spent.Cmp(deposited) > 0 {
@@ -444,10 +454,10 @@ func (m msgServer) UpdateState(goCtx context.Context, msg *types.MsgUpdateState)
 		return nil, types.ErrInvalidNonce
 	}
 
-	// Verify spent <= deposited
+	// Verify spent is non-negative and <= deposited
 	spent, ok := new(big.Int).SetString(msg.Update.Spent, 10)
-	if !ok {
-		return nil, fmt.Errorf("invalid spent amount")
+	if !ok || spent.Sign() < 0 {
+		return nil, fmt.Errorf("invalid spent amount: must be non-negative")
 	}
 	deposited, _ := new(big.Int).SetString(ch.Deposited, 10)
 	if spent.Cmp(deposited) > 0 {
