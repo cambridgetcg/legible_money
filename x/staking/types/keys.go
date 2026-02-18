@@ -49,6 +49,9 @@ var (
 // single delegator. Prevents rapid stake-shifting attacks that could
 // manipulate VRF selection probabilities within a single epoch.
 // 1,111 blocks ≈ 46 minutes at 2.521s/block.
+//
+// Deprecated: Use Params.RedelegationCooldownBlocks instead (governance-adjustable).
+// This constant is retained as a fallback default for pre-migration state.
 const RedelegationCooldownBlocks uint64 = 1111
 
 // RedelegationCooldownKey returns the store key for a delegator's last redelegation height

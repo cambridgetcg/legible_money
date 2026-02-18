@@ -1,0 +1,58 @@
+syntax = "proto3";
+package legible.autopoiesis.v1;
+
+option go_package = "github.com/legible-money/legible/x/autopoiesis/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the autopoiesis module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+  rpc Activate(MsgActivateAutopoiesis) returns (MsgActivateAutopoiesisResponse);
+  rpc OverrideMultiplier(MsgOverrideMultiplier) returns (MsgOverrideMultiplierResponse);
+  rpc FreezeMultiplier(MsgFreezeMultiplier) returns (MsgFreezeMultiplierResponse);
+}
+
+// Params defines the autopoiesis module parameters.
+message Params {
+  uint64 epoch_length_blocks       = 1;
+  uint64 max_change_per_epoch_bps  = 2;
+  uint64 slash_multiplier_min      = 3;
+  uint64 slash_multiplier_max      = 4;
+  uint64 ssi_critical_threshold    = 5;
+  uint64 ssi_moderate_threshold    = 6;
+  uint64 ssi_low_moderate_threshold = 7;
+  bool   enabled                   = 8;
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}
+
+message MsgActivateAutopoiesis {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  bool   activate  = 2;
+}
+message MsgActivateAutopoiesisResponse {}
+
+message MsgOverrideMultiplier {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string path      = 2;
+  uint64 value     = 3;
+}
+message MsgOverrideMultiplierResponse {}
+
+message MsgFreezeMultiplier {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  string path      = 2;
+  bool   frozen    = 3;
+}
+message MsgFreezeMultiplierResponse {}

@@ -12,6 +12,7 @@ import (
 func TestEvaluateLogicZone_Propositional(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, zone string) uint64 {
 			if zone == "propositional" {
 				return 1_000_000 // 100%
@@ -36,6 +37,7 @@ func TestEvaluateLogicZone_Propositional(t *testing.T) {
 func TestEvaluateLogicZone_Peano_NoGrounding(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
 			return 850_000
 		},
@@ -60,6 +62,7 @@ func TestEvaluateLogicZone_Peano_NoGrounding(t *testing.T) {
 func TestEvaluateLogicZone_Peano_WithGrounding(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
 			return 850_000
 		},
@@ -89,6 +92,7 @@ func TestEvaluateLogicZone_Peano_EmpiricalRefRejected(t *testing.T) {
 	// G-2: An empirical fact should NOT ground a Peano claim
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
 			return 850_000
 		},
@@ -117,6 +121,7 @@ func TestEvaluateLogicZone_Peano_WrongDomainRejected(t *testing.T) {
 	// G-2: A fact in a different domain should NOT ground a Gödelian claim
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
 			return 850_000
 		},
@@ -145,6 +150,7 @@ func TestEvaluateLogicZone_Peano_EmptyZoneRefAllowed(t *testing.T) {
 	// Backward compat: fact with no LogicZone set still grounds (no restriction)
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
 			return 850_000
 		},
@@ -203,6 +209,7 @@ func TestIsZoneCompatibleGrounding(t *testing.T) {
 func TestEvaluateLogicZone_SetTheory(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, _ string) uint64 {
 			return 800_000
 		},
@@ -226,7 +233,7 @@ func TestEvaluateLogicZone_SetTheory(t *testing.T) {
 
 func TestEvaluateLogicZone_EmptyZone(t *testing.T) {
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
 	claim := types.Claim{LogicZone: ""}
 
 	result := evaluateLogicZone(ctx, evalCtx, claim)
@@ -239,6 +246,7 @@ func TestEvaluateLogicZone_EmptyZone(t *testing.T) {
 func TestEvaluateLogicZone_Empirical(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetZoneConfidenceCeiling: func(_ sdk.Context, zone string) uint64 {
 			if zone == "empirical" {
 				return 700_000
@@ -263,6 +271,7 @@ func TestEvaluateLogicZone_Empirical(t *testing.T) {
 func TestApplyCeilings_TripleCeiling(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetConfidenceCeiling: func(_ sdk.Context, domain string) (uint64, uint64, error) {
 			if domain == "sociology" {
 				return 850_000, 0, nil // social stratum ceiling
@@ -291,6 +300,7 @@ func TestApplyCeilings_TripleCeiling(t *testing.T) {
 func TestApplyCeilings_CategoryCeilingWins(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetConfidenceCeiling: func(_ sdk.Context, _ string) (uint64, uint64, error) {
 			return 1_000_000, 0, nil // fundamental stratum
 		},
@@ -315,6 +325,7 @@ func TestApplyCeilings_CategoryCeilingWins(t *testing.T) {
 func TestApplyCeilings_FallbackStratum(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:       types.DefaultExtendedParams(),
 		GetConfidenceCeiling: nil, // no ontology keeper
 	}
 

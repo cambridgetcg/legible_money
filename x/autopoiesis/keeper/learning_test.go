@@ -410,7 +410,7 @@ func TestCollectAndAdapt_MetaLearningAtEpoch20(t *testing.T) {
 	// Activate and seed through 20 epochs
 	params := types.DefaultParams()
 	params.EpochLengthBlocks = 10 // short epochs for testing
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 	k.SetState(ctx, types.AutopoiesisState{Active: true, CurrentEpoch: 0})
 
 	// Run CollectAndAdapt for epochs 1-20

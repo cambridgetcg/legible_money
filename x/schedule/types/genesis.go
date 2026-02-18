@@ -9,6 +9,7 @@ func DefaultParams() Params {
 		MaxFutureBlocks:        12500000, // ~1 year at 2521ms blocks
 		MinPrepaidExecutions:   10,
 		ExpiredRetentionBlocks: 1000,
+		CleanupIntervalBlocks:  100,
 	}
 }
 

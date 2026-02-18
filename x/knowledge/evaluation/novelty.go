@@ -60,10 +60,11 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Cl
 
 	bridgeScore = calculateBridgeScore(ctx, evalCtx, claim)
 
+	ep := evalCtx.ExtendedParams
 	// Combined novelty = (info_gain + bridge_score) / 2, capped at NoveltyMaxBonusBps
 	combined := (infoGainBps + bridgeScore) / 2
-	if combined > types.NoveltyMaxBonusBps {
-		combined = types.NoveltyMaxBonusBps
+	if combined > ep.NoveltyMaxBonusBps {
+		combined = ep.NoveltyMaxBonusBps
 	}
 
 	// FARM-7: Scale novelty bonus by domain contributor count.
@@ -71,8 +72,8 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Cl
 	// get proportionally reduced novelty bonuses to prevent domain squatting.
 	if evalCtx.GetDomainUniqueContributors != nil && claim.Domain != "" {
 		contributors := evalCtx.GetDomainUniqueContributors(ctx, claim.Domain)
-		if contributors < types.MinDomainContributorsForNovelty {
-			combined = (combined * contributors) / types.MinDomainContributorsForNovelty
+		if contributors < ep.MinDomainContributorsForNovelty {
+			combined = (combined * contributors) / ep.MinDomainContributorsForNovelty
 		}
 	}
 
@@ -155,10 +156,11 @@ func calculateBridgeScore(ctx sdk.Context, evalCtx *EvaluationContext, claim typ
 		return 0
 	}
 
+	ep := evalCtx.ExtendedParams
 	var bridgeBonus uint64
 
 	for _, refId := range claim.References {
-		if bridgeBonus >= types.MaxBridgeBonusBps {
+		if bridgeBonus >= ep.MaxBridgeBonusBps {
 			break
 		}
 
@@ -168,19 +170,19 @@ func calculateBridgeScore(ctx sdk.Context, evalCtx *EvaluationContext, claim typ
 		}
 
 		// Only well-verified cross-domain refs count as bridges
-		if refFact.Confidence < types.VerifiedBridgeThreshold {
+		if refFact.Confidence < ep.VerifiedBridgeThresholdBps {
 			continue
 		}
 
 		// Verified bridge: bonus proportional to ref confidence
-		// Scale: at threshold (700k) = base bonus, at 1M = 1.43× bonus
-		bonus := types.CrossDomainBridgeBonusBps * refFact.Confidence / types.VerifiedBridgeThreshold
-		if bonus > types.CrossDomainBridgeBonusBps*3/2 {
-			bonus = types.CrossDomainBridgeBonusBps * 3 / 2 // cap at 1.5× per ref
+		// Scale: at threshold = base bonus, at 1M = 1.43× bonus
+		bonus := ep.CrossDomainBridgeBonusBps * refFact.Confidence / ep.VerifiedBridgeThresholdBps
+		if bonus > ep.CrossDomainBridgeBonusBps*3/2 {
+			bonus = ep.CrossDomainBridgeBonusBps * 3 / 2 // cap at 1.5× per ref
 		}
 
-		if bridgeBonus+bonus > types.MaxBridgeBonusBps {
-			bonus = types.MaxBridgeBonusBps - bridgeBonus
+		if bridgeBonus+bonus > ep.MaxBridgeBonusBps {
+			bonus = ep.MaxBridgeBonusBps - bridgeBonus
 		}
 		bridgeBonus += bonus
 	}

@@ -10,7 +10,7 @@ import (
 
 func TestEdgeCase_EmptyClaimText(t *testing.T) {
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
 	claim := types.Claim{Id: "c1", ClaimText: ""}
 
 	result := evaluateEdgeCases(ctx, evalCtx, claim)
@@ -21,7 +21,7 @@ func TestEdgeCase_EmptyClaimText(t *testing.T) {
 
 func TestEdgeCase_SelfReference(t *testing.T) {
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
 	claim := types.Claim{
 		Id:          "c1",
 		ClaimText:   "some claim",
@@ -38,6 +38,7 @@ func TestEdgeCase_SelfReference(t *testing.T) {
 func TestEdgeCase_AxiomContradiction(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
 			if id == "axiom-f1" {
 				return types.Fact{
@@ -65,6 +66,7 @@ func TestEdgeCase_AxiomContradiction(t *testing.T) {
 func TestEdgeCase_AxiomContradiction_LowConfidence(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetFact: func(_ sdk.Context, id string) (types.Fact, bool) {
 			if id == "f1" {
 				return types.Fact{
@@ -92,6 +94,7 @@ func TestEdgeCase_AxiomContradiction_LowConfidence(t *testing.T) {
 func TestEdgeCase_NoEvidenceNoRefsRequiringCategory(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return nil // no evidence
 		},
@@ -112,6 +115,7 @@ func TestEdgeCase_NoEvidenceNoRefsRequiringCategory(t *testing.T) {
 func TestEdgeCase_NoEvidenceButHasRefs(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return nil
 		},
@@ -133,6 +137,7 @@ func TestEdgeCase_NoEvidenceButHasRefs(t *testing.T) {
 func TestEdgeCase_HasSubstantiveEvidenceNoRefs(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", Status: "verified", EvidenceType: "experiment"}, // substantive
@@ -155,6 +160,7 @@ func TestEdgeCase_HasSubstantiveEvidenceNoRefs(t *testing.T) {
 func TestEdgeCase_AttestationOnlyInsufficient(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", Status: "verified", EvidenceType: "attestation"}, // NOT substantive
@@ -177,6 +183,7 @@ func TestEdgeCase_AttestationOnlyInsufficient(t *testing.T) {
 func TestEdgeCase_AnalyticDoesNotRequireEvidence(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return nil
 		},
@@ -197,6 +204,7 @@ func TestEdgeCase_AnalyticDoesNotRequireEvidence(t *testing.T) {
 func TestEdgeCase_NoEdgeCases(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetFact: func(_ sdk.Context, _ string) (types.Fact, bool) {
 			return types.Fact{Id: "f1", Status: types.FactStatusVerified, Confidence: 800_000}, true
 		},
@@ -217,6 +225,7 @@ func TestEdgeCase_NoEdgeCases(t *testing.T) {
 func TestEdgeCase_AllEvidenceRejected(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", Status: "rejected"},

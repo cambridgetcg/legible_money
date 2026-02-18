@@ -17,6 +17,9 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgUnpauseToken{}, "tokens/UnpauseToken", nil)
 	cdc.RegisterConcrete(&MsgAddLiquidity{}, "tokens/AddLiquidity", nil)
 	cdc.RegisterConcrete(&MsgRemoveLiquidity{}, "tokens/RemoveLiquidity", nil)
+	cdc.RegisterConcrete(&MsgDelegatePower{}, "tokens/DelegatePower", nil)
+	cdc.RegisterConcrete(&MsgWrapToken{}, "tokens/WrapToken", nil)
+	cdc.RegisterConcrete(&MsgUnwrapToken{}, "tokens/UnwrapToken", nil)
 	cdc.RegisterConcrete(&MsgSwap{}, "tokens/Swap", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "tokens/UpdateParams", nil)
 }

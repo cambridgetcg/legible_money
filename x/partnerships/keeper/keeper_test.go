@@ -881,7 +881,7 @@ func TestMsgUpdateParams(t *testing.T) {
 	}
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: authority,
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -896,9 +896,10 @@ func TestMsgUpdateParams(t *testing.T) {
 func TestMsgUpdateParamsUnauthorized(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
+	dp := types.DefaultParams()
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr(99),
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	})
 	if err == nil {
 		t.Error("expected unauthorized error")
@@ -1204,19 +1205,22 @@ func TestMsgDistributeRewardValidateBasic(t *testing.T) {
 func TestMsgUpdateParamsValidateBasic(t *testing.T) {
 	authority := testAddr(1)
 
-	valid := types.MsgUpdateParams{Authority: authority, Params: types.DefaultParams()}
+	dp := types.DefaultParams()
+	valid := types.MsgUpdateParams{Authority: authority, Params: &dp}
 	if err := valid.ValidateBasic(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	invalid := types.MsgUpdateParams{Authority: "", Params: types.DefaultParams()}
+	dp2 := types.DefaultParams()
+	invalid := types.MsgUpdateParams{Authority: "", Params: &dp2}
 	if err := invalid.ValidateBasic(); err == nil {
 		t.Error("expected error for empty authority")
 	}
 
+	ip := types.Params{FormationWindowBlocks: 0}
 	invalidParams := types.MsgUpdateParams{
 		Authority: authority,
-		Params:    types.Params{FormationWindowBlocks: 0},
+		Params:    &ip,
 	}
 	if err := invalidParams.ValidateBasic(); err == nil {
 		t.Error("expected error for invalid params")

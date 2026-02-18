@@ -61,4 +61,5 @@ message Params {
   uint64 max_future_blocks = 4;
   uint64 min_prepaid_executions = 5;
   uint64 expired_retention_blocks = 6;
+  uint64 cleanup_interval_blocks = 7;
 }

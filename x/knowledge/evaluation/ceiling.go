@@ -28,8 +28,8 @@ func applyCeilings(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Clai
 		minCeiling = stratumCeiling
 	}
 
-	// 3. Category ceiling (from CATEGORY_DECAY MaxConfidence)
-	if profile, ok := types.CATEGORY_DECAY[claim.EpistemicCategory]; ok {
+	// 3. Category ceiling (from category decay profile MaxConfidence)
+	if profile, ok := evalCtx.ExtendedParams.GetCategoryDecayProfile(claim.EpistemicCategory); ok {
 		if profile.MaxConfidence > 0 && profile.MaxConfidence < minCeiling {
 			minCeiling = profile.MaxConfidence
 		}
@@ -42,7 +42,7 @@ func applyCeilings(ctx sdk.Context, evalCtx *EvaluationContext, claim types.Clai
 }
 
 // getStratumCeiling queries the ontology module for the domain's stratum ceiling.
-// Falls back to the hardcoded STRATUM_CONFIDENCE_CEILING map.
+// Falls back to the params-based stratum confidence ceiling map.
 func getStratumCeiling(ctx sdk.Context, evalCtx *EvaluationContext, domain string) uint64 {
 	if evalCtx.GetConfidenceCeiling != nil && domain != "" {
 		maxConf, _, err := evalCtx.GetConfidenceCeiling(ctx, domain)
@@ -53,7 +53,7 @@ func getStratumCeiling(ctx sdk.Context, evalCtx *EvaluationContext, domain strin
 
 	// Fallback: infer stratum from domain name
 	stratum := inferStratum(domain)
-	if ceiling, ok := types.STRATUM_CONFIDENCE_CEILING[stratum]; ok {
+	if ceiling, ok := evalCtx.ExtendedParams.GetStratumConfidenceCeiling(stratum); ok {
 		return ceiling
 	}
 

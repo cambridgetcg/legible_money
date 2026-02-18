@@ -1,14 +1,9 @@
 package types
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/cosmos/cosmos-sdk/codec"
-	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/gogoproto/proto"
-	"google.golang.org/grpc"
 )
 
 // --- Enums ---
@@ -117,21 +112,7 @@ func (p *Params) Validate() error {
 	return nil
 }
 
-// --- Message Types ---
-
-// MsgRequestQualification requests qualification for a domain.
-type MsgRequestQualification struct {
-	ValidatorAddr string               `json:"validator_addr"`
-	Domain        string               `json:"domain"`
-	Pathway       QualificationPathway `json:"pathway"`
-	Stake         string               `json:"stake,omitempty"`
-	Endorsers     []string             `json:"endorsers,omitempty"`
-	InheritFrom   string               `json:"inherit_from,omitempty"`
-}
-
-func (m *MsgRequestQualification) Reset()         { *m = MsgRequestQualification{} }
-func (m *MsgRequestQualification) String() string { return proto.CompactTextString(m) }
-func (m *MsgRequestQualification) ProtoMessage()  {}
+// --- Validation & Signers for proto-generated Msg types ---
 
 func (m *MsgRequestQualification) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.ValidatorAddr); err != nil {
@@ -140,7 +121,7 @@ func (m *MsgRequestQualification) ValidateBasic() error {
 	if m.Domain == "" {
 		return fmt.Errorf("domain is required")
 	}
-	switch m.Pathway {
+	switch QualificationPathway(m.Pathway) {
 	case PathwayStakeCommitment, PathwayTrackRecord, PathwayCrossReference, PathwayStratumInheritance:
 	default:
 		return fmt.Errorf("invalid pathway: %s", m.Pathway)
@@ -152,28 +133,6 @@ func (m *MsgRequestQualification) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(m.ValidatorAddr)
 	return []sdk.AccAddress{addr}
 }
-
-// MsgRequestQualificationResponse is the response.
-type MsgRequestQualificationResponse struct {
-	Granted bool   `json:"granted"`
-	Error   string `json:"error,omitempty"`
-}
-
-func (m *MsgRequestQualificationResponse) Reset()         { *m = MsgRequestQualificationResponse{} }
-func (m *MsgRequestQualificationResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgRequestQualificationResponse) ProtoMessage()  {}
-
-// MsgEndorseQualification endorses another validator's qualification.
-type MsgEndorseQualification struct {
-	Endorser        string `json:"endorser"`
-	TargetValidator string `json:"target_validator"`
-	Domain          string `json:"domain"`
-	Stake           string `json:"stake"`
-}
-
-func (m *MsgEndorseQualification) Reset()         { *m = MsgEndorseQualification{} }
-func (m *MsgEndorseQualification) String() string { return proto.CompactTextString(m) }
-func (m *MsgEndorseQualification) ProtoMessage()  {}
 
 func (m *MsgEndorseQualification) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Endorser); err != nil {
@@ -195,108 +154,6 @@ func (m *MsgEndorseQualification) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(m.Endorser)
 	return []sdk.AccAddress{addr}
 }
-
-// MsgEndorseQualificationResponse is the response.
-type MsgEndorseQualificationResponse struct {
-	Success bool `json:"success"`
-}
-
-func (m *MsgEndorseQualificationResponse) Reset()         { *m = MsgEndorseQualificationResponse{} }
-func (m *MsgEndorseQualificationResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgEndorseQualificationResponse) ProtoMessage()  {}
-
-// --- Service Interfaces ---
-
-// MsgServer defines the capture defense module's message server interface.
-type MsgServer interface {
-	RequestQualification(context.Context, *MsgRequestQualification) (*MsgRequestQualificationResponse, error)
-	EndorseQualification(context.Context, *MsgEndorseQualification) (*MsgEndorseQualificationResponse, error)
-}
-
-// Query types (QueryServer, QueryQualificationRequest/Response, etc.) are now provided
-// by the proto-generated query.pb.go and query_grpc.pb.go files.
-
-// --- Codec Registration ---
-
-// RegisterCodec registers the capture defense module's types with the amino codec.
-func RegisterCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&MsgRequestQualification{}, "capture_defense/RequestQualification", nil)
-	cdc.RegisterConcrete(&MsgEndorseQualification{}, "capture_defense/EndorseQualification", nil)
-	cdc.RegisterConcrete(&MsgUpdateParams{}, "capture_defense/UpdateParams", nil)
-}
-
-// RegisterInterfaces registers the module's interfaces.
-func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgRequestQualification{},
-		&MsgEndorseQualification{},
-		&MsgUpdateParams{},
-	)
-}
-
-// gRPC service descriptors for msg server
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.capture_defense.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "RequestQualification", Handler: _Msg_RequestQualification_Handler},
-		{MethodName: "EndorseQualification", Handler: _Msg_EndorseQualification_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
-}
-
-func _Msg_RequestQualification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRequestQualification)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RequestQualification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_defense.v1.Msg/RequestQualification"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RequestQualification(ctx, req.(*MsgRequestQualification))
-	})
-}
-
-func _Msg_EndorseQualification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgEndorseQualification)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).EndorseQualification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_defense.v1.Msg/EndorseQualification"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).EndorseQualification(ctx, req.(*MsgEndorseQualification))
-	})
-}
-
-// RegisterMsgServer registers the capture defense msg server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
-
-// Query gRPC service descriptor, handlers, and RegisterQueryServer are now provided
-// by the proto-generated query_grpc.pb.go file.
-
-
-// MsgUpdateParams is the governance message to update module params.
-type MsgUpdateParams struct {
-	Authority string  `json:"authority"`
-	Params    *Params `json:"params"`
-}
-
-// MsgUpdateParamsResponse is the response type for MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (*MsgUpdateParams) ProtoMessage()             {}
-func (*MsgUpdateParams) Reset()                     {}
-func (*MsgUpdateParams) String() string             { return "MsgUpdateParams" }
-func (*MsgUpdateParamsResponse) ProtoMessage()      {}
-func (*MsgUpdateParamsResponse) Reset()             {}
-func (*MsgUpdateParamsResponse) String() string     { return "MsgUpdateParamsResponse" }
 
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)

@@ -1206,22 +1206,23 @@ func (k Keeper) UpdateVerifierConformity(ctx sdk.Context, validatorAddr string, 
 // GetConformityPenaltyBPS returns the reward penalty for a rubber-stamp verifier.
 // Returns 0 if the validator has insufficient samples or is below the conformity threshold.
 func (k Keeper) GetConformityPenaltyBPS(ctx sdk.Context, validatorAddr string) uint64 {
+	ep := k.GetExtendedParams(ctx)
 	record, found := k.GetVerifierConformity(ctx, validatorAddr)
-	if !found || record.TotalVotes < types.ConformityMinSamples {
+	if !found || record.TotalVotes < ep.ConformityMinSamples {
 		return 0
 	}
 	// conformityRate = conformingVotes * 1_000_000 / totalVotes
 	conformityRate := (record.ConformingVotes * 1_000_000) / record.TotalVotes
-	if conformityRate <= types.ConformityThresholdBPS {
+	if conformityRate <= ep.ConformityThresholdBps {
 		return 0
 	}
-	// Linear penalty: scales from 0 at threshold to ConformityPenaltyMaxBPS at 100%
-	excess := conformityRate - types.ConformityThresholdBPS
-	penaltyRange := uint64(1_000_000) - types.ConformityThresholdBPS
+	// Linear penalty: scales from 0 at threshold to ConformityPenaltyMaxBps at 100%
+	excess := conformityRate - ep.ConformityThresholdBps
+	penaltyRange := uint64(1_000_000) - ep.ConformityThresholdBps
 	if penaltyRange == 0 {
-		return types.ConformityPenaltyMaxBPS
+		return ep.ConformityPenaltyMaxBps
 	}
-	penalty := (excess * types.ConformityPenaltyMaxBPS) / penaltyRange
+	penalty := (excess * ep.ConformityPenaltyMaxBps) / penaltyRange
 	return penalty
 }
 
@@ -1284,15 +1285,16 @@ func (k Keeper) IncrementRoundsParticipated(ctx sdk.Context, validatorAddr strin
 // GetParticipationPenaltyBPS returns the reward penalty for a passive staking validator.
 // Returns 0 if the validator has insufficient samples or meets the participation threshold.
 func (k Keeper) GetParticipationPenaltyBPS(ctx sdk.Context, validatorAddr string) uint64 {
+	ep := k.GetExtendedParams(ctx)
 	record, found := k.GetValidatorParticipation(ctx, validatorAddr)
-	if !found || record.RoundsAssigned < types.ParticipationMinSamples {
+	if !found || record.RoundsAssigned < ep.ParticipationMinSamples {
 		return 0
 	}
 	// participationRate = roundsParticipated * 1_000_000 / roundsAssigned
 	participationRate := (record.RoundsParticipated * 1_000_000) / record.RoundsAssigned
-	if participationRate >= types.MinParticipationRateBPS {
+	if participationRate >= ep.MinParticipationRateBps {
 		return 0
 	}
-	// Below threshold: apply flat PassiveStakingPenaltyBPS
-	return types.PassiveStakingPenaltyBPS
+	// Below threshold: apply flat PassiveStakingPenaltyBps
+	return ep.PassiveStakingPenaltyBps
 }

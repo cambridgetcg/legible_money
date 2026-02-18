@@ -65,7 +65,7 @@ func (k Keeper) GetAuthority() string {
 // --- Params ---
 
 // SetParams sets module parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := json.Marshal(params)
 	if err != nil {
@@ -77,17 +77,19 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
 }
 
 // GetParams returns module parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, err := kvStore.Get(types.ParamsKey)
 	if err != nil || bz == nil {
-		return types.DefaultParams()
+		dp := types.DefaultParams()
+		return &dp
 	}
 	var params types.Params
 	if err := json.Unmarshal(bz, &params); err != nil {
-		return types.DefaultParams()
+		dp := types.DefaultParams()
+		return &dp
 	}
-	return params
+	return &params
 }
 
 // --- Module State ---
@@ -563,7 +565,7 @@ func (k Keeper) CollectAndAdapt(ctx sdk.Context) {
 
 // computeSSIAdaptations computes SSI-driven parameter changes.
 // SSI targets: slash.system, blockreward.system, minverifiers.system
-func (k Keeper) computeSSIAdaptations(ctx sdk.Context, ssi uint64, epoch uint64, params types.Params) []types.Adaptation {
+func (k Keeper) computeSSIAdaptations(ctx sdk.Context, ssi uint64, epoch uint64, params *types.Params) []types.Adaptation {
 	var results []types.Adaptation
 
 	currentSlash := k.GetMultiplier(ctx, types.PathSlashSystem)
@@ -580,7 +582,7 @@ func (k Keeper) computeSSIAdaptations(ctx sdk.Context, ssi uint64, epoch uint64,
 	}
 
 	// SSI also targets block reward and min verifiers at moderate+ stress
-	if ssi > params.SSIModerateThreshold {
+	if ssi > params.SsiModerateThreshold {
 		currentReward := k.GetMultiplier(ctx, types.PathBlockRewardSystem)
 		rawDelta := -int64(types.MaxChangePerEpochBps / 2) // reduce rewards under stress
 		rawDelta = k.applyLearnedRate(ctx, types.PathBlockRewardSystem, rawDelta)
@@ -624,7 +626,7 @@ func (k Keeper) computeSSIAdaptations(ctx sdk.Context, ssi uint64, epoch uint64,
 
 // computeCRIAdaptations computes CRI-driven parameter changes.
 // CRI targets: decay.{category}.{domain}, revbonus.{category}.{domain}
-func (k Keeper) computeCRIAdaptations(ctx sdk.Context, cri types.CRIValue, epoch uint64, params types.Params) []types.Adaptation {
+func (k Keeper) computeCRIAdaptations(ctx sdk.Context, cri types.CRIValue, epoch uint64, params *types.Params) []types.Adaptation {
 	var results []types.Adaptation
 
 	decayPath := fmt.Sprintf("decay.%s.%s", cri.Category, cri.Domain)
@@ -687,7 +689,7 @@ func (k Keeper) computeCRIAdaptations(ctx sdk.Context, cri types.CRIValue, epoch
 
 // computeDVIAdaptations computes DVI-driven parameter changes.
 // DVI targets: reward.{domain}, claimstake.{domain}
-func (k Keeper) computeDVIAdaptations(ctx sdk.Context, dvi types.DVIValue, epoch uint64, params types.Params) []types.Adaptation {
+func (k Keeper) computeDVIAdaptations(ctx sdk.Context, dvi types.DVIValue, epoch uint64, params *types.Params) []types.Adaptation {
 	var results []types.Adaptation
 
 	rewardPath := fmt.Sprintf("reward.%s", dvi.Domain)
@@ -769,7 +771,7 @@ func (k Keeper) computeDVIAdaptations(ctx sdk.Context, dvi types.DVIValue, epoch
 
 // computeVCFAdaptations computes VCF-driven parameter changes.
 // VCF targets: citation.{domain}, domainprior.{domain}
-func (k Keeper) computeVCFAdaptations(ctx sdk.Context, vcf types.VCFValue, epoch uint64, params types.Params) []types.Adaptation {
+func (k Keeper) computeVCFAdaptations(ctx sdk.Context, vcf types.VCFValue, epoch uint64, params *types.Params) []types.Adaptation {
 	var results []types.Adaptation
 
 	citationPath := fmt.Sprintf("citation.%s", vcf.Domain)

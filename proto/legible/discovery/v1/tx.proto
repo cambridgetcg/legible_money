@@ -1,0 +1,77 @@
+syntax = "proto3";
+package legible.discovery.v1;
+
+option go_package = "github.com/legible-money/legible/x/discovery/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/discovery/v1/state.proto";
+
+// Msg defines the discovery module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc RegisterAgent(MsgRegisterAgent) returns (MsgRegisterAgentResponse);
+  rpc UpdateProfile(MsgUpdateProfile) returns (MsgUpdateProfileResponse);
+  rpc AddCapability(MsgAddCapability) returns (MsgAddCapabilityResponse);
+  rpc RemoveCapability(MsgRemoveCapability) returns (MsgRemoveCapabilityResponse);
+  rpc DeregisterAgent(MsgDeregisterAgent) returns (MsgDeregisterAgentResponse);
+  rpc Heartbeat(MsgHeartbeat) returns (MsgHeartbeatResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgRegisterAgent {
+  option (cosmos.msg.v1.signer) = "address";
+  string address                      = 1;
+  string did                          = 2;
+  string display_name                 = 3;
+  repeated AgentCapability capabilities = 4;
+  repeated string domains             = 5;
+  string stake                        = 6;
+  string description                  = 7;
+  string metadata                     = 8;
+}
+message MsgRegisterAgentResponse {}
+
+message MsgUpdateProfile {
+  option (cosmos.msg.v1.signer) = "address";
+  string address      = 1;
+  string display_name = 2;
+  string description  = 3;
+  string metadata     = 4;
+}
+message MsgUpdateProfileResponse {}
+
+message MsgAddCapability {
+  option (cosmos.msg.v1.signer) = "address";
+  string address              = 1;
+  AgentCapability capability  = 2;
+}
+message MsgAddCapabilityResponse {}
+
+message MsgRemoveCapability {
+  option (cosmos.msg.v1.signer) = "address";
+  string address         = 1;
+  string capability_type = 2;
+}
+message MsgRemoveCapabilityResponse {}
+
+message MsgDeregisterAgent {
+  option (cosmos.msg.v1.signer) = "address";
+  string address = 1;
+}
+message MsgDeregisterAgentResponse {
+  string refunded_stake = 1;
+}
+
+message MsgHeartbeat {
+  option (cosmos.msg.v1.signer) = "address";
+  string address = 1;
+}
+message MsgHeartbeatResponse {}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

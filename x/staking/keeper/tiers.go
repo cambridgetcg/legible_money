@@ -188,35 +188,22 @@ func CalculateTierReward(
 	return adjusted.String()
 }
 
-// CalculateTierSlash applies tier-based slash multiplier
-// Higher tiers get slashed more heavily for violations
+// CalculateTierSlash applies tier-based slash multiplier from TierConfig.
+// Higher tiers get slashed more heavily for violations.
 func CalculateTierSlash(
 	ctx sdk.Context,
 	k Keeper,
 	tier types.ValidatorTier,
 	baseSlash string,
 ) string {
-	// Slash multipliers (inverse of reward multipliers)
-	// Tier 0 (Apprentice): 1.5x slash (less stake to lose, higher penalty)
-	// Tier 1 (Verified): 1.2x slash
-	// Tier 2 (Bonded): 1.0x slash (standard)
-	// Tier 3 (Guardian): 1.0x slash (already lose tier on any slash)
-
 	baseInt := new(big.Int)
 	baseInt.SetString(baseSlash, 10)
 
-	var multiplier int64
-	switch tier {
-	case types.TierApprentice:
-		multiplier = 1500 // 1.5x
-	case types.TierVerified:
-		multiplier = 1200 // 1.2x
-	case types.TierBonded:
-		multiplier = 1000 // 1.0x
-	case types.TierGuardian:
-		multiplier = 1000 // 1.0x (but loses tier immediately)
-	default:
-		multiplier = 1000
+	// Read SlashMultiplierBps from tier config; default 1.0x if not found
+	multiplier := int64(1000)
+	config, found := k.GetTierConfig(ctx, tier)
+	if found && config.SlashMultiplierBps > 0 {
+		multiplier = int64(config.SlashMultiplierBps)
 	}
 
 	mult := big.NewInt(multiplier)

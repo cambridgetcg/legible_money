@@ -81,7 +81,7 @@ func TestGoldenVector_SSI_Adaptation_Moderate(t *testing.T) {
 	current := uint64(1_000_000)
 	ssi := uint64(600_000) // moderate
 
-	newMult, delta := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, delta := types.ComputeSSIAdaptation(ssi, current, &params)
 
 	// Expected: moderate → +50000 (5%) target
 	// Rate limit: max change = 1M * 50K / 1M = 50K
@@ -101,7 +101,7 @@ func TestGoldenVector_SSI_Adaptation_Critical_RateLimited(t *testing.T) {
 	current := uint64(1_000_000)
 	ssi := uint64(900_000) // critical
 
-	newMult, delta := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, delta := types.ComputeSSIAdaptation(ssi, current, &params)
 
 	// Expected: critical → +150000 target, rate limit 50000 → capped at 1050000
 	if newMult != 1_050_000 {
@@ -301,7 +301,7 @@ func TestComputeGRMAdaptation_HighUtilization(t *testing.T) {
 	currentMaxTx := uint64(types.DefaultMultiplier)
 	currentGas := uint64(types.DefaultMultiplier)
 
-	adaptations := types.ComputeGRMAdaptation(grm, currentMaxTx, currentGas, params)
+	adaptations := types.ComputeGRMAdaptation(grm, currentMaxTx, currentGas, &params)
 	if len(adaptations) != 2 {
 		t.Fatalf("expected 2 adaptations for high GRM, got %d", len(adaptations))
 	}
@@ -322,7 +322,7 @@ func TestComputeGRMAdaptation_LowUtilization(t *testing.T) {
 	currentMaxTx := uint64(types.DefaultMultiplier)
 	currentGas := uint64(types.DefaultMultiplier)
 
-	adaptations := types.ComputeGRMAdaptation(grm, currentMaxTx, currentGas, params)
+	adaptations := types.ComputeGRMAdaptation(grm, currentMaxTx, currentGas, &params)
 	if len(adaptations) != 2 {
 		t.Fatalf("expected 2 adaptations for low GRM, got %d", len(adaptations))
 	}
@@ -341,7 +341,7 @@ func TestComputeGRMAdaptation_Normal_NoChange(t *testing.T) {
 	params := types.DefaultParams()
 	grm := uint64(500_000) // 50% — normal, in [0.3, 0.7]
 
-	adaptations := types.ComputeGRMAdaptation(grm, types.DefaultMultiplier, types.DefaultMultiplier, params)
+	adaptations := types.ComputeGRMAdaptation(grm, types.DefaultMultiplier, types.DefaultMultiplier, &params)
 	if len(adaptations) != 0 {
 		t.Errorf("expected no adaptations for normal GRM, got %d", len(adaptations))
 	}

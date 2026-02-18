@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/gogoproto/proto"
 )
 
 // Tier aliases — map legacy names to proto-generated ValidatorTier enum values.
@@ -61,11 +60,12 @@ func DefaultTierConfigs() []*TierConfig {
 			MinAccuracy:                     0,
 			MaxSlashCount:                   -1,
 			AllowedCategories:               []string{"protocol", "computational", "formal"},
-			RewardMultiplier:                100, // 0.1x
-			SelectionWeight:                 100, // 0.1x for virtual stake calculation
+			RewardMultiplier:                100,  // 0.1x
+			SelectionWeight:                 100,  // 0.1x for virtual stake calculation
 			SlashWindowEpochs:               0,
 			MinContestedVerifications:       0,
 			ContestedVerificationMultiplier: 1,
+			SlashMultiplierBps:              1500, // 1.5x slash (less stake to lose, higher penalty)
 		},
 		{
 			Tier:                            "verified",
@@ -74,11 +74,12 @@ func DefaultTierConfigs() []*TierConfig {
 			MinAccuracy:                     770000, // 77%
 			MaxSlashCount:                   -1,
 			AllowedCategories:               []string{"protocol", "computational", "formal", "empirical"},
-			RewardMultiplier:                500, // 0.5x
-			SelectionWeight:                 500, // 0.5x
+			RewardMultiplier:                500,  // 0.5x
+			SelectionWeight:                 500,  // 0.5x
 			SlashWindowEpochs:               0,
 			MinContestedVerifications:       0,
 			ContestedVerificationMultiplier: 1,
+			SlashMultiplierBps:              1200, // 1.2x slash
 		},
 		{
 			Tier:                            "bonded",
@@ -92,6 +93,7 @@ func DefaultTierConfigs() []*TierConfig {
 			SlashWindowEpochs:               0,
 			MinContestedVerifications:       0,
 			ContestedVerificationMultiplier: 1,
+			SlashMultiplierBps:              1000, // 1.0x slash (standard)
 		},
 		{
 			Tier:                            "guardian",
@@ -105,6 +107,7 @@ func DefaultTierConfigs() []*TierConfig {
 			SlashWindowEpochs:               10,   // Only slashes within last 10 epochs count
 			MinContestedVerifications:       33,   // Must engage hard claims
 			ContestedVerificationMultiplier: 3,    // Contested claims count 3x
+			SlashMultiplierBps:              1000, // 1.0x slash (but loses tier immediately)
 		},
 	}
 }
@@ -144,19 +147,9 @@ func (m *MsgRegisterValidator) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 
-// --- Additional Message Types (not in proto) ---
+// --- Additional Message Types (now proto-generated in tx.pb.go) ---
 
-// MsgUpdateValidatorStake updates self-delegation
-type MsgUpdateValidatorStake struct {
-	Validator  string // bech32 validator operator address
-	Amount     string // amount to stake/unstake
-	IsIncrease bool   // true = stake, false = unstake
-}
-
-func (m *MsgUpdateValidatorStake) Reset()         { *m = MsgUpdateValidatorStake{} }
-func (m *MsgUpdateValidatorStake) String() string { return proto.CompactTextString(m) }
-func (m *MsgUpdateValidatorStake) ProtoMessage()  {}
-
+// ValidateBasic performs stateless validation for MsgUpdateValidatorStake.
 func (m *MsgUpdateValidatorStake) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Validator); err != nil {
 		return fmt.Errorf("invalid validator address: %w", err)
@@ -167,34 +160,13 @@ func (m *MsgUpdateValidatorStake) ValidateBasic() error {
 	return nil
 }
 
+// GetSigners returns the expected signers for MsgUpdateValidatorStake.
 func (m *MsgUpdateValidatorStake) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(m.Validator)
 	return []sdk.AccAddress{addr}
 }
 
-// MsgUpdateValidatorStakeResponse is the response
-type MsgUpdateValidatorStakeResponse struct {
-	NewStake string
-	NewTier  ValidatorTier
-}
-
-func (m *MsgUpdateValidatorStakeResponse) Reset()         { *m = MsgUpdateValidatorStakeResponse{} }
-func (m *MsgUpdateValidatorStakeResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgUpdateValidatorStakeResponse) ProtoMessage()  {}
-
-// --- Delegation Message Types ---
-
-// MsgDelegate delegates tokens to a validator.
-type MsgDelegate struct {
-	Delegator string // bech32 delegator address
-	Validator string // bech32 validator operator address
-	Amount    string // amount to delegate (bigint as string in ulgm)
-}
-
-func (m *MsgDelegate) Reset()         { *m = MsgDelegate{} }
-func (m *MsgDelegate) String() string { return proto.CompactTextString(m) }
-func (m *MsgDelegate) ProtoMessage()  {}
-
+// ValidateBasic performs stateless validation for MsgDelegate.
 func (m *MsgDelegate) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Delegator); err != nil {
 		return fmt.Errorf("invalid delegator address: %w", err)
@@ -208,31 +180,13 @@ func (m *MsgDelegate) ValidateBasic() error {
 	return nil
 }
 
+// GetSigners returns the expected signers for MsgDelegate.
 func (m *MsgDelegate) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(m.Delegator)
 	return []sdk.AccAddress{addr}
 }
 
-// MsgDelegateResponse is the response for MsgDelegate.
-type MsgDelegateResponse struct {
-	NewDelegation string // total delegation to this validator
-}
-
-func (m *MsgDelegateResponse) Reset()         { *m = MsgDelegateResponse{} }
-func (m *MsgDelegateResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgDelegateResponse) ProtoMessage()  {}
-
-// MsgUndelegate undelegates tokens from a validator (initiates unbonding).
-type MsgUndelegate struct {
-	Delegator string // bech32 delegator address
-	Validator string // bech32 validator operator address
-	Amount    string // amount to undelegate (bigint as string in ulgm)
-}
-
-func (m *MsgUndelegate) Reset()         { *m = MsgUndelegate{} }
-func (m *MsgUndelegate) String() string { return proto.CompactTextString(m) }
-func (m *MsgUndelegate) ProtoMessage()  {}
-
+// ValidateBasic performs stateless validation for MsgUndelegate.
 func (m *MsgUndelegate) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Delegator); err != nil {
 		return fmt.Errorf("invalid delegator address: %w", err)
@@ -246,33 +200,13 @@ func (m *MsgUndelegate) ValidateBasic() error {
 	return nil
 }
 
+// GetSigners returns the expected signers for MsgUndelegate.
 func (m *MsgUndelegate) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(m.Delegator)
 	return []sdk.AccAddress{addr}
 }
 
-// MsgUndelegateResponse is the response for MsgUndelegate.
-type MsgUndelegateResponse struct {
-	UnbondingId       string // unbonding entry ID
-	CompletesAtHeight uint64 // when unbonding completes
-}
-
-func (m *MsgUndelegateResponse) Reset()         { *m = MsgUndelegateResponse{} }
-func (m *MsgUndelegateResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgUndelegateResponse) ProtoMessage()  {}
-
-// MsgRedelegate moves delegation from one validator to another.
-type MsgRedelegate struct {
-	Delegator    string // bech32 delegator address
-	SrcValidator string // bech32 source validator operator address
-	DstValidator string // bech32 destination validator operator address
-	Amount       string // amount to redelegate (bigint as string in ulgm)
-}
-
-func (m *MsgRedelegate) Reset()         { *m = MsgRedelegate{} }
-func (m *MsgRedelegate) String() string { return proto.CompactTextString(m) }
-func (m *MsgRedelegate) ProtoMessage()  {}
-
+// ValidateBasic performs stateless validation for MsgRedelegate.
 func (m *MsgRedelegate) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Delegator); err != nil {
 		return fmt.Errorf("invalid delegator address: %w", err)
@@ -292,17 +226,11 @@ func (m *MsgRedelegate) ValidateBasic() error {
 	return nil
 }
 
+// GetSigners returns the expected signers for MsgRedelegate.
 func (m *MsgRedelegate) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(m.Delegator)
 	return []sdk.AccAddress{addr}
 }
-
-// MsgRedelegateResponse is the response for MsgRedelegate.
-type MsgRedelegateResponse struct{}
-
-func (m *MsgRedelegateResponse) Reset()         { *m = MsgRedelegateResponse{} }
-func (m *MsgRedelegateResponse) String() string { return proto.CompactTextString(m) }
-func (m *MsgRedelegateResponse) ProtoMessage()  {}
 
 // --- Params Validation ---
 
@@ -325,24 +253,59 @@ func (p *Params) Validate() error {
 	if p.SlashEscalationBps > 1000000 {
 		return fmt.Errorf("slash_escalation_bps must be <= 1000000")
 	}
+
+	// Validate tier configs (if present — empty is allowed for backward compat)
+	if len(p.TierConfigs) > 0 {
+		if len(p.TierConfigs) != 4 {
+			return fmt.Errorf("tier_configs must have exactly 4 entries, got %d", len(p.TierConfigs))
+		}
+		expectedTiers := []string{"apprentice", "verified", "bonded", "guardian"}
+		for i, tc := range p.TierConfigs {
+			if tc.Tier != expectedTiers[i] {
+				return fmt.Errorf("tier_configs[%d]: expected tier %q, got %q", i, expectedTiers[i], tc.Tier)
+			}
+			tcMinStake := new(big.Int)
+			if _, ok := tcMinStake.SetString(tc.MinStake, 10); !ok || tcMinStake.Sign() <= 0 {
+				return fmt.Errorf("tier_configs[%d]: min_stake must be positive, got %q", i, tc.MinStake)
+			}
+			if tc.MinAccuracy > 1000000 {
+				return fmt.Errorf("tier_configs[%d]: min_accuracy must be <= 1000000, got %d", i, tc.MinAccuracy)
+			}
+			if tc.RewardMultiplier == 0 {
+				return fmt.Errorf("tier_configs[%d]: reward_multiplier must be positive", i)
+			}
+			if tc.SelectionWeight == 0 {
+				return fmt.Errorf("tier_configs[%d]: selection_weight must be positive", i)
+			}
+			if tc.SlashMultiplierBps == 0 || tc.SlashMultiplierBps > 10000 {
+				return fmt.Errorf("tier_configs[%d]: slash_multiplier_bps must be in [1, 10000], got %d", i, tc.SlashMultiplierBps)
+			}
+		}
+	}
+
+	// Validate reputation deltas (zero is allowed for backward compat — treated as default)
+	if p.ReputationCorrectDelta > 1000000 {
+		return fmt.Errorf("reputation_correct_delta must be <= 1000000")
+	}
+	if p.ReputationIncorrectDelta > 1000000 {
+		return fmt.Errorf("reputation_incorrect_delta must be <= 1000000")
+	}
+	if p.ReputationSlashDelta > 1000000 {
+		return fmt.Errorf("reputation_slash_delta must be <= 1000000")
+	}
+
 	return nil
 }
 
-// MsgUpdateParams updates module parameters (governance-gated).
-type MsgUpdateParams struct {
-	Authority string `json:"authority"` // gov module address
-	Params    Params `json:"params"`
-}
+// Note: MsgUpdateParams and MsgUpdateParamsResponse are now proto-generated in tx.pb.go.
 
-func (msg *MsgUpdateParams) Reset()         {}
-func (msg *MsgUpdateParams) String() string { return "MsgUpdateParams" }
-func (msg *MsgUpdateParams) ProtoMessage()  {}
-
+// GetSigners returns the expected signers for MsgUpdateParams.
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }
 
+// ValidateBasic performs stateless validation for MsgUpdateParams.
 func (msg *MsgUpdateParams) ValidateBasic() error {
 	if msg.Authority == "" {
 		return fmt.Errorf("authority cannot be empty")
@@ -350,23 +313,8 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
+	if msg.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return msg.Params.Validate()
-}
-
-// MsgUpdateParamsResponse is the response for MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (msg *MsgUpdateParamsResponse) Reset()         {}
-func (msg *MsgUpdateParamsResponse) String() string { return "" }
-func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// FullMsgServer extends the proto-generated MsgServer with additional RPCs
-// that are not yet defined in the protobuf service.
-type FullMsgServer interface {
-	MsgServer
-	UpdateValidatorStake(sdk.Context, *MsgUpdateValidatorStake) (*MsgUpdateValidatorStakeResponse, error)
-	Delegate(sdk.Context, *MsgDelegate) (*MsgDelegateResponse, error)
-	Undelegate(sdk.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
-	Redelegate(sdk.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
-	UpdateParams(sdk.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }

@@ -19,7 +19,7 @@ func (k Keeper) RequestQualification(goCtx context.Context, msg *types.MsgReques
 		ctx,
 		msg.ValidatorAddr,
 		msg.Domain,
-		msg.Pathway,
+		types.QualificationPathway(msg.Pathway),
 		msg.Stake,
 		msg.Endorsers,
 		msg.InheritFrom,
@@ -36,7 +36,7 @@ func (k Keeper) RequestQualification(goCtx context.Context, msg *types.MsgReques
 			"qualification_granted",
 			sdk.NewAttribute("validator", msg.ValidatorAddr),
 			sdk.NewAttribute("domain", msg.Domain),
-			sdk.NewAttribute("pathway", string(msg.Pathway)),
+			sdk.NewAttribute("pathway", msg.Pathway),
 			sdk.NewAttribute("status", string(qual.Status)),
 		),
 	)

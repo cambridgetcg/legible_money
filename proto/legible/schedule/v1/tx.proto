@@ -1,0 +1,74 @@
+syntax = "proto3";
+package legible.schedule.v1;
+
+option go_package = "github.com/legible-money/legible/x/schedule/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/schedule/v1/state.proto";
+
+// Msg defines the schedule module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc CreateSchedule(MsgCreateSchedule) returns (MsgCreateScheduleResponse);
+  rpc PauseSchedule(MsgPauseSchedule) returns (MsgPauseScheduleResponse);
+  rpc ResumeSchedule(MsgResumeSchedule) returns (MsgResumeScheduleResponse);
+  rpc CancelSchedule(MsgCancelSchedule) returns (MsgCancelScheduleResponse);
+  rpc AddFee(MsgAddFee) returns (MsgAddFeeResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgCreateSchedule {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator                = 1;
+  ScheduleCondition condition   = 2;
+  uint64 max_executions         = 3;
+  string fee_per_execution      = 4;
+  string prepaid_fee            = 5;
+  string target_address         = 6;
+  string call_data              = 7;
+  string transfer_value         = 8;
+  string linked_entity_type     = 9;
+  string linked_entity_id       = 10;
+}
+message MsgCreateScheduleResponse {
+  string process_id = 1;
+}
+
+message MsgPauseSchedule {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator    = 1;
+  string process_id = 2;
+}
+message MsgPauseScheduleResponse {}
+
+message MsgResumeSchedule {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator    = 1;
+  string process_id = 2;
+}
+message MsgResumeScheduleResponse {}
+
+message MsgCancelSchedule {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator    = 1;
+  string process_id = 2;
+}
+message MsgCancelScheduleResponse {
+  string refunded_amount = 1;
+}
+
+message MsgAddFee {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator    = 1;
+  string process_id = 2;
+  string amount     = 3;
+}
+message MsgAddFeeResponse {}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

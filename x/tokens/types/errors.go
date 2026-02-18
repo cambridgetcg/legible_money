@@ -30,4 +30,10 @@ var (
 	ErrSameToken             = errors.Register(ModuleName, 25, "token A and token B cannot be the same")
 	ErrInsufficientLP        = errors.Register(ModuleName, 26, "insufficient LP tokens")
 	ErrZeroLiquidity         = errors.Register(ModuleName, 27, "cannot add zero liquidity")
+
+	// Phase 2: Delegation + Wrap errors
+	ErrSelfDelegation                 = errors.Register(ModuleName, 28, "cannot delegate power to self")
+	ErrNotWrappable                   = errors.Register(ModuleName, 29, "token does not have wrappable feature")
+	ErrWrapRecordNotFound             = errors.Register(ModuleName, 30, "wrap record not found for denom")
+	ErrInsufficientUndelegatedBalance = errors.Register(ModuleName, 31, "insufficient undelegated balance")
 )

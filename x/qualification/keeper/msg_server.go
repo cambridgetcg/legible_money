@@ -15,6 +15,7 @@ import (
 var _ types.MsgServer = msgServer{}
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -30,7 +31,7 @@ func (ms msgServer) RequestQualification(goCtx context.Context, msg *types.MsgRe
 	var q *types.DomainQualification
 	var err error
 
-	switch msg.Pathway {
+	switch types.QualificationPathway(msg.Pathway) {
 	case types.PathwayStakeCommitment:
 		if msg.Stake == "" {
 			return nil, fmt.Errorf("stake amount is required for stake_commitment pathway")
@@ -61,12 +62,12 @@ func (ms msgServer) RequestQualification(goCtx context.Context, msg *types.MsgRe
 		"qualification_granted",
 		sdk.NewAttribute("validator", msg.ValidatorAddr),
 		sdk.NewAttribute("domain", msg.Domain),
-		sdk.NewAttribute("pathway", string(msg.Pathway)),
-		sdk.NewAttribute("status", string(q.Status)),
+		sdk.NewAttribute("pathway", msg.Pathway),
+		sdk.NewAttribute("status", q.Status),
 	))
 
 	return &types.MsgRequestQualificationResponse{
-		Status: types.QualificationStatus(q.Status),
+		Status: q.Status,
 	}, nil
 }
 
@@ -181,10 +182,13 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", ms.Keeper.GetAuthority(), msg.Authority)
 	}
 
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
 	if err := msg.Params.Validate(); err != nil {
 		return nil, err
 	}
 
-	ms.Keeper.SetParams(ctx, msg.Params)
+	ms.Keeper.SetParams(ctx, *msg.Params)
 	return &types.MsgUpdateParamsResponse{}, nil
 }

@@ -535,6 +535,8 @@ func (k Keeper) RecordVerification(ctx sdk.Context, validatorAddr string, correc
 		return types.ErrValidatorNotFound
 	}
 
+	params := k.GetParams(ctx)
+
 	validator.VerificationsCompleted++
 	if correct {
 		validator.VerificationsCorrect++
@@ -542,14 +544,18 @@ func (k Keeper) RecordVerification(ctx sdk.Context, validatorAddr string, correc
 		if contested {
 			validator.ContestedVerificationsCorrect++
 		}
-		// Increase reputation slightly
-		if validator.Reputation < 1000000 {
-			validator.Reputation += 100 // +0.01%
+		// Increase reputation (parameterized via P1-A)
+		correctDelta := params.ReputationCorrectDelta
+		if validator.Reputation+correctDelta <= 1000000 {
+			validator.Reputation += correctDelta
+		} else {
+			validator.Reputation = 1000000
 		}
 	} else {
-		// Decrease reputation (P0-1 fix: prevent uint64 underflow)
-		if validator.Reputation >= 200 {
-			validator.Reputation -= 200 // -0.02%
+		// Decrease reputation (P0-1 fix: prevent uint64 underflow, P1-A: parameterized)
+		incorrectDelta := params.ReputationIncorrectDelta
+		if validator.Reputation >= incorrectDelta {
+			validator.Reputation -= incorrectDelta
 		} else {
 			validator.Reputation = 0
 		}
@@ -670,9 +676,10 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, amount str
 		validator.LastSlashedHeight = uint64(ctx.BlockHeight())
 	}
 
-	// Decrease reputation significantly
-	if validator.Reputation > 10000 {
-		validator.Reputation -= 10000 // -1%
+	// Decrease reputation significantly (P1-A: parameterized)
+	slashDelta := params.ReputationSlashDelta
+	if validator.Reputation > slashDelta {
+		validator.Reputation -= slashDelta
 	} else {
 		validator.Reputation = 0
 	}
@@ -724,17 +731,30 @@ func (k Keeper) GetLastRedelegationHeight(ctx sdk.Context, delegatorAddr string)
 
 // --- Params ---
 
-// SetParams stores module parameters
+// SetParams stores module parameters and syncs tier configs to KVStore.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := proto.Marshal(&params)
 	if err != nil {
 		return err
 	}
-	return store.Set(types.ParamsKey, bz)
+	if err := store.Set(types.ParamsKey, bz); err != nil {
+		return err
+	}
+
+	// Sync tier configs to KVStore (fast-read cache, single-writer via SetParams)
+	for _, tc := range params.TierConfigs {
+		if tc != nil {
+			if err := k.SetTierConfig(ctx, *tc); err != nil {
+				return fmt.Errorf("failed to sync tier config %q: %w", tc.Tier, err)
+			}
+		}
+	}
+
+	return nil
 }
 
-// GetParams retrieves module parameters
+// GetParams retrieves module parameters with backward-compat fill for pre-migration state.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
@@ -746,6 +766,32 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	if err := proto.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
+
+	// Backward compat: fill tier configs from KVStore if not in params (pre-migration)
+	if len(params.TierConfigs) == 0 {
+		allConfigs := k.GetAllTierConfigs(ctx)
+		if len(allConfigs) > 0 {
+			for i := range allConfigs {
+				params.TierConfigs = append(params.TierConfigs, &allConfigs[i])
+			}
+		}
+	}
+
+	// Backward compat: fill zero-value fields with defaults
+	defaults := types.DefaultParams()
+	if params.ReputationCorrectDelta == 0 {
+		params.ReputationCorrectDelta = defaults.ReputationCorrectDelta
+	}
+	if params.ReputationIncorrectDelta == 0 {
+		params.ReputationIncorrectDelta = defaults.ReputationIncorrectDelta
+	}
+	if params.ReputationSlashDelta == 0 {
+		params.ReputationSlashDelta = defaults.ReputationSlashDelta
+	}
+	if params.RedelegationCooldownBlocks == 0 {
+		params.RedelegationCooldownBlocks = defaults.RedelegationCooldownBlocks
+	}
+
 	return params
 }
 
@@ -753,18 +799,20 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // InitGenesis initializes the module from genesis state
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
-	// Set params
+	// Set params (SetParams syncs tier configs to KVStore if present in params)
 	if gs.Params != nil {
 		if err := k.SetParams(ctx, *gs.Params); err != nil {
 			return err
 		}
 	}
 
-	// Set tier configs
-	for _, config := range gs.TierConfigs {
-		if config != nil {
-			if err := k.SetTierConfig(ctx, *config); err != nil {
-				return err
+	// Legacy backward compat: if params had no tier configs, use genesis-level tier configs
+	if gs.Params == nil || len(gs.Params.TierConfigs) == 0 {
+		for _, config := range gs.TierConfigs {
+			if config != nil {
+				if err := k.SetTierConfig(ctx, *config); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -806,8 +854,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) error {
 
 // ExportGenesis exports the module state
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
-	params := k.GetParams(ctx)
-	tierConfigs := k.GetAllTierConfigs(ctx)
+	params := k.GetParams(ctx) // GetParams backward compat already fills TierConfigs
 
 	var validators []*types.LegibleValidator
 	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
@@ -827,26 +874,20 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		return false
 	})
 
-	// Convert []TierConfig to []*TierConfig
-	tierConfigPtrs := make([]*types.TierConfig, len(tierConfigs))
-	for i := range tierConfigs {
-		tierConfigPtrs[i] = &tierConfigs[i]
-	}
-
 	return &types.GenesisState{
 		Params:           &params,
 		Validators:       validators,
 		Delegations:      delegations,
 		UnbondingEntries: unbondings,
-		TierConfigs:      tierConfigPtrs,
+		TierConfigs:      params.TierConfigs, // sourced from params (canonical location)
 		UnbondingSeq:     k.GetUnbondingSeq(ctx),
 	}
 }
 
 // --- Msg Server Implementation ---
 
-// msgServer implements both the proto-generated MsgServer (RegisterValidator)
-// and the extended FullMsgServer (Delegate, Undelegate, Redelegate, UpdateValidatorStake).
+// msgServer implements the proto-generated MsgServer with all 6 RPCs:
+// RegisterValidator, UpdateValidatorStake, Delegate, Undelegate, Redelegate, UpdateParams.
 type msgServer struct {
 	types.UnimplementedMsgServer
 	Keeper
@@ -863,24 +904,24 @@ func (k msgServer) RegisterValidator(goCtx context.Context, msg *types.MsgRegist
 	return k.Keeper.RegisterValidator(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
-func (k msgServer) UpdateValidatorStake(ctx sdk.Context, msg *types.MsgUpdateValidatorStake) (*types.MsgUpdateValidatorStakeResponse, error) {
-	return k.Keeper.UpdateValidatorStake(ctx, msg)
+func (k msgServer) UpdateValidatorStake(goCtx context.Context, msg *types.MsgUpdateValidatorStake) (*types.MsgUpdateValidatorStakeResponse, error) {
+	return k.Keeper.UpdateValidatorStake(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
-func (k msgServer) Delegate(ctx sdk.Context, msg *types.MsgDelegate) (*types.MsgDelegateResponse, error) {
-	return k.Keeper.Delegate(ctx, msg)
+func (k msgServer) Delegate(goCtx context.Context, msg *types.MsgDelegate) (*types.MsgDelegateResponse, error) {
+	return k.Keeper.Delegate(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
-func (k msgServer) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.MsgUndelegateResponse, error) {
-	return k.Keeper.Undelegate(ctx, msg)
+func (k msgServer) Undelegate(goCtx context.Context, msg *types.MsgUndelegate) (*types.MsgUndelegateResponse, error) {
+	return k.Keeper.Undelegate(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
-func (k msgServer) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
-	return k.Keeper.Redelegate(ctx, msg)
+func (k msgServer) Redelegate(goCtx context.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
+	return k.Keeper.Redelegate(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
-func (k msgServer) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
-	return k.Keeper.UpdateParams(ctx, msg)
+func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	return k.Keeper.UpdateParams(sdk.UnwrapSDKContext(goCtx), msg)
 }
 
 // --- Block Processing ---

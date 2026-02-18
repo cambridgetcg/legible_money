@@ -463,6 +463,7 @@ type Params struct {
 	MaxFutureBlocks        uint64                 `protobuf:"varint,4,opt,name=max_future_blocks,json=maxFutureBlocks,proto3" json:"max_future_blocks,omitempty"`
 	MinPrepaidExecutions   uint64                 `protobuf:"varint,5,opt,name=min_prepaid_executions,json=minPrepaidExecutions,proto3" json:"min_prepaid_executions,omitempty"`
 	ExpiredRetentionBlocks uint64                 `protobuf:"varint,6,opt,name=expired_retention_blocks,json=expiredRetentionBlocks,proto3" json:"expired_retention_blocks,omitempty"`
+	CleanupIntervalBlocks  uint64                 `protobuf:"varint,7,opt,name=cleanup_interval_blocks,json=cleanupIntervalBlocks,proto3" json:"cleanup_interval_blocks,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -539,6 +540,13 @@ func (x *Params) GetExpiredRetentionBlocks() uint64 {
 	return 0
 }
 
+func (x *Params) GetCleanupIntervalBlocks() uint64 {
+	if x != nil {
+		return x.CleanupIntervalBlocks
+	}
+	return 0
+}
+
 var File_legible_schedule_v1_state_proto protoreflect.FileDescriptor
 
 const file_legible_schedule_v1_state_proto_rawDesc = "" +
@@ -585,14 +593,15 @@ const file_legible_schedule_v1_state_proto_rawDesc = "" +
 	"\x10linked_entity_id\x18\r \x01(\tR\x0elinkedEntityId\x12(\n" +
 	"\x10created_at_block\x18\x0e \x01(\x04R\x0ecreatedAtBlock\x12(\n" +
 	"\x10expires_at_block\x18\x0f \x01(\x04R\x0eexpiresAtBlock\x12&\n" +
-	"\x0fnext_execute_at\x18\x10 \x01(\x04R\rnextExecuteAt\"\xb4\x02\n" +
+	"\x0fnext_execute_at\x18\x10 \x01(\x04R\rnextExecuteAt\"\xec\x02\n" +
 	"\x06Params\x123\n" +
 	"\x16max_active_per_account\x18\x01 \x01(\rR\x13maxActivePerAccount\x12)\n" +
 	"\x11max_gas_per_block\x18\x02 \x01(\x04R\x0emaxGasPerBlock\x12.\n" +
 	"\x13min_interval_blocks\x18\x03 \x01(\x04R\x11minIntervalBlocks\x12*\n" +
 	"\x11max_future_blocks\x18\x04 \x01(\x04R\x0fmaxFutureBlocks\x124\n" +
 	"\x16min_prepaid_executions\x18\x05 \x01(\x04R\x14minPrepaidExecutions\x128\n" +
-	"\x18expired_retention_blocks\x18\x06 \x01(\x04R\x16expiredRetentionBlocksB3Z1github.com/legible-money/legible/x/schedule/typesb\x06proto3"
+	"\x18expired_retention_blocks\x18\x06 \x01(\x04R\x16expiredRetentionBlocks\x126\n" +
+	"\x17cleanup_interval_blocks\x18\a \x01(\x04R\x15cleanupIntervalBlocksB3Z1github.com/legible-money/legible/x/schedule/typesb\x06proto3"
 
 var (
 	file_legible_schedule_v1_state_proto_rawDescOnce sync.Once

@@ -234,7 +234,7 @@ func TestAdaptation_HealthyRelaxes(t *testing.T) {
 	// Start with elevated multiplier
 	current := uint64(1_200_000) // 1.2x
 	ssi := uint64(100_000)       // 0.1 — healthy
-	newMult, delta := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, delta := types.ComputeSSIAdaptation(ssi, current, &params)
 	if delta >= 0 {
 		t.Errorf("expected negative delta for healthy SSI, got %d", delta)
 	}
@@ -247,7 +247,7 @@ func TestAdaptation_HealthyDoesNotGoBelow1x(t *testing.T) {
 	params := types.DefaultParams()
 	current := uint64(1_000_000) // 1.0x — already at default
 	ssi := uint64(50_000)        // very healthy
-	newMult, delta := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, delta := types.ComputeSSIAdaptation(ssi, current, &params)
 	if delta != 0 {
 		t.Errorf("expected no change when already at 1.0x, got delta=%d", delta)
 	}
@@ -260,7 +260,7 @@ func TestAdaptation_ModerateIncreasesSlash(t *testing.T) {
 	params := types.DefaultParams()
 	current := uint64(1_000_000) // 1.0x
 	ssi := uint64(600_000)       // 0.6 — moderate
-	newMult, delta := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, delta := types.ComputeSSIAdaptation(ssi, current, &params)
 	if delta <= 0 {
 		t.Errorf("expected positive delta for moderate SSI, got %d", delta)
 	}
@@ -281,8 +281,8 @@ func TestAdaptation_CriticalIncreasesMore(t *testing.T) {
 	current := uint64(1_000_000)          // 1.0x
 	ssiMod := uint64(600_000)             // moderate
 	ssiCrit := uint64(900_000)            // critical
-	newMod, _ := types.ComputeSSIAdaptation(ssiMod, current, params)
-	newCrit, _ := types.ComputeSSIAdaptation(ssiCrit, current, params)
+	newMod, _ := types.ComputeSSIAdaptation(ssiMod, current, &params)
+	newCrit, _ := types.ComputeSSIAdaptation(ssiCrit, current, &params)
 	if newCrit <= newMod {
 		t.Errorf("critical SSI should produce larger increase than moderate: critical=%d moderate=%d", newCrit, newMod)
 	}
@@ -292,7 +292,7 @@ func TestAdaptation_RateLimiting(t *testing.T) {
 	params := types.DefaultParams()
 	current := uint64(1_000_000) // 1.0x
 	ssi := uint64(900_000)       // critical — wants +15%
-	newMult, _ := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, _ := types.ComputeSSIAdaptation(ssi, current, &params)
 	maxAllowed := current + (current * params.MaxChangePerEpochBps / types.BasisPoints)
 	if newMult > maxAllowed {
 		t.Errorf("rate limit violated: new=%d max_allowed=%d", newMult, maxAllowed)
@@ -305,7 +305,7 @@ func TestAdaptation_BoundsEnforced(t *testing.T) {
 	// Try to go above max
 	current := uint64(2_900_000) // 2.9x — near max of 3.0x
 	ssi := uint64(900_000)       // critical
-	newMult, _ := types.ComputeSSIAdaptation(ssi, current, params)
+	newMult, _ := types.ComputeSSIAdaptation(ssi, current, &params)
 	if newMult > params.SlashMultiplierMax {
 		t.Errorf("upper bound violated: new=%d max=%d", newMult, params.SlashMultiplierMax)
 	}
@@ -313,7 +313,7 @@ func TestAdaptation_BoundsEnforced(t *testing.T) {
 	// Try to go below min
 	current2 := uint64(510_000) // 0.51x — near min of 0.5x
 	ssi2 := uint64(50_000)      // healthy — wants to relax
-	newMult2, _ := types.ComputeSSIAdaptation(ssi2, current2, params)
+	newMult2, _ := types.ComputeSSIAdaptation(ssi2, current2, &params)
 	if newMult2 < params.SlashMultiplierMin {
 		t.Errorf("lower bound violated: new=%d min=%d", newMult2, params.SlashMultiplierMin)
 	}
@@ -326,7 +326,7 @@ func TestAdaptation_MultiEpochAccumulation(t *testing.T) {
 
 	// Run 10 epochs of moderate stress
 	for i := 0; i < 10; i++ {
-		mult, _ = types.ComputeSSIAdaptation(ssi, mult, params)
+		mult, _ = types.ComputeSSIAdaptation(ssi, mult, &params)
 	}
 
 	if mult <= types.DefaultMultiplier {

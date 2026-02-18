@@ -11,6 +11,7 @@ package keeper_test
 // ==================================================================================
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/legible-money/legible/x/billing/keeper"
@@ -46,7 +47,7 @@ func TestOC_BILL1_QuoteReplayAttack(t *testing.T) {
 	_, err := srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
 		Sender:      providerAddr,
 		Domains:     []string{"mathematics"},
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 	if err != nil {
 		t.Fatalf("register provider: %v", err)
@@ -64,7 +65,7 @@ func TestOC_BILL1_QuoteReplayAttack(t *testing.T) {
 	// First execution — should succeed
 	_, err = srv.ExecutePayment(ctx, &types.MsgExecutePayment{
 		Sender:  callerAddr,
-		QuoteId: quote.QuoteId,
+		QuoteId: fmt.Sprintf("%d", quote.QuoteId),
 	})
 	if err != nil {
 		t.Fatalf("OC-BILL-1 FAIL: first execution should succeed: %v", err)
@@ -73,7 +74,7 @@ func TestOC_BILL1_QuoteReplayAttack(t *testing.T) {
 	// ATTACK: Second execution — should be rejected
 	_, err = srv.ExecutePayment(ctx, &types.MsgExecutePayment{
 		Sender:  callerAddr,
-		QuoteId: quote.QuoteId,
+		QuoteId: fmt.Sprintf("%d", quote.QuoteId),
 	})
 	if err == nil {
 		t.Fatal("OC-BILL-1 FAIL: quote replay attack succeeded! Double execution allowed.")
@@ -109,7 +110,7 @@ func TestOC_BILL2_QuoteCallerImpersonation(t *testing.T) {
 	_, _ = srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
 		Sender:      providerAddr,
 		Domains:     []string{"mathematics"},
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 
 	kk.addFact("fact-impersonate", 500000, 10, 50, testAddr(10))
@@ -120,7 +121,7 @@ func TestOC_BILL2_QuoteCallerImpersonation(t *testing.T) {
 	// ATTACK: Bob tries to execute Alice's quote
 	_, err := srv.ExecutePayment(ctx, &types.MsgExecutePayment{
 		Sender:  bobAddr,
-		QuoteId: quote.QuoteId,
+		QuoteId: fmt.Sprintf("%d", quote.QuoteId),
 	})
 	if err == nil {
 		t.Fatal("OC-BILL-2 FAIL: Bob was able to execute Alice's quote!")
@@ -153,7 +154,7 @@ func TestOC_BILL3_ExpiredQuoteExecution(t *testing.T) {
 	_, _ = srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
 		Sender:      providerAddr,
 		Domains:     []string{"physics"},
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 
 	kk.addFact("fact-expired", 500000, 10, 50, testAddr(10))
@@ -167,7 +168,7 @@ func TestOC_BILL3_ExpiredQuoteExecution(t *testing.T) {
 	// ATTACK: Execute expired quote
 	_, err := srv.ExecutePayment(expiredCtx, &types.MsgExecutePayment{
 		Sender:  callerAddr,
-		QuoteId: quote.QuoteId,
+		QuoteId: fmt.Sprintf("%d", quote.QuoteId),
 	})
 	if err == nil {
 		t.Fatal("OC-BILL-3 FAIL: expired quote was accepted!")
@@ -193,7 +194,7 @@ func TestOC_BILL4_UpdateParamsAuthBypass(t *testing.T) {
 	// ATTACK: Random user tries to update params
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr(99),
-		Params: types.Params{
+		Params: &types.Params{
 			BaseCostPerFact:  "1",        // Set absurdly low cost
 			MinProviderStake: "1",        // Set absurdly low stake
 			ResearchShareBps: 0,          // Zero out research funding

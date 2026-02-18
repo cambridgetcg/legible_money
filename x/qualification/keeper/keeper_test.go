@@ -1023,13 +1023,13 @@ func TestMsgRequestQualification_StakeCommitment(t *testing.T) {
 	resp, err := ms.RequestQualification(ctx, &types.MsgRequestQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Pathway:       types.PathwayStakeCommitment,
+		Pathway:       string(types.PathwayStakeCommitment),
 		Stake:         "22000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.Status != types.StatusProbationary {
+	if resp.Status != string(types.StatusProbationary) {
 		t.Errorf("expected probationary, got %s", resp.Status)
 	}
 }
@@ -1041,12 +1041,12 @@ func TestMsgRequestQualification_TrackRecord(t *testing.T) {
 	resp, err := ms.RequestQualification(ctx, &types.MsgRequestQualification{
 		ValidatorAddr: "lgmvaloper1abc",
 		Domain:        "physics",
-		Pathway:       types.PathwayTrackRecord,
+		Pathway:       string(types.PathwayTrackRecord),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.Status != types.StatusActive {
+	if resp.Status != string(types.StatusActive) {
 		t.Errorf("expected active for track record, got %s", resp.Status)
 	}
 }
@@ -1157,7 +1157,7 @@ func TestMsgUpdateParams(t *testing.T) {
 
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "authority",
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1173,9 +1173,10 @@ func TestMsgUpdateParams_Unauthorized(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	ms := keeper.NewMsgServerImpl(k)
+	defaultParams := types.DefaultParams()
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "not_authority",
-		Params:    types.DefaultParams(),
+		Params:    &defaultParams,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized params update")

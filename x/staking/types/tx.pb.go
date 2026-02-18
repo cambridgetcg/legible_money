@@ -490,11 +490,531 @@ func (x *ValidatorTierParams) GetVirtualStakeAmount() string {
 	return ""
 }
 
+type MsgUpdateValidatorStake struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Validator     string                 `protobuf:"bytes,1,opt,name=validator,proto3" json:"validator,omitempty"`
+	Amount        string                 `protobuf:"bytes,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	IsIncrease    bool                   `protobuf:"varint,3,opt,name=is_increase,json=isIncrease,proto3" json:"is_increase,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateValidatorStake) Reset() {
+	*x = MsgUpdateValidatorStake{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateValidatorStake) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateValidatorStake) ProtoMessage() {}
+
+func (x *MsgUpdateValidatorStake) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateValidatorStake.ProtoReflect.Descriptor instead.
+func (*MsgUpdateValidatorStake) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *MsgUpdateValidatorStake) GetValidator() string {
+	if x != nil {
+		return x.Validator
+	}
+	return ""
+}
+
+func (x *MsgUpdateValidatorStake) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+func (x *MsgUpdateValidatorStake) GetIsIncrease() bool {
+	if x != nil {
+		return x.IsIncrease
+	}
+	return false
+}
+
+type MsgUpdateValidatorStakeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NewStake      string                 `protobuf:"bytes,1,opt,name=new_stake,json=newStake,proto3" json:"new_stake,omitempty"`
+	NewTier       ValidatorTier          `protobuf:"varint,2,opt,name=new_tier,json=newTier,proto3,enum=legible.staking.v1.ValidatorTier" json:"new_tier,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateValidatorStakeResponse) Reset() {
+	*x = MsgUpdateValidatorStakeResponse{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateValidatorStakeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateValidatorStakeResponse) ProtoMessage() {}
+
+func (x *MsgUpdateValidatorStakeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateValidatorStakeResponse.ProtoReflect.Descriptor instead.
+func (*MsgUpdateValidatorStakeResponse) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MsgUpdateValidatorStakeResponse) GetNewStake() string {
+	if x != nil {
+		return x.NewStake
+	}
+	return ""
+}
+
+func (x *MsgUpdateValidatorStakeResponse) GetNewTier() ValidatorTier {
+	if x != nil {
+		return x.NewTier
+	}
+	return ValidatorTier_VALIDATOR_TIER_UNSPECIFIED
+}
+
+type MsgDelegate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Delegator     string                 `protobuf:"bytes,1,opt,name=delegator,proto3" json:"delegator,omitempty"`
+	Validator     string                 `protobuf:"bytes,2,opt,name=validator,proto3" json:"validator,omitempty"`
+	Amount        string                 `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgDelegate) Reset() {
+	*x = MsgDelegate{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgDelegate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgDelegate) ProtoMessage() {}
+
+func (x *MsgDelegate) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgDelegate.ProtoReflect.Descriptor instead.
+func (*MsgDelegate) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *MsgDelegate) GetDelegator() string {
+	if x != nil {
+		return x.Delegator
+	}
+	return ""
+}
+
+func (x *MsgDelegate) GetValidator() string {
+	if x != nil {
+		return x.Validator
+	}
+	return ""
+}
+
+func (x *MsgDelegate) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+type MsgDelegateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NewDelegation string                 `protobuf:"bytes,1,opt,name=new_delegation,json=newDelegation,proto3" json:"new_delegation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgDelegateResponse) Reset() {
+	*x = MsgDelegateResponse{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgDelegateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgDelegateResponse) ProtoMessage() {}
+
+func (x *MsgDelegateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgDelegateResponse.ProtoReflect.Descriptor instead.
+func (*MsgDelegateResponse) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MsgDelegateResponse) GetNewDelegation() string {
+	if x != nil {
+		return x.NewDelegation
+	}
+	return ""
+}
+
+type MsgUndelegate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Delegator     string                 `protobuf:"bytes,1,opt,name=delegator,proto3" json:"delegator,omitempty"`
+	Validator     string                 `protobuf:"bytes,2,opt,name=validator,proto3" json:"validator,omitempty"`
+	Amount        string                 `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUndelegate) Reset() {
+	*x = MsgUndelegate{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUndelegate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUndelegate) ProtoMessage() {}
+
+func (x *MsgUndelegate) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUndelegate.ProtoReflect.Descriptor instead.
+func (*MsgUndelegate) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *MsgUndelegate) GetDelegator() string {
+	if x != nil {
+		return x.Delegator
+	}
+	return ""
+}
+
+func (x *MsgUndelegate) GetValidator() string {
+	if x != nil {
+		return x.Validator
+	}
+	return ""
+}
+
+func (x *MsgUndelegate) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+type MsgUndelegateResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	UnbondingId       string                 `protobuf:"bytes,1,opt,name=unbonding_id,json=unbondingId,proto3" json:"unbonding_id,omitempty"`
+	CompletesAtHeight uint64                 `protobuf:"varint,2,opt,name=completes_at_height,json=completesAtHeight,proto3" json:"completes_at_height,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *MsgUndelegateResponse) Reset() {
+	*x = MsgUndelegateResponse{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUndelegateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUndelegateResponse) ProtoMessage() {}
+
+func (x *MsgUndelegateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUndelegateResponse.ProtoReflect.Descriptor instead.
+func (*MsgUndelegateResponse) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MsgUndelegateResponse) GetUnbondingId() string {
+	if x != nil {
+		return x.UnbondingId
+	}
+	return ""
+}
+
+func (x *MsgUndelegateResponse) GetCompletesAtHeight() uint64 {
+	if x != nil {
+		return x.CompletesAtHeight
+	}
+	return 0
+}
+
+type MsgRedelegate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Delegator     string                 `protobuf:"bytes,1,opt,name=delegator,proto3" json:"delegator,omitempty"`
+	SrcValidator  string                 `protobuf:"bytes,2,opt,name=src_validator,json=srcValidator,proto3" json:"src_validator,omitempty"`
+	DstValidator  string                 `protobuf:"bytes,3,opt,name=dst_validator,json=dstValidator,proto3" json:"dst_validator,omitempty"`
+	Amount        string                 `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgRedelegate) Reset() {
+	*x = MsgRedelegate{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgRedelegate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgRedelegate) ProtoMessage() {}
+
+func (x *MsgRedelegate) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgRedelegate.ProtoReflect.Descriptor instead.
+func (*MsgRedelegate) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *MsgRedelegate) GetDelegator() string {
+	if x != nil {
+		return x.Delegator
+	}
+	return ""
+}
+
+func (x *MsgRedelegate) GetSrcValidator() string {
+	if x != nil {
+		return x.SrcValidator
+	}
+	return ""
+}
+
+func (x *MsgRedelegate) GetDstValidator() string {
+	if x != nil {
+		return x.DstValidator
+	}
+	return ""
+}
+
+func (x *MsgRedelegate) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+type MsgRedelegateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgRedelegateResponse) Reset() {
+	*x = MsgRedelegateResponse{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgRedelegateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgRedelegateResponse) ProtoMessage() {}
+
+func (x *MsgRedelegateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgRedelegateResponse.ProtoReflect.Descriptor instead.
+func (*MsgRedelegateResponse) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{12}
+}
+
+type MsgUpdateParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authority     string                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	Params        *Params                `protobuf:"bytes,2,opt,name=params,proto3" json:"params,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParams) Reset() {
+	*x = MsgUpdateParams{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParams) ProtoMessage() {}
+
+func (x *MsgUpdateParams) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParams.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParams) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *MsgUpdateParams) GetAuthority() string {
+	if x != nil {
+		return x.Authority
+	}
+	return ""
+}
+
+func (x *MsgUpdateParams) GetParams() *Params {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+type MsgUpdateParamsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParamsResponse) Reset() {
+	*x = MsgUpdateParamsResponse{}
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParamsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParamsResponse) ProtoMessage() {}
+
+func (x *MsgUpdateParamsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_staking_v1_tx_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParamsResponse.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
+	return file_legible_staking_v1_tx_proto_rawDescGZIP(), []int{14}
+}
+
 var File_legible_staking_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_staking_v1_tx_proto_rawDesc = "" +
 	"\n" +
-	"\x1blegible/staking/v1/tx.proto\x12\x12legible.staking.v1\x1a\x17cosmos/msg/v1/msg.proto\"\x92\x02\n" +
+	"\x1blegible/staking/v1/tx.proto\x12\x12legible.staking.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a legible/staking/v1/genesis.proto\"\x92\x02\n" +
 	"\x14MsgRegisterValidator\x12+\n" +
 	"\x11validator_address\x18\x01 \x01(\tR\x10validatorAddress\x12\x17\n" +
 	"\apub_key\x18\x02 \x01(\fR\x06pubKey\x12'\n" +
@@ -527,15 +1047,53 @@ const file_legible_staking_v1_tx_proto_rawDesc = "" +
 	"\x12tier3_min_accuracy\x18\x06 \x01(\rR\x10tier3MinAccuracy\x12*\n" +
 	"\x11tier3_max_slashes\x18\a \x01(\x04R\x0ftier3MaxSlashes\x12:\n" +
 	"\x19max_apprentice_validators\x18\b \x01(\rR\x17maxApprenticeValidators\x120\n" +
-	"\x14virtual_stake_amount\x18\t \x01(\tR\x12virtualStakeAmount*\xa3\x01\n" +
+	"\x14virtual_stake_amount\x18\t \x01(\tR\x12virtualStakeAmount\"\x80\x01\n" +
+	"\x17MsgUpdateValidatorStake\x12\x1c\n" +
+	"\tvalidator\x18\x01 \x01(\tR\tvalidator\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\tR\x06amount\x12\x1f\n" +
+	"\vis_increase\x18\x03 \x01(\bR\n" +
+	"isIncrease:\x0e\x82\xe7\xb0*\tvalidator\"|\n" +
+	"\x1fMsgUpdateValidatorStakeResponse\x12\x1b\n" +
+	"\tnew_stake\x18\x01 \x01(\tR\bnewStake\x12<\n" +
+	"\bnew_tier\x18\x02 \x01(\x0e2!.legible.staking.v1.ValidatorTierR\anewTier\"q\n" +
+	"\vMsgDelegate\x12\x1c\n" +
+	"\tdelegator\x18\x01 \x01(\tR\tdelegator\x12\x1c\n" +
+	"\tvalidator\x18\x02 \x01(\tR\tvalidator\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\tR\x06amount:\x0e\x82\xe7\xb0*\tdelegator\"<\n" +
+	"\x13MsgDelegateResponse\x12%\n" +
+	"\x0enew_delegation\x18\x01 \x01(\tR\rnewDelegation\"s\n" +
+	"\rMsgUndelegate\x12\x1c\n" +
+	"\tdelegator\x18\x01 \x01(\tR\tdelegator\x12\x1c\n" +
+	"\tvalidator\x18\x02 \x01(\tR\tvalidator\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\tR\x06amount:\x0e\x82\xe7\xb0*\tdelegator\"j\n" +
+	"\x15MsgUndelegateResponse\x12!\n" +
+	"\funbonding_id\x18\x01 \x01(\tR\vunbondingId\x12.\n" +
+	"\x13completes_at_height\x18\x02 \x01(\x04R\x11completesAtHeight\"\x9f\x01\n" +
+	"\rMsgRedelegate\x12\x1c\n" +
+	"\tdelegator\x18\x01 \x01(\tR\tdelegator\x12#\n" +
+	"\rsrc_validator\x18\x02 \x01(\tR\fsrcValidator\x12#\n" +
+	"\rdst_validator\x18\x03 \x01(\tR\fdstValidator\x12\x16\n" +
+	"\x06amount\x18\x04 \x01(\tR\x06amount:\x0e\x82\xe7\xb0*\tdelegator\"\x17\n" +
+	"\x15MsgRedelegateResponse\"s\n" +
+	"\x0fMsgUpdateParams\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\tR\tauthority\x122\n" +
+	"\x06params\x18\x02 \x01(\v2\x1a.legible.staking.v1.ParamsR\x06params:\x0e\x82\xe7\xb0*\tauthority\"\x19\n" +
+	"\x17MsgUpdateParamsResponse*\xa3\x01\n" +
 	"\rValidatorTier\x12\x1e\n" +
 	"\x1aVALIDATOR_TIER_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19VALIDATOR_TIER_APPRENTICE\x10\x01\x12\x1b\n" +
 	"\x17VALIDATOR_TIER_VERIFIED\x10\x02\x12\x19\n" +
 	"\x15VALIDATOR_TIER_BONDED\x10\x03\x12\x1b\n" +
-	"\x17VALIDATOR_TIER_GUARDIAN\x10\x042}\n" +
+	"\x17VALIDATOR_TIER_GUARDIAN\x10\x042\xe7\x04\n" +
 	"\x03Msg\x12o\n" +
-	"\x11RegisterValidator\x12(.legible.staking.v1.MsgRegisterValidator\x1a0.legible.staking.v1.MsgRegisterValidatorResponse\x1a\x05\x80\xe7\xb0*\x01B2Z0github.com/legible-money/legible/x/staking/typesb\x06proto3"
+	"\x11RegisterValidator\x12(.legible.staking.v1.MsgRegisterValidator\x1a0.legible.staking.v1.MsgRegisterValidatorResponse\x12x\n" +
+	"\x14UpdateValidatorStake\x12+.legible.staking.v1.MsgUpdateValidatorStake\x1a3.legible.staking.v1.MsgUpdateValidatorStakeResponse\x12T\n" +
+	"\bDelegate\x12\x1f.legible.staking.v1.MsgDelegate\x1a'.legible.staking.v1.MsgDelegateResponse\x12Z\n" +
+	"\n" +
+	"Undelegate\x12!.legible.staking.v1.MsgUndelegate\x1a).legible.staking.v1.MsgUndelegateResponse\x12Z\n" +
+	"\n" +
+	"Redelegate\x12!.legible.staking.v1.MsgRedelegate\x1a).legible.staking.v1.MsgRedelegateResponse\x12`\n" +
+	"\fUpdateParams\x12#.legible.staking.v1.MsgUpdateParams\x1a+.legible.staking.v1.MsgUpdateParamsResponse\x1a\x05\x80\xe7\xb0*\x01B2Z0github.com/legible-money/legible/x/staking/typesb\x06proto3"
 
 var (
 	file_legible_staking_v1_tx_proto_rawDescOnce sync.Once
@@ -550,26 +1108,49 @@ func file_legible_staking_v1_tx_proto_rawDescGZIP() []byte {
 }
 
 var file_legible_staking_v1_tx_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_legible_staking_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_legible_staking_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_legible_staking_v1_tx_proto_goTypes = []any{
-	(ValidatorTier)(0),                   // 0: legible.staking.v1.ValidatorTier
-	(*MsgRegisterValidator)(nil),         // 1: legible.staking.v1.MsgRegisterValidator
-	(*ValidatorDescription)(nil),         // 2: legible.staking.v1.ValidatorDescription
-	(*MsgRegisterValidatorResponse)(nil), // 3: legible.staking.v1.MsgRegisterValidatorResponse
-	(*ValidatorTierInfo)(nil),            // 4: legible.staking.v1.ValidatorTierInfo
-	(*ValidatorTierParams)(nil),          // 5: legible.staking.v1.ValidatorTierParams
+	(ValidatorTier)(0),                      // 0: legible.staking.v1.ValidatorTier
+	(*MsgRegisterValidator)(nil),            // 1: legible.staking.v1.MsgRegisterValidator
+	(*ValidatorDescription)(nil),            // 2: legible.staking.v1.ValidatorDescription
+	(*MsgRegisterValidatorResponse)(nil),    // 3: legible.staking.v1.MsgRegisterValidatorResponse
+	(*ValidatorTierInfo)(nil),               // 4: legible.staking.v1.ValidatorTierInfo
+	(*ValidatorTierParams)(nil),             // 5: legible.staking.v1.ValidatorTierParams
+	(*MsgUpdateValidatorStake)(nil),         // 6: legible.staking.v1.MsgUpdateValidatorStake
+	(*MsgUpdateValidatorStakeResponse)(nil), // 7: legible.staking.v1.MsgUpdateValidatorStakeResponse
+	(*MsgDelegate)(nil),                     // 8: legible.staking.v1.MsgDelegate
+	(*MsgDelegateResponse)(nil),             // 9: legible.staking.v1.MsgDelegateResponse
+	(*MsgUndelegate)(nil),                   // 10: legible.staking.v1.MsgUndelegate
+	(*MsgUndelegateResponse)(nil),           // 11: legible.staking.v1.MsgUndelegateResponse
+	(*MsgRedelegate)(nil),                   // 12: legible.staking.v1.MsgRedelegate
+	(*MsgRedelegateResponse)(nil),           // 13: legible.staking.v1.MsgRedelegateResponse
+	(*MsgUpdateParams)(nil),                 // 14: legible.staking.v1.MsgUpdateParams
+	(*MsgUpdateParamsResponse)(nil),         // 15: legible.staking.v1.MsgUpdateParamsResponse
+	(*Params)(nil),                          // 16: legible.staking.v1.Params
 }
 var file_legible_staking_v1_tx_proto_depIdxs = []int32{
-	2, // 0: legible.staking.v1.MsgRegisterValidator.description:type_name -> legible.staking.v1.ValidatorDescription
-	0, // 1: legible.staking.v1.MsgRegisterValidatorResponse.initial_tier:type_name -> legible.staking.v1.ValidatorTier
-	0, // 2: legible.staking.v1.ValidatorTierInfo.current_tier:type_name -> legible.staking.v1.ValidatorTier
-	1, // 3: legible.staking.v1.Msg.RegisterValidator:input_type -> legible.staking.v1.MsgRegisterValidator
-	3, // 4: legible.staking.v1.Msg.RegisterValidator:output_type -> legible.staking.v1.MsgRegisterValidatorResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2,  // 0: legible.staking.v1.MsgRegisterValidator.description:type_name -> legible.staking.v1.ValidatorDescription
+	0,  // 1: legible.staking.v1.MsgRegisterValidatorResponse.initial_tier:type_name -> legible.staking.v1.ValidatorTier
+	0,  // 2: legible.staking.v1.ValidatorTierInfo.current_tier:type_name -> legible.staking.v1.ValidatorTier
+	0,  // 3: legible.staking.v1.MsgUpdateValidatorStakeResponse.new_tier:type_name -> legible.staking.v1.ValidatorTier
+	16, // 4: legible.staking.v1.MsgUpdateParams.params:type_name -> legible.staking.v1.Params
+	1,  // 5: legible.staking.v1.Msg.RegisterValidator:input_type -> legible.staking.v1.MsgRegisterValidator
+	6,  // 6: legible.staking.v1.Msg.UpdateValidatorStake:input_type -> legible.staking.v1.MsgUpdateValidatorStake
+	8,  // 7: legible.staking.v1.Msg.Delegate:input_type -> legible.staking.v1.MsgDelegate
+	10, // 8: legible.staking.v1.Msg.Undelegate:input_type -> legible.staking.v1.MsgUndelegate
+	12, // 9: legible.staking.v1.Msg.Redelegate:input_type -> legible.staking.v1.MsgRedelegate
+	14, // 10: legible.staking.v1.Msg.UpdateParams:input_type -> legible.staking.v1.MsgUpdateParams
+	3,  // 11: legible.staking.v1.Msg.RegisterValidator:output_type -> legible.staking.v1.MsgRegisterValidatorResponse
+	7,  // 12: legible.staking.v1.Msg.UpdateValidatorStake:output_type -> legible.staking.v1.MsgUpdateValidatorStakeResponse
+	9,  // 13: legible.staking.v1.Msg.Delegate:output_type -> legible.staking.v1.MsgDelegateResponse
+	11, // 14: legible.staking.v1.Msg.Undelegate:output_type -> legible.staking.v1.MsgUndelegateResponse
+	13, // 15: legible.staking.v1.Msg.Redelegate:output_type -> legible.staking.v1.MsgRedelegateResponse
+	15, // 16: legible.staking.v1.Msg.UpdateParams:output_type -> legible.staking.v1.MsgUpdateParamsResponse
+	11, // [11:17] is the sub-list for method output_type
+	5,  // [5:11] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_legible_staking_v1_tx_proto_init() }
@@ -577,13 +1158,14 @@ func file_legible_staking_v1_tx_proto_init() {
 	if File_legible_staking_v1_tx_proto != nil {
 		return
 	}
+	file_legible_staking_v1_genesis_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_staking_v1_tx_proto_rawDesc), len(file_legible_staking_v1_tx_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

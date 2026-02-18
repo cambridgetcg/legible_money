@@ -263,8 +263,9 @@ func TestDecayModulation_NovelSlowerDecay(t *testing.T) {
 	baseConf := uint64(800_000)
 	blocks := uint64(3_000_000) // significant age
 
-	normalDecayed := keeper.CalculateDecayedConfidence(baseConf, blocks, "empirical")
-	novelDecayed := keeper.CalculateDecayedConfidenceNovel(baseConf, blocks, "empirical", types.NoveltyDecayHalfLifeMultiplier)
+	ep := types.DefaultExtendedParams()
+	normalDecayed := keeper.CalculateDecayedConfidence(baseConf, blocks, "empirical", ep)
+	novelDecayed := keeper.CalculateDecayedConfidenceNovel(baseConf, blocks, "empirical", types.NoveltyDecayHalfLifeMultiplier, ep)
 
 	if novelDecayed <= normalDecayed {
 		t.Errorf("novel decay (%d) should be slower (higher confidence) than normal (%d)", novelDecayed, normalDecayed)
@@ -276,8 +277,9 @@ func TestDecayModulation_MultiplierOne(t *testing.T) {
 	baseConf := uint64(800_000)
 	blocks := uint64(3_000_000)
 
-	standard := keeper.CalculateDecayedConfidence(baseConf, blocks, "empirical")
-	withMult1 := keeper.CalculateDecayedConfidenceNovel(baseConf, blocks, "empirical", 1)
+	ep := types.DefaultExtendedParams()
+	standard := keeper.CalculateDecayedConfidence(baseConf, blocks, "empirical", ep)
+	withMult1 := keeper.CalculateDecayedConfidenceNovel(baseConf, blocks, "empirical", 1, ep)
 
 	if standard != withMult1 {
 		t.Errorf("multiplier=1 should equal standard: standard=%d mult1=%d", standard, withMult1)
@@ -289,8 +291,9 @@ func TestDecayModulation_EternalUnaffected(t *testing.T) {
 	baseConf := uint64(800_000)
 	blocks := uint64(3_000_000)
 
-	standard := keeper.CalculateDecayedConfidence(baseConf, blocks, "analytic")
-	novel := keeper.CalculateDecayedConfidenceNovel(baseConf, blocks, "analytic", 5)
+	ep := types.DefaultExtendedParams()
+	standard := keeper.CalculateDecayedConfidence(baseConf, blocks, "analytic", ep)
+	novel := keeper.CalculateDecayedConfidenceNovel(baseConf, blocks, "analytic", 5, ep)
 
 	if standard != novel {
 		t.Errorf("eternal category should be unaffected by multiplier: standard=%d novel=%d", standard, novel)

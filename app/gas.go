@@ -237,44 +237,50 @@ var TransactionGasCosts = map[string]uint64{
 	"set_spending_limit": 40_000,
 
 	// Domain qualification
-	"request_qualification":  80_000,
-	"endorse_validator":      50_000,
-	"renew_qualification":    30_000,
-	"withdraw_qualification": 50_000,
+	"request_qualification":       80_000,
+	"endorse_validator":           50_000,
+	"renew_qualification":         30_000,
+	"withdraw_qualification":      50_000,
+	"update_qualification_params": 40_000,
 
 	// Capture defense
-	"request_capture_qualification": 80_000,
-	"endorse_capture_qualification": 40_000,
+	"request_capture_qualification":  80_000,
+	"endorse_capture_qualification":  40_000,
+	"update_capture_defense_params":  40_000,
 
 	// Capture challenge
-	"submit_capture_challenge":  100_000,
-	"add_challenge_evidence":    50_000,
-	"resolve_capture_challenge": 80_000,
+	"submit_capture_challenge":        100_000,
+	"add_challenge_evidence":          50_000,
+	"resolve_capture_challenge":       80_000,
+	"update_capture_challenge_params": 40_000,
 
 	// Discovery
-	"register_agent":    60_000,
-	"update_profile":    30_000,
-	"add_capability":    25_000,
-	"remove_capability": 20_000,
-	"deregister_agent":  30_000,
-	"heartbeat":         15_000,
+	"register_agent":          60_000,
+	"update_profile":          30_000,
+	"add_capability":          25_000,
+	"remove_capability":       20_000,
+	"deregister_agent":        30_000,
+	"heartbeat":               15_000,
+	"update_discovery_params": 40_000,
 
 	// Partnerships
-	"initiate_partnership":  100_000,
-	"accept_partnership":    40_000,
-	"deposit_to_pot":        50_000,
-	"distribute_reward":     60_000,
-	"propose_operation":     80_000,
-	"approve_operation":     30_000,
-	"reject_operation":      30_000,
-	"safety_freeze":         80_000,
-	"raise_coercion_signal": 60_000,
-	"initiate_exit":         50_000,
+	"initiate_partnership":       100_000,
+	"accept_partnership":         40_000,
+	"deposit_to_pot":             50_000,
+	"distribute_reward":          60_000,
+	"propose_operation":          80_000,
+	"approve_operation":          30_000,
+	"reject_operation":           30_000,
+	"safety_freeze":              80_000,
+	"raise_coercion_signal":      60_000,
+	"initiate_exit":              50_000,
+	"update_partnerships_params": 40_000,
 
 	// Autopoiesis
-	"activate_autopoiesis": 40_000,
-	"override_multiplier":  50_000,
-	"freeze_multiplier":    30_000,
+	"activate_autopoiesis":    40_000,
+	"override_multiplier":     50_000,
+	"freeze_multiplier":       30_000,
+	"update_autopoiesis_params": 40_000,
 
 	// Compute pool
 	"register_compute_provider":   80_000,
@@ -291,23 +297,26 @@ var TransactionGasCosts = map[string]uint64{
 	"update_domain":              40_000,
 	"register_logic_zone":        60_000,
 	"acknowledge_incompleteness": 30_000,
+	"update_ontology_params":     40_000,
 
 	// Schedule
-	"create_schedule": 80_000,
-	"pause_schedule":  20_000,
-	"resume_schedule": 20_000,
-	"cancel_schedule": 30_000,
-	"add_fee":         25_000,
+	"create_schedule":        80_000,
+	"pause_schedule":         20_000,
+	"resume_schedule":        20_000,
+	"cancel_schedule":        30_000,
+	"add_fee":                25_000,
+	"update_schedule_params": 40_000,
 
 	// ICA auth
 	"register_ica": 80_000,
 	"send_ica_tx":  60_000,
 
 	// Billing
-	"register_provider":   80_000,
-	"deregister_provider": 30_000,
-	"request_quote":       20_000,
-	"execute_payment":     40_000,
+	"register_provider":      80_000,
+	"deregister_provider":    30_000,
+	"request_quote":          20_000,
+	"execute_payment":        40_000,
+	"update_billing_params":  40_000,
 
 	// Governance (extended)
 	"attach_upgrade_plan":  60_000,

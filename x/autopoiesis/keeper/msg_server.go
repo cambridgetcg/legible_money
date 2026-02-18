@@ -10,6 +10,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -48,11 +49,11 @@ func (ms msgServer) Activate(goCtx context.Context, msg *types.MsgActivateAutopo
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	state := ms.GetState(ctx)
-	state.Active = msg.Active
+	state.Active = msg.Activate
 	ms.SetState(ctx, state)
 
 	action := "deactivated"
-	if msg.Active {
+	if msg.Activate {
 		action = "activated"
 	}
 

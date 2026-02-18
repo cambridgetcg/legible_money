@@ -42,7 +42,7 @@ func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "1000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 	if err != nil {
 		t.Fatalf("first registration: %v", err)
@@ -54,7 +54,7 @@ func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
 		ServiceType: "gpu_compute",
 		Endpoint:    "https://api2.example.com",
 		PricePerCu:  "2000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 	if err == nil {
 		t.Fatal("OC-COMP-1 FAIL: duplicate provider registration allowed!")
@@ -104,9 +104,10 @@ func TestOC_COMP3_UpdateParamsAuthBypass(t *testing.T) {
 
 	// ATTACK: Random user tries to update params
 	attackerAddr := sdk.AccAddress([]byte("attacker____________")).String()
+	dp := types.DefaultParams()
 	_, err := srv.UpdateComputeParams(ctx, &types.MsgUpdateComputeParams{
 		Authority: attackerAddr,
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	})
 	if err == nil {
 		t.Fatal("OC-COMP-3 FAIL: unauthorized user was able to update params!")

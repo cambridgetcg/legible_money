@@ -12,6 +12,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -291,7 +292,10 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 
-	k.SetParams(ctx, msg.Params)
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
+	k.SetParams(ctx, *msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }

@@ -363,19 +363,10 @@ type AutopoiesisState struct {
 	LastObservedHeight uint64 `json:"last_observed_height"`
 }
 
-// ============ Params ============
-
-// Params holds governance-tunable autopoiesis parameters.
-type Params struct {
-	EpochLengthBlocks       uint64 `json:"epoch_length_blocks"`
-	MaxChangePerEpochBps    uint64 `json:"max_change_per_epoch_bps"`
-	SlashMultiplierMin      uint64 `json:"slash_multiplier_min"`
-	SlashMultiplierMax      uint64 `json:"slash_multiplier_max"`
-	SSICriticalThreshold    uint64 `json:"ssi_critical_threshold"`
-	SSIModerateThreshold    uint64 `json:"ssi_moderate_threshold"`
-	SSILowModerateThreshold uint64 `json:"ssi_low_moderate_threshold"`
-	Enabled                 bool   `json:"enabled"`
-}
+// ============ Params Defaults & Validation ============
+//
+// The Params struct is proto-generated in tx.pb.go.
+// This section provides DefaultParams() and Validate() for the proto type.
 
 func DefaultParams() Params {
 	return Params{
@@ -383,14 +374,14 @@ func DefaultParams() Params {
 		MaxChangePerEpochBps:    MaxChangePerEpochBps,
 		SlashMultiplierMin:      BoundsSlashMultiplier.Min,
 		SlashMultiplierMax:      BoundsSlashMultiplier.Max,
-		SSICriticalThreshold:    SSICritical,
-		SSIModerateThreshold:    SSIModerate,
-		SSILowModerateThreshold: SSILowModerate,
+		SsiCriticalThreshold:    SSICritical,
+		SsiModerateThreshold:    SSIModerate,
+		SsiLowModerateThreshold: SSILowModerate,
 		Enabled:                 true,
 	}
 }
 
-func (p Params) Validate() error {
+func (p *Params) Validate() error {
 	if p.EpochLengthBlocks == 0 {
 		return fmt.Errorf("epoch_length_blocks must be positive")
 	}
@@ -406,11 +397,12 @@ func (p Params) Validate() error {
 // ============ Genesis ============
 
 type GenesisState struct {
-	Params Params `json:"params"`
+	Params *Params `json:"params"`
 }
 
 func DefaultGenesis() GenesisState {
-	return GenesisState{Params: DefaultParams()}
+	dp := DefaultParams()
+	return GenesisState{Params: &dp}
 }
 
 // ============ SSI Computation ============
@@ -468,14 +460,14 @@ func ComputeSSI(obs EpochObservation) uint64 {
 
 // ComputeSSIAdaptation determines the slash multiplier adjustment for a given SSI value.
 // Returns the new multiplier value (in basis points), rate-limited and bounded.
-func ComputeSSIAdaptation(ssi uint64, currentMultiplier uint64, params Params) (newMultiplier uint64, delta int64) {
+func ComputeSSIAdaptation(ssi uint64, currentMultiplier uint64, params *Params) (newMultiplier uint64, delta int64) {
 	target := currentMultiplier
 
-	if ssi >= params.SSICriticalThreshold {
+	if ssi >= params.SsiCriticalThreshold {
 		target = currentMultiplier + SSICriticalSlashDelta
-	} else if ssi >= params.SSIModerateThreshold {
+	} else if ssi >= params.SsiModerateThreshold {
 		target = currentMultiplier + SSIModerateSlashDelta
-	} else if ssi >= params.SSILowModerateThreshold {
+	} else if ssi >= params.SsiLowModerateThreshold {
 		target = currentMultiplier + SSILowModerateSlashDelta
 	} else {
 		// Healthy: relax toward default
@@ -535,7 +527,7 @@ func ComputeGRM(obs EpochObservation) uint64 {
 
 // ComputeGRMAdaptation determines max-tx and gas multiplier adjustments.
 // Returns adaptations for PathMaxTxSystem and PathGasSystem.
-func ComputeGRMAdaptation(grm uint64, currentMaxTx, currentGas uint64, params Params) (adaptations []Adaptation) {
+func ComputeGRMAdaptation(grm uint64, currentMaxTx, currentGas uint64, params *Params) (adaptations []Adaptation) {
 	rateLimit := params.MaxChangePerEpochBps
 
 	if grm > GRMHighUtilization {

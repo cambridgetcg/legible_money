@@ -10,6 +10,7 @@ import (
 
 func makeEvalCtxWithEvidence(evidences map[string][]types.EvidenceRecord) *EvaluationContext {
 	return &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, claimId string) []types.EvidenceRecord {
 			if evidences != nil {
 				return evidences[claimId]

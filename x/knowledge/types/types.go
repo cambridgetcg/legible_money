@@ -47,11 +47,11 @@ const (
 // CategoryDecayProfile defines per-category confidence decay parameters.
 // Half-life in blocks (0 = eternal, no decay). From TS EPISTEMIC_PROFILES.
 type CategoryDecayProfile struct {
-	HalfLifeBlocks         uint64 // 0 = eternal (analytic, formal, protocol)
-	MaxConfidence          uint64 // stratum ceiling (basis points, 0-1_000_000)
-	MinConfidence          uint64 // floor after decay
-	ReverificationBonus    uint64 // bonus on successful re-verification
-	RequiresReverification bool
+	HalfLifeBlocks         uint64 `json:"half_life_blocks"`         // 0 = eternal (analytic, formal, protocol)
+	MaxConfidence          uint64 `json:"max_confidence"`           // stratum ceiling (basis points, 0-1_000_000)
+	MinConfidence          uint64 `json:"min_confidence"`           // floor after decay
+	ReverificationBonus    uint64 `json:"reverification_bonus"`     // bonus on successful re-verification
+	RequiresReverification bool   `json:"requires_reverification"`
 }
 
 // CATEGORY_DECAY maps epistemic category to decay profile.
@@ -983,6 +983,67 @@ type ExtendedParams struct {
 	NoveltyImmunityThresholdBps    uint64 `json:"novelty_immunity_threshold_bps"`     // novelty score for extended grace (default 500000 = 50%)
 	NoveltyGraceMultiplier         uint64 `json:"novelty_grace_multiplier"`           // grace period multiplier for novel facts (default 3)
 	NoveltyDecayHalfLifeMultiplier uint64 `json:"novelty_decay_half_life_multiplier"` // half-life extension for novel facts (default 2)
+
+	// Citation self-referencing
+	SelfCitationDiscountBps uint64 `json:"self_citation_discount_bps"` // discount for citing own facts (default 500000 = 50%)
+
+	// Fundamentality thresholds — score brackets for citation fundamentality
+	FundamentalityNotableBps      uint64 `json:"fundamentality_notable_bps"`      // 0.25 threshold (default 250000)
+	FundamentalityFoundationalBps uint64 `json:"fundamentality_foundational_bps"` // 0.50 threshold (default 500000)
+	FundamentalityFundamentalBps  uint64 `json:"fundamentality_fundamental_bps"`  // 0.75 threshold (default 750000)
+	FundamentalityAxiomaticBps    uint64 `json:"fundamentality_axiomatic_bps"`    // 0.90 threshold (default 900000)
+
+	// Fundamentality reward multipliers
+	FundamentalityBonusNotableBps      uint64 `json:"fundamentality_bonus_notable_bps"`      // 1.1x (default 1100000)
+	FundamentalityBonusFoundationalBps uint64 `json:"fundamentality_bonus_foundational_bps"` // 1.25x (default 1250000)
+	FundamentalityBonusFundamentalBps  uint64 `json:"fundamentality_bonus_fundamental_bps"`  // 1.5x (default 1500000)
+	FundamentalityBonusAxiomaticBps    uint64 `json:"fundamentality_bonus_axiomatic_bps"`    // 2.0x (default 2000000)
+
+	// FARM-2: Trivial claim detection
+	CalibrationTrivialThreshold uint64 `json:"calibration_trivial_threshold"` // acceptance rate above this is suspicious (default 950000 = 95%)
+	MaxCalibrationTrivialPenalty uint64 `json:"max_calibration_trivial_penalty"` // max penalty for trivial spam (default 100000 = 10%)
+
+	// FARM-6: Misbehavior vesting pause
+	MisbehaviorRejectionThreshold uint64 `json:"misbehavior_rejection_threshold"` // rejection rate triggering vesting pause (default 300000 = 30%)
+	MisbehaviorMinSamples         uint32 `json:"misbehavior_min_samples"`         // min claims before misbehavior check (default 10)
+
+	// FARM-9: Proportional challenge economics
+	ChallengeStakeRatioMinBps uint64 `json:"challenge_stake_ratio_min_bps"` // min challenger stake as % of claim stake (default 500000 = 50%)
+	ChallengeRewardCapBps     uint64 `json:"challenge_reward_cap_bps"`      // reward cap as % of challenger stake (default 1000000 = 100%)
+
+	// FARM-7: Domain squatting prevention
+	MinDomainContributorsForNovelty uint64 `json:"min_domain_contributors_for_novelty"` // min unique contributors for full novelty (default 3)
+
+	// FARM-1: Rubber-stamp verifier detection
+	ConformityThresholdBps  uint64 `json:"conformity_threshold_bps"`   // conformity rate triggering penalty (default 950000 = 95%)
+	ConformityMinSamples    uint64 `json:"conformity_min_samples"`     // min votes before tracking (default 20)
+	ConformityPenaltyMaxBps uint64 `json:"conformity_penalty_max_bps"` // max conformity penalty (default 200000 = 20%)
+
+	// FARM-8: Passive staking prevention
+	MinParticipationRateBps  uint64 `json:"min_participation_rate_bps"`  // min participation rate (default 500000 = 50%)
+	ParticipationMinSamples  uint64 `json:"participation_min_samples"`   // min assigned rounds before tracking (default 10)
+	PassiveStakingPenaltyBps uint64 `json:"passive_staking_penalty_bps"` // penalty for non-participants (default 500000 = 50%)
+
+	// Counter-fact evaluation penalties (Stage 10)
+	CounterFactHighConfidenceBps uint64 `json:"counter_fact_high_confidence_bps"` // threshold for high penalty tier (default 700000 = 70%)
+	CounterFactMediumConfidenceBps uint64 `json:"counter_fact_medium_confidence_bps"` // threshold for medium penalty tier (default 400000 = 40%)
+	CounterFactHighPenalty       uint64 `json:"counter_fact_high_penalty"`        // penalty per high-confidence counter-fact (default 80000)
+	CounterFactMediumPenalty     uint64 `json:"counter_fact_medium_penalty"`      // penalty per medium-confidence counter-fact (default 40000)
+	CounterFactLowPenalty        uint64 `json:"counter_fact_low_penalty"`         // penalty per low-confidence counter-fact (default 10000)
+	MaxCounterFactPenalty        uint64 `json:"max_counter_fact_penalty"`         // total cap on counter-fact penalties (default 400000)
+
+	// Stale contested fact decay (R-5)
+	StaleContestedDecayEpochs  uint64 `json:"stale_contested_decay_epochs"`   // epochs without activity before decay (default 10)
+	StaleContestedDecayRateBps uint64 `json:"stale_contested_decay_rate_bps"` // decay per epoch when stale (default 50000 = 5%)
+
+	// Minimum claim stake
+	MinClaimStakeUlgm uint64 `json:"min_claim_stake_ulgm"` // floor for claim stake (default 1000 = 0.001 LGM)
+
+	// Map-based profiles (governance-adjustable per-category/type values)
+	CategoryDecayProfiles      map[string]CategoryDecayProfile `json:"category_decay_profiles,omitempty"`
+	StratumConfidenceCeilings  map[string]uint64               `json:"stratum_confidence_ceilings,omitempty"`
+	EvidenceTypeStrengths      map[string]uint64               `json:"evidence_type_strengths,omitempty"`
+	ChallengeWindowMultipliers map[string]uint64               `json:"challenge_window_multipliers,omitempty"`
 }
 
 // DefaultExtendedParams returns the default extended parameters.
@@ -1073,7 +1134,174 @@ func DefaultExtendedParams() ExtendedParams {
 		NoveltyImmunityThresholdBps:    NoveltyImmunityThreshold,
 		NoveltyGraceMultiplier:         NoveltyGraceMultiplier,
 		NoveltyDecayHalfLifeMultiplier: NoveltyDecayHalfLifeMultiplier,
+
+		// Citation self-referencing
+		SelfCitationDiscountBps: SelfCitationDiscountBPS,
+
+		// Fundamentality thresholds
+		FundamentalityNotableBps:      FundamentalityNotable,
+		FundamentalityFoundationalBps: FundamentalityFoundational,
+		FundamentalityFundamentalBps:  FundamentalityFundamental,
+		FundamentalityAxiomaticBps:    FundamentalityAxiomatic,
+
+		// Fundamentality reward multipliers
+		FundamentalityBonusNotableBps:      FundamentalityBonusNotable,
+		FundamentalityBonusFoundationalBps: FundamentalityBonusFoundational,
+		FundamentalityBonusFundamentalBps:  FundamentalityBonusFundamental,
+		FundamentalityBonusAxiomaticBps:    FundamentalityBonusAxiomatic,
+
+		// FARM-2: Trivial claim detection
+		CalibrationTrivialThreshold:  CalibrationTrivialThreshold,
+		MaxCalibrationTrivialPenalty: MaxCalibrationTrivialPenalty,
+
+		// FARM-6: Misbehavior vesting pause
+		MisbehaviorRejectionThreshold: MisbehaviorRejectionThreshold,
+		MisbehaviorMinSamples:         MisbehaviorMinSamples,
+
+		// FARM-9: Proportional challenge economics
+		ChallengeStakeRatioMinBps: ChallengeStakeRatioMinBPS,
+		ChallengeRewardCapBps:     ChallengeRewardCapBPS,
+
+		// FARM-7: Domain squatting prevention
+		MinDomainContributorsForNovelty: MinDomainContributorsForNovelty,
+
+		// FARM-1: Rubber-stamp verifier detection
+		ConformityThresholdBps:  ConformityThresholdBPS,
+		ConformityMinSamples:    ConformityMinSamples,
+		ConformityPenaltyMaxBps: ConformityPenaltyMaxBPS,
+
+		// FARM-8: Passive staking prevention
+		MinParticipationRateBps:  MinParticipationRateBPS,
+		ParticipationMinSamples:  ParticipationMinSamples,
+		PassiveStakingPenaltyBps: PassiveStakingPenaltyBPS,
+
+		// Counter-fact evaluation penalties
+		CounterFactHighConfidenceBps:   CounterFactHighConfidence,
+		CounterFactMediumConfidenceBps: CounterFactMediumConfidence,
+		CounterFactHighPenalty:         CounterFactHighPenalty,
+		CounterFactMediumPenalty:       CounterFactMediumPenalty,
+		CounterFactLowPenalty:          CounterFactLowPenalty,
+		MaxCounterFactPenalty:          MaxCounterFactPenalty,
+
+		// Stale contested fact decay
+		StaleContestedDecayEpochs:  StaleContestedDecayEpochs,
+		StaleContestedDecayRateBps: StaleContestedDecayRateBps,
+
+		// Minimum claim stake
+		MinClaimStakeUlgm: MinClaimStakeUlgm,
+
+		// Map-based profiles (default to current hardcoded maps)
+		CategoryDecayProfiles:      DefaultCategoryDecayProfiles(),
+		StratumConfidenceCeilings:  DefaultStratumConfidenceCeilings(),
+		EvidenceTypeStrengths:      DefaultEvidenceTypeStrengths(),
+		ChallengeWindowMultipliers: DefaultChallengeWindowMultipliers(),
 	}
+}
+
+// DefaultCategoryDecayProfiles returns the default category decay profiles.
+// Values match the hardcoded CATEGORY_DECAY map.
+func DefaultCategoryDecayProfiles() map[string]CategoryDecayProfile {
+	return map[string]CategoryDecayProfile{
+		"analytic":               {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+		"formal":                 {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+		"protocol":               {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+		"empirical":              {HalfLifeBlocks: 1_000_000, MaxConfidence: 990_000, MinConfidence: 330_000, ReverificationBonus: 110_000, RequiresReverification: true},
+		"historical":             {HalfLifeBlocks: 500_000, MaxConfidence: 950_000, MinConfidence: 200_000, ReverificationBonus: 30_000, RequiresReverification: true},
+		"predictive":             {HalfLifeBlocks: 20_000, MaxConfidence: 900_000, MinConfidence: 100_000, ReverificationBonus: 80_000, RequiresReverification: true},
+		"social":                 {HalfLifeBlocks: 150_000, MaxConfidence: 850_000, MinConfidence: 200_000, ReverificationBonus: 40_000, RequiresReverification: true},
+		"replicated":             {HalfLifeBlocks: 1_000_000, MaxConfidence: 995_000, MinConfidence: 300_000, ReverificationBonus: 20_000, RequiresReverification: true},
+		"computational":          {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+		"protocol_observation":   {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	}
+}
+
+// DefaultStratumConfidenceCeilings returns the default stratum confidence ceilings.
+func DefaultStratumConfidenceCeilings() map[string]uint64 {
+	return map[string]uint64{
+		"fundamental":   1_000_000,
+		"physical":      990_000,
+		"chemical":      980_000,
+		"biological":    950_000,
+		"cognitive":     900_000,
+		"social":        850_000,
+		"technological": 1_000_000,
+	}
+}
+
+// DefaultEvidenceTypeStrengths returns the default evidence type strength values.
+func DefaultEvidenceTypeStrengths() map[string]uint64 {
+	return map[string]uint64{
+		"on_chain":    1_000_000,
+		"computation": 950_000,
+		"experiment":  850_000,
+		"oracle_feed": 700_000,
+		"document":    600_000,
+		"attestation": 500_000,
+	}
+}
+
+// DefaultChallengeWindowMultipliers returns the default challenge window multipliers per category.
+func DefaultChallengeWindowMultipliers() map[string]uint64 {
+	return map[string]uint64{
+		"analytic":             EternalChallengeMultiplier,
+		"formal":               EternalChallengeMultiplier,
+		"protocol":             EternalChallengeMultiplier,
+		"computational":        EternalChallengeMultiplier,
+		"protocol_observation": EternalChallengeMultiplier,
+		"historical":           SlowDecayChallengeMultiplier,
+		"replicated":           SlowDecayChallengeMultiplier,
+		"empirical":            FastDecayChallengeMultiplier,
+		"social":               FastDecayChallengeMultiplier,
+		"predictive":           FastDecayChallengeMultiplier,
+	}
+}
+
+// GetCategoryDecayProfile returns the decay profile for a category from params,
+// falling back to the hardcoded map if not found in params.
+func (ep ExtendedParams) GetCategoryDecayProfile(category string) (CategoryDecayProfile, bool) {
+	if ep.CategoryDecayProfiles != nil {
+		if p, ok := ep.CategoryDecayProfiles[category]; ok {
+			return p, true
+		}
+	}
+	p, ok := CATEGORY_DECAY[category]
+	return p, ok
+}
+
+// GetStratumConfidenceCeiling returns the stratum ceiling from params,
+// falling back to the hardcoded map if not found.
+func (ep ExtendedParams) GetStratumConfidenceCeiling(stratum string) (uint64, bool) {
+	if ep.StratumConfidenceCeilings != nil {
+		if c, ok := ep.StratumConfidenceCeilings[stratum]; ok {
+			return c, true
+		}
+	}
+	c, ok := STRATUM_CONFIDENCE_CEILING[stratum]
+	return c, ok
+}
+
+// GetEvidenceTypeStrength returns the evidence type strength from params,
+// falling back to the hardcoded map if not found.
+func (ep ExtendedParams) GetEvidenceTypeStrength(evidenceType string) (uint64, bool) {
+	if ep.EvidenceTypeStrengths != nil {
+		if s, ok := ep.EvidenceTypeStrengths[evidenceType]; ok {
+			return s, true
+		}
+	}
+	s, ok := EVIDENCE_TYPE_STRENGTH[evidenceType]
+	return s, ok
+}
+
+// GetChallengeWindowMultiplier returns the challenge window multiplier from params,
+// falling back to the hardcoded map if not found.
+func (ep ExtendedParams) GetChallengeWindowMultiplier(category string) (uint64, bool) {
+	if ep.ChallengeWindowMultipliers != nil {
+		if m, ok := ep.ChallengeWindowMultipliers[category]; ok {
+			return m, true
+		}
+	}
+	m, ok := ChallengeWindowProfile[category]
+	return m, ok
 }
 
 // ValidateExtendedParams performs basic validation on extended parameters.
@@ -1146,6 +1374,101 @@ func (ep ExtendedParams) ValidateExtendedParams() error {
 	}
 	if ep.NoveltyDecayHalfLifeMultiplier == 0 {
 		return fmt.Errorf("novelty_decay_half_life_multiplier must be > 0")
+	}
+	// Self-citation discount
+	if ep.SelfCitationDiscountBps > 1_000_000 {
+		return fmt.Errorf("self_citation_discount_bps must be <= 1000000")
+	}
+	// Fundamentality thresholds must be strictly increasing
+	if ep.FundamentalityNotableBps > 0 && ep.FundamentalityFoundationalBps > 0 &&
+		ep.FundamentalityNotableBps >= ep.FundamentalityFoundationalBps {
+		return fmt.Errorf("fundamentality thresholds must be strictly increasing: notable < foundational")
+	}
+	if ep.FundamentalityFoundationalBps > 0 && ep.FundamentalityFundamentalBps > 0 &&
+		ep.FundamentalityFoundationalBps >= ep.FundamentalityFundamentalBps {
+		return fmt.Errorf("fundamentality thresholds must be strictly increasing: foundational < fundamental")
+	}
+	if ep.FundamentalityFundamentalBps > 0 && ep.FundamentalityAxiomaticBps > 0 &&
+		ep.FundamentalityFundamentalBps >= ep.FundamentalityAxiomaticBps {
+		return fmt.Errorf("fundamentality thresholds must be strictly increasing: fundamental < axiomatic")
+	}
+	// FARM detection
+	if ep.CalibrationTrivialThreshold > 1_000_000 {
+		return fmt.Errorf("calibration_trivial_threshold must be <= 1000000")
+	}
+	if ep.MaxCalibrationTrivialPenalty > 1_000_000 {
+		return fmt.Errorf("max_calibration_trivial_penalty must be <= 1000000")
+	}
+	if ep.MisbehaviorRejectionThreshold > 1_000_000 {
+		return fmt.Errorf("misbehavior_rejection_threshold must be <= 1000000")
+	}
+	if ep.ChallengeStakeRatioMinBps > 1_000_000 {
+		return fmt.Errorf("challenge_stake_ratio_min_bps must be <= 1000000")
+	}
+	if ep.ConformityThresholdBps > 1_000_000 {
+		return fmt.Errorf("conformity_threshold_bps must be <= 1000000")
+	}
+	if ep.ConformityPenaltyMaxBps > 1_000_000 {
+		return fmt.Errorf("conformity_penalty_max_bps must be <= 1000000")
+	}
+	if ep.MinParticipationRateBps > 1_000_000 {
+		return fmt.Errorf("min_participation_rate_bps must be <= 1000000")
+	}
+	if ep.PassiveStakingPenaltyBps > 1_000_000 {
+		return fmt.Errorf("passive_staking_penalty_bps must be <= 1000000")
+	}
+	// Counter-fact penalty tiers must be monotonically decreasing
+	if ep.CounterFactHighPenalty > 0 && ep.CounterFactMediumPenalty > 0 &&
+		ep.CounterFactHighPenalty < ep.CounterFactMediumPenalty {
+		return fmt.Errorf("counter_fact_high_penalty must be >= counter_fact_medium_penalty")
+	}
+	if ep.CounterFactMediumPenalty > 0 && ep.CounterFactLowPenalty > 0 &&
+		ep.CounterFactMediumPenalty < ep.CounterFactLowPenalty {
+		return fmt.Errorf("counter_fact_medium_penalty must be >= counter_fact_low_penalty")
+	}
+	if ep.StaleContestedDecayRateBps > 1_000_000 {
+		return fmt.Errorf("stale_contested_decay_rate_bps must be <= 1000000")
+	}
+	// Map validations
+	if ep.CategoryDecayProfiles != nil {
+		for cat, prof := range ep.CategoryDecayProfiles {
+			if prof.MaxConfidence > 1_000_000 {
+				return fmt.Errorf("category_decay_profiles[%s].max_confidence must be <= 1000000", cat)
+			}
+			if prof.MinConfidence > 1_000_000 {
+				return fmt.Errorf("category_decay_profiles[%s].min_confidence must be <= 1000000", cat)
+			}
+			if prof.MinConfidence > prof.MaxConfidence {
+				return fmt.Errorf("category_decay_profiles[%s].min_confidence (%d) must be <= max_confidence (%d)", cat, prof.MinConfidence, prof.MaxConfidence)
+			}
+			if prof.ReverificationBonus > 1_000_000 {
+				return fmt.Errorf("category_decay_profiles[%s].reverification_bonus must be <= 1000000", cat)
+			}
+		}
+	}
+	if ep.EvidenceTypeStrengths != nil {
+		for et, s := range ep.EvidenceTypeStrengths {
+			if s > 1_000_000 {
+				return fmt.Errorf("evidence_type_strengths[%s] must be <= 1000000", et)
+			}
+		}
+	}
+	if ep.StratumConfidenceCeilings != nil {
+		for stratum, c := range ep.StratumConfidenceCeilings {
+			if c > 1_000_000 {
+				return fmt.Errorf("stratum_confidence_ceilings[%s] must be <= 1000000", stratum)
+			}
+		}
+	}
+	if ep.ChallengeWindowMultipliers != nil {
+		for cat, m := range ep.ChallengeWindowMultipliers {
+			if m == 0 {
+				return fmt.Errorf("challenge_window_multipliers[%s] must be > 0", cat)
+			}
+			if m > 10 {
+				return fmt.Errorf("challenge_window_multipliers[%s] must be <= 10", cat)
+			}
+		}
 	}
 	return nil
 }

@@ -132,7 +132,7 @@ func TestOC_QUAL4_UpdateParamsAuthBypass(t *testing.T) {
 	// ATTACK: Random user tries to update params
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "not_authority",
-		Params: types.Params{
+		Params: &types.Params{
 			MinVerifications: 1,    // dangerously low
 			MinAccuracyBps:   1000, // 10% (instead of 77%)
 		},

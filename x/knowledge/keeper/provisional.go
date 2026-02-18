@@ -39,7 +39,7 @@ func (k Keeper) EvaluatePendingClaims(ctx sdk.Context, currentHeight uint64) {
 func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, params types.Params, currentHeight uint64) error {
 	// Run the deterministic 6-stage evaluation engine using the same API
 	// as vote_extensions.go — all validators produce identical results.
-	evalCtx := k.BuildEvaluationContext()
+	evalCtx := k.BuildEvaluationContext(ctx)
 
 	// Create a synthetic round for the evaluation engine (required by the API
 	// but not used for adversarial verification — the round serves only as context)
@@ -58,10 +58,11 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, pa
 	score := evalResult.Confidence
 	claim.StructuralScore = score
 
-	rejectThreshold := uint64(types.RejectThresholdDefault)
+	ep := k.GetExtendedParams(ctx)
+	rejectThreshold := ep.RejectThreshold
 	provisionalThreshold := params.ProvisionalThreshold
 	if provisionalThreshold == 0 {
-		provisionalThreshold = types.ProvisionalThresholdDefault
+		provisionalThreshold = 500_000 // default
 	}
 
 	if score < rejectThreshold {
@@ -81,7 +82,7 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim types.Claim, pa
 	}
 
 	// Calculate challenge window duration based on epistemic category
-	windowDuration := k.calculateChallengeWindow(claim.EpistemicCategory, claim.LogicZone, score, params)
+	windowDuration := k.calculateChallengeWindow(ctx, claim.EpistemicCategory, claim.LogicZone, score, params)
 	claim.ChallengeWindowStart = currentHeight
 	claim.ChallengeWindowEnd = currentHeight + windowDuration
 
@@ -256,15 +257,16 @@ func (k Keeper) TransitionToVerified(ctx sdk.Context, claim types.Claim, current
 }
 
 // calculateChallengeWindow determines the challenge window duration based on epistemic category.
-func (k Keeper) calculateChallengeWindow(category, logicZone string, score uint64, params types.Params) uint64 {
+func (k Keeper) calculateChallengeWindow(ctx sdk.Context, category, logicZone string, score uint64, params types.Params) uint64 {
 	baseDuration := params.BaseChallengeDuration
 	if baseDuration == 0 {
-		baseDuration = types.BaseChallengeDurationDefault
+		baseDuration = 34_272 // default ~1 day
 	}
 
-	multiplier, ok := types.ChallengeWindowProfile[category]
-	if !ok {
-		multiplier = types.FastDecayChallengeMultiplier
+	ep := k.GetExtendedParams(ctx)
+	multiplier, ok := ep.GetChallengeWindowMultiplier(category)
+	if !ok || multiplier == 0 {
+		multiplier = 1 // fallback: 1x base duration
 	}
 
 	duration := baseDuration * multiplier
@@ -285,13 +287,14 @@ func (k Keeper) calculateChallengeWindow(category, logicZone string, score uint6
 // BuildEvaluationContext creates an EvaluationContext wired from keeper methods.
 // This is the keeper-side equivalent of NewEvaluationContextFromKeeper in app/.
 // Defined here so the BeginBlocker can call it without importing app/.
-func (k Keeper) BuildEvaluationContext() *evaluation.EvaluationContext {
+func (k Keeper) BuildEvaluationContext(ctx sdk.Context) *evaluation.EvaluationContext {
 	evalCtx := &evaluation.EvaluationContext{
 		GetClaim:                k.GetClaim,
 		GetFact:                 k.GetFact,
 		GetSupportingFacts:      k.GetSupportingFacts,
 		GetContradictingFacts:   k.GetContradictingFacts,
 		GetSubmitterCalibration: k.GetCalibrationRecord,
+		ExtendedParams:          k.GetExtendedParams(ctx),
 	}
 
 	if k.evidenceMgmtKeeper != nil {

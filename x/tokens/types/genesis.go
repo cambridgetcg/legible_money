@@ -19,6 +19,19 @@ type PoolGenesisEntry struct {
 	Positions map[string]string `json:"positions"` // providerAddr → LP token amount string
 }
 
+// DelegationGenesisEntry holds delegation data for a token at genesis.
+type DelegationGenesisEntry struct {
+	TokenId     string            `json:"token_id"`
+	Delegations map[string]string `json:"delegations"` // "delegator/delegate" → amount
+	Totals      map[string]string `json:"totals"`       // delegator → total
+}
+
+// WrapGenesisEntry holds a wrap record mapping for genesis.
+type WrapGenesisEntry struct {
+	TokenId      string `json:"token_id"`
+	WrappedDenom string `json:"wrapped_denom"`
+}
+
 // DefaultGenesis returns the default genesis state.
 func DefaultGenesis() *GenesisState {
 	p := DefaultParams()

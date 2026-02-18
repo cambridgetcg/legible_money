@@ -471,9 +471,9 @@ func TestRegisterProvider(t *testing.T) {
 
 	srv := keeper.NewMsgServerImpl(k)
 	_, err := srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
-		Sender:      addr,
-		Domains:     []string{"mathematics", "physics"},
-		StakeAmount: "100000000",
+		Sender:  addr,
+		Domains: []string{"mathematics", "physics"},
+		Stake:   "100000000",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -507,9 +507,9 @@ func TestRegisterProviderInsufficientStake(t *testing.T) {
 
 	srv := keeper.NewMsgServerImpl(k)
 	_, err := srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
-		Sender:      addr,
-		Domains:     []string{"mathematics"},
-		StakeAmount: "1000", // Way below minimum
+		Sender:  addr,
+		Domains: []string{"mathematics"},
+		Stake:   "1000", // Way below minimum
 	})
 	if err == nil {
 		t.Error("expected insufficient stake error")
@@ -525,18 +525,18 @@ func TestRegisterProviderDuplicate(t *testing.T) {
 
 	srv := keeper.NewMsgServerImpl(k)
 	_, err := srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
-		Sender:      addr,
-		Domains:     []string{"mathematics"},
-		StakeAmount: "100000000",
+		Sender:  addr,
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
 	})
 	if err != nil {
 		t.Fatalf("first registration failed: %v", err)
 	}
 
 	_, err = srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
-		Sender:      addr,
-		Domains:     []string{"physics"},
-		StakeAmount: "100000000",
+		Sender:  addr,
+		Domains: []string{"physics"},
+		Stake:   "100000000",
 	})
 	if err == nil {
 		t.Error("expected duplicate provider error")
@@ -552,9 +552,9 @@ func TestDeregisterProvider(t *testing.T) {
 
 	srv := keeper.NewMsgServerImpl(k)
 	_, err := srv.RegisterProvider(ctx, &types.MsgRegisterProvider{
-		Sender:      addr,
-		Domains:     []string{"mathematics"},
-		StakeAmount: "100000000",
+		Sender:  addr,
+		Domains: []string{"mathematics"},
+		Stake:   "100000000",
 	})
 	if err != nil {
 		t.Fatalf("registration failed: %v", err)
@@ -806,7 +806,7 @@ func TestUpdateParams(t *testing.T) {
 	}
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: authority,
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -824,9 +824,10 @@ func TestUpdateParams(t *testing.T) {
 func TestUpdateParamsUnauthorized(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 	srv := keeper.NewMsgServerImpl(k)
+	defaultParams := types.DefaultParams()
 	_, err := srv.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAddr(99),
-		Params:    types.DefaultParams(),
+		Params:    &defaultParams,
 	})
 	if err == nil {
 		t.Error("expected unauthorized error")

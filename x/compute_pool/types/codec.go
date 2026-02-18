@@ -16,7 +16,6 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgConfirmUsage{}, "compute_pool/ConfirmUsage", nil)
 	cdc.RegisterConcrete(&MsgDisputeUsage{}, "compute_pool/DisputeUsage", nil)
 	cdc.RegisterConcrete(&MsgUpdateComputeParams{}, "compute_pool/UpdateComputeParams", nil)
-	cdc.RegisterConcrete(&MsgUpdateParams{}, "compute_pool/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the module's interface types.
@@ -30,7 +29,6 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgConfirmUsage{},
 		&MsgDisputeUsage{},
 		&MsgUpdateComputeParams{},
-		&MsgUpdateParams{},
 	)
 }
 

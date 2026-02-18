@@ -1,0 +1,58 @@
+syntax = "proto3";
+package legible.capture_challenge.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_challenge/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/capture_challenge/v1/state.proto";
+import "legible/capture_challenge/v1/genesis.proto";
+
+// Msg defines the capture challenge module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc SubmitChallenge(MsgSubmitChallenge) returns (MsgSubmitChallengeResponse);
+  rpc AddEvidence(MsgAddEvidence) returns (MsgAddEvidenceResponse);
+  rpc ResolveChallenge(MsgResolveChallenge) returns (MsgResolveChallengeResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgSubmitChallenge {
+  option (cosmos.msg.v1.signer) = "challenger";
+  string challenger                    = 1;
+  string domain                        = 2;
+  repeated CaptureEvidence evidence    = 3;
+  string stake                         = 4;
+  repeated string accused_validators   = 5;
+}
+message MsgSubmitChallengeResponse {
+  string challenge_id = 1;
+}
+
+message MsgAddEvidence {
+  option (cosmos.msg.v1.signer) = "challenger";
+  string challenger         = 1;
+  string challenge_id       = 2;
+  CaptureEvidence evidence  = 3;
+}
+message MsgAddEvidenceResponse {
+  int32 evidence_count = 1;
+}
+
+message MsgResolveChallenge {
+  option (cosmos.msg.v1.signer) = "resolver";
+  string resolver      = 1;
+  string challenge_id  = 2;
+  string outcome       = 3;
+  string justification = 4;
+}
+message MsgResolveChallengeResponse {
+  string challenger_reward = 1;
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

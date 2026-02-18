@@ -18,7 +18,7 @@ func makeFacts(facts map[string]types.Fact) func(sdk.Context, string) (types.Fac
 
 func TestEvaluateFactGraph_NoReferences(t *testing.T) {
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
 	claim := types.Claim{Id: "c1"}
 
 	result := evaluateFactGraph(ctx, evalCtx, claim)
@@ -34,6 +34,7 @@ func TestEvaluateFactGraph_VerifiedReferences(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -62,6 +63,7 @@ func TestEvaluateFactGraph_SupportCapped(t *testing.T) {
 		refs[i] = "f" + string(rune('0'+i))
 	}
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -81,6 +83,7 @@ func TestEvaluateFactGraph_DisprovenReferences(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -96,7 +99,8 @@ func TestEvaluateFactGraph_DisprovenReferences(t *testing.T) {
 func TestEvaluateFactGraph_BrokenReferences(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
-		GetFact: func(_ sdk.Context, _ string) (types.Fact, bool) { return types.Fact{}, false },
+		ExtendedParams: types.DefaultExtendedParams(),
+		GetFact:        func(_ sdk.Context, _ string) (types.Fact, bool) { return types.Fact{}, false },
 	}
 	claim := types.Claim{Id: "c1", References: []string{"nonexistent"}}
 
@@ -113,7 +117,8 @@ func TestEvaluateFactGraph_HighConfidenceContradiction(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
-		GetFact: makeFacts(facts),
+		ExtendedParams: types.DefaultExtendedParams(),
+		GetFact:        makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, factId string) []types.FactReference {
 			if factId == "f1" {
 				return []types.FactReference{
@@ -140,6 +145,7 @@ func TestDomainCoherence_SameDomain(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -158,6 +164,7 @@ func TestDomainCoherence_SameStratum(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -176,6 +183,7 @@ func TestDomainCoherence_DifferentStratum(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -196,6 +204,7 @@ func TestDomainCoherence_MultipleIncoherent(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -222,6 +231,7 @@ func TestDomainCoherence_Capped(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -242,6 +252,7 @@ func TestDomainCoherence_EmptyDomain_NoCheck(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -260,6 +271,7 @@ func TestDomainCoherence_RefEmptyDomain_Skipped(t *testing.T) {
 	}
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
 		GetFact:               makeFacts(facts),
 		GetContradictingFacts: func(_ sdk.Context, _ string) []types.FactReference { return nil },
 	}
@@ -278,7 +290,7 @@ func TestDetectCycle_NoCycle(t *testing.T) {
 		"f2": {Id: "f2", References: nil},
 	}
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{GetFact: makeFacts(facts)}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams(), GetFact: makeFacts(facts)}
 
 	if detectCycle(ctx, evalCtx, []string{"f1"}) {
 		t.Error("expected no cycle")
@@ -291,7 +303,7 @@ func TestDetectCycle_WithCycle(t *testing.T) {
 		"f2": {Id: "f2", References: []string{"f1"}}, // cycle back to f1
 	}
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{GetFact: makeFacts(facts)}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams(), GetFact: makeFacts(facts)}
 
 	if !detectCycle(ctx, evalCtx, []string{"f1"}) {
 		t.Error("expected cycle detection")
@@ -315,7 +327,7 @@ func TestDetectCycle_BeyondMaxDepth(t *testing.T) {
 		"f11": {Id: "f11", References: []string{"f1"}}, // cycle at depth 11 > maxBFSDepth=10
 	}
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{GetFact: makeFacts(facts)}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams(), GetFact: makeFacts(facts)}
 
 	// Should NOT detect the cycle since it's beyond maxBFSDepth
 	if detectCycle(ctx, evalCtx, []string{"f1"}) {
@@ -328,7 +340,7 @@ func TestDetectCycle_SelfReference(t *testing.T) {
 		"f1": {Id: "f1", References: []string{"f1"}}, // self-loop
 	}
 	ctx := mockCtx()
-	evalCtx := &EvaluationContext{GetFact: makeFacts(facts)}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams(), GetFact: makeFacts(facts)}
 
 	// BFS starts at f1, visits f1's references which include f1 (already visited + is original)
 	if !detectCycle(ctx, evalCtx, []string{"f1"}) {

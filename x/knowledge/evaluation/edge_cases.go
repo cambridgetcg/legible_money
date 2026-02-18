@@ -77,7 +77,7 @@ func evaluateEdgeCases(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 				if ev.Status == "rejected" || ev.Status == "expired" {
 					continue
 				}
-				strength, ok := types.EVIDENCE_TYPE_STRENGTH[ev.EvidenceType]
+				strength, ok := evalCtx.ExtendedParams.GetEvidenceTypeStrength(ev.EvidenceType)
 				if !ok {
 					continue
 				}

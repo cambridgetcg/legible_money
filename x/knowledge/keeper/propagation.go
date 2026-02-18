@@ -16,6 +16,7 @@ import (
 // Propagation stops when the change is below PropagationThreshold (1%) or MaxPropagationDepth is reached.
 func (k Keeper) PropagateConfidenceChange(ctx sdk.Context, factID string, newConfidence uint64) int {
 	updated := 0
+	ep := k.GetExtendedParams(ctx)
 
 	// BFS queue: fact IDs whose dependents need checking
 	type queueEntry struct {
@@ -29,7 +30,7 @@ func (k Keeper) PropagateConfidenceChange(ctx sdk.Context, factID string, newCon
 		entry := queue[0]
 		queue = queue[1:]
 
-		if entry.depth >= types.MaxPropagationDepth {
+		if entry.depth >= int(ep.MaxPropagationDepth) {
 			continue
 		}
 
@@ -63,12 +64,12 @@ func (k Keeper) PropagateConfidenceChange(ctx sdk.Context, factID string, newCon
 				diff = oldConf - derived
 			}
 
-			if diff < types.PropagationThreshold {
+			if diff < ep.PropagationThreshold {
 				continue
 			}
 
 			// Apply the derived confidence (clamped by category ceiling)
-			if profile, ok := types.CATEGORY_DECAY[dependent.EpistemicCategory]; ok {
+			if profile, ok := ep.GetCategoryDecayProfile(dependent.EpistemicCategory); ok {
 				if derived > profile.MaxConfidence {
 					derived = profile.MaxConfidence
 				}
@@ -112,6 +113,8 @@ func (k Keeper) CalculateDerivedConfidence(ctx sdk.Context, factID string) uint6
 		return fact.BaseConfidence
 	}
 
+	ep := k.GetExtendedParams(ctx)
+
 	// Weakest-link: minimum confidence among all supporting references
 	var minConf uint64
 	hasSupportRef := false
@@ -127,11 +130,11 @@ func (k Keeper) CalculateDerivedConfidence(ctx sdk.Context, factID string) uint6
 
 		// Apply decay to cited fact
 		currentHeight := uint64(ctx.BlockHeight())
-		cited = k.applyDecayToFact(cited, currentHeight)
+		cited = k.applyDecayToFact(cited, currentHeight, ep)
 
 		// Check for cycles — penalize cycle members
 		if k.isInCycle(ctx, factID, ref.ToFactId) {
-			cited.Confidence = (cited.Confidence * types.CyclePenaltyFactor) / 1_000_000
+			cited.Confidence = (cited.Confidence * ep.CyclePenaltyFactor) / 1_000_000
 		}
 
 		if !hasSupportRef || cited.Confidence < minConf {
@@ -197,8 +200,8 @@ func (k Keeper) isInCycle(ctx sdk.Context, sourceID, targetID string) bool {
 			}
 		}
 
-		// Limit search depth
-		if len(visited) > types.MaxPropagationDepth*2 {
+		// Limit search depth (use a reasonable default if ep not available)
+		if len(visited) > 20 {
 			break
 		}
 	}
@@ -225,6 +228,7 @@ func (k Keeper) isFactInAnyCycle(ctx sdk.Context, factID string) bool {
 // Called periodically (e.g., every 1000 blocks) to discourage circular citation.
 func (k Keeper) ApplyCyclePenalties(ctx sdk.Context) int {
 	penalized := 0
+	ep := k.GetExtendedParams(ctx)
 	cycleFacts := k.DetectCircularDependencies(ctx)
 
 	for _, factID := range cycleFacts {
@@ -234,7 +238,7 @@ func (k Keeper) ApplyCyclePenalties(ctx sdk.Context) int {
 		}
 
 		// Apply 0.4× penalty
-		penalizedConf := (fact.Confidence * types.CyclePenaltyFactor) / 1_000_000
+		penalizedConf := (fact.Confidence * ep.CyclePenaltyFactor) / 1_000_000
 		if penalizedConf == fact.Confidence {
 			continue // already at minimum
 		}

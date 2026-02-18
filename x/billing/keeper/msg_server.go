@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -12,6 +13,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -46,15 +48,15 @@ func (k msgServer) RegisterProvider(goCtx context.Context, msg *types.MsgRegiste
 
 	// Validate stake amount
 	stakeAmt := new(big.Int)
-	if _, ok := stakeAmt.SetString(msg.StakeAmount, 10); !ok || stakeAmt.Sign() <= 0 {
-		return nil, fmt.Errorf("%w: %s", types.ErrInvalidAmount, msg.StakeAmount)
+	if _, ok := stakeAmt.SetString(msg.Stake, 10); !ok || stakeAmt.Sign() <= 0 {
+		return nil, fmt.Errorf("%w: %s", types.ErrInvalidAmount, msg.Stake)
 	}
 
 	params := k.GetParams(ctx)
 	minStake := new(big.Int)
 	minStake.SetString(params.MinProviderStake, 10)
 	if stakeAmt.Cmp(minStake) < 0 {
-		return nil, fmt.Errorf("%w: need %s, got %s", types.ErrInsufficientStake, params.MinProviderStake, msg.StakeAmount)
+		return nil, fmt.Errorf("%w: need %s, got %s", types.ErrInsufficientStake, params.MinProviderStake, msg.Stake)
 	}
 
 	// Transfer stake to module account
@@ -67,7 +69,7 @@ func (k msgServer) RegisterProvider(goCtx context.Context, msg *types.MsgRegiste
 	provider := types.Provider{
 		Address:      msg.Sender,
 		Domains:      msg.Domains,
-		StakeAmount:  msg.StakeAmount,
+		StakeAmount:  msg.Stake,
 		Active:       true,
 		TotalCalls:   0,
 		TotalRevenue: "0",
@@ -84,14 +86,14 @@ func (k msgServer) RegisterProvider(goCtx context.Context, msg *types.MsgRegiste
 		sdk.NewEvent(
 			"provider_registered",
 			sdk.NewAttribute("address", msg.Sender),
-			sdk.NewAttribute("stake", msg.StakeAmount),
+			sdk.NewAttribute("stake", msg.Stake),
 			sdk.NewAttribute("domains", fmt.Sprintf("%v", msg.Domains)),
 		),
 	)
 
 	k.Logger(ctx).Info("provider registered",
 		"address", msg.Sender,
-		"stake", msg.StakeAmount,
+		"stake", msg.Stake,
 	)
 
 	return &types.MsgRegisterProviderResponse{}, nil
@@ -175,7 +177,7 @@ func (k msgServer) RequestQuote(goCtx context.Context, msg *types.MsgRequestQuot
 		),
 	)
 
-	return &types.MsgRequestQuoteResponse{Quote: quote}, nil
+	return &types.MsgRequestQuoteResponse{Quote: &quote}, nil
 }
 
 // ExecutePayment handles MsgExecutePayment -- execute a quoted knowledge payment.
@@ -196,15 +198,21 @@ func (k msgServer) ExecutePayment(goCtx context.Context, msg *types.MsgExecutePa
 		return nil, fmt.Errorf("invalid sender address: %w", err)
 	}
 
+	// Parse quote ID from string to uint64
+	quoteId, err := strconv.ParseUint(msg.QuoteId, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid quote_id %q: %w", msg.QuoteId, err)
+	}
+
 	// Look up quote
-	quote, found := k.GetQuote(ctx, msg.QuoteId)
+	quote, found := k.GetQuote(ctx, quoteId)
 	if !found {
-		return nil, fmt.Errorf("%w: %d", types.ErrQuoteNotFound, msg.QuoteId)
+		return nil, fmt.Errorf("%w: %d", types.ErrQuoteNotFound, quoteId)
 	}
 
 	// Validate quote
 	if quote.Executed {
-		return nil, fmt.Errorf("%w: %d", types.ErrQuoteAlreadyUsed, msg.QuoteId)
+		return nil, fmt.Errorf("%w: %d", types.ErrQuoteAlreadyUsed, quoteId)
 	}
 
 	currentBlock := uint64(ctx.BlockHeight())
@@ -265,7 +273,7 @@ func (k msgServer) ExecutePayment(goCtx context.Context, msg *types.MsgExecutePa
 	recordId := k.GetNextCallRecordId(ctx)
 	record := types.CallRecord{
 		RecordId:  recordId,
-		QuoteId:   msg.QuoteId,
+		QuoteId:   quoteId,
 		Caller:    msg.Sender,
 		Provider:  quote.Provider,
 		TotalPaid: quote.TotalPrice,
@@ -278,7 +286,7 @@ func (k msgServer) ExecutePayment(goCtx context.Context, msg *types.MsgExecutePa
 		sdk.NewEvent(
 			"payment_executed",
 			sdk.NewAttribute("record_id", fmt.Sprintf("%d", recordId)),
-			sdk.NewAttribute("quote_id", fmt.Sprintf("%d", msg.QuoteId)),
+			sdk.NewAttribute("quote_id", fmt.Sprintf("%d", quoteId)),
 			sdk.NewAttribute("caller", msg.Sender),
 			sdk.NewAttribute("provider", quote.Provider),
 			sdk.NewAttribute("total_paid", quote.TotalPrice),
@@ -287,7 +295,7 @@ func (k msgServer) ExecutePayment(goCtx context.Context, msg *types.MsgExecutePa
 
 	k.Logger(ctx).Info("payment executed",
 		"record_id", recordId,
-		"quote_id", msg.QuoteId,
+		"quote_id", quoteId,
 		"total_paid", quote.TotalPrice,
 	)
 
@@ -301,7 +309,10 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, msg.Params)
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
+	k.SetParams(ctx, *msg.Params)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

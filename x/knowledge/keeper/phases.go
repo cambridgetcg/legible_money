@@ -48,7 +48,7 @@ func (k Keeper) BeginBlockerAdversarial(ctx sdk.Context) error {
 	k.ProcessChallengeWindowExpiry(ctx, height)
 
 	// 5. At epoch boundaries: confidence growth + maturity advancement
-	if height%types.ConfidenceGrowthEpoch == 0 {
+	if height%ep.ConfidenceGrowthEpochBlocks == 0 {
 		k.ApplyConfidenceGrowth(ctx, height)
 		k.AdvanceMaturityLevels(ctx, height)
 	}

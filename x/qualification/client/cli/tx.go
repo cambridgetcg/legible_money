@@ -54,7 +54,7 @@ func NewRequestQualificationCmd() *cobra.Command {
 			msg := &types.MsgRequestQualification{
 				ValidatorAddr: clientCtx.GetFromAddress().String(),
 				Domain:        args[0],
-				Pathway:       types.QualificationPathway(args[1]),
+				Pathway:       args[1],
 				Stake:         stake,
 				InheritFrom:   inheritFrom,
 			}

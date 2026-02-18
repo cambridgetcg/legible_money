@@ -103,6 +103,7 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 	// BUT reward verified cross-domain bridges (novelty-aware AH-3).
 	// Unverified cross-domain refs are suspicious (hallucination). Well-verified ones
 	// from different domains represent genuine interdisciplinary synthesis.
+	ep := evalCtx.ExtendedParams
 	if claim.Domain != "" && evalCtx.GetFact != nil {
 		var incoherencePenalty uint64
 		for _, refId := range claim.References {
@@ -117,7 +118,7 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 			// Verified bridge: high-confidence cross-domain ref → skip penalty.
 			// The novelty stage (stage 6) awards a positive bonus for these.
 			// Here we just avoid penalizing what's actually valuable synthesis.
-			if refFact.Confidence >= types.VerifiedBridgeThreshold &&
+			if refFact.Confidence >= ep.VerifiedBridgeThresholdBps &&
 				(refFact.Status == types.FactStatusVerified || refFact.Status == types.FactStatusActive) {
 				continue
 			}
@@ -145,7 +146,7 @@ func evaluateFactGraph(ctx sdk.Context, evalCtx *EvaluationContext, claim types.
 		if totalAdjustment > 0 {
 			// Apply cycle penalty factor: 40% reduction
 			// CyclePenaltyFactor = 400,000 means multiply by 0.4 (i.e., lose 60%)
-			cyclePenalty := int64(uint64(totalAdjustment) * (1_000_000 - types.CyclePenaltyFactor) / 1_000_000)
+			cyclePenalty := int64(uint64(totalAdjustment) * (1_000_000 - ep.CyclePenaltyFactor) / 1_000_000)
 			totalAdjustment -= cyclePenalty
 		} else {
 			// Negative or zero adjustment with a cycle: apply a fixed penalty

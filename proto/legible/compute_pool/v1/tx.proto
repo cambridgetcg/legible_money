@@ -1,0 +1,87 @@
+syntax = "proto3";
+package legible.compute_pool.v1;
+
+option go_package = "github.com/legible-money/legible/x/compute_pool/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/compute_pool/v1/state.proto";
+
+// Msg defines the compute pool module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc RegisterComputeProvider(MsgRegisterComputeProvider) returns (MsgRegisterComputeProviderResponse);
+  rpc UpdateProvider(MsgUpdateProvider) returns (MsgUpdateProviderResponse);
+  rpc DeregisterProvider(MsgDeregisterProvider) returns (MsgDeregisterProviderResponse);
+  rpc ProviderHeartbeat(MsgProviderHeartbeat) returns (MsgProviderHeartbeatResponse);
+  rpc RedeemCredits(MsgRedeemCredits) returns (MsgRedeemCreditsResponse);
+  rpc ConfirmUsage(MsgConfirmUsage) returns (MsgConfirmUsageResponse);
+  rpc DisputeUsage(MsgDisputeUsage) returns (MsgDisputeUsageResponse);
+  rpc UpdateComputeParams(MsgUpdateComputeParams) returns (MsgUpdateComputeParamsResponse);
+}
+
+message MsgRegisterComputeProvider {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender       = 1;
+  string did          = 2;
+  string service_type = 3;
+  string endpoint     = 4;
+  string price_per_cu = 5;
+  string stake        = 6;
+}
+message MsgRegisterComputeProviderResponse {}
+
+message MsgUpdateProvider {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender       = 1;
+  string endpoint     = 2;
+  string price_per_cu = 3;
+  bool   pause        = 4;
+  bool   unpause      = 5;
+}
+message MsgUpdateProviderResponse {}
+
+message MsgDeregisterProvider {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+}
+message MsgDeregisterProviderResponse {}
+
+message MsgProviderHeartbeat {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+}
+message MsgProviderHeartbeatResponse {}
+
+message MsgRedeemCredits {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender   = 1;
+  string provider = 2;
+  uint64 cu       = 3;
+}
+message MsgRedeemCreditsResponse {
+  string ticket_id = 1;
+}
+
+message MsgConfirmUsage {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender    = 1;
+  string ticket_id = 2;
+  uint64 actual_cu = 3;
+}
+message MsgConfirmUsageResponse {}
+
+message MsgDisputeUsage {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender    = 1;
+  string ticket_id = 2;
+  string reason    = 3;
+}
+message MsgDisputeUsageResponse {}
+
+message MsgUpdateComputeParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateComputeParamsResponse {}

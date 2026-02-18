@@ -112,7 +112,7 @@ func (k Keeper) AddEvidence(goCtx context.Context, msg *types.MsgAddEvidence) (*
 	challenge.Evidence = append(challenge.Evidence, msg.Evidence)
 	k.SetChallenge(ctx, challenge)
 
-	return &types.MsgAddEvidenceResponse{EvidenceCount: len(challenge.Evidence)}, nil
+	return &types.MsgAddEvidenceResponse{EvidenceCount: int32(len(challenge.Evidence))}, nil
 }
 
 // ResolveChallenge resolves a capture challenge with an outcome.

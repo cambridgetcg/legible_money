@@ -51,8 +51,10 @@ func (k Keeper) DistributeCitationRewards(
 		return 0
 	}
 
+	ep := k.GetExtendedParams(ctx)
+
 	// Calculate citation pool (15% of total reward)
-	citationPool := (totalReward * types.CitationShareBPS) / 1_000_000
+	citationPool := (totalReward * ep.CitationShareBps) / 1_000_000
 	if citationPool == 0 {
 		return 0
 	}
@@ -67,7 +69,7 @@ func (k Keeper) DistributeCitationRewards(
 	var totalDistributed uint64
 	levelShare := citationPool
 
-	for level := 0; level < types.MaxPropagationDepth && levelShare > 0; level++ {
+	for level := 0; level < int(ep.MaxPropagationDepth) && levelShare > 0; level++ {
 		// Find facts at this level
 		var levelRefs []types.FactReference
 		if level == 0 {
@@ -107,11 +109,11 @@ func (k Keeper) DistributeCitationRewards(
 			// reduction. This prevents agents from building self-referential citation
 			// pyramids for passive income.
 			if citingSubmitter != "" && fact.Submitter == citingSubmitter {
-				adjustedShare = (adjustedShare * (1_000_000 - types.SelfCitationDiscountBPS)) / 1_000_000
+				adjustedShare = (adjustedShare * (1_000_000 - ep.SelfCitationDiscountBps)) / 1_000_000
 			}
 
 			// Enforce protocol floor
-			protocolFloor := (totalReward * types.CitationProtocolFloorBPS) / 1_000_000
+			protocolFloor := (totalReward * ep.CitationProtocolFloorBps) / 1_000_000
 			if adjustedShare < protocolFloor {
 				adjustedShare = protocolFloor
 			}
@@ -158,7 +160,7 @@ func (k Keeper) DistributeCitationRewards(
 		}
 
 		// Decay for next level
-		levelShare = (levelShare * types.CitationDecayPerLevel) / 1_000_000
+		levelShare = (levelShare * ep.CitationDecayPerLevel) / 1_000_000
 	}
 
 	return totalDistributed
@@ -168,13 +170,14 @@ func (k Keeper) DistributeCitationRewards(
 // how many other facts depend on it (incoming citation count as proxy for fundamentality).
 // Facts cited by 50+ other facts get 2.0x; 20+ get 1.5x; 10+ get 1.25x; 3+ get 1.1x.
 func (k Keeper) calculateFundamentalityBonus(ctx sdk.Context, factID string) uint64 {
-	score := k.CalculateFundamentalityScore(ctx, factID)
-	return GetFundamentalityMultiplier(score)
+	ep := k.GetExtendedParams(ctx)
+	score := k.CalculateFundamentalityScore(ctx, factID, ep)
+	return GetFundamentalityMultiplier(score, ep)
 }
 
 // CalculateFundamentalityScore computes a fundamentality score for a fact
 // based on its incoming citation count (how many facts depend on it).
-func (k Keeper) CalculateFundamentalityScore(ctx sdk.Context, factID string) uint64 {
+func (k Keeper) CalculateFundamentalityScore(ctx sdk.Context, factID string, ep types.ExtendedParams) uint64 {
 	incoming := k.GetIncomingReferences(ctx, factID)
 
 	// Count supporting references
@@ -188,29 +191,29 @@ func (k Keeper) CalculateFundamentalityScore(ctx sdk.Context, factID string) uin
 	// Map to fundamentality level
 	switch {
 	case supportCount >= 50:
-		return types.FundamentalityAxiomatic // 0.90
+		return ep.FundamentalityAxiomaticBps // 0.90
 	case supportCount >= 20:
-		return types.FundamentalityFundamental // 0.75
+		return ep.FundamentalityFundamentalBps // 0.75
 	case supportCount >= 10:
-		return types.FundamentalityFoundational // 0.50
+		return ep.FundamentalityFoundationalBps // 0.50
 	case supportCount >= 3:
-		return types.FundamentalityNotable // 0.25
+		return ep.FundamentalityNotableBps // 0.25
 	default:
 		return 0
 	}
 }
 
 // GetFundamentalityMultiplier returns the reward multiplier for a fundamentality score.
-func GetFundamentalityMultiplier(score uint64) uint64 {
+func GetFundamentalityMultiplier(score uint64, ep types.ExtendedParams) uint64 {
 	switch {
-	case score >= types.FundamentalityAxiomatic:
-		return types.FundamentalityBonusAxiomatic // 2.0x
-	case score >= types.FundamentalityFundamental:
-		return types.FundamentalityBonusFundamental // 1.5x
-	case score >= types.FundamentalityFoundational:
-		return types.FundamentalityBonusFoundational // 1.25x
-	case score >= types.FundamentalityNotable:
-		return types.FundamentalityBonusNotable // 1.1x
+	case score >= ep.FundamentalityAxiomaticBps:
+		return ep.FundamentalityBonusAxiomaticBps // 2.0x
+	case score >= ep.FundamentalityFundamentalBps:
+		return ep.FundamentalityBonusFundamentalBps // 1.5x
+	case score >= ep.FundamentalityFoundationalBps:
+		return ep.FundamentalityBonusFoundationalBps // 1.25x
+	case score >= ep.FundamentalityNotableBps:
+		return ep.FundamentalityBonusNotableBps // 1.1x
 	default:
 		return 1_000_000 // 1.0x
 	}

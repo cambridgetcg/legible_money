@@ -4,6 +4,7 @@ package legible.staking.v1;
 option go_package = "github.com/legible-money/legible/x/staking/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/staking/v1/genesis.proto";
 
 // Msg defines the staking module's extended transaction service.
 // Extends standard Cosmos x/staking with graduated validator tiers and VRF.
@@ -12,6 +13,15 @@ service Msg {
 
   // RegisterValidator registers a new validator (supports zero-stake Tier 0).
   rpc RegisterValidator(MsgRegisterValidator) returns (MsgRegisterValidatorResponse);
+
+  // Stake management
+  rpc UpdateValidatorStake(MsgUpdateValidatorStake) returns (MsgUpdateValidatorStakeResponse);
+  rpc Delegate(MsgDelegate) returns (MsgDelegateResponse);
+  rpc Undelegate(MsgUndelegate) returns (MsgUndelegateResponse);
+  rpc Redelegate(MsgRedelegate) returns (MsgRedelegateResponse);
+
+  // Governance
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
 // MsgRegisterValidator registers as a validator.
@@ -89,3 +99,55 @@ message ValidatorTierParams {
   // Virtual stake amount for Tier 0/1 VRF selection
   string virtual_stake_amount = 9;
 }
+
+// ============================================================================
+// Additional Stake Management Messages
+// ============================================================================
+
+message MsgUpdateValidatorStake {
+  option (cosmos.msg.v1.signer) = "validator";
+  string validator   = 1;
+  string amount      = 2;
+  bool   is_increase = 3;
+}
+message MsgUpdateValidatorStakeResponse {
+  string        new_stake = 1;
+  ValidatorTier new_tier  = 2;
+}
+
+message MsgDelegate {
+  option (cosmos.msg.v1.signer) = "delegator";
+  string delegator = 1;
+  string validator = 2;
+  string amount    = 3;
+}
+message MsgDelegateResponse {
+  string new_delegation = 1;
+}
+
+message MsgUndelegate {
+  option (cosmos.msg.v1.signer) = "delegator";
+  string delegator = 1;
+  string validator = 2;
+  string amount    = 3;
+}
+message MsgUndelegateResponse {
+  string unbonding_id        = 1;
+  uint64 completes_at_height = 2;
+}
+
+message MsgRedelegate {
+  option (cosmos.msg.v1.signer) = "delegator";
+  string delegator     = 1;
+  string src_validator = 2;
+  string dst_validator = 3;
+  string amount        = 4;
+}
+message MsgRedelegateResponse {}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

@@ -16,6 +16,12 @@ func DefaultParams() Params {
 		MaxSlashCountDeactivate: 3,        // slashes to deactivate
 		MinStakeForVerification: "111000", // R3: 0.111 LGM min real stake for VRF eligibility (tier 0 threshold)
 		SlashEscalationBps:      100000,   // 10% escalation per prior slash (in 1M BPS)
+		// Tier configs + parameterized constants (P1-A)
+		TierConfigs:                DefaultTierConfigs(),
+		ReputationCorrectDelta:     100,   // +0.01% reputation per correct verification
+		ReputationIncorrectDelta:   200,   // -0.02% reputation per incorrect verification
+		ReputationSlashDelta:       10000, // -1% reputation per slash
+		RedelegationCooldownBlocks: 1111,  // ~46 min at 2.521s/block
 	}
 }
 
@@ -27,7 +33,7 @@ func DefaultGenesisState() *GenesisState {
 		Validators:       []*LegibleValidator{},
 		Delegations:      []*Delegation{},
 		UnbondingEntries: []*UnbondingEntry{},
-		TierConfigs:      DefaultTierConfigs(),
+		TierConfigs:      p.TierConfigs, // sourced from params (canonical location)
 	}
 }
 
@@ -39,8 +45,12 @@ func (gs *GenesisState) Validate() error {
 	if gs.Params.UnbondingPeriod == 0 {
 		return fmt.Errorf("unbonding period must be positive")
 	}
-	if len(gs.TierConfigs) != 4 {
-		return fmt.Errorf("expected 4 tier configs, got %d", len(gs.TierConfigs))
+	// Tier configs must exist in at least one location (params or legacy genesis field)
+	hasTierConfigsInParams := len(gs.Params.TierConfigs) == 4
+	hasTierConfigsLegacy := len(gs.TierConfigs) == 4
+	if !hasTierConfigsInParams && !hasTierConfigsLegacy {
+		return fmt.Errorf("expected 4 tier configs (in params or genesis), got params=%d genesis=%d",
+			len(gs.Params.TierConfigs), len(gs.TierConfigs))
 	}
 	return nil
 }

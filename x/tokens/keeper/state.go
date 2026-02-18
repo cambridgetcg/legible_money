@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/protobuf/proto"
@@ -314,6 +315,201 @@ func (k Keeper) IterateLPPositionsByPool(ctx sdk.Context, poolId string, cb func
 			continue
 		}
 		if cb(providerAddr, lp) {
+			break
+		}
+	}
+}
+
+// ---------- Phase 2: Delegation CRUD ----------
+
+// GetDelegation returns the delegation amount from delegator to delegate for a token.
+func (k Keeper) GetDelegation(ctx sdk.Context, tokenId, delegator, delegate string) *big.Int {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.DelegationKey(tokenId, delegator, delegate))
+	if err != nil || bz == nil {
+		return new(big.Int)
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(string(bz), 10); !ok {
+		return new(big.Int)
+	}
+	return amt
+}
+
+// SetDelegation sets the delegation amount. Zero deletes the entry.
+func (k Keeper) SetDelegation(ctx sdk.Context, tokenId, delegator, delegate string, amount *big.Int) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	if amount.Sign() == 0 {
+		_ = kvStore.Delete(types.DelegationKey(tokenId, delegator, delegate))
+		return
+	}
+	_ = kvStore.Set(types.DelegationKey(tokenId, delegator, delegate), []byte(amount.String()))
+}
+
+// GetDelegatorTotal returns the total amount delegated by a delegator for a token.
+func (k Keeper) GetDelegatorTotal(ctx sdk.Context, tokenId, delegator string) *big.Int {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.DelegatorTotalKey(tokenId, delegator))
+	if err != nil || bz == nil {
+		return new(big.Int)
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(string(bz), 10); !ok {
+		return new(big.Int)
+	}
+	return amt
+}
+
+// SetDelegatorTotal sets the total delegated amount. Zero deletes the entry.
+func (k Keeper) SetDelegatorTotal(ctx sdk.Context, tokenId, delegator string, total *big.Int) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	if total.Sign() == 0 {
+		_ = kvStore.Delete(types.DelegatorTotalKey(tokenId, delegator))
+		return
+	}
+	_ = kvStore.Set(types.DelegatorTotalKey(tokenId, delegator), []byte(total.String()))
+}
+
+// GetUndelegatedBalance returns balance minus total delegated for a token holder.
+func (k Keeper) GetUndelegatedBalance(ctx sdk.Context, tokenId, addr string) *big.Int {
+	bal := k.GetBalance(ctx, tokenId, addr)
+	total := k.GetDelegatorTotal(ctx, tokenId, addr)
+	result := new(big.Int).Sub(bal, total)
+	if result.Sign() < 0 {
+		return new(big.Int)
+	}
+	return result
+}
+
+// IterateDelegationsByDelegator iterates over all delegations by a delegator for a token.
+func (k Keeper) IterateDelegationsByDelegator(ctx sdk.Context, tokenId, delegator string, cb func(delegate string, amount *big.Int) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.DelegationsByDelegatorPrefix(tokenId, delegator)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	prefixLen := len(prefix)
+	for ; iter.Valid(); iter.Next() {
+		delegate := string(iter.Key()[prefixLen:])
+		amt := new(big.Int)
+		if _, ok := amt.SetString(string(iter.Value()), 10); !ok {
+			continue
+		}
+		if cb(delegate, amt) {
+			break
+		}
+	}
+}
+
+// IterateDelegationsByToken iterates over all delegations for a token.
+func (k Keeper) IterateDelegationsByToken(ctx sdk.Context, tokenId string, cb func(delegator, delegate string, amount *big.Int) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.DelegationsByTokenPrefix(tokenId)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	prefixLen := len(prefix)
+	for ; iter.Valid(); iter.Next() {
+		// Key suffix: delegator/delegate
+		suffix := string(iter.Key()[prefixLen:])
+		parts := strings.SplitN(suffix, "/", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		amt := new(big.Int)
+		if _, ok := amt.SetString(string(iter.Value()), 10); !ok {
+			continue
+		}
+		if cb(parts[0], parts[1], amt) {
+			break
+		}
+	}
+}
+
+// IterateDelegatorTotalsByToken iterates over all delegator totals for a token.
+func (k Keeper) IterateDelegatorTotalsByToken(ctx sdk.Context, tokenId string, cb func(delegator string, total *big.Int) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.DelegatorTotalsByTokenPrefix(tokenId)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	prefixLen := len(prefix)
+	for ; iter.Valid(); iter.Next() {
+		delegator := string(iter.Key()[prefixLen:])
+		amt := new(big.Int)
+		if _, ok := amt.SetString(string(iter.Value()), 10); !ok {
+			continue
+		}
+		if cb(delegator, amt) {
+			break
+		}
+	}
+}
+
+// ---------- Phase 2: Wrap CRUD ----------
+
+// WrappedDenom returns the deterministic wrapped denom for a token ID.
+func WrappedDenom(tokenId string) string {
+	return "lgm20/" + tokenId
+}
+
+// SetWrapRecord stores the wrap record mapping (tokenId ↔ wrappedDenom).
+func (k Keeper) SetWrapRecord(ctx sdk.Context, tokenId, wrappedDenom string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Set(types.WrapRecordKey(tokenId), []byte(wrappedDenom))
+	_ = kvStore.Set(types.WrapReverseIndexKey(wrappedDenom), []byte(tokenId))
+}
+
+// GetWrappedDenom returns the wrapped denom for a token ID, or empty if not set.
+func (k Keeper) GetWrappedDenom(ctx sdk.Context, tokenId string) string {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.WrapRecordKey(tokenId))
+	if err != nil || bz == nil {
+		return ""
+	}
+	return string(bz)
+}
+
+// GetTokenIdByWrappedDenom returns the token ID for a wrapped denom, or empty if not found.
+func (k Keeper) GetTokenIdByWrappedDenom(ctx sdk.Context, wrappedDenom string) string {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.WrapReverseIndexKey(wrappedDenom))
+	if err != nil || bz == nil {
+		return ""
+	}
+	return string(bz)
+}
+
+// DeleteWrapRecord removes a wrap record and its reverse index.
+func (k Keeper) DeleteWrapRecord(ctx sdk.Context, tokenId, wrappedDenom string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Delete(types.WrapRecordKey(tokenId))
+	_ = kvStore.Delete(types.WrapReverseIndexKey(wrappedDenom))
+}
+
+// IterateWrapRecords iterates over all wrap records.
+func (k Keeper) IterateWrapRecords(ctx sdk.Context, cb func(tokenId, wrappedDenom string) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.WrapRecordKeyPrefix, prefixEndBytes(types.WrapRecordKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	prefixLen := len(types.WrapRecordKeyPrefix)
+	for ; iter.Valid(); iter.Next() {
+		tokenId := string(iter.Key()[prefixLen:])
+		wrappedDenom := string(iter.Value())
+		if cb(tokenId, wrappedDenom) {
 			break
 		}
 	}

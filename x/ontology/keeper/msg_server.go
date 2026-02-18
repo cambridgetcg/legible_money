@@ -12,6 +12,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -28,7 +29,7 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 	params := k.GetParams(ctx)
 
 	// Validate stratum exists
-	if _, found := k.GetStratum(ctx, msg.Stratum); !found {
+	if _, found := k.GetStratum(ctx, types.Stratum(msg.Stratum)); !found {
 		return nil, fmt.Errorf("%w: stratum %d not registered", types.ErrInvalidStratum, msg.Stratum)
 	}
 
@@ -164,11 +165,14 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
 	if err := msg.Params.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
 
-	k.SetParams(ctx, msg.Params)
+	k.SetParams(ctx, *msg.Params)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -188,17 +192,21 @@ func (k msgServer) RegisterLogicZone(goCtx context.Context, msg *types.MsgRegist
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
+	if msg.ZoneProperties == nil {
+		return nil, fmt.Errorf("zone properties cannot be nil")
+	}
+
 	// Check if zone already exists
 	if _, found := k.GetLogicZone(ctx, types.LogicZone(msg.ZoneProperties.Zone)); found {
 		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneExists, msg.ZoneProperties.Zone)
 	}
 
-	k.SetLogicZone(ctx, msg.ZoneProperties)
+	k.SetLogicZone(ctx, *msg.ZoneProperties)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"logic_zone_registered",
-			sdk.NewAttribute("zone", string(msg.ZoneProperties.Zone)),
+			sdk.NewAttribute("zone", msg.ZoneProperties.Zone),
 			sdk.NewAttribute("complete", fmt.Sprintf("%v", msg.ZoneProperties.Complete)),
 			sdk.NewAttribute("goedel_applies", fmt.Sprintf("%v", msg.ZoneProperties.GoedelApplies)),
 			sdk.NewAttribute("max_confidence_bps", fmt.Sprintf("%d", msg.ZoneProperties.MaxConfidenceBps)),
@@ -214,7 +222,7 @@ func (k msgServer) AcknowledgeIncompleteness(goCtx context.Context, msg *types.M
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate zone exists and Gödel applies
-	zone, found := k.GetLogicZone(ctx, msg.Zone)
+	zone, found := k.GetLogicZone(ctx, types.LogicZone(msg.Zone))
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneNotFound, msg.Zone)
 	}
@@ -226,7 +234,7 @@ func (k msgServer) AcknowledgeIncompleteness(goCtx context.Context, msg *types.M
 	// Store acknowledgment
 	ack := types.IncompletenessAcknowledgment{
 		FactId:         msg.FactId,
-		Zone:           msg.Zone,
+		Zone:           types.LogicZone(msg.Zone),
 		Reason:         msg.Reason,
 		AcknowledgedAt: uint64(ctx.BlockHeight()),
 		AcknowledgedBy: msg.Submitter,
@@ -237,7 +245,7 @@ func (k msgServer) AcknowledgeIncompleteness(goCtx context.Context, msg *types.M
 		sdk.NewEvent(
 			"incompleteness_acknowledged",
 			sdk.NewAttribute("fact_id", msg.FactId),
-			sdk.NewAttribute("zone", string(msg.Zone)),
+			sdk.NewAttribute("zone", msg.Zone),
 			sdk.NewAttribute("submitter", msg.Submitter),
 		),
 	)

@@ -46,10 +46,11 @@ func evaluateSubmitterCalibration(ctx sdk.Context, evalCtx *EvaluationContext, c
 		return result
 	}
 
+	ep := evalCtx.ExtendedParams
 	record, found := evalCtx.GetSubmitterCalibration(ctx, claim.Submitter)
-	if !found || record.TotalClaims < types.MinCalibrationSamples {
+	if !found || record.TotalClaims < uint64(ep.MinCalibrationSamples) {
 		result.Justification = fmt.Sprintf("unrated submitter (%d/%d claims)",
-			record.TotalClaims, types.MinCalibrationSamples)
+			record.TotalClaims, ep.MinCalibrationSamples)
 		return result
 	}
 
@@ -62,26 +63,26 @@ func evaluateSubmitterCalibration(ctx sdk.Context, evalCtx *EvaluationContext, c
 	// Instead of rewarding near-perfect acceptance, penalize it. The insight is that
 	// genuine knowledge work has a natural rejection rate — if everything you submit
 	// gets accepted, you're likely submitting only obvious truths.
-	if acceptanceRate > types.CalibrationTrivialThreshold {
+	if acceptanceRate > ep.CalibrationTrivialThreshold {
 		// Scale penalty by how far above the trivial threshold
-		excess := int64(acceptanceRate) - int64(types.CalibrationTrivialThreshold)
+		excess := int64(acceptanceRate) - int64(ep.CalibrationTrivialThreshold)
 		// 50,000 range (950k→1M) maps to 0→MaxCalibrationTrivialPenalty
-		adjustment = -(excess * int64(types.MaxCalibrationTrivialPenalty)) / 50_000
-		if adjustment < -int64(types.MaxCalibrationTrivialPenalty) {
-			adjustment = -int64(types.MaxCalibrationTrivialPenalty)
+		adjustment = -(excess * int64(ep.MaxCalibrationTrivialPenalty)) / 50_000
+		if adjustment < -int64(ep.MaxCalibrationTrivialPenalty) {
+			adjustment = -int64(ep.MaxCalibrationTrivialPenalty)
 		}
 	} else {
 		// Normal calibration: Deviation from neutral point, scaled by calibrationScalingFactor.
 		// Positive = above 70% → bonus, Negative = below 70% → penalty.
-		deviation := int64(acceptanceRate) - int64(types.CalibrationNeutralRate)
+		deviation := int64(acceptanceRate) - int64(ep.CalibrationNeutralRate)
 		adjustment = deviation / calibrationScalingFactor
 
 		// Clamp to bounds
-		if adjustment > int64(types.MaxCalibrationBonus) {
-			adjustment = int64(types.MaxCalibrationBonus)
+		if adjustment > int64(ep.MaxCalibrationBonus) {
+			adjustment = int64(ep.MaxCalibrationBonus)
 		}
-		if adjustment < -int64(types.MaxCalibrationPenalty) {
-			adjustment = -int64(types.MaxCalibrationPenalty)
+		if adjustment < -int64(ep.MaxCalibrationPenalty) {
+			adjustment = -int64(ep.MaxCalibrationPenalty)
 		}
 	}
 

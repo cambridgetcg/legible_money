@@ -1,0 +1,58 @@
+syntax = "proto3";
+package legible.billing.v1;
+
+option go_package = "github.com/legible-money/legible/x/billing/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/billing/v1/state.proto";
+
+// Msg defines the billing module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc RegisterProvider(MsgRegisterProvider) returns (MsgRegisterProviderResponse);
+  rpc DeregisterProvider(MsgDeregisterProvider) returns (MsgDeregisterProviderResponse);
+  rpc RequestQuote(MsgRequestQuote) returns (MsgRequestQuoteResponse);
+  rpc ExecutePayment(MsgExecutePayment) returns (MsgExecutePaymentResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgRegisterProvider {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender            = 1;
+  repeated string domains  = 2;
+  string stake             = 3;
+}
+message MsgRegisterProviderResponse {}
+
+message MsgDeregisterProvider {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+}
+message MsgDeregisterProviderResponse {}
+
+message MsgRequestQuote {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender              = 1;
+  string provider            = 2;
+  repeated string fact_ids   = 3;
+}
+message MsgRequestQuoteResponse {
+  APIQuote quote = 1;
+}
+
+message MsgExecutePayment {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender    = 1;
+  string quote_id  = 2;
+}
+message MsgExecutePaymentResponse {
+  uint64 record_id = 1;
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

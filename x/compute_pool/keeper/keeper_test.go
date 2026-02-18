@@ -286,7 +286,7 @@ func TestRegisterProvider(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake:       "100000000",
 		Did:         "did:lgm:provider1",
 	}
 
@@ -327,7 +327,7 @@ func TestRegisterProviderInsufficientStake(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "50000000",
+		Stake: "50000000",
 	}
 
 	err := k.RegisterProvider(ctx, msg)
@@ -346,7 +346,7 @@ func TestRegisterProviderDuplicate(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 
 	_ = k.RegisterProvider(ctx, msg)
@@ -366,7 +366,7 @@ func TestRegisterProviderPriceExceedsCeiling(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "99999999", // way above ceiling of 10000
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 
 	err := k.RegisterProvider(ctx, msg)
@@ -390,7 +390,7 @@ func TestProviderDeregistration(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, msg)
 
@@ -416,7 +416,7 @@ func TestProviderHeartbeat(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, msg)
 
@@ -443,7 +443,7 @@ func TestProviderLivenessCheck(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, msg)
 
@@ -474,7 +474,7 @@ func TestProviderPauseUnpause(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -693,7 +693,7 @@ func TestRedemptionLifecycle(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
 		PricePerCu:  "1000", // 0.001 LGM per CU
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -760,7 +760,7 @@ func TestRedemptionPartialUsage(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "1000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -803,7 +803,7 @@ func TestRedemptionDispute(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "1000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -849,7 +849,7 @@ func TestRedemptionExpiry(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "1000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -887,7 +887,7 @@ func TestRedemptionInsufficientCredits(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "1000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -913,7 +913,7 @@ func TestSelfRedemptionBlocked(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "1000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
 
@@ -1026,7 +1026,7 @@ func TestGetActiveProvidersByType(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api1.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 
 	_ = k.RegisterProvider(ctx, &types.MsgRegisterComputeProvider{
@@ -1034,7 +1034,7 @@ func TestGetActiveProvidersByType(t *testing.T) {
 		ServiceType: "gpu_compute",
 		Endpoint:    "https://api2.example.com",
 		PricePerCu:  "3000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	})
 
 	// Query AI providers only
@@ -1080,7 +1080,7 @@ func TestMsgRegisterValidateBasic(t *testing.T) {
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
 		PricePerCu:  "5000",
-		StakeAmount: "100000000",
+		Stake: "100000000",
 	}
 	if err := msg.ValidateBasic(); err != nil {
 		t.Errorf("expected valid: %v", err)
@@ -1109,7 +1109,7 @@ func TestMsgRegisterValidateBasic(t *testing.T) {
 
 	// Zero stake
 	bad = *msg
-	bad.StakeAmount = "0"
+	bad.Stake = "0"
 	if err := bad.ValidateBasic(); err == nil {
 		t.Error("expected error for zero stake")
 	}
@@ -1119,7 +1119,7 @@ func TestMsgRedeemCreditsValidateBasic(t *testing.T) {
 	msg := &types.MsgRedeemCredits{
 		Sender:   validatorAddr.String(),
 		Provider: providerAddr1.String(),
-		CuAmount: 100,
+		Cu:       100,
 	}
 	if err := msg.ValidateBasic(); err != nil {
 		t.Errorf("expected valid: %v", err)
@@ -1127,7 +1127,7 @@ func TestMsgRedeemCreditsValidateBasic(t *testing.T) {
 
 	// Zero CU
 	bad := *msg
-	bad.CuAmount = 0
+	bad.Cu = 0
 	if err := bad.ValidateBasic(); err == nil {
 		t.Error("expected error for zero CU amount")
 	}
@@ -1143,9 +1143,10 @@ func TestUpdateParamsAuth(t *testing.T) {
 	ms := keeper.NewMsgServerImpl(k)
 
 	// Wrong authority
+	dp := types.DefaultParams()
 	_, err := ms.UpdateComputeParams(sdk.WrapSDKContext(ctx), &types.MsgUpdateComputeParams{
 		Authority: "wrong_addr",
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	})
 	if err == nil {
 		t.Error("expected error for wrong authority")

@@ -69,7 +69,7 @@ Stake must meet the minimum proposal stake parameter.`,
 				Name:        args[0],
 				DisplayName: args[1],
 				Description: description,
-				Stratum:     types.Stratum(stratum),
+				Stratum:     uint32(stratum),
 				Proposer:    clientCtx.GetFromAddress().String(),
 				Stake:       args[3],
 			}
@@ -183,7 +183,7 @@ Max confidence in basis points (1000000 = 100%).`,
 
 			msg := &types.MsgRegisterLogicZone{
 				Authority: clientCtx.GetFromAddress().String(),
-				ZoneProperties: types.LogicZoneProperties{
+				ZoneProperties: &types.LogicZoneProperties{
 					Zone:             args[0],
 					Complete:         complete,
 					Decidable:        decidable,
@@ -222,7 +222,7 @@ limitations. The zone must have GoedelApplies=true.`,
 			msg := &types.MsgAcknowledgeIncompleteness{
 				Submitter: clientCtx.GetFromAddress().String(),
 				FactId:    args[0],
-				Zone:      types.LogicZone(args[1]),
+				Zone:      args[1],
 				Reason:    args[2],
 			}
 

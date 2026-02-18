@@ -59,7 +59,7 @@ Price and stake are in ulgm.`,
 				ServiceType: args[0],
 				Endpoint:    args[1],
 				PricePerCu:  args[2],
-				StakeAmount: args[3],
+				Stake:       args[3],
 				Did:         did,
 			}
 
@@ -93,11 +93,11 @@ Use flags to specify which fields to update.`,
 			unpause, _ := cmd.Flags().GetBool("unpause")
 
 			msg := &types.MsgUpdateProvider{
-				Sender:   clientCtx.GetFromAddress().String(),
-				Endpoint: endpoint,
-				Price:    price,
-				Pause:    pause,
-				Unpause:  unpause,
+				Sender:     clientCtx.GetFromAddress().String(),
+				Endpoint:   endpoint,
+				PricePerCu: price,
+				Pause:      pause,
+				Unpause:    unpause,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -183,7 +183,7 @@ Creates a redemption ticket that must be confirmed after service delivery.`,
 			msg := &types.MsgRedeemCredits{
 				Sender:   clientCtx.GetFromAddress().String(),
 				Provider: args[0],
-				CuAmount: cuAmount,
+				Cu:       cuAmount,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -206,11 +206,6 @@ func NewConfirmUsageCmd() *cobra.Command {
 				return err
 			}
 
-			ticketID, err := parseUint64(args[0])
-			if err != nil {
-				return fmt.Errorf("invalid ticket-id: %w", err)
-			}
-
 			actualCU, err := parseUint64(args[1])
 			if err != nil {
 				return fmt.Errorf("invalid actual-cu: %w", err)
@@ -218,7 +213,7 @@ func NewConfirmUsageCmd() *cobra.Command {
 
 			msg := &types.MsgConfirmUsage{
 				Sender:   clientCtx.GetFromAddress().String(),
-				TicketId: ticketID,
+				TicketId: args[0],
 				ActualCu: actualCU,
 			}
 
@@ -242,14 +237,9 @@ func NewDisputeUsageCmd() *cobra.Command {
 				return err
 			}
 
-			ticketID, err := parseUint64(args[0])
-			if err != nil {
-				return fmt.Errorf("invalid ticket-id: %w", err)
-			}
-
 			msg := &types.MsgDisputeUsage{
 				Sender:   clientCtx.GetFromAddress().String(),
-				TicketId: ticketID,
+				TicketId: args[0],
 				Reason:   args[1],
 			}
 

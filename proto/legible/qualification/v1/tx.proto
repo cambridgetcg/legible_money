@@ -1,0 +1,62 @@
+syntax = "proto3";
+package legible.qualification.v1;
+
+option go_package = "github.com/legible-money/legible/x/qualification/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/qualification/v1/genesis.proto";
+
+// Msg defines the qualification module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc RequestQualification(MsgRequestQualification) returns (MsgRequestQualificationResponse);
+  rpc EndorseValidator(MsgEndorseValidator) returns (MsgEndorseValidatorResponse);
+  rpc RenewQualification(MsgRenewQualification) returns (MsgRenewQualificationResponse);
+  rpc WithdrawQualification(MsgWithdrawQualification) returns (MsgWithdrawQualificationResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgRequestQualification {
+  option (cosmos.msg.v1.signer) = "validator_addr";
+  string validator_addr = 1;
+  string domain         = 2;
+  string pathway        = 3;
+  string stake          = 4;
+  string inherit_from   = 5;
+}
+message MsgRequestQualificationResponse {
+  string status = 1;
+}
+
+message MsgEndorseValidator {
+  option (cosmos.msg.v1.signer) = "endorser_addr";
+  string endorser_addr    = 1;
+  string target_validator = 2;
+  string domain           = 3;
+  string stake            = 4;
+}
+message MsgEndorseValidatorResponse {
+  string endorsement_id = 1;
+}
+
+message MsgRenewQualification {
+  option (cosmos.msg.v1.signer) = "validator_addr";
+  string validator_addr = 1;
+  string domain         = 2;
+}
+message MsgRenewQualificationResponse {}
+
+message MsgWithdrawQualification {
+  option (cosmos.msg.v1.signer) = "validator_addr";
+  string validator_addr = 1;
+  string domain         = 2;
+}
+message MsgWithdrawQualificationResponse {}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

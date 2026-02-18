@@ -15,6 +15,7 @@ func fullEvalCtx(
 	contradictions map[string][]types.FactReference,
 ) *EvaluationContext {
 	return &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetClaim: func(_ sdk.Context, id string) (types.Claim, bool) {
 			return types.Claim{}, false
 		},

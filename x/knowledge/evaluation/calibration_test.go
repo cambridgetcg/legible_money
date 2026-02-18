@@ -11,6 +11,7 @@ import (
 func TestCalibration_NoKeeper(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:          types.DefaultExtendedParams(),
 		GetSubmitterCalibration: nil,
 	}
 	claim := types.Claim{Id: "c1", Submitter: "lgm1abc"}
@@ -24,6 +25,7 @@ func TestCalibration_NoKeeper(t *testing.T) {
 func TestCalibration_EmptySubmitter(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{}, false
 		},
@@ -39,6 +41,7 @@ func TestCalibration_EmptySubmitter(t *testing.T) {
 func TestCalibration_Unrated(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    3, // below MinCalibrationSamples (5)
@@ -57,6 +60,7 @@ func TestCalibration_Unrated(t *testing.T) {
 func TestCalibration_PerfectSubmitter(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    10,
@@ -79,6 +83,7 @@ func TestCalibration_PerfectSubmitter(t *testing.T) {
 func TestCalibration_NeutralSubmitter(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    10,
@@ -98,6 +103,7 @@ func TestCalibration_NeutralSubmitter(t *testing.T) {
 func TestCalibration_SerialHallucinator(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    10,
@@ -119,6 +125,7 @@ func TestCalibration_SerialHallucinator(t *testing.T) {
 func TestCalibration_LowAcceptance(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    10,
@@ -140,6 +147,7 @@ func TestCalibration_LowAcceptance(t *testing.T) {
 func TestCalibration_HighAcceptance(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    10,
@@ -161,6 +169,7 @@ func TestCalibration_HighAcceptance(t *testing.T) {
 func TestCalibration_NotFound(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{}, false
 		},
@@ -176,6 +185,7 @@ func TestCalibration_NotFound(t *testing.T) {
 func TestCalibration_ExactMinSamples(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    5, // exactly MinCalibrationSamples
@@ -199,6 +209,7 @@ func TestCalibration_TrivialThresholdBoundary(t *testing.T) {
 
 	// 96% acceptance = just above trivial threshold (950,000)
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    100,
@@ -221,6 +232,7 @@ func TestCalibration_JustBelowTrivialThreshold(t *testing.T) {
 
 	// 94% acceptance = below trivial threshold, gets normal bonus
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    100,
@@ -241,6 +253,7 @@ func TestCalibration_JustBelowTrivialThreshold(t *testing.T) {
 func TestCalibration_BelowMinSamples(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetSubmitterCalibration: func(_ sdk.Context, _ string) (types.CalibrationRecord, bool) {
 			return types.CalibrationRecord{
 				TotalClaims:    4, // below MinCalibrationSamples

@@ -67,11 +67,12 @@ func evaluateParticipantContext(ctx sdk.Context, evalCtx *EvaluationContext, cla
 		return result
 	}
 
+	ep := evalCtx.ExtendedParams
 	if humanCount > 0 {
 		// Observable claim with human-grounded evidence: small bonus.
-		bonus := humanCount * types.HumanEvidenceBonusBpsDefault
-		if bonus > types.MaxHumanEvidenceBonusBpsDefault {
-			bonus = types.MaxHumanEvidenceBonusBpsDefault
+		bonus := humanCount * ep.HumanEvidenceBonusBps
+		if bonus > ep.MaxHumanEvidenceBonusBps {
+			bonus = ep.MaxHumanEvidenceBonusBps
 		}
 		result.Adjustment = int64(bonus)
 		result.Justification = fmt.Sprintf(
@@ -82,11 +83,11 @@ func evaluateParticipantContext(ctx sdk.Context, evalCtx *EvaluationContext, cla
 	}
 
 	// Observable claim with ONLY agent-verifiable evidence: penalty + ceiling.
-	result.Adjustment = -int64(types.HumanEvidenceGapPenaltyBpsDefault)
-	result.Ceiling = types.AgentOnlyEmpiricalCeilingDefault
+	result.Adjustment = -int64(ep.HumanEvidenceGapPenaltyBps)
+	result.Ceiling = ep.AgentOnlyEmpiricalCeiling
 	result.Justification = fmt.Sprintf(
 		"observable category with only agent-verifiable evidence (%d items) — %d bps penalty, %d ceiling",
-		agentCount, types.HumanEvidenceGapPenaltyBpsDefault, types.AgentOnlyEmpiricalCeilingDefault,
+		agentCount, ep.HumanEvidenceGapPenaltyBps, ep.AgentOnlyEmpiricalCeiling,
 	)
 	return result
 }

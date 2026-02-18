@@ -11,7 +11,7 @@ message GenesisState {
   repeated LegibleValidator validators        = 2;
   repeated Delegation       delegations       = 3;
   repeated UnbondingEntry   unbonding_entries = 4;
-  repeated TierConfig       tier_configs      = 5;
+  repeated TierConfig       tier_configs      = 5; // deprecated: tier configs now in Params.tier_configs
   uint64                    unbonding_seq     = 6; // monotonic unbonding sequence counter
 }
 
@@ -28,4 +28,9 @@ message Params {
   uint32 max_slash_count_deactivate = 8; // slashes to deactivate (default: 3)
   string min_stake_for_verification = 9; // R3: min real stake to participate in VRF (default: "100000000")
   uint64 slash_escalation_bps       = 10; // per-prior-slash escalation factor in BPS (default: 100000 = 10%)
+  repeated TierConfig tier_configs            = 11; // governance-adjustable tier configs
+  uint64 reputation_correct_delta             = 12; // reputation increase for correct verification (default: 100 = +0.01%)
+  uint64 reputation_incorrect_delta           = 13; // reputation decrease for incorrect verification (default: 200 = -0.02%)
+  uint64 reputation_slash_delta               = 14; // reputation decrease on slash (default: 10000 = -1%)
+  uint64 redelegation_cooldown_blocks         = 15; // blocks between redelegations (default: 1111 ~46 min)
 }

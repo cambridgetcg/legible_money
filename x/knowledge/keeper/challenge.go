@@ -41,7 +41,8 @@ func (k Keeper) OpenChallenge(
 	}
 
 	// Check max concurrent challenges
-	if claim.ActiveChallengeCount >= types.MaxConcurrentChallenges {
+	ep := k.GetExtendedParams(ctx)
+	if claim.ActiveChallengeCount >= ep.MaxConcurrentChallenges {
 		return types.ProvisionalChallenge{}, types.ErrMaxChallengesReached
 	}
 
@@ -55,11 +56,11 @@ func (k Keeper) OpenChallenge(
 			}
 			return false
 		})
-		cooldown := uint64(types.BaseCooldownBlocks)
+		cooldown := ep.BaseCooldownBlocks
 		for i := uint32(0); i < attemptNumber; i++ {
 			cooldown *= 2
-			if cooldown > types.MaxCooldownBlocks {
-				cooldown = types.MaxCooldownBlocks
+			if cooldown > ep.MaxCooldownBlocks {
+				cooldown = ep.MaxCooldownBlocks
 				break
 			}
 		}
@@ -75,8 +76,12 @@ func (k Keeper) OpenChallenge(
 		return types.ProvisionalChallenge{}, fmt.Errorf("%w: invalid stake amount", types.ErrInsufficientStake)
 	}
 	minStake := new(big.Int)
-	if _, ok := minStake.SetString(params.MinChallengeStake, 10); !ok {
-		minStake.SetInt64(int64(types.MinChallengeStakeDefault))
+	minChallengeStake := params.MinChallengeStake
+	if minChallengeStake == "" {
+		minChallengeStake = fmt.Sprintf("%d", ep.MinClaimStakeUlgm)
+	}
+	if _, ok := minStake.SetString(minChallengeStake, 10); !ok {
+		minStake.SetInt64(int64(ep.MinClaimStakeUlgm))
 	}
 	if stakeAmount.Cmp(minStake) < 0 {
 		return types.ProvisionalChallenge{}, fmt.Errorf("%w: need at least %s, got %s",
@@ -88,7 +93,7 @@ func (k Keeper) OpenChallenge(
 	if claim.StakeAmount != "" {
 		claimStake := new(big.Int)
 		if _, ok := claimStake.SetString(claim.StakeAmount, 10); ok && claimStake.Sign() > 0 {
-			minPropStake := new(big.Int).Mul(claimStake, big.NewInt(int64(types.ChallengeStakeRatioMinBPS)))
+			minPropStake := new(big.Int).Mul(claimStake, big.NewInt(int64(ep.ChallengeStakeRatioMinBps)))
 			minPropStake.Div(minPropStake, big.NewInt(1_000_000))
 			if stakeAmount.Cmp(minPropStake) < 0 {
 				return types.ProvisionalChallenge{}, fmt.Errorf("%w: must stake at least 50%% of claim stake (%s), got %s",
@@ -205,7 +210,7 @@ func (k Keeper) ResolveDeterministicChallenge(
 	)
 
 	// Use the same evaluation pipeline as provisional acceptance
-	evalCtx := k.BuildEvaluationContext()
+	evalCtx := k.BuildEvaluationContext(ctx)
 	currentHeight := uint64(ctx.BlockHeight())
 
 	syntheticRound := types.VerificationRound{
@@ -224,7 +229,8 @@ func (k Keeper) ResolveDeterministicChallenge(
 	originalScore := claim.StructuralScore
 
 	// Determine outcome based on score change
-	if newScore < uint64(types.RejectThresholdDefault) {
+	ep := k.GetExtendedParams(ctx)
+	if newScore < ep.RejectThreshold {
 		return types.ChallengeOutcomeOverturned, newScore, nil
 	}
 
@@ -262,14 +268,19 @@ func (k Keeper) ApplyChallengeOutcome(
 	switch outcome {
 	case types.ChallengeOutcomeUpheld:
 		// Fact survives — slash challenger, boost fact confidence
-		k.slashChallengerBond(ctx, challenge, params.FailedChallengeSlashBps)
+		failedSlashBps := params.FailedChallengeSlashBps
+		if failedSlashBps == 0 {
+			failedSlashBps = k.GetExtendedParams(ctx).ChallengeStakeRatioMinBps
+		}
+		k.slashChallengerBond(ctx, challenge, failedSlashBps)
 
 		if claim.ProvisionalFactId != "" {
 			if fact, found := k.GetFact(ctx, claim.ProvisionalFactId); found {
 				// Boost confidence by 11%
 				boost := uint64(110_000) // 11%
 				newConf := fact.Confidence + boost
-				categoryCeiling := getCategoryCeiling(fact.EpistemicCategory)
+				ep := k.GetExtendedParams(ctx)
+				categoryCeiling := getCategoryCeilingFromParams(fact.EpistemicCategory, ep)
 				if newConf > categoryCeiling {
 					newConf = categoryCeiling
 				}
@@ -456,15 +467,16 @@ func (k Keeper) slashSubmitterAndRewardChallenger(
 	// Challenger reward = 30% of slashed amount
 	rewardBps := params.SuccessfulChallengeRewardBps
 	if rewardBps == 0 {
-		rewardBps = types.SuccessfulChallengeRewardBpsDefault
+		rewardBps = 300_000 // default 30%
 	}
 	rewardAmount := new(big.Int).Mul(slashAmount, big.NewInt(int64(rewardBps)))
 	rewardAmount.Div(rewardAmount, big.NewInt(1_000_000))
 
 	// FARM-9: Cap reward at 100% of challenger's own stake to prevent asymmetric payoffs.
+	ep := k.GetExtendedParams(ctx)
 	challengerStake := new(big.Int)
 	if _, ok := challengerStake.SetString(challenge.Stake, 10); ok && challengerStake.Sign() > 0 {
-		maxReward := new(big.Int).Mul(challengerStake, big.NewInt(int64(types.ChallengeRewardCapBPS)))
+		maxReward := new(big.Int).Mul(challengerStake, big.NewInt(int64(ep.ChallengeRewardCapBps)))
 		maxReward.Div(maxReward, big.NewInt(1_000_000))
 		if rewardAmount.Cmp(maxReward) > 0 {
 			rewardAmount.Set(maxReward)
@@ -551,9 +563,9 @@ func (k Keeper) cascadeConfidenceReduction(ctx sdk.Context, revokedFactId string
 	}
 }
 
-// getCategoryCeiling returns the max confidence for an epistemic category.
-func getCategoryCeiling(category string) uint64 {
-	if profile, ok := types.CATEGORY_DECAY[category]; ok {
+// getCategoryCeilingFromParams returns the max confidence for an epistemic category.
+func getCategoryCeilingFromParams(category string, ep types.ExtendedParams) uint64 {
+	if profile, ok := ep.GetCategoryDecayProfile(category); ok {
 		return profile.MaxConfidence
 	}
 	return 1_000_000

@@ -164,9 +164,10 @@ func (k Keeper) AggregateVerificationResult(
 	}
 
 	// Apply category ceiling from epistemic profile
+	ep := k.GetExtendedParams(ctx)
 	if round.ClaimId != "" {
 		if claim, found := k.GetClaim(ctx, round.ClaimId); found {
-			if profile, ok := types.CATEGORY_DECAY[claim.EpistemicCategory]; ok {
+			if profile, ok := ep.GetCategoryDecayProfile(claim.EpistemicCategory); ok {
 				if result.Confidence > profile.MaxConfidence {
 					result.Confidence = profile.MaxConfidence
 				}
@@ -191,8 +192,8 @@ func (k Keeper) AggregateVerificationResult(
 
 	// AH-4: Method diversity check — penalize suspiciously uniform verification.
 	// Applied after all other confidence adjustments but before rewards.
-	if len(round.Reveals) >= types.MinDiversityParticipants {
-		diversityAdj := computeMethodDiversityAdjustment(round.Reveals)
+	if len(round.Reveals) >= int(ep.MinDiversityParticipants) {
+		diversityAdj := computeMethodDiversityAdjustment(round.Reveals, ep)
 		if diversityAdj != 0 {
 			result.MethodDiversityPenalty = diversityAdj
 			if diversityAdj < 0 {
@@ -416,9 +417,10 @@ func (k Keeper) applyStratumCeiling(ctx sdk.Context, domain string, confidence u
 		// Fall through to hardcoded on error (domain not in ontology yet)
 	}
 
-	// Fallback: hardcoded mapping for bootstrap domains
+	// Fallback: parameterized mapping for bootstrap domains
+	ep := k.GetExtendedParams(ctx)
 	domainStratum := inferDomainStratum(domain)
-	ceiling, ok := types.STRATUM_CONFIDENCE_CEILING[domainStratum]
+	ceiling, ok := ep.GetStratumConfidenceCeiling(domainStratum)
 	if !ok {
 		return confidence // no ceiling for unknown stratum
 	}
@@ -470,6 +472,7 @@ func (k Keeper) computeEvidenceBonus(ctx sdk.Context, claimId string) uint64 {
 		return 0
 	}
 
+	ep := k.GetExtendedParams(ctx)
 	var totalScore uint64
 	var validCount uint64
 
@@ -479,7 +482,7 @@ func (k Keeper) computeEvidenceBonus(ctx sdk.Context, claimId string) uint64 {
 			continue
 		}
 
-		typeStrength, ok := types.EVIDENCE_TYPE_STRENGTH[ev.EvidenceType]
+		typeStrength, ok := ep.GetEvidenceTypeStrength(ev.EvidenceType)
 		if !ok {
 			typeStrength = 400_000 // conservative default for unknown types (0.4)
 		}
@@ -505,8 +508,8 @@ func (k Keeper) computeEvidenceBonus(ctx sdk.Context, claimId string) uint64 {
 	bonus := totalScore / validCount
 
 	// Cap at MaxEvidenceBonus
-	if bonus > types.MaxEvidenceBonus {
-		bonus = types.MaxEvidenceBonus
+	if bonus > ep.MaxEvidenceBonus {
+		bonus = ep.MaxEvidenceBonus
 	}
 
 	k.Logger(ctx).Debug("evidence bonus computed",
@@ -550,8 +553,8 @@ func applyTierMultiplier(baseReward uint64, tier uint32) uint64 {
 //     (SingleMethodPenaltyBps = -5%).
 //  3. Two distinct methods: neutral (no adjustment).
 //  4. Three or more distinct methods: diversity bonus (DiversityBonusBps = +3%).
-func computeMethodDiversityAdjustment(reveals map[string]*types.VerificationReveal) int64 {
-	if len(reveals) < types.MinDiversityParticipants {
+func computeMethodDiversityAdjustment(reveals map[string]*types.VerificationReveal, ep types.ExtendedParams) int64 {
+	if len(reveals) < int(ep.MinDiversityParticipants) {
 		return 0
 	}
 
@@ -582,14 +585,14 @@ func computeMethodDiversityAdjustment(reveals map[string]*types.VerificationReve
 
 	if uniqueDeclared == 1 {
 		// All declaring validators use the same method — suspicious
-		adjustment -= int64(types.SingleMethodPenaltyBps)
+		adjustment -= int64(ep.SingleMethodPenaltyBps)
 		if allIdenticalConfidence {
 			// Same method AND identical confidence — very suspicious
-			adjustment -= int64(types.UniformityPenaltyBps)
+			adjustment -= int64(ep.UniformityPenaltyBps)
 		}
 	} else if uniqueDeclared >= 3 {
 		// Genuine methodological diversity — reward
-		adjustment += int64(types.DiversityBonusBps)
+		adjustment += int64(ep.DiversityBonusBps)
 	}
 	// uniqueDeclared == 2: neutral
 

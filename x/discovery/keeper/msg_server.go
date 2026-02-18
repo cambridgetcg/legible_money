@@ -12,6 +12,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -61,18 +62,11 @@ func (k msgServer) RegisterAgent(goCtx context.Context, msg *types.MsgRegisterAg
 
 	currentHeight := uint64(ctx.BlockHeight())
 
-	// Convert value capabilities to pointer capabilities for proto type
-	capPtrs := make([]*types.AgentCapability, len(msg.Capabilities))
-	for i := range msg.Capabilities {
-		cp := msg.Capabilities[i]
-		capPtrs[i] = &cp
-	}
-
 	profile := types.AgentProfile{
 		Address:           msg.Address,
 		Did:               msg.Did,
 		DisplayName:       msg.DisplayName,
-		Capabilities:      capPtrs,
+		Capabilities:      msg.Capabilities,
 		Domains:           msg.Domains,
 		Status:            "active",
 		ReputationScore:   500000, // start at 0.5
@@ -153,8 +147,7 @@ func (k msgServer) AddCapability(goCtx context.Context, msg *types.MsgAddCapabil
 	// Remove old indexes before mutation
 	k.DeleteProfile(ctx, profile)
 
-	capCopy := msg.Capability
-	profile.Capabilities = append(profile.Capabilities, &capCopy)
+	profile.Capabilities = append(profile.Capabilities, msg.Capability)
 	k.SetProfile(ctx, profile)
 
 	return &types.MsgAddCapabilityResponse{}, nil
@@ -258,7 +251,7 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 
-	k.SetParams(ctx, msg.Params)
+	k.SetParams(ctx, *msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }

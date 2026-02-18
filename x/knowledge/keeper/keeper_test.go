@@ -1074,7 +1074,7 @@ func TestInsufficientQuorumNoQuorumFlag(t *testing.T) {
 func TestCalculateDecayedConfidence_Eternal(t *testing.T) {
 	// Eternal categories (formal, analytic, protocol, computational) should not decay
 	for _, cat := range []string{"formal", "analytic", "protocol", "computational"} {
-		result := keeper.CalculateDecayedConfidence(900_000, 1_000_000, cat)
+		result := keeper.CalculateDecayedConfidence(900_000, 1_000_000, cat, types.DefaultExtendedParams())
 		if result != 900_000 {
 			t.Errorf("category %s: expected no decay (900000), got %d", cat, result)
 		}
@@ -1086,26 +1086,28 @@ func TestCalculateDecayedConfidence_Empirical(t *testing.T) {
 	base := uint64(900_000)
 
 	// At 0 blocks: no decay
-	result := keeper.CalculateDecayedConfidence(base, 0, "empirical")
+	ep := types.DefaultExtendedParams()
+
+	result := keeper.CalculateDecayedConfidence(base, 0, "empirical", ep)
 	if result != base {
 		t.Errorf("at 0 blocks: expected %d, got %d", base, result)
 	}
 
 	// At 1 half-life (1,000,000 blocks): should be ~halfway between base and min
 	// min=330,000, so midpoint = 330,000 + (900,000-330,000)*0.5 = 615,000
-	result = keeper.CalculateDecayedConfidence(base, 1_000_000, "empirical")
+	result = keeper.CalculateDecayedConfidence(base, 1_000_000, "empirical", ep)
 	if result < 565_000 || result > 665_000 {
 		t.Errorf("at 1 half-life: expected ~615000, got %d", result)
 	}
 
 	// At 2 half-lives: should be ~472,500
-	result = keeper.CalculateDecayedConfidence(base, 2_000_000, "empirical")
+	result = keeper.CalculateDecayedConfidence(base, 2_000_000, "empirical", ep)
 	if result < 420_000 || result > 520_000 {
 		t.Errorf("at 2 half-lives: expected ~472500, got %d", result)
 	}
 
 	// At 10 half-lives: should be near min (330,000)
-	result = keeper.CalculateDecayedConfidence(base, 10_000_000, "empirical")
+	result = keeper.CalculateDecayedConfidence(base, 10_000_000, "empirical", ep)
 	if result < 330_000 || result > 340_000 {
 		t.Errorf("at 10 half-lives: expected ~330000, got %d", result)
 	}
@@ -1113,7 +1115,7 @@ func TestCalculateDecayedConfidence_Empirical(t *testing.T) {
 
 func TestCalculateDecayedConfidence_CeilingEnforced(t *testing.T) {
 	// Empirical max = 990,000. Passing 1,000,000 should be clamped.
-	result := keeper.CalculateDecayedConfidence(1_000_000, 0, "empirical")
+	result := keeper.CalculateDecayedConfidence(1_000_000, 0, "empirical", types.DefaultExtendedParams())
 	if result != 990_000 {
 		t.Errorf("expected ceiling 990000, got %d", result)
 	}
@@ -1121,7 +1123,7 @@ func TestCalculateDecayedConfidence_CeilingEnforced(t *testing.T) {
 
 func TestCalculateDecayedConfidence_UnknownCategory(t *testing.T) {
 	// Unknown category returns base unchanged
-	result := keeper.CalculateDecayedConfidence(800_000, 50_000, "unknown")
+	result := keeper.CalculateDecayedConfidence(800_000, 50_000, "unknown", types.DefaultExtendedParams())
 	if result != 800_000 {
 		t.Errorf("expected 800000 for unknown category, got %d", result)
 	}
@@ -1173,20 +1175,22 @@ func TestGetFactWithDecay(t *testing.T) {
 }
 
 func TestCalculateMaturity(t *testing.T) {
+	ep := types.DefaultExtendedParams()
+
 	// Emerging: low conf/age/verifications
-	m := keeper.CalculateMaturity(500_000, 1000, 1)
+	m := keeper.CalculateMaturity(500_000, 1000, 1, ep)
 	if m != types.MaturityEmerging {
 		t.Errorf("expected emerging, got %s", m)
 	}
 
 	// Established: >=800K conf, >=34272 age, >=3 verifications
-	m = keeper.CalculateMaturity(800_000, 34_272, 3)
+	m = keeper.CalculateMaturity(800_000, 34_272, 3, ep)
 	if m != types.MaturityEstablished {
 		t.Errorf("expected established, got %s", m)
 	}
 
 	// Canonical: >=900K conf, >=342720 age, >=10 verifications
-	m = keeper.CalculateMaturity(900_000, 342_720, 10)
+	m = keeper.CalculateMaturity(900_000, 342_720, 10, ep)
 	if m != types.MaturityCanonical {
 		t.Errorf("expected canonical, got %s", m)
 	}
@@ -1199,7 +1203,8 @@ func TestNeedsReverification(t *testing.T) {
 		Confidence:         500_000,
 		LastVerifiedHeight: 10,
 	}
-	if keeper.NeedsReverification(formalFact, 1_000_000) {
+	ep := types.DefaultExtendedParams()
+	if keeper.NeedsReverification(formalFact, 1_000_000, ep) {
 		t.Error("formal facts should never need reverification")
 	}
 
@@ -1210,19 +1215,19 @@ func TestNeedsReverification(t *testing.T) {
 		LastVerifiedHeight: 10,
 		VerifiedAtHeight:   10,
 	}
-	if keeper.NeedsReverification(empiricalFact, 100) {
+	if keeper.NeedsReverification(empiricalFact, 100, ep) {
 		t.Error("empirical fact above threshold should not need reverification")
 	}
 
 	// Empirical fact below threshold
 	empiricalFact.Confidence = 400_000 // below 60%
-	if !keeper.NeedsReverification(empiricalFact, 100) {
+	if !keeper.NeedsReverification(empiricalFact, 100, ep) {
 		t.Error("empirical fact below threshold should need reverification")
 	}
 
 	// Empirical fact stale: age > 2× half-life (2,000,000 blocks)
 	empiricalFact.Confidence = 800_000
-	if !keeper.NeedsReverification(empiricalFact, 2_000_011) {
+	if !keeper.NeedsReverification(empiricalFact, 2_000_011, ep) {
 		t.Error("stale empirical fact should need reverification")
 	}
 }
@@ -1234,8 +1239,10 @@ func TestApplyReverificationBonus(t *testing.T) {
 		Confidence:        600_000,
 	}
 
+	ep := types.DefaultExtendedParams()
+
 	// Empirical bonus = 110,000
-	result := keeper.ApplyReverificationBonus(fact)
+	result := keeper.ApplyReverificationBonus(fact, ep)
 	if result.BaseConfidence != 810_000 {
 		t.Errorf("expected base 810000 after bonus, got %d", result.BaseConfidence)
 	}
@@ -1245,7 +1252,7 @@ func TestApplyReverificationBonus(t *testing.T) {
 
 	// Bonus capped at max
 	fact.BaseConfidence = 970_000
-	result = keeper.ApplyReverificationBonus(fact)
+	result = keeper.ApplyReverificationBonus(fact, ep)
 	if result.BaseConfidence != 990_000 { // empirical max
 		t.Errorf("expected capped at 990000, got %d", result.BaseConfidence)
 	}
@@ -1545,13 +1552,14 @@ func TestIsFactExpired_ExplicitExpiry(t *testing.T) {
 		ExpiresAtBlock: 100,
 	}
 
-	expired, _ := keeper.IsFactExpired(fact, 99)
+	ep := types.DefaultExtendedParams()
+	expired, _ := keeper.IsFactExpired(fact, 99, ep)
 	if expired {
 		t.Error("should not be expired before expiry block")
 	}
 
 	var reason string
-	expired, reason = keeper.IsFactExpired(fact, 100)
+	expired, reason = keeper.IsFactExpired(fact, 100, ep)
 	if !expired || reason != "explicit_expiry" {
 		t.Errorf("expected explicit_expiry at block 100, got expired=%v reason=%s", expired, reason)
 	}
@@ -1610,7 +1618,8 @@ func TestIsFactExpired_ConfidenceDecay(t *testing.T) {
 	// Staleness = 40,010 blocks. At 40,009: factor = 0.5^(40009/20000) ≈ 0.5^2 ≈ 0.25
 	// decayed = 100K + 300K*0.25 = 175K < 300K. YES! This triggers before staleness.
 
-	expired, reason := keeper.IsFactExpired(fact, 40_009)
+	ep := types.DefaultExtendedParams()
+	expired, reason := keeper.IsFactExpired(fact, 40_009, ep)
 	if !expired || reason != "confidence_decay" {
 		t.Errorf("expected confidence_decay, got expired=%v reason=%s", expired, reason)
 	}
@@ -1626,8 +1635,9 @@ func TestIsFactExpired_ReverificationStaleness(t *testing.T) {
 		LastVerifiedHeight: 10,
 	}
 
+	ep := types.DefaultExtendedParams()
 	// Staleness threshold: 2 × 1,000,000 = 2,000,000 blocks
-	expired, reason := keeper.IsFactExpired(fact, 2_000_011)
+	expired, reason := keeper.IsFactExpired(fact, 2_000_011, ep)
 	if !expired || reason != "reverification_staleness" {
 		t.Errorf("expected reverification_staleness, got expired=%v reason=%s", expired, reason)
 	}
@@ -1639,7 +1649,7 @@ func TestIsFactExpired_TerminalStatesSkipped(t *testing.T) {
 			Status:            status,
 			EpistemicCategory: "empirical",
 		}
-		expired, _ := keeper.IsFactExpired(fact, 999_999)
+		expired, _ := keeper.IsFactExpired(fact, 999_999, types.DefaultExtendedParams())
 		if expired {
 			t.Errorf("status %s should not be checked for expiry", status)
 		}
@@ -1941,12 +1951,13 @@ func TestCalculateFundamentalityScore(t *testing.T) {
 		})
 	}
 
-	score := k.CalculateFundamentalityScore(ctx, "fundamental-1")
+	ep := types.DefaultExtendedParams()
+	score := k.CalculateFundamentalityScore(ctx, "fundamental-1", ep)
 	if score != types.FundamentalityNotable {
 		t.Errorf("expected Notable (250000) with 5 refs, got %d", score)
 	}
 
-	mult := keeper.GetFundamentalityMultiplier(score)
+	mult := keeper.GetFundamentalityMultiplier(score, ep)
 	if mult != types.FundamentalityBonusNotable {
 		t.Errorf("expected 1.1x multiplier (1100000), got %d", mult)
 	}

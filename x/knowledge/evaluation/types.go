@@ -46,6 +46,9 @@ type EvaluationContext struct {
 	GetFactCountByDomain        func(ctx sdk.Context, domain string) uint64
 	GetDomainCount              func(ctx sdk.Context) uint64
 	GetDomainUniqueContributors func(ctx sdk.Context, domain string) uint64 // FARM-7
+
+	// Governance-tunable parameters (replaces hardcoded constants)
+	ExtendedParams types.ExtendedParams
 }
 
 // OntologyToKnowledgeScale converts the ontology module's basis point scale

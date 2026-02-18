@@ -25,15 +25,16 @@ func (k Keeper) IsFactImmune(ctx sdk.Context, fact types.Fact) bool {
 		return true
 	}
 
+	ep := k.GetExtendedParams(ctx)
+
 	// Eternal categories: analytic, formal, protocol, computational (HalfLifeBlocks == 0)
-	if profile, ok := types.CATEGORY_DECAY[fact.EpistemicCategory]; ok {
+	if profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory); ok {
 		if profile.HalfLifeBlocks == 0 {
 			return true
 		}
 	}
 
 	// Fundamentality immunity: facts cited by many others are foundational
-	ep := k.GetExtendedParams(ctx)
 	threshold := ep.FundamentalityImmunityThreshold
 	if threshold == 0 {
 		threshold = 50 // default
@@ -121,16 +122,17 @@ func (k Keeper) calculateContributionScore(ctx sdk.Context, fact types.Fact) uin
 	citationScore := (sqrtCitations * 600_000) / 10
 
 	// Fundamentality tier bonus
-	fundScore := k.CalculateFundamentalityScore(ctx, fact.Id)
+	ep := k.GetExtendedParams(ctx)
+	fundScore := k.CalculateFundamentalityScore(ctx, fact.Id, ep)
 	var fundBonus uint64
 	switch {
-	case fundScore >= types.FundamentalityAxiomatic:
+	case fundScore >= ep.FundamentalityAxiomaticBps:
 		fundBonus = 400_000
-	case fundScore >= types.FundamentalityFundamental:
+	case fundScore >= ep.FundamentalityFundamentalBps:
 		fundBonus = 300_000
-	case fundScore >= types.FundamentalityFoundational:
+	case fundScore >= ep.FundamentalityFoundationalBps:
 		fundBonus = 200_000
-	case fundScore >= types.FundamentalityNotable:
+	case fundScore >= ep.FundamentalityNotableBps:
 		fundBonus = 100_000
 	}
 
@@ -273,7 +275,7 @@ func (k Keeper) GetGracePeriod(ctx sdk.Context, category string) uint64 {
 		grace = 1_028_160 // default ~30 days
 	}
 
-	if profile, ok := types.CATEGORY_DECAY[category]; ok && profile.HalfLifeBlocks > 0 {
+	if profile, ok := ep.GetCategoryDecayProfile(category); ok && profile.HalfLifeBlocks > 0 {
 		multiplier := ep.GraceMultiplier
 		if multiplier == 0 {
 			multiplier = 2
@@ -296,11 +298,11 @@ func (k Keeper) GetGracePeriodForFact(ctx sdk.Context, fact types.Fact) uint64 {
 	ep := k.GetExtendedParams(ctx)
 	noveltyThreshold := ep.NoveltyImmunityThresholdBps
 	if noveltyThreshold == 0 {
-		noveltyThreshold = types.NoveltyImmunityThreshold
+		noveltyThreshold = 500_000 // default 50%
 	}
 	noveltyMult := ep.NoveltyGraceMultiplier
 	if noveltyMult == 0 {
-		noveltyMult = types.NoveltyGraceMultiplier
+		noveltyMult = 3 // default 3x
 	}
 
 	// Novel facts or prophetic facts get extended grace

@@ -83,11 +83,13 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // genesisJSON is the combined genesis structure for JSON marshal/unmarshal.
 // It includes both the proto GenesisState fields and the hand-written token entries.
 type genesisJSON struct {
-	Params       *types.Params                `json:"params,omitempty"`
-	Accounts     []*types.ExpirableAccount    `json:"accounts,omitempty"`
-	Rai          *types.RAIHoldingAccount     `json:"rai,omitempty"`
-	TokenEntries []types.TokenGenesisEntry    `json:"token_entries,omitempty"`
-	PoolEntries  []types.PoolGenesisEntry     `json:"pool_entries,omitempty"`
+	Params            *types.Params                    `json:"params,omitempty"`
+	Accounts          []*types.ExpirableAccount        `json:"accounts,omitempty"`
+	Rai               *types.RAIHoldingAccount         `json:"rai,omitempty"`
+	TokenEntries      []types.TokenGenesisEntry        `json:"token_entries,omitempty"`
+	PoolEntries       []types.PoolGenesisEntry         `json:"pool_entries,omitempty"`
+	DelegationEntries []types.DelegationGenesisEntry   `json:"delegation_entries,omitempty"`
+	WrapEntries       []types.WrapGenesisEntry         `json:"wrap_entries,omitempty"`
 }
 
 // InitGenesis initializes the module's state from genesis.
@@ -154,6 +156,51 @@ func (k Keeper) InitGenesisPools(ctx sdk.Context, data json.RawMessage) {
 				k.SetLPPosition(ctx, entry.Pool.Id, providerAddr, lp)
 			}
 		}
+	}
+}
+
+// InitGenesisDelegations initializes delegation state from raw genesis JSON.
+func (k Keeper) InitGenesisDelegations(ctx sdk.Context, data json.RawMessage) {
+	if data == nil {
+		return
+	}
+	var g genesisJSON
+	if err := json.Unmarshal(data, &g); err != nil {
+		return
+	}
+	for i := range g.DelegationEntries {
+		entry := &g.DelegationEntries[i]
+		for key, amtStr := range entry.Delegations {
+			parts := strings.SplitN(key, "/", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			amt := new(big.Int)
+			if _, ok := amt.SetString(amtStr, 10); ok && amt.Sign() > 0 {
+				k.SetDelegation(ctx, entry.TokenId, parts[0], parts[1], amt)
+			}
+		}
+		for delegator, totalStr := range entry.Totals {
+			total := new(big.Int)
+			if _, ok := total.SetString(totalStr, 10); ok && total.Sign() > 0 {
+				k.SetDelegatorTotal(ctx, entry.TokenId, delegator, total)
+			}
+		}
+	}
+}
+
+// InitGenesisWraps initializes wrap record state from raw genesis JSON.
+func (k Keeper) InitGenesisWraps(ctx sdk.Context, data json.RawMessage) {
+	if data == nil {
+		return
+	}
+	var g genesisJSON
+	if err := json.Unmarshal(data, &g); err != nil {
+		return
+	}
+	for i := range g.WrapEntries {
+		entry := &g.WrapEntries[i]
+		k.SetWrapRecord(ctx, entry.TokenId, entry.WrappedDenom)
 	}
 }
 
@@ -225,6 +272,42 @@ func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
 		return false
 	})
 
+	// Export delegation entries per token
+	var delegationEntries []types.DelegationGenesisEntry
+	k.IterateTokens(ctx, func(token *types.TokenDefinition) bool {
+		delegations := make(map[string]string)
+		totals := make(map[string]string)
+
+		k.IterateDelegationsByToken(ctx, token.Id, func(delegator, delegate string, amount *big.Int) bool {
+			delegations[delegator+"/"+delegate] = amount.String()
+			return false
+		})
+
+		k.IterateDelegatorTotalsByToken(ctx, token.Id, func(delegator string, total *big.Int) bool {
+			totals[delegator] = total.String()
+			return false
+		})
+
+		if len(delegations) > 0 {
+			delegationEntries = append(delegationEntries, types.DelegationGenesisEntry{
+				TokenId:     token.Id,
+				Delegations: delegations,
+				Totals:      totals,
+			})
+		}
+		return false
+	})
+
+	// Export wrap entries
+	var wrapEntries []types.WrapGenesisEntry
+	k.IterateWrapRecords(ctx, func(tokenId, wrappedDenom string) bool {
+		wrapEntries = append(wrapEntries, types.WrapGenesisEntry{
+			TokenId:      tokenId,
+			WrappedDenom: wrappedDenom,
+		})
+		return false
+	})
+
 	g := genesisJSON{
 		Params: &p,
 		Accounts: []*types.ExpirableAccount{},
@@ -234,8 +317,10 @@ func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
 			TotalDistributed: "0",
 			LastDistBlock:    0,
 		},
-		TokenEntries: tokenEntries,
-		PoolEntries:  poolEntries,
+		TokenEntries:      tokenEntries,
+		PoolEntries:       poolEntries,
+		DelegationEntries: delegationEntries,
+		WrapEntries:       wrapEntries,
 	}
 
 	bz, err := json.Marshal(g)

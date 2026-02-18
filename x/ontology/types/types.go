@@ -1,11 +1,9 @@
 package types
 
 import (
-	"context"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
 // Stratum represents a level in the knowledge ontology.
@@ -184,21 +182,7 @@ var ValidZonesForCategory = map[string]map[LogicZone]bool{
 	"social":        {ZoneEmpirical: true},
 }
 
-// ---------- Message Types ----------
-
-// MsgProposeDomain proposes a new domain within a stratum.
-type MsgProposeDomain struct {
-	Name        string  `json:"name"`
-	DisplayName string  `json:"display_name"`
-	Description string  `json:"description"`
-	Stratum     Stratum `json:"stratum"`
-	Proposer    string  `json:"proposer"` // bech32 address
-	Stake       string  `json:"stake"`    // bigint as string
-}
-
-func (msg *MsgProposeDomain) Reset()         {}
-func (msg *MsgProposeDomain) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgProposeDomain) ProtoMessage()  {}
+// ---------- GetSigners and ValidateBasic for proto-generated Msg types ----------
 
 func (msg *MsgProposeDomain) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Proposer)
@@ -212,7 +196,7 @@ func (msg *MsgProposeDomain) ValidateBasic() error {
 	if msg.DisplayName == "" {
 		return fmt.Errorf("display name cannot be empty")
 	}
-	if !msg.Stratum.IsValid() {
+	if !Stratum(msg.Stratum).IsValid() {
 		return fmt.Errorf("invalid stratum: %d", msg.Stratum)
 	}
 	if msg.Proposer == "" {
@@ -223,25 +207,6 @@ func (msg *MsgProposeDomain) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgProposeDomainResponse struct {
-	ProposalId string `json:"proposal_id"`
-}
-
-func (msg *MsgProposeDomainResponse) Reset()         {}
-func (msg *MsgProposeDomainResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgProposeDomainResponse) ProtoMessage()  {}
-
-// MsgVoteDomainProposal votes on a domain proposal.
-type MsgVoteDomainProposal struct {
-	ProposalId string `json:"proposal_id"`
-	Voter      string `json:"voter"`   // bech32 address
-	Approve    bool   `json:"approve"` // true = for, false = against
-}
-
-func (msg *MsgVoteDomainProposal) Reset()         {}
-func (msg *MsgVoteDomainProposal) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgVoteDomainProposal) ProtoMessage()  {}
 
 func (msg *MsgVoteDomainProposal) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Voter)
@@ -260,25 +225,6 @@ func (msg *MsgVoteDomainProposal) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgVoteDomainProposalResponse struct{}
-
-func (msg *MsgVoteDomainProposalResponse) Reset()         {}
-func (msg *MsgVoteDomainProposalResponse) String() string { return "" }
-func (msg *MsgVoteDomainProposalResponse) ProtoMessage()  {}
-
-// MsgUpdateDomain updates domain metadata (authority only).
-type MsgUpdateDomain struct {
-	Authority   string `json:"authority"` // bech32 address (gov module)
-	DomainName  string `json:"domain_name"`
-	DisplayName string `json:"display_name"`
-	Description string `json:"description"`
-	Status      string `json:"status"` // "active", "deprecated"
-}
-
-func (msg *MsgUpdateDomain) Reset()         {}
-func (msg *MsgUpdateDomain) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgUpdateDomain) ProtoMessage()  {}
 
 func (msg *MsgUpdateDomain) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
@@ -301,22 +247,6 @@ func (msg *MsgUpdateDomain) ValidateBasic() error {
 	return nil
 }
 
-type MsgUpdateDomainResponse struct{}
-
-func (msg *MsgUpdateDomainResponse) Reset()         {}
-func (msg *MsgUpdateDomainResponse) String() string { return "" }
-func (msg *MsgUpdateDomainResponse) ProtoMessage()  {}
-
-// MsgUpdateParams updates module parameters (authority only).
-type MsgUpdateParams struct {
-	Authority string `json:"authority"` // bech32 address (gov module)
-	Params    Params `json:"params"`
-}
-
-func (msg *MsgUpdateParams) Reset()         {}
-func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgUpdateParams) ProtoMessage()  {}
-
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
@@ -332,24 +262,6 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	return nil
 }
 
-type MsgUpdateParamsResponse struct{}
-
-func (msg *MsgUpdateParamsResponse) Reset()         {}
-func (msg *MsgUpdateParamsResponse) String() string { return "" }
-func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// ---------- Logic Zone Messages ----------
-
-// MsgRegisterLogicZone registers a new logic zone (authority only).
-type MsgRegisterLogicZone struct {
-	Authority      string              `json:"authority"`
-	ZoneProperties LogicZoneProperties `json:"zone_properties"`
-}
-
-func (msg *MsgRegisterLogicZone) Reset()         {}
-func (msg *MsgRegisterLogicZone) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRegisterLogicZone) ProtoMessage()  {}
-
 func (msg *MsgRegisterLogicZone) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
@@ -362,7 +274,7 @@ func (msg *MsgRegisterLogicZone) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
-	if msg.ZoneProperties.Zone == "" {
+	if msg.ZoneProperties == nil || msg.ZoneProperties.Zone == "" {
 		return fmt.Errorf("zone name cannot be empty")
 	}
 	if msg.ZoneProperties.MaxConfidenceBps > 1000000 {
@@ -370,24 +282,6 @@ func (msg *MsgRegisterLogicZone) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgRegisterLogicZoneResponse struct{}
-
-func (msg *MsgRegisterLogicZoneResponse) Reset()         {}
-func (msg *MsgRegisterLogicZoneResponse) String() string { return "" }
-func (msg *MsgRegisterLogicZoneResponse) ProtoMessage()  {}
-
-// MsgAcknowledgeIncompleteness records that a fact in an incomplete zone has been acknowledged.
-type MsgAcknowledgeIncompleteness struct {
-	Submitter string    `json:"submitter"` // bech32 address
-	FactId    string    `json:"fact_id"`
-	Zone      LogicZone `json:"zone"`
-	Reason    string    `json:"reason"`
-}
-
-func (msg *MsgAcknowledgeIncompleteness) Reset()         {}
-func (msg *MsgAcknowledgeIncompleteness) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgAcknowledgeIncompleteness) ProtoMessage()  {}
 
 func (msg *MsgAcknowledgeIncompleteness) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
@@ -413,128 +307,8 @@ func (msg *MsgAcknowledgeIncompleteness) ValidateBasic() error {
 	return nil
 }
 
-type MsgAcknowledgeIncompletenessResponse struct{}
-
-func (msg *MsgAcknowledgeIncompletenessResponse) Reset()         {}
-func (msg *MsgAcknowledgeIncompletenessResponse) String() string { return "" }
-func (msg *MsgAcknowledgeIncompletenessResponse) ProtoMessage()  {}
-
-// ---------- MsgServer Interface ----------
-
-// MsgServer is the service interface for the ontology module.
-type MsgServer interface {
-	ProposeDomain(context.Context, *MsgProposeDomain) (*MsgProposeDomainResponse, error)
-	VoteDomainProposal(context.Context, *MsgVoteDomainProposal) (*MsgVoteDomainProposalResponse, error)
-	UpdateDomain(context.Context, *MsgUpdateDomain) (*MsgUpdateDomainResponse, error)
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
-	RegisterLogicZone(context.Context, *MsgRegisterLogicZone) (*MsgRegisterLogicZoneResponse, error)
-	AcknowledgeIncompleteness(context.Context, *MsgAcknowledgeIncompleteness) (*MsgAcknowledgeIncompletenessResponse, error)
-}
-
-func _Msg_ProposeDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgProposeDomain)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ProposeDomain(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/ProposeDomain"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ProposeDomain(ctx, req.(*MsgProposeDomain))
-	})
-}
-
-func _Msg_VoteDomainProposal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgVoteDomainProposal)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).VoteDomainProposal(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/VoteDomainProposal"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).VoteDomainProposal(ctx, req.(*MsgVoteDomainProposal))
-	})
-}
-
-func _Msg_UpdateDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateDomain)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateDomain(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/UpdateDomain"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateDomain(ctx, req.(*MsgUpdateDomain))
-	})
-}
-
-func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateParams(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/UpdateParams"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
-	})
-}
-
-func _Msg_RegisterLogicZone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRegisterLogicZone)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RegisterLogicZone(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/RegisterLogicZone"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RegisterLogicZone(ctx, req.(*MsgRegisterLogicZone))
-	})
-}
-
-func _Msg_AcknowledgeIncompleteness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgAcknowledgeIncompleteness)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).AcknowledgeIncompleteness(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Msg/AcknowledgeIncompleteness"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).AcknowledgeIncompleteness(ctx, req.(*MsgAcknowledgeIncompleteness))
-	})
-}
-
-// Service descriptor for MsgServer registration.
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.ontology.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "ProposeDomain", Handler: _Msg_ProposeDomain_Handler},
-		{MethodName: "VoteDomainProposal", Handler: _Msg_VoteDomainProposal_Handler},
-		{MethodName: "UpdateDomain", Handler: _Msg_UpdateDomain_Handler},
-		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
-		{MethodName: "RegisterLogicZone", Handler: _Msg_RegisterLogicZone_Handler},
-		{MethodName: "AcknowledgeIncompleteness", Handler: _Msg_AcknowledgeIncompleteness_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/ontology/v1/tx.proto",
-}
-
-// RegisterMsgServer registers the MsgServer implementation with the gRPC server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
-}
+// NOTE: MsgServer interface, gRPC handlers, service descriptor, and RegisterMsgServer
+// are now proto-generated in tx_grpc.pb.go.
 
 // NOTE: QueryServer, query request/response types, query handlers, and RegisterQueryServer
 // are now proto-generated in query.pb.go and query_grpc.pb.go.

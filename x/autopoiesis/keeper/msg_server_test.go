@@ -54,15 +54,15 @@ func TestUpdateParams_Success(t *testing.T) {
 		MaxChangePerEpochBps:    100_000,
 		SlashMultiplierMin:      500_000,
 		SlashMultiplierMax:      3_000_000,
-		SSICriticalThreshold:    900_000,
-		SSIModerateThreshold:    600_000,
-		SSILowModerateThreshold: 300_000,
+		SsiCriticalThreshold:    900_000,
+		SsiModerateThreshold:    600_000,
+		SsiLowModerateThreshold: 300_000,
 		Enabled:                 true,
 	}
 
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAuthority,
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)
@@ -72,17 +72,18 @@ func TestUpdateParams_Success(t *testing.T) {
 	if stored.EpochLengthBlocks != 2222 {
 		t.Fatalf("expected epoch_length_blocks=2222, got %d", stored.EpochLengthBlocks)
 	}
-	if stored.SSICriticalThreshold != 900_000 {
-		t.Fatalf("expected ssi_critical=900000, got %d", stored.SSICriticalThreshold)
+	if stored.SsiCriticalThreshold != 900_000 {
+		t.Fatalf("expected ssi_critical=900000, got %d", stored.SsiCriticalThreshold)
 	}
 }
 
 func TestUpdateParams_Unauthorized(t *testing.T) {
 	ms, _, ctx := setupMsgServer(t)
 
+	dp := types.DefaultParams()
 	_, err := ms.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: "lgm1wrongauthority",
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized caller")
@@ -92,7 +93,7 @@ func TestUpdateParams_Unauthorized(t *testing.T) {
 func TestUpdateParams_InvalidParams(t *testing.T) {
 	msg := &types.MsgUpdateParams{
 		Authority: testAuthority,
-		Params: types.Params{
+		Params: &types.Params{
 			EpochLengthBlocks: 0, // invalid
 		},
 	}
@@ -109,7 +110,7 @@ func TestActivate_Enable(t *testing.T) {
 	// Deactivate first
 	_, err := ms.Activate(ctx, &types.MsgActivateAutopoiesis{
 		Authority: testAuthority,
-		Active:    false,
+		Activate: false,
 	})
 	if err != nil {
 		t.Fatalf("Deactivate failed: %v", err)
@@ -121,7 +122,7 @@ func TestActivate_Enable(t *testing.T) {
 	// Re-activate
 	_, err = ms.Activate(ctx, &types.MsgActivateAutopoiesis{
 		Authority: testAuthority,
-		Active:    true,
+		Activate: true,
 	})
 	if err != nil {
 		t.Fatalf("Activate failed: %v", err)
@@ -136,7 +137,7 @@ func TestActivate_Unauthorized(t *testing.T) {
 
 	_, err := ms.Activate(ctx, &types.MsgActivateAutopoiesis{
 		Authority: "lgm1wrongauthority",
-		Active:    false,
+		Activate: false,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized caller")

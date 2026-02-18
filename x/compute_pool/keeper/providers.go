@@ -21,11 +21,11 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 
 	// Validate stake meets minimum
 	stakeAmt := new(big.Int)
-	stakeAmt.SetString(msg.StakeAmount, 10)
+	stakeAmt.SetString(msg.Stake, 10)
 	minStake := new(big.Int)
 	minStake.SetString(params.MinProviderStake, 10)
 	if stakeAmt.Cmp(minStake) < 0 {
-		return fmt.Errorf("%w: need %s, got %s", types.ErrInsufficientStake, params.MinProviderStake, msg.StakeAmount)
+		return fmt.Errorf("%w: need %s, got %s", types.ErrInsufficientStake, params.MinProviderStake, msg.Stake)
 	}
 
 	// Validate price doesn't exceed ceiling
@@ -56,7 +56,7 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 		ServiceType:   msg.ServiceType,
 		Endpoint:      msg.Endpoint,
 		PricePerCu:    msg.PricePerCu,
-		Stake:         msg.StakeAmount,
+		Stake:         msg.Stake,
 		Status:        string(types.ProviderStatusActive),
 		RegisteredAt:  height,
 		LastHeartbeat: height,
@@ -70,7 +70,7 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 			"compute_provider_registered",
 			sdk.NewAttribute("address", msg.Sender),
 			sdk.NewAttribute("service_type", msg.ServiceType),
-			sdk.NewAttribute("stake", msg.StakeAmount),
+			sdk.NewAttribute("stake", msg.Stake),
 			sdk.NewAttribute("price_per_cu", msg.PricePerCu),
 		),
 	)
@@ -95,10 +95,10 @@ func (k Keeper) UpdateProviderState(ctx sdk.Context, msg *types.MsgUpdateProvide
 		provider.Endpoint = msg.Endpoint
 	}
 
-	if msg.Price != "" {
+	if msg.PricePerCu != "" {
 		// Validate price ceiling
 		price := new(big.Int)
-		price.SetString(msg.Price, 10)
+		price.SetString(msg.PricePerCu, 10)
 		maxPrice := new(big.Int)
 		maxPrice.SetString(params.MaxPricePerCu, 10)
 		if price.Cmp(maxPrice) > 0 {
@@ -107,7 +107,7 @@ func (k Keeper) UpdateProviderState(ctx sdk.Context, msg *types.MsgUpdateProvide
 
 		// Schedule price change with delay
 		height := uint64(ctx.BlockHeight())
-		provider.PendingPrice = msg.Price
+		provider.PendingPrice = msg.PricePerCu
 		provider.PriceChangeAt = height + params.PriceChangeDelayBlocks
 	}
 

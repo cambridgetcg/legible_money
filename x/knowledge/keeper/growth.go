@@ -23,6 +23,7 @@ import (
 //   - After reaching established maturity: cap raised to category ceiling
 func (k Keeper) ApplyConfidenceGrowth(ctx sdk.Context, currentHeight uint64) {
 	params := k.GetParams(ctx)
+	ep := k.GetExtendedParams(ctx)
 	growthPerEpoch := params.ConfidenceGrowthPerEpoch
 	if growthPerEpoch == 0 {
 		growthPerEpoch = types.ConfidenceGrowthPerEpochDefault
@@ -56,10 +57,10 @@ func (k Keeper) ApplyConfidenceGrowth(ctx sdk.Context, currentHeight uint64) {
 		// Determine confidence cap
 		cap := maxSurvival
 		if fact.SurvivedChallenges > 0 {
-			cap = types.SurvivedChallengeConfidenceCap // 88%
+			cap = ep.SurvivedChallengeConfCap // 88%
 		}
 		if fact.Maturity == types.MaturityEstablished || fact.Maturity == types.MaturityCanonical {
-			categoryCeiling := getCategoryCeiling(fact.EpistemicCategory)
+			categoryCeiling := getCategoryCeilingFromParams(fact.EpistemicCategory, ep)
 			if categoryCeiling > cap {
 				cap = categoryCeiling
 			}
@@ -74,7 +75,7 @@ func (k Keeper) ApplyConfidenceGrowth(ctx sdk.Context, currentHeight uint64) {
 		}
 
 		// Apply category ceiling
-		categoryCeiling := getCategoryCeiling(fact.EpistemicCategory)
+		categoryCeiling := getCategoryCeilingFromParams(fact.EpistemicCategory, ep)
 		if categoryCeiling < cap {
 			cap = categoryCeiling
 		}
@@ -103,8 +104,9 @@ func (k Keeper) ApplyConfidenceGrowth(ctx sdk.Context, currentHeight uint64) {
 // decays by StaleContestedDecayRateBps (5%) per epoch. If confidence falls below
 // RetractionThresholdBps (10%), the fact is revoked.
 func (k Keeper) DecayStaleContestedFacts(ctx sdk.Context, currentHeight uint64) {
-	growthEpoch := uint64(types.ConfidenceGrowthEpoch)
-	staleThreshold := types.StaleContestedDecayEpochs * growthEpoch
+	ep := k.GetExtendedParams(ctx)
+	growthEpoch := ep.ConfidenceGrowthEpochBlocks
+	staleThreshold := ep.StaleContestedDecayEpochs * growthEpoch
 
 	k.IterateFacts(ctx, func(fact types.Fact) bool {
 		if fact.Status != types.FactStatusContested {
@@ -123,7 +125,7 @@ func (k Keeper) DecayStaleContestedFacts(ctx sdk.Context, currentHeight uint64) 
 		}
 
 		// Apply decay
-		decayAmount := (fact.Confidence * types.StaleContestedDecayRateBps) / 1_000_000
+		decayAmount := (fact.Confidence * ep.StaleContestedDecayRateBps) / 1_000_000
 		if decayAmount == 0 {
 			decayAmount = 1 // Always decay at least 1 unit
 		}
@@ -169,17 +171,8 @@ func (k Keeper) DecayStaleContestedFacts(ctx sdk.Context, currentHeight uint64) 
 func (k Keeper) DetectPropheticFacts(ctx sdk.Context, currentHeight uint64) {
 	ep := k.GetExtendedParams(ctx)
 	propheticThreshold := ep.PropheticBaseThresholdBps
-	if propheticThreshold == 0 {
-		propheticThreshold = types.PropheticBaseThreshold
-	}
 	citationThreshold := ep.PropheticCitationThreshold
-	if citationThreshold == 0 {
-		citationThreshold = types.PropheticCitationThreshold
-	}
 	propheticCap := ep.PropheticConfidenceCapBps
-	if propheticCap == 0 {
-		propheticCap = types.PropheticConfidenceCap
-	}
 
 	k.IterateFacts(ctx, func(fact types.Fact) bool {
 		// Skip if already prophetic or not verified
@@ -212,7 +205,7 @@ func (k Keeper) DetectPropheticFacts(ctx sdk.Context, currentHeight uint64) {
 		// Calculate citation growth rate (citations per epoch since creation)
 		ageBlocks := currentHeight - fact.CreatedAtHeight
 		if ageBlocks > 0 {
-			epochBlocks := uint64(types.ConfidenceGrowthEpoch)
+			epochBlocks := ep.ConfidenceGrowthEpochBlocks
 			epochsAlive := ageBlocks / epochBlocks
 			if epochsAlive == 0 {
 				epochsAlive = 1
@@ -253,9 +246,6 @@ func (k Keeper) DetectPropheticFacts(ctx sdk.Context, currentHeight uint64) {
 func (k Keeper) ApplyPropheticGrowth(ctx sdk.Context, currentHeight uint64) {
 	ep := k.GetExtendedParams(ctx)
 	propheticCap := ep.PropheticConfidenceCapBps
-	if propheticCap == 0 {
-		propheticCap = types.PropheticConfidenceCap
-	}
 
 	params := k.GetParams(ctx)
 	growthPerEpoch := params.ConfidenceGrowthPerEpoch
@@ -311,6 +301,7 @@ func (k Keeper) ApplyPropheticGrowth(ctx sdk.Context, currentHeight uint64) {
 //   - verifier_count (original verification round participants)
 //   - citation_count (being cited = passive verification)
 func (k Keeper) AdvanceMaturityLevels(ctx sdk.Context, currentHeight uint64) {
+	ep := k.GetExtendedParams(ctx)
 	k.IterateFacts(ctx, func(fact types.Fact) bool {
 		if fact.Status != types.FactStatusVerified && fact.Status != types.FactStatusActive {
 			return false
@@ -337,9 +328,9 @@ func (k Keeper) AdvanceMaturityLevels(ctx sdk.Context, currentHeight uint64) {
 
 		switch fact.Maturity {
 		case types.MaturityEmerging, "":
-			if fact.Confidence >= types.MaturityEstablishedMinConf &&
-				age >= types.MaturityEstablishedMinAge &&
-				effectiveVerifications >= types.MaturityEstablishedMinVerifications {
+			if fact.Confidence >= ep.MaturityEstablishedMinConf &&
+				age >= ep.MaturityEstablishedMinAge &&
+				effectiveVerifications >= uint32(ep.MaturityEstablishedMinVerif) {
 				fact.Maturity = types.MaturityEstablished
 				k.SetFact(ctx, fact)
 
@@ -352,9 +343,9 @@ func (k Keeper) AdvanceMaturityLevels(ctx sdk.Context, currentHeight uint64) {
 			}
 
 		case types.MaturityEstablished:
-			if fact.Confidence >= types.MaturityCanonicalMinConf &&
-				age >= types.MaturityCanonicalMinAge &&
-				effectiveVerifications >= types.MaturityCanonicalMinVerifications {
+			if fact.Confidence >= ep.MaturityCanonicalMinConf &&
+				age >= ep.MaturityCanonicalMinAge &&
+				effectiveVerifications >= uint32(ep.MaturityCanonicalMinVerif) {
 				fact.Maturity = types.MaturityCanonical
 				k.SetFact(ctx, fact)
 

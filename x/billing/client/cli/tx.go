@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -53,9 +52,9 @@ declaring which knowledge domains you serve.`,
 			}
 
 			msg := &types.MsgRegisterProvider{
-				Sender:      clientCtx.GetFromAddress().String(),
-				StakeAmount: args[0],
-				Domains:     domains,
+				Sender:  clientCtx.GetFromAddress().String(),
+				Stake:   args[0],
+				Domains: domains,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -137,14 +136,9 @@ The quote must still be within its validity window.`,
 				return err
 			}
 
-			quoteID, err := parseUint64(args[0])
-			if err != nil {
-				return fmt.Errorf("invalid quote-id: %w", err)
-			}
-
 			msg := &types.MsgExecutePayment{
 				Sender:  clientCtx.GetFromAddress().String(),
-				QuoteId: quoteID,
+				QuoteId: args[0],
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -153,12 +147,4 @@ The quote must still be within its validity window.`,
 
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
-}
-
-// parseUint64 parses a string to uint64.
-func parseUint64(s string) (uint64, error) {
-	s = strings.TrimSpace(s)
-	var n uint64
-	_, err := fmt.Sscanf(s, "%d", &n)
-	return n, err
 }

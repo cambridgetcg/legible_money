@@ -34,13 +34,14 @@ func evaluateCounterFacts(ctx sdk.Context, evalCtx *EvaluationContext, claim typ
 		return result
 	}
 
+	ep := evalCtx.ExtendedParams
 	// Check if this claim's own target is already known to be false.
 	// This applies when a claim references a fact that is itself disproven.
 	var totalPenalty uint64
 	var disprovenRefFound bool
 
 	for _, refId := range claim.References {
-		if totalPenalty >= types.MaxCounterFactPenalty {
+		if totalPenalty >= ep.MaxCounterFactPenalty {
 			break
 		}
 
@@ -55,16 +56,16 @@ func evaluateCounterFacts(ctx sdk.Context, evalCtx *EvaluationContext, claim typ
 			}
 
 			var penalty uint64
-			if cf.Confidence >= types.CounterFactHighConfidence {
-				penalty = types.CounterFactHighPenalty
-			} else if cf.Confidence >= types.CounterFactMediumConfidence {
-				penalty = types.CounterFactMediumPenalty
+			if cf.Confidence >= ep.CounterFactHighConfidenceBps {
+				penalty = ep.CounterFactHighPenalty
+			} else if cf.Confidence >= ep.CounterFactMediumConfidenceBps {
+				penalty = ep.CounterFactMediumPenalty
 			} else {
-				penalty = types.CounterFactLowPenalty
+				penalty = ep.CounterFactLowPenalty
 			}
 
-			if totalPenalty+penalty > types.MaxCounterFactPenalty {
-				penalty = types.MaxCounterFactPenalty - totalPenalty
+			if totalPenalty+penalty > ep.MaxCounterFactPenalty {
+				penalty = ep.MaxCounterFactPenalty - totalPenalty
 			}
 			totalPenalty += penalty
 		}

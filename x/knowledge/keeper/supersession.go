@@ -133,7 +133,8 @@ func (k Keeper) GetLatestVersion(ctx sdk.Context, factID string) (types.Fact, bo
 func (k Keeper) TriggerReverificationScan(ctx sdk.Context, maxPerBlock int) int {
 	facts := k.GetFactsNeedingReverification(ctx, maxPerBlock)
 	triggered := 0
-	maxCreated := types.MaxReverificationsPerBlock
+	ep := k.GetExtendedParams(ctx)
+	maxCreated := int(ep.MaxReverificationsPerBlock)
 
 	for _, fact := range facts {
 		if triggered >= maxCreated {
@@ -261,7 +262,8 @@ func (k Keeper) MasterConfidence(ctx sdk.Context, factID string) uint64 {
 		blocksSince = currentHeight - lastVerified
 	}
 
-	decayed := CalculateDecayedConfidence(cBase, blocksSince, fact.EpistemicCategory)
+	ep := k.GetExtendedParams(ctx)
+	decayed := CalculateDecayedConfidence(cBase, blocksSince, fact.EpistemicCategory, ep)
 	var mTemporal uint64
 	if cBase > 0 {
 		mTemporal = (decayed * 1_000_000) / cBase
@@ -291,7 +293,7 @@ func (k Keeper) MasterConfidence(ctx sdk.Context, factID string) uint64 {
 
 	// Apply ceiling: min(C_max, C_final)
 	// Category ceiling
-	if profile, ok := types.CATEGORY_DECAY[fact.EpistemicCategory]; ok {
+	if profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory); ok {
 		if cFinal > profile.MaxConfidence {
 			cFinal = profile.MaxConfidence
 		}

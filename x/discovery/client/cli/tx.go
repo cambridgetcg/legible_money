@@ -126,7 +126,7 @@ func NewAddCapabilityCmd() *cobra.Command {
 
 			msg := &types.MsgAddCapability{
 				Address: clientCtx.GetFromAddress().String(),
-				Capability: types.AgentCapability{
+				Capability: &types.AgentCapability{
 					CapabilityType: args[0],
 					Domains:        domains,
 					ConfidenceBps:  confidence,

@@ -15,7 +15,7 @@ func mockSDKContext() sdk.Context {
 
 func TestEvaluateCounterFacts_NoLookup(t *testing.T) {
 	ctx := mockSDKContext()
-	evalCtx := &EvaluationContext{}
+	evalCtx := &EvaluationContext{ExtendedParams: types.DefaultExtendedParams()}
 	claim := types.Claim{
 		References: []string{"fact-1"},
 	}
@@ -32,6 +32,7 @@ func TestEvaluateCounterFacts_NoReferences(t *testing.T) {
 	ctx := mockSDKContext()
 	called := false
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, _ string) []types.CounterFact {
 			called = true
 			return nil
@@ -52,6 +53,7 @@ func TestEvaluateCounterFacts_NoReferences(t *testing.T) {
 func TestEvaluateCounterFacts_HighConfidenceCounterFact(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, factId string) []types.CounterFact {
 			if factId == "fact-1" {
 				return []types.CounterFact{
@@ -78,6 +80,7 @@ func TestEvaluateCounterFacts_HighConfidenceCounterFact(t *testing.T) {
 func TestEvaluateCounterFacts_MediumConfidenceCounterFact(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, _ string) []types.CounterFact {
 			return []types.CounterFact{
 				{
@@ -100,6 +103,7 @@ func TestEvaluateCounterFacts_MediumConfidenceCounterFact(t *testing.T) {
 func TestEvaluateCounterFacts_LowConfidenceCounterFact(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, _ string) []types.CounterFact {
 			return []types.CounterFact{
 				{
@@ -122,6 +126,7 @@ func TestEvaluateCounterFacts_LowConfidenceCounterFact(t *testing.T) {
 func TestEvaluateCounterFacts_UnverifiedIgnored(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, _ string) []types.CounterFact {
 			return []types.CounterFact{
 				{
@@ -144,6 +149,7 @@ func TestEvaluateCounterFacts_UnverifiedIgnored(t *testing.T) {
 func TestEvaluateCounterFacts_PenaltyCapped(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, _ string) []types.CounterFact {
 			// Return many high-confidence counter-facts
 			cfs := make([]types.CounterFact, 10)
@@ -171,6 +177,7 @@ func TestEvaluateCounterFacts_PenaltyCapped(t *testing.T) {
 func TestEvaluateCounterFacts_DisprovenRefForcesReject(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, _ string) []types.CounterFact {
 			return []types.CounterFact{
 				{
@@ -203,6 +210,7 @@ func TestEvaluateCounterFacts_DisprovenRefForcesReject(t *testing.T) {
 func TestEvaluateCounterFacts_MultipleRefs(t *testing.T) {
 	ctx := mockSDKContext()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetCounterFactsByFact: func(_ sdk.Context, factId string) []types.CounterFact {
 			switch factId {
 			case "fact-1":

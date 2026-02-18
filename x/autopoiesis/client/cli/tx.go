@@ -54,7 +54,7 @@ active: true or false`,
 
 			msg := &types.MsgActivateAutopoiesis{
 				Authority: clientCtx.GetFromAddress().String(),
-				Active:    active,
+				Activate:  active,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)

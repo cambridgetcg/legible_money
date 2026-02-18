@@ -12,24 +12,24 @@ import (
 // Uses exponential half-life decay: C(t) = C_min + (C_0 - C_min) × 0.5^(t/halfLife)
 // Eternal categories (halfLife=0) return the original confidence unchanged.
 // All values in basis points (0-1,000,000).
-func CalculateDecayedConfidence(baseConfidence, blocksSince uint64, category string) uint64 {
-	return calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince, category, 1)
+func CalculateDecayedConfidence(baseConfidence, blocksSince uint64, category string, ep types.ExtendedParams) uint64 {
+	return calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince, category, 1, ep)
 }
 
 // CalculateDecayedConfidenceNovel computes confidence decay for novel facts.
 // Novel facts get an extended half-life (2× by default) so their knowledge
 // persists longer before requiring reverification.
-func CalculateDecayedConfidenceNovel(baseConfidence, blocksSince uint64, category string, halfLifeMultiplier uint64) uint64 {
+func CalculateDecayedConfidenceNovel(baseConfidence, blocksSince uint64, category string, halfLifeMultiplier uint64, ep types.ExtendedParams) uint64 {
 	if halfLifeMultiplier == 0 {
 		halfLifeMultiplier = 1
 	}
-	return calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince, category, halfLifeMultiplier)
+	return calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince, category, halfLifeMultiplier, ep)
 }
 
 // calculateDecayedConfidenceWithMultiplier is the shared implementation
 // for standard and novelty-aware decay.
-func calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince uint64, category string, halfLifeMultiplier uint64) uint64 {
-	profile, ok := types.CATEGORY_DECAY[category]
+func calculateDecayedConfidenceWithMultiplier(baseConfidence, blocksSince uint64, category string, halfLifeMultiplier uint64, ep types.ExtendedParams) uint64 {
+	profile, ok := ep.GetCategoryDecayProfile(category)
 	if !ok {
 		return baseConfidence // unknown category — no decay
 	}
@@ -81,13 +81,14 @@ func (k Keeper) GetFactWithDecay(ctx sdk.Context, factID string) (types.Fact, bo
 		return fact, false
 	}
 
+	ep := k.GetExtendedParams(ctx)
 	currentHeight := uint64(ctx.BlockHeight())
-	fact = k.applyDecayToFact(fact, currentHeight)
+	fact = k.applyDecayToFact(fact, currentHeight, ep)
 	return fact, true
 }
 
 // applyDecayToFact computes the current decayed confidence for a fact.
-func (k Keeper) applyDecayToFact(fact types.Fact, currentHeight uint64) types.Fact {
+func (k Keeper) applyDecayToFact(fact types.Fact, currentHeight uint64, ep types.ExtendedParams) types.Fact {
 	// Use BaseConfidence if set, otherwise use Confidence as the base
 	base := fact.BaseConfidence
 	if base == 0 {
@@ -104,44 +105,44 @@ func (k Keeper) applyDecayToFact(fact types.Fact, currentHeight uint64) types.Fa
 
 	// Novel or prophetic facts get slower decay (extended half-life)
 	var decayed uint64
-	if fact.NoveltyScore >= types.NoveltyImmunityThreshold || fact.IsProphetic {
-		decayed = CalculateDecayedConfidenceNovel(base, blocksSince, fact.EpistemicCategory, types.NoveltyDecayHalfLifeMultiplier)
+	if fact.NoveltyScore >= ep.NoveltyImmunityThresholdBps || fact.IsProphetic {
+		decayed = CalculateDecayedConfidenceNovel(base, blocksSince, fact.EpistemicCategory, ep.NoveltyDecayHalfLifeMultiplier, ep)
 	} else {
-		decayed = CalculateDecayedConfidence(base, blocksSince, fact.EpistemicCategory)
+		decayed = CalculateDecayedConfidence(base, blocksSince, fact.EpistemicCategory, ep)
 	}
 	fact.Confidence = decayed
 	fact.LastConfidenceUpdate = currentHeight
 
 	// Update maturity based on current state
-	fact.Maturity = CalculateMaturity(decayed, blocksSince, uint64(fact.VerifierCount))
+	fact.Maturity = CalculateMaturity(decayed, blocksSince, uint64(fact.VerifierCount), ep)
 
 	return fact
 }
 
 // CalculateMaturity determines fact maturity level based on confidence, age, and verifications.
-func CalculateMaturity(confidence, ageBlocks, verificationCount uint64) string {
-	if confidence >= types.MaturityCanonicalMinConf &&
-		ageBlocks >= types.MaturityCanonicalMinAge &&
-		verificationCount >= types.MaturityCanonicalMinVerifications {
+func CalculateMaturity(confidence, ageBlocks, verificationCount uint64, ep types.ExtendedParams) string {
+	if confidence >= ep.MaturityCanonicalMinConf &&
+		ageBlocks >= ep.MaturityCanonicalMinAge &&
+		verificationCount >= uint64(ep.MaturityCanonicalMinVerif) {
 		return types.MaturityCanonical
 	}
-	if confidence >= types.MaturityEstablishedMinConf &&
-		ageBlocks >= types.MaturityEstablishedMinAge &&
-		verificationCount >= types.MaturityEstablishedMinVerifications {
+	if confidence >= ep.MaturityEstablishedMinConf &&
+		ageBlocks >= ep.MaturityEstablishedMinAge &&
+		verificationCount >= uint64(ep.MaturityEstablishedMinVerif) {
 		return types.MaturityEstablished
 	}
 	return types.MaturityEmerging
 }
 
 // NeedsReverification checks if a fact's confidence has decayed below the reverification threshold.
-func NeedsReverification(fact types.Fact, currentHeight uint64) bool {
-	profile, ok := types.CATEGORY_DECAY[fact.EpistemicCategory]
+func NeedsReverification(fact types.Fact, currentHeight uint64, ep types.ExtendedParams) bool {
+	profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory)
 	if !ok || !profile.RequiresReverification {
 		return false
 	}
 
 	// Check confidence threshold
-	if fact.Confidence < types.ReverificationThreshold {
+	if fact.Confidence < ep.ReverificationThreshold {
 		return true
 	}
 
@@ -153,7 +154,7 @@ func NeedsReverification(fact types.Fact, currentHeight uint64) bool {
 		}
 		if currentHeight > lastVerified {
 			age := currentHeight - lastVerified
-			if age > types.StalenessMultiplier*profile.HalfLifeBlocks {
+			if age > uint64(ep.StalenessMultiplier)*profile.HalfLifeBlocks {
 				return true
 			}
 		}
@@ -163,8 +164,8 @@ func NeedsReverification(fact types.Fact, currentHeight uint64) bool {
 }
 
 // ApplyReverificationBonus applies the category-specific reverification bonus.
-func ApplyReverificationBonus(fact types.Fact) types.Fact {
-	profile, ok := types.CATEGORY_DECAY[fact.EpistemicCategory]
+func ApplyReverificationBonus(fact types.Fact, ep types.ExtendedParams) types.Fact {
+	profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory)
 	if !ok {
 		return fact
 	}

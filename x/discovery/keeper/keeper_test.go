@@ -206,7 +206,7 @@ func TestRegisterAgentHandler(t *testing.T) {
 		DisplayName: "Test Agent",
 		Domains:     []string{"mathematics"},
 		Stake:       "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification", ConfidenceBps: 8000},
 		},
 	}
@@ -343,14 +343,14 @@ func TestAddCapability(t *testing.T) {
 		Did:     "did:lgm:test",
 		Domains: []string{"mathematics"},
 		Stake:   "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification", ConfidenceBps: 8000},
 		},
 	})
 
 	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
 		Address: testAgent1,
-		Capability: types.AgentCapability{
+		Capability: &types.AgentCapability{
 			CapabilityType: "research",
 			ConfidenceBps:  7000,
 		},
@@ -374,14 +374,14 @@ func TestAddCapability_Duplicate(t *testing.T) {
 		Did:     "did:lgm:test",
 		Domains: []string{"mathematics"},
 		Stake:   "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification"},
 		},
 	})
 
 	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
 		Address:    testAgent1,
-		Capability: types.AgentCapability{CapabilityType: "verification"},
+		Capability: &types.AgentCapability{CapabilityType: "verification"},
 	})
 	if err == nil {
 		t.Fatal("expected error for duplicate capability")
@@ -401,7 +401,7 @@ func TestAddCapability_InactiveAgent(t *testing.T) {
 
 	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
 		Address:    testAgent1,
-		Capability: types.AgentCapability{CapabilityType: "verification"},
+		Capability: &types.AgentCapability{CapabilityType: "verification"},
 	})
 	if err == nil {
 		t.Fatal("expected error for inactive agent")
@@ -419,7 +419,7 @@ func TestRemoveCapability(t *testing.T) {
 		Did:     "did:lgm:test",
 		Domains: []string{"mathematics"},
 		Stake:   "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification"},
 			{CapabilityType: "research"},
 		},
@@ -553,7 +553,7 @@ func TestUpdateParams(t *testing.T) {
 
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAgent1, // matches setupKeeper authority
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)
@@ -569,9 +569,10 @@ func TestUpdateParams_Unauthorized(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	msgServer := keeper.NewMsgServerImpl(k)
 
+	dp := types.DefaultParams()
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testAgent2, // wrong authority
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	})
 	if err == nil {
 		t.Fatal("expected error for unauthorized UpdateParams")

@@ -90,7 +90,7 @@ func TestOC_DS2_CapabilitySpam(t *testing.T) {
 		Did:     "did:lgm:spam_test",
 		Domains: []string{"mathematics"},
 		Stake:   "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification", ConfidenceBps: 8000},
 		},
 	})
@@ -102,7 +102,7 @@ func TestOC_DS2_CapabilitySpam(t *testing.T) {
 	for _, capType := range []string{"research", "review"} {
 		_, err = msgServer.AddCapability(ctx, &types.MsgAddCapability{
 			Address: testAgent1,
-			Capability: types.AgentCapability{
+			Capability: &types.AgentCapability{
 				CapabilityType: capType,
 				ConfidenceBps:  7000,
 			},
@@ -121,7 +121,7 @@ func TestOC_DS2_CapabilitySpam(t *testing.T) {
 	// ATTACK: Try to add 4th capability beyond the cap.
 	_, err = msgServer.AddCapability(ctx, &types.MsgAddCapability{
 		Address: testAgent1,
-		Capability: types.AgentCapability{
+		Capability: &types.AgentCapability{
 			CapabilityType: "arbitration",
 			ConfidenceBps:  9000,
 		},
@@ -153,7 +153,7 @@ func TestOC_DS3_DuplicateCapability(t *testing.T) {
 		Did:     "did:lgm:dup_cap",
 		Domains: []string{"mathematics"},
 		Stake:   "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification", ConfidenceBps: 8000},
 		},
 	})
@@ -161,7 +161,7 @@ func TestOC_DS3_DuplicateCapability(t *testing.T) {
 	// Try to add the same capability type again.
 	_, err := msgServer.AddCapability(ctx, &types.MsgAddCapability{
 		Address:    testAgent1,
-		Capability: types.AgentCapability{CapabilityType: "verification", ConfidenceBps: 9000},
+		Capability: &types.AgentCapability{CapabilityType: "verification", ConfidenceBps: 9000},
 	})
 	if err == nil {
 		// If it succeeds, check if it duplicated or replaced.
@@ -196,7 +196,7 @@ func TestOC_DS4_DeregisterStakeRefund(t *testing.T) {
 		DisplayName: "Deregister Test",
 		Domains:     []string{"mathematics", "physics"},
 		Stake:       "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification"},
 		},
 	})
@@ -319,7 +319,7 @@ func TestOC_DS7_ProfileUpdatePreservation(t *testing.T) {
 		DisplayName: "Original Name",
 		Domains:     []string{"mathematics", "physics"},
 		Stake:       "100000000",
-		Capabilities: []types.AgentCapability{
+		Capabilities: []*types.AgentCapability{
 			{CapabilityType: "verification", ConfidenceBps: 8000},
 			{CapabilityType: "research", ConfidenceBps: 7000},
 		},

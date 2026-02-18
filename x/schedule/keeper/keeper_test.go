@@ -657,7 +657,7 @@ func TestUpdateParams(t *testing.T) {
 
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: testCreator, // testCreator is the authority in setupKeeper
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("UpdateParams failed: %v", err)
@@ -675,9 +675,10 @@ func TestUpdateParamsUnauthorized(t *testing.T) {
 
 	otherAddr := sdk.AccAddress("other_address_______").String()
 
+	dp := types.DefaultParams()
 	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: otherAddr,
-		Params:    types.DefaultParams(),
+		Params:    &dp,
 	})
 	if err == nil {
 		t.Fatal("expected unauthorized error for non-authority sender")

@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -10,6 +11,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	Keeper
 }
 
@@ -76,7 +78,7 @@ func (k msgServer) ProviderHeartbeat(goCtx context.Context, msg *types.MsgProvid
 func (k msgServer) RedeemCredits(goCtx context.Context, msg *types.MsgRedeemCredits) (*types.MsgRedeemCreditsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	ticket, err := k.CreateRedemptionTicket(ctx, msg.Sender, msg.Provider, msg.CuAmount)
+	ticket, err := k.CreateRedemptionTicket(ctx, msg.Sender, msg.Provider, msg.Cu)
 	if err != nil {
 		return nil, err
 	}
@@ -85,17 +87,22 @@ func (k msgServer) RedeemCredits(goCtx context.Context, msg *types.MsgRedeemCred
 		"ticket_id", ticket.Id,
 		"validator", msg.Sender,
 		"provider", msg.Provider,
-		"cu_amount", msg.CuAmount,
+		"cu_amount", msg.Cu,
 	)
 
-	return &types.MsgRedeemCreditsResponse{TicketId: ticket.Id}, nil
+	return &types.MsgRedeemCreditsResponse{TicketId: fmt.Sprintf("%d", ticket.Id)}, nil
 }
 
 // ConfirmUsage confirms that compute was delivered for a redemption ticket.
 func (k msgServer) ConfirmUsage(goCtx context.Context, msg *types.MsgConfirmUsage) (*types.MsgConfirmUsageResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	if err := k.ConfirmRedemption(ctx, msg.Sender, msg.TicketId, msg.ActualCu); err != nil {
+	ticketId, err := strconv.ParseUint(msg.TicketId, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ticket_id: %w", err)
+	}
+
+	if err := k.ConfirmRedemption(ctx, msg.Sender, ticketId, msg.ActualCu); err != nil {
 		return nil, err
 	}
 
@@ -111,7 +118,12 @@ func (k msgServer) ConfirmUsage(goCtx context.Context, msg *types.MsgConfirmUsag
 func (k msgServer) DisputeUsage(goCtx context.Context, msg *types.MsgDisputeUsage) (*types.MsgDisputeUsageResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	if err := k.DisputeRedemption(ctx, msg.Sender, msg.TicketId, msg.Reason); err != nil {
+	ticketId, err := strconv.ParseUint(msg.TicketId, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ticket_id: %w", err)
+	}
+
+	if err := k.DisputeRedemption(ctx, msg.Sender, ticketId, msg.Reason); err != nil {
 		return nil, err
 	}
 
@@ -130,28 +142,13 @@ func (k msgServer) UpdateComputeParams(goCtx context.Context, msg *types.MsgUpda
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, msg.Params)
+	if msg.Params != nil {
+		k.SetParams(ctx, *msg.Params)
+	}
 
 	k.Logger(ctx).Info("compute pool params updated",
 		"authority", msg.Authority,
 	)
 
 	return &types.MsgUpdateComputeParamsResponse{}, nil
-}
-
-
-// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
-func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
-	if k.GetAuthority() != msg.Authority {
-		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
-	}
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetParams(ctx, msg.Params)
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			"compute_pool_params_updated",
-			sdk.NewAttribute("authority", msg.Authority),
-		),
-	)
-	return &types.MsgUpdateParamsResponse{}, nil
 }

@@ -19,7 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Msg_RegisterValidator_FullMethodName = "/legible.staking.v1.Msg/RegisterValidator"
+	Msg_RegisterValidator_FullMethodName    = "/legible.staking.v1.Msg/RegisterValidator"
+	Msg_UpdateValidatorStake_FullMethodName = "/legible.staking.v1.Msg/UpdateValidatorStake"
+	Msg_Delegate_FullMethodName             = "/legible.staking.v1.Msg/Delegate"
+	Msg_Undelegate_FullMethodName           = "/legible.staking.v1.Msg/Undelegate"
+	Msg_Redelegate_FullMethodName           = "/legible.staking.v1.Msg/Redelegate"
+	Msg_UpdateParams_FullMethodName         = "/legible.staking.v1.Msg/UpdateParams"
 )
 
 // MsgClient is the client API for Msg service.
@@ -31,6 +36,13 @@ const (
 type MsgClient interface {
 	// RegisterValidator registers a new validator (supports zero-stake Tier 0).
 	RegisterValidator(ctx context.Context, in *MsgRegisterValidator, opts ...grpc.CallOption) (*MsgRegisterValidatorResponse, error)
+	// Stake management
+	UpdateValidatorStake(ctx context.Context, in *MsgUpdateValidatorStake, opts ...grpc.CallOption) (*MsgUpdateValidatorStakeResponse, error)
+	Delegate(ctx context.Context, in *MsgDelegate, opts ...grpc.CallOption) (*MsgDelegateResponse, error)
+	Undelegate(ctx context.Context, in *MsgUndelegate, opts ...grpc.CallOption) (*MsgUndelegateResponse, error)
+	Redelegate(ctx context.Context, in *MsgRedelegate, opts ...grpc.CallOption) (*MsgRedelegateResponse, error)
+	// Governance
+	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 }
 
 type msgClient struct {
@@ -51,6 +63,56 @@ func (c *msgClient) RegisterValidator(ctx context.Context, in *MsgRegisterValida
 	return out, nil
 }
 
+func (c *msgClient) UpdateValidatorStake(ctx context.Context, in *MsgUpdateValidatorStake, opts ...grpc.CallOption) (*MsgUpdateValidatorStakeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgUpdateValidatorStakeResponse)
+	err := c.cc.Invoke(ctx, Msg_UpdateValidatorStake_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) Delegate(ctx context.Context, in *MsgDelegate, opts ...grpc.CallOption) (*MsgDelegateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgDelegateResponse)
+	err := c.cc.Invoke(ctx, Msg_Delegate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) Undelegate(ctx context.Context, in *MsgUndelegate, opts ...grpc.CallOption) (*MsgUndelegateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgUndelegateResponse)
+	err := c.cc.Invoke(ctx, Msg_Undelegate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) Redelegate(ctx context.Context, in *MsgRedelegate, opts ...grpc.CallOption) (*MsgRedelegateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgRedelegateResponse)
+	err := c.cc.Invoke(ctx, Msg_Redelegate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgUpdateParamsResponse)
+	err := c.cc.Invoke(ctx, Msg_UpdateParams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 // All implementations must embed UnimplementedMsgServer
 // for forward compatibility.
@@ -60,6 +122,13 @@ func (c *msgClient) RegisterValidator(ctx context.Context, in *MsgRegisterValida
 type MsgServer interface {
 	// RegisterValidator registers a new validator (supports zero-stake Tier 0).
 	RegisterValidator(context.Context, *MsgRegisterValidator) (*MsgRegisterValidatorResponse, error)
+	// Stake management
+	UpdateValidatorStake(context.Context, *MsgUpdateValidatorStake) (*MsgUpdateValidatorStakeResponse, error)
+	Delegate(context.Context, *MsgDelegate) (*MsgDelegateResponse, error)
+	Undelegate(context.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
+	Redelegate(context.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
+	// Governance
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 	mustEmbedUnimplementedMsgServer()
 }
 
@@ -72,6 +141,21 @@ type UnimplementedMsgServer struct{}
 
 func (UnimplementedMsgServer) RegisterValidator(context.Context, *MsgRegisterValidator) (*MsgRegisterValidatorResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterValidator not implemented")
+}
+func (UnimplementedMsgServer) UpdateValidatorStake(context.Context, *MsgUpdateValidatorStake) (*MsgUpdateValidatorStakeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateValidatorStake not implemented")
+}
+func (UnimplementedMsgServer) Delegate(context.Context, *MsgDelegate) (*MsgDelegateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Delegate not implemented")
+}
+func (UnimplementedMsgServer) Undelegate(context.Context, *MsgUndelegate) (*MsgUndelegateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Undelegate not implemented")
+}
+func (UnimplementedMsgServer) Redelegate(context.Context, *MsgRedelegate) (*MsgRedelegateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Redelegate not implemented")
+}
+func (UnimplementedMsgServer) UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateParams not implemented")
 }
 func (UnimplementedMsgServer) mustEmbedUnimplementedMsgServer() {}
 func (UnimplementedMsgServer) testEmbeddedByValue()             {}
@@ -112,6 +196,96 @@ func _Msg_RegisterValidator_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_UpdateValidatorStake_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateValidatorStake)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateValidatorStake(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_UpdateValidatorStake_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateValidatorStake(ctx, req.(*MsgUpdateValidatorStake))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_Delegate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgDelegate)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).Delegate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_Delegate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).Delegate(ctx, req.(*MsgDelegate))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_Undelegate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUndelegate)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).Undelegate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_Undelegate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).Undelegate(ctx, req.(*MsgUndelegate))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_Redelegate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgRedelegate)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).Redelegate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_Redelegate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).Redelegate(ctx, req.(*MsgRedelegate))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_UpdateParams_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Msg_ServiceDesc is the grpc.ServiceDesc for Msg service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -122,6 +296,26 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RegisterValidator",
 			Handler:    _Msg_RegisterValidator_Handler,
+		},
+		{
+			MethodName: "UpdateValidatorStake",
+			Handler:    _Msg_UpdateValidatorStake_Handler,
+		},
+		{
+			MethodName: "Delegate",
+			Handler:    _Msg_Delegate_Handler,
+		},
+		{
+			MethodName: "Undelegate",
+			Handler:    _Msg_Undelegate_Handler,
+		},
+		{
+			MethodName: "Redelegate",
+			Handler:    _Msg_Redelegate_Handler,
+		},
+		{
+			MethodName: "UpdateParams",
+			Handler:    _Msg_UpdateParams_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

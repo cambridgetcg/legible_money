@@ -1,12 +1,10 @@
 package types
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
 // -----------------------------------------------------------------------
@@ -17,6 +15,11 @@ import (
 // and GenesisState are provided by the proto-generated .pb.go files
 // (state.pb.go and genesis.pb.go). Only methods, type aliases, constants,
 // and non-proto types are kept here.
+//
+// Msg types, Response types, MsgServer interface, gRPC service descriptors,
+// handler functions, and RegisterMsgServer are provided by the proto-generated
+// tx.pb.go and tx_grpc.pb.go files. Only GetSigners() and ValidateBasic()
+// methods are kept here.
 // -----------------------------------------------------------------------
 
 type PartnershipStatus = string
@@ -117,18 +120,10 @@ func (p Params) Validate() error {
 }
 
 // -----------------------------------------------------------------------
-// Cold-Start Message Types
+// GetSigners and ValidateBasic methods for proto-generated Msg types
 // -----------------------------------------------------------------------
 
-// MsgInitiateSeedPartnership starts a seed (tier -1) partnership.
-type MsgInitiateSeedPartnership struct {
-	Initiator string `json:"initiator"`
-	Partner   string `json:"partner"`
-}
-
-func (msg *MsgInitiateSeedPartnership) Reset()         {}
-func (msg *MsgInitiateSeedPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgInitiateSeedPartnership) ProtoMessage()  {}
+// --- Cold-start messages ---
 
 func (msg *MsgInitiateSeedPartnership) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Initiator)
@@ -154,26 +149,6 @@ func (msg *MsgInitiateSeedPartnership) ValidateBasic() error {
 	return nil
 }
 
-// MsgInitiateSeedPartnershipResponse is the response.
-type MsgInitiateSeedPartnershipResponse struct {
-	SeedPartnershipId string `json:"seed_partnership_id"`
-}
-
-func (msg *MsgInitiateSeedPartnershipResponse) Reset()         {}
-func (msg *MsgInitiateSeedPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgInitiateSeedPartnershipResponse) ProtoMessage()  {}
-
-// MsgGraduateSeedPartnership upgrades a seed partnership to tier 0.
-type MsgGraduateSeedPartnership struct {
-	Sender            string `json:"sender"`
-	SeedPartnershipId string `json:"seed_partnership_id"`
-	AdditionalDeposit string `json:"additional_deposit"` // ulgm as string
-}
-
-func (msg *MsgGraduateSeedPartnership) Reset()         {}
-func (msg *MsgGraduateSeedPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgGraduateSeedPartnership) ProtoMessage()  {}
-
 func (msg *MsgGraduateSeedPartnership) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{addr}
@@ -196,25 +171,6 @@ func (msg *MsgGraduateSeedPartnership) ValidateBasic() error {
 	return nil
 }
 
-// MsgGraduateSeedPartnershipResponse is the response.
-type MsgGraduateSeedPartnershipResponse struct {
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgGraduateSeedPartnershipResponse) Reset()         {}
-func (msg *MsgGraduateSeedPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgGraduateSeedPartnershipResponse) ProtoMessage()  {}
-
-// MsgRegisterInPool registers in the formation matchmaking pool.
-type MsgRegisterInPool struct {
-	Sender  string   `json:"sender"`
-	Domains []string `json:"domains"`
-}
-
-func (msg *MsgRegisterInPool) Reset()         {}
-func (msg *MsgRegisterInPool) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRegisterInPool) ProtoMessage()  {}
-
 func (msg *MsgRegisterInPool) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{addr}
@@ -233,24 +189,6 @@ func (msg *MsgRegisterInPool) ValidateBasic() error {
 	return nil
 }
 
-// MsgRegisterInPoolResponse is the response.
-type MsgRegisterInPoolResponse struct{}
-
-func (msg *MsgRegisterInPoolResponse) Reset()         {}
-func (msg *MsgRegisterInPoolResponse) String() string { return "" }
-func (msg *MsgRegisterInPoolResponse) ProtoMessage()  {}
-
-// MsgDeclareIntent declares a partnership formation intent.
-type MsgDeclareIntent struct {
-	Sender  string   `json:"sender"`
-	Domains []string `json:"domains"`
-	Tier    uint32   `json:"tier"`
-}
-
-func (msg *MsgDeclareIntent) Reset()         {}
-func (msg *MsgDeclareIntent) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgDeclareIntent) ProtoMessage()  {}
-
 func (msg *MsgDeclareIntent) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{addr}
@@ -268,26 +206,6 @@ func (msg *MsgDeclareIntent) ValidateBasic() error {
 	}
 	return nil
 }
-
-// MsgDeclareIntentResponse is the response.
-type MsgDeclareIntentResponse struct {
-	IntentId string `json:"intent_id"`
-}
-
-func (msg *MsgDeclareIntentResponse) Reset()         {}
-func (msg *MsgDeclareIntentResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgDeclareIntentResponse) ProtoMessage()  {}
-
-// MsgSponsorPartnership creates a mentorship-sponsored partnership.
-type MsgSponsorPartnership struct {
-	Sponsor string `json:"sponsor"`
-	Mentee  string `json:"mentee"`
-	Amount  string `json:"amount"` // sponsor contribution as ulgm string
-}
-
-func (msg *MsgSponsorPartnership) Reset()         {}
-func (msg *MsgSponsorPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSponsorPartnership) ProtoMessage()  {}
 
 func (msg *MsgSponsorPartnership) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sponsor)
@@ -317,29 +235,7 @@ func (msg *MsgSponsorPartnership) ValidateBasic() error {
 	return nil
 }
 
-// MsgSponsorPartnershipResponse is the response.
-type MsgSponsorPartnershipResponse struct {
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgSponsorPartnershipResponse) Reset()         {}
-func (msg *MsgSponsorPartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSponsorPartnershipResponse) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// Message types
-// -----------------------------------------------------------------------
-
-// MsgInitiatePartnership starts partnership formation.
-type MsgInitiatePartnership struct {
-	Initiator string `json:"initiator"` // bech32 address
-	Partner   string `json:"partner"`   // bech32 address
-	LockTier  uint32 `json:"lock_tier"` // 0-5, commitment level
-}
-
-func (msg *MsgInitiatePartnership) Reset()         {}
-func (msg *MsgInitiatePartnership) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgInitiatePartnership) ProtoMessage()  {}
+// --- Core messages ---
 
 func (msg *MsgInitiatePartnership) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Initiator)
@@ -365,25 +261,6 @@ func (msg *MsgInitiatePartnership) ValidateBasic() error {
 	return nil
 }
 
-// MsgInitiatePartnershipResponse is the response for MsgInitiatePartnership.
-type MsgInitiatePartnershipResponse struct {
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgInitiatePartnershipResponse) Reset()         {}
-func (msg *MsgInitiatePartnershipResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgInitiatePartnershipResponse) ProtoMessage()  {}
-
-// MsgAcceptPartnership accepts a pending partnership formation.
-type MsgAcceptPartnership struct {
-	Acceptor      string `json:"acceptor"` // bech32 address
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgAcceptPartnership) Reset()         {}
-func (msg *MsgAcceptPartnership) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgAcceptPartnership) ProtoMessage()  {}
-
 func (msg *MsgAcceptPartnership) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Acceptor)
 	return []sdk.AccAddress{addr}
@@ -401,24 +278,6 @@ func (msg *MsgAcceptPartnership) ValidateBasic() error {
 	}
 	return nil
 }
-
-// MsgAcceptPartnershipResponse is the response for MsgAcceptPartnership.
-type MsgAcceptPartnershipResponse struct{}
-
-func (msg *MsgAcceptPartnershipResponse) Reset()         {}
-func (msg *MsgAcceptPartnershipResponse) String() string { return "" }
-func (msg *MsgAcceptPartnershipResponse) ProtoMessage()  {}
-
-// MsgDepositToPot deposits funds directly into the partnership common pot.
-type MsgDepositToPot struct {
-	Depositor     string `json:"depositor"` // bech32 address (must be human or agent)
-	PartnershipId string `json:"partnership_id"`
-	Amount        string `json:"amount"` // ulgm as string
-}
-
-func (msg *MsgDepositToPot) Reset()         {}
-func (msg *MsgDepositToPot) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgDepositToPot) ProtoMessage()  {}
 
 func (msg *MsgDepositToPot) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Depositor)
@@ -441,25 +300,6 @@ func (msg *MsgDepositToPot) ValidateBasic() error {
 	}
 	return nil
 }
-
-// MsgDepositToPotResponse is the response for MsgDepositToPot.
-type MsgDepositToPotResponse struct{}
-
-func (msg *MsgDepositToPotResponse) Reset()         {}
-func (msg *MsgDepositToPotResponse) String() string { return "" }
-func (msg *MsgDepositToPotResponse) ProtoMessage()  {}
-
-// MsgDistributeReward distributes a reward through the partnership.
-type MsgDistributeReward struct {
-	Authority     string `json:"authority"` // bech32 address (module or governance)
-	PartnershipId string `json:"partnership_id"`
-	GrossAmount   string `json:"gross_amount"` // bigint as string
-	SourceType    string `json:"source_type"`  // "verification", "citation", "service"
-}
-
-func (msg *MsgDistributeReward) Reset()         {}
-func (msg *MsgDistributeReward) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgDistributeReward) ProtoMessage()  {}
 
 func (msg *MsgDistributeReward) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
@@ -486,29 +326,7 @@ func (msg *MsgDistributeReward) ValidateBasic() error {
 	return nil
 }
 
-// MsgDistributeRewardResponse is the response for MsgDistributeReward.
-type MsgDistributeRewardResponse struct {
-	HumanShare   string `json:"human_share"`
-	AgentShare   string `json:"agent_share"`
-	CommonPotAdd string `json:"common_pot_add"`
-}
-
-func (msg *MsgDistributeRewardResponse) Reset()         {}
-func (msg *MsgDistributeRewardResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgDistributeRewardResponse) ProtoMessage()  {}
-
-// MsgProposeOperation proposes a consensus operation.
-type MsgProposeOperation struct {
-	Proposer      string `json:"proposer"` // bech32 address
-	PartnershipId string `json:"partnership_id"`
-	OperationType string `json:"operation_type"` // "withdrawal", "split_change", "tier_upgrade"
-	Amount        string `json:"amount"`         // bigint as string
-	Rationale     string `json:"rationale"`
-}
-
-func (msg *MsgProposeOperation) Reset()         {}
-func (msg *MsgProposeOperation) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgProposeOperation) ProtoMessage()  {}
+// --- Deliberation messages ---
 
 func (msg *MsgProposeOperation) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Proposer)
@@ -535,25 +353,6 @@ func (msg *MsgProposeOperation) ValidateBasic() error {
 	return nil
 }
 
-// MsgProposeOperationResponse is the response for MsgProposeOperation.
-type MsgProposeOperationResponse struct {
-	OperationId string `json:"operation_id"`
-}
-
-func (msg *MsgProposeOperationResponse) Reset()         {}
-func (msg *MsgProposeOperationResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgProposeOperationResponse) ProtoMessage()  {}
-
-// MsgApproveOperation approves a pending consensus operation.
-type MsgApproveOperation struct {
-	Approver    string `json:"approver"` // bech32 address
-	OperationId string `json:"operation_id"`
-}
-
-func (msg *MsgApproveOperation) Reset()         {}
-func (msg *MsgApproveOperation) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgApproveOperation) ProtoMessage()  {}
-
 func (msg *MsgApproveOperation) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Approver)
 	return []sdk.AccAddress{addr}
@@ -571,25 +370,6 @@ func (msg *MsgApproveOperation) ValidateBasic() error {
 	}
 	return nil
 }
-
-// MsgApproveOperationResponse is the response for MsgApproveOperation.
-type MsgApproveOperationResponse struct{}
-
-func (msg *MsgApproveOperationResponse) Reset()         {}
-func (msg *MsgApproveOperationResponse) String() string { return "" }
-func (msg *MsgApproveOperationResponse) ProtoMessage()  {}
-
-// MsgRejectOperation rejects a pending operation with optional counter-proposal.
-type MsgRejectOperation struct {
-	Rejecter         string `json:"rejecter"` // bech32 address
-	OperationId      string `json:"operation_id"`
-	CounterAmount    string `json:"counter_amount"`    // optional counter amount (bigint as string, "0" for no counter)
-	CounterRationale string `json:"counter_rationale"` // optional counter rationale
-}
-
-func (msg *MsgRejectOperation) Reset()         {}
-func (msg *MsgRejectOperation) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRejectOperation) ProtoMessage()  {}
 
 func (msg *MsgRejectOperation) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Rejecter)
@@ -615,24 +395,7 @@ func (msg *MsgRejectOperation) ValidateBasic() error {
 	return nil
 }
 
-// MsgRejectOperationResponse is the response for MsgRejectOperation.
-type MsgRejectOperationResponse struct {
-	CounterOperationId string `json:"counter_operation_id,omitempty"` // set if counter-proposal created
-}
-
-func (msg *MsgRejectOperationResponse) Reset()         {}
-func (msg *MsgRejectOperationResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRejectOperationResponse) ProtoMessage()  {}
-
-// MsgSafetyFreeze triggers a unilateral safety freeze.
-type MsgSafetyFreeze struct {
-	Freezer       string `json:"freezer"` // bech32 address
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgSafetyFreeze) Reset()         {}
-func (msg *MsgSafetyFreeze) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSafetyFreeze) ProtoMessage()  {}
+// --- Safety & exit messages ---
 
 func (msg *MsgSafetyFreeze) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Freezer)
@@ -652,25 +415,6 @@ func (msg *MsgSafetyFreeze) ValidateBasic() error {
 	return nil
 }
 
-// MsgSafetyFreezeResponse is the response for MsgSafetyFreeze.
-type MsgSafetyFreezeResponse struct {
-	ExpiresAt uint64 `json:"expires_at"`
-}
-
-func (msg *MsgSafetyFreezeResponse) Reset()         {}
-func (msg *MsgSafetyFreezeResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgSafetyFreezeResponse) ProtoMessage()  {}
-
-// MsgRaiseCoercionSignal raises a coercion/duress flag.
-type MsgRaiseCoercionSignal struct {
-	Raiser        string `json:"raiser"` // bech32 address
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgRaiseCoercionSignal) Reset()         {}
-func (msg *MsgRaiseCoercionSignal) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRaiseCoercionSignal) ProtoMessage()  {}
-
 func (msg *MsgRaiseCoercionSignal) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Raiser)
 	return []sdk.AccAddress{addr}
@@ -688,26 +432,6 @@ func (msg *MsgRaiseCoercionSignal) ValidateBasic() error {
 	}
 	return nil
 }
-
-// MsgRaiseCoercionSignalResponse is the response for MsgRaiseCoercionSignal.
-type MsgRaiseCoercionSignalResponse struct {
-	SignalId  string `json:"signal_id"`
-	ExpiresAt uint64 `json:"expires_at"`
-}
-
-func (msg *MsgRaiseCoercionSignalResponse) Reset()         {}
-func (msg *MsgRaiseCoercionSignalResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRaiseCoercionSignalResponse) ProtoMessage()  {}
-
-// MsgInitiateExit starts the exit/dissolution process.
-type MsgInitiateExit struct {
-	Initiator     string `json:"initiator"` // bech32 address
-	PartnershipId string `json:"partnership_id"`
-}
-
-func (msg *MsgInitiateExit) Reset()         {}
-func (msg *MsgInitiateExit) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgInitiateExit) ProtoMessage()  {}
 
 func (msg *MsgInitiateExit) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Initiator)
@@ -727,24 +451,7 @@ func (msg *MsgInitiateExit) ValidateBasic() error {
 	return nil
 }
 
-// MsgInitiateExitResponse is the response for MsgInitiateExit.
-type MsgInitiateExitResponse struct {
-	CooldownEndsAt uint64 `json:"cooldown_ends_at"`
-}
-
-func (msg *MsgInitiateExitResponse) Reset()         {}
-func (msg *MsgInitiateExitResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgInitiateExitResponse) ProtoMessage()  {}
-
-// MsgUpdateParams updates module parameters (governance-gated).
-type MsgUpdateParams struct {
-	Authority string `json:"authority"` // bech32 address (gov module)
-	Params    Params `json:"params"`
-}
-
-func (msg *MsgUpdateParams) Reset()         {}
-func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgUpdateParams) ProtoMessage()  {}
+// --- Governance messages ---
 
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
@@ -758,216 +465,10 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
+	if msg.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return msg.Params.Validate()
-}
-
-// MsgUpdateParamsResponse is the response for MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (msg *MsgUpdateParamsResponse) Reset()         {}
-func (msg *MsgUpdateParamsResponse) String() string { return "" }
-func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// MsgServer interface
-// -----------------------------------------------------------------------
-
-// MsgServer defines the partnerships module message service.
-type MsgServer interface {
-	InitiatePartnership(context.Context, *MsgInitiatePartnership) (*MsgInitiatePartnershipResponse, error)
-	AcceptPartnership(context.Context, *MsgAcceptPartnership) (*MsgAcceptPartnershipResponse, error)
-	DepositToPot(context.Context, *MsgDepositToPot) (*MsgDepositToPotResponse, error)
-	DistributeReward(context.Context, *MsgDistributeReward) (*MsgDistributeRewardResponse, error)
-	ProposeOperation(context.Context, *MsgProposeOperation) (*MsgProposeOperationResponse, error)
-	ApproveOperation(context.Context, *MsgApproveOperation) (*MsgApproveOperationResponse, error)
-	RejectOperation(context.Context, *MsgRejectOperation) (*MsgRejectOperationResponse, error)
-	SafetyFreeze(context.Context, *MsgSafetyFreeze) (*MsgSafetyFreezeResponse, error)
-	RaiseCoercionSignal(context.Context, *MsgRaiseCoercionSignal) (*MsgRaiseCoercionSignalResponse, error)
-	InitiateExit(context.Context, *MsgInitiateExit) (*MsgInitiateExitResponse, error)
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
-}
-
-// -----------------------------------------------------------------------
-// gRPC service descriptor (hand-written, replaces proto generation)
-// -----------------------------------------------------------------------
-
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.partnerships.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "InitiatePartnership", Handler: _Msg_InitiatePartnership_Handler},
-		{MethodName: "AcceptPartnership", Handler: _Msg_AcceptPartnership_Handler},
-		{MethodName: "DepositToPot", Handler: _Msg_DepositToPot_Handler},
-		{MethodName: "DistributeReward", Handler: _Msg_DistributeReward_Handler},
-		{MethodName: "ProposeOperation", Handler: _Msg_ProposeOperation_Handler},
-		{MethodName: "ApproveOperation", Handler: _Msg_ApproveOperation_Handler},
-		{MethodName: "RejectOperation", Handler: _Msg_RejectOperation_Handler},
-		{MethodName: "SafetyFreeze", Handler: _Msg_SafetyFreeze_Handler},
-		{MethodName: "RaiseCoercionSignal", Handler: _Msg_RaiseCoercionSignal_Handler},
-		{MethodName: "InitiateExit", Handler: _Msg_InitiateExit_Handler},
-		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/partnerships/v1/tx.proto",
-}
-
-func _Msg_InitiatePartnership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgInitiatePartnership)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).InitiatePartnership(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/InitiatePartnership"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).InitiatePartnership(ctx, req.(*MsgInitiatePartnership))
-	})
-}
-
-func _Msg_AcceptPartnership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgAcceptPartnership)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).AcceptPartnership(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/AcceptPartnership"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).AcceptPartnership(ctx, req.(*MsgAcceptPartnership))
-	})
-}
-
-func _Msg_DepositToPot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgDepositToPot)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).DepositToPot(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/DepositToPot"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).DepositToPot(ctx, req.(*MsgDepositToPot))
-	})
-}
-
-func _Msg_DistributeReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgDistributeReward)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).DistributeReward(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/DistributeReward"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).DistributeReward(ctx, req.(*MsgDistributeReward))
-	})
-}
-
-func _Msg_ProposeOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgProposeOperation)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ProposeOperation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/ProposeOperation"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ProposeOperation(ctx, req.(*MsgProposeOperation))
-	})
-}
-
-func _Msg_ApproveOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgApproveOperation)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ApproveOperation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/ApproveOperation"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ApproveOperation(ctx, req.(*MsgApproveOperation))
-	})
-}
-
-func _Msg_RejectOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRejectOperation)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RejectOperation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/RejectOperation"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RejectOperation(ctx, req.(*MsgRejectOperation))
-	})
-}
-
-func _Msg_SafetyFreeze_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgSafetyFreeze)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).SafetyFreeze(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/SafetyFreeze"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).SafetyFreeze(ctx, req.(*MsgSafetyFreeze))
-	})
-}
-
-func _Msg_RaiseCoercionSignal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRaiseCoercionSignal)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RaiseCoercionSignal(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/RaiseCoercionSignal"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RaiseCoercionSignal(ctx, req.(*MsgRaiseCoercionSignal))
-	})
-}
-
-func _Msg_InitiateExit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgInitiateExit)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).InitiateExit(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/InitiateExit"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).InitiateExit(ctx, req.(*MsgInitiateExit))
-	})
-}
-
-func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateParams(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.partnerships.v1.Msg/UpdateParams"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
-	})
-}
-
-// RegisterMsgServer registers the MsgServer implementation with the gRPC server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
 }
 
 // Query types (QueryServer, QueryParamsRequest/Response, QueryPartnershipRequest/Response,

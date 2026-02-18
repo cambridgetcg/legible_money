@@ -16,6 +16,8 @@ import (
 
 // Keeper manages the capture challenge module's state.
 type Keeper struct {
+	types.UnimplementedMsgServer
+
 	cdc          codec.Codec
 	storeService store.KVStoreService
 

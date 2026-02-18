@@ -12,7 +12,7 @@ import (
 //  1. Explicit expiry: ExpiresAtBlock > 0 && currentBlock >= ExpiresAtBlock
 //  2. Confidence decay: decayed confidence < MinConfidenceThreshold (30%)
 //  3. Reverification staleness: age > StalenessMultiplier × halfLife without reverification
-func IsFactExpired(fact types.Fact, currentHeight uint64) (bool, string) {
+func IsFactExpired(fact types.Fact, currentHeight uint64, ep types.ExtendedParams) (bool, string) {
 	// Condition 1: Explicit expiry
 	if fact.ExpiresAtBlock > 0 && currentHeight >= fact.ExpiresAtBlock {
 		return true, "explicit_expiry"
@@ -25,7 +25,7 @@ func IsFactExpired(fact types.Fact, currentHeight uint64) (bool, string) {
 		return false, ""
 	}
 
-	profile, ok := types.CATEGORY_DECAY[fact.EpistemicCategory]
+	profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory)
 	if !ok {
 		return false, ""
 	}
@@ -49,16 +49,16 @@ func IsFactExpired(fact types.Fact, currentHeight uint64) (bool, string) {
 		blocksSince = currentHeight - lastVerified
 	}
 
-	decayed := CalculateDecayedConfidence(base, blocksSince, fact.EpistemicCategory)
+	decayed := CalculateDecayedConfidence(base, blocksSince, fact.EpistemicCategory, ep)
 
 	// Condition 2: Confidence below minimum
-	if decayed < types.MinConfidenceThreshold {
+	if decayed < ep.MinConfidenceThreshold {
 		return true, "confidence_decay"
 	}
 
 	// Condition 3: Reverification staleness
 	if profile.RequiresReverification && profile.HalfLifeBlocks > 0 {
-		if blocksSince > types.StalenessMultiplier*profile.HalfLifeBlocks {
+		if blocksSince > uint64(ep.StalenessMultiplier)*profile.HalfLifeBlocks {
 			return true, "reverification_staleness"
 		}
 	}
@@ -70,6 +70,7 @@ func IsFactExpired(fact types.Fact, currentHeight uint64) (bool, string) {
 // Amortized: processes at most maxPerBlock facts per EndBlocker call.
 func (k Keeper) ExpireStaleFactsInEndBlocker(ctx sdk.Context, maxPerBlock int) int {
 	currentHeight := uint64(ctx.BlockHeight())
+	ep := k.GetExtendedParams(ctx)
 	expired := 0
 
 	k.IterateFacts(ctx, func(fact types.Fact) bool {
@@ -85,7 +86,7 @@ func (k Keeper) ExpireStaleFactsInEndBlocker(ctx sdk.Context, maxPerBlock int) i
 			return false
 		}
 
-		isExpired, reason := IsFactExpired(fact, currentHeight)
+		isExpired, reason := IsFactExpired(fact, currentHeight, ep)
 		if isExpired {
 			fact.Status = types.FactStatusExpired
 			k.SetFact(ctx, fact)
@@ -110,6 +111,7 @@ func (k Keeper) ExpireStaleFactsInEndBlocker(ctx sdk.Context, maxPerBlock int) i
 // GetFactsNeedingReverification returns facts below the reverification threshold.
 func (k Keeper) GetFactsNeedingReverification(ctx sdk.Context, maxResults int) []types.Fact {
 	currentHeight := uint64(ctx.BlockHeight())
+	ep := k.GetExtendedParams(ctx)
 	var facts []types.Fact
 
 	k.IterateFacts(ctx, func(fact types.Fact) bool {
@@ -123,9 +125,9 @@ func (k Keeper) GetFactsNeedingReverification(ctx sdk.Context, maxResults int) [
 		}
 
 		// Apply decay to get current confidence
-		decayed := k.applyDecayToFact(fact, currentHeight)
+		decayed := k.applyDecayToFact(fact, currentHeight, ep)
 
-		if NeedsReverification(decayed, currentHeight) {
+		if NeedsReverification(decayed, currentHeight, ep) {
 			facts = append(facts, decayed)
 		}
 		return false
@@ -142,11 +144,12 @@ func (k Keeper) ReverifyFact(ctx sdk.Context, factID string, newConfidence uint6
 	}
 
 	// Apply reverification bonus
-	fact = ApplyReverificationBonus(fact)
+	ep := k.GetExtendedParams(ctx)
+	fact = ApplyReverificationBonus(fact, ep)
 
 	// If new verification confidence provided, use it
 	if newConfidence > 0 {
-		profile, ok := types.CATEGORY_DECAY[fact.EpistemicCategory]
+		profile, ok := ep.GetCategoryDecayProfile(fact.EpistemicCategory)
 		if ok && newConfidence > profile.MaxConfidence {
 			newConfidence = profile.MaxConfidence
 		}
@@ -157,7 +160,7 @@ func (k Keeper) ReverifyFact(ctx sdk.Context, factID string, newConfidence uint6
 	fact.LastVerifiedHeight = currentHeight
 	fact.VerifierCount++
 	fact.LastConfidenceUpdate = currentHeight
-	fact.Maturity = CalculateMaturity(fact.Confidence, currentHeight-fact.CreatedAtHeight, uint64(fact.VerifierCount))
+	fact.Maturity = CalculateMaturity(fact.Confidence, currentHeight-fact.CreatedAtHeight, uint64(fact.VerifierCount), ep)
 
 	// Reactivate if expired
 	if fact.Status == types.FactStatusExpired {

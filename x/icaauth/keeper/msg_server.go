@@ -13,6 +13,7 @@ import (
 )
 
 type msgServer struct {
+	types.UnimplementedMsgServer
 	k Keeper
 }
 

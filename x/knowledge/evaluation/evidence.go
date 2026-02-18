@@ -50,12 +50,13 @@ func evaluateEvidence(ctx sdk.Context, evalCtx *EvaluationContext, claim types.C
 	var totalScore uint64
 	var validCount uint64
 
+	ep := evalCtx.ExtendedParams
 	for _, ev := range evidences {
 		if ev.Status == "rejected" || ev.Status == "expired" {
 			continue
 		}
 
-		typeStrength, ok := types.EVIDENCE_TYPE_STRENGTH[ev.EvidenceType]
+		typeStrength, ok := ep.GetEvidenceTypeStrength(ev.EvidenceType)
 		if !ok {
 			typeStrength = defaultTypeStrength
 		}
@@ -76,8 +77,8 @@ func evaluateEvidence(ctx sdk.Context, evalCtx *EvaluationContext, claim types.C
 	}
 
 	bonus := totalScore / validCount
-	if bonus > types.MaxEvidenceBonus {
-		bonus = types.MaxEvidenceBonus
+	if bonus > ep.MaxEvidenceBonus {
+		bonus = ep.MaxEvidenceBonus
 	}
 
 	result.Adjustment = int64(bonus)

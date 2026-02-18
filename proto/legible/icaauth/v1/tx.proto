@@ -1,0 +1,46 @@
+syntax = "proto3";
+package legible.icaauth.v1;
+
+option go_package = "github.com/legible-money/legible/x/icaauth/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/icaauth/v1/state.proto";
+
+// Msg defines the ICA auth module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc RegisterInterchainAccount(MsgRegisterInterchainAccount) returns (MsgRegisterInterchainAccountResponse);
+  rpc SendICATransaction(MsgSendICATransaction) returns (MsgSendICATransactionResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgRegisterInterchainAccount {
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner                   = 1;
+  string connection_id           = 2;
+  string version                 = 3;
+  repeated string allowed_msgs   = 4;
+}
+message MsgRegisterInterchainAccountResponse {
+  string channel_id = 1;
+  string port_id    = 2;
+}
+
+message MsgSendICATransaction {
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner          = 1;
+  string connection_id  = 2;
+  bytes  msg_bytes      = 3;
+  uint64 timeout_nanos  = 4;
+}
+message MsgSendICATransactionResponse {
+  uint64 sequence = 1;
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

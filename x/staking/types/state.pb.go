@@ -396,6 +396,7 @@ type TierConfig struct {
 	SlashWindowEpochs               uint64                 `protobuf:"varint,9,opt,name=slash_window_epochs,json=slashWindowEpochs,proto3" json:"slash_window_epochs,omitempty"`                                            // epochs within which slashes count (0 = all-time)
 	MinContestedVerifications       uint64                 `protobuf:"varint,10,opt,name=min_contested_verifications,json=minContestedVerifications,proto3" json:"min_contested_verifications,omitempty"`                   // minimum contested-category verifications
 	ContestedVerificationMultiplier uint64                 `protobuf:"varint,11,opt,name=contested_verification_multiplier,json=contestedVerificationMultiplier,proto3" json:"contested_verification_multiplier,omitempty"` // multiplier for contested verifications (1 = normal)
+	SlashMultiplierBps              uint64                 `protobuf:"varint,12,opt,name=slash_multiplier_bps,json=slashMultiplierBps,proto3" json:"slash_multiplier_bps,omitempty"`                                        // per-tier slash multiplier in BPS (1000 = 1.0x)
 	unknownFields                   protoimpl.UnknownFields
 	sizeCache                       protoimpl.SizeCache
 }
@@ -507,6 +508,13 @@ func (x *TierConfig) GetContestedVerificationMultiplier() uint64 {
 	return 0
 }
 
+func (x *TierConfig) GetSlashMultiplierBps() uint64 {
+	if x != nil {
+		return x.SlashMultiplierBps
+	}
+	return 0
+}
+
 var File_legible_staking_v1_state_proto protoreflect.FileDescriptor
 
 const file_legible_staking_v1_state_proto_rawDesc = "" +
@@ -553,7 +561,7 @@ const file_legible_staking_v1_state_proto_rawDesc = "" +
 	"\x13initiated_at_height\x18\x05 \x01(\x04R\x11initiatedAtHeight\x12.\n" +
 	"\x13completes_at_height\x18\x06 \x01(\x04R\x11completesAtHeight\x12\x16\n" +
 	"\x06status\x18\a \x01(\tR\x06status\x12#\n" +
-	"\rorigin_period\x18\b \x01(\x04R\foriginPeriod\"\xf8\x03\n" +
+	"\rorigin_period\x18\b \x01(\x04R\foriginPeriod\"\xaa\x04\n" +
 	"\n" +
 	"TierConfig\x12\x12\n" +
 	"\x04tier\x18\x01 \x01(\tR\x04tier\x12\x1b\n" +
@@ -567,7 +575,8 @@ const file_legible_staking_v1_state_proto_rawDesc = "" +
 	"\x13slash_window_epochs\x18\t \x01(\x04R\x11slashWindowEpochs\x12>\n" +
 	"\x1bmin_contested_verifications\x18\n" +
 	" \x01(\x04R\x19minContestedVerifications\x12J\n" +
-	"!contested_verification_multiplier\x18\v \x01(\x04R\x1fcontestedVerificationMultiplierB2Z0github.com/legible-money/legible/x/staking/typesb\x06proto3"
+	"!contested_verification_multiplier\x18\v \x01(\x04R\x1fcontestedVerificationMultiplier\x120\n" +
+	"\x14slash_multiplier_bps\x18\f \x01(\x04R\x12slashMultiplierBpsB2Z0github.com/legible-money/legible/x/staking/typesb\x06proto3"
 
 var (
 	file_legible_staking_v1_state_proto_rawDescOnce sync.Once

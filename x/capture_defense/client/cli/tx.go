@@ -57,7 +57,7 @@ the validator enters a probationary period of 777 blocks.`,
 			msg := &types.MsgRequestQualification{
 				ValidatorAddr: clientCtx.GetFromAddress().String(),
 				Domain:        args[0],
-				Pathway:       types.QualificationPathway(args[1]),
+				Pathway:       args[1],
 				Stake:         args[2],
 				Endorsers:     endorsers,
 				InheritFrom:   inheritFrom,

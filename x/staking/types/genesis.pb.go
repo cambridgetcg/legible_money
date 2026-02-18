@@ -28,7 +28,7 @@ type GenesisState struct {
 	Validators       []*LegibleValidator    `protobuf:"bytes,2,rep,name=validators,proto3" json:"validators,omitempty"`
 	Delegations      []*Delegation          `protobuf:"bytes,3,rep,name=delegations,proto3" json:"delegations,omitempty"`
 	UnbondingEntries []*UnbondingEntry      `protobuf:"bytes,4,rep,name=unbonding_entries,json=unbondingEntries,proto3" json:"unbonding_entries,omitempty"`
-	TierConfigs      []*TierConfig          `protobuf:"bytes,5,rep,name=tier_configs,json=tierConfigs,proto3" json:"tier_configs,omitempty"`
+	TierConfigs      []*TierConfig          `protobuf:"bytes,5,rep,name=tier_configs,json=tierConfigs,proto3" json:"tier_configs,omitempty"`     // deprecated: tier configs now in Params.tier_configs
 	UnbondingSeq     uint64                 `protobuf:"varint,6,opt,name=unbonding_seq,json=unbondingSeq,proto3" json:"unbonding_seq,omitempty"` // monotonic unbonding sequence counter
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -115,13 +115,18 @@ type Params struct {
 	MaxValidators           uint32                 `protobuf:"varint,4,opt,name=max_validators,json=maxValidators,proto3" json:"max_validators,omitempty"`                                 // max total validators
 	MinSelfDelegation       string                 `protobuf:"bytes,5,opt,name=min_self_delegation,json=minSelfDelegation,proto3" json:"min_self_delegation,omitempty"`                    // minimum self-delegation (bigint as string)
 	// Anti-grief parameters (R1-R4 remediation)
-	MaxSlashesPerEpoch      uint32 `protobuf:"varint,6,opt,name=max_slashes_per_epoch,json=maxSlashesPerEpoch,proto3" json:"max_slashes_per_epoch,omitempty"`                // R2: max slashes per validator per epoch (default: 2)
-	SlashDecayPeriodBlocks  uint64 `protobuf:"varint,7,opt,name=slash_decay_period_blocks,json=slashDecayPeriodBlocks,proto3" json:"slash_decay_period_blocks,omitempty"`    // R1: blocks between slash count decays (default: 34272 = 1 epoch)
-	MaxSlashCountDeactivate uint32 `protobuf:"varint,8,opt,name=max_slash_count_deactivate,json=maxSlashCountDeactivate,proto3" json:"max_slash_count_deactivate,omitempty"` // slashes to deactivate (default: 3)
-	MinStakeForVerification string `protobuf:"bytes,9,opt,name=min_stake_for_verification,json=minStakeForVerification,proto3" json:"min_stake_for_verification,omitempty"`  // R3: min real stake to participate in VRF (default: "100000000")
-	SlashEscalationBps      uint64 `protobuf:"varint,10,opt,name=slash_escalation_bps,json=slashEscalationBps,proto3" json:"slash_escalation_bps,omitempty"`                 // per-prior-slash escalation factor in BPS (default: 100000 = 10%)
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	MaxSlashesPerEpoch         uint32        `protobuf:"varint,6,opt,name=max_slashes_per_epoch,json=maxSlashesPerEpoch,proto3" json:"max_slashes_per_epoch,omitempty"`                        // R2: max slashes per validator per epoch (default: 2)
+	SlashDecayPeriodBlocks     uint64        `protobuf:"varint,7,opt,name=slash_decay_period_blocks,json=slashDecayPeriodBlocks,proto3" json:"slash_decay_period_blocks,omitempty"`            // R1: blocks between slash count decays (default: 34272 = 1 epoch)
+	MaxSlashCountDeactivate    uint32        `protobuf:"varint,8,opt,name=max_slash_count_deactivate,json=maxSlashCountDeactivate,proto3" json:"max_slash_count_deactivate,omitempty"`         // slashes to deactivate (default: 3)
+	MinStakeForVerification    string        `protobuf:"bytes,9,opt,name=min_stake_for_verification,json=minStakeForVerification,proto3" json:"min_stake_for_verification,omitempty"`          // R3: min real stake to participate in VRF (default: "100000000")
+	SlashEscalationBps         uint64        `protobuf:"varint,10,opt,name=slash_escalation_bps,json=slashEscalationBps,proto3" json:"slash_escalation_bps,omitempty"`                         // per-prior-slash escalation factor in BPS (default: 100000 = 10%)
+	TierConfigs                []*TierConfig `protobuf:"bytes,11,rep,name=tier_configs,json=tierConfigs,proto3" json:"tier_configs,omitempty"`                                                 // governance-adjustable tier configs
+	ReputationCorrectDelta     uint64        `protobuf:"varint,12,opt,name=reputation_correct_delta,json=reputationCorrectDelta,proto3" json:"reputation_correct_delta,omitempty"`             // reputation increase for correct verification (default: 100 = +0.01%)
+	ReputationIncorrectDelta   uint64        `protobuf:"varint,13,opt,name=reputation_incorrect_delta,json=reputationIncorrectDelta,proto3" json:"reputation_incorrect_delta,omitempty"`       // reputation decrease for incorrect verification (default: 200 = -0.02%)
+	ReputationSlashDelta       uint64        `protobuf:"varint,14,opt,name=reputation_slash_delta,json=reputationSlashDelta,proto3" json:"reputation_slash_delta,omitempty"`                   // reputation decrease on slash (default: 10000 = -1%)
+	RedelegationCooldownBlocks uint64        `protobuf:"varint,15,opt,name=redelegation_cooldown_blocks,json=redelegationCooldownBlocks,proto3" json:"redelegation_cooldown_blocks,omitempty"` // blocks between redelegations (default: 1111 ~46 min)
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *Params) Reset() {
@@ -224,6 +229,41 @@ func (x *Params) GetSlashEscalationBps() uint64 {
 	return 0
 }
 
+func (x *Params) GetTierConfigs() []*TierConfig {
+	if x != nil {
+		return x.TierConfigs
+	}
+	return nil
+}
+
+func (x *Params) GetReputationCorrectDelta() uint64 {
+	if x != nil {
+		return x.ReputationCorrectDelta
+	}
+	return 0
+}
+
+func (x *Params) GetReputationIncorrectDelta() uint64 {
+	if x != nil {
+		return x.ReputationIncorrectDelta
+	}
+	return 0
+}
+
+func (x *Params) GetReputationSlashDelta() uint64 {
+	if x != nil {
+		return x.ReputationSlashDelta
+	}
+	return 0
+}
+
+func (x *Params) GetRedelegationCooldownBlocks() uint64 {
+	if x != nil {
+		return x.RedelegationCooldownBlocks
+	}
+	return 0
+}
+
 var File_legible_staking_v1_genesis_proto protoreflect.FileDescriptor
 
 const file_legible_staking_v1_genesis_proto_rawDesc = "" +
@@ -237,7 +277,7 @@ const file_legible_staking_v1_genesis_proto_rawDesc = "" +
 	"\vdelegations\x18\x03 \x03(\v2\x1e.legible.staking.v1.DelegationR\vdelegations\x12O\n" +
 	"\x11unbonding_entries\x18\x04 \x03(\v2\".legible.staking.v1.UnbondingEntryR\x10unbondingEntries\x12A\n" +
 	"\ftier_configs\x18\x05 \x03(\v2\x1e.legible.staking.v1.TierConfigR\vtierConfigs\x12#\n" +
-	"\runbonding_seq\x18\x06 \x01(\x04R\funbondingSeq\"\x85\x04\n" +
+	"\runbonding_seq\x18\x06 \x01(\x04R\funbondingSeq\"\xb8\x06\n" +
 	"\x06Params\x12:\n" +
 	"\x19max_apprentice_validators\x18\x01 \x01(\rR\x17maxApprenticeValidators\x12)\n" +
 	"\x10unbonding_period\x18\x02 \x01(\x04R\x0funbondingPeriod\x12#\n" +
@@ -249,7 +289,12 @@ const file_legible_staking_v1_genesis_proto_rawDesc = "" +
 	"\x1amax_slash_count_deactivate\x18\b \x01(\rR\x17maxSlashCountDeactivate\x12;\n" +
 	"\x1amin_stake_for_verification\x18\t \x01(\tR\x17minStakeForVerification\x120\n" +
 	"\x14slash_escalation_bps\x18\n" +
-	" \x01(\x04R\x12slashEscalationBpsB2Z0github.com/legible-money/legible/x/staking/typesb\x06proto3"
+	" \x01(\x04R\x12slashEscalationBps\x12A\n" +
+	"\ftier_configs\x18\v \x03(\v2\x1e.legible.staking.v1.TierConfigR\vtierConfigs\x128\n" +
+	"\x18reputation_correct_delta\x18\f \x01(\x04R\x16reputationCorrectDelta\x12<\n" +
+	"\x1areputation_incorrect_delta\x18\r \x01(\x04R\x18reputationIncorrectDelta\x124\n" +
+	"\x16reputation_slash_delta\x18\x0e \x01(\x04R\x14reputationSlashDelta\x12@\n" +
+	"\x1credelegation_cooldown_blocks\x18\x0f \x01(\x04R\x1aredelegationCooldownBlocksB2Z0github.com/legible-money/legible/x/staking/typesb\x06proto3"
 
 var (
 	file_legible_staking_v1_genesis_proto_rawDescOnce sync.Once
@@ -278,11 +323,12 @@ var file_legible_staking_v1_genesis_proto_depIdxs = []int32{
 	3, // 2: legible.staking.v1.GenesisState.delegations:type_name -> legible.staking.v1.Delegation
 	4, // 3: legible.staking.v1.GenesisState.unbonding_entries:type_name -> legible.staking.v1.UnbondingEntry
 	5, // 4: legible.staking.v1.GenesisState.tier_configs:type_name -> legible.staking.v1.TierConfig
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	5, // 5: legible.staking.v1.Params.tier_configs:type_name -> legible.staking.v1.TierConfig
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_legible_staking_v1_genesis_proto_init() }

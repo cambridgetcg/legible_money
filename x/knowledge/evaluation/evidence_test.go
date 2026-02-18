@@ -15,6 +15,7 @@ func mockCtx() sdk.Context {
 func TestEvaluateEvidence_NoEvidence_RequiringCategory(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return nil
 		},
@@ -34,6 +35,7 @@ func TestEvaluateEvidence_NoEvidence_RequiringCategory(t *testing.T) {
 func TestEvaluateEvidence_NoEvidence_NonRequiringCategory(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return nil
 		},
@@ -52,6 +54,7 @@ func TestEvaluateEvidence_NoEvidence_NonRequiringCategory(t *testing.T) {
 func TestEvaluateEvidence_WithOnChainEvidence(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{
@@ -79,6 +82,7 @@ func TestEvaluateEvidence_WithOnChainEvidence(t *testing.T) {
 func TestEvaluateEvidence_RejectedEvidenceSkipped(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", EvidenceType: "on_chain", Status: "rejected", Reliability: 900_000},
@@ -97,6 +101,7 @@ func TestEvaluateEvidence_RejectedEvidenceSkipped(t *testing.T) {
 func TestEvaluateEvidence_UnauditedEvidence(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", EvidenceType: "document", Status: "submitted", Reliability: 0},
@@ -117,6 +122,7 @@ func TestEvaluateEvidence_UnauditedEvidence(t *testing.T) {
 func TestEvaluateEvidence_NilEvidenceKeeper(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams:       types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: nil, // no evidence keeper
 	}
 	claim := types.Claim{
@@ -135,6 +141,7 @@ func TestEvaluateEvidence_NilEvidenceKeeper(t *testing.T) {
 func TestEvaluateEvidence_MultipleEvidences(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", EvidenceType: "on_chain", Status: "verified", Reliability: 800_000},
@@ -157,6 +164,7 @@ func TestEvaluateEvidence_MultipleEvidences(t *testing.T) {
 func TestEvaluateEvidence_UnknownType(t *testing.T) {
 	ctx := mockCtx()
 	evalCtx := &EvaluationContext{
+		ExtendedParams: types.DefaultExtendedParams(),
 		GetEvidenceByClaimId: func(_ sdk.Context, _ string) []types.EvidenceRecord {
 			return []types.EvidenceRecord{
 				{Id: "ev-1", EvidenceType: "mystery_type", Status: "verified", Reliability: 1_000_000},

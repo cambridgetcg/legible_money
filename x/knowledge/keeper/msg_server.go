@@ -88,9 +88,10 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	// Enforce minimum claim stake to prevent zero-slash spam.
 	// Without this floor, integer truncation makes the 22% slash = 0 for stakes < 5 ulgm,
 	// allowing attackers to spam claims with no economic penalty. (OpenClaw C-3 fix)
-	if stakeAmount.Int64() < types.MinClaimStakeUlgm {
+	ep := k.GetExtendedParams(ctx)
+	if stakeAmount.Int64() < int64(ep.MinClaimStakeUlgm) {
 		return nil, fmt.Errorf("%w: claim stake must be at least %d ulgm",
-			types.ErrInsufficientStake, types.MinClaimStakeUlgm)
+			types.ErrInsufficientStake, ep.MinClaimStakeUlgm)
 	}
 
 	submitterAddr, err := sdk.AccAddressFromBech32(msg.Submitter)

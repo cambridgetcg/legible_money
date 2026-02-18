@@ -2314,3 +2314,345 @@ func TestTier_ZeroVerifications(t *testing.T) {
 		t.Errorf("verified stake but zero verifications: expected apprentice, got %v", tier)
 	}
 }
+
+// ==================== P1-A Tier Config Parameterization Tests ====================
+
+func TestParamsIncludesTierConfigs(t *testing.T) {
+	p := types.DefaultParams()
+
+	if len(p.TierConfigs) != 4 {
+		t.Fatalf("expected 4 tier configs in default params, got %d", len(p.TierConfigs))
+	}
+
+	expectedTiers := []string{"apprentice", "verified", "bonded", "guardian"}
+	expectedSlashBps := []uint64{1500, 1200, 1000, 1000}
+	for i, tc := range p.TierConfigs {
+		if tc.Tier != expectedTiers[i] {
+			t.Errorf("tier_configs[%d]: expected tier %q, got %q", i, expectedTiers[i], tc.Tier)
+		}
+		if tc.SlashMultiplierBps != expectedSlashBps[i] {
+			t.Errorf("tier_configs[%d]: expected slash_multiplier_bps %d, got %d", i, expectedSlashBps[i], tc.SlashMultiplierBps)
+		}
+	}
+
+	if p.ReputationCorrectDelta != 100 {
+		t.Errorf("expected reputation_correct_delta 100, got %d", p.ReputationCorrectDelta)
+	}
+	if p.ReputationIncorrectDelta != 200 {
+		t.Errorf("expected reputation_incorrect_delta 200, got %d", p.ReputationIncorrectDelta)
+	}
+	if p.ReputationSlashDelta != 10000 {
+		t.Errorf("expected reputation_slash_delta 10000, got %d", p.ReputationSlashDelta)
+	}
+	if p.RedelegationCooldownBlocks != 1111 {
+		t.Errorf("expected redelegation_cooldown_blocks 1111, got %d", p.RedelegationCooldownBlocks)
+	}
+}
+
+func TestSetParamsSyncsTierConfigs(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Modify tier config in params
+	params := k.GetParams(ctx)
+	if len(params.TierConfigs) != 4 {
+		t.Fatalf("expected 4 tier configs, got %d", len(params.TierConfigs))
+	}
+
+	// Change apprentice slash multiplier from 1500 to 2000
+	params.TierConfigs[0].SlashMultiplierBps = 2000
+	if err := k.SetParams(ctx, params); err != nil {
+		t.Fatalf("SetParams failed: %v", err)
+	}
+
+	// Verify KVStore was updated via GetTierConfig
+	config, found := k.GetTierConfig(ctx, types.TierApprentice)
+	if !found {
+		t.Fatal("apprentice tier config not found after SetParams")
+	}
+	if config.SlashMultiplierBps != 2000 {
+		t.Errorf("expected SlashMultiplierBps 2000 in KVStore, got %d", config.SlashMultiplierBps)
+	}
+}
+
+func TestSlashMultiplierFromTierConfig(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Default: Apprentice = 1.5x, base 1000 -> 1500
+	result := keeper.CalculateTierSlash(ctx, k, types.TierApprentice, "1000")
+	if result != "1500" {
+		t.Errorf("apprentice slash: expected 1500, got %s", result)
+	}
+
+	// Default: Bonded = 1.0x, base 1000 -> 1000
+	result = keeper.CalculateTierSlash(ctx, k, types.TierBonded, "1000")
+	if result != "1000" {
+		t.Errorf("bonded slash: expected 1000, got %s", result)
+	}
+
+	// Now modify apprentice multiplier via params to 2.0x
+	params := k.GetParams(ctx)
+	params.TierConfigs[0].SlashMultiplierBps = 2000
+	if err := k.SetParams(ctx, params); err != nil {
+		t.Fatalf("SetParams failed: %v", err)
+	}
+
+	result = keeper.CalculateTierSlash(ctx, k, types.TierApprentice, "1000")
+	if result != "2000" {
+		t.Errorf("modified apprentice slash: expected 2000, got %s", result)
+	}
+}
+
+func TestReputationDeltasFromParams(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	addr := sdk.AccAddress("rep_delta_test______").String()
+	did := "did:lgm:reputation_delta_test"
+	registerTestValidator(t, k, ctx, addr, did, "111000")
+
+	// Test correct verification: default +100
+	if err := k.RecordVerification(ctx, addr, true, false); err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ := k.GetValidator(ctx, addr)
+	if v.Reputation != 500100 { // 500000 + 100
+		t.Errorf("expected reputation 500100 after correct, got %d", v.Reputation)
+	}
+
+	// Test incorrect verification: default -200
+	if err := k.RecordVerification(ctx, addr, false, false); err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, addr)
+	if v.Reputation != 499900 { // 500100 - 200
+		t.Errorf("expected reputation 499900 after incorrect, got %d", v.Reputation)
+	}
+
+	// Now change deltas via params
+	params := k.GetParams(ctx)
+	params.ReputationCorrectDelta = 500
+	params.ReputationIncorrectDelta = 1000
+	if err := k.SetParams(ctx, params); err != nil {
+		t.Fatalf("SetParams failed: %v", err)
+	}
+
+	// Correct with new delta: +500
+	if err := k.RecordVerification(ctx, addr, true, false); err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, addr)
+	if v.Reputation != 500400 { // 499900 + 500
+		t.Errorf("expected reputation 500400, got %d", v.Reputation)
+	}
+
+	// Incorrect with new delta: -1000
+	if err := k.RecordVerification(ctx, addr, false, false); err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, addr)
+	if v.Reputation != 499400 { // 500400 - 1000
+		t.Errorf("expected reputation 499400, got %d", v.Reputation)
+	}
+}
+
+func TestRedelegationCooldownFromParams(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	val1Addr := sdk.AccAddress("redel_val1__________").String()
+	val2Addr := sdk.AccAddress("redel_val2__________").String()
+	delegatorAddr := sdk.AccAddress("redel_delegator_____").String()
+
+	registerTestValidator(t, k, ctx, val1Addr, "did:lgm:val1_redel", "111000")
+	registerTestValidator(t, k, ctx, val2Addr, "did:lgm:val2_redel", "111000")
+
+	// Create delegation to val1
+	if err := k.SetDelegation(ctx, types.Delegation{
+		DelegatorAddress:  delegatorAddr,
+		ValidatorAddress:  val1Addr,
+		Amount:            "50000",
+		DelegatedAtHeight: 100,
+	}); err != nil {
+		t.Fatalf("SetDelegation failed: %v", err)
+	}
+
+	// Successful redelegate at height 100
+	_, err := k.Redelegate(ctx, &types.MsgRedelegate{
+		Delegator:    delegatorAddr,
+		SrcValidator: val1Addr,
+		DstValidator: val2Addr,
+		Amount:       "10000",
+	})
+	if err != nil {
+		t.Fatalf("first redelegate failed: %v", err)
+	}
+
+	// Attempt redelegate within default cooldown (1111 blocks) should fail
+	_, err = k.Redelegate(ctx, &types.MsgRedelegate{
+		Delegator:    delegatorAddr,
+		SrcValidator: val2Addr,
+		DstValidator: val1Addr,
+		Amount:       "5000",
+	})
+	if err == nil {
+		t.Fatal("expected cooldown error, got nil")
+	}
+
+	// Now reduce cooldown to 10 blocks via params
+	params := k.GetParams(ctx)
+	params.RedelegationCooldownBlocks = 10
+	if err := k.SetParams(ctx, params); err != nil {
+		t.Fatalf("SetParams failed: %v", err)
+	}
+
+	// Still at height 100, cooldown is now 10 blocks from height 100 → ready at 110
+	ctx = ctx.WithBlockHeight(111)
+	_, err = k.Redelegate(ctx, &types.MsgRedelegate{
+		Delegator:    delegatorAddr,
+		SrcValidator: val2Addr,
+		DstValidator: val1Addr,
+		Amount:       "5000",
+	})
+	if err != nil {
+		t.Fatalf("redelegate after reduced cooldown should succeed: %v", err)
+	}
+}
+
+func TestUpdateParamsWithTierConfigs(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Simulate governance updating params with modified tier configs
+	params := k.GetParams(ctx)
+	params.TierConfigs[1].RewardMultiplier = 750 // change verified reward from 500 to 750
+	params.ReputationSlashDelta = 5000           // reduce slash penalty
+
+	_, err := k.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: "authority",
+		Params:    &params,
+	})
+	if err != nil {
+		t.Fatalf("UpdateParams failed: %v", err)
+	}
+
+	// Verify params were stored
+	newParams := k.GetParams(ctx)
+	if newParams.TierConfigs[1].RewardMultiplier != 750 {
+		t.Errorf("expected verified reward_multiplier 750, got %d", newParams.TierConfigs[1].RewardMultiplier)
+	}
+	if newParams.ReputationSlashDelta != 5000 {
+		t.Errorf("expected reputation_slash_delta 5000, got %d", newParams.ReputationSlashDelta)
+	}
+
+	// Verify tier config was synced to KVStore
+	config, found := k.GetTierConfig(ctx, types.TierVerified)
+	if !found {
+		t.Fatal("verified tier config not found")
+	}
+	if config.RewardMultiplier != 750 {
+		t.Errorf("KVStore tier config: expected reward_multiplier 750, got %d", config.RewardMultiplier)
+	}
+}
+
+func TestParamsValidation_BadTierConfigs(t *testing.T) {
+	// Wrong number of tier configs
+	p := types.DefaultParams()
+	p.TierConfigs = p.TierConfigs[:3] // only 3
+	if err := p.Validate(); err == nil {
+		t.Error("expected validation error for 3 tier configs")
+	}
+
+	// Wrong tier order
+	p = types.DefaultParams()
+	p.TierConfigs[0].Tier = "bonded"
+	if err := p.Validate(); err == nil {
+		t.Error("expected validation error for wrong tier order")
+	}
+
+	// Invalid min_stake
+	p = types.DefaultParams()
+	p.TierConfigs[0].MinStake = "0"
+	if err := p.Validate(); err == nil {
+		t.Error("expected validation error for zero min_stake")
+	}
+
+	// SlashMultiplierBps out of range
+	p = types.DefaultParams()
+	p.TierConfigs[0].SlashMultiplierBps = 0
+	if err := p.Validate(); err == nil {
+		t.Error("expected validation error for zero slash_multiplier_bps")
+	}
+
+	p = types.DefaultParams()
+	p.TierConfigs[0].SlashMultiplierBps = 20000
+	if err := p.Validate(); err == nil {
+		t.Error("expected validation error for slash_multiplier_bps > 10000")
+	}
+
+	// Valid params should pass
+	p = types.DefaultParams()
+	if err := p.Validate(); err != nil {
+		t.Errorf("default params should validate: %v", err)
+	}
+}
+
+func TestInitGenesisBackwardCompat(t *testing.T) {
+	// Test legacy genesis: tier configs only in GenesisState.TierConfigs, not in Params
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	if err := stateStore.LoadLatestVersion(); err != nil {
+		t.Fatalf("failed to load latest version: %v", err)
+	}
+	registry := codectypes.NewInterfaceRegistry()
+	cdc := codec.NewProtoCodec(registry)
+	storeService := runtime.NewKVStoreService(storeKey)
+	bk := newMockBankKeeper()
+	ak := &mockAccountKeeper{}
+	k := keeper.NewKeeper(cdc, storeService, ak, bk, nil, "authority")
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
+
+	// Create legacy-style genesis: params WITHOUT TierConfigs, tier configs in genesis field
+	legacyParams := types.Params{
+		UnbondingPeriod:   268560,
+		VirtualStake:      "11000000",
+		MaxValidators:     100,
+		MinSelfDelegation: "111000",
+		SlashEscalationBps: 100000,
+		// TierConfigs intentionally empty (simulates pre-migration)
+	}
+	gs := &types.GenesisState{
+		Params:           &legacyParams,
+		Validators:       []*types.LegibleValidator{},
+		Delegations:      []*types.Delegation{},
+		UnbondingEntries: []*types.UnbondingEntry{},
+		TierConfigs:      types.DefaultTierConfigs(), // legacy location
+	}
+
+	if err := k.InitGenesis(ctx, gs); err != nil {
+		t.Fatalf("InitGenesis with legacy format failed: %v", err)
+	}
+
+	// Verify tier configs are accessible via KVStore
+	config, found := k.GetTierConfig(ctx, types.TierGuardian)
+	if !found {
+		t.Fatal("guardian tier config not found after legacy init")
+	}
+	if config.MinVerifications != 333 {
+		t.Errorf("expected guardian min_verifications 333, got %d", config.MinVerifications)
+	}
+
+	// Verify GetParams backward compat fills TierConfigs from KVStore
+	params := k.GetParams(ctx)
+	if len(params.TierConfigs) != 4 {
+		t.Fatalf("expected GetParams to fill 4 tier configs, got %d", len(params.TierConfigs))
+	}
+	if params.TierConfigs[3].Tier != "guardian" {
+		t.Errorf("expected tier 3 to be guardian, got %s", params.TierConfigs[3].Tier)
+	}
+
+	// Verify backward compat fills default reputation deltas
+	if params.ReputationCorrectDelta != 100 {
+		t.Errorf("expected default reputation_correct_delta 100, got %d", params.ReputationCorrectDelta)
+	}
+	if params.RedelegationCooldownBlocks != 1111 {
+		t.Errorf("expected default redelegation_cooldown_blocks 1111, got %d", params.RedelegationCooldownBlocks)
+	}
+}

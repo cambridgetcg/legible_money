@@ -61,6 +61,15 @@ func DefaultParams() Params {
 		MaxValidatorsPerRound:          22,
 		InvalidClaimSlashBps:           220000,  // 22% slash on rejected claims
 		VerificationRewardAmount:       3000000, // 3 LGM base reward per correct verification (ulgm)
+		// Adversarial verification defaults (must match hardcoded constants)
+		ProvisionalThreshold:           ProvisionalThresholdDefault,
+		BaseChallengeDuration:          BaseChallengeDurationDefault,
+		MinChallengeStake:              "11000000", // 11 LGM in ulgm
+		ConfidenceGrowthPerEpoch:       ConfidenceGrowthPerEpochDefault,
+		MaxSurvivalConfidence:          MaxSurvivalConfidenceDefault,
+		FailedChallengeSlashBps:        FailedChallengeSlashBpsDefault,
+		SuccessfulChallengeRewardBps:   SuccessfulChallengeRewardBpsDefault,
+		AdversarialVerificationEnabled: true,
 	}
 }
 

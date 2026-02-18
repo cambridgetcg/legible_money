@@ -318,10 +318,12 @@ func (k Keeper) Undelegate(ctx sdk.Context, msg *types.MsgUndelegate) (*types.Ms
 
 // Redelegate moves delegation from one validator to another.
 func (k Keeper) Redelegate(ctx sdk.Context, msg *types.MsgRedelegate) (*types.MsgRedelegateResponse, error) {
-	// Enforce redelegation cooldown to prevent rapid stake-shifting attacks
+	// Enforce redelegation cooldown to prevent rapid stake-shifting attacks (P1-A: parameterized)
+	params := k.GetParams(ctx)
+	cooldownBlocks := params.RedelegationCooldownBlocks
 	currentHeight := uint64(ctx.BlockHeight())
 	lastRedelHeight := k.GetLastRedelegationHeight(ctx, msg.Delegator)
-	if lastRedelHeight > 0 && currentHeight < lastRedelHeight+types.RedelegationCooldownBlocks {
+	if lastRedelHeight > 0 && currentHeight < lastRedelHeight+cooldownBlocks {
 		return nil, types.ErrRedelegationCooldown
 	}
 
@@ -592,7 +594,11 @@ func (k Keeper) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*type
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
 
-	if err := k.SetParams(ctx, msg.Params); err != nil {
+	if msg.Params == nil {
+		return nil, fmt.Errorf("params cannot be nil")
+	}
+
+	if err := k.SetParams(ctx, *msg.Params); err != nil {
 		return nil, fmt.Errorf("failed to set params: %w", err)
 	}
 

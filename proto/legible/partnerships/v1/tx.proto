@@ -1,0 +1,197 @@
+syntax = "proto3";
+package legible.partnerships.v1;
+
+option go_package = "github.com/legible-money/legible/x/partnerships/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/partnerships/v1/state.proto";
+
+// Msg defines the partnerships module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // Cold-start (Tier -1) formation
+  rpc InitiateSeedPartnership(MsgInitiateSeedPartnership) returns (MsgInitiateSeedPartnershipResponse);
+  rpc GraduateSeedPartnership(MsgGraduateSeedPartnership) returns (MsgGraduateSeedPartnershipResponse);
+  rpc RegisterInPool(MsgRegisterInPool) returns (MsgRegisterInPoolResponse);
+  rpc DeclareIntent(MsgDeclareIntent) returns (MsgDeclareIntentResponse);
+  rpc SponsorPartnership(MsgSponsorPartnership) returns (MsgSponsorPartnershipResponse);
+
+  // Core partnership lifecycle
+  rpc InitiatePartnership(MsgInitiatePartnership) returns (MsgInitiatePartnershipResponse);
+  rpc AcceptPartnership(MsgAcceptPartnership) returns (MsgAcceptPartnershipResponse);
+  rpc DepositToPot(MsgDepositToPot) returns (MsgDepositToPotResponse);
+  rpc DistributeReward(MsgDistributeReward) returns (MsgDistributeRewardResponse);
+
+  // Deliberation
+  rpc ProposeOperation(MsgProposeOperation) returns (MsgProposeOperationResponse);
+  rpc ApproveOperation(MsgApproveOperation) returns (MsgApproveOperationResponse);
+  rpc RejectOperation(MsgRejectOperation) returns (MsgRejectOperationResponse);
+
+  // Safety & exit
+  rpc SafetyFreeze(MsgSafetyFreeze) returns (MsgSafetyFreezeResponse);
+  rpc RaiseCoercionSignal(MsgRaiseCoercionSignal) returns (MsgRaiseCoercionSignalResponse);
+  rpc InitiateExit(MsgInitiateExit) returns (MsgInitiateExitResponse);
+
+  // Governance
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// --- Cold-start messages ---
+
+message MsgInitiateSeedPartnership {
+  option (cosmos.msg.v1.signer) = "initiator";
+  string initiator = 1;
+  string partner   = 2;
+}
+message MsgInitiateSeedPartnershipResponse {
+  string seed_partnership_id = 1;
+}
+
+message MsgGraduateSeedPartnership {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender               = 1;
+  string seed_partnership_id  = 2;
+  string additional_deposit   = 3;
+}
+message MsgGraduateSeedPartnershipResponse {
+  string partnership_id = 1;
+}
+
+message MsgRegisterInPool {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender            = 1;
+  repeated string domains  = 2;
+}
+message MsgRegisterInPoolResponse {}
+
+message MsgDeclareIntent {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender            = 1;
+  repeated string domains  = 2;
+  uint32 tier              = 3;
+}
+message MsgDeclareIntentResponse {
+  string intent_id = 1;
+}
+
+message MsgSponsorPartnership {
+  option (cosmos.msg.v1.signer) = "sponsor";
+  string sponsor = 1;
+  string mentee  = 2;
+  string amount  = 3;
+}
+message MsgSponsorPartnershipResponse {
+  string partnership_id = 1;
+}
+
+// --- Core lifecycle ---
+
+message MsgInitiatePartnership {
+  option (cosmos.msg.v1.signer) = "initiator";
+  string initiator = 1;
+  string partner   = 2;
+  uint32 lock_tier = 3;
+}
+message MsgInitiatePartnershipResponse {
+  string partnership_id = 1;
+}
+
+message MsgAcceptPartnership {
+  option (cosmos.msg.v1.signer) = "acceptor";
+  string acceptor       = 1;
+  string partnership_id = 2;
+}
+message MsgAcceptPartnershipResponse {}
+
+message MsgDepositToPot {
+  option (cosmos.msg.v1.signer) = "depositor";
+  string depositor      = 1;
+  string partnership_id = 2;
+  string amount         = 3;
+}
+message MsgDepositToPotResponse {}
+
+message MsgDistributeReward {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority      = 1;
+  string partnership_id = 2;
+  string gross_amount   = 3;
+  string source_type    = 4;
+}
+message MsgDistributeRewardResponse {
+  string human_share     = 1;
+  string agent_share     = 2;
+  string common_pot_add  = 3;
+}
+
+// --- Deliberation ---
+
+message MsgProposeOperation {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer       = 1;
+  string partnership_id = 2;
+  string operation_type = 3;
+  string amount         = 4;
+  string rationale      = 5;
+}
+message MsgProposeOperationResponse {
+  string operation_id = 1;
+}
+
+message MsgApproveOperation {
+  option (cosmos.msg.v1.signer) = "approver";
+  string approver     = 1;
+  string operation_id = 2;
+}
+message MsgApproveOperationResponse {}
+
+message MsgRejectOperation {
+  option (cosmos.msg.v1.signer) = "rejecter";
+  string rejecter          = 1;
+  string operation_id      = 2;
+  string counter_amount    = 3;
+  string counter_rationale = 4;
+}
+message MsgRejectOperationResponse {
+  string counter_operation_id = 1;
+}
+
+// --- Safety & exit ---
+
+message MsgSafetyFreeze {
+  option (cosmos.msg.v1.signer) = "freezer";
+  string freezer        = 1;
+  string partnership_id = 2;
+}
+message MsgSafetyFreezeResponse {
+  uint64 expires_at = 1;
+}
+
+message MsgRaiseCoercionSignal {
+  option (cosmos.msg.v1.signer) = "raiser";
+  string raiser         = 1;
+  string partnership_id = 2;
+}
+message MsgRaiseCoercionSignalResponse {
+  string signal_id  = 1;
+  uint64 expires_at = 2;
+}
+
+message MsgInitiateExit {
+  option (cosmos.msg.v1.signer) = "initiator";
+  string initiator      = 1;
+  string partnership_id = 2;
+}
+message MsgInitiateExitResponse {
+  uint64 cooldown_ends_at = 1;
+}
+
+// --- Governance ---
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

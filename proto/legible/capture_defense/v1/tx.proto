@@ -1,0 +1,48 @@
+syntax = "proto3";
+package legible.capture_defense.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_defense/types";
+
+import "cosmos/msg/v1/msg.proto";
+import "legible/capture_defense/v1/genesis.proto";
+
+// Msg defines the capture defense module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc RequestQualification(MsgRequestQualification) returns (MsgRequestQualificationResponse);
+  rpc EndorseQualification(MsgEndorseQualification) returns (MsgEndorseQualificationResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgRequestQualification {
+  option (cosmos.msg.v1.signer) = "validator_addr";
+  string validator_addr    = 1;
+  string domain            = 2;
+  string pathway           = 3;
+  string stake             = 4;
+  repeated string endorsers = 5;
+  string inherit_from      = 6;
+}
+message MsgRequestQualificationResponse {
+  bool   granted = 1;
+  string error   = 2;
+}
+
+message MsgEndorseQualification {
+  option (cosmos.msg.v1.signer) = "endorser";
+  string endorser         = 1;
+  string target_validator = 2;
+  string domain           = 3;
+  string stake            = 4;
+}
+message MsgEndorseQualificationResponse {
+  bool success = 1;
+}
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params    = 2;
+}
+message MsgUpdateParamsResponse {}

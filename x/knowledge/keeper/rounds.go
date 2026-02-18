@@ -327,13 +327,14 @@ func (k Keeper) CompleteRound(
 
 			// Transfer evidence summaries from claim to fact (evidence provenance survives)
 			if k.evidenceMgmtKeeper != nil {
+				ep := k.GetExtendedParams(ctx)
 				evidences := k.evidenceMgmtKeeper.GetEvidenceByClaimId(ctx, claim.Id)
 				summaries := make([]*types.FactEvidenceSummary, 0, len(evidences))
 				for _, ev := range evidences {
 					if ev.Status == "rejected" || ev.Status == "expired" {
 						continue
 					}
-					typeStrength, ok := types.EVIDENCE_TYPE_STRENGTH[ev.EvidenceType]
+					typeStrength, ok := ep.GetEvidenceTypeStrength(ev.EvidenceType)
 					if !ok {
 						typeStrength = 400_000
 					}
@@ -1399,20 +1400,21 @@ func (k Keeper) checkMisbehaviorVestingPause(ctx sdk.Context, submitter string) 
 		return
 	}
 
+	ep := k.GetExtendedParams(ctx)
 	record, found := k.GetCalibrationRecord(ctx, submitter)
-	if !found || record.TotalClaims < types.MisbehaviorMinSamples {
+	if !found || record.TotalClaims < uint64(ep.MisbehaviorMinSamples) {
 		return
 	}
 
 	// Calculate rejection rate: rejectedClaims * 1,000,000 / totalClaims
 	rejectionRate := (record.RejectedClaims * 1_000_000) / record.TotalClaims
-	if rejectionRate > types.MisbehaviorRejectionThreshold {
+	if rejectionRate > ep.MisbehaviorRejectionThreshold {
 		paused := k.vestingRewardsKeeper.PauseAllVestingByRecipient(ctx, submitter)
 		if paused > 0 {
 			k.Logger(ctx).Warn("FARM-6: agent misbehavior detected — vesting paused",
 				"submitter", submitter,
 				"rejection_rate", rejectionRate,
-				"threshold", types.MisbehaviorRejectionThreshold,
+				"threshold", ep.MisbehaviorRejectionThreshold,
 				"schedules_paused", paused,
 			)
 		}

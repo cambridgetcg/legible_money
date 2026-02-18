@@ -873,7 +873,7 @@ func TestMsgProposeDomain(t *testing.T) {
 		Name:        "biology",
 		DisplayName: "Biology",
 		Description: "The study of living organisms",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "1000000",
 	})
@@ -911,7 +911,7 @@ func TestMsgProposeDomainInsufficientStake(t *testing.T) {
 	_, err := msgSrv.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
 		Name:        "biology",
 		DisplayName: "Biology",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "1000000",
 	})
@@ -930,7 +930,7 @@ func TestMsgProposeDomainBelowMinStake(t *testing.T) {
 	_, err := msgSrv.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
 		Name:        "biology",
 		DisplayName: "Biology",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "100", // below min_proposal_stake of 1000000
 	})
@@ -950,7 +950,7 @@ func TestMsgVoteDomainProposal(t *testing.T) {
 	resp, _ := msgSrv.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
 		Name:        "biology",
 		DisplayName: "Biology",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "1000000",
 	})
@@ -1020,7 +1020,7 @@ func TestMsgUpdateParams(t *testing.T) {
 
 	_, err := msgSrv.UpdateParams(sdk.WrapSDKContext(ctx), &types.MsgUpdateParams{
 		Authority: "authority",
-		Params:    newParams,
+		Params:    &newParams,
 	})
 	if err != nil {
 		t.Fatalf("failed to update params: %v", err)
@@ -1039,9 +1039,10 @@ func TestMsgUpdateParamsUnauthorized(t *testing.T) {
 	k, ctx, _ := setupKeeper(t)
 	msgSrv := keeper.NewMsgServerImpl(k)
 
+	defaultParams := types.DefaultParams()
 	_, err := msgSrv.UpdateParams(sdk.WrapSDKContext(ctx), &types.MsgUpdateParams{
 		Authority: testAddr("hacker"),
-		Params:    types.DefaultParams(),
+		Params:    &defaultParams,
 	})
 	if err == nil {
 		t.Error("expected error for unauthorized param update")
@@ -1169,7 +1170,7 @@ func TestQueryProposal(t *testing.T) {
 	createResp, _ := msgSrv.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
 		Name:        "biology",
 		DisplayName: "Biology",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "1000000",
 	})
@@ -1306,7 +1307,7 @@ func TestFullProposalLifecycle(t *testing.T) {
 		Name:        "chemistry",
 		DisplayName: "Chemistry",
 		Description: "Chemical sciences",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "1000000",
 	})
@@ -1587,7 +1588,7 @@ func TestMsgRegisterLogicZone(t *testing.T) {
 	// Register a custom zone
 	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
 		Authority: "authority",
-		ZoneProperties: types.LogicZoneProperties{
+		ZoneProperties: &types.LogicZoneProperties{
 			Zone:             "modal_logic",
 			Complete:         false,
 			Decidable:        true,
@@ -1617,7 +1618,7 @@ func TestMsgRegisterLogicZoneDuplicate(t *testing.T) {
 	// propositional already exists from defaults
 	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
 		Authority: "authority",
-		ZoneProperties: types.LogicZoneProperties{
+		ZoneProperties: &types.LogicZoneProperties{
 			Zone:             string(types.ZonePropositional),
 			Complete:         true,
 			MaxConfidenceBps: 1000000,
@@ -1634,7 +1635,7 @@ func TestMsgRegisterLogicZoneUnauthorized(t *testing.T) {
 
 	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
 		Authority: testAddr("hacker"),
-		ZoneProperties: types.LogicZoneProperties{
+		ZoneProperties: &types.LogicZoneProperties{
 			Zone:             "hacked_zone",
 			MaxConfidenceBps: 1000000,
 		},
@@ -1653,7 +1654,7 @@ func TestMsgAcknowledgeIncompleteness(t *testing.T) {
 	_, err := msgSrv.AcknowledgeIncompleteness(sdk.WrapSDKContext(ctx), &types.MsgAcknowledgeIncompleteness{
 		Submitter: submitter,
 		FactId:    "fact-123",
-		Zone:      types.ZonePeano,
+		Zone:      string(types.ZonePeano),
 		Reason:    "This theorem is stated within Peano arithmetic and may be unprovable within the system",
 	})
 	if err != nil {
@@ -1684,7 +1685,7 @@ func TestMsgAcknowledgeIncompletenessCompleteZone(t *testing.T) {
 	_, err := msgSrv.AcknowledgeIncompleteness(sdk.WrapSDKContext(ctx), &types.MsgAcknowledgeIncompleteness{
 		Submitter: testAddr("alice"),
 		FactId:    "fact-456",
-		Zone:      types.ZonePropositional,
+		Zone:      string(types.ZonePropositional),
 		Reason:    "This shouldn't work",
 	})
 	if err == nil {
@@ -2019,7 +2020,7 @@ func TestStakeRefundOnPassedProposal(t *testing.T) {
 		Name:        "chemistry",
 		DisplayName: "Chemistry",
 		Description: "Chemical sciences",
-		Stratum:     types.StratumEmpirical,
+		Stratum:     uint32(types.StratumEmpirical),
 		Proposer:    proposer,
 		Stake:       "1000000",
 	})

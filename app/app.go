@@ -314,7 +314,7 @@ var (
 		vestingrewardstypes.ModuleName:   {authtypes.Minter, authtypes.Burner},
 		knowledgetypes.ModuleName:        nil,
 		legiblestakingtypes.ModuleName:   {authtypes.Burner, authtypes.Staking},
-		tokenstypes.ModuleName:           {authtypes.Burner},
+		tokenstypes.ModuleName:           {authtypes.Minter, authtypes.Burner},
 		ResearchFundName:                 nil, // receives 7% research tax; no mint/burn needed
 		BurnModuleName:                   {authtypes.Burner},
 		disputestypes.ModuleName:         {authtypes.Burner},

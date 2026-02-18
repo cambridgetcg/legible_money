@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/tokens/types"
@@ -186,11 +188,13 @@ func (s *msgServer) BurnToken(goCtx context.Context, msg *types.MsgBurnToken) (*
 		return nil, types.ErrInvalidAmount
 	}
 
-	// Check burner balance
-	bal := s.GetBalance(ctx, msg.TokenId, msg.Burner)
-	if bal.Cmp(amount) < 0 {
-		return nil, types.ErrInsufficientBalance
+	// Check burner's undelegated balance
+	undelegated := s.GetUndelegatedBalance(ctx, msg.TokenId, msg.Burner)
+	if undelegated.Cmp(amount) < 0 {
+		return nil, types.ErrInsufficientUndelegatedBalance
 	}
+
+	bal := s.GetBalance(ctx, msg.TokenId, msg.Burner)
 
 	// Debit burner
 	bal.Sub(bal, amount)
@@ -235,13 +239,14 @@ func (s *msgServer) TransferToken(goCtx context.Context, msg *types.MsgTransferT
 		return nil, types.ErrInvalidAmount
 	}
 
-	// Check sender balance
-	senderBal := s.GetBalance(ctx, msg.TokenId, msg.Sender)
-	if senderBal.Cmp(amount) < 0 {
-		return nil, types.ErrInsufficientBalance
+	// Check sender's undelegated balance
+	undelegated := s.GetUndelegatedBalance(ctx, msg.TokenId, msg.Sender)
+	if undelegated.Cmp(amount) < 0 {
+		return nil, types.ErrInsufficientUndelegatedBalance
 	}
 
 	// Debit sender, credit recipient
+	senderBal := s.GetBalance(ctx, msg.TokenId, msg.Sender)
 	senderBal.Sub(senderBal, amount)
 	s.SetBalance(ctx, msg.TokenId, msg.Sender, senderBal)
 
@@ -319,11 +324,12 @@ func (s *msgServer) TransferFrom(goCtx context.Context, msg *types.MsgTransferFr
 		return nil, types.ErrAllowanceExceeded
 	}
 
-	// Check from balance
-	fromBal := s.GetBalance(ctx, msg.TokenId, msg.From)
-	if fromBal.Cmp(amount) < 0 {
-		return nil, types.ErrInsufficientBalance
+	// Check from's undelegated balance
+	undelegated := s.GetUndelegatedBalance(ctx, msg.TokenId, msg.From)
+	if undelegated.Cmp(amount) < 0 {
+		return nil, types.ErrInsufficientUndelegatedBalance
 	}
+	fromBal := s.GetBalance(ctx, msg.TokenId, msg.From)
 
 	// Deduct allowance
 	allowance.Sub(allowance, amount)
@@ -797,19 +803,189 @@ func (s *msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 	return &types.MsgUpdateParamsResponse{}, nil
 }
 
-// ---------- Phase 2 Stubs (Unimplemented) ----------
-//
-// The following 3 handlers are registered in the proto service and codec
-// interfaces but return codes.Unimplemented via the embedded
-// UnimplementedMsgServer. They will be implemented in Phase 2.
-//
-// DelegatePower — Delegates governance voting power from one token holder
-//   to another without transferring ownership. Enables liquid democracy
-//   for LGM-20 token governance participation.
-//
-// WrapToken — Wraps an LGM-20 secondary token into an IBC-compatible
-//   sdk.Coin denomination, enabling cross-chain transfers via IBC.
-//   Requires the token's Wrappable feature flag.
-//
-// UnwrapToken — Unwraps an IBC-compatible sdk.Coin back into the
-//   original LGM-20 secondary token representation.
+// ---------- Phase 2: Delegation + Wrap/Unwrap ----------
+
+// DelegatePower delegates governance voting power from the delegator to a delegate
+// for a specific LGM-20 token. Amount=0 revokes the delegation. Delegated tokens
+// cannot be transferred or burned until un-delegated.
+func (s *msgServer) DelegatePower(goCtx context.Context, msg *types.MsgDelegatePower) (*types.MsgDelegatePowerResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	token := s.GetToken(ctx, msg.TokenId)
+	if token == nil {
+		return nil, types.ErrTokenNotFound
+	}
+
+	if token.Paused {
+		return nil, types.ErrTokenPaused
+	}
+
+	if msg.Delegator == msg.Delegate {
+		return nil, types.ErrSelfDelegation
+	}
+
+	newAmount := new(big.Int)
+	if _, ok := newAmount.SetString(msg.Amount, 10); !ok || newAmount.Sign() < 0 {
+		return nil, types.ErrInvalidAmount
+	}
+
+	// Get current delegation
+	currentDelegation := s.GetDelegation(ctx, msg.TokenId, msg.Delegator, msg.Delegate)
+	currentTotal := s.GetDelegatorTotal(ctx, msg.TokenId, msg.Delegator)
+
+	if newAmount.Cmp(currentDelegation) > 0 {
+		// Increasing delegation: check undelegated balance covers the delta
+		delta := new(big.Int).Sub(newAmount, currentDelegation)
+		undelegated := s.GetUndelegatedBalance(ctx, msg.TokenId, msg.Delegator)
+		if undelegated.Cmp(delta) < 0 {
+			return nil, types.ErrInsufficientUndelegatedBalance
+		}
+		// Update total: add delta
+		currentTotal.Add(currentTotal, delta)
+	} else if newAmount.Cmp(currentDelegation) < 0 {
+		// Decreasing delegation: subtract delta from total
+		delta := new(big.Int).Sub(currentDelegation, newAmount)
+		currentTotal.Sub(currentTotal, delta)
+	} else {
+		// No change
+		return &types.MsgDelegatePowerResponse{}, nil
+	}
+
+	// Persist
+	s.SetDelegation(ctx, msg.TokenId, msg.Delegator, msg.Delegate, newAmount)
+	s.SetDelegatorTotal(ctx, msg.TokenId, msg.Delegator, currentTotal)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"delegate_power",
+		sdk.NewAttribute("token_id", msg.TokenId),
+		sdk.NewAttribute("delegator", msg.Delegator),
+		sdk.NewAttribute("delegate", msg.Delegate),
+		sdk.NewAttribute("amount", newAmount.String()),
+	))
+
+	return &types.MsgDelegatePowerResponse{}, nil
+}
+
+// WrapToken wraps an LGM-20 secondary token into an IBC-compatible sdk.Coin.
+// Requires the token's Wrappable feature flag. The wrapped denom is deterministic: "lgm20/{tokenId}".
+func (s *msgServer) WrapToken(goCtx context.Context, msg *types.MsgWrapToken) (*types.MsgWrapTokenResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	token := s.GetToken(ctx, msg.TokenId)
+	if token == nil {
+		return nil, types.ErrTokenNotFound
+	}
+
+	if token.Paused {
+		return nil, types.ErrTokenPaused
+	}
+
+	if token.Features == nil || !token.Features.Wrappable {
+		return nil, types.ErrNotWrappable
+	}
+
+	amount := new(big.Int)
+	if _, ok := amount.SetString(msg.Amount, 10); !ok || amount.Sign() <= 0 {
+		return nil, types.ErrInvalidAmount
+	}
+
+	// Check undelegated balance
+	undelegated := s.GetUndelegatedBalance(ctx, msg.TokenId, msg.Sender)
+	if undelegated.Cmp(amount) < 0 {
+		return nil, types.ErrInsufficientUndelegatedBalance
+	}
+
+	// Debit sender's LGM-20 balance
+	bal := s.GetBalance(ctx, msg.TokenId, msg.Sender)
+	bal.Sub(bal, amount)
+	s.SetBalance(ctx, msg.TokenId, msg.Sender, bal)
+
+	// Determine wrapped denom and create/update wrap record (idempotent)
+	wrappedDenom := WrappedDenom(msg.TokenId)
+	s.SetWrapRecord(ctx, msg.TokenId, wrappedDenom)
+
+	// Mint sdk.Coins and send to sender
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sender address: %w", err)
+	}
+
+	coins := sdk.NewCoins(sdk.NewCoin(wrappedDenom, sdkmath.NewIntFromBigInt(amount)))
+	if err := s.bankKeeper.MintCoins(ctx, types.ModuleName, coins); err != nil {
+		return nil, fmt.Errorf("failed to mint wrapped coins: %w", err)
+	}
+	if err := s.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, senderAddr, coins); err != nil {
+		return nil, fmt.Errorf("failed to send wrapped coins: %w", err)
+	}
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"wrap_token",
+		sdk.NewAttribute("token_id", msg.TokenId),
+		sdk.NewAttribute("sender", msg.Sender),
+		sdk.NewAttribute("amount", amount.String()),
+		sdk.NewAttribute("wrapped_denom", wrappedDenom),
+	))
+
+	return &types.MsgWrapTokenResponse{WrappedDenom: wrappedDenom}, nil
+}
+
+// UnwrapToken unwraps an IBC-compatible sdk.Coin back into the original LGM-20 token.
+// Unwrap is always allowed regardless of the Wrappable feature flag.
+func (s *msgServer) UnwrapToken(goCtx context.Context, msg *types.MsgUnwrapToken) (*types.MsgUnwrapTokenResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Look up token ID from wrapped denom
+	tokenId := s.GetTokenIdByWrappedDenom(ctx, msg.WrappedDenom)
+	if tokenId == "" {
+		return nil, types.ErrWrapRecordNotFound
+	}
+
+	token := s.GetToken(ctx, tokenId)
+	if token == nil {
+		return nil, types.ErrTokenNotFound
+	}
+
+	if token.Paused {
+		return nil, types.ErrTokenPaused
+	}
+
+	amount := new(big.Int)
+	if _, ok := amount.SetString(msg.Amount, 10); !ok || amount.Sign() <= 0 {
+		return nil, types.ErrInvalidAmount
+	}
+
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sender address: %w", err)
+	}
+
+	// Check sender holds sufficient wrapped coins
+	coin := s.bankKeeper.GetBalance(ctx, senderAddr, msg.WrappedDenom)
+	if coin.Amount.BigInt().Cmp(amount) < 0 {
+		return nil, types.ErrInsufficientBalance
+	}
+
+	// Send coins from sender to module, then burn
+	coins := sdk.NewCoins(sdk.NewCoin(msg.WrappedDenom, sdkmath.NewIntFromBigInt(amount)))
+	if err := s.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, coins); err != nil {
+		return nil, fmt.Errorf("failed to send wrapped coins to module: %w", err)
+	}
+	if err := s.bankKeeper.BurnCoins(ctx, types.ModuleName, coins); err != nil {
+		return nil, fmt.Errorf("failed to burn wrapped coins: %w", err)
+	}
+
+	// Credit sender's LGM-20 balance
+	bal := s.GetBalance(ctx, tokenId, msg.Sender)
+	bal.Add(bal, amount)
+	s.SetBalance(ctx, tokenId, msg.Sender, bal)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"unwrap_token",
+		sdk.NewAttribute("token_id", tokenId),
+		sdk.NewAttribute("sender", msg.Sender),
+		sdk.NewAttribute("amount", amount.String()),
+		sdk.NewAttribute("wrapped_denom", msg.WrappedDenom),
+	))
+
+	return &types.MsgUnwrapTokenResponse{TokenId: tokenId}, nil
+}

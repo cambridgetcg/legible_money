@@ -331,6 +331,87 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	return nil
 }
 
+// --- MsgDelegatePower ---
+
+func (msg *MsgDelegatePower) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Delegator)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgDelegatePower) ValidateBasic() error {
+	if msg.Delegator == "" {
+		return fmt.Errorf("delegator cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Delegator); err != nil {
+		return fmt.Errorf("invalid delegator address: %w", err)
+	}
+	if msg.TokenId == "" {
+		return fmt.Errorf("token_id cannot be empty")
+	}
+	if msg.Delegate == "" {
+		return fmt.Errorf("delegate cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Delegate); err != nil {
+		return fmt.Errorf("invalid delegate address: %w", err)
+	}
+	if msg.Delegator == msg.Delegate {
+		return fmt.Errorf("delegator and delegate cannot be the same")
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(msg.Amount, 10); !ok || amt.Sign() < 0 {
+		return fmt.Errorf("amount must be a non-negative integer")
+	}
+	return nil
+}
+
+// --- MsgWrapToken ---
+
+func (msg *MsgWrapToken) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgWrapToken) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.TokenId == "" {
+		return fmt.Errorf("token_id cannot be empty")
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(msg.Amount, 10); !ok || amt.Sign() <= 0 {
+		return fmt.Errorf("amount must be a positive integer")
+	}
+	return nil
+}
+
+// --- MsgUnwrapToken ---
+
+func (msg *MsgUnwrapToken) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUnwrapToken) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.WrappedDenom == "" {
+		return fmt.Errorf("wrapped_denom cannot be empty")
+	}
+	amt := new(big.Int)
+	if _, ok := amt.SetString(msg.Amount, 10); !ok || amt.Sign() <= 0 {
+		return fmt.Errorf("amount must be a positive integer")
+	}
+	return nil
+}
+
 // --- MsgSwap ---
 
 func (msg *MsgSwap) GetSigners() []sdk.AccAddress {

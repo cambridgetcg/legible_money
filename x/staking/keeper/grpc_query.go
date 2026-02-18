@@ -115,15 +115,10 @@ func (q queryServer) Unbondings(goCtx context.Context, req *types.QueryUnbonding
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	params := q.Keeper.GetParams(ctx)
-	tierConfigs := q.Keeper.GetAllTierConfigs(ctx)
-	tcPtrs := make([]*types.TierConfig, len(tierConfigs))
-	for i := range tierConfigs {
-		tcPtrs[i] = &tierConfigs[i]
-	}
+	params := q.Keeper.GetParams(ctx) // GetParams backward compat fills TierConfigs
 
 	return &types.QueryParamsResponse{
 		Params:      &params,
-		TierConfigs: tcPtrs,
+		TierConfigs: params.TierConfigs, // sourced from params (canonical location)
 	}, nil
 }

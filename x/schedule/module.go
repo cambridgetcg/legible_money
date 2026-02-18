@@ -141,8 +141,13 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 			"height", sdkCtx.BlockHeight())
 	}
 
-	// Cleanup expired processes every 100 blocks
-	if sdkCtx.BlockHeight()%100 == 0 {
+	// Cleanup expired processes at governance-adjustable interval
+	params := am.keeper.GetParams(sdkCtx)
+	cleanupInterval := int64(params.CleanupIntervalBlocks)
+	if cleanupInterval <= 0 {
+		cleanupInterval = 100 // fallback
+	}
+	if sdkCtx.BlockHeight()%cleanupInterval == 0 {
 		cleaned := am.keeper.CleanupExpiredProcesses(sdkCtx)
 		if cleaned > 0 {
 			am.keeper.Logger(sdkCtx).Info("expired schedules cleaned",

@@ -327,7 +327,7 @@ func TestCollectAndAdapt_ProposalTriggersRun(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.EpochLengthBlocks = 10
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 	k.SetState(ctx, types.AutopoiesisState{Active: true, CurrentEpoch: 0})
 
 	// Set system under maximum stress: low accuracy, low participation, high expiration

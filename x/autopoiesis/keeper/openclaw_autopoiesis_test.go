@@ -19,7 +19,7 @@ func TestOC_AP1_SSIMetricManipulation(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.EpochLengthBlocks = 10
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 	k.SetState(ctx, types.AutopoiesisState{Active: true})
 
 	// Attack: spike validators to 1 active / 100 total → extreme non-participation
@@ -45,7 +45,7 @@ func TestOC_AP2_OscillationAttack(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.EpochLengthBlocks = 10
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 	k.SetState(ctx, types.AutopoiesisState{Active: true})
 
 	var slashHistory []uint64
@@ -127,7 +127,7 @@ func TestOC_AP4_EmergencyHaltFreeze(t *testing.T) {
 
 	params := types.DefaultParams()
 	params.EpochLengthBlocks = 10
-	k.SetParams(ctx, params)
+	k.SetParams(ctx, &params)
 	k.SetState(ctx, types.AutopoiesisState{Active: true})
 
 	// Run a few epochs normally

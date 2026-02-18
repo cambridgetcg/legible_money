@@ -1,12 +1,10 @@
 package types
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"google.golang.org/grpc"
 )
 
 // --- Params Validation ---
@@ -97,19 +95,8 @@ func (gs GenesisState) Validate() error {
 }
 
 // -----------------------------------------------------------------------
-// Message types (not in proto-generated files)
+// GetSigners / ValidateBasic for proto-generated Msg types
 // -----------------------------------------------------------------------
-
-// MsgRegisterProvider registers a new knowledge API provider.
-type MsgRegisterProvider struct {
-	Sender      string   `json:"sender"`
-	Domains     []string `json:"domains"`
-	StakeAmount string   `json:"stake_amount"`
-}
-
-func (msg *MsgRegisterProvider) Reset()         {}
-func (msg *MsgRegisterProvider) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRegisterProvider) ProtoMessage()  {}
 
 func (msg *MsgRegisterProvider) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
@@ -127,27 +114,11 @@ func (msg *MsgRegisterProvider) ValidateBasic() error {
 		return fmt.Errorf("at least one domain is required")
 	}
 	amt := new(big.Int)
-	if _, ok := amt.SetString(msg.StakeAmount, 10); !ok || amt.Sign() <= 0 {
+	if _, ok := amt.SetString(msg.Stake, 10); !ok || amt.Sign() <= 0 {
 		return fmt.Errorf("stake amount must be a positive integer")
 	}
 	return nil
 }
-
-// MsgRegisterProviderResponse is the response for MsgRegisterProvider.
-type MsgRegisterProviderResponse struct{}
-
-func (msg *MsgRegisterProviderResponse) Reset()         {}
-func (msg *MsgRegisterProviderResponse) String() string { return "" }
-func (msg *MsgRegisterProviderResponse) ProtoMessage()  {}
-
-// MsgDeregisterProvider removes a provider and refunds stake.
-type MsgDeregisterProvider struct {
-	Sender string `json:"sender"`
-}
-
-func (msg *MsgDeregisterProvider) Reset()         {}
-func (msg *MsgDeregisterProvider) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgDeregisterProvider) ProtoMessage()  {}
 
 func (msg *MsgDeregisterProvider) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
@@ -163,24 +134,6 @@ func (msg *MsgDeregisterProvider) ValidateBasic() error {
 	}
 	return nil
 }
-
-// MsgDeregisterProviderResponse is the response for MsgDeregisterProvider.
-type MsgDeregisterProviderResponse struct{}
-
-func (msg *MsgDeregisterProviderResponse) Reset()         {}
-func (msg *MsgDeregisterProviderResponse) String() string { return "" }
-func (msg *MsgDeregisterProviderResponse) ProtoMessage()  {}
-
-// MsgRequestQuote requests a price quote for querying facts.
-type MsgRequestQuote struct {
-	Sender   string   `json:"sender"`
-	Provider string   `json:"provider"`
-	FactIds  []string `json:"fact_ids"`
-}
-
-func (msg *MsgRequestQuote) Reset()         {}
-func (msg *MsgRequestQuote) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRequestQuote) ProtoMessage()  {}
 
 func (msg *MsgRequestQuote) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
@@ -206,25 +159,6 @@ func (msg *MsgRequestQuote) ValidateBasic() error {
 	return nil
 }
 
-// MsgRequestQuoteResponse is the response for MsgRequestQuote.
-type MsgRequestQuoteResponse struct {
-	Quote APIQuote `json:"quote"`
-}
-
-func (msg *MsgRequestQuoteResponse) Reset()         {}
-func (msg *MsgRequestQuoteResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgRequestQuoteResponse) ProtoMessage()  {}
-
-// MsgExecutePayment executes a quoted payment for knowledge access.
-type MsgExecutePayment struct {
-	Sender  string `json:"sender"`
-	QuoteId uint64 `json:"quote_id"`
-}
-
-func (msg *MsgExecutePayment) Reset()         {}
-func (msg *MsgExecutePayment) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgExecutePayment) ProtoMessage()  {}
-
 func (msg *MsgExecutePayment) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{addr}
@@ -240,25 +174,6 @@ func (msg *MsgExecutePayment) ValidateBasic() error {
 	return nil
 }
 
-// MsgExecutePaymentResponse is the response for MsgExecutePayment.
-type MsgExecutePaymentResponse struct {
-	RecordId uint64 `json:"record_id"`
-}
-
-func (msg *MsgExecutePaymentResponse) Reset()         {}
-func (msg *MsgExecutePaymentResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgExecutePaymentResponse) ProtoMessage()  {}
-
-// MsgUpdateParams updates module parameters (governance-gated).
-type MsgUpdateParams struct {
-	Authority string `json:"authority"`
-	Params    Params `json:"params"`
-}
-
-func (msg *MsgUpdateParams) Reset()         {}
-func (msg *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgUpdateParams) ProtoMessage()  {}
-
 func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
@@ -271,118 +186,8 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
+	if msg.Params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
 	return msg.Params.Validate()
-}
-
-// MsgUpdateParamsResponse is the response for MsgUpdateParams.
-type MsgUpdateParamsResponse struct{}
-
-func (msg *MsgUpdateParamsResponse) Reset()         {}
-func (msg *MsgUpdateParamsResponse) String() string { return "" }
-func (msg *MsgUpdateParamsResponse) ProtoMessage()  {}
-
-// -----------------------------------------------------------------------
-// MsgServer interface
-// -----------------------------------------------------------------------
-
-// MsgServer defines the billing module message service.
-type MsgServer interface {
-	RegisterProvider(context.Context, *MsgRegisterProvider) (*MsgRegisterProviderResponse, error)
-	DeregisterProvider(context.Context, *MsgDeregisterProvider) (*MsgDeregisterProviderResponse, error)
-	RequestQuote(context.Context, *MsgRequestQuote) (*MsgRequestQuoteResponse, error)
-	ExecutePayment(context.Context, *MsgExecutePayment) (*MsgExecutePaymentResponse, error)
-	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
-}
-
-// -----------------------------------------------------------------------
-// gRPC service descriptor (hand-written, replaces proto generation)
-// -----------------------------------------------------------------------
-
-var _Msg_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.billing.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "RegisterProvider", Handler: _Msg_RegisterProvider_Handler},
-		{MethodName: "DeregisterProvider", Handler: _Msg_DeregisterProvider_Handler},
-		{MethodName: "RequestQuote", Handler: _Msg_RequestQuote_Handler},
-		{MethodName: "ExecutePayment", Handler: _Msg_ExecutePayment_Handler},
-		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/billing/v1/tx.proto",
-}
-
-func _Msg_RegisterProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRegisterProvider)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RegisterProvider(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.billing.v1.Msg/RegisterProvider"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RegisterProvider(ctx, req.(*MsgRegisterProvider))
-	})
-}
-
-func _Msg_DeregisterProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgDeregisterProvider)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).DeregisterProvider(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.billing.v1.Msg/DeregisterProvider"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).DeregisterProvider(ctx, req.(*MsgDeregisterProvider))
-	})
-}
-
-func _Msg_RequestQuote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgRequestQuote)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).RequestQuote(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.billing.v1.Msg/RequestQuote"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).RequestQuote(ctx, req.(*MsgRequestQuote))
-	})
-}
-
-func _Msg_ExecutePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgExecutePayment)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ExecutePayment(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.billing.v1.Msg/ExecutePayment"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ExecutePayment(ctx, req.(*MsgExecutePayment))
-	})
-}
-
-func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgUpdateParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).UpdateParams(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.billing.v1.Msg/UpdateParams"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
-	})
-}
-
-// RegisterMsgServer registers the MsgServer implementation with the gRPC server.
-func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
-	s.RegisterService(&_Msg_serviceDesc, srv)
 }

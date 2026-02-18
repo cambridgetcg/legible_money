@@ -63,4 +63,5 @@ message TierConfig {
   uint64 slash_window_epochs = 9;  // epochs within which slashes count (0 = all-time)
   uint64 min_contested_verifications = 10; // minimum contested-category verifications
   uint64 contested_verification_multiplier = 11; // multiplier for contested verifications (1 = normal)
+  uint64 slash_multiplier_bps = 12; // per-tier slash multiplier in BPS (1000 = 1.0x)
 }
