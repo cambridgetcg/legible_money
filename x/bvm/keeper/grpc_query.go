@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a QueryServer implementation.
@@ -55,8 +56,13 @@ func (q queryServer) ContractsByCreator(goCtx context.Context, req *types.QueryC
 		contracts = contracts[:limit]
 	}
 
+	ptrs := make([]*types.DeployedContract, len(contracts))
+	for i := range contracts {
+		ptrs[i] = &contracts[i]
+	}
+
 	return &types.QueryContractsByCreatorResponse{
-		Contracts: contracts,
+		Contracts: ptrs,
 		Total:     total,
 	}, nil
 }
@@ -92,8 +98,8 @@ func (q queryServer) Schedule(goCtx context.Context, req *types.QueryScheduleReq
 }
 
 // Params returns the module parameters.
-func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
+func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

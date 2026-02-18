@@ -23,4 +23,5 @@ message Params {
   uint64 call_base_gas_cost          = 5; // base gas cost per call
   uint64 storage_write_gas_cost      = 6; // gas cost per storage write
   uint64 storage_read_gas_cost       = 7; // gas cost per storage read
+  uint32 current_bvm_version         = 8; // current BVM version for opcode activation
 }
