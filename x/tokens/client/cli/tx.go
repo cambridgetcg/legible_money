@@ -58,6 +58,10 @@ func NewCreateTokenCmd() *cobra.Command {
 			}
 
 			maxSupply, _ := cmd.Flags().GetString("max-supply")
+			mintable, _ := cmd.Flags().GetBool("mintable")
+			burnable, _ := cmd.Flags().GetBool("burnable")
+			pausable, _ := cmd.Flags().GetBool("pausable")
+			wrappable, _ := cmd.Flags().GetBool("wrappable")
 
 			msg := &types.MsgCreateToken{
 				Creator:       clientCtx.GetFromAddress().String(),
@@ -66,6 +70,12 @@ func NewCreateTokenCmd() *cobra.Command {
 				Decimals:      uint32(decimals),
 				InitialSupply: args[3],
 				MaxSupply:     maxSupply,
+				Features: &types.TokenFeatures{
+					Mintable:  mintable,
+					Burnable:  burnable,
+					Pausable:  pausable,
+					Wrappable: wrappable,
+				},
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -73,6 +83,10 @@ func NewCreateTokenCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("max-supply", "0", "Maximum token supply (0 for unlimited)")
+	cmd.Flags().Bool("mintable", false, "Enable minting for this token")
+	cmd.Flags().Bool("burnable", false, "Enable burning for this token")
+	cmd.Flags().Bool("pausable", false, "Enable pause/unpause for this token")
+	cmd.Flags().Bool("wrappable", false, "Enable wrapping into IBC-compatible coins")
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
