@@ -8,10 +8,20 @@ import (
 	"github.com/legible-money/legible/x/capture_challenge/types"
 )
 
-var _ types.QueryServer = Keeper{}
+type queryServer struct {
+	Keeper
+	types.UnimplementedQueryServer
+}
+
+// NewQueryServerImpl returns a QueryServer implementation.
+func NewQueryServerImpl(keeper Keeper) types.QueryServer {
+	return &queryServer{Keeper: keeper}
+}
+
+var _ types.QueryServer = queryServer{}
 
 // Challenge returns a challenge by ID.
-func (k Keeper) Challenge(goCtx context.Context, req *types.QueryChallengeRequest) (*types.QueryChallengeResponse, error) {
+func (k queryServer) Challenge(goCtx context.Context, req *types.QueryChallengeRequest) (*types.QueryChallengeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	ch, found := k.GetChallenge(ctx, req.ChallengeId)
@@ -25,7 +35,7 @@ func (k Keeper) Challenge(goCtx context.Context, req *types.QueryChallengeReques
 }
 
 // ActiveChallenges returns all active challenges, optionally filtered by domain.
-func (k Keeper) ActiveChallenges(goCtx context.Context, req *types.QueryActiveChallengesRequest) (*types.QueryActiveChallengesResponse, error) {
+func (k queryServer) ActiveChallenges(goCtx context.Context, req *types.QueryActiveChallengesRequest) (*types.QueryActiveChallengesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	var active []*types.CaptureChallenge
@@ -47,7 +57,7 @@ func (k Keeper) ActiveChallenges(goCtx context.Context, req *types.QueryActiveCh
 }
 
 // BountyPool returns the bounty pool for a domain.
-func (k Keeper) BountyPool(goCtx context.Context, req *types.QueryBountyPoolRequest) (*types.QueryBountyPoolResponse, error) {
+func (k queryServer) BountyPool(goCtx context.Context, req *types.QueryBountyPoolRequest) (*types.QueryBountyPoolResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	pool, found := k.GetBountyPool(ctx, req.Domain)

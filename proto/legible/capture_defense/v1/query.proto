@@ -1,0 +1,31 @@
+syntax = "proto3";
+package legible.capture_defense.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_defense/types";
+
+import "google/api/annotations.proto";
+import "legible/capture_defense/v1/state.proto";
+
+service Query {
+  rpc Qualification(QueryQualificationRequest) returns (QueryQualificationResponse) {
+    option (google.api.http).get = "/legible/capture_defense/v1/qualification/{validator_addr}/{domain}";
+  }
+  rpc ValidatorQualifications(QueryValidatorQualificationsRequest) returns (QueryValidatorQualificationsResponse) {
+    option (google.api.http).get = "/legible/capture_defense/v1/qualifications/{validator_addr}";
+  }
+  rpc DomainReputation(QueryDomainReputationRequest) returns (QueryDomainReputationResponse) {
+    option (google.api.http).get = "/legible/capture_defense/v1/reputation/{validator_addr}/{domain}";
+  }
+  rpc CaptureRisk(QueryCaptureRiskRequest) returns (QueryCaptureRiskResponse) {
+    option (google.api.http).get = "/legible/capture_defense/v1/risk/{domain}";
+  }
+}
+
+message QueryQualificationRequest { string validator_addr = 1; string domain = 2; }
+message QueryQualificationResponse { DomainQualification qualification = 1; bool found = 2; }
+message QueryValidatorQualificationsRequest { string validator_addr = 1; }
+message QueryValidatorQualificationsResponse { repeated DomainQualification qualifications = 1; }
+message QueryDomainReputationRequest { string validator_addr = 1; string domain = 2; }
+message QueryDomainReputationResponse { EffectiveReputationResult reputation = 1; }
+message QueryCaptureRiskRequest { string domain = 1; }
+message QueryCaptureRiskResponse { CaptureMetrics metrics = 1; bool found = 2; }

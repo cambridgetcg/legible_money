@@ -1,0 +1,53 @@
+syntax = "proto3";
+package legible.evidence_mgmt.v1;
+
+option go_package = "github.com/legible-money/legible/x/evidence_mgmt/types";
+
+import "google/api/annotations.proto";
+import "legible/evidence_mgmt/v1/state.proto";
+import "legible/evidence_mgmt/v1/genesis.proto";
+
+// Query defines the gRPC query service for the evidence_mgmt module.
+service Query {
+  rpc Evidence(QueryEvidenceRequest) returns (QueryEvidenceResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/evidence/{evidence_id}";
+  }
+  rpc EvidenceByClaimId(QueryEvidenceByClaimIdRequest) returns (QueryEvidenceByClaimIdResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/evidence/claim/{claim_id}";
+  }
+  rpc Audit(QueryAuditRequest) returns (QueryAuditResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/audit/{audit_id}";
+  }
+  rpc AuditsForEvidence(QueryAuditsForEvidenceRequest) returns (QueryAuditsForEvidenceResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/audits/{evidence_id}";
+  }
+  rpc Oracle(QueryOracleRequest) returns (QueryOracleResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/oracle/{oracle_id}";
+  }
+  rpc ActiveOracles(QueryActiveOraclesRequest) returns (QueryActiveOraclesResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/oracles/active";
+  }
+  rpc Consensus(QueryConsensusRequest) returns (QueryConsensusResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/consensus/{evidence_id}";
+  }
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/evidence_mgmt/v1/params";
+  }
+}
+
+message QueryEvidenceRequest { string evidence_id = 1; }
+message QueryEvidenceResponse { Evidence evidence = 1; }
+message QueryEvidenceByClaimIdRequest { string claim_id = 1; }
+message QueryEvidenceByClaimIdResponse { repeated Evidence evidences = 1; }
+message QueryAuditRequest { string audit_id = 1; }
+message QueryAuditResponse { EvidenceAudit audit = 1; }
+message QueryAuditsForEvidenceRequest { string evidence_id = 1; }
+message QueryAuditsForEvidenceResponse { repeated EvidenceAudit audits = 1; }
+message QueryOracleRequest { string oracle_id = 1; }
+message QueryOracleResponse { Oracle oracle = 1; }
+message QueryActiveOraclesRequest {}
+message QueryActiveOraclesResponse { repeated Oracle oracles = 1; }
+message QueryConsensusRequest { string evidence_id = 1; }
+message QueryConsensusResponse { AuditConsensus consensus = 1; }
+message QueryParamsRequest {}
+message QueryParamsResponse { Params params = 1; }

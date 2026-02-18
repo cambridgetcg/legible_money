@@ -1,0 +1,21 @@
+syntax = "proto3";
+package legible.ibcratelimit.v1;
+
+option go_package = "github.com/legible-money/legible/x/ibcratelimit/types";
+
+import "google/api/annotations.proto";
+import "legible/ibcratelimit/v1/state.proto";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/ibcratelimit/v1/params";
+  }
+  rpc ChannelFlow(QueryChannelFlowRequest) returns (QueryChannelFlowResponse) {
+    option (google.api.http).get = "/legible/ibcratelimit/v1/channel_flow/{channel_id}";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse { Params params = 1; }
+message QueryChannelFlowRequest { string channel_id = 1; }
+message QueryChannelFlowResponse { ChannelFlow flow = 1; bool found = 2; }

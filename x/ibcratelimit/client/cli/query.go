@@ -69,7 +69,7 @@ Returns the flow amounts and whether rate limits have been hit.`,
 				return err
 			}
 
-			req := &types.QueryChannelFlowRequest{ChannelID: args[0]}
+			req := &types.QueryChannelFlowRequest{ChannelId: args[0]}
 			resp := &types.QueryChannelFlowResponse{}
 			if err := clientCtx.Invoke(cmd.Context(), "/legible.ibcratelimit.v1.Query/ChannelFlow", req, resp); err != nil {
 				return fmt.Errorf("failed to query channel flow: %w", err)

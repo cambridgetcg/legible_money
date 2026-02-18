@@ -1,0 +1,40 @@
+syntax = "proto3";
+package legible.vesting_rewards.v1;
+
+option go_package = "github.com/legible-money/legible/x/vesting_rewards/types";
+
+import "google/api/annotations.proto";
+import "legible/vesting_rewards/v1/state.proto";
+import "legible/vesting_rewards/v1/genesis.proto";
+
+service Query {
+  rpc VestingSchedule(QueryVestingScheduleRequest) returns (QueryVestingScheduleResponse) {
+    option (google.api.http).get = "/legible/vesting_rewards/v1/schedule/{vesting_id}";
+  }
+  rpc VestingSchedulesByRecipient(QueryVestingSchedulesByRecipientRequest) returns (QueryVestingSchedulesByRecipientResponse) {
+    option (google.api.http).get = "/legible/vesting_rewards/v1/schedules/recipient/{recipient}";
+  }
+  rpc ActiveVestingSchedules(QueryActiveVestingSchedulesRequest) returns (QueryActiveVestingSchedulesResponse) {
+    option (google.api.http).get = "/legible/vesting_rewards/v1/schedules/active";
+  }
+  rpc BlockRewardDistribution(QueryBlockRewardDistributionRequest) returns (QueryBlockRewardDistributionResponse) {
+    option (google.api.http).get = "/legible/vesting_rewards/v1/distribution/{block_height}";
+  }
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/vesting_rewards/v1/params";
+  }
+}
+
+message QueryVestingScheduleRequest { string vesting_id = 1; }
+message QueryVestingScheduleResponse { VestingSchedule schedule = 1; }
+message QueryVestingSchedulesByRecipientRequest { string recipient = 1; }
+message QueryVestingSchedulesByRecipientResponse { repeated VestingSchedule schedules = 1; }
+message QueryActiveVestingSchedulesRequest { uint32 limit = 1; uint32 offset = 2; }
+message QueryActiveVestingSchedulesResponse { repeated VestingSchedule schedules = 1; uint32 total = 2; }
+message QueryBlockRewardDistributionRequest { uint64 block_height = 1; }
+message QueryBlockRewardDistributionResponse { BlockRewardDistribution distribution = 1; bool found = 2; }
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+  repeated CategoryConfig category_configs = 2;
+}

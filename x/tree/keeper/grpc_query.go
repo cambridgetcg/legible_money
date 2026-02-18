@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a QueryServer implementation.
@@ -33,9 +34,6 @@ func (q queryServer) Project(goCtx context.Context, req *types.QueryProjectReque
 func (q queryServer) ProjectsByFounder(goCtx context.Context, req *types.QueryProjectsByFounderRequest) (*types.QueryProjectsByFounderResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	projects := q.Keeper.GetProjectsByFounder(ctx, req.Founder)
-	if projects == nil {
-		projects = []types.ProductProject{}
-	}
 
 	total := uint64(len(projects))
 	offset := uint32(0)
@@ -49,14 +47,20 @@ func (q queryServer) ProjectsByFounder(goCtx context.Context, req *types.QueryPr
 	if uint32(len(projects)) > offset {
 		projects = projects[offset:]
 	} else {
-		projects = []types.ProductProject{}
+		projects = nil
 	}
 	if uint32(len(projects)) > limit {
 		projects = projects[:limit]
 	}
 
+	// Convert []ProductProject to []*ProductProject for proto
+	ptrs := make([]*types.ProductProject, len(projects))
+	for i := range projects {
+		ptrs[i] = &projects[i]
+	}
+
 	return &types.QueryProjectsByFounderResponse{
-		Projects: projects,
+		Projects: ptrs,
 		Total:    total,
 	}, nil
 }
@@ -75,9 +79,6 @@ func (q queryServer) Task(goCtx context.Context, req *types.QueryTaskRequest) (*
 func (q queryServer) TasksByProject(goCtx context.Context, req *types.QueryTasksByProjectRequest) (*types.QueryTasksByProjectResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	tasks := q.Keeper.GetTasksByProject(ctx, req.ProjectId)
-	if tasks == nil {
-		tasks = []types.ProjectTask{}
-	}
 
 	total := uint64(len(tasks))
 	offset := uint32(0)
@@ -91,14 +92,20 @@ func (q queryServer) TasksByProject(goCtx context.Context, req *types.QueryTasks
 	if uint32(len(tasks)) > offset {
 		tasks = tasks[offset:]
 	} else {
-		tasks = []types.ProjectTask{}
+		tasks = nil
 	}
 	if uint32(len(tasks)) > limit {
 		tasks = tasks[:limit]
 	}
 
+	// Convert []ProjectTask to []*ProjectTask for proto
+	ptrs := make([]*types.ProjectTask, len(tasks))
+	for i := range tasks {
+		ptrs[i] = &tasks[i]
+	}
+
 	return &types.QueryTasksByProjectResponse{
-		Tasks: tasks,
+		Tasks: ptrs,
 		Total: total,
 	}, nil
 }
@@ -127,5 +134,5 @@ func (q queryServer) Seed(goCtx context.Context, req *types.QuerySeedRequest) (*
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

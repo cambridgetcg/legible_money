@@ -58,7 +58,7 @@ Price and stake are in ulgm.`,
 				Sender:      clientCtx.GetFromAddress().String(),
 				ServiceType: args[0],
 				Endpoint:    args[1],
-				PricePerCU:  args[2],
+				PricePerCu:  args[2],
 				StakeAmount: args[3],
 				Did:         did,
 			}
@@ -183,7 +183,7 @@ Creates a redemption ticket that must be confirmed after service delivery.`,
 			msg := &types.MsgRedeemCredits{
 				Sender:   clientCtx.GetFromAddress().String(),
 				Provider: args[0],
-				CUAmount: cuAmount,
+				CuAmount: cuAmount,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
@@ -219,7 +219,7 @@ func NewConfirmUsageCmd() *cobra.Command {
 			msg := &types.MsgConfirmUsage{
 				Sender:   clientCtx.GetFromAddress().String(),
 				TicketId: ticketID,
-				ActualCU: actualCU,
+				ActualCu: actualCU,
 			}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)

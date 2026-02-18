@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a query server implementation.
@@ -61,8 +62,14 @@ func (q queryServer) Pots(goCtx context.Context, req *types.QueryPotsRequest) (*
 		end = total
 	}
 
+	slice := all[start:end]
+	ptrs := make([]*types.ClaimingPot, len(slice))
+	for i := range slice {
+		ptrs[i] = &slice[i]
+	}
+
 	return &types.QueryPotsResponse{
-		Pots:  all[start:end],
+		Pots:  ptrs,
 		Total: total,
 	}, nil
 }
@@ -89,8 +96,14 @@ func (q queryServer) PotsByCreator(goCtx context.Context, req *types.QueryPotsBy
 		end = total
 	}
 
+	slice := all[start:end]
+	ptrs := make([]*types.ClaimingPot, len(slice))
+	for i := range slice {
+		ptrs[i] = &slice[i]
+	}
+
 	return &types.QueryPotsByCreatorResponse{
-		Pots:  all[start:end],
+		Pots:  ptrs,
 		Total: total,
 	}, nil
 }
@@ -134,8 +147,14 @@ func (q queryServer) ClaimRecords(goCtx context.Context, req *types.QueryClaimRe
 		end = total
 	}
 
+	slice := all[start:end]
+	ptrs := make([]*types.ClaimRecord, len(slice))
+	for i := range slice {
+		ptrs[i] = &slice[i]
+	}
+
 	return &types.QueryClaimRecordsResponse{
-		Records: all[start:end],
+		Records: ptrs,
 		Total:   total,
 	}, nil
 }
@@ -143,8 +162,9 @@ func (q queryServer) ClaimRecords(goCtx context.Context, req *types.QueryClaimRe
 // Params returns the module parameters.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	params := q.Keeper.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
-		Params: q.Keeper.GetParams(ctx),
+		Params: &params,
 	}, nil
 }

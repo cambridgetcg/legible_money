@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a query server implementation.

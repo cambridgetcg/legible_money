@@ -1,0 +1,98 @@
+syntax = "proto3";
+package legible.claiming_pot.v1;
+
+option go_package = "github.com/legible-money/legible/x/claiming_pot/types";
+
+import "google/api/annotations.proto";
+import "legible/claiming_pot/v1/state.proto";
+import "legible/claiming_pot/v1/genesis.proto";
+
+// Query defines the gRPC query service for the claiming_pot module.
+service Query {
+  // Pot returns a single claiming pot by ID.
+  rpc Pot(QueryPotRequest) returns (QueryPotResponse) {
+    option (google.api.http).get = "/legible/claiming_pot/v1/pot/{pot_id}";
+  }
+
+  // Pots returns claiming pots filtered by status.
+  rpc Pots(QueryPotsRequest) returns (QueryPotsResponse) {
+    option (google.api.http).get = "/legible/claiming_pot/v1/pots";
+  }
+
+  // PotsByCreator returns claiming pots created by a specific address.
+  rpc PotsByCreator(QueryPotsByCreatorRequest) returns (QueryPotsByCreatorResponse) {
+    option (google.api.http).get = "/legible/claiming_pot/v1/pots/creator/{creator}";
+  }
+
+  // Eligibility checks if a claimer is eligible for a pot.
+  rpc Eligibility(QueryEligibilityRequest) returns (QueryEligibilityResponse) {
+    option (google.api.http).get = "/legible/claiming_pot/v1/eligibility/{pot_id}/{claimer}";
+  }
+
+  // ClaimRecords returns claim records for a pot.
+  rpc ClaimRecords(QueryClaimRecordsRequest) returns (QueryClaimRecordsResponse) {
+    option (google.api.http).get = "/legible/claiming_pot/v1/records/{pot_id}";
+  }
+
+  // Params returns the module parameters.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/claiming_pot/v1/params";
+  }
+}
+
+message QueryPotRequest {
+  string pot_id = 1;
+}
+
+message QueryPotResponse {
+  ClaimingPot pot = 1;
+}
+
+message QueryPotsRequest {
+  string status = 1;
+  uint32 limit = 2;
+  uint32 offset = 3;
+}
+
+message QueryPotsResponse {
+  repeated ClaimingPot pots = 1;
+  uint64 total = 2;
+}
+
+message QueryPotsByCreatorRequest {
+  string creator = 1;
+  uint32 limit = 2;
+  uint32 offset = 3;
+}
+
+message QueryPotsByCreatorResponse {
+  repeated ClaimingPot pots = 1;
+  uint64 total = 2;
+}
+
+message QueryEligibilityRequest {
+  string pot_id = 1;
+  string claimer = 2;
+}
+
+message QueryEligibilityResponse {
+  bool eligible = 1;
+  string reason = 2;
+}
+
+message QueryClaimRecordsRequest {
+  string pot_id = 1;
+  uint32 limit = 2;
+  uint32 offset = 3;
+}
+
+message QueryClaimRecordsResponse {
+  repeated ClaimRecord records = 1;
+  uint64 total = 2;
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1;
+}

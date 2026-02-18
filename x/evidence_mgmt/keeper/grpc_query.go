@@ -11,6 +11,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns an implementation of the QueryServer interface.
@@ -29,7 +30,7 @@ func (k queryServer) Evidence(goCtx context.Context, req *types.QueryEvidenceReq
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrEvidenceNotFound, req.EvidenceId)
 	}
-	return &types.QueryEvidenceResponse{Evidence: evidence}, nil
+	return &types.QueryEvidenceResponse{Evidence: &evidence}, nil
 }
 
 func (k queryServer) EvidenceByClaimId(goCtx context.Context, req *types.QueryEvidenceByClaimIdRequest) (*types.QueryEvidenceByClaimIdResponse, error) {
@@ -38,10 +39,11 @@ func (k queryServer) EvidenceByClaimId(goCtx context.Context, req *types.QueryEv
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	evidences := k.GetEvidenceByClaimId(ctx, req.ClaimId)
-	if evidences == nil {
-		evidences = []types.Evidence{}
+	ptrs := make([]*types.Evidence, len(evidences))
+	for i := range evidences {
+		ptrs[i] = &evidences[i]
 	}
-	return &types.QueryEvidenceByClaimIdResponse{Evidences: evidences}, nil
+	return &types.QueryEvidenceByClaimIdResponse{Evidences: ptrs}, nil
 }
 
 func (k queryServer) Audit(goCtx context.Context, req *types.QueryAuditRequest) (*types.QueryAuditResponse, error) {
@@ -53,7 +55,7 @@ func (k queryServer) Audit(goCtx context.Context, req *types.QueryAuditRequest) 
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrAuditNotFound, req.AuditId)
 	}
-	return &types.QueryAuditResponse{Audit: audit}, nil
+	return &types.QueryAuditResponse{Audit: &audit}, nil
 }
 
 func (k queryServer) AuditsForEvidence(goCtx context.Context, req *types.QueryAuditsForEvidenceRequest) (*types.QueryAuditsForEvidenceResponse, error) {
@@ -62,10 +64,11 @@ func (k queryServer) AuditsForEvidence(goCtx context.Context, req *types.QueryAu
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	audits := k.GetAuditsForEvidence(ctx, req.EvidenceId)
-	if audits == nil {
-		audits = []types.EvidenceAudit{}
+	ptrs := make([]*types.EvidenceAudit, len(audits))
+	for i := range audits {
+		ptrs[i] = &audits[i]
 	}
-	return &types.QueryAuditsForEvidenceResponse{Audits: audits}, nil
+	return &types.QueryAuditsForEvidenceResponse{Audits: ptrs}, nil
 }
 
 func (k queryServer) Oracle(goCtx context.Context, req *types.QueryOracleRequest) (*types.QueryOracleResponse, error) {
@@ -77,16 +80,17 @@ func (k queryServer) Oracle(goCtx context.Context, req *types.QueryOracleRequest
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrOracleNotFound, req.OracleId)
 	}
-	return &types.QueryOracleResponse{Oracle: oracle}, nil
+	return &types.QueryOracleResponse{Oracle: &oracle}, nil
 }
 
 func (k queryServer) ActiveOracles(goCtx context.Context, req *types.QueryActiveOraclesRequest) (*types.QueryActiveOraclesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	oracles := k.GetActiveOracles(ctx)
-	if oracles == nil {
-		oracles = []types.Oracle{}
+	ptrs := make([]*types.Oracle, len(oracles))
+	for i := range oracles {
+		ptrs[i] = &oracles[i]
 	}
-	return &types.QueryActiveOraclesResponse{Oracles: oracles}, nil
+	return &types.QueryActiveOraclesResponse{Oracles: ptrs}, nil
 }
 
 func (k queryServer) Consensus(goCtx context.Context, req *types.QueryConsensusRequest) (*types.QueryConsensusResponse, error) {
@@ -98,11 +102,11 @@ func (k queryServer) Consensus(goCtx context.Context, req *types.QueryConsensusR
 	if !found {
 		return nil, fmt.Errorf("consensus not found for evidence %s", req.EvidenceId)
 	}
-	return &types.QueryConsensusResponse{Consensus: consensus}, nil
+	return &types.QueryConsensusResponse{Consensus: &consensus}, nil
 }
 
 func (k queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := k.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }
