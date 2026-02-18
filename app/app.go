@@ -361,6 +361,46 @@ func init() {
 
 	// Set the default bond denom to ulgm (micro-LGM).
 	sdk.DefaultBondDenom = "ulgm"
+
+	// B7-1 guard: verify all custom modules that use bank keeper have maccPerms entries.
+	// This catches missing registrations at startup rather than at runtime panic.
+	requiredModuleAccounts := []string{
+		legibleauthtypes.ModuleName,
+		vestingrewardstypes.ModuleName,
+		knowledgetypes.ModuleName,
+		legiblestakingtypes.ModuleName,
+		tokenstypes.ModuleName,
+		disputestypes.ModuleName,
+		evidencemgmttypes.ModuleName,
+		claimingpottypes.ModuleName,
+		channelstypes.ModuleName,
+		qualificationtypes.ModuleName,
+		capturedefensetypes.ModuleName,
+		capturechallengetypes.ModuleName,
+		treetypes.ModuleName,
+		billingtypes.ModuleName,
+		partnershipstypes.ModuleName,
+		computepooltypes.ModuleName,
+		lgmgovtypes.ModuleName,
+		bvmtypes.ModuleName,
+		discoverytypes.ModuleName,
+		ontologytypes.ModuleName,
+		researchtypes.ModuleName,
+		scheduletypes.ModuleName,
+		ResearchFundName,
+		BurnModuleName,
+		TreasuryProtocolName,
+		TreasuryResearchName,
+		TreasuryFoundationName,
+		TreasuryCommunityName,
+		TreasuryDevelopersName,
+		TreasuryReserveName,
+	}
+	for _, name := range requiredModuleAccounts {
+		if _, ok := maccPerms[name]; !ok {
+			panic(fmt.Sprintf("CRITICAL: module %q uses bank keeper but is not registered in maccPerms — add it to app/app.go", name))
+		}
+	}
 }
 
 // LegibleApp extends baseapp.BaseApp with all Cosmos SDK modules.
