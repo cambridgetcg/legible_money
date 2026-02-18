@@ -309,6 +309,28 @@ func (msg *MsgRemoveLiquidity) ValidateBasic() error {
 	return nil
 }
 
+// --- MsgUpdateParams ---
+
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUpdateParams) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
+	}
+	if msg.Params != nil {
+		if err := msg.Params.Validate(); err != nil {
+			return fmt.Errorf("invalid params: %w", err)
+		}
+	}
+	return nil
+}
+
 // --- MsgSwap ---
 
 func (msg *MsgSwap) GetSigners() []sdk.AccAddress {

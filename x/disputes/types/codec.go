@@ -21,6 +21,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 // RegisterInterfaces registers the module's interface types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
+		// Proto-generated (tx.pb.go)
 		&MsgInitiateDispute{},
 		&MsgCommitEvidence{},
 		&MsgRevealEvidence{},
@@ -29,6 +30,10 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgSettleDispute{},
 		&MsgTimeoutDispute{},
 		&MsgUpdateParams{},
+		// Hand-written (types.go) — have XXX_MessageName in proto_names.go
+		&MsgOpenDispute{},
+		&MsgSubmitEvidence{},
+		&MsgVoteDispute{},
 	)
 }
 

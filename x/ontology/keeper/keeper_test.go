@@ -1068,7 +1068,7 @@ func TestQueryStratum(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	resp, err := qSrv.Stratum(sdk.WrapSDKContext(ctx), &types.QueryStratumRequest{
-		Stratum: types.StratumEmpirical,
+		Stratum: uint32(types.StratumEmpirical),
 	})
 	if err != nil {
 		t.Fatalf("query stratum failed: %v", err)
@@ -1083,7 +1083,7 @@ func TestQueryStratumInvalid(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	_, err := qSrv.Stratum(sdk.WrapSDKContext(ctx), &types.QueryStratumRequest{
-		Stratum: types.Stratum(99),
+		Stratum: uint32(types.Stratum(99)),
 	})
 	if err == nil {
 		t.Error("expected error for invalid stratum query")
@@ -1135,7 +1135,7 @@ func TestQueryDomainsByStratum(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	resp, err := qSrv.DomainsByStratum(sdk.WrapSDKContext(ctx), &types.QueryDomainsByStratumRequest{
-		Stratum: types.StratumEmpirical,
+		Stratum: uint32(types.StratumEmpirical),
 	})
 	if err != nil {
 		t.Fatalf("query domains by stratum failed: %v", err)
@@ -1618,7 +1618,7 @@ func TestMsgRegisterLogicZoneDuplicate(t *testing.T) {
 	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
 		Authority: "authority",
 		ZoneProperties: types.LogicZoneProperties{
-			Zone:             types.ZonePropositional,
+			Zone:             string(types.ZonePropositional),
 			Complete:         true,
 			MaxConfidenceBps: 1000000,
 		},
@@ -1714,7 +1714,7 @@ func TestQueryLogicZone(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	resp, err := qSrv.LogicZone(sdk.WrapSDKContext(ctx), &types.QueryLogicZoneRequest{
-		Zone: types.ZonePeano,
+		Zone: string(types.ZonePeano),
 	})
 	if err != nil {
 		t.Fatalf("query logic zone failed: %v", err)

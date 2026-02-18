@@ -20,6 +20,11 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
 		&MsgRegisterValidator{},
+		&MsgUpdateValidatorStake{},
+		&MsgDelegate{},
+		&MsgUndelegate{},
+		&MsgRedelegate{},
+		&MsgUpdateParams{},
 	)
 }
 

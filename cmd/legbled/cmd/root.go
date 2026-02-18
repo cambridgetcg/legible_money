@@ -27,6 +27,7 @@ import (
 
 	legibleapp "github.com/legible-money/legible/app"
 	legibleauthcli "github.com/legible-money/legible/x/auth/client/cli"
+	lgmgovcli "github.com/legible-money/legible/x/gov/client/cli"
 	autopoiesiscli "github.com/legible-money/legible/x/autopoiesis/client/cli"
 	billingcli "github.com/legible-money/legible/x/billing/client/cli"
 	bvmcli "github.com/legible-money/legible/x/bvm/client/cli"
@@ -148,6 +149,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		disputescli.NewQueryCmd(),
 		emergencycli.NewQueryCmd(),
 		evidencemgmtcli.NewQueryCmd(),
+		homecli.NewQueryCmd(),
 		ibcratelimitcli.NewQueryCmd(),
 		icaauthcli.NewQueryCmd(),
 		knowledgecli.NewQueryCmd(),
@@ -160,6 +162,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		tokenscli.NewQueryCmd(),
 		treecli.NewQueryCmd(),
 		vestingrewardscli.NewQueryCmd(),
+		lgmgovcli.NewQueryCmd(),
 	)
 	rootCmd.AddCommand(queryCmd)
 
@@ -211,6 +214,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		tokenscli.NewTxCmd(),
 		treecli.NewTxCmd(),
 		vestingrewardscli.NewTxCmd(),
+		lgmgovcli.NewTxCmd(),
 	)
 	rootCmd.AddCommand(txCmd)
 

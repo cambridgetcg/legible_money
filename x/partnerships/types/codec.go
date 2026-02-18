@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 func RegisterCodec(cdc *codec.LegacyAmino) {
@@ -20,7 +21,19 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 }
 
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgInitiatePartnership{},
+		&MsgAcceptPartnership{},
+		&MsgDepositToPot{},
+		&MsgDistributeReward{},
+		&MsgProposeOperation{},
+		&MsgApproveOperation{},
+		&MsgRejectOperation{},
+		&MsgSafetyFreeze{},
+		&MsgRaiseCoercionSignal{},
+		&MsgInitiateExit{},
+		&MsgUpdateParams{},
+	)
 }
 
 var (

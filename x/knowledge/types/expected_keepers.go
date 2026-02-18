@@ -44,6 +44,28 @@ type OntologyKeeper interface {
 	// ValidateZoneForCategory checks that the declared logic zone is compatible
 	// with the claim's epistemic category. Prevents zone self-declaration gaming.
 	ValidateZoneForCategory(ctx sdk.Context, zone string, epistemicCategory string) error
+
+	// --- Query support methods ---
+	// These return knowledge module proto types directly so query server methods
+	// can serve ontology data without intermediate type conversion.
+
+	// GetStratumDefinition returns a StratumDefinition for a given stratum level.
+	GetStratumDefinition(ctx sdk.Context, level uint32) (*StratumDefinition, bool)
+
+	// GetAllStratumDefinitions returns all strata as StratumDefinitions.
+	GetAllStratumDefinitions(ctx sdk.Context) []*StratumDefinition
+
+	// GetOntologyDomains returns all registered domains as OntologicalDomains.
+	GetOntologyDomains(ctx sdk.Context) []*OntologicalDomain
+
+	// GetOntologyDomainsByStratum returns domains belonging to a specific stratum level.
+	GetOntologyDomainsByStratum(ctx sdk.Context, level uint32) []*OntologicalDomain
+
+	// GetDomainProposalById returns a domain proposal by its ID.
+	GetDomainProposalById(ctx sdk.Context, id string) (*DomainProposal, bool)
+
+	// GetAllDomainProposals returns all domain proposals.
+	GetAllDomainProposals(ctx sdk.Context) []*DomainProposal
 }
 
 // DomainQualificationKeeper defines the expected domain qualification keeper interface.

@@ -16,7 +16,10 @@ type msgServer struct {
 }
 
 // NewMsgServerImpl returns an implementation of the MsgServer interface.
-// Phase 1 implements 8 core LGM-20 handlers; the remaining 6 return Unimplemented.
+// Phase 1 implements 12 handlers: 8 core LGM-20 token operations (Create, Mint,
+// Burn, Transfer, Approve, TransferFrom, Pause, Unpause), 3 liquidity pool
+// operations (AddLiquidity, RemoveLiquidity, Swap), and UpdateParams for governance.
+// The remaining 3 (DelegatePower, WrapToken, UnwrapToken) return Unimplemented.
 func NewMsgServerImpl(keeper Keeper) *msgServer {
 	return &msgServer{Keeper: keeper}
 }
@@ -770,3 +773,43 @@ func (s *msgServer) Swap(goCtx context.Context, msg *types.MsgSwap) (*types.MsgS
 
 	return &types.MsgSwapResponse{AmountOut: amountOut.String()}, nil
 }
+
+// UpdateParams updates the tokens module parameters. Only callable by governance.
+func (s *msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if msg.Authority != s.GetAuthority() {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", s.GetAuthority(), msg.Authority)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg.Params != nil {
+		if err := msg.Params.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid params: %w", err)
+		}
+		s.SetParams(ctx, *msg.Params)
+	}
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"tokens_params_updated",
+		sdk.NewAttribute("authority", msg.Authority),
+	))
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+// ---------- Phase 2 Stubs (Unimplemented) ----------
+//
+// The following 3 handlers are registered in the proto service and codec
+// interfaces but return codes.Unimplemented via the embedded
+// UnimplementedMsgServer. They will be implemented in Phase 2.
+//
+// DelegatePower — Delegates governance voting power from one token holder
+//   to another without transferring ownership. Enables liquid democracy
+//   for LGM-20 token governance participation.
+//
+// WrapToken — Wraps an LGM-20 secondary token into an IBC-compatible
+//   sdk.Coin denomination, enabling cross-chain transfers via IBC.
+//   Requires the token's Wrappable feature flag.
+//
+// UnwrapToken — Unwraps an IBC-compatible sdk.Coin back into the
+//   original LGM-20 secondary token representation.

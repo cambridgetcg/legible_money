@@ -47,7 +47,10 @@ func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
 // DefaultGenesis returns the module's default genesis state.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 	gs := types.DefaultGenesis()
-	bz, _ := json.Marshal(gs)
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal default %s genesis: %v", types.ModuleName, err))
+	}
 	return bz
 }
 
@@ -104,14 +107,19 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 // InitGenesis initializes the module from genesis.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	var gs types.GenesisState
-	json.Unmarshal(data, &gs)
+	if err := json.Unmarshal(data, &gs); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal %s genesis: %v", types.ModuleName, err))
+	}
 	am.keeper.InitGenesis(ctx, gs)
 }
 
 // ExportGenesis exports the module's genesis state.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := am.keeper.ExportGenesis(ctx)
-	bz, _ := json.Marshal(gs)
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal %s genesis: %v", types.ModuleName, err))
+	}
 	return bz
 }
 

@@ -37,14 +37,18 @@ var TransactionGasCosts = map[string]uint64{
 	"verification_reveal": 40_000,
 	"challenge_fact":      80_000,
 	"add_fact":            120_000,
-	"challenge_claim":     80_000,
-	"revoke_fact":         60_000,
 
 	// Staking / delegation
 	"delegate":           60_000,
 	"undelegate":         60_000,
 	"register_validator": 100_000,
 	"redelegate":         80_000,
+
+	// Staking (extended — hand-written Legible staking types)
+	"update_validator_stake": 60_000,
+	"legible_delegate":       60_000,
+	"legible_undelegate":     60_000,
+	"legible_redelegate":     80_000,
 
 	// System transactions (typically fee-exempt when issued by consensus)
 	"verification_reward": 50_000,
@@ -70,6 +74,11 @@ var TransactionGasCosts = map[string]uint64{
 
 	// Knowledge pruning
 	"patronize_fact": 50_000,
+
+	// Knowledge (extended — hand-written types)
+	"submit_contradiction":       80_000,
+	"challenge_provisional_fact": 80_000,
+	"update_extended_params":     40_000,
 
 	// Ontology
 	"propose_domain":   80_000,
@@ -102,6 +111,10 @@ var TransactionGasCosts = map[string]uint64{
 	"settle_dispute":   80_000,
 	"timeout_dispute":  40_000,
 
+	// Disputes (extended — hand-written types)
+	"open_dispute":            100_000,
+	"dispute_submit_evidence": 50_000,
+
 	// Research
 	"submit_research":    80_000,
 	"challenge_research": 60_000,
@@ -113,11 +126,12 @@ var TransactionGasCosts = map[string]uint64{
 	"fund_research":      50_000,
 
 	// Evidence management
-	"submit_evidence":  60_000,
-	"archive_evidence": 40_000,
-	"audit_submit":     50_000,
-	"audit_resolve":    60_000,
-	"register_oracle":  80_000,
+	"submit_evidence": 60_000,
+	"register_oracle": 80_000,
+
+	// Evidence management (extended)
+	"audit_evidence":     50_000,
+	"submit_oracle_data": 40_000,
 
 	// Vesting / rewards
 	"create_vesting":     80_000,
@@ -150,6 +164,11 @@ var TransactionGasCosts = map[string]uint64{
 	"close_channel":   50_000,
 	"settle_channel":  60_000,
 	"dispute_channel": 80_000,
+
+	// Payment channels (extended — hand-written types)
+	"deposit_channel":       40_000,
+	"update_channel_state":  30_000,
+	"claim_expired_channel": 40_000,
 
 	// Tree of Life (projects, tasks, services, seeds)
 	"create_project":      80_000,
@@ -185,6 +204,11 @@ var TransactionGasCosts = map[string]uint64{
 	"deploy_contract":    200_000,
 	"call_contract":      21_000,
 	"schedule_execution": 40_000,
+
+	// BVM (extended — hand-written types)
+	"schedule_contract":     40_000,
+	"cancel_bvm_schedule":   30_000,
+	"update_contract_state": 40_000,
 
 	// Emergency
 	"propose_halt":   50_000,
@@ -247,6 +271,21 @@ var TransactionGasCosts = map[string]uint64{
 	"raise_coercion_signal": 60_000,
 	"initiate_exit":         50_000,
 
+	// Autopoiesis
+	"activate_autopoiesis": 40_000,
+	"override_multiplier":  50_000,
+	"freeze_multiplier":    30_000,
+
+	// Compute pool
+	"register_compute_provider":   80_000,
+	"update_compute_provider":     30_000,
+	"deregister_compute_provider": 40_000,
+	"provider_heartbeat":          15_000,
+	"redeem_credits":              50_000,
+	"confirm_usage":               30_000,
+	"dispute_usage":               60_000,
+	"update_compute_params":       40_000,
+
 	// Ontology (extended)
 	"vote_domain_proposal":       30_000,
 	"update_domain":              40_000,
@@ -260,6 +299,10 @@ var TransactionGasCosts = map[string]uint64{
 	"cancel_schedule": 30_000,
 	"add_fee":         25_000,
 
+	// ICA auth
+	"register_ica": 80_000,
+	"send_ica_tx":  60_000,
+
 	// Billing
 	"register_provider":   80_000,
 	"deregister_provider": 30_000,
@@ -267,6 +310,7 @@ var TransactionGasCosts = map[string]uint64{
 	"execute_payment":     40_000,
 
 	// Governance (extended)
+	"attach_upgrade_plan":  60_000,
 	"amend_lip":            60_000,
 	"advance_lip_stage":    40_000,
 	"withdraw_lip":         30_000,

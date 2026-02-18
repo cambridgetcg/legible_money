@@ -40,6 +40,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgChallengeDomainProposal{},
 		&MsgRegisterStratum{},
 		&MsgUpdateParams{},
+		// Hand-written (types.go) — have XXX_MessageName in proto_names.go
+		&MsgUpdateExtendedParams{},
+		&MsgChallengeProvisionalFact{},
 	)
 }
 

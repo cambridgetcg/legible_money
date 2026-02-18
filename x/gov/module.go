@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
@@ -239,31 +240,41 @@ func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.Disb
 	)
 }
 
-// --- BigInt string helpers ---
+// --- BigInt string helpers (using math/big to avoid uint64 overflow) ---
 
+// addBigIntStrings sums arbitrary-precision integer strings.
+// Returns "0" for empty/unparseable inputs.
 func addBigIntStrings(vals ...string) string {
-	var total uint64
+	total := new(big.Int)
 	for _, v := range vals {
-		n := parseBigIntString(v)
-		total += n
+		total.Add(total, parseBigInt(v))
 	}
-	return fmt.Sprintf("%d", total)
+	return total.String()
 }
 
+// bpsFraction computes (numerator * 10000) / denominator using math/big
+// to avoid uint64 overflow on the multiplication. Returns basis points (0-10000).
 func bpsFraction(numerator, denominator string) uint64 {
-	n := parseBigIntString(numerator)
-	d := parseBigIntString(denominator)
-	if d == 0 {
+	n := parseBigInt(numerator)
+	d := parseBigInt(denominator)
+	if d.Sign() == 0 {
 		return 0
 	}
-	return (n * 10000) / d
+	// (n * 10000) / d — safe with big.Int
+	result := new(big.Int).Mul(n, big.NewInt(10000))
+	result.Div(result, d)
+	return result.Uint64()
 }
 
-func parseBigIntString(s string) uint64 {
+// parseBigInt parses a decimal string into *big.Int.
+// Returns zero for empty or unparseable strings.
+func parseBigInt(s string) *big.Int {
 	if s == "" {
-		return 0
+		return new(big.Int)
 	}
-	var n uint64
-	fmt.Sscanf(s, "%d", &n)
+	n, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		return new(big.Int)
+	}
 	return n
 }

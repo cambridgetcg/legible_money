@@ -219,7 +219,12 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgSubmitChallenge{},
+		&MsgAddEvidence{},
+		&MsgResolveChallenge{},
+		&MsgUpdateParams{},
+	)
 }
 
 // gRPC service descriptors for msg server

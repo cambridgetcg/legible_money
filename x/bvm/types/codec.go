@@ -19,10 +19,15 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 // RegisterInterfaces registers the bvm module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
+		// Proto-generated (tx.pb.go)
 		&MsgDeployContract{},
 		&MsgCallContract{},
 		&MsgScheduleExecution{},
 		&MsgUpdateParams{},
+		// Hand-written (types.go) — have XXX_MessageName in proto_names.go
+		&MsgScheduleContract{},
+		&MsgCancelSchedule{},
+		&MsgUpdateContractState{},
 	)
 }
 

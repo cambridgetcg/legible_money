@@ -15,11 +15,11 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the module's interface types.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
 	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgRegisterInterchainAccount{},
+		&MsgSendICATransaction{},
 		&MsgUpdateParams{},
 	)
-
 }
 
 var (

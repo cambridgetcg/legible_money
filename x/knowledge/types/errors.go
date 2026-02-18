@@ -65,4 +65,6 @@ var (
 	ErrPatronageExpired      = errors.Register(ModuleName, 62, "patronage has expired")
 	ErrPruningDisabled       = errors.Register(ModuleName, 63, "pruning is not enabled")
 	ErrDuplicateChallenge    = errors.Register(ModuleName, 64, "fact already has an active verification round")
+	ErrStratumNotFound       = errors.Register(ModuleName, 65, "stratum not found")
+	ErrProposalNotFound      = errors.Register(ModuleName, 66, "domain proposal not found")
 )

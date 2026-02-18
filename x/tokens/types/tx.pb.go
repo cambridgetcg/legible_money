@@ -1826,11 +1826,99 @@ func (x *LiquidityPool) GetFeeBps() uint32 {
 	return 0
 }
 
+type MsgUpdateParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Authority     string                 `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	Params        *Params                `protobuf:"bytes,2,opt,name=params,proto3" json:"params,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParams) Reset() {
+	*x = MsgUpdateParams{}
+	mi := &file_legible_tokens_v1_tx_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParams) ProtoMessage() {}
+
+func (x *MsgUpdateParams) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_tokens_v1_tx_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParams.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParams) Descriptor() ([]byte, []int) {
+	return file_legible_tokens_v1_tx_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *MsgUpdateParams) GetAuthority() string {
+	if x != nil {
+		return x.Authority
+	}
+	return ""
+}
+
+func (x *MsgUpdateParams) GetParams() *Params {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+type MsgUpdateParamsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MsgUpdateParamsResponse) Reset() {
+	*x = MsgUpdateParamsResponse{}
+	mi := &file_legible_tokens_v1_tx_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MsgUpdateParamsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MsgUpdateParamsResponse) ProtoMessage() {}
+
+func (x *MsgUpdateParamsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_tokens_v1_tx_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MsgUpdateParamsResponse.ProtoReflect.Descriptor instead.
+func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
+	return file_legible_tokens_v1_tx_proto_rawDescGZIP(), []int{32}
+}
+
 var File_legible_tokens_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_tokens_v1_tx_proto_rawDesc = "" +
 	"\n" +
-	"\x1alegible/tokens/v1/tx.proto\x12\x11legible.tokens.v1\x1a\x17cosmos/msg/v1/msg.proto\"\x84\x02\n" +
+	"\x1alegible/tokens/v1/tx.proto\x12\x11legible.tokens.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a\x1flegible/tokens/v1/genesis.proto\"\x84\x02\n" +
 	"\x0eMsgCreateToken\x12\x18\n" +
 	"\acreator\x18\x01 \x01(\tR\acreator\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -1959,7 +2047,11 @@ const file_legible_tokens_v1_tx_proto_rawDesc = "" +
 	"\treserve_a\x18\x04 \x01(\tR\breserveA\x12\x1b\n" +
 	"\treserve_b\x18\x05 \x01(\tR\breserveB\x12&\n" +
 	"\x0ftotal_lp_supply\x18\x06 \x01(\tR\rtotalLpSupply\x12\x17\n" +
-	"\afee_bps\x18\a \x01(\rR\x06feeBps2\x9c\n" +
+	"\afee_bps\x18\a \x01(\rR\x06feeBps\"r\n" +
+	"\x0fMsgUpdateParams\x12\x1c\n" +
+	"\tauthority\x18\x01 \x01(\tR\tauthority\x121\n" +
+	"\x06params\x18\x02 \x01(\v2\x19.legible.tokens.v1.ParamsR\x06params:\x0e\x82\xe7\xb0*\tauthority\"\x19\n" +
+	"\x17MsgUpdateParamsResponse2\xfc\n" +
 	"\n" +
 	"\x03Msg\x12[\n" +
 	"\vCreateToken\x12!.legible.tokens.v1.MsgCreateToken\x1a).legible.tokens.v1.MsgCreateTokenResponse\x12U\n" +
@@ -1976,7 +2068,8 @@ const file_legible_tokens_v1_tx_proto_rawDesc = "" +
 	"\vUnwrapToken\x12!.legible.tokens.v1.MsgUnwrapToken\x1a).legible.tokens.v1.MsgUnwrapTokenResponse\x12^\n" +
 	"\fAddLiquidity\x12\".legible.tokens.v1.MsgAddLiquidity\x1a*.legible.tokens.v1.MsgAddLiquidityResponse\x12g\n" +
 	"\x0fRemoveLiquidity\x12%.legible.tokens.v1.MsgRemoveLiquidity\x1a-.legible.tokens.v1.MsgRemoveLiquidityResponse\x12F\n" +
-	"\x04Swap\x12\x1a.legible.tokens.v1.MsgSwap\x1a\".legible.tokens.v1.MsgSwapResponse\x1a\x05\x80\xe7\xb0*\x01B1Z/github.com/legible-money/legible/x/tokens/typesb\x06proto3"
+	"\x04Swap\x12\x1a.legible.tokens.v1.MsgSwap\x1a\".legible.tokens.v1.MsgSwapResponse\x12^\n" +
+	"\fUpdateParams\x12\".legible.tokens.v1.MsgUpdateParams\x1a*.legible.tokens.v1.MsgUpdateParamsResponse\x1a\x05\x80\xe7\xb0*\x01B1Z/github.com/legible-money/legible/x/tokens/typesb\x06proto3"
 
 var (
 	file_legible_tokens_v1_tx_proto_rawDescOnce sync.Once
@@ -1990,7 +2083,7 @@ func file_legible_tokens_v1_tx_proto_rawDescGZIP() []byte {
 	return file_legible_tokens_v1_tx_proto_rawDescData
 }
 
-var file_legible_tokens_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_legible_tokens_v1_tx_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_legible_tokens_v1_tx_proto_goTypes = []any{
 	(*MsgCreateToken)(nil),             // 0: legible.tokens.v1.MsgCreateToken
 	(*TokenFeatures)(nil),              // 1: legible.tokens.v1.TokenFeatures
@@ -2023,43 +2116,49 @@ var file_legible_tokens_v1_tx_proto_goTypes = []any{
 	(*MsgSwapResponse)(nil),            // 28: legible.tokens.v1.MsgSwapResponse
 	(*TokenDefinition)(nil),            // 29: legible.tokens.v1.TokenDefinition
 	(*LiquidityPool)(nil),              // 30: legible.tokens.v1.LiquidityPool
+	(*MsgUpdateParams)(nil),            // 31: legible.tokens.v1.MsgUpdateParams
+	(*MsgUpdateParamsResponse)(nil),    // 32: legible.tokens.v1.MsgUpdateParamsResponse
+	(*Params)(nil),                     // 33: legible.tokens.v1.Params
 }
 var file_legible_tokens_v1_tx_proto_depIdxs = []int32{
 	1,  // 0: legible.tokens.v1.MsgCreateToken.features:type_name -> legible.tokens.v1.TokenFeatures
 	1,  // 1: legible.tokens.v1.TokenDefinition.features:type_name -> legible.tokens.v1.TokenFeatures
-	0,  // 2: legible.tokens.v1.Msg.CreateToken:input_type -> legible.tokens.v1.MsgCreateToken
-	3,  // 3: legible.tokens.v1.Msg.MintToken:input_type -> legible.tokens.v1.MsgMintToken
-	5,  // 4: legible.tokens.v1.Msg.BurnToken:input_type -> legible.tokens.v1.MsgBurnToken
-	7,  // 5: legible.tokens.v1.Msg.TransferToken:input_type -> legible.tokens.v1.MsgTransferToken
-	9,  // 6: legible.tokens.v1.Msg.ApproveToken:input_type -> legible.tokens.v1.MsgApproveToken
-	11, // 7: legible.tokens.v1.Msg.TransferFrom:input_type -> legible.tokens.v1.MsgTransferFrom
-	13, // 8: legible.tokens.v1.Msg.PauseToken:input_type -> legible.tokens.v1.MsgPauseToken
-	15, // 9: legible.tokens.v1.Msg.UnpauseToken:input_type -> legible.tokens.v1.MsgUnpauseToken
-	17, // 10: legible.tokens.v1.Msg.DelegatePower:input_type -> legible.tokens.v1.MsgDelegatePower
-	19, // 11: legible.tokens.v1.Msg.WrapToken:input_type -> legible.tokens.v1.MsgWrapToken
-	21, // 12: legible.tokens.v1.Msg.UnwrapToken:input_type -> legible.tokens.v1.MsgUnwrapToken
-	23, // 13: legible.tokens.v1.Msg.AddLiquidity:input_type -> legible.tokens.v1.MsgAddLiquidity
-	25, // 14: legible.tokens.v1.Msg.RemoveLiquidity:input_type -> legible.tokens.v1.MsgRemoveLiquidity
-	27, // 15: legible.tokens.v1.Msg.Swap:input_type -> legible.tokens.v1.MsgSwap
-	2,  // 16: legible.tokens.v1.Msg.CreateToken:output_type -> legible.tokens.v1.MsgCreateTokenResponse
-	4,  // 17: legible.tokens.v1.Msg.MintToken:output_type -> legible.tokens.v1.MsgMintTokenResponse
-	6,  // 18: legible.tokens.v1.Msg.BurnToken:output_type -> legible.tokens.v1.MsgBurnTokenResponse
-	8,  // 19: legible.tokens.v1.Msg.TransferToken:output_type -> legible.tokens.v1.MsgTransferTokenResponse
-	10, // 20: legible.tokens.v1.Msg.ApproveToken:output_type -> legible.tokens.v1.MsgApproveTokenResponse
-	12, // 21: legible.tokens.v1.Msg.TransferFrom:output_type -> legible.tokens.v1.MsgTransferFromResponse
-	14, // 22: legible.tokens.v1.Msg.PauseToken:output_type -> legible.tokens.v1.MsgPauseTokenResponse
-	16, // 23: legible.tokens.v1.Msg.UnpauseToken:output_type -> legible.tokens.v1.MsgUnpauseTokenResponse
-	18, // 24: legible.tokens.v1.Msg.DelegatePower:output_type -> legible.tokens.v1.MsgDelegatePowerResponse
-	20, // 25: legible.tokens.v1.Msg.WrapToken:output_type -> legible.tokens.v1.MsgWrapTokenResponse
-	22, // 26: legible.tokens.v1.Msg.UnwrapToken:output_type -> legible.tokens.v1.MsgUnwrapTokenResponse
-	24, // 27: legible.tokens.v1.Msg.AddLiquidity:output_type -> legible.tokens.v1.MsgAddLiquidityResponse
-	26, // 28: legible.tokens.v1.Msg.RemoveLiquidity:output_type -> legible.tokens.v1.MsgRemoveLiquidityResponse
-	28, // 29: legible.tokens.v1.Msg.Swap:output_type -> legible.tokens.v1.MsgSwapResponse
-	16, // [16:30] is the sub-list for method output_type
-	2,  // [2:16] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	33, // 2: legible.tokens.v1.MsgUpdateParams.params:type_name -> legible.tokens.v1.Params
+	0,  // 3: legible.tokens.v1.Msg.CreateToken:input_type -> legible.tokens.v1.MsgCreateToken
+	3,  // 4: legible.tokens.v1.Msg.MintToken:input_type -> legible.tokens.v1.MsgMintToken
+	5,  // 5: legible.tokens.v1.Msg.BurnToken:input_type -> legible.tokens.v1.MsgBurnToken
+	7,  // 6: legible.tokens.v1.Msg.TransferToken:input_type -> legible.tokens.v1.MsgTransferToken
+	9,  // 7: legible.tokens.v1.Msg.ApproveToken:input_type -> legible.tokens.v1.MsgApproveToken
+	11, // 8: legible.tokens.v1.Msg.TransferFrom:input_type -> legible.tokens.v1.MsgTransferFrom
+	13, // 9: legible.tokens.v1.Msg.PauseToken:input_type -> legible.tokens.v1.MsgPauseToken
+	15, // 10: legible.tokens.v1.Msg.UnpauseToken:input_type -> legible.tokens.v1.MsgUnpauseToken
+	17, // 11: legible.tokens.v1.Msg.DelegatePower:input_type -> legible.tokens.v1.MsgDelegatePower
+	19, // 12: legible.tokens.v1.Msg.WrapToken:input_type -> legible.tokens.v1.MsgWrapToken
+	21, // 13: legible.tokens.v1.Msg.UnwrapToken:input_type -> legible.tokens.v1.MsgUnwrapToken
+	23, // 14: legible.tokens.v1.Msg.AddLiquidity:input_type -> legible.tokens.v1.MsgAddLiquidity
+	25, // 15: legible.tokens.v1.Msg.RemoveLiquidity:input_type -> legible.tokens.v1.MsgRemoveLiquidity
+	27, // 16: legible.tokens.v1.Msg.Swap:input_type -> legible.tokens.v1.MsgSwap
+	31, // 17: legible.tokens.v1.Msg.UpdateParams:input_type -> legible.tokens.v1.MsgUpdateParams
+	2,  // 18: legible.tokens.v1.Msg.CreateToken:output_type -> legible.tokens.v1.MsgCreateTokenResponse
+	4,  // 19: legible.tokens.v1.Msg.MintToken:output_type -> legible.tokens.v1.MsgMintTokenResponse
+	6,  // 20: legible.tokens.v1.Msg.BurnToken:output_type -> legible.tokens.v1.MsgBurnTokenResponse
+	8,  // 21: legible.tokens.v1.Msg.TransferToken:output_type -> legible.tokens.v1.MsgTransferTokenResponse
+	10, // 22: legible.tokens.v1.Msg.ApproveToken:output_type -> legible.tokens.v1.MsgApproveTokenResponse
+	12, // 23: legible.tokens.v1.Msg.TransferFrom:output_type -> legible.tokens.v1.MsgTransferFromResponse
+	14, // 24: legible.tokens.v1.Msg.PauseToken:output_type -> legible.tokens.v1.MsgPauseTokenResponse
+	16, // 25: legible.tokens.v1.Msg.UnpauseToken:output_type -> legible.tokens.v1.MsgUnpauseTokenResponse
+	18, // 26: legible.tokens.v1.Msg.DelegatePower:output_type -> legible.tokens.v1.MsgDelegatePowerResponse
+	20, // 27: legible.tokens.v1.Msg.WrapToken:output_type -> legible.tokens.v1.MsgWrapTokenResponse
+	22, // 28: legible.tokens.v1.Msg.UnwrapToken:output_type -> legible.tokens.v1.MsgUnwrapTokenResponse
+	24, // 29: legible.tokens.v1.Msg.AddLiquidity:output_type -> legible.tokens.v1.MsgAddLiquidityResponse
+	26, // 30: legible.tokens.v1.Msg.RemoveLiquidity:output_type -> legible.tokens.v1.MsgRemoveLiquidityResponse
+	28, // 31: legible.tokens.v1.Msg.Swap:output_type -> legible.tokens.v1.MsgSwapResponse
+	32, // 32: legible.tokens.v1.Msg.UpdateParams:output_type -> legible.tokens.v1.MsgUpdateParamsResponse
+	18, // [18:33] is the sub-list for method output_type
+	3,  // [3:18] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_legible_tokens_v1_tx_proto_init() }
@@ -2067,13 +2166,14 @@ func file_legible_tokens_v1_tx_proto_init() {
 	if File_legible_tokens_v1_tx_proto != nil {
 		return
 	}
+	file_legible_tokens_v1_genesis_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_tokens_v1_tx_proto_rawDesc), len(file_legible_tokens_v1_tx_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
