@@ -50,6 +50,13 @@ const (
 	SourceFalsification     RewardSource = "falsification"
 )
 
+// AutopoiesisKeeper defines the expected autopoiesis keeper interface.
+// Used for adaptive block reward multipliers via the autopoiesis feedback loop.
+type AutopoiesisKeeper interface {
+	// GetMultiplier returns the current multiplier value for a path (BPS, 1M = 1.0x).
+	GetMultiplier(ctx sdk.Context, path string) uint64
+}
+
 // --- ValidateBasic methods for proto-generated message types ---
 
 func (m *MsgCreateVesting) ValidateBasic() error {

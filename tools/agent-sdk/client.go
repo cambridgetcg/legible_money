@@ -2,8 +2,38 @@ package agentsdk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 )
+
+// ProtoUint64 handles proto JSON's uint64 encoding: numbers are serialized
+// as JSON strings (not numbers) to preserve precision. This type unmarshals
+// from both JSON strings ("950000") and JSON numbers (950000).
+type ProtoUint64 uint64
+
+func (p *ProtoUint64) UnmarshalJSON(b []byte) error {
+	// Try number first
+	var n uint64
+	if err := json.Unmarshal(b, &n); err == nil {
+		*p = ProtoUint64(n)
+		return nil
+	}
+	// Try string (proto JSON format for uint64)
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		n, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		*p = ProtoUint64(n)
+		return nil
+	}
+	return fmt.Errorf("cannot unmarshal %s into ProtoUint64", string(b))
+}
+
+func (p ProtoUint64) Uint64() uint64 { return uint64(p) }
+func (p ProtoUint64) Uint32() uint32 { return uint32(p) }
 
 // QueryClient defines the interface for querying chain state.
 // Implementations wrap legbled's gRPC client or CLI output.
@@ -244,26 +274,30 @@ type RoundInfo struct {
 	ClaimID       string `json:"claim_id"`
 	Phase         string `json:"phase"` // "commit", "reveal", "aggregation", "complete"
 	VerifierCount int    `json:"verifier_count"`
-	StartBlock    uint64 `json:"start_block"`
-	PhaseEndBlock uint64 `json:"phase_end_block"`
+
+	// Diagnostic fields populated only by RoundDetail (not ActiveRounds).
+	CommitmentCount int    `json:"-"` // number of commitments received
+	RevealCount     int    `json:"-"` // number of reveals received
+	FinalVerdict    string `json:"-"` // accepted/rejected/insufficient/contested
+	FinalConfidence uint64 `json:"-"` // 0-1000000
 }
 
 // FactInfo holds accepted fact data.
 type FactInfo struct {
-	ID            string   `json:"id"`
-	ClaimText     string   `json:"claim_text"`
-	Domain        string   `json:"domain"`
-	Category      string   `json:"category"`
-	Confidence    uint32   `json:"confidence"`
-	SubmittedBy   string   `json:"submitted_by"`
-	Maturity      string   `json:"maturity,omitempty"`       // emerging/established/canonical
-	CitationCount uint32   `json:"citation_count,omitempty"`
-	References    []string `json:"references,omitempty"`     // outgoing fact IDs
-	StratumCeiling uint32  `json:"stratum_ceiling,omitempty"`
-	NoveltyScore  uint32   `json:"novelty_score,omitempty"`
-	LogicZone     string   `json:"logic_zone,omitempty"`
-	Status        string   `json:"status,omitempty"`
-	EvidenceBonus uint32   `json:"evidence_bonus,omitempty"`
+	ID             string      `json:"id"`
+	ClaimText      string      `json:"claim_text"`
+	Domain         string      `json:"domain"`
+	Category       string      `json:"epistemic_category"`
+	Confidence     ProtoUint64 `json:"confidence"`
+	SubmittedBy    string      `json:"submitter"`
+	Maturity       string      `json:"maturity,omitempty"`
+	CitationCount  ProtoUint64 `json:"citation_count,omitempty"`
+	References     []string    `json:"references,omitempty"`
+	StratumCeiling ProtoUint64 `json:"stratum_ceiling,omitempty"`
+	NoveltyScore   ProtoUint64 `json:"novelty_score,omitempty"`
+	LogicZone      string      `json:"logic_zone,omitempty"`
+	Status         string      `json:"status,omitempty"`
+	EvidenceBonus  ProtoUint64 `json:"evidence_bonus,omitempty"`
 }
 
 // FactReference represents a typed edge between two facts.
