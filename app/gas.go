@@ -363,6 +363,17 @@ const (
 	BurnModuleName   = "burn"
 )
 
+// Billing treasury module account names (5-way research split + protocol treasury).
+// Must match constants in x/billing/keeper/distribution.go.
+const (
+	TreasuryProtocolName    = "treasury_protocol"
+	TreasuryResearchName    = "treasury_research"
+	TreasuryFoundationName  = "treasury_foundation"
+	TreasuryCommunityName   = "treasury_community"
+	TreasuryDevelopersName  = "treasury_developers"
+	TreasuryReserveName     = "treasury_reserve"
+)
+
 // SystemTxTypes are transaction types that bypass gas fees (issued by consensus).
 var SystemTxTypes = map[string]bool{
 	"verification_reward": true,

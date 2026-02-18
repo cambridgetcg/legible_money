@@ -329,6 +329,19 @@ var (
 		partnershipstypes.ModuleName:     {authtypes.Burner, authtypes.Staking},
 		computepooltypes.ModuleName:      {authtypes.Burner},
 		lgmgovtypes.ModuleName:           {authtypes.Burner}, // LIP deposit escrow + vote stake escrow
+		// Modules with bank keeper calls that were missing (B7-1 audit)
+		bvmtypes.ModuleName:              nil,                // BVM value transfer escrow (Send only, no mint/burn)
+		discoverytypes.ModuleName:        nil,                // agent registration stake escrow
+		ontologytypes.ModuleName:         nil,                // domain proposal stake return
+		researchtypes.ModuleName:         {authtypes.Burner}, // research submission/bounty escrow + burn on rejection
+		scheduletypes.ModuleName:         nil,                // schedule creation fee escrow
+		// Billing treasury accounts (5-way research split + protocol)
+		TreasuryProtocolName:             nil,
+		TreasuryResearchName:             nil,
+		TreasuryFoundationName:           nil,
+		TreasuryCommunityName:            nil,
+		TreasuryDevelopersName:           nil,
+		TreasuryReserveName:              nil,
 	}
 )
 
