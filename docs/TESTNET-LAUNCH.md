@@ -27,7 +27,7 @@
 - **Network**: 1 Gbps
 
 ### Software
-- Go 1.22+
+- Go 1.23+
 - jq 1.6+
 - CometBFT (bundled)
 
@@ -44,8 +44,10 @@ The genesis ceremony creates the initial `genesis.json` with:
 ### Step 1: Build the binary
 
 ```bash
-go build -o build/legbled ./cmd/legbled
+make build
 ```
+
+This injects version metadata (name, version, commit) via ldflags. Do not use bare `go build` — the binary will report empty version fields.
 
 ### Step 2: Initialize genesis
 
@@ -220,3 +222,9 @@ See `scripts/testnet-genesis-config.json` under `modules.knowledge.extended_para
 5. **Vote extensions required**: `vote_extensions_enable_height = "1"` is mandatory. Without it, VRF-based validator selection for PoT will not function.
 
 6. **Bootstrap period**: First 480,000 blocks (~14 days), essential PoT transactions (claims, commitments, reveals, validator registration, account registration) are gas-free to bootstrap the knowledge verification network.
+
+7. **Account pubkey bootstrap**: The first transaction from a new account must be broadcast to register the on-chain pubkey. Until then, `legbled query auth account <addr>` returns a null pubkey and the account cannot sign multi-message transactions.
+
+8. **Module account permissions**: Before launch, verify all modules that use `SendCoinsFromModuleToAccount` or `SendCoinsFromAccountToModule` are registered in `maccPerms` (`app/app.go`). Missing entries will cause runtime panics.
+
+9. **PoT verification path**: The deterministic commit/reveal path (submit claim → commit → reveal → fact creation) is fully tested end-to-end. The arbiter-based dispute resolution path needs additional testing before production use.
