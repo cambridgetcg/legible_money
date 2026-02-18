@@ -100,7 +100,7 @@ func TestPhaseD(t *testing.T) {
 
 		// Submit claim from test1
 		test1Client := e.NewCLIClient("test1")
-		_, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
+		claimTxHash, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 			Text:     claimText,
 			Domain:   "general",
 			Category: "empirical",
@@ -109,8 +109,28 @@ func TestPhaseD(t *testing.T) {
 		if err != nil {
 			t.Fatalf("SubmitClaim: %v", err)
 		}
+		t.Logf("claim tx broadcast: hash=%s", claimTxHash)
 		helpers.WaitForTx(ctx, valClient)
+
+		// Check claim tx DeliverTx result
+		if claimTxHash != "" {
+			code, rawLog, qErr := test1Client.QueryTxResult(ctx, claimTxHash)
+			if qErr != nil {
+				t.Logf("claim tx query failed: %v", qErr)
+			} else if code != 0 {
+				t.Fatalf("claim tx DeliverTx FAILED: code=%d log=%s", code, rawLog)
+			} else {
+				t.Logf("claim tx DeliverTx OK (code=0)")
+			}
+		}
 		t.Logf("claim submitted, waiting for active round...")
+
+		// Diagnostic: raw CLI query to see exactly what the chain returns
+		if rawOut, rawErr := valClient.RawQuery(ctx, "query", "knowledge", "active-rounds"); rawErr != nil {
+			t.Logf("raw active-rounds query error: %v", rawErr)
+		} else {
+			t.Logf("raw active-rounds output (first 500 chars): %.500s", string(rawOut))
+		}
 
 		// Wait for round in commit phase
 		roundID := waitForCommitRound(t, ctx, valClient)
@@ -139,21 +159,39 @@ func TestPhaseD(t *testing.T) {
 		// Map agent verdict to SDK verdict
 		sdkVerdict := mapVerdict(verdict.Verdict)
 
+		// Scale confidence: agent uses 0-10000 BPS, chain uses 0-1000000
+		chainConfidence := verdict.Confidence * 100
+
 		// Compute commitment hash using SDK method
-		commitment := agentsdk.ComputeCommitment(roundID, sdkVerdict, verdict.Confidence, verdict.Salt)
+		commitment := agentsdk.ComputeCommitment(roundID, sdkVerdict, chainConfidence, verdict.Salt)
 		t.Logf("computed commitment hash: %s", commitment)
 
 		// Submit commitment from validator
-		_, err = valClient.SubmitCommitment(ctx, roundID, commitment)
+		commitHash, err := valClient.SubmitCommitment(ctx, roundID, commitment)
 		if err != nil {
 			t.Fatalf("SubmitCommitment: %v", err)
 		}
 		helpers.WaitForTx(ctx, valClient)
 
-		// Verify commitment was stored (catches silent tx failures)
+		// Check DeliverTx result (sync mode only returns CheckTx result)
+		if commitHash != "" {
+			code, rawLog, qErr := valClient.QueryTxResult(ctx, commitHash)
+			if qErr != nil {
+				t.Logf("commit tx query failed (may not be indexed yet): %v", qErr)
+			} else if code != 0 {
+				t.Fatalf("commit tx DeliverTx FAILED: code=%d log=%s", code, rawLog)
+			} else {
+				t.Logf("commit tx DeliverTx OK (code=0)")
+			}
+		}
+
+		// Verify commitment was stored
 		detail, _ := valClient.RoundDetail(ctx, roundID)
 		if detail != nil {
-			t.Logf("post-commit round: phase=%s commitments (detail available)", detail.Phase)
+			t.Logf("post-commit round: phase=%s commitments=%d reveals=%d", detail.Phase, detail.CommitmentCount, detail.RevealCount)
+			if detail.CommitmentCount == 0 {
+				t.Fatalf("commitment was not stored in round — DeliverTx likely failed silently")
+			}
 		}
 		t.Logf("commitment submitted, waiting for reveal phase...")
 
@@ -174,12 +212,33 @@ func TestPhaseD(t *testing.T) {
 		}
 		t.Logf("round in reveal phase, submitting reveal...")
 
-		// Submit reveal from validator
-		_, err = valClient.SubmitReveal(ctx, roundID, sdkVerdict, verdict.Confidence, verdict.Salt)
+		// Submit reveal from validator (using chain-scale confidence)
+		revealHash, err := valClient.SubmitReveal(ctx, roundID, sdkVerdict, chainConfidence, verdict.Salt)
 		if err != nil {
 			t.Fatalf("SubmitReveal: %v", err)
 		}
 		helpers.WaitForTx(ctx, valClient)
+
+		// Check DeliverTx result for reveal
+		if revealHash != "" {
+			code, rawLog, qErr := valClient.QueryTxResult(ctx, revealHash)
+			if qErr != nil {
+				t.Logf("reveal tx query failed: %v", qErr)
+			} else if code != 0 {
+				t.Fatalf("reveal tx DeliverTx FAILED: code=%d log=%s", code, rawLog)
+			} else {
+				t.Logf("reveal tx DeliverTx OK (code=0)")
+			}
+		}
+
+		// Verify reveal was stored
+		detail, _ = valClient.RoundDetail(ctx, roundID)
+		if detail != nil {
+			t.Logf("post-reveal round: phase=%s commitments=%d reveals=%d", detail.Phase, detail.CommitmentCount, detail.RevealCount)
+			if detail.RevealCount == 0 {
+				t.Fatalf("reveal was not stored in round — DeliverTx likely failed")
+			}
+		}
 		t.Logf("reveal submitted, waiting for round completion...")
 
 		// Wait for completion (reveal phase is 60 blocks ~151s, so wait 4 minutes)
@@ -193,7 +252,9 @@ func TestPhaseD(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		detail, _ = valClient.RoundDetail(ctx, roundID)
 		if detail != nil {
-			t.Logf("round final: phase=%s", detail.Phase)
+			t.Logf("round final: phase=%s final_verdict=%s final_confidence=%d commitments=%d reveals=%d",
+				detail.Phase, detail.FinalVerdict, detail.FinalConfidence,
+				detail.CommitmentCount, detail.RevealCount)
 		}
 
 		facts, _ := valClient.FactsByDomain(ctx, "general")
@@ -232,17 +293,28 @@ func TestPhaseD(t *testing.T) {
 			"DNA has a double helix structure",
 		}
 
-		for _, text := range claimTexts {
-			_, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
+		for i, text := range claimTexts {
+			txHash, err := test1Client.SubmitClaim(ctx, agentsdk.SubmitClaimRequest{
 				Text:     text,
 				Domain:   "general",
 				Category: "empirical",
 				Stake:    1_000_000,
 			})
 			if err != nil {
-				t.Logf("claim submission error (continuing): %v", err)
+				t.Logf("claim %d submission error (continuing): %v", i+1, err)
+				continue
 			}
 			helpers.WaitForTx(ctx, valClient)
+			if txHash != "" {
+				code, rawLog, qErr := test1Client.QueryTxResult(ctx, txHash)
+				if qErr != nil {
+					t.Logf("claim %d tx query: %v", i+1, qErr)
+				} else if code != 0 {
+					t.Logf("claim %d DeliverTx FAILED: code=%d log=%s", i+1, code, rawLog)
+				} else {
+					t.Logf("claim %d DeliverTx OK", i+1)
+				}
+			}
 		}
 		t.Logf("submitted %d claims", len(claimTexts))
 
@@ -297,7 +369,9 @@ func TestPhaseD(t *testing.T) {
 			}
 			v := verdicts[i]
 			sdkV := mapVerdict(v.Verdict)
-			hash := agentsdk.ComputeCommitment(r.ID, sdkV, v.Confidence, v.Salt)
+			// Scale confidence: agent uses 0-10000 BPS, chain uses 0-1000000
+			chainConf := v.Confidence * 100
+			hash := agentsdk.ComputeCommitment(r.ID, sdkV, chainConf, v.Salt)
 
 			_, err := valClient.SubmitCommitment(ctx, r.ID, hash)
 			if err != nil {
@@ -309,7 +383,7 @@ func TestPhaseD(t *testing.T) {
 			committedRounds = append(committedRounds, roundVerdict{
 				roundID:    r.ID,
 				sdkVerdict: sdkV,
-				confidence: v.Confidence,
+				confidence: chainConf,
 				salt:       v.Salt,
 			})
 			t.Logf("committed to round %s: verdict=%s", r.ID, v.Verdict)
@@ -342,25 +416,30 @@ func TestPhaseD(t *testing.T) {
 		}
 		t.Logf("revealed %d rounds", revealed)
 
-		// Wait for facts (reveal phase is 60 blocks ~151s, plus aggregation time)
+		// Wait for round completions — reveal phase is 60 blocks (~151s) per round.
+		// With 3 sequential reveals, the last round completes ~150s after the last reveal.
+		// We check for facts periodically.
 		factCtx, factCancel := context.WithTimeout(ctx, 4*time.Minute)
 		defer factCancel()
 
-		factTicker := time.NewTicker(5 * time.Second)
+		factTicker := time.NewTicker(10 * time.Second)
 		defer factTicker.Stop()
 
 		for {
 			select {
 			case <-factCtx.Done():
-				facts, _ := valClient.FactsByDomain(ctx, "general")
+				facts, factsErr := valClient.FactsByDomain(ctx, "general")
+				if factsErr != nil {
+					t.Logf("final facts query error: %v", factsErr)
+				}
 				newFacts := len(facts) - initialCount
-				t.Logf("timeout: %d total facts, %d new", len(facts), newFacts)
+				t.Logf("timeout: %d total facts, %d new (initial=%d)", len(facts), newFacts, initialCount)
 				if newFacts > 0 {
 					helpers.AgentResult(t, "04", fmt.Sprintf("autonomous loop created %d new facts", newFacts))
 					return
 				}
 				if revealed > 0 {
-					helpers.AgentResult(t, "04", fmt.Sprintf("agent evaluated + harness committed/revealed %d rounds (no facts — verdicts may be reject/abstain)", revealed))
+					helpers.AgentResult(t, "04", fmt.Sprintf("agent evaluated + harness committed/revealed %d rounds (facts may still be aggregating)", revealed))
 					return
 				}
 				t.Fatalf("autonomous loop: 0 new facts, 0 reveals")
@@ -393,16 +472,24 @@ func waitForCommitRound(t *testing.T, ctx context.Context, client agentsdk.Query
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
+	var lastErr error
+	var lastRoundCount int
 	for {
 		select {
 		case <-commitCtx.Done():
-			t.Fatalf("no active round in commit phase found")
+			if lastErr != nil {
+				t.Logf("last ActiveRounds error: %v", lastErr)
+			}
+			t.Logf("last ActiveRounds returned %d rounds (none in commit phase)", lastRoundCount)
+			t.Fatalf("no active round in commit phase found after 60s")
 			return ""
 		case <-ticker.C:
 			rounds, err := client.ActiveRounds(commitCtx)
 			if err != nil {
+				lastErr = err
 				continue
 			}
+			lastRoundCount = len(rounds)
 			for _, r := range rounds {
 				if r.Phase == "commit" {
 					return r.ID
