@@ -14,6 +14,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 
+	"github.com/legible-money/legible/x/staking/client/cli"
 	"github.com/legible-money/legible/x/staking/keeper"
 	"github.com/legible-money/legible/x/staking/types"
 )
@@ -35,7 +36,7 @@ func (AppModuleBasic) Name() string { return types.ModuleName }
 
 // RegisterLegacyAminoCodec registers the staking module's types on the LegacyAmino codec.
 func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	// Register types if using amino
+	types.RegisterCodec(cdc)
 }
 
 // RegisterInterfaces registers the module's interface types
@@ -68,14 +69,12 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the root tx command for the staking module.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	// Return tx commands when CLI is implemented
-	return nil
+	return cli.NewTxCmd()
 }
 
-// GetQueryCmd returns no root query command for the staking module.
+// GetQueryCmd returns the root query command for the staking module.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	// Return query commands when CLI is implemented
-	return nil
+	return cli.NewQueryCmd()
 }
 
 // AppModule implements an application module for the staking module.

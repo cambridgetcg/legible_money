@@ -45,7 +45,7 @@ func NewQueryParamsCmd() *cobra.Command {
 
 			req := &types.QueryParamsRequest{}
 			resp := &types.QueryParamsResponse{}
-			if err := clientCtx.Invoke(cmd.Context(), "/legible.lgm_gov.v1.Query/Params", req, resp); err != nil {
+			if err := clientCtx.Invoke(cmd.Context(), "/legible.gov.v1.Query/Params", req, resp); err != nil {
 				return fmt.Errorf("failed to query params: %w", err)
 			}
 
@@ -71,7 +71,7 @@ func NewQueryLIPCmd() *cobra.Command {
 
 			req := &types.QueryLIPRequest{LipId: args[0]}
 			resp := &types.QueryLIPResponse{}
-			if err := clientCtx.Invoke(cmd.Context(), "/legible.lgm_gov.v1.Query/LIP", req, resp); err != nil {
+			if err := clientCtx.Invoke(cmd.Context(), "/legible.gov.v1.Query/LIP", req, resp); err != nil {
 				return fmt.Errorf("failed to query LIP: %w", err)
 			}
 
@@ -108,7 +108,7 @@ Stages: draft, review, last_call, voting, accepted, rejected, withdrawn`,
 				Offset: offset,
 			}
 			resp := &types.QueryLIPsResponse{}
-			if err := clientCtx.Invoke(cmd.Context(), "/legible.lgm_gov.v1.Query/LIPs", req, resp); err != nil {
+			if err := clientCtx.Invoke(cmd.Context(), "/legible.gov.v1.Query/LIPs", req, resp); err != nil {
 				return fmt.Errorf("failed to query LIPs: %w", err)
 			}
 
@@ -137,7 +137,7 @@ func NewQueryDisbursementCmd() *cobra.Command {
 
 			req := &types.QueryDisbursementRequest{DisbursementId: args[0]}
 			resp := &types.QueryDisbursementResponse{}
-			if err := clientCtx.Invoke(cmd.Context(), "/legible.lgm_gov.v1.Query/Disbursement", req, resp); err != nil {
+			if err := clientCtx.Invoke(cmd.Context(), "/legible.gov.v1.Query/Disbursement", req, resp); err != nil {
 				return fmt.Errorf("failed to query disbursement: %w", err)
 			}
 
