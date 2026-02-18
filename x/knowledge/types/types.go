@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -483,22 +484,8 @@ func (msg *MsgChallengeFact) ValidateBasic() error {
 	return nil
 }
 
-// MsgChallengeProvisionalFact challenges a provisionally accepted fact during its challenge window.
-// This is the core adversarial verification message — any agent can stake counter-evidence.
-// Not in proto — hand-written message type for adversarial verification.
-type MsgChallengeProvisionalFact struct {
-	Challenger   string   `json:"challenger"`    // bech32
-	ClaimId      string   `json:"claim_id"`      // target claim
-	FactId       string   `json:"fact_id"`       // provisional fact (if exists)
-	Stake        string   `json:"stake"`         // challenge bond
-	Reason       string   `json:"reason"`        // human-readable
-	EvidenceIds  []string `json:"evidence_ids"`  // counter-evidence from evidence_mgmt
-	CounterClaim string   `json:"counter_claim"` // optional: what challenger believes instead
-}
-
-func (msg *MsgChallengeProvisionalFact) Reset()         {}
-func (msg *MsgChallengeProvisionalFact) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgChallengeProvisionalFact) ProtoMessage()  {}
+// MsgChallengeProvisionalFact: struct and proto methods now in claim.pb.go (proto-generated).
+// Only GetSigners and ValidateBasic remain here as hand-written additions.
 
 func (msg *MsgChallengeProvisionalFact) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Challenger)
@@ -523,15 +510,6 @@ func (msg *MsgChallengeProvisionalFact) ValidateBasic() error {
 	}
 	return nil
 }
-
-type MsgChallengeProvisionalFactResponse struct {
-	ChallengeId string `json:"challenge_id"`
-	DisputeId   string `json:"dispute_id,omitempty"` // set for Path B (arbiter resolution)
-}
-
-func (msg *MsgChallengeProvisionalFactResponse) Reset()         {}
-func (msg *MsgChallengeProvisionalFactResponse) String() string { return fmt.Sprintf("%+v", *msg) }
-func (msg *MsgChallengeProvisionalFactResponse) ProtoMessage()  {}
 
 func (msg *MsgAddFact) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
@@ -1473,16 +1451,9 @@ func (ep ExtendedParams) ValidateExtendedParams() error {
 	return nil
 }
 
-// MsgUpdateExtendedParams updates the extended (non-proto) module parameters.
-// Governance-gated: only the gov module authority can call this.
-type MsgUpdateExtendedParams struct {
-	Authority      string         `json:"authority"`
-	ExtendedParams ExtendedParams `json:"extended_params"`
-}
-
-func (msg *MsgUpdateExtendedParams) Reset()         {}
-func (msg *MsgUpdateExtendedParams) String() string { return "MsgUpdateExtendedParams" }
-func (msg *MsgUpdateExtendedParams) ProtoMessage()  {}
+// MsgUpdateExtendedParams: struct and proto methods now in claim.pb.go (proto-generated).
+// Only GetSigners and ValidateBasic remain here.
+// Note: proto uses ExtendedParamsJson ([]byte) instead of ExtendedParams struct.
 
 func (msg *MsgUpdateExtendedParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
@@ -1496,15 +1467,15 @@ func (msg *MsgUpdateExtendedParams) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return fmt.Errorf("invalid authority address: %w", err)
 	}
-	return msg.ExtendedParams.ValidateExtendedParams()
+	if len(msg.ExtendedParamsJson) == 0 {
+		return fmt.Errorf("extended_params_json cannot be empty")
+	}
+	var ep ExtendedParams
+	if err := json.Unmarshal(msg.ExtendedParamsJson, &ep); err != nil {
+		return fmt.Errorf("invalid extended params JSON: %w", err)
+	}
+	return ep.ValidateExtendedParams()
 }
-
-// MsgUpdateExtendedParamsResponse is the response for MsgUpdateExtendedParams.
-type MsgUpdateExtendedParamsResponse struct{}
-
-func (msg *MsgUpdateExtendedParamsResponse) Reset()         {}
-func (msg *MsgUpdateExtendedParamsResponse) String() string { return "" }
-func (msg *MsgUpdateExtendedParamsResponse) ProtoMessage()  {}
 
 // PatronageRecord tracks a patron's stake in keeping a fact alive.
 type PatronageRecord struct {

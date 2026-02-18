@@ -30,6 +30,10 @@ service Msg {
   rpc ChallengeDomainProposal(MsgChallengeDomainProposal) returns (MsgChallengeDomainProposalResponse);
   rpc RegisterStratum(MsgRegisterStratum) returns (MsgRegisterStratumResponse);
 
+  // Adversarial verification
+  rpc ChallengeProvisionalFact(MsgChallengeProvisionalFact) returns (MsgChallengeProvisionalFactResponse);
+
   // Governance
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+  rpc UpdateExtendedParams(MsgUpdateExtendedParams) returns (MsgUpdateExtendedParamsResponse);
 }

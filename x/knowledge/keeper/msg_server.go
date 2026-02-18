@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -452,6 +453,16 @@ func (k msgServer) ChallengeProvisionalFact(goCtx context.Context, msg *types.Ms
 		resp.DisputeId = challenge.DisputeId
 	}
 
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("challenge_provisional_fact",
+			sdk.NewAttribute("challenge_id", challenge.Id),
+			sdk.NewAttribute("claim_id", msg.ClaimId),
+			sdk.NewAttribute("fact_id", msg.FactId),
+			sdk.NewAttribute("challenger", msg.Challenger),
+			sdk.NewAttribute("resolution_path", challenge.ResolutionPath),
+		),
+	)
+
 	return resp, nil
 }
 
@@ -641,6 +652,11 @@ func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 	if msg.Params != nil {
 		k.SetParams(ctx, msg.Params)
 	}
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("knowledge_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
 	return &types.MsgUpdateParamsResponse{}, nil
 }
 
@@ -649,8 +665,13 @@ func (k msgServer) UpdateExtendedParams(goCtx context.Context, msg *types.MsgUpd
 	if k.GetAuthority() != msg.Authority {
 		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
 	}
+	// Decode JSON-serialized extended params
+	var ep types.ExtendedParams
+	if err := json.Unmarshal(msg.ExtendedParamsJson, &ep); err != nil {
+		return nil, fmt.Errorf("invalid extended params JSON: %w", err)
+	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	k.SetExtendedParams(ctx, msg.ExtendedParams)
+	k.SetExtendedParams(ctx, ep)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("knowledge_extended_params_updated",
 			sdk.NewAttribute("authority", msg.Authority),

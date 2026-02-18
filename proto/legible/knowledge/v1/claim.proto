@@ -286,6 +286,35 @@ message MsgChallengeFactResponse {
   string round_id = 1;
 }
 
+// MsgChallengeProvisionalFact challenges a provisionally accepted fact during its challenge window.
+// This is the core adversarial verification message — any agent can stake counter-evidence.
+message MsgChallengeProvisionalFact {
+  option (cosmos.msg.v1.signer) = "challenger";
+  string challenger = 1;                // bech32 address
+  string claim_id = 2;                  // target claim
+  string fact_id = 3;                   // provisional fact (if exists)
+  string stake = 4;                     // challenge bond (bigint as string)
+  string reason = 5;                    // human-readable challenge reason
+  repeated string evidence_ids = 6;     // counter-evidence from evidence_mgmt
+  string counter_claim = 7;             // optional: what challenger believes instead
+}
+
+message MsgChallengeProvisionalFactResponse {
+  string challenge_id = 1;
+  string dispute_id = 2;               // set for Path B (arbiter resolution)
+}
+
+// MsgUpdateExtendedParams updates the extended (non-proto) module parameters.
+// Governance-gated: only the gov module authority can call this.
+message MsgUpdateExtendedParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  // Extended params are JSON-serialized in the bytes field since they're too complex for proto.
+  bytes extended_params_json = 2;
+}
+
+message MsgUpdateExtendedParamsResponse {}
+
 // MsgAddFact is a governance-gated fact creation (for genesis/migration).
 message MsgAddFact {
   option (cosmos.msg.v1.signer) = "authority";
