@@ -59,8 +59,9 @@ func (interp *Interpreter) Execute(
 		interp.accessTracker.MarkAddressWarm(ctx.Coinbase)
 	}
 
-	// Enforce call depth limit (prevents recursive call DoS)
-	if interp.callDepth > MaxCallDepth {
+	// Enforce call depth limit (prevents recursive call DoS).
+	// P0-4: use >= to match ExecuteCall's check; root call is depth 0, depths 0-1023 valid.
+	if interp.callDepth >= MaxCallDepth {
 		return interp.errorResult(ErrCodeCallDepthExceeded, "call depth exceeded")
 	}
 
@@ -498,8 +499,12 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 {
 			return actionError
 		}
-		off := int(offset.Uint64())
-		ln := int(length.Uint64())
+		// P0-1: check for 256→int truncation before memory arithmetic.
+		off, offOk := toMemoryOffset(offset)
+		ln, lnOk := toMemoryOffset(length)
+		if !offOk || !lnOk {
+			return actionError
+		}
 		// Dynamic gas: 6 per word
 		words := (ln + 31) / 32
 		if words > 0 {
@@ -580,13 +585,19 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 || !ok3 {
 			return actionError
 		}
-		ln := int(length.Uint64())
+		// P0-1: guard against 256→int truncation on all three operands.
+		ln, lnOk := toMemoryOffset(length)
+		dstMem, dstOk := toMemoryOffset(destOff)
+		srcMem, srcOk := toMemoryOffset(dataOff)
+		if !lnOk || !dstOk || !srcOk {
+			return actionError
+		}
 		if ln > 0 {
 			words := (ln + 31) / 32
 			if err := interp.gas.Consume(GasCopy * uint64(words)); err != nil {
 				return actionError
 			}
-			if gasCost, err := interp.memory.Expand(int(destOff.Uint64()) + ln); err != nil {
+			if gasCost, err := interp.memory.Expand(dstMem + ln); err != nil {
 				return actionError
 			} else if gasCost > 0 {
 				if err := interp.gas.Consume(gasCost); err != nil {
@@ -594,13 +605,12 @@ func (interp *Interpreter) executeOpcode(
 				}
 			}
 			src := make([]byte, ln)
-			srcOff := int(dataOff.Uint64())
 			for i := 0; i < ln; i++ {
-				if srcOff+i < len(ctx.CallData) {
-					src[i] = ctx.CallData[srcOff+i]
+				if srcMem+i < len(ctx.CallData) {
+					src[i] = ctx.CallData[srcMem+i]
 				}
 			}
-			interp.memory.Write(int(destOff.Uint64()), src)
+			interp.memory.Write(dstMem, src)
 		}
 
 	case CODESIZE:
@@ -613,13 +623,19 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 || !ok3 {
 			return actionError
 		}
-		ln := int(length.Uint64())
+		// P0-1: guard against 256→int truncation.
+		ln, lnOk := toMemoryOffset(length)
+		dstMem, dstOk := toMemoryOffset(destOff)
+		srcMem, srcOk := toMemoryOffset(codeOff)
+		if !lnOk || !dstOk || !srcOk {
+			return actionError
+		}
 		if ln > 0 {
 			words := (ln + 31) / 32
 			if err := interp.gas.Consume(GasCopy * uint64(words)); err != nil {
 				return actionError
 			}
-			if gasCost, err := interp.memory.Expand(int(destOff.Uint64()) + ln); err != nil {
+			if gasCost, err := interp.memory.Expand(dstMem + ln); err != nil {
 				return actionError
 			} else if gasCost > 0 {
 				if err := interp.gas.Consume(gasCost); err != nil {
@@ -627,13 +643,12 @@ func (interp *Interpreter) executeOpcode(
 				}
 			}
 			src := make([]byte, ln)
-			srcOff := int(codeOff.Uint64())
 			for i := 0; i < ln; i++ {
-				if srcOff+i < len(ctx.Bytecode) {
-					src[i] = ctx.Bytecode[srcOff+i]
+				if srcMem+i < len(ctx.Bytecode) {
+					src[i] = ctx.Bytecode[srcMem+i]
 				}
 			}
-			interp.memory.Write(int(destOff.Uint64()), src)
+			interp.memory.Write(dstMem, src)
 		}
 
 	case GASPRICE:
@@ -672,13 +687,19 @@ func (interp *Interpreter) executeOpcode(
 		if err := interp.gas.Consume(accessGas); err != nil {
 			return actionError
 		}
-		ln := int(length.Uint64())
+		// P0-1: guard against 256→int truncation.
+		ln, lnOk := toMemoryOffset(length)
+		dstMem, dstOk := toMemoryOffset(destOff)
+		srcMem, srcOk := toMemoryOffset(codeOff)
+		if !lnOk || !dstOk || !srcOk {
+			return actionError
+		}
 		if ln > 0 {
 			words := (ln + 31) / 32
 			if err := interp.gas.Consume(GasCopy * uint64(words)); err != nil {
 				return actionError
 			}
-			if gasCost, err := interp.memory.Expand(int(destOff.Uint64()) + ln); err != nil {
+			if gasCost, err := interp.memory.Expand(dstMem + ln); err != nil {
 				return actionError
 			} else if gasCost > 0 {
 				if err := interp.gas.Consume(gasCost); err != nil {
@@ -687,13 +708,12 @@ func (interp *Interpreter) executeOpcode(
 			}
 			code := state.GetCode(addrBytes)
 			src := make([]byte, ln)
-			srcOff := int(codeOff.Uint64())
 			for i := 0; i < ln; i++ {
-				if srcOff+i < len(code) {
-					src[i] = code[srcOff+i]
+				if srcMem+i < len(code) {
+					src[i] = code[srcMem+i]
 				}
 			}
-			interp.memory.Write(int(destOff.Uint64()), src)
+			interp.memory.Write(dstMem, src)
 		}
 
 	case RETURNDATASIZE:
@@ -706,8 +726,13 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 || !ok3 {
 			return actionError
 		}
-		ln := int(length.Uint64())
-		srcOff := int(dataOff.Uint64())
+		// P0-1: guard against 256→int truncation.
+		ln, lnOk := toMemoryOffset(length)
+		srcOff, srcOk := toMemoryOffset(dataOff)
+		dstMem, dstOk := toMemoryOffset(destOff)
+		if !lnOk || !srcOk || !dstOk {
+			return actionError
+		}
 		if srcOff+ln > len(interp.returnData) {
 			return actionError // Out of bounds
 		}
@@ -716,14 +741,14 @@ func (interp *Interpreter) executeOpcode(
 			if err := interp.gas.Consume(GasCopy * uint64(words)); err != nil {
 				return actionError
 			}
-			if gasCost, err := interp.memory.Expand(int(destOff.Uint64()) + ln); err != nil {
+			if gasCost, err := interp.memory.Expand(dstMem + ln); err != nil {
 				return actionError
 			} else if gasCost > 0 {
 				if err := interp.gas.Consume(gasCost); err != nil {
 					return actionError
 				}
 			}
-			interp.memory.Write(int(destOff.Uint64()), interp.returnData[srcOff:srcOff+ln])
+			interp.memory.Write(dstMem, interp.returnData[srcOff:srcOff+ln])
 		}
 
 	case EXTCODEHASH:
@@ -805,7 +830,10 @@ func (interp *Interpreter) executeOpcode(
 		if !ok {
 			return actionError
 		}
-		off := int(offset.Uint64())
+		off, offOk := toMemoryOffset(offset) // P0-1
+		if !offOk {
+			return actionError
+		}
 		if gasCost, err := interp.memory.Expand(off + 32); err != nil {
 			return actionError
 		} else if gasCost > 0 {
@@ -821,7 +849,10 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 {
 			return actionError
 		}
-		off := int(offset.Uint64())
+		off, offOk := toMemoryOffset(offset) // P0-1
+		if !offOk {
+			return actionError
+		}
 		if gasCost, err := interp.memory.Expand(off + 32); err != nil {
 			return actionError
 		} else if gasCost > 0 {
@@ -837,7 +868,10 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 {
 			return actionError
 		}
-		off := int(offset.Uint64())
+		off, offOk := toMemoryOffset(offset) // P0-1
+		if !offOk {
+			return actionError
+		}
 		if gasCost, err := interp.memory.Expand(off + 1); err != nil {
 			return actionError
 		} else if gasCost > 0 {
@@ -970,8 +1004,12 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 {
 			return actionError
 		}
-		off := int(offset.Uint64())
-		ln := int(length.Uint64())
+		// P0-1: guard against 256→int truncation.
+		off, offOk := toMemoryOffset(offset)
+		ln, lnOk := toMemoryOffset(length)
+		if !offOk || !lnOk {
+			return actionError
+		}
 		if ln > 0 {
 			if gasCost, err := interp.memory.Expand(off + ln); err != nil {
 				return actionError
@@ -990,8 +1028,12 @@ func (interp *Interpreter) executeOpcode(
 		if !ok1 || !ok2 {
 			return actionError
 		}
-		off := int(offset.Uint64())
-		ln := int(length.Uint64())
+		// P0-1: guard against 256→int truncation.
+		off, offOk := toMemoryOffset(offset)
+		ln, lnOk := toMemoryOffset(length)
+		if !offOk || !lnOk {
+			return actionError
+		}
 		if ln > 0 {
 			if gasCost, err := interp.memory.Expand(off + ln); err != nil {
 				return actionError
@@ -1033,8 +1075,12 @@ func (interp *Interpreter) executeOpcode(
 			b := WordToBytes32(t)
 			topics[i] = b[:]
 		}
-		off := int(offset.Uint64())
-		ln := int(length.Uint64())
+		// P0-1: guard against 256→int truncation.
+		off, offOk := toMemoryOffset(offset)
+		ln, lnOk := toMemoryOffset(length)
+		if !offOk || !lnOk {
+			return actionError
+		}
 		// Dynamic gas: 8 per byte of data
 		if ln > 0 {
 			if err := interp.gas.Consume(GasLogData * uint64(ln)); err != nil {
@@ -1071,11 +1117,15 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 
-		// Expand memory for input and output regions
-		argsOff := int(argsOffArg.Uint64())
-		argsLen := int(argsLenArg.Uint64())
-		retOff := int(retOffArg.Uint64())
-		retLen := int(retLenArg.Uint64())
+		// Expand memory for input and output regions.
+		// P0-1: guard against 256→int truncation on all memory operands.
+		argsOff, argsOffOk := toMemoryOffset(argsOffArg)
+		argsLen, argsLenOk := toMemoryOffset(argsLenArg)
+		retOff, retOffOk := toMemoryOffset(retOffArg)
+		retLen, retLenOk := toMemoryOffset(retLenArg)
+		if !argsOffOk || !argsLenOk || !retOffOk || !retLenOk {
+			return actionError
+		}
 		maxEnd := argsOff + argsLen
 		if retOff+retLen > maxEnd {
 			maxEnd = retOff + retLen
@@ -1109,7 +1159,9 @@ func (interp *Interpreter) executeOpcode(
 
 		mode := ModeCall
 		if opcode == CALLCODE {
-			mode = ModeCall // CALLCODE uses caller's storage (similar to DELEGATECALL without msg.sender preservation)
+			// P0-2: CALLCODE executes target's code in caller's storage context.
+			// ModeCallCode = target code + caller storage + msg.sender = calling contract.
+			mode = ModeCallCode
 		}
 
 		// STATICCALL inheritance: if parent is static, sub-calls must also be static
@@ -1162,10 +1214,14 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 
-		argsOff := int(argsOffArg.Uint64())
-		argsLen := int(argsLenArg.Uint64())
-		retOff := int(retOffArg.Uint64())
-		retLen := int(retLenArg.Uint64())
+		// P0-1: guard against 256→int truncation on all memory operands.
+		argsOff, argsOffOk := toMemoryOffset(argsOffArg)
+		argsLen, argsLenOk := toMemoryOffset(argsLenArg)
+		retOff, retOffOk := toMemoryOffset(retOffArg)
+		retLen, retLenOk := toMemoryOffset(retLenArg)
+		if !argsOffOk || !argsLenOk || !retOffOk || !retLenOk {
+			return actionError
+		}
 		maxEnd := argsOff + argsLen
 		if retOff+retLen > maxEnd {
 			maxEnd = retOff + retLen
@@ -1233,8 +1289,12 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 
-		off := int(offsetArg.Uint64())
-		ln := int(lengthArg.Uint64())
+		// P0-1: guard against 256→int truncation.
+		off, offOk := toMemoryOffset(offsetArg)
+		ln, lnOk := toMemoryOffset(lengthArg)
+		if !offOk || !lnOk {
+			return actionError
+		}
 		if ln > 0 {
 			if gasCost, err := interp.memory.Expand(off + ln); err != nil {
 				return actionError
@@ -1304,8 +1364,12 @@ func (interp *Interpreter) executeOpcode(
 			return actionError
 		}
 
-		off := int(offsetArg.Uint64())
-		ln := int(lengthArg.Uint64())
+		// P0-1: guard against 256→int truncation.
+		off, offOk := toMemoryOffset(offsetArg)
+		ln, lnOk := toMemoryOffset(lengthArg)
+		if !offOk || !lnOk {
+			return actionError
+		}
 		if ln > 0 {
 			if gasCost, err := interp.memory.Expand(off + ln); err != nil {
 				return actionError
@@ -2270,6 +2334,19 @@ func (interp *Interpreter) errorResult(code ErrorCode, msg string) *ExecutionRes
 		Logs:       nil,
 		Error:      &ExecutionError{Code: code, Message: msg},
 	}
+}
+
+// toMemoryOffset converts a 256-bit stack word to a native int for memory/calldata
+// offset arithmetic.  Returns (0, false) if the value exceeds 63 bits, which prevents
+// silent wrap-around on both 64-bit and 32-bit platforms and ensures that
+// offset + size arithmetic cannot overflow into a falsely-valid small address.
+// Any value this large (≥ 2^63) would far exceed the 1 MB memory limit and is
+// therefore not a legitimate memory address.
+func toMemoryOffset(v *big.Int) (int, bool) {
+	if v.BitLen() > 63 {
+		return 0, false
+	}
+	return int(v.Uint64()), true
 }
 
 func scanJumpDests(bytecode []byte) map[int]bool {

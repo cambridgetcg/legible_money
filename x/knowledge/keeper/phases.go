@@ -251,8 +251,11 @@ func (k Keeper) performAggregation(ctx sdk.Context, round types.VerificationRoun
 		return fmt.Errorf("aggregation failed for round %s: %w", round.Id, err)
 	}
 
+	// P0-2: Determine if this is a contested round for Guardian tier tracking
+	contested := round.Type == types.RoundTypeChallenge || round.Type == types.RoundTypeContradiction
+
 	// Apply rewards and slashes
-	if err := k.ApplyRewardsAndSlashes(ctx, result); err != nil {
+	if err := k.ApplyRewardsAndSlashes(ctx, result, contested); err != nil {
 		k.Logger(ctx).Error("failed to apply rewards/slashes",
 			"round_id", round.Id, "error", err)
 	}

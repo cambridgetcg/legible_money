@@ -19,6 +19,6 @@ func NewQualificationVerificationHooks(k Keeper) QualificationVerificationHooks 
 // AfterVerificationCompleted delegates to the qualification keeper's
 // RecordVerificationOutcome to update domain-specific accuracy metrics,
 // consecutive counts, and suspension triggers.
-func (h QualificationVerificationHooks) AfterVerificationCompleted(ctx sdk.Context, validatorAddr, domain string, correct bool) error {
+func (h QualificationVerificationHooks) AfterVerificationCompleted(ctx sdk.Context, validatorAddr, domain string, correct, _ bool) error {
 	return h.k.RecordVerificationOutcome(ctx, validatorAddr, domain, correct)
 }

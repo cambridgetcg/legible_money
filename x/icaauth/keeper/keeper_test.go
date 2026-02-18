@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"fmt"
 	"testing"
 
 	"cosmossdk.io/core/store"
@@ -15,6 +16,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	gogoproto "github.com/cosmos/gogoproto/proto"
+	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
+	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
 
 	legibleauthtypes "github.com/legible-money/legible/x/auth/types"
 	"github.com/legible-money/legible/x/icaauth/keeper"
@@ -69,8 +73,16 @@ func (m *mockLegibleAuthKeeper) GetAddressForDID(_ sdk.Context, did string) (str
 
 // mockICAControllerKeeper implements types.ICAControllerKeeper for testing.
 type mockICAControllerKeeper struct {
-	registered map[string]bool // "connectionID:owner" -> true
-	failNext   bool
+	registered  map[string]bool // "connectionID:owner" -> true
+	failNext    bool
+	sentPackets []mockSentPacket
+	failSendTx  bool
+}
+
+type mockSentPacket struct {
+	ConnectionID string
+	PortID       string
+	Data         []byte
 }
 
 func newMockICAControllerKeeper() *mockICAControllerKeeper {
@@ -102,6 +114,19 @@ func (m *mockICAControllerKeeper) GetOpenActiveChannel(_ sdk.Context, connection
 		return "channel-remote-0", true
 	}
 	return "", false
+}
+
+func (m *mockICAControllerKeeper) SendTx(_ sdk.Context, _ *capabilitytypes.Capability, connectionID, portID string, icaPacketData icatypes.InterchainAccountPacketData, _ uint64) (uint64, error) {
+	if m.failSendTx {
+		m.failSendTx = false
+		return 0, fmt.Errorf("mock SendTx failure")
+	}
+	m.sentPackets = append(m.sentPackets, mockSentPacket{
+		ConnectionID: connectionID,
+		PortID:       portID,
+		Data:         icaPacketData.Data,
+	})
+	return uint64(len(m.sentPackets)), nil
 }
 
 // ============================================================
@@ -561,7 +586,7 @@ func TestMsgRegisterInterchainAccount_ICAControllerError(t *testing.T) {
 }
 
 func TestMsgSendICATransaction_Success(t *testing.T) {
-	k, ctx, mockAuth, _ := setupKeeper(t)
+	k, ctx, mockAuth, mockICA := setupKeeper(t)
 	ms := keeper.NewMsgServerImpl(k)
 
 	mockAuth.accounts[testAddress] = &legibleauthtypes.LegibleAccount{
@@ -569,24 +594,47 @@ func TestMsgSendICATransaction_Success(t *testing.T) {
 		Did:     testDID,
 	}
 
+	// Set params with the allowed msg type
+	_ = k.SetParams(ctx, types.Params{
+		MaxRemoteAccountsPerDid: 10,
+		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
+		RegistrationCooldown:    100,
+	})
+
 	// First register an account and activate it
 	acc := &types.RemoteAccount{
-		ConnectionId: "connection-0",
-		PortId:       "icacontroller-test",
-		OwnerDid:     testDID,
-		Active:       true, // pre-activated
+		ConnectionId:    "connection-0",
+		PortId:          "icacontroller-test",
+		OwnerDid:        testDID,
+		Active:          true, // pre-activated
+		AllowedMsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"},
 	}
 	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	// Build a valid CosmosTx with an allowed msg type
+	cosmosTx := makeTestCosmosTx(t, "/cosmos.bank.v1beta1.MsgSend")
 
 	msg := &types.MsgSendICATransaction{
 		Owner:        testAddress,
 		ConnectionId: "connection-0",
-		MsgBytes:     []byte("test-tx-bytes"),
+		MsgBytes:     cosmosTx,
+		TimeoutNanos: 600_000_000_000, // 10 minutes
 	}
 
-	_, err := ms.SendICATransaction(ctx, msg)
+	resp, err := ms.SendICATransaction(ctx, msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Sequence == 0 {
+		t.Error("expected non-zero packet sequence")
+	}
+
+	// Verify the packet was actually sent
+	if len(mockICA.sentPackets) != 1 {
+		t.Fatalf("expected 1 sent packet, got %d", len(mockICA.sentPackets))
+	}
+	if mockICA.sentPackets[0].ConnectionID != "connection-0" {
+		t.Errorf("expected connection-0, got %s", mockICA.sentPackets[0].ConnectionID)
 	}
 }
 
@@ -696,5 +744,176 @@ func TestQueryParams(t *testing.T) {
 	}
 	if resp.Params.MaxRemoteAccountsPerDid != 10 {
 		t.Errorf("expected MaxRemoteAccountsPerDid=10, got %d", resp.Params.MaxRemoteAccountsPerDid)
+	}
+}
+
+// ============================================================
+// Test Helpers
+// ============================================================
+
+// makeTestCosmosTx creates a valid protobuf-encoded CosmosTx with a single Any message.
+func makeTestCosmosTx(t *testing.T, typeURL string) []byte {
+	t.Helper()
+	cosmosTx := &icatypes.CosmosTx{
+		Messages: []*codectypes.Any{
+			{
+				TypeUrl: typeURL,
+				Value:   []byte{0x0a, 0x04, 0x74, 0x65, 0x73, 0x74}, // minimal protobuf payload
+			},
+		},
+	}
+	bz, err := gogoproto.Marshal(cosmosTx)
+	if err != nil {
+		t.Fatalf("failed to marshal test CosmosTx: %v", err)
+	}
+	return bz
+}
+
+// ============================================================
+// P0-4 Tests: AllowedMsgTypes Enforcement
+// ============================================================
+
+func TestMsgSendICATransaction_DisallowedMsgType(t *testing.T) {
+	k, ctx, mockAuth, _ := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	mockAuth.accounts[testAddress] = &legibleauthtypes.LegibleAccount{
+		Address: testAddress,
+		Did:     testDID,
+	}
+
+	// Set global params to only allow MsgSend
+	_ = k.SetParams(ctx, types.Params{
+		MaxRemoteAccountsPerDid: 10,
+		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
+		RegistrationCooldown:    100,
+	})
+
+	acc := &types.RemoteAccount{
+		ConnectionId:    "connection-0",
+		PortId:          "icacontroller-test",
+		OwnerDid:        testDID,
+		Active:          true,
+		AllowedMsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"},
+	}
+	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	// Try sending a MsgTransfer (not in allowlist)
+	cosmosTx := makeTestCosmosTx(t, "/ibc.applications.transfer.v1.MsgTransfer")
+
+	msg := &types.MsgSendICATransaction{
+		Owner:        testAddress,
+		ConnectionId: "connection-0",
+		MsgBytes:     cosmosTx,
+	}
+
+	_, err := ms.SendICATransaction(ctx, msg)
+	if err == nil {
+		t.Error("expected error for disallowed msg type")
+	}
+}
+
+func TestMsgSendICATransaction_GlobalAllowlistBlock(t *testing.T) {
+	k, ctx, mockAuth, _ := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	mockAuth.accounts[testAddress] = &legibleauthtypes.LegibleAccount{
+		Address: testAddress,
+		Did:     testDID,
+	}
+
+	// Global allows only MsgSend, per-account allows MsgDelegate
+	_ = k.SetParams(ctx, types.Params{
+		MaxRemoteAccountsPerDid: 10,
+		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
+		RegistrationCooldown:    100,
+	})
+
+	acc := &types.RemoteAccount{
+		ConnectionId:    "connection-0",
+		PortId:          "icacontroller-test",
+		OwnerDid:        testDID,
+		Active:          true,
+		AllowedMsgTypes: []string{"/cosmos.staking.v1beta1.MsgDelegate"},
+	}
+	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	// MsgDelegate is in per-account allowlist but NOT in global
+	cosmosTx := makeTestCosmosTx(t, "/cosmos.staking.v1beta1.MsgDelegate")
+
+	msg := &types.MsgSendICATransaction{
+		Owner:        testAddress,
+		ConnectionId: "connection-0",
+		MsgBytes:     cosmosTx,
+	}
+
+	_, err := ms.SendICATransaction(ctx, msg)
+	if err == nil {
+		t.Error("expected error: msg type in per-account but not global allowlist")
+	}
+}
+
+func TestMsgSendICATransaction_EmptyMsgBytes(t *testing.T) {
+	k, ctx, mockAuth, _ := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	mockAuth.accounts[testAddress] = &legibleauthtypes.LegibleAccount{
+		Address: testAddress,
+		Did:     testDID,
+	}
+
+	acc := &types.RemoteAccount{
+		ConnectionId: "connection-0",
+		PortId:       "icacontroller-test",
+		OwnerDid:     testDID,
+		Active:       true,
+	}
+	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	// Empty CosmosTx (no messages)
+	cosmosTx := &icatypes.CosmosTx{Messages: nil}
+	bz, _ := gogoproto.Marshal(cosmosTx)
+
+	msg := &types.MsgSendICATransaction{
+		Owner:        testAddress,
+		ConnectionId: "connection-0",
+		MsgBytes:     bz,
+	}
+
+	_, err := ms.SendICATransaction(ctx, msg)
+	if err == nil {
+		t.Error("expected error for empty CosmosTx")
+	}
+}
+
+// ============================================================
+// P0-6 Tests: MsgTransfer removed from defaults
+// ============================================================
+
+func TestDefaultParams_NoMsgTransfer(t *testing.T) {
+	params := types.DefaultParams()
+	for _, msgType := range params.AllowedHostMsgTypes {
+		if msgType == "/ibc.applications.transfer.v1.MsgTransfer" {
+			t.Error("MsgTransfer should not be in default AllowedHostMsgTypes (P0-6)")
+		}
+	}
+	// Verify the other expected types are still there
+	expected := []string{
+		"/cosmos.bank.v1beta1.MsgSend",
+		"/cosmos.staking.v1beta1.MsgDelegate",
+		"/cosmos.staking.v1beta1.MsgUndelegate",
+		"/cosmos.gov.v1.MsgVote",
+	}
+	for _, exp := range expected {
+		found := false
+		for _, got := range params.AllowedHostMsgTypes {
+			if got == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected %s in AllowedHostMsgTypes", exp)
+		}
 	}
 }

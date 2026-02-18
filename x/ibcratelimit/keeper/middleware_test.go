@@ -484,3 +484,557 @@ func TestMiddleware_OnTimeoutPacket_Delegates(t *testing.T) {
 		t.Error("expected no flow record on timeout")
 	}
 }
+
+// ============================================================
+// P0-2 Tests: Multi-Denom Rate Limiting
+// ============================================================
+
+func TestMiddleware_OnRecvPacket_NonTrackedDenom_NowLimited(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "10000000000",
+		MaxInflowPerEpoch:  "100", // very low limit
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// Send a non-ulgm denom — should now be rate-limited (P0-2 fix)
+	packet := channeltypes.NewPacket(
+		makeTransferData("uatom", "200"),
+		1,
+		"transfer", "channel-src",
+		"transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000),
+		0,
+	)
+
+	ack := mw.OnRecvPacket(ctx, packet, nil)
+	if ack == nil {
+		t.Fatal("expected non-nil ack")
+	}
+	if ack.Success() {
+		t.Error("expected non-ulgm denom to be rate-limited (exceeds 100 limit with 200 amount)")
+	}
+}
+
+func TestICS4Wrapper_SendPacket_NonTrackedDenom_NowLimited(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "100", // very low limit
+		MaxInflowPerEpoch:  "10000000000",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockICS4Wrapper{}
+	w := keeper.NewICS4Wrapper(inner, k)
+
+	// Non-ulgm denom outflow should now be rate-limited (P0-2 fix)
+	_, err := w.SendPacket(
+		ctx, nil,
+		"transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+		makeTransferData("uatom", "200"),
+	)
+	if err == nil {
+		t.Error("expected non-ulgm denom outflow to be rate-limited")
+	}
+}
+
+// ============================================================
+// P0-3 Tests: Sliding Window Epoch Reset
+// ============================================================
+
+func TestSlidingWindow_EpochBoundary_NoDoubleBurst(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Short epoch for testing (10 blocks)
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  10,
+		MaxOutflowPerEpoch: "1000",
+		MaxInflowPerEpoch:  "1000",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// Phase 1: Use 900/1000 of inflow limit during first epoch (block 100, epoch starts at 100)
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "900"),
+		1, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("first packet should succeed (900 of 1000)")
+	}
+
+	// Phase 2: Advance to just past epoch boundary (block 111, epoch started at 100, length 10)
+	// The previous epoch's 900 should carry over partially
+	ctx = ctx.WithBlockHeight(111)
+
+	// At block 111, we are 1 block into the new epoch (111-110=1).
+	// Carry-over = 900 * (10-1)/10 = 810
+	// So effective inflow = 0 (current) + 810 (carry) = 810
+	// A 200 transfer would push to 1010 > 1000 limit
+
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "200"),
+		2, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if ack2.Success() {
+		t.Error("expected rejection: sliding window carry-over (810) + new (200) = 1010 > 1000 limit")
+	}
+}
+
+func TestSlidingWindow_DecayOverTime(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  10,
+		MaxOutflowPerEpoch: "1000",
+		MaxInflowPerEpoch:  "1000",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// Fill up to 900 in first epoch
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "900"),
+		1, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("first packet should succeed")
+	}
+
+	// Advance to 5 blocks into the new epoch
+	// Carry-over = 900 * (10-5)/10 = 450
+	ctx = ctx.WithBlockHeight(115)
+
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "500"),
+		2, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if !ack2.Success() {
+		t.Error("should succeed: carry-over (450) + new (500) = 950 < 1000")
+	}
+}
+
+func TestSlidingWindow_FullEpochLater_NoCarryOver(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  10,
+		MaxOutflowPerEpoch: "1000",
+		MaxInflowPerEpoch:  "1000",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// Fill up to 900 in first epoch
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "900"),
+		1, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("first packet should succeed")
+	}
+
+	// Advance to 2+ full epochs later — no carry-over
+	ctx = ctx.WithBlockHeight(130)
+
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "999"),
+		2, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if !ack2.Success() {
+		t.Error("should succeed: no carry-over after 2+ full epochs, 999 < 1000")
+	}
+}
+
+// ============================================================
+// Multi-Denom Rate Limiting Tests
+// ============================================================
+
+// TestMultiDenom_AggregateLimit verifies that transfers of different denoms
+// aggregate against the same per-channel limit.
+func TestMultiDenom_AggregateLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "10000000000",
+		MaxInflowPerEpoch:  "1000",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// 500 of denom A (ulgm)
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "500"),
+		1, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("500 of denom A should succeed")
+	}
+
+	// 500 of denom B (uatom) — aggregate total = 1000
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData("uatom", "500"),
+		2, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if !ack2.Success() {
+		t.Fatal("500 of denom B should succeed (total 1000 = limit)")
+	}
+
+	// Verify aggregate flow
+	flow, found := k.GetFlow(ctx, "channel-dest")
+	if !found {
+		t.Fatal("expected flow record")
+	}
+	if flow.InflowTotal != "1000" {
+		t.Errorf("expected aggregate inflow=1000, got %s", flow.InflowTotal)
+	}
+
+	// One more of any denom should fail
+	pkt3 := channeltypes.NewPacket(
+		makeTransferData("ibc/ABC123", "1"),
+		3, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack3 := mw.OnRecvPacket(ctx, pkt3, nil)
+	if ack3.Success() {
+		t.Error("should reject: aggregate 1001 > 1000 limit")
+	}
+}
+
+// TestMultiDenom_DifferentChannels verifies flow for one channel doesn't count
+// against another channel's limits.
+func TestMultiDenom_DifferentChannels(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "10000000000",
+		MaxInflowPerEpoch:  "1000",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// 800 on channel-0
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "800"),
+		1, "transfer", "channel-src", "transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("800 on channel-0 should succeed")
+	}
+
+	// 800 on channel-1 — independent channel, separate flow
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "800"),
+		2, "transfer", "channel-src", "transfer", "channel-1",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if !ack2.Success() {
+		t.Fatal("800 on channel-1 should succeed (independent channel)")
+	}
+
+	// Each channel has its own flow
+	flow0, _ := k.GetFlow(ctx, "channel-0")
+	flow1, _ := k.GetFlow(ctx, "channel-1")
+	if flow0.InflowTotal != "800" {
+		t.Errorf("channel-0: expected inflow=800, got %s", flow0.InflowTotal)
+	}
+	if flow1.InflowTotal != "800" {
+		t.Errorf("channel-1: expected inflow=800, got %s", flow1.InflowTotal)
+	}
+
+	// 300 more on channel-0 exceeds its limit (800+300=1100 > 1000)
+	pkt3 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "300"),
+		3, "transfer", "channel-src", "transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack3 := mw.OnRecvPacket(ctx, pkt3, nil)
+	if ack3.Success() {
+		t.Error("channel-0: should reject 800+300=1100 > 1000")
+	}
+
+	// But 200 on channel-1 is still fine (800+200=1000)
+	pkt4 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "200"),
+		4, "transfer", "channel-src", "transfer", "channel-1",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack4 := mw.OnRecvPacket(ctx, pkt4, nil)
+	if !ack4.Success() {
+		t.Error("channel-1: should succeed 800+200=1000 = limit")
+	}
+}
+
+// TestMultiDenom_NativeToken verifies that LGM (ulgm) transfers are correctly
+// rate-limited.
+func TestMultiDenom_NativeToken(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "10000000000",
+		MaxInflowPerEpoch:  "500",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	// Under limit → OK
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "400"),
+		1, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("400 ulgm should succeed (limit 500)")
+	}
+
+	// Over limit → rejected
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData("ulgm", "200"),
+		2, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if ack2.Success() {
+		t.Error("400+200=600 > 500 limit: should reject")
+	}
+}
+
+// TestMultiDenom_IBCDenom verifies that IBC denominations (ibc/hash...) are
+// correctly rate-limited.
+func TestMultiDenom_IBCDenom(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "10000000000",
+		MaxInflowPerEpoch:  "500",
+		TrackedDenom:       "ulgm",
+	})
+
+	inner := &mockIBCModule{recvAck: successAck{}}
+	mw := keeper.NewIBCMiddleware(inner, k)
+
+	ibcDenom := "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"
+
+	// Under limit → OK
+	pkt1 := channeltypes.NewPacket(
+		makeTransferData(ibcDenom, "400"),
+		1, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack1 := mw.OnRecvPacket(ctx, pkt1, nil)
+	if !ack1.Success() {
+		t.Fatal("400 ibc/... should succeed (limit 500)")
+	}
+
+	// Over limit → rejected
+	pkt2 := channeltypes.NewPacket(
+		makeTransferData(ibcDenom, "200"),
+		2, "transfer", "channel-src", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ack2 := mw.OnRecvPacket(ctx, pkt2, nil)
+	if ack2.Success() {
+		t.Error("400+200=600 > 500 limit: IBC denoms should be rate-limited")
+	}
+
+	// Verify flow tracked
+	flow, found := k.GetFlow(ctx, "channel-dest")
+	if !found {
+		t.Fatal("expected flow record")
+	}
+	if flow.InflowTotal != "400" {
+		t.Errorf("expected inflow=400 (first successful), got %s", flow.InflowTotal)
+	}
+}
+
+// ============================================================
+// ICA Rate Limit Integration Tests
+// ============================================================
+
+// TestICA_TransferThroughRateLimit verifies that an ICA-initiated transfer is
+// counted against rate limits (same middleware path as direct transfers).
+func TestICA_TransferThroughRateLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "1000",
+		MaxInflowPerEpoch:  "10000000000",
+		TrackedDenom:       "ulgm",
+	})
+
+	innerW := &mockICS4Wrapper{}
+	w := keeper.NewICS4Wrapper(innerW, k)
+
+	// ICA-initiated transfer (goes through same SendPacket path)
+	seq, err := w.SendPacket(
+		ctx, nil,
+		"transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+		makeTransferData("ulgm", "500"),
+	)
+	if err != nil {
+		t.Fatalf("ICA transfer within limit should succeed: %v", err)
+	}
+	if seq == 0 {
+		t.Error("expected non-zero sequence")
+	}
+
+	// Track outflow via ack (outflow tracked on acknowledgement)
+	innerMod := &mockIBCModule{}
+	mw := keeper.NewIBCMiddleware(innerMod, k)
+
+	packet := channeltypes.NewPacket(
+		makeTransferData("ulgm", "500"),
+		seq, "transfer", "channel-0", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ackBytes := channeltypes.NewResultAcknowledgement([]byte("ok")).Acknowledgement()
+	err = mw.OnAcknowledgementPacket(ctx, packet, ackBytes, nil)
+	if err != nil {
+		t.Fatalf("ack should succeed: %v", err)
+	}
+
+	// Verify outflow tracked
+	flow, found := k.GetFlow(ctx, "channel-0")
+	if !found {
+		t.Fatal("expected flow record")
+	}
+	if flow.OutflowTotal != "500" {
+		t.Errorf("expected outflow=500, got %s", flow.OutflowTotal)
+	}
+}
+
+// TestICA_ExceedsLimit_Rejected verifies that an ICA transfer exceeding the
+// rate limit is rejected at the SendPacket level.
+func TestICA_ExceedsLimit_Rejected(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "500",
+		MaxInflowPerEpoch:  "10000000000",
+		TrackedDenom:       "ulgm",
+	})
+
+	innerW := &mockICS4Wrapper{}
+	w := keeper.NewICS4Wrapper(innerW, k)
+
+	// ICA-initiated transfer exceeding limit
+	_, err := w.SendPacket(
+		ctx, nil,
+		"transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+		makeTransferData("ulgm", "600"),
+	)
+	if err == nil {
+		t.Error("ICA transfer exceeding limit should be rejected")
+	}
+}
+
+// TestICA_AndDirectTransfer_SharedLimit verifies that direct transfers and
+// ICA transfers share the same per-channel rate limit pool.
+func TestICA_AndDirectTransfer_SharedLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	k.SetParams(ctx, types.Params{
+		EpochLengthBlocks:  34272,
+		MaxOutflowPerEpoch: "1000",
+		MaxInflowPerEpoch:  "10000000000",
+		TrackedDenom:       "ulgm",
+	})
+
+	innerW := &mockICS4Wrapper{}
+	w := keeper.NewICS4Wrapper(innerW, k)
+	innerMod := &mockIBCModule{}
+	mw := keeper.NewIBCMiddleware(innerMod, k)
+
+	// Direct transfer: send 800 (80% of 1000 limit)
+	_, err := w.SendPacket(
+		ctx, nil,
+		"transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+		makeTransferData("ulgm", "800"),
+	)
+	if err != nil {
+		t.Fatalf("direct transfer (800) should succeed: %v", err)
+	}
+
+	// Track outflow via ack
+	packet := channeltypes.NewPacket(
+		makeTransferData("ulgm", "800"),
+		1, "transfer", "channel-0", "transfer", "channel-dest",
+		clienttypes.NewHeight(0, 1000), 0,
+	)
+	ackBytes := channeltypes.NewResultAcknowledgement([]byte("ok")).Acknowledgement()
+	err = mw.OnAcknowledgementPacket(ctx, packet, ackBytes, nil)
+	if err != nil {
+		t.Fatalf("ack should succeed: %v", err)
+	}
+
+	// ICA transfer: try 300 (30%) → rejected (800+300=1100 > 1000)
+	_, err = w.SendPacket(
+		ctx, nil,
+		"transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+		makeTransferData("ulgm", "300"),
+	)
+	if err == nil {
+		t.Error("ICA transfer should be rejected: 800+300=1100 > 1000 shared limit")
+	}
+
+	// But 200 fits (800+200=1000)
+	_, err = w.SendPacket(
+		ctx, nil,
+		"transfer", "channel-0",
+		clienttypes.NewHeight(0, 1000), 0,
+		makeTransferData("ulgm", "200"),
+	)
+	if err != nil {
+		t.Errorf("200 should succeed (800+200=1000): %v", err)
+	}
+}

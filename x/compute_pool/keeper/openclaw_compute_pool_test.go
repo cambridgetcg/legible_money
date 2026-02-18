@@ -41,7 +41,7 @@ func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
 		Sender:      addr,
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "1000",
+		PricePerCu:  "1000",
 		StakeAmount: "100000000",
 	})
 	if err != nil {
@@ -53,7 +53,7 @@ func TestOC_COMP1_DuplicateProviderRegistration(t *testing.T) {
 		Sender:      addr,
 		ServiceType: "gpu_compute",
 		Endpoint:    "https://api2.example.com",
-		PricePerCU:  "2000",
+		PricePerCu:  "2000",
 		StakeAmount: "100000000",
 	})
 	if err == nil {

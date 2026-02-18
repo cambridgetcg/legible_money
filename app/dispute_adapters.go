@@ -146,6 +146,11 @@ func (a *StakeQueryAdapter) GetValidatorStake(ctx context.Context, address strin
 	return "0", nil
 }
 
+func (a *StakeQueryAdapter) GetTotalBondedStake(ctx context.Context) (string, error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	return a.keeper.GetTotalBondedStake(sdkCtx), nil
+}
+
 // ---------- VestingKeeper Adapter ----------
 
 // DisputeVestingAdapter adapts the vesting_rewards keeper to the disputes module's

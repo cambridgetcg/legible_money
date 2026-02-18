@@ -11,12 +11,6 @@
 //	verifyCommitment           →  VerifyVoteExtension (vote_extensions.go)
 //	applyBlock()               →  FinalizeBlock
 //
-//	tryProduceBlock()          →  PrepareProposal
-//	validateBlock()            →  ProcessProposal
-//	submitCommitment/Reveal    →  ExtendVote (vote_extensions.go)
-//	verifyCommitment           →  VerifyVoteExtension (vote_extensions.go)
-//	applyBlock()               →  FinalizeBlock
-//
 // Vote Extension Data Flow:
 //  1. ExtendVote: Validators attach commitments/reveals to CometBFT votes
 //  2. PrepareProposal: Proposer collects extensions, creates injection tx
@@ -27,8 +21,6 @@ package app
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,6 +96,12 @@ type InjectedReveal struct {
 	Salt       string `json:"salt"`
 }
 
+// MaxVEXInjectionBytes is the maximum size (in bytes) of a vote extension injection
+// pseudo-tx. This prevents block bloat from oversized injections.
+// With 100 validators × 50 entries/validator × ~200 bytes/entry = ~1MB.
+// We set a 2MB limit for safety margin.
+const MaxVEXInjectionBytes = 2 * 1024 * 1024
+
 // isVoteExtInjectionTx checks if a tx has the vote extension injection prefix.
 func isVoteExtInjectionTx(tx []byte) bool {
 	return len(tx) > len(VoteExtInjectionPrefix) &&
@@ -136,8 +134,19 @@ func decodeVoteExtInjection(tx []byte) (VoteExtInjection, error) {
 // 2. Collect vote extensions from the previous block
 // 3. Inject vote extension data (commitments/reveals) as a pseudo-tx at position 0
 func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
-	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (resp *abci.ResponsePrepareProposal, err error) {
 		logger := ctx.Logger().With("module", "abci", "handler", "PrepareProposal")
+
+		// Panic recovery: a panic in PrepareProposal must not crash the node.
+		// Return an empty proposal so CometBFT selects the next proposer.
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("PANIC in PrepareProposal — returning empty proposal",
+					"height", req.Height, "panic", fmt.Sprintf("%v", r))
+				resp = &abci.ResponsePrepareProposal{Txs: nil}
+				err = nil
+			}
+		}()
 
 		// Emergency halt guard: only allow emergency txs during halt
 		if app.EmergencyKeeper.IsHalted(ctx) {
@@ -179,7 +188,16 @@ func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
 					// next proposer. (PP-CONSENSUS-1 remediation)
 					return nil, fmt.Errorf("critical: vote extension injection encoding failed: %w", err)
 				}
-				txs = append(txs, injBytes)
+
+				// P1-2 FIX: Enforce VEX injection size limit to prevent block bloat.
+				if len(injBytes) > MaxVEXInjectionBytes {
+					logger.Warn("vote extension injection exceeds size limit — dropping",
+						"size", len(injBytes), "max", MaxVEXInjectionBytes)
+					// Drop the injection entirely rather than producing a partial/corrupt one.
+					// The rounds will retry on the next block.
+				} else {
+					txs = append(txs, injBytes)
+				}
 
 				logger.Info("injecting vote extension data",
 					"commitments", len(injection.Commitments),
@@ -217,8 +235,21 @@ func (app *LegibleApp) PrepareProposalHandler() sdk.PrepareProposalHandler {
 // 2. Validate all regular transactions
 // 3. Verify VRF proofs for proposer eligibility
 func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
-	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (resp *abci.ResponseProcessProposal, err error) {
 		logger := ctx.Logger().With("module", "abci", "handler", "ProcessProposal")
+
+		// Panic recovery: a panic in ProcessProposal must not crash the node.
+		// Reject the proposal so the network can try the next proposer.
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("PANIC in ProcessProposal — rejecting proposal",
+					"height", req.Height, "panic", fmt.Sprintf("%v", r))
+				resp = &abci.ResponseProcessProposal{
+					Status: abci.ResponseProcessProposal_REJECT,
+				}
+				err = nil
+			}
+		}()
 
 		// Emergency halt guard: reject proposals containing non-emergency txs
 		if app.EmergencyKeeper.IsHalted(ctx) {
@@ -248,6 +279,14 @@ func (app *LegibleApp) ProcessProposalHandler() sdk.ProcessProposalHandler {
 		for i, txBytes := range req.Txs {
 			// Skip vote extension injection tx (validated separately)
 			if isVoteExtInjectionTx(txBytes) {
+				// P1-2 FIX: Reject oversized VEX injections
+				if len(txBytes) > MaxVEXInjectionBytes {
+					logger.Warn("vote extension injection tx exceeds size limit",
+						"index", i, "size", len(txBytes), "max", MaxVEXInjectionBytes)
+					return &abci.ResponseProcessProposal{
+						Status: abci.ResponseProcessProposal_REJECT,
+					}, nil
+				}
 				// Validate the injection format
 				if _, err := decodeVoteExtInjection(txBytes); err != nil {
 					logger.Warn("invalid vote extension injection tx", "index", i, "err", err)
@@ -374,6 +413,16 @@ func (app *LegibleApp) processVoteExtensions(
 func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 	logger := ctx.Logger().With("module", "abci", "handler", "PreBlocker")
 
+	// Panic recovery: a panic while processing injected VEX data must not
+	// crash the node. The round data is lost for this block but the chain
+	// continues producing blocks.
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("PANIC in ProcessVoteExtInjection — skipping injection",
+				"height", ctx.BlockHeight(), "panic", fmt.Sprintf("%v", r))
+		}
+	}()
+
 	inj, err := decodeVoteExtInjection(data)
 	if err != nil {
 		logger.Error("failed to decode vote extension injection", "err", err)
@@ -386,6 +435,34 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 
 	// Store commitments in keeper state
 	for _, c := range inj.Commitments {
+		// GAP-2 FIX: Re-verify VRF proof before storing each commitment.
+		// VerifyVoteExtension verified proofs when the extension was received, but
+		// a malicious block proposer could construct a fake injection containing
+		// commitments with invalid or fabricated VRF proofs — bypassing selection
+		// verification entirely. Re-checking here closes the proposer-injection gap.
+		if c.VRFOutput == "" || c.VRFProof == "" {
+			logger.Warn("injected commitment missing VRF proof — discarding",
+				"round_id", c.RoundID,
+				"validator", c.Validator,
+			)
+			continue
+		}
+		round, roundFound := app.KnowledgeKeeper.GetVerificationRound(ctx, c.RoundID)
+		if roundFound {
+			if err := app.KnowledgeKeeper.VerifyValidatorVRFSelection(
+				ctx, round, c.Validator, c.VRFOutput, c.VRFProof,
+			); err != nil {
+				logger.Warn("VRF proof re-verification failed for injected commitment — discarding",
+					"round_id", c.RoundID,
+					"validator", c.Validator,
+					"err", err,
+				)
+				continue
+			}
+		}
+		// If round not found, allow storage to proceed — StoreCommitmentInRound
+		// will return ErrRoundNotFound and the loop will skip cleanly.
+
 		commitment := knowledgetypes.VerificationCommitment{
 			Validator:         c.Validator,
 			CommitmentHash:    c.CommitmentHash,
@@ -456,34 +533,13 @@ func (app *LegibleApp) ProcessVoteExtInjection(ctx sdk.Context, data []byte) {
 }
 
 // ComputeCommitmentHash generates a commitment hash for a verification verdict.
-// Uses domain-separated, length-prefixed encoding to prevent second-preimage attacks.
-// hash = SHA-256("LGM.commitment.v1" || len(roundID) || roundID || len(verdict) || verdict || confidence || len(salt) || salt)
+// Delegates to knowledgetypes.ComputeCommitmentHash (canonical implementation).
 func ComputeCommitmentHash(roundID, verdict string, confidence uint64, salt string) string {
-	h := sha256.New()
-	// Domain separation
-	h.Write([]byte("LGM.commitment.v1:"))
-	// Length-prefixed roundID
-	lenBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(roundID)))
-	h.Write(lenBuf)
-	h.Write([]byte(roundID))
-	// Length-prefixed verdict
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(verdict)))
-	h.Write(lenBuf)
-	h.Write([]byte(verdict))
-	// Fixed-size confidence
-	confBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(confBytes, confidence)
-	h.Write(confBytes)
-	// Length-prefixed salt
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(salt)))
-	h.Write(lenBuf)
-	h.Write([]byte(salt))
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return knowledgetypes.ComputeCommitmentHash(roundID, verdict, confidence, salt)
 }
 
 // VerifyCommitmentHash checks that a reveal matches its prior commitment.
+// Delegates to knowledgetypes.VerifyCommitmentHash (canonical implementation).
 func VerifyCommitmentHash(commitmentHash, roundID, verdict string, confidence uint64, salt string) bool {
-	computed := ComputeCommitmentHash(roundID, verdict, confidence, salt)
-	return computed == commitmentHash
+	return knowledgetypes.VerifyCommitmentHash(commitmentHash, roundID, verdict, confidence, salt)
 }

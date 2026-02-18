@@ -19,6 +19,19 @@ func (p *Params) Validate() error {
 	return nil
 }
 
+// Gas limit constants.
+const (
+	// MaxContractGasLimit is the maximum VM gas a single contract call or scheduled
+	// execution may consume. Prevents users from setting GasLimit to 2^64-1.
+	// Governance can override this by adding it to Params in a future proto update.
+	MaxContractGasLimit uint64 = 10_000_000
+
+	// MaxScheduledGasPerBlock is the aggregate VM gas budget for all scheduled
+	// contract executions within a single BeginBlock. Prevents block production
+	// stalls from unbounded scheduled execution. ~15% of BlockGasLimit (33.3M).
+	MaxScheduledGasPerBlock uint64 = 5_000_000
+)
+
 // --- Extension methods for proto-generated message types ---
 
 // ValidateBasic performs stateless validation on MsgDeployContract.
@@ -48,6 +61,9 @@ func (m *MsgCallContract) ValidateBasic() error {
 	}
 	if m.GasLimit == 0 {
 		return fmt.Errorf("gas limit must be positive")
+	}
+	if m.GasLimit > MaxContractGasLimit {
+		return fmt.Errorf("gas limit %d exceeds maximum %d", m.GasLimit, MaxContractGasLimit)
 	}
 	return nil
 }
@@ -106,6 +122,9 @@ func (m *MsgScheduleContract) ValidateBasic() error {
 	}
 	if m.MaxGas == 0 {
 		return fmt.Errorf("max_gas must be positive")
+	}
+	if m.MaxGas > MaxContractGasLimit {
+		return fmt.Errorf("max_gas %d exceeds maximum %d", m.MaxGas, MaxContractGasLimit)
 	}
 	return nil
 }

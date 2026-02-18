@@ -690,7 +690,7 @@ func NewLegibleApp(
 		appCodec,
 		keys[icacontrollertypes.StoreKey],
 		paramstypes.Subspace{},
-		app.IBCKeeper.ChannelKeeper,
+		rateLimitICS4Wrapper,           // ics4Wrapper — routes ICA outbound through rate limit (P0-1 fix)
 		app.IBCKeeper.ChannelKeeper,
 		app.IBCKeeper.PortKeeper,
 		app.ScopedICAControllerKeeper,
@@ -1038,11 +1038,14 @@ func NewLegibleApp(
 	rateLimitTransferModule := ibcratelimitkeeper.NewIBCMiddleware(feeTransferModule, app.IBCRateLimitKeeper)
 	ibcRouter.AddRoute(ibctransfertypes.ModuleName, rateLimitTransferModule)
 
-	// ICA routes
+	// ICA routes — wrapped through rate limit middleware (P0-1 fix: ICA packets
+	// are now subject to rate limiting on both inbound and outbound paths)
 	icaControllerIBCModule := icacontroller.NewIBCMiddleware(nil, app.ICAControllerKeeper)
+	rateLimitICAController := ibcratelimitkeeper.NewIBCMiddleware(icaControllerIBCModule, app.IBCRateLimitKeeper)
 	icaHostIBCModule := icahost.NewIBCModule(app.ICAHostKeeper)
-	ibcRouter.AddRoute(icacontrollertypes.SubModuleName, icaControllerIBCModule)
-	ibcRouter.AddRoute(icahosttypes.SubModuleName, icaHostIBCModule)
+	rateLimitICAHost := ibcratelimitkeeper.NewIBCMiddleware(icaHostIBCModule, app.IBCRateLimitKeeper)
+	ibcRouter.AddRoute(icacontrollertypes.SubModuleName, rateLimitICAController)
+	ibcRouter.AddRoute(icahosttypes.SubModuleName, rateLimitICAHost)
 
 	// Custom IBC modules (Phase 2: knowledge oracle IBC module)
 	// ibcRouter.AddRoute("knowledge", knowledgeIBCModule)

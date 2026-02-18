@@ -165,11 +165,19 @@ func (am AppModule) tallyAndResolveLIP(ctx sdk.Context, lip types.LIP, params ty
 	if totalWeight == "0" {
 		lip.Stage = string(types.StageRejected)
 	} else {
-		supportBps := bpsFraction(lip.SupportWeight, totalWeight)
-		if supportBps >= params.SupportThresholdBps {
-			lip.Stage = string(types.StageAccepted)
-		} else {
+		// Quorum check: totalWeight must meet QuorumThresholdBps of total bonded stake
+		quorumMet := am.checkQuorum(ctx, totalWeight, params.QuorumThresholdBps)
+		lip.QuorumMet = quorumMet
+
+		if !quorumMet {
 			lip.Stage = string(types.StageRejected)
+		} else {
+			supportBps := bpsFraction(lip.SupportWeight, totalWeight)
+			if supportBps >= params.SupportThresholdBps {
+				lip.Stage = string(types.StageAccepted)
+			} else {
+				lip.Stage = string(types.StageRejected)
+			}
 		}
 	}
 	lip.UpdatedAtBlock = uint64(ctx.BlockHeight())
@@ -220,13 +228,21 @@ func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.Disb
 	if totalWeight == "0" {
 		disb.Stage = string(types.DisbStageRejected)
 	} else {
-		supportBps := bpsFraction(disb.SupportWeight, totalWeight)
-		if supportBps >= params.DisbursementSupportBps {
-			disb.Stage = string(types.DisbStageApproved)
-			disb.ApprovedAtBlock = uint64(ctx.BlockHeight())
-			disb.TimelockExpiry = disb.ApprovedAtBlock + params.DisbursementTimelockBlocks
-		} else {
+		// Quorum check: totalWeight must meet DisbursementQuorumBps of total bonded stake
+		quorumMet := am.checkQuorum(ctx, totalWeight, params.DisbursementQuorumBps)
+		disb.QuorumMet = quorumMet
+
+		if !quorumMet {
 			disb.Stage = string(types.DisbStageRejected)
+		} else {
+			supportBps := bpsFraction(disb.SupportWeight, totalWeight)
+			if supportBps >= params.DisbursementSupportBps {
+				disb.Stage = string(types.DisbStageApproved)
+				disb.ApprovedAtBlock = uint64(ctx.BlockHeight())
+				disb.TimelockExpiry = disb.ApprovedAtBlock + params.DisbursementTimelockBlocks
+			} else {
+				disb.Stage = string(types.DisbStageRejected)
+			}
 		}
 	}
 	am.keeper.SetDisbursement(ctx, disb)
@@ -238,6 +254,27 @@ func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.Disb
 			sdk.NewAttribute("stage", string(disb.Stage)),
 		),
 	)
+}
+
+// checkQuorum checks whether the total voting power meets the required quorum
+// threshold (in basis points) of total bonded stake. Returns true if quorum is
+// met, or if the staking keeper is unavailable (nil-safe degradation).
+func (am AppModule) checkQuorum(ctx sdk.Context, totalVotingPower string, quorumBps uint64) bool {
+	if quorumBps == 0 {
+		return true // no quorum requirement
+	}
+	sk := am.keeper.GetStakingKeeper()
+	if sk == nil {
+		return true // no staking keeper wired — skip quorum check
+	}
+	totalBonded, err := sk.GetTotalBondedStake(ctx)
+	if err != nil || totalBonded == "" || totalBonded == "0" {
+		// If total bonded stake is zero or unavailable, quorum cannot be met
+		return false
+	}
+	// quorum met if: totalVotingPower * 10000 / totalBondedStake >= quorumBps
+	actualBps := bpsFraction(totalVotingPower, totalBonded)
+	return actualBps >= quorumBps
 }
 
 // --- BigInt string helpers (using math/big to avoid uint64 overflow) ---

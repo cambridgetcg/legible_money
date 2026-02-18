@@ -125,30 +125,15 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic: resolve expired disputes.
+// BeginBlock executes begin-block logic: auto-settle expired closing and disputed channels.
 func (am AppModule) BeginBlock(goCtx context.Context) error {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	currentBlock := uint64(ctx.BlockHeight())
 
-	// Resolve expired disputes
-	disputes := am.keeper.GetExpiredDisputes(ctx, currentBlock)
-	for _, d := range disputes {
-		ch, found := am.keeper.GetChannel(ctx, d.ChannelId)
-		if !found {
-			continue
-		}
-
-		// Accept disputed state as final
-		ch.Spent = d.DisputedSpent
-		ch.Nonce = d.DisputedNonce
-		ch.Status = types.ChannelStatusOpen // revert to open with updated state
-		ch.DisputeDeadline = 0
-		am.keeper.SetChannel(ctx, ch)
-
-		// Mark dispute as resolved
-		d.Resolved = true
-		d.Resolution = "timeout"
-		am.keeper.SetDispute(ctx, d)
+	// Auto-settle channels past their dispute/closing deadline
+	expiredChannels := am.keeper.GetExpiredChannels(ctx, currentBlock)
+	for _, ch := range expiredChannels {
+		am.keeper.AutoSettleChannel(ctx, ch)
 	}
 
 	return nil

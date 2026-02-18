@@ -374,6 +374,36 @@ func (k Keeper) CountContractSchedules(ctx sdk.Context, contractAddress string) 
 	return count
 }
 
+// --- Schedule Capabilities ---
+
+// SetScheduleCapabilities stores the caller's capabilities at schedule creation time.
+// Used by P1-2 to prevent privilege escalation in scheduled executions.
+func (k Keeper) SetScheduleCapabilities(ctx sdk.Context, scheduleId string, caps types.SessionCapabilities) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(caps)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal schedule capabilities: %v", err))
+	}
+	if err := store.Set(types.ScheduleCapabilityKey(scheduleId), bz); err != nil {
+		panic(fmt.Sprintf("failed to set schedule capabilities: %v", err))
+	}
+}
+
+// GetScheduleCapabilities retrieves the stored capabilities for a schedule.
+// Returns false if no capabilities are stored (pre-fix schedules).
+func (k Keeper) GetScheduleCapabilities(ctx sdk.Context, scheduleId string) (types.SessionCapabilities, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.ScheduleCapabilityKey(scheduleId))
+	if err != nil || bz == nil {
+		return types.SessionCapabilities{}, false
+	}
+	var caps types.SessionCapabilities
+	if err := json.Unmarshal(bz, &caps); err != nil {
+		return types.SessionCapabilities{}, false
+	}
+	return caps, true
+}
+
 // --- Gas Schedule ---
 
 // SetGasSchedule stores a governance gas schedule override.

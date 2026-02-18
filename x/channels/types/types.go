@@ -12,10 +12,9 @@ import (
 
 const (
 	ChannelStatusOpen     = "open"
-	ChannelStatusClosing  = "closing"
-	ChannelStatusDisputed = "disputed"
-	ChannelStatusSettled  = "settled"
-	ChannelStatusClosed   = "closed"
+	ChannelStatusClosing  = "closing"  // unilateral close challenge period
+	ChannelStatusDisputed = "disputed" // dispute challenge period
+	ChannelStatusClosed   = "closed"   // terminal state
 )
 
 // --- Params Validation ---

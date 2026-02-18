@@ -38,6 +38,11 @@ var (
 
 	// RedelegationCooldownPrefix tracks last redelegation height per delegator
 	RedelegationCooldownPrefix = []byte{0x08}
+
+	// ValidatorDelegationIndexPrefix is the reverse index: validator → delegators.
+	// P1-1 fix: DelegationsByValidatorPrefix was broken (used DelegationKeyPrefix
+	// which is keyed by delegator, not validator).
+	ValidatorDelegationIndexPrefix = []byte{0x09}
 )
 
 // RedelegationCooldownBlocks is the minimum gap between redelegations for a
@@ -68,9 +73,18 @@ func DelegationKey(delegatorAddr, validatorAddr string) []byte {
 	return append(key, []byte(validatorAddr)...)
 }
 
-// DelegationsByValidatorPrefix returns the prefix for all delegations to a validator
+// DelegationsByValidatorPrefix returns the prefix for all delegations to a validator.
+// P1-1 fix: Uses the reverse index (ValidatorDelegationIndexPrefix) instead of
+// DelegationKeyPrefix, which is keyed by delegator address.
 func DelegationsByValidatorPrefix(validatorAddr string) []byte {
-	return append(DelegationKeyPrefix, []byte(validatorAddr)...)
+	return append(ValidatorDelegationIndexPrefix, append([]byte(validatorAddr), 0x00)...)
+}
+
+// ValidatorDelegationIndexKey returns the store key for a validator→delegator index entry.
+func ValidatorDelegationIndexKey(validatorAddr, delegatorAddr string) []byte {
+	key := append(ValidatorDelegationIndexPrefix, []byte(validatorAddr)...)
+	key = append(key, 0x00) // separator
+	return append(key, []byte(delegatorAddr)...)
 }
 
 // UnbondingKey returns the store key for an unbonding entry

@@ -9,7 +9,7 @@ import (
 // qualification for domain metrics) implement this interface and register via
 // Keeper.SetVerificationHooks.
 type VerificationHooks interface {
-	AfterVerificationCompleted(ctx sdk.Context, validatorAddr, domain string, correct bool) error
+	AfterVerificationCompleted(ctx sdk.Context, validatorAddr, domain string, correct, contested bool) error
 }
 
 // MultiVerificationHooks composes multiple hook implementations into one.
@@ -23,9 +23,9 @@ func NewMultiVerificationHooks(hooks ...VerificationHooks) MultiVerificationHook
 
 // AfterVerificationCompleted calls AfterVerificationCompleted on all composed hooks.
 // Errors are logged but do not prevent subsequent hooks from being called.
-func (h MultiVerificationHooks) AfterVerificationCompleted(ctx sdk.Context, validatorAddr, domain string, correct bool) error {
+func (h MultiVerificationHooks) AfterVerificationCompleted(ctx sdk.Context, validatorAddr, domain string, correct, contested bool) error {
 	for _, hook := range h {
-		if err := hook.AfterVerificationCompleted(ctx, validatorAddr, domain, correct); err != nil {
+		if err := hook.AfterVerificationCompleted(ctx, validatorAddr, domain, correct, contested); err != nil {
 			ctx.Logger().Error("verification hook failed",
 				"validator", validatorAddr,
 				"domain", domain,

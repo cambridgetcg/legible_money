@@ -173,8 +173,18 @@ func (k Keeper) StoreRevealInRound(
 	}
 
 	// Verify the validator committed
-	if _, hasCommitment := round.Commitments[reveal.Validator]; !hasCommitment {
+	commitment, hasCommitment := round.Commitments[reveal.Validator]
+	if !hasCommitment {
 		return fmt.Errorf("%w: %s", types.ErrNoCommitment, reveal.Validator)
+	}
+
+	// P0-2 FIX: Verify the reveal data produces the correct commitment hash.
+	// Without this check, a malicious proposer could tamper with reveal data
+	// (e.g., change verdict from "accept" to "reject") in the VEX injection tx.
+	// VerifyVoteExtension checks this for the original extension, but cannot
+	// protect against proposer tampering of the injection tx content.
+	if !types.VerifyCommitmentHash(commitment.CommitmentHash, roundID, reveal.Verdict, reveal.Confidence, reveal.Salt) {
+		return fmt.Errorf("reveal does not match commitment hash for %s in round %s", reveal.Validator, roundID)
 	}
 
 	if existing, exists := round.Reveals[reveal.Validator]; exists {

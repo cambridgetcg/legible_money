@@ -97,13 +97,17 @@ func (lgd LGMGasDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool,
 			"tx gas limit %d exceeds per-tx limit %d", gasLimit, TxGasLimit)
 	}
 
-	// Calculate minimum required gas from message types
+	// Calculate minimum required gas from message types.
+	// ANTE P1-2 FIX: Saturating addition to prevent uint64 overflow.
 	msgs := tx.GetMsgs()
 	var totalRequiredGas uint64
 	for _, msg := range msgs {
 		msgType := sdk.MsgTypeURL(msg)
 		requiredGas := lookupMsgGas(msgType)
 		totalRequiredGas += requiredGas
+		if totalRequiredGas < requiredGas { // overflow detected
+			return ctx, errors.Wrap(sdkerrors.ErrOutOfGas, "gas requirement overflow")
+		}
 	}
 
 	if totalRequiredGas < MinGasLimit {

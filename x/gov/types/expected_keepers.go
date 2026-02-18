@@ -9,6 +9,9 @@ import (
 // StakingKeeper defines the expected staking module keeper interface.
 type StakingKeeper interface {
 	GetValidatorStake(ctx context.Context, address string) (string, error)
+	// GetTotalBondedStake returns the sum of TotalStake across all active validators.
+	// Used for quorum calculation during vote tallying.
+	GetTotalBondedStake(ctx context.Context) (string, error)
 }
 
 // BankKeeper defines the expected bank module keeper interface for token transfers.

@@ -126,12 +126,7 @@ func (im IBCMiddleware) OnRecvPacket(
 		return im.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
-	// Only rate-limit the tracked denom
-	if data.Denom != params.TrackedDenom {
-		return im.app.OnRecvPacket(ctx, packet, relayer)
-	}
-
-	// Parse the amount
+	// Parse the amount — all denoms are rate-limited (aggregate per channel)
 	amount, ok := new(big.Int).SetString(data.Amount, 10)
 	if !ok || amount.Sign() <= 0 {
 		return im.app.OnRecvPacket(ctx, packet, relayer)
@@ -140,18 +135,15 @@ func (im IBCMiddleware) OnRecvPacket(
 	// Get (or reset) the flow record for this channel
 	flow := im.keeper.GetOrResetFlow(ctx, packet.GetDestChannel())
 
-	// Check inflow limit
+	// Check inflow limit using effective flow (sliding window)
 	maxInflow, ok := new(big.Int).SetString(params.MaxInflowPerEpoch, 10)
 	if !ok {
 		maxInflow = new(big.Int) // zero — block all if misconfigured
 	}
 
-	currentInflow, ok := new(big.Int).SetString(flow.InflowTotal, 10)
-	if !ok {
-		currentInflow = new(big.Int)
-	}
+	effectiveInflow := im.keeper.GetEffectiveInflow(ctx, packet.GetDestChannel())
 
-	newInflow := new(big.Int).Add(currentInflow, amount)
+	newInflow := new(big.Int).Add(effectiveInflow, amount)
 	if newInflow.Cmp(maxInflow) > 0 {
 		// Inflow limit exceeded — return error ack without processing
 		return channeltypes.NewErrorAcknowledgement(types.ErrInflowExceeded)
@@ -162,7 +154,11 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	// Only track the inflow if the inner module accepted the packet (successful ack)
 	if ack != nil && ack.Success() {
-		flow.InflowTotal = newInflow.String()
+		currentInflow, ok := new(big.Int).SetString(flow.InflowTotal, 10)
+		if !ok {
+			currentInflow = new(big.Int)
+		}
+		flow.InflowTotal = new(big.Int).Add(currentInflow, amount).String()
 		im.keeper.SetFlow(ctx, flow)
 	}
 
@@ -192,17 +188,12 @@ func (im IBCMiddleware) OnAcknowledgementPacket(
 		return nil // transfer failed on counterparty, no outflow to track
 	}
 
-	params := im.keeper.GetParams(ctx)
-
 	var data transferPacketData
 	if err := json.Unmarshal(packet.GetData(), &data); err != nil {
 		return nil
 	}
 
-	if data.Denom != params.TrackedDenom {
-		return nil
-	}
-
+	// All denoms are tracked (aggregate per channel)
 	amount, ok := new(big.Int).SetString(data.Amount, 10)
 	if !ok || amount.Sign() <= 0 {
 		return nil
@@ -265,31 +256,24 @@ func (w ICS4Wrapper) SendPacket(
 		return w.channel.SendPacket(ctx, chanCap, sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, data)
 	}
 
-	// Only rate-limit the tracked denom
-	if packetData.Denom != params.TrackedDenom {
-		return w.channel.SendPacket(ctx, chanCap, sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, data)
-	}
-
+	// All denoms are rate-limited (aggregate per channel)
 	amount, ok := new(big.Int).SetString(packetData.Amount, 10)
 	if !ok || amount.Sign() <= 0 {
 		return w.channel.SendPacket(ctx, chanCap, sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, data)
 	}
 
-	// Get (or reset) the flow record for this source channel
-	flow := w.keeper.GetOrResetFlow(ctx, sourceChannel)
+	// Ensure flow record exists (triggers epoch reset if needed)
+	_ = w.keeper.GetOrResetFlow(ctx, sourceChannel)
 
-	// Check outflow limit
+	// Check outflow limit using effective flow (sliding window)
 	maxOutflow, ok := new(big.Int).SetString(params.MaxOutflowPerEpoch, 10)
 	if !ok {
 		maxOutflow = new(big.Int) // zero — block all if misconfigured
 	}
 
-	currentOutflow, ok := new(big.Int).SetString(flow.OutflowTotal, 10)
-	if !ok {
-		currentOutflow = new(big.Int)
-	}
+	effectiveOutflow := w.keeper.GetEffectiveOutflow(ctx, sourceChannel)
 
-	newOutflow := new(big.Int).Add(currentOutflow, amount)
+	newOutflow := new(big.Int).Add(effectiveOutflow, amount)
 	if newOutflow.Cmp(maxOutflow) > 0 {
 		return 0, types.ErrOutflowExceeded
 	}

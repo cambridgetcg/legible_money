@@ -112,6 +112,7 @@ func (m msgServer) OpenChannel(goCtx context.Context, msg *types.MsgOpenChannel)
 }
 
 // UpdateChannel submits an off-chain channel state update.
+// P0-1 FIX: Verifies counterparty Ed25519 signature over canonical payload.
 func (m msgServer) UpdateChannel(goCtx context.Context, msg *types.MsgUpdateChannel) (*types.MsgUpdateChannelResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -126,6 +127,16 @@ func (m msgServer) UpdateChannel(goCtx context.Context, msg *types.MsgUpdateChan
 	// Verify sender is payer or provider
 	if msg.Sender != ch.Payer && msg.Sender != ch.Provider {
 		return nil, types.ErrNotChannelParty
+	}
+
+	// P0-1: Verify counterparty signature over canonical payload
+	counterparty := ch.Provider
+	if msg.Sender == ch.Provider {
+		counterparty = ch.Payer
+	}
+	payload := types.ChannelSigningPayload("update", ctx.ChainID(), msg.ChannelId, msg.Sequence, msg.NewBalanceReceiver)
+	if err := types.VerifyPackedSignature(payload, msg.Signature, counterparty); err != nil {
+		return nil, types.ErrInvalidSignature.Wrap(err.Error())
 	}
 
 	// Verify sequence is higher
@@ -162,6 +173,7 @@ func (m msgServer) UpdateChannel(goCtx context.Context, msg *types.MsgUpdateChan
 }
 
 // DisputeChannel opens a dispute on a channel.
+// P0-1 FIX: Verifies counterparty signature proving they agreed to the claimed state.
 func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeChannel) (*types.MsgDisputeChannelResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := m.Keeper.GetParams(ctx)
@@ -177,6 +189,16 @@ func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeCh
 	// Verify disputer is payer or provider
 	if msg.Disputer != ch.Payer && msg.Disputer != ch.Provider {
 		return nil, types.ErrNotChannelParty
+	}
+
+	// P0-1: Verify counterparty signature proving they agreed to this state
+	counterparty := ch.Provider
+	if msg.Disputer == ch.Provider {
+		counterparty = ch.Payer
+	}
+	payload := types.ChannelSigningPayload("dispute", ctx.ChainID(), msg.ChannelId, msg.Sequence, msg.ClaimedBalanceReceiver)
+	if err := types.VerifyPackedSignature(payload, msg.ProofSignature, counterparty); err != nil {
+		return nil, types.ErrInvalidSignature.Wrap(err.Error())
 	}
 
 	// Validate claimed balance: must be non-negative and <= deposited
@@ -227,6 +249,11 @@ func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeCh
 }
 
 // SettleChannel settles a channel (distributes funds).
+//
+// State machine:
+//   - open    → closing (challenge period starts, no fund transfer)
+//   - closing → closed  (after deadline, funds distributed)
+//   - disputed → closed (after deadline, disputed state used, funds distributed)
 func (m msgServer) SettleChannel(goCtx context.Context, msg *types.MsgSettleChannel) (*types.MsgSettleChannelResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -240,22 +267,43 @@ func (m msgServer) SettleChannel(goCtx context.Context, msg *types.MsgSettleChan
 		return nil, types.ErrNotChannelParty
 	}
 
-	if ch.Status == types.ChannelStatusClosed || ch.Status == types.ChannelStatusSettled {
+	if ch.Status == types.ChannelStatusClosed {
 		return nil, types.ErrChannelAlreadyClosed
 	}
 
-	// If disputed, check deadline passed
+	// Open → start closing challenge period (unilateral close initiation)
+	if ch.Status == types.ChannelStatusOpen {
+		params := m.Keeper.GetParams(ctx)
+		ch.Status = types.ChannelStatusClosing
+		ch.DisputeDeadline = uint64(ctx.BlockHeight()) + params.DisputePeriodBlocks
+		m.Keeper.SetChannel(ctx, ch)
+
+		ctx.EventManager().EmitEvent(sdk.NewEvent(
+			"channel_closing",
+			sdk.NewAttribute("channel_id", msg.ChannelId),
+			sdk.NewAttribute("initiator", msg.Authority),
+			sdk.NewAttribute("deadline", fmt.Sprintf("%d", ch.DisputeDeadline)),
+		))
+
+		return &types.MsgSettleChannelResponse{
+			AmountToSender:   "0",
+			AmountToReceiver: "0",
+		}, nil
+	}
+
+	// Closing or disputed → check deadline passed
+	if uint64(ctx.BlockHeight()) <= ch.DisputeDeadline {
+		return nil, types.ErrDisputePeriodActive
+	}
+
+	// If disputed, resolve dispute and use disputed state
 	if ch.Status == types.ChannelStatusDisputed {
-		if uint64(ctx.BlockHeight()) <= ch.DisputeDeadline {
-			return nil, types.ErrDisputePeriodActive
-		}
-		// Resolve dispute -- use disputed state
 		dispute, hasDispute := m.Keeper.GetDispute(ctx, ch.ChannelId)
 		if hasDispute && !dispute.Resolved {
 			ch.Spent = dispute.DisputedSpent
 			ch.Nonce = dispute.DisputedNonce
 			dispute.Resolved = true
-			dispute.Resolution = "disputed_state_accepted" // disputer's claimed state used for settlement
+			dispute.Resolution = "disputed_state_accepted"
 			m.Keeper.SetDispute(ctx, dispute)
 		}
 	}
@@ -310,6 +358,7 @@ func (m msgServer) SettleChannel(goCtx context.Context, msg *types.MsgSettleChan
 }
 
 // CloseChannel cooperatively closes a channel.
+// P0-1 FIX: Requires counterparty signature proving both parties agree on final state.
 func (m msgServer) CloseChannel(goCtx context.Context, msg *types.MsgCloseChannel) (*types.MsgCloseChannelResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -324,6 +373,16 @@ func (m msgServer) CloseChannel(goCtx context.Context, msg *types.MsgCloseChanne
 	// Verify closer is payer or provider
 	if msg.Closer != ch.Payer && msg.Closer != ch.Provider {
 		return nil, types.ErrNotChannelParty
+	}
+
+	// P0-1: Verify counterparty signature over canonical payload
+	counterparty := ch.Provider
+	if msg.Closer == ch.Provider {
+		counterparty = ch.Payer
+	}
+	payload := types.ChannelSigningPayload("close", ctx.ChainID(), msg.ChannelId, msg.Sequence, msg.FinalBalanceReceiver)
+	if err := types.VerifyPackedSignature(payload, msg.CounterpartySignature, counterparty); err != nil {
+		return nil, types.ErrInvalidSignature.Wrap(err.Error())
 	}
 
 	// Use final balance receiver as spent amount — reject negative values
@@ -433,6 +492,7 @@ func (m msgServer) DepositChannel(goCtx context.Context, msg *types.MsgDepositCh
 }
 
 // UpdateState submits an off-chain state update using the legacy message format.
+// P0-1 FIX: Verifies both payer and provider signatures over canonical payload.
 func (m msgServer) UpdateState(goCtx context.Context, msg *types.MsgUpdateState) (*types.MsgUpdateStateResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -447,6 +507,15 @@ func (m msgServer) UpdateState(goCtx context.Context, msg *types.MsgUpdateState)
 	// Verify sender is payer or provider
 	if msg.Sender != ch.Payer && msg.Sender != ch.Provider {
 		return nil, types.ErrNotChannelParty
+	}
+
+	// P0-1: Verify both payer and provider signatures
+	payload := types.ChannelSigningPayload("state", ctx.ChainID(), msg.ChannelId, msg.Update.Nonce, msg.Update.Spent)
+	if err := types.VerifyHexPackedSignature(payload, msg.Update.PayerSignature, ch.Payer); err != nil {
+		return nil, types.ErrInvalidSignature.Wrap("payer: " + err.Error())
+	}
+	if err := types.VerifyHexPackedSignature(payload, msg.Update.ProviderSignature, ch.Provider); err != nil {
+		return nil, types.ErrInvalidSignature.Wrap("provider: " + err.Error())
 	}
 
 	// Verify nonce is higher
@@ -550,7 +619,6 @@ func (m msgServer) ClaimExpired(goCtx context.Context, msg *types.MsgClaimExpire
 
 	return &types.MsgClaimExpiredResponse{RefundedAmount: payerRefund.String()}, nil
 }
-
 
 // UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
 func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {

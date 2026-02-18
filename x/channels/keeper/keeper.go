@@ -160,6 +160,79 @@ func (k Keeper) SpendFromChannel(goCtx context.Context, channelId string, amount
 	return nil
 }
 
+// GetExpiredChannels returns channels in closing or disputed status past their deadline.
+func (k Keeper) GetExpiredChannels(ctx sdk.Context, currentBlock uint64) []types.PaymentChannel {
+	var channels []types.PaymentChannel
+	k.IterateChannels(ctx, func(ch types.PaymentChannel) bool {
+		if (ch.Status == types.ChannelStatusClosing || ch.Status == types.ChannelStatusDisputed) &&
+			ch.DisputeDeadline > 0 && currentBlock > ch.DisputeDeadline {
+			channels = append(channels, ch)
+		}
+		return false
+	})
+	return channels
+}
+
+// AutoSettleChannel distributes funds and closes a channel that has passed its deadline.
+// For disputed channels, uses the disputed state. For closing channels, uses the last agreed state.
+func (k Keeper) AutoSettleChannel(ctx sdk.Context, ch types.PaymentChannel) {
+	deposited, _ := new(big.Int).SetString(ch.Deposited, 10)
+	spent, _ := new(big.Int).SetString(ch.Spent, 10)
+	if spent == nil {
+		spent = new(big.Int)
+	}
+
+	// If disputed, resolve dispute and use disputed state
+	if ch.Status == types.ChannelStatusDisputed {
+		dispute, hasDispute := k.GetDispute(ctx, ch.ChannelId)
+		if hasDispute && !dispute.Resolved {
+			disputedSpent, ok := new(big.Int).SetString(dispute.DisputedSpent, 10)
+			if ok {
+				spent = disputedSpent
+			}
+			ch.Spent = dispute.DisputedSpent
+			ch.Nonce = dispute.DisputedNonce
+			dispute.Resolved = true
+			dispute.Resolution = "auto_settled"
+			k.SetDispute(ctx, dispute)
+		}
+	}
+
+	senderRefund := new(big.Int).Sub(deposited, spent)
+	receiverPayout := new(big.Int).Set(spent)
+
+	// Transfer from module to payer (refund)
+	if senderRefund.Sign() > 0 && k.bankKeeper != nil {
+		payerAddr, err := sdk.AccAddressFromBech32(ch.Payer)
+		if err == nil {
+			refundCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(senderRefund)))
+			_ = k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, payerAddr, refundCoins)
+		}
+	}
+
+	// Transfer from module to provider (payout)
+	if receiverPayout.Sign() > 0 && k.bankKeeper != nil {
+		providerAddr, err := sdk.AccAddressFromBech32(ch.Provider)
+		if err == nil {
+			payoutCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(receiverPayout)))
+			_ = k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, providerAddr, payoutCoins)
+		}
+	}
+
+	ch.Status = types.ChannelStatusClosed
+	ch.DisputeDeadline = 0
+	available := new(big.Int).Sub(deposited, spent)
+	ch.Available = available.String()
+	k.SetChannel(ctx, ch)
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		"auto_settle_channel",
+		sdk.NewAttribute("channel_id", ch.ChannelId),
+		sdk.NewAttribute("amount_to_payer", senderRefund.String()),
+		sdk.NewAttribute("amount_to_provider", receiverPayout.String()),
+	))
+}
+
 // ExportGenesisJSON exports genesis as raw JSON.
 func (k Keeper) ExportGenesisJSON(ctx sdk.Context) json.RawMessage {
 	gs := k.ExportGenesis(ctx)

@@ -166,6 +166,21 @@ func (k Keeper) IterateValidators(ctx sdk.Context, cb func(types.LegibleValidato
 	}
 }
 
+// GetTotalBondedStake returns the sum of TotalStake across all active validators.
+func (k Keeper) GetTotalBondedStake(ctx sdk.Context) string {
+	total := new(big.Int)
+	k.IterateValidators(ctx, func(v types.LegibleValidator) bool {
+		if v.IsActive && v.TotalStake != "" {
+			stake := new(big.Int)
+			if _, ok := stake.SetString(v.TotalStake, 10); ok {
+				total.Add(total, stake)
+			}
+		}
+		return false
+	})
+	return total.String()
+}
+
 // GetActiveValidatorSet returns all active validators
 func (k Keeper) GetActiveValidatorSet(ctx sdk.Context) []types.LegibleValidator {
 	var validators []types.LegibleValidator
@@ -194,7 +209,7 @@ func (k Keeper) CountBlockProducers(ctx sdk.Context) uint32 {
 
 // --- Delegation Operations ---
 
-// SetDelegation stores a delegation
+// SetDelegation stores a delegation and maintains the validator→delegator reverse index.
 func (k Keeper) SetDelegation(ctx sdk.Context, delegation types.Delegation) error {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := proto.Marshal(&delegation)
@@ -203,7 +218,13 @@ func (k Keeper) SetDelegation(ctx sdk.Context, delegation types.Delegation) erro
 	}
 
 	key := types.DelegationKey(delegation.DelegatorAddress, delegation.ValidatorAddress)
-	return store.Set(key, bz)
+	if err := store.Set(key, bz); err != nil {
+		return err
+	}
+
+	// P1-1 fix: Maintain reverse index (validator → delegator)
+	indexKey := types.ValidatorDelegationIndexKey(delegation.ValidatorAddress, delegation.DelegatorAddress)
+	return store.Set(indexKey, []byte{1})
 }
 
 // GetDelegation retrieves a delegation
@@ -224,34 +245,51 @@ func (k Keeper) GetDelegation(ctx sdk.Context, delegatorAddr, validatorAddr stri
 	return delegation, true
 }
 
-// GetDelegationsForValidator returns all delegations to a validator
+// GetDelegationsForValidator returns all delegations to a validator.
+// P1-1 fix: Uses the reverse index (0x09 prefix) to find delegator addresses,
+// then looks up the actual delegation records from the primary store.
 func (k Keeper) GetDelegationsForValidator(ctx sdk.Context, validatorAddr string) []types.Delegation {
 	store := k.storeService.OpenKVStore(ctx)
 	prefix := types.DelegationsByValidatorPrefix(validatorAddr)
 	iterator, err := store.Iterator(prefix, prefixEndBytes(prefix))
 	if err != nil {
-		k.Logger(ctx).Error("failed to create delegation iterator", "validator", validatorAddr, "error", err)
+		k.Logger(ctx).Error("failed to create delegation index iterator", "validator", validatorAddr, "error", err)
 		return nil
 	}
 	defer iterator.Close()
 
 	var delegations []types.Delegation
+	// The index key format is: [0x09] + validatorAddr + [0x00] + delegatorAddr
+	// We need to extract the delegatorAddr suffix after the separator.
+	prefixLen := len(prefix)
 	for ; iterator.Valid(); iterator.Next() {
-		var delegation types.Delegation
-		if err := proto.Unmarshal(iterator.Value(), &delegation); err != nil {
+		key := iterator.Key()
+		if len(key) <= prefixLen {
 			continue
 		}
-		delegations = append(delegations, delegation)
+		delegatorAddr := string(key[prefixLen:])
+
+		// Look up the actual delegation
+		del, found := k.GetDelegation(ctx, delegatorAddr, validatorAddr)
+		if found {
+			delegations = append(delegations, del)
+		}
 	}
 
 	return delegations
 }
 
-// DeleteDelegation removes a delegation
+// DeleteDelegation removes a delegation and its reverse index entry.
 func (k Keeper) DeleteDelegation(ctx sdk.Context, delegatorAddr, validatorAddr string) error {
 	store := k.storeService.OpenKVStore(ctx)
 	key := types.DelegationKey(delegatorAddr, validatorAddr)
-	return store.Delete(key)
+	if err := store.Delete(key); err != nil {
+		return err
+	}
+
+	// P1-1 fix: Remove reverse index entry
+	indexKey := types.ValidatorDelegationIndexKey(validatorAddr, delegatorAddr)
+	return store.Delete(indexKey)
 }
 
 // --- Unbonding Operations ---
@@ -489,8 +527,9 @@ func (k Keeper) CalculateTierSlash(ctx sdk.Context, tier types.ValidatorTier, ba
 
 // --- Performance Tracking ---
 
-// RecordVerification updates validator verification stats
-func (k Keeper) RecordVerification(ctx sdk.Context, validatorAddr string, correct bool) error {
+// RecordVerification updates validator verification stats.
+// P0-2 fix: contested parameter tracks ContestedVerificationsCorrect for Guardian tier.
+func (k Keeper) RecordVerification(ctx sdk.Context, validatorAddr string, correct, contested bool) error {
 	validator, found := k.GetValidator(ctx, validatorAddr)
 	if !found {
 		return types.ErrValidatorNotFound
@@ -499,14 +538,20 @@ func (k Keeper) RecordVerification(ctx sdk.Context, validatorAddr string, correc
 	validator.VerificationsCompleted++
 	if correct {
 		validator.VerificationsCorrect++
+		// P0-2: Track contested verifications for Guardian tier requirement
+		if contested {
+			validator.ContestedVerificationsCorrect++
+		}
 		// Increase reputation slightly
 		if validator.Reputation < 1000000 {
 			validator.Reputation += 100 // +0.01%
 		}
 	} else {
-		// Decrease reputation
-		if validator.Reputation > 100 {
+		// Decrease reputation (P0-1 fix: prevent uint64 underflow)
+		if validator.Reputation >= 200 {
 			validator.Reputation -= 200 // -0.02%
+		} else {
+			validator.Reputation = 0
 		}
 	}
 

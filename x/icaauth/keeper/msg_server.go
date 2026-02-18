@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
+	gogoproto "github.com/cosmos/gogoproto/proto"
 
 	legibleauthtypes "github.com/legible-money/legible/x/auth/types"
 	"github.com/legible-money/legible/x/icaauth/types"
@@ -105,14 +107,67 @@ func (ms *msgServer) SendICATransaction(goCtx context.Context, msg *types.MsgSen
 		return nil, fmt.Errorf("interchain account is not yet active")
 	}
 
+	// P0-4: Enforce per-account AllowedMsgTypes and global AllowedHostMsgTypes.
+	// Deserialize the CosmosTx to extract message type URLs.
+	var cosmosTx icatypes.CosmosTx
+	if err := gogoproto.Unmarshal(msg.MsgBytes, &cosmosTx); err != nil {
+		return nil, fmt.Errorf("failed to decode ICA messages: %w", err)
+	}
+	if len(cosmosTx.Messages) == 0 {
+		return nil, fmt.Errorf("ICA transaction must contain at least one message")
+	}
+
+	params := ms.k.GetParams(ctx)
+	for _, anyMsg := range cosmosTx.Messages {
+		typeURL := anyMsg.TypeUrl
+
+		// Check per-account allowlist (if set)
+		if len(remoteAccount.AllowedMsgTypes) > 0 {
+			if !containsStr(remoteAccount.AllowedMsgTypes, typeURL) {
+				return nil, types.ErrMsgTypeNotAllowed.Wrapf(
+					"message type %s not in account allowlist", typeURL)
+			}
+		}
+
+		// Check global allowlist
+		if !containsStr(params.AllowedHostMsgTypes, typeURL) {
+			return nil, types.ErrMsgTypeNotAllowed.Wrapf(
+				"message type %s not in global AllowedHostMsgTypes", typeURL)
+		}
+	}
+
+	// P0-5: Actually send the ICA transaction.
+	packetData := icatypes.InterchainAccountPacketData{
+		Type: icatypes.EXECUTE_TX,
+		Data: msg.MsgBytes,
+	}
+
+	seq, err := ms.k.icaController.SendTx(
+		ctx, nil, msg.ConnectionId, remoteAccount.PortId, packetData, msg.TimeoutNanos,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send ICA transaction: %w", err)
+	}
+
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"send_ica_transaction",
 		sdk.NewAttribute("owner", msg.Owner),
 		sdk.NewAttribute("did", lgmAccount.Did),
 		sdk.NewAttribute("connection_id", msg.ConnectionId),
+		sdk.NewAttribute("sequence", fmt.Sprintf("%d", seq)),
 	))
 
-	return &types.MsgSendICATransactionResponse{}, nil
+	return &types.MsgSendICATransactionResponse{Sequence: seq}, nil
+}
+
+// containsStr checks if a string slice contains a specific string.
+func containsStr(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 

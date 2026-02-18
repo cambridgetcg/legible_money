@@ -8,7 +8,8 @@ type ExecutionMode int
 const (
 	ModeCall         ExecutionMode = iota
 	ModeStaticCall                 // Read-only, inherited by sub-calls
-	ModeDelegateCall               // Target code, caller's storage
+	ModeDelegateCall               // Target code, caller's storage, original caller preserved
+	ModeCallCode                   // Target code, caller's storage, msg.sender = calling contract
 	ModeCreate                     // Contract creation
 )
 

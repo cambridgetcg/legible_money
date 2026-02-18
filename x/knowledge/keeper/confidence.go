@@ -301,8 +301,9 @@ func (k Keeper) calculateRewardsAndSlashes(
 			result.Rewards[validatorAddr] = reward
 		} else if reveal.Verdict != "abstain" {
 			// Slash wrong verdict: 6% of stake (abstain is not slashed)
+			// Use safeMulDiv to prevent uint64 overflow for large stakes
 			stake := stakeMap[validatorAddr]
-			slashAmount := stake * wrongSlashBps / 1_000_000
+			slashAmount := safeMulDiv(stake, wrongSlashBps, 1_000_000)
 			if slashAmount > 0 {
 				result.Slashes[validatorAddr] = slashAmount
 			}
@@ -318,7 +319,8 @@ func (k Keeper) calculateRewardsAndSlashes(
 				stake = k.GetEffectiveStakeForValidator(ctx, validatorAddr)
 			}
 			// Missed reveal penalty: 0.01% of stake (Cosmos-aligned downtime)
-			slashAmount := stake * missedSlashBps / 1_000_000
+			// Use safeMulDiv to prevent uint64 overflow for large stakes
+			slashAmount := safeMulDiv(stake, missedSlashBps, 1_000_000)
 			if slashAmount > 0 {
 				result.Slashes[validatorAddr] = slashAmount
 			}
@@ -328,9 +330,11 @@ func (k Keeper) calculateRewardsAndSlashes(
 
 // ApplyRewardsAndSlashes distributes rewards and applies slashes from a
 // verification result to validator accounts.
+// P0-2 fix: contested flag propagated to verification hooks for Guardian tier tracking.
 func (k Keeper) ApplyRewardsAndSlashes(
 	ctx sdk.Context,
 	result types.VerificationResult,
+	contested bool,
 ) error {
 	params := k.GetParams(ctx)
 	researchTaxRate := params.ResearchTaxRate
@@ -343,7 +347,7 @@ func (k Keeper) ApplyRewardsAndSlashes(
 	for _, validatorAddr := range sortedMapKeys(result.Rewards) {
 		amount := result.Rewards[validatorAddr]
 		if k.verificationHooks != nil {
-			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, true); err != nil {
+			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, true, contested); err != nil {
 				k.Logger(ctx).Error("verification hook failed for correct verification",
 					"validator", validatorAddr, "error", err)
 			}
@@ -387,7 +391,7 @@ func (k Keeper) ApplyRewardsAndSlashes(
 				"validator", validatorAddr, "amount", amount, "error", err)
 		}
 		if k.verificationHooks != nil {
-			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, false); err != nil {
+			if err := k.verificationHooks.AfterVerificationCompleted(ctx, validatorAddr, result.Domain, false, contested); err != nil {
 				k.Logger(ctx).Error("verification hook failed for incorrect verification",
 					"validator", validatorAddr, "error", err)
 			}

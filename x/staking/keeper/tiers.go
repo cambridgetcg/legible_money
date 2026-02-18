@@ -25,7 +25,14 @@ func ComputeValidatorTier(
 	stakeInt.SetString(stake, 10)
 
 	currentHeight := uint64(ctx.BlockHeight())
-	epochLength := uint64(1111) // BLOCKS_PER_EPOCH
+	// P0-3 fix: Read epoch length from params instead of hardcoding.
+	// Guardian slash window uses SlashDecayPeriodBlocks (34,272 blocks = ~1 day),
+	// not BLOCKS_PER_EPOCH (1,111). The hardcoded value made the window 31x shorter.
+	params := k.GetParams(ctx)
+	epochLength := params.GetSlashDecayPeriodBlocks()
+	if epochLength == 0 {
+		epochLength = 34272 // fallback default
+	}
 
 	// Calculate accuracy (0-1000000 basis points)
 	var accuracy uint64
@@ -64,9 +71,13 @@ func ComputeValidatorTier(
 		return types.TierBonded
 	}
 
-	// Tier 1 (Verified): 22 verifications at 77% accuracy
+	// Tier 1 (Verified): 1.11 LGM stake + 22 verifications at 77% accuracy
 	verifiedConfig := tierConfigs[1]
-	if verifications >= verifiedConfig.MinVerifications &&
+	minStakeVerified := new(big.Int)
+	minStakeVerified.SetString(verifiedConfig.MinStake, 10)
+
+	if stakeInt.Cmp(minStakeVerified) >= 0 &&
+		verifications >= verifiedConfig.MinVerifications &&
 		accuracy >= verifiedConfig.MinAccuracy {
 		return types.TierVerified
 	}

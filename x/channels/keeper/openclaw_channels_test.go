@@ -95,21 +95,25 @@ func TestOC_CH2_NonceRollback(t *testing.T) {
 		Sender:    payer1,
 		ChannelId: resp.ChannelId,
 		Update: types.ChannelStateUpdate{
-			Nonce: 5,
-			Spent: "3000000",
+			Nonce:             5,
+			Spent:             "3000000",
+			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 5, "3000000"),
+			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 5, "3000000"),
 		},
 	})
 	if err != nil {
 		t.Fatalf("first update: %v", err)
 	}
 
-	// ATTACK: Rollback to nonce 3 with lower spent
+	// ATTACK: Rollback to nonce 3 with lower spent (valid sigs but stale nonce)
 	_, err = msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender:    payer1,
 		ChannelId: resp.ChannelId,
 		Update: types.ChannelStateUpdate{
-			Nonce: 3,
-			Spent: "1000000", // trying to undo 2M in payments
+			Nonce:             3,
+			Spent:             "1000000", // trying to undo 2M in payments
+			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 3, "1000000"),
+			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 3, "1000000"),
 		},
 	})
 	if err == nil {
@@ -146,12 +150,13 @@ func TestOC_CH3_PrematureSettlementDuringDispute(t *testing.T) {
 		TimeoutHeight: 10000,
 	})
 
-	// Provider disputes with higher spent amount
+	// Provider disputes with higher spent amount (payer1 is counterparty)
 	_, err := msgServer.DisputeChannel(ctx, &types.MsgDisputeChannel{
 		Disputer:               provider1,
 		ChannelId:              resp.ChannelId,
 		Sequence:               1,
 		ClaimedBalanceReceiver: "4000000",
+		ProofSignature:         signPacked(payer1Party, "dispute", resp.ChannelId, 1, "4000000"),
 	})
 	if err != nil {
 		t.Fatalf("dispute: %v", err)
@@ -196,12 +201,13 @@ func TestOC_CH4_OverspendAttack(t *testing.T) {
 		TimeoutHeight: 10000,
 	})
 
-	// ATTACK: Set spent amount higher than deposited
+	// ATTACK: Set spent amount higher than deposited (with valid counterparty sig to reach overspend check)
 	_, err := msgServer.UpdateChannel(ctx, &types.MsgUpdateChannel{
 		Sender:             provider1,
 		ChannelId:          resp.ChannelId,
 		Sequence:           1,
 		NewBalanceReceiver: "9999999999", // way over deposited 5M
+		Signature:          signPacked(payer1Party, "update", resp.ChannelId, 1, "9999999999"),
 	})
 	if err == nil {
 		t.Fatal("OC-CH-4 FAIL: overspend allowed! Channel would owe more than it holds.")
@@ -237,26 +243,41 @@ func TestOC_CH5_NonceFreshness(t *testing.T) {
 	// Update with nonce 1 — success.
 	_, err := msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{Nonce: 1, Spent: "1000000"},
+		Update: types.ChannelStateUpdate{
+			Nonce:             1,
+			Spent:             "1000000",
+			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "1000000"),
+			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 1, "1000000"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("nonce 1 update failed: %v", err)
 	}
 
-	// ATTACK: Replay nonce=1 (same nonce, different spent).
+	// ATTACK: Replay nonce=1 (same nonce, different spent — valid sigs but stale nonce).
 	_, err = msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{Nonce: 1, Spent: "500000"},
+		Update: types.ChannelStateUpdate{
+			Nonce:             1,
+			Spent:             "500000",
+			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 1, "500000"),
+			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 1, "500000"),
+		},
 	})
 	if err == nil {
 		t.Error("ATTACK SUCCEEDED: same-nonce replay accepted; " +
 			"state can be rewritten without nonce advancement")
 	}
 
-	// ATTACK: Nonce=0 (below initial after update).
+	// ATTACK: Nonce=0 (below initial after update — valid sigs but stale nonce).
 	_, err = msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{Nonce: 0, Spent: "0"},
+		Update: types.ChannelStateUpdate{
+			Nonce:             0,
+			Spent:             "0",
+			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 0, "0"),
+			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 0, "0"),
+		},
 	})
 	if err == nil {
 		t.Error("ATTACK SUCCEEDED: nonce=0 accepted after nonce=1; payments can be reversed")
@@ -265,7 +286,12 @@ func TestOC_CH5_NonceFreshness(t *testing.T) {
 	// Verify nonce=2 succeeds (forward progression).
 	_, err = msgServer.UpdateState(ctx, &types.MsgUpdateState{
 		Sender: payer1, ChannelId: resp.ChannelId,
-		Update: types.ChannelStateUpdate{Nonce: 2, Spent: "2000000"},
+		Update: types.ChannelStateUpdate{
+			Nonce:             2,
+			Spent:             "2000000",
+			PayerSignature:    signHex(payer1Party, "state", resp.ChannelId, 2, "2000000"),
+			ProviderSignature: signHex(provider1Party, "state", resp.ChannelId, 2, "2000000"),
+		},
 	})
 	if err != nil {
 		t.Errorf("nonce 2 should succeed: %v", err)
@@ -438,14 +464,14 @@ func TestOC_CH9_DepositToClosedChannel(t *testing.T) {
 		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
 	})
 
-	// Close the channel cooperatively.
+	// Close the channel cooperatively (provider1 is counterparty).
 	_, err := msgServer.CloseChannel(ctx, &types.MsgCloseChannel{
 		Closer:                payer1,
 		ChannelId:             resp.ChannelId,
 		Sequence:              1,
 		FinalBalanceReceiver:  "0",
 		FinalBalanceSender:    "5000000",
-		CounterpartySignature: []byte("sig"),
+		CounterpartySignature: signPacked(provider1Party, "close", resp.ChannelId, 1, "0"),
 	})
 	if err != nil {
 		t.Fatalf("close failed: %v", err)

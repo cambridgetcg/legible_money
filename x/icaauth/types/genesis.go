@@ -9,7 +9,8 @@ func DefaultParams() Params {
 			"/cosmos.staking.v1beta1.MsgDelegate",
 			"/cosmos.staking.v1beta1.MsgUndelegate",
 			"/cosmos.gov.v1.MsgVote",
-			"/ibc.applications.transfer.v1.MsgTransfer",
+			// MsgTransfer intentionally excluded: ICA-initiated IBC transfers
+			// bypass rate limiting middleware, creating a bridge drain vector (P0-6).
 		},
 		RegistrationCooldown: 100, // ~4 minutes at 2521ms blocks
 	}

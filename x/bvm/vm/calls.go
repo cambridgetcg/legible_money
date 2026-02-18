@@ -49,6 +49,13 @@ func ExecuteCall(
 		currentContract = callerCtx.CurrentContract // Caller's storage
 		caller = callerCtx.Caller                   // Preserve original caller
 
+	case ModeCallCode:
+		// CALLCODE: execute target's code in caller's storage context.
+		// Unlike DELEGATECALL, msg.sender = the calling contract (not the original caller).
+		bytecode = state.GetCode(targetAddr)
+		currentContract = callerCtx.CurrentContract // Caller's storage
+		caller = callerCtx.CurrentContract           // msg.sender = calling contract
+
 	case ModeCreate:
 		bytecode = callData // Init code IS the calldata
 		currentContract = targetAddr
@@ -66,23 +73,29 @@ func ExecuteCall(
 	}
 
 	subCtx := &ExecutionContext{
-		Caller:          caller,
-		CallerDID:       callerCtx.CallerDID,
-		Origin:          callerCtx.Origin,
-		OriginDID:       callerCtx.OriginDID,
-		CurrentContract: currentContract,
-		BlockNumber:     callerCtx.BlockNumber,
-		Timestamp:       callerCtx.Timestamp,
-		GasPrice:        callerCtx.GasPrice,
-		GasLimit:        gasForward,
-		Value:           value,
-		CallData:        callData,
-		Mode:            mode,
-		Bytecode:        bytecode,
-		ChainID:         callerCtx.ChainID,
-		Coinbase:        callerCtx.Coinbase,
-		PrevRandao:      callerCtx.PrevRandao,
-		BaseFee:         callerCtx.BaseFee,
+		Caller:             caller,
+		CallerDID:          callerCtx.CallerDID,
+		Origin:             callerCtx.Origin,
+		OriginDID:          callerCtx.OriginDID,
+		CurrentContract:    currentContract,
+		BlockNumber:        callerCtx.BlockNumber,
+		Timestamp:          callerCtx.Timestamp,
+		GasPrice:           callerCtx.GasPrice,
+		GasLimit:           gasForward,
+		Value:              value,
+		CallData:           callData,
+		Mode:               mode,
+		Bytecode:           bytecode,
+		ChainID:            callerCtx.ChainID,
+		Coinbase:           callerCtx.Coinbase,
+		PrevRandao:         callerCtx.PrevRandao,
+		BaseFee:            callerCtx.BaseFee,
+		// P0-3: propagate execution context fields to sub-calls so agent opcodes,
+		// governance gas overrides, and version gates work correctly in call chains.
+		Capabilities:       callerCtx.Capabilities,
+		GasSchedule:        callerCtx.GasSchedule,
+		IsCommitPhase:      callerCtx.IsCommitPhase,
+		ContractBvmVersion: callerCtx.ContractBvmVersion,
 	}
 
 	subInterp := NewInterpreter()

@@ -18,11 +18,17 @@ const (
 
 // Store key prefixes.
 var (
-	FlowPrefix = []byte{0x01} // channel_id -> ChannelFlow
-	ParamsKey  = []byte{0x02}
+	FlowPrefix         = []byte{0x01} // channel_id -> ChannelFlow (current epoch)
+	ParamsKey          = []byte{0x02}
+	PreviousFlowPrefix = []byte{0x03} // channel_id -> ChannelFlow (previous epoch, for sliding window)
 )
 
 // FlowKey returns the store key for a specific channel's flow record.
 func FlowKey(channelID string) []byte {
 	return append(FlowPrefix, []byte(channelID)...)
+}
+
+// PreviousFlowKey returns the store key for a channel's previous epoch flow record.
+func PreviousFlowKey(channelID string) []byte {
+	return append(PreviousFlowPrefix, []byte(channelID)...)
 }

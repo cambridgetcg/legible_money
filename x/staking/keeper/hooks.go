@@ -17,6 +17,7 @@ func NewStakingVerificationHooks(k Keeper) StakingVerificationHooks {
 
 // AfterVerificationCompleted delegates to the staking keeper's RecordVerification
 // to update validator stats (verification count, reputation, tier transitions).
-func (h StakingVerificationHooks) AfterVerificationCompleted(ctx sdk.Context, validatorAddr, _ string, correct bool) error {
-	return h.k.RecordVerification(ctx, validatorAddr, correct)
+// P0-2 fix: passes contested flag so ContestedVerificationsCorrect is tracked.
+func (h StakingVerificationHooks) AfterVerificationCompleted(ctx sdk.Context, validatorAddr, _ string, correct, contested bool) error {
+	return h.k.RecordVerification(ctx, validatorAddr, correct, contested)
 }

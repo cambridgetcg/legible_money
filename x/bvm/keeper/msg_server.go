@@ -395,6 +395,28 @@ func (c *prodCompositeHost) SelfAccuracy(callerDID string) uint64 {
 	return c.treasury.SelfAccuracy(callerDID)
 }
 
+// safeExecute wraps vm.Interpreter.Execute with panic recovery (P0-3).
+// On panic, returns a failed result with full gas charged (punishment for triggering a panic).
+// The second return value indicates whether a panic was recovered.
+func safeExecute(
+	interp *vm.Interpreter,
+	bytecode []byte,
+	execCtx *vm.ExecutionContext,
+	stateDB vm.StateDB,
+	host vm.HostFunctions,
+) (result *vm.ExecutionResult, panicked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = true
+			result = &vm.ExecutionResult{
+				Success: false,
+				GasUsed: execCtx.GasLimit,
+			}
+		}
+	}()
+	return interp.Execute(bytecode, execCtx, stateDB, host), false
+}
+
 // DeployContract deploys a new contract to the BVM.
 func (m msgServer) DeployContract(goCtx context.Context, msg *types.MsgDeployContract) (*types.MsgDeployContractResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
@@ -585,9 +607,22 @@ func (m msgServer) CallContract(goCtx context.Context, msg *types.MsgCallContrac
 	// Build host functions wired to the keeper for agent opcodes
 	host := m.Keeper.buildHost(ctx, stateDB)
 
-	// Execute
+	// Execute with panic recovery (P0-3)
 	interp := vm.NewInterpreter()
-	result := interp.Execute(code.Bytecode, execCtx, stateDB, host)
+	result, panicked := safeExecute(interp, code.Bytecode, execCtx, stateDB, host)
+	if panicked {
+		m.Logger(ctx).Error("BVM CallContract execution panicked",
+			"contract", msg.ContractAddress,
+			"caller", msg.Caller,
+			"gas_limit", msg.GasLimit,
+		)
+	}
+
+	// P0-1: Bridge VM gas to SDK gas meter.
+	// This ensures block gas limits actually constrain VM execution.
+	// If this exceeds the tx gas limit, the SDK catches the out-of-gas panic
+	// and reverts the entire transaction (including value transfers).
+	ctx.GasMeter().ConsumeGas(result.GasUsed, "bvm_execution")
 
 	// Apply state changes on success
 	if result.Success {
@@ -695,6 +730,11 @@ func (m msgServer) ScheduleExecution(goCtx context.Context, msg *types.MsgSchedu
 	}
 	m.SetSchedule(ctx, schedule)
 
+	// P1-2: Store scheduler's current capabilities so scheduled execution
+	// inherits the scheduler's permissions, not full access.
+	schedCaps := m.resolveCallerCapabilities(ctx, msg.Scheduler)
+	m.SetScheduleCapabilities(ctx, scheduleId, schedCaps)
+
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"bvm_schedule_execution",
 		sdk.NewAttribute("schedule_id", scheduleId),
@@ -752,6 +792,11 @@ func (m msgServer) ScheduleContract(goCtx context.Context, msg *types.MsgSchedul
 		Cancelled:       false,
 	}
 	m.SetSchedule(ctx, schedule)
+
+	// P1-2: Store caller's current capabilities so scheduled execution
+	// inherits the caller's permissions, not full access.
+	schedCaps := m.resolveCallerCapabilities(ctx, msg.Caller)
+	m.SetScheduleCapabilities(ctx, scheduleId, schedCaps)
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
 		"bvm_schedule_contract",
@@ -835,13 +880,35 @@ func (m msgServer) UpdateContractState(goCtx context.Context, msg *types.MsgUpda
 	return &types.MsgUpdateContractStateResponse{}, nil
 }
 
-// ExecutePendingSchedules executes all schedules due at the current block.
-// Called from BeginBlock.
+// ExecutePendingSchedules executes schedules due at the current block.
+// Called from BeginBlock. Enforces a per-block gas budget (P0-2) and
+// recovers from VM panics (P0-3) to prevent chain halts.
 func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 	currentBlock := uint64(ctx.BlockHeight())
 	schedules := k.GetPendingSchedules(ctx, currentBlock)
 
+	var totalGasUsed uint64
+
 	for _, schedule := range schedules {
+		// P0-2: Enforce per-block gas budget for scheduled executions.
+		// Schedules that exceed the budget are deferred — their block index
+		// entries remain, and GetPendingSchedules will pick them up next block.
+		if totalGasUsed >= types.MaxScheduledGasPerBlock {
+			k.Logger(ctx).Info("scheduled execution gas budget exhausted, deferring remaining",
+				"block", currentBlock,
+				"total_gas_used", totalGasUsed,
+				"remaining_schedules", len(schedules),
+			)
+			break
+		}
+
+		// Cap this schedule's effective gas to the remaining budget
+		remainingBudget := types.MaxScheduledGasPerBlock - totalGasUsed
+		effectiveMaxGas := schedule.MaxGas
+		if effectiveMaxGas > remainingBudget {
+			effectiveMaxGas = remainingBudget
+		}
+
 		// Remove old block index entry
 		kvStore := k.storeService.OpenKVStore(ctx)
 		_ = kvStore.Delete(types.ScheduleBlockIndexKey(schedule.ExecuteAtBlock, schedule.ScheduleId))
@@ -870,15 +937,26 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 					}
 				}
 
-				// ZD-B01 FIX: Scheduled executions must have explicit Capabilities,
-				// otherwise the C-1 secure default (nil = deny all) silently blocks
-				// all agent opcodes (SUBMIT_CLAIM, STAKE, UNSTAKE, etc.).
-				// Scheduled executions run with full authority of the original caller.
-				fullCaps := &vm.SessionCapabilities{
-					CanStake:        true,
-					CanTransfer:     true,
-					CanSubmitClaims: true,
-					CanVote:         true,
+				// P1-2: Load stored capabilities instead of hardcoding full access.
+				// Capabilities were stored at schedule creation time to prevent
+				// privilege escalation from restricted session keys.
+				var caps *vm.SessionCapabilities
+				storedCaps, hasCaps := k.GetScheduleCapabilities(ctx, schedule.ScheduleId)
+				if hasCaps {
+					caps = &vm.SessionCapabilities{
+						CanTransfer:     storedCaps.CanTransfer,
+						CanStake:        storedCaps.CanStake,
+						CanSubmitClaims: storedCaps.CanSubmitClaims,
+						CanVote:         storedCaps.CanVote,
+					}
+				} else {
+					// Backwards compat: pre-fix schedules without stored caps get full access
+					caps = &vm.SessionCapabilities{
+						CanStake:        true,
+						CanTransfer:     true,
+						CanSubmitClaims: true,
+						CanVote:         true,
+					}
 				}
 
 				// Build governance gas schedule for scheduled execution
@@ -904,21 +982,30 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 					BlockNumber:        currentBlock,
 					Timestamp:          uint64(ctx.BlockTime().Unix()),
 					GasPrice:           new(big.Int),
-					GasLimit:           schedule.MaxGas,
+					GasLimit:           effectiveMaxGas,
 					Value:              new(big.Int),
 					CallData:           callData,
 					Mode:               vm.ModeCall,
 					Bytecode:           code.Bytecode,
 					ChainID:            big.NewInt(2521),
-					Capabilities:       fullCaps,
+					Capabilities:       caps,
 					ContractBvmVersion: contract.BvmVersion,
 					GasSchedule:        schedGasSchedule,
 				}
 
 				stateDB := vm.NewCosmosStateDB(&kvStoreAdapter{store: kvStore})
 				host := k.buildHost(ctx, stateDB)
+
+				// P0-3: Execute with panic recovery to prevent chain halts
 				interp := vm.NewInterpreter()
-				result := interp.Execute(code.Bytecode, execCtx, stateDB, host)
+				result, panicked := safeExecute(interp, code.Bytecode, execCtx, stateDB, host)
+				if panicked {
+					k.Logger(ctx).Error("BVM scheduled execution panicked",
+						"schedule_id", schedule.ScheduleId,
+						"contract", schedule.ContractAddress,
+						"block", currentBlock,
+					)
+				}
 
 				success = result.Success
 				gasUsed = result.GasUsed
@@ -939,6 +1026,9 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 			}
 		}
 
+		// Track gas for budget enforcement
+		totalGasUsed += gasUsed
+
 		schedule.Executed = true
 		k.SetSchedule(ctx, schedule)
 
@@ -954,6 +1044,31 @@ func (k Keeper) ExecutePendingSchedules(ctx sdk.Context) {
 	}
 }
 
+
+// resolveCallerCapabilities resolves the caller's current session capabilities.
+// If the caller has an active session key, those restricted capabilities are returned.
+// Otherwise (identity/operational key), full capabilities are returned.
+func (m msgServer) resolveCallerCapabilities(ctx sdk.Context, caller string) types.SessionCapabilities {
+	fullCaps := types.SessionCapabilities{
+		CanTransfer:     true,
+		CanStake:        true,
+		CanSubmitClaims: true,
+		CanVote:         true,
+	}
+	if m.authKeeper == nil {
+		return fullCaps
+	}
+	sc, found := m.authKeeper.GetSessionCapabilities(ctx, caller, uint64(ctx.BlockHeight()))
+	if !found {
+		return fullCaps
+	}
+	return types.SessionCapabilities{
+		CanTransfer:     sc.CanTransfer,
+		CanStake:        sc.CanStake,
+		CanSubmitClaims: sc.CanSubmitClaims,
+		CanVote:         sc.CanVote,
+	}
+}
 
 // UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
 func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {

@@ -53,6 +53,11 @@ func (k Keeper) GetUpgradeKeeper() types.UpgradeKeeper {
 	return k.upgradeKeeper
 }
 
+// GetStakingKeeper returns the staking keeper (may be nil).
+func (k Keeper) GetStakingKeeper() types.StakingKeeper {
+	return k.stakingKeeper
+}
+
 // prefixEndBytes returns the end key for a prefix scan (exclusive upper bound).
 // It increments the last byte of the prefix; if it overflows, it tries the
 // previous byte, and so on. Returns nil if all bytes overflow (prefix is all 0xff).

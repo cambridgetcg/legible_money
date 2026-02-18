@@ -149,7 +149,7 @@ func promoteToGuardian(t *testing.T, k keeper.Keeper, ctx sdk.Context, addr stri
 	}
 	v.VerificationsCompleted = 1200
 	v.VerificationsCorrect = 1000 // ~83% accuracy (> 77% min)
-	v.ContestedVerificationsCorrect = 10
+	v.ContestedVerificationsCorrect = 33 // P2-2 fix: Guardian requires MinContestedVerifications=33
 	v.SlashCount = 0
 	v.Tier = "guardian"
 	if err := k.SetValidator(ctx, v); err != nil {
@@ -1253,5 +1253,1064 @@ func TestSlashValidator_ProgressiveEscalation(t *testing.T) {
 	}
 	if v.SlashCount != 3 {
 		t.Errorf("expected slashCount=3, got %d", v.SlashCount)
+	}
+}
+
+// ---------- Session-7 Hardening Tests ----------
+
+// P0-1: Reputation underflow edge cases
+func TestRecordVerification_ReputationUnderflowEdge(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	valAddr := sdk.AccAddress("validator_repedge___").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:repedge", "1111000000")
+
+	// Set reputation to exactly 200 — should decrement to 0
+	v, _ := k.GetValidator(ctx, valAddr)
+	v.Reputation = 200
+	k.SetValidator(ctx, v)
+
+	err := k.RecordVerification(ctx, valAddr, false, false)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Reputation != 0 {
+		t.Errorf("P0-1: expected reputation=0 after underflow edge, got %d", v.Reputation)
+	}
+
+	// Set reputation to 199 — should clamp to 0, not underflow
+	v.Reputation = 199
+	k.SetValidator(ctx, v)
+	err = k.RecordVerification(ctx, valAddr, false, false)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Reputation != 0 {
+		t.Errorf("P0-1: expected reputation=0 for value 199, got %d", v.Reputation)
+	}
+
+	// Set reputation to 1 — should clamp to 0
+	v.Reputation = 1
+	k.SetValidator(ctx, v)
+	err = k.RecordVerification(ctx, valAddr, false, false)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Reputation != 0 {
+		t.Errorf("P0-1: expected reputation=0 for value 1, got %d", v.Reputation)
+	}
+
+	// Set reputation to 0 — should stay 0
+	v.Reputation = 0
+	k.SetValidator(ctx, v)
+	err = k.RecordVerification(ctx, valAddr, false, false)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Reputation != 0 {
+		t.Errorf("P0-1: expected reputation=0 for value 0, got %d", v.Reputation)
+	}
+}
+
+// P0-2: ContestedVerificationsCorrect tracking
+func TestRecordVerification_ContestedTracking(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	valAddr := sdk.AccAddress("validator_contested_").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:contested", "1111000000")
+
+	// Record a correct non-contested verification
+	err := k.RecordVerification(ctx, valAddr, true, false)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.VerificationsCompleted != 1 {
+		t.Errorf("expected VerificationsCompleted=1, got %d", v.VerificationsCompleted)
+	}
+	if v.VerificationsCorrect != 1 {
+		t.Errorf("expected VerificationsCorrect=1, got %d", v.VerificationsCorrect)
+	}
+	if v.ContestedVerificationsCorrect != 0 {
+		t.Errorf("P0-2: expected ContestedVerificationsCorrect=0 for non-contested, got %d", v.ContestedVerificationsCorrect)
+	}
+
+	// Record a correct contested verification
+	err = k.RecordVerification(ctx, valAddr, true, true)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.ContestedVerificationsCorrect != 1 {
+		t.Errorf("P0-2: expected ContestedVerificationsCorrect=1, got %d", v.ContestedVerificationsCorrect)
+	}
+
+	// Record an incorrect contested verification — should NOT increment ContestedVerificationsCorrect
+	err = k.RecordVerification(ctx, valAddr, false, true)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.ContestedVerificationsCorrect != 1 {
+		t.Errorf("P0-2: expected ContestedVerificationsCorrect=1 (wrong verdict), got %d", v.ContestedVerificationsCorrect)
+	}
+	if v.VerificationsCompleted != 3 {
+		t.Errorf("expected VerificationsCompleted=3, got %d", v.VerificationsCompleted)
+	}
+}
+
+// P0-3: Epoch length consistency (reads from params, not hardcoded)
+func TestComputeValidatorTier_GuardianSlashWindow(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Set slash decay period to 34272 (1 day at 2.521s/block)
+	params := k.GetParams(ctx)
+	params.SlashDecayPeriodBlocks = 34272
+	k.SetParams(ctx, params)
+
+	// A guardian-eligible validator slashed 1 epoch ago (34272 blocks)
+	// With 10-epoch window, slash should still be within window
+	ctx = ctx.WithBlockHeight(342722) // well past 10 epochs (window = 10*34272 = 342720)
+	tier := keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",   // 11,111 LGM (guardian stake)
+		1200,            // verifications
+		1000,            // correct (83%)
+		1,               // 1 slash
+		33,              // contested correct
+		342720,          // last slash 1 block ago — within 10-epoch window
+	)
+	// Should NOT qualify for guardian because slash is within window
+	if tier == types.TierGuardian {
+		t.Error("P0-3: validator with recent slash should not qualify for guardian")
+	}
+
+	// Same validator, but last slash was 11+ epochs ago (outside 10-epoch window)
+	// lastSlashHeight=0 is treated as "unknown" → conservative (returns full count)
+	// Use lastSlashHeight=1 so the window calculation actually runs
+	tier = keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",
+		1200,
+		1000,
+		1,
+		33,
+		1, // last slash at height 1 — 342720 blocks ago, outside 10-epoch window
+	)
+	// With windowed slashes, old slash should be ignored → guardian eligible
+	if tier != types.TierGuardian {
+		t.Errorf("P0-3: validator with old slash should qualify for guardian, got %v", tier)
+	}
+}
+
+// P1-1: GetDelegationsForValidator via reverse index
+func TestGetDelegationsForValidator_ReverseIndex(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	val1Addr := sdk.AccAddress("validator_ri1_______").String()
+	val2Addr := sdk.AccAddress("validator_ri2_______").String()
+	registerTestValidator(t, k, ctx, val1Addr, "did:lgm:ri1", "1000000000000000000000")
+	registerTestValidator(t, k, ctx, val2Addr, "did:lgm:ri2", "1000000000000000000000")
+
+	del1Addr := sdk.AccAddress("delegator_ri1_______").String()
+	del2Addr := sdk.AccAddress("delegator_ri2_______").String()
+	del3Addr := sdk.AccAddress("delegator_ri3_______").String()
+
+	// Delegate to val1 from del1 and del2
+	k.Delegate(ctx, &types.MsgDelegate{
+		Delegator: del1Addr, Validator: val1Addr, Amount: "100000000000000000000",
+	})
+	k.Delegate(ctx, &types.MsgDelegate{
+		Delegator: del2Addr, Validator: val1Addr, Amount: "200000000000000000000",
+	})
+
+	// Delegate to val2 from del3
+	k.Delegate(ctx, &types.MsgDelegate{
+		Delegator: del3Addr, Validator: val2Addr, Amount: "300000000000000000000",
+	})
+
+	// Query delegations for val1 — should return self-delegation + del1 + del2
+	// (RegisterValidator creates a self-delegation)
+	delegations := k.GetDelegationsForValidator(ctx, val1Addr)
+	if len(delegations) != 3 {
+		t.Fatalf("P1-1: expected 3 delegations for val1 (self+del1+del2), got %d", len(delegations))
+	}
+
+	// Verify all delegators are present (including self-delegation)
+	found := map[string]bool{}
+	for _, d := range delegations {
+		found[d.DelegatorAddress] = true
+		if d.ValidatorAddress != val1Addr {
+			t.Errorf("P1-1: delegation should be for val1, got %s", d.ValidatorAddress)
+		}
+	}
+	if !found[val1Addr] {
+		t.Error("P1-1: missing self-delegation from val1")
+	}
+	if !found[del1Addr] {
+		t.Error("P1-1: missing delegation from del1")
+	}
+	if !found[del2Addr] {
+		t.Error("P1-1: missing delegation from del2")
+	}
+
+	// Query delegations for val2 — should return self-delegation + del3
+	delegations = k.GetDelegationsForValidator(ctx, val2Addr)
+	if len(delegations) != 2 {
+		t.Fatalf("P1-1: expected 2 delegations for val2 (self+del3), got %d", len(delegations))
+	}
+	foundVal2 := map[string]bool{}
+	for _, d := range delegations {
+		foundVal2[d.DelegatorAddress] = true
+	}
+	if !foundVal2[val2Addr] {
+		t.Error("P1-1: missing self-delegation from val2")
+	}
+	if !foundVal2[del3Addr] {
+		t.Error("P1-1: missing delegation from del3")
+	}
+}
+
+// P1-1: Reverse index cleanup on undelegation
+func TestGetDelegationsForValidator_UndelegateCleanup(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("validator_undclean__").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:undclean", "1000000000000000000000")
+
+	del1Addr := sdk.AccAddress("delegator_uc1_______").String()
+	del2Addr := sdk.AccAddress("delegator_uc2_______").String()
+
+	k.Delegate(ctx, &types.MsgDelegate{
+		Delegator: del1Addr, Validator: valAddr, Amount: "100000000000000000000",
+	})
+	k.Delegate(ctx, &types.MsgDelegate{
+		Delegator: del2Addr, Validator: valAddr, Amount: "200000000000000000000",
+	})
+
+	// Undelegate full amount from del1
+	k.Undelegate(ctx, &types.MsgUndelegate{
+		Delegator: del1Addr, Validator: valAddr, Amount: "100000000000000000000",
+	})
+
+	// Should now have self-delegation + del2
+	delegations := k.GetDelegationsForValidator(ctx, valAddr)
+	if len(delegations) != 2 {
+		t.Fatalf("P1-1: expected 2 delegations after undelegate (self+del2), got %d", len(delegations))
+	}
+	foundDelegators := map[string]bool{}
+	for _, d := range delegations {
+		foundDelegators[d.DelegatorAddress] = true
+	}
+	if !foundDelegators[valAddr] {
+		t.Error("P1-1: missing self-delegation")
+	}
+	if !foundDelegators[del2Addr] {
+		t.Error("P1-1: expected del2 to remain after del1 undelegation")
+	}
+}
+
+// Guardian tier: contested verifications requirement enforced
+func TestComputeValidatorTier_GuardianContestedRequired(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// All guardian requirements met EXCEPT contested verifications
+	tier := keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000", // 11,111 LGM
+		1200,          // verifications
+		1000,          // correct (83%)
+		0,             // no slashes
+		32,            // only 32 contested (need 33)
+		0,             // no slash history
+	)
+	if tier == types.TierGuardian {
+		t.Error("should not qualify for guardian with only 32 contested verifications")
+	}
+	if tier != types.TierBonded {
+		t.Errorf("expected bonded tier fallback, got %v", tier)
+	}
+
+	// Now with exactly 33 — should qualify
+	tier = keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",
+		1200,
+		1000,
+		0,
+		33,
+		0,
+	)
+	if tier != types.TierGuardian {
+		t.Errorf("should qualify for guardian with 33 contested, got %v", tier)
+	}
+}
+
+// Guardian tier with contested verification multiplier (3x)
+func TestComputeValidatorTier_ContestedMultiplier(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Guardian requires MinVerifications=333 with contested multiplier 3x
+	// With 100 total verifications and 50 contested correct:
+	// effective = (100-50) + 50*(1+(3-1)) = 50 + 150 = 200
+	// 200 < 333 → should not qualify
+	tier := keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",
+		100,  // verifications
+		80,   // correct
+		0,    // no slashes
+		50,   // contested correct
+		0,
+	)
+	if tier == types.TierGuardian {
+		t.Error("200 effective verifications should not meet 333 requirement")
+	}
+
+	// With 200 total and 100 contested:
+	// effective = (200-100) + 100*3 = 100 + 300 = 400
+	// 400 >= 333 → should qualify (if all other requirements met)
+	tier = keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",
+		200,  // verifications
+		180,  // correct (90%)
+		0,    // no slashes
+		100,  // contested correct
+		0,
+	)
+	if tier != types.TierGuardian {
+		t.Errorf("400 effective verifications should meet 333 requirement, got %v", tier)
+	}
+}
+
+// P2-2: promoteToGuardian helper correctness — verify it sets 33 contested
+func TestPromoteToGuardian_MeetsAllRequirements(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("validator_guardian___").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:guardian", "11111000000")
+	promoteToGuardian(t, k, ctx, valAddr)
+
+	v, found := k.GetValidator(ctx, valAddr)
+	if !found {
+		t.Fatal("validator not found")
+	}
+
+	// Verify the helper sets values that actually qualify for guardian
+	computedTier := keeper.ComputeValidatorTier(
+		ctx, k,
+		v.TotalStake,
+		v.VerificationsCompleted,
+		v.VerificationsCorrect,
+		v.SlashCount,
+		v.ContestedVerificationsCorrect,
+		v.LastSlashedHeight,
+	)
+	if computedTier != types.TierGuardian {
+		t.Errorf("P2-2: promoteToGuardian helper should produce a validator that computes as guardian, got %v", computedTier)
+	}
+}
+
+// ==========================================================================
+// R2 Session 6: 4-Tier Validator Lifecycle Tests
+// ==========================================================================
+
+// ---------- Task 1: Full Tier Progression Integration Test ----------
+
+func TestTierProgression_ApprenticeToGuardian(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_lifecycle________").String()
+
+	// Step 1: Register with 0.111 LGM → Apprentice
+	resp, err := k.RegisterValidator(ctx, &types.MsgRegisterValidator{
+		ValidatorAddress: valAddr,
+		PubKey:           []byte("lifecycle_pubkey"),
+		SelfDelegation:   "111000", // 0.111 LGM in ulgm
+		CommissionRate:   1000,
+		Description:      &types.ValidatorDescription{Identity: "did:lgm:lifecycle"},
+	})
+	if err != nil {
+		t.Fatalf("Step 1: registration failed: %v", err)
+	}
+	if resp.InitialTier != types.TierApprentice {
+		t.Fatalf("Step 1: expected apprentice, got %v", resp.InitialTier)
+	}
+
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.Tier != "apprentice" {
+		t.Fatalf("Step 1: stored tier should be apprentice, got %s", v.Tier)
+	}
+
+	// Step 2: Perform 22 correct verifications → still Apprentice (need 1.11 LGM for Verified)
+	for i := 0; i < 22; i++ {
+		if err := k.RecordVerification(ctx, valAddr, true, false); err != nil {
+			t.Fatalf("Step 2: RecordVerification #%d failed: %v", i+1, err)
+		}
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.VerificationsCompleted != 22 {
+		t.Fatalf("Step 2: expected 22 verifications, got %d", v.VerificationsCompleted)
+	}
+	if v.VerificationsCorrect != 22 {
+		t.Fatalf("Step 2: expected 22 correct, got %d", v.VerificationsCorrect)
+	}
+	if v.Tier != "apprentice" {
+		t.Fatalf("Step 2: expected still apprentice (insufficient stake for verified), got %s", v.Tier)
+	}
+
+	// Step 3: Increase stake to 1.11 LGM → Verified (Tier 1)
+	// Need to add 1110000 - 111000 = 999000 more
+	_, err = k.UpdateValidatorStake(ctx, &types.MsgUpdateValidatorStake{
+		Validator:  valAddr,
+		Amount:     "999000",
+		IsIncrease: true,
+	})
+	if err != nil {
+		t.Fatalf("Step 3: stake increase failed: %v", err)
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Tier != "verified" {
+		t.Fatalf("Step 3: expected verified with 1.11 LGM + 22 verifications at 100%%, got %s", v.Tier)
+	}
+
+	// Step 4: Verify accuracy ≥ 77% → still Verified (already at 100%)
+	accuracy := v.GetAccuracyRate()
+	if accuracy < 770000 {
+		t.Fatalf("Step 4: expected accuracy ≥ 77%%, got %d bps", accuracy)
+	}
+	if v.Tier != "verified" {
+		t.Fatalf("Step 4: expected verified, got %s", v.Tier)
+	}
+
+	// Step 5: Increase stake to 1,111 LGM → Bonded (Tier 2)
+	// Current stake is 1,110,000 ulgm. Need 1,111,000,000 ulgm.
+	needed := "1109890000" // 1,111,000,000 - 1,110,000 = 1,109,890,000
+	_, err = k.UpdateValidatorStake(ctx, &types.MsgUpdateValidatorStake{
+		Validator:  valAddr,
+		Amount:     needed,
+		IsIncrease: true,
+	})
+	if err != nil {
+		t.Fatalf("Step 5: stake increase to bonded failed: %v", err)
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	// With 1,111 LGM, 22 verifications at 100% accuracy → meets Bonded requirements
+	// (Bonded: 1,111 LGM, 11 verifications, 50% accuracy)
+	if v.Tier != "bonded" {
+		t.Fatalf("Step 5: expected bonded with 1,111 LGM + 22 verifs, got %s", v.Tier)
+	}
+
+	// Step 6: Verify we have enough verifications for bonded (already satisfied at step 2)
+	if v.VerificationsCompleted < 11 {
+		t.Fatalf("Step 6: expected ≥ 11 verifications for bonded, got %d", v.VerificationsCompleted)
+	}
+
+	// Step 7: Path to Guardian — increase stake to 11,111 LGM
+	// Current stake: 1,111,000,000. Need 11,111,000,000.
+	_, err = k.UpdateValidatorStake(ctx, &types.MsgUpdateValidatorStake{
+		Validator:  valAddr,
+		Amount:     "10000000000", // add 10,000 LGM
+		IsIncrease: true,
+	})
+	if err != nil {
+		t.Fatalf("Step 7: stake increase to guardian-level failed: %v", err)
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	// Still bonded — need more verifications + contested + accuracy check
+	if v.Tier == "guardian" {
+		t.Fatalf("Step 7: should NOT be guardian yet (insufficient verifications/contested)")
+	}
+
+	// Step 8: Simulate contested verifications for Guardian requirement
+	// Need 333 effective verifications (with 3x multiplier): 11 contested correct gives 33
+	// Need MinContestedVerifications=33
+	// We have 22 verifications already. Let's add more:
+	// Strategy: 78 more normal correct verifications + 11 contested correct = 89 more
+	// Total: 22 + 78 + 11 = 111 total
+	// Effective: (111 - 11) + 11*3 = 100 + 33 = 133 ... not enough
+	// Need 333 effective. Let's do: normal_correct + contested_correct*3 >= 333
+	// With 33 contested correct: (total - 33) + 33*3 = total - 33 + 99 = total + 66
+	// Need total + 66 >= 333 → total >= 267
+	// Currently have 22. Need 267 - 22 = 245 more verifications total.
+	// Of those 245, we need 33 to be contested correct (11 already done? no, we haven't done any contested yet).
+	// Let's do: 212 normal correct + 33 contested correct = 245 more
+	for i := 0; i < 212; i++ {
+		if err := k.RecordVerification(ctx, valAddr, true, false); err != nil {
+			t.Fatalf("Step 8: normal verification #%d failed: %v", i+1, err)
+		}
+	}
+	for i := 0; i < 33; i++ {
+		if err := k.RecordVerification(ctx, valAddr, true, true); err != nil {
+			t.Fatalf("Step 8: contested verification #%d failed: %v", i+1, err)
+		}
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	// Total: 22 + 212 + 33 = 267 verifications, all correct (100% accuracy)
+	// Effective: (267 - 33) + 33*3 = 234 + 99 = 333 → meets 333 requirement
+	// Contested correct: 33 → meets MinContestedVerifications=33
+	// Stake: 11,111 LGM → meets MinStake
+	// Accuracy: 100% → meets 77%
+	// SlashCount: 0 → meets MaxSlashCount=0
+	if v.VerificationsCompleted != 267 {
+		t.Fatalf("Step 8: expected 267 total verifications, got %d", v.VerificationsCompleted)
+	}
+	if v.ContestedVerificationsCorrect != 33 {
+		t.Fatalf("Step 8: expected 33 contested correct, got %d", v.ContestedVerificationsCorrect)
+	}
+	if v.Tier != "guardian" {
+		t.Fatalf("Step 8: expected guardian tier, got %s (stake=%s, verifs=%d, correct=%d, contested=%d, slashes=%d)",
+			v.Tier, v.TotalStake, v.VerificationsCompleted, v.VerificationsCorrect,
+			v.ContestedVerificationsCorrect, v.SlashCount)
+	}
+}
+
+// ---------- Task 2: Tier Demotion Tests ----------
+
+func TestTierDemotion_GuardianSlash_ImmediateDemotion(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_gdemotion_______").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:gdemotion", "11111000000") // 11,111 LGM
+	promoteToGuardian(t, k, ctx, valAddr)
+
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.Tier != "guardian" {
+		t.Fatalf("precondition: expected guardian tier, got %s", v.Tier)
+	}
+
+	// Slash the guardian → should immediately drop to Bonded
+	// (Guardian requires MaxSlashCount=0, any slash disqualifies)
+	err := k.SlashValidator(ctx, valAddr, "100000", "test_guardian_demotion")
+	if err != nil {
+		t.Fatalf("SlashValidator failed: %v", err)
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Tier == "guardian" {
+		t.Fatal("guardian should be demoted after slash")
+	}
+	if v.Tier != "bonded" {
+		t.Errorf("expected demotion to bonded (still meets bonded requirements), got %s", v.Tier)
+	}
+	if v.SlashCount != 1 {
+		t.Errorf("expected slashCount=1, got %d", v.SlashCount)
+	}
+}
+
+func TestTierDemotion_StakeDropsBelowThreshold(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_stakedrop_______").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:stakedrop", "1111000000") // 1,111 LGM
+	promoteToBonded(t, k, ctx, valAddr)
+
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.Tier != "bonded" {
+		t.Fatalf("precondition: expected bonded, got %s", v.Tier)
+	}
+
+	// Decrease stake below bonded threshold (1,111 LGM → 1,110 LGM)
+	_, err := k.UpdateValidatorStake(ctx, &types.MsgUpdateValidatorStake{
+		Validator:  valAddr,
+		Amount:     "1000000", // reduce by 1 LGM
+		IsIncrease: false,
+	})
+	if err != nil {
+		t.Fatalf("stake decrease failed: %v", err)
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	// New stake: 1,111,000,000 - 1,000,000 = 1,110,000,000 < 1,111,000,000 required
+	if v.Tier == "bonded" {
+		t.Fatal("should be demoted — stake dropped below bonded threshold")
+	}
+	// With 20 verifications at 75% accuracy and 1.11 LGM+: should be verified
+	// 15 correct / 20 total = 750000 bps (75%) < 770000 (77%) — not enough for verified
+	// So it should drop to apprentice
+	// Actually: promoteToBonded sets 20 verifs, 15 correct = 75% < 77% for verified
+	// But verified also needs 1.11 LGM stake — check: 1,110,000,000 > 1,110,000 ✓
+	// Accuracy: 750000 < 770000 — doesn't qualify for verified
+	if v.Tier != "apprentice" {
+		t.Errorf("expected demotion to apprentice (accuracy 75%% < 77%% for verified), got %s", v.Tier)
+	}
+}
+
+func TestTierDemotion_AccuracyDropsBelowThreshold(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_accydrop________").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:accydrop", "1110000") // 1.11 LGM (verified stake)
+
+	// Set up as verified: 22 verifications at 100% accuracy
+	v, _ := k.GetValidator(ctx, valAddr)
+	v.VerificationsCompleted = 22
+	v.VerificationsCorrect = 22
+	v.Tier = "verified"
+	k.SetValidator(ctx, v)
+
+	// Verify precondition
+	v, _ = k.GetValidator(ctx, valAddr)
+	if v.Tier != "verified" {
+		t.Fatalf("precondition: expected verified, got %s", v.Tier)
+	}
+
+	// Record 8 incorrect verifications to drop accuracy below 77%
+	// Current: 22/22 = 100%. After 8 wrong: 22/30 = 73.3% < 77%
+	for i := 0; i < 8; i++ {
+		if err := k.RecordVerification(ctx, valAddr, false, false); err != nil {
+			t.Fatalf("RecordVerification #%d failed: %v", i+1, err)
+		}
+	}
+
+	v, _ = k.GetValidator(ctx, valAddr)
+	accuracy := v.GetAccuracyRate()
+	if accuracy >= 770000 {
+		t.Fatalf("expected accuracy < 77%%, got %d bps", accuracy)
+	}
+	if v.Tier == "verified" {
+		t.Fatal("should be demoted — accuracy dropped below verified threshold")
+	}
+	if v.Tier != "apprentice" {
+		t.Errorf("expected demotion to apprentice, got %s", v.Tier)
+	}
+}
+
+func TestTierDemotion_SlashDecayWindow(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_slashdecay______").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:slashdecay", "11111000000") // 11,111 LGM
+
+	// Set up as bonded with guardian-level stats EXCEPT a recent slash
+	v, _ := k.GetValidator(ctx, valAddr)
+	v.VerificationsCompleted = 1200
+	v.VerificationsCorrect = 1000
+	v.ContestedVerificationsCorrect = 33
+	v.SlashCount = 1
+	v.LastSlashedHeight = 100 // slashed at current block height
+	v.Tier = "bonded"        // can't be guardian due to slash
+	k.SetValidator(ctx, v)
+
+	// At height 100, slash is within window → should remain bonded, not guardian
+	tier := keeper.ComputeValidatorTier(ctx, k, v.TotalStake, v.VerificationsCompleted,
+		v.VerificationsCorrect, v.SlashCount, v.ContestedVerificationsCorrect, v.LastSlashedHeight)
+	if tier == types.TierGuardian {
+		t.Fatal("should NOT be guardian — recent slash within window")
+	}
+
+	// Advance past 10-epoch window: 10 * 34272 = 342720 blocks
+	params := k.GetParams(ctx)
+	epochLength := params.GetSlashDecayPeriodBlocks()
+	windowBlocks := 10 * epochLength // 342720
+	futureCtx := ctx.WithBlockHeight(int64(100 + windowBlocks + 1))
+
+	// Now the slash is outside the window → should qualify for guardian
+	tier = keeper.ComputeValidatorTier(futureCtx, k, v.TotalStake, v.VerificationsCompleted,
+		v.VerificationsCorrect, v.SlashCount, v.ContestedVerificationsCorrect, v.LastSlashedHeight)
+	if tier != types.TierGuardian {
+		t.Errorf("expected guardian after slash window expired, got %v", tier)
+	}
+}
+
+// ---------- Task 3: Contested Verification Flow ----------
+
+func TestContestedVerification_ChallengeRound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_challenge_______").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:challenge", "1111000000")
+
+	// Record a correct contested verification (simulating challenge round)
+	err := k.RecordVerification(ctx, valAddr, true, true) // contested=true
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.ContestedVerificationsCorrect != 1 {
+		t.Errorf("challenge round: expected ContestedVerificationsCorrect=1, got %d", v.ContestedVerificationsCorrect)
+	}
+	if v.VerificationsCompleted != 1 {
+		t.Errorf("expected VerificationsCompleted=1, got %d", v.VerificationsCompleted)
+	}
+	if v.VerificationsCorrect != 1 {
+		t.Errorf("expected VerificationsCorrect=1, got %d", v.VerificationsCorrect)
+	}
+}
+
+func TestContestedVerification_ContradictionRound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_contradiction___").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:contradiction", "1111000000")
+
+	// Contradiction round is also contested=true
+	err := k.RecordVerification(ctx, valAddr, true, true)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.ContestedVerificationsCorrect != 1 {
+		t.Errorf("contradiction round: expected ContestedVerificationsCorrect=1, got %d", v.ContestedVerificationsCorrect)
+	}
+}
+
+func TestContestedVerification_NormalRound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	valAddr := sdk.AccAddress("val_normalround_____").String()
+	registerTestValidator(t, k, ctx, valAddr, "did:lgm:normalround", "1111000000")
+
+	// Normal round: contested=false → should NOT increment ContestedVerificationsCorrect
+	err := k.RecordVerification(ctx, valAddr, true, false)
+	if err != nil {
+		t.Fatalf("RecordVerification failed: %v", err)
+	}
+
+	v, _ := k.GetValidator(ctx, valAddr)
+	if v.ContestedVerificationsCorrect != 0 {
+		t.Errorf("normal round: expected ContestedVerificationsCorrect=0, got %d", v.ContestedVerificationsCorrect)
+	}
+	if v.VerificationsCorrect != 1 {
+		t.Errorf("expected VerificationsCorrect=1, got %d", v.VerificationsCorrect)
+	}
+}
+
+func TestContestedVerification_3xMultiplier(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// The 3x multiplier boosts effective verification count, NOT MinContestedVerifications.
+	// MinContestedVerifications=33 requires 33 raw contested correct verifications.
+	// Guardian MinVerifications=333 uses effective count.
+	//
+	// With 267 total verifications and 33 contested correct:
+	// effective = (267-33) + 33*3 = 234 + 99 = 333 → meets MinVerifications
+	// Without multiplier: 267 < 333 → would NOT qualify
+	tier := keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000", // guardian stake
+		267,           // total verifications (less than 333 threshold)
+		250,           // correct (93.6% accuracy > 77%)
+		0,             // no slashes
+		33,            // 33 contested correct (meets MinContestedVerifications)
+		0,
+	)
+	// effective = (267-33) + 33*3 = 234 + 99 = 333 ≥ 333 → qualifies
+	if tier != types.TierGuardian {
+		t.Errorf("3x multiplier: expected guardian (267 total + 33 contested*3 = 333 effective), got %v", tier)
+	}
+
+	// Without the multiplier bonus, 267 total wouldn't be enough.
+	// Prove: with 266 total and 33 contested:
+	// effective = (266-33) + 33*3 = 233 + 99 = 332 < 333 → doesn't qualify
+	tier = keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",
+		266, // one fewer → effective = 332 < 333
+		250,
+		0,
+		33,
+		0,
+	)
+	if tier == types.TierGuardian {
+		t.Error("should NOT qualify for guardian with 332 effective verifications (< 333)")
+	}
+
+	// Confirm MinContestedVerifications is raw, not multiplied:
+	// 32 contested correct < 33 → fails even with high total
+	tier = keeper.ComputeValidatorTier(
+		ctx, k,
+		"11111000000",
+		500, // plenty of total
+		400,
+		0,
+		32, // only 32 < 33 minimum
+		0,
+	)
+	if tier == types.TierGuardian {
+		t.Error("should NOT qualify for guardian with only 32 contested (< 33 MinContestedVerifications)")
+	}
+}
+
+// ---------- Task 4: VRF Selection Weight by Tier ----------
+
+func TestVRFSelection_TierWeighting(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create validators at each tier
+	apprenticeAddr := sdk.AccAddress("val_vrf_apprentice__").String()
+	verifiedAddr := sdk.AccAddress("val_vrf_verified____").String()
+	bondedAddr := sdk.AccAddress("val_vrf_bonded______").String()
+	guardianAddr := sdk.AccAddress("val_vrf_guardian____").String()
+
+	registerTestValidator(t, k, ctx, apprenticeAddr, "did:lgm:vrfa", "111000")          // 0.111 LGM
+	registerTestValidator(t, k, ctx, verifiedAddr, "did:lgm:vrfv", "1110000")           // 1.11 LGM
+	registerTestValidator(t, k, ctx, bondedAddr, "did:lgm:vrfb", "1111000000")          // 1,111 LGM
+	registerTestValidator(t, k, ctx, guardianAddr, "did:lgm:vrfg", "11111000000")       // 11,111 LGM
+
+	// Set up verified tier requirements
+	vv, _ := k.GetValidator(ctx, verifiedAddr)
+	vv.VerificationsCompleted = 22
+	vv.VerificationsCorrect = 22
+	vv.Tier = "verified"
+	k.SetValidator(ctx, vv)
+
+	promoteToBonded(t, k, ctx, bondedAddr)
+	promoteToGuardian(t, k, ctx, guardianAddr)
+
+	params := k.GetParams(ctx)
+
+	// Test effective selection stakes
+	apprenticeV, _ := k.GetValidator(ctx, apprenticeAddr)
+	verifiedV, _ := k.GetValidator(ctx, verifiedAddr)
+	bondedV, _ := k.GetValidator(ctx, bondedAddr)
+	guardianV, _ := k.GetValidator(ctx, guardianAddr)
+
+	apprenticeStake := keeper.GetEffectiveSelectionStake(ctx, k, apprenticeV, params)
+	verifiedStake := keeper.GetEffectiveSelectionStake(ctx, k, verifiedV, params)
+	bondedStake := keeper.GetEffectiveSelectionStake(ctx, k, bondedV, params)
+	guardianStake := keeper.GetEffectiveSelectionStake(ctx, k, guardianV, params)
+
+	// Apprentice: virtual stake = 11 LGM = 11000000 ulgm
+	if apprenticeStake != "11000000" {
+		t.Errorf("apprentice: expected virtual stake 11000000, got %s", apprenticeStake)
+	}
+
+	// Verified: virtual stake = 11 LGM = 11000000 ulgm (same as apprentice)
+	if verifiedStake != "11000000" {
+		t.Errorf("verified: expected virtual stake 11000000, got %s", verifiedStake)
+	}
+
+	// Bonded: real stake (1,111 LGM = 1111000000 ulgm)
+	if bondedStake != bondedV.TotalStake {
+		t.Errorf("bonded: expected real stake %s, got %s", bondedV.TotalStake, bondedStake)
+	}
+
+	// Guardian: real stake (11,111 LGM = 11111000000 ulgm)
+	if guardianStake != guardianV.TotalStake {
+		t.Errorf("guardian: expected real stake %s, got %s", guardianV.TotalStake, guardianStake)
+	}
+
+	// Verify tier reward multipliers
+	baseReward := "1000000"
+
+	apprenticeReward := keeper.CalculateTierReward(ctx, k, types.TierApprentice, baseReward)
+	verifiedReward := keeper.CalculateTierReward(ctx, k, types.TierVerified, baseReward)
+	bondedReward := keeper.CalculateTierReward(ctx, k, types.TierBonded, baseReward)
+	guardianReward := keeper.CalculateTierReward(ctx, k, types.TierGuardian, baseReward)
+
+	// Apprentice: 0.1x → 100000
+	if apprenticeReward != "100000" {
+		t.Errorf("apprentice reward: expected 100000 (0.1x), got %s", apprenticeReward)
+	}
+	// Verified: 0.5x → 500000
+	if verifiedReward != "500000" {
+		t.Errorf("verified reward: expected 500000 (0.5x), got %s", verifiedReward)
+	}
+	// Bonded: 1.0x → 1000000
+	if bondedReward != "1000000" {
+		t.Errorf("bonded reward: expected 1000000 (1.0x), got %s", bondedReward)
+	}
+	// Guardian: 2.0x → 2000000
+	if guardianReward != "2000000" {
+		t.Errorf("guardian reward: expected 2000000 (2.0x), got %s", guardianReward)
+	}
+}
+
+func TestVRFSelection_OnlyEligibleCategories(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Apprentice: protocol, computational, formal only
+	apprenticeCategories := []struct {
+		category string
+		allowed  bool
+	}{
+		{"protocol", true},
+		{"computational", true},
+		{"formal", true},
+		{"empirical", false},
+		{"oracle", false},
+		{"attestation", false},
+		{"predictive", false},
+		{"social", false},
+		{"contested", false},
+	}
+
+	for _, tc := range apprenticeCategories {
+		result := keeper.IsTierEligibleForCategory(ctx, k, types.TierApprentice, tc.category)
+		if result != tc.allowed {
+			t.Errorf("Apprentice + %s: expected %v, got %v", tc.category, tc.allowed, result)
+		}
+	}
+
+	// Verified: adds empirical
+	verifiedCategories := []struct {
+		category string
+		allowed  bool
+	}{
+		{"protocol", true},
+		{"computational", true},
+		{"formal", true},
+		{"empirical", true},
+		{"oracle", false},
+		{"attestation", false},
+	}
+
+	for _, tc := range verifiedCategories {
+		result := keeper.IsTierEligibleForCategory(ctx, k, types.TierVerified, tc.category)
+		if result != tc.allowed {
+			t.Errorf("Verified + %s: expected %v, got %v", tc.category, tc.allowed, result)
+		}
+	}
+
+	// Bonded: adds oracle, attestation
+	for _, cat := range []string{"protocol", "computational", "formal", "empirical", "oracle", "attestation"} {
+		if !keeper.IsTierEligibleForCategory(ctx, k, types.TierBonded, cat) {
+			t.Errorf("Bonded should be eligible for %s", cat)
+		}
+	}
+	for _, cat := range []string{"predictive", "social", "contested"} {
+		if keeper.IsTierEligibleForCategory(ctx, k, types.TierBonded, cat) {
+			t.Errorf("Bonded should NOT be eligible for %s", cat)
+		}
+	}
+
+	// Guardian: all categories
+	allCategories := []string{"protocol", "computational", "formal", "empirical",
+		"oracle", "attestation", "predictive", "social", "contested"}
+	for _, cat := range allCategories {
+		if !keeper.IsTierEligibleForCategory(ctx, k, types.TierGuardian, cat) {
+			t.Errorf("Guardian should be eligible for %s", cat)
+		}
+	}
+}
+
+// ---------- Task 5: Edge Cases ----------
+
+func TestTier_ExactThresholdStake(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Exact minimum for Verified: 1,110,000 ulgm (1.11 LGM)
+	tier := keeper.ComputeValidatorTier(ctx, k,
+		"1110000", // exact Verified MinStake
+		22,        // meets MinVerifications
+		22,        // 100% accuracy > 77%
+		0, 0, 0,
+	)
+	if tier != types.TierVerified {
+		t.Errorf("exact Verified threshold: expected verified, got %v", tier)
+	}
+
+	// Exact minimum for Bonded: 1,111,000,000 ulgm (1,111 LGM)
+	tier = keeper.ComputeValidatorTier(ctx, k,
+		"1111000000", // exact Bonded MinStake
+		11,           // meets MinVerifications
+		11,           // 100% accuracy > 50%
+		0, 0, 0,
+	)
+	if tier != types.TierBonded {
+		t.Errorf("exact Bonded threshold: expected bonded, got %v", tier)
+	}
+
+	// Exact minimum for Guardian: 11,111,000,000 ulgm (11,111 LGM)
+	tier = keeper.ComputeValidatorTier(ctx, k,
+		"11111000000", // exact Guardian MinStake
+		333,           // meets effective verifications (no contested multiplier since 33*3=99, 333-33+99=399 ≥ 333)
+		300,           // 90% accuracy > 77%
+		0,             // zero slashes
+		33,            // meets MinContestedVerifications
+		0,
+	)
+	if tier != types.TierGuardian {
+		t.Errorf("exact Guardian threshold: expected guardian, got %v", tier)
+	}
+}
+
+func TestTier_OneBelow(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// One below Verified threshold: 1,109,999 ulgm (< 1.11 LGM)
+	tier := keeper.ComputeValidatorTier(ctx, k,
+		"1109999", // 1 ulgm below Verified MinStake
+		22,        // meets verifications
+		22,        // 100% accuracy
+		0, 0, 0,
+	)
+	if tier != types.TierApprentice {
+		t.Errorf("one below Verified: expected apprentice, got %v", tier)
+	}
+
+	// One below Bonded threshold: 1,110,999,999 ulgm (< 1,111 LGM)
+	tier = keeper.ComputeValidatorTier(ctx, k,
+		"1110999999",
+		22,
+		22,
+		0, 0, 0,
+	)
+	// Should qualify for Verified (has enough stake, verifications, accuracy)
+	if tier != types.TierVerified {
+		t.Errorf("one below Bonded: expected verified (meets verified requirements), got %v", tier)
+	}
+
+	// One below Guardian threshold: 11,110,999,999 ulgm (< 11,111 LGM)
+	tier = keeper.ComputeValidatorTier(ctx, k,
+		"11110999999",
+		1200,
+		1000,
+		0,
+		33,
+		0,
+	)
+	// Should qualify for Bonded (meets bonded requirements)
+	if tier != types.TierBonded {
+		t.Errorf("one below Guardian: expected bonded, got %v", tier)
+	}
+}
+
+func TestTier_ZeroVerifications(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// New validator with high stake but zero verifications → Apprentice
+	// Even with guardian-level stake, 0 verifications means no upgrade
+	tier := keeper.ComputeValidatorTier(ctx, k,
+		"11111000000", // 11,111 LGM (guardian stake)
+		0,             // zero verifications
+		0,             // zero correct
+		0, 0, 0,
+	)
+	if tier != types.TierApprentice {
+		t.Errorf("zero verifications: expected apprentice regardless of stake, got %v", tier)
+	}
+
+	// Even with Bonded-level stake: 0 verifications → Apprentice
+	tier = keeper.ComputeValidatorTier(ctx, k,
+		"1111000000", // 1,111 LGM (bonded stake)
+		0,
+		0,
+		0, 0, 0,
+	)
+	if tier != types.TierApprentice {
+		t.Errorf("bonded stake but zero verifications: expected apprentice, got %v", tier)
+	}
+
+	// Verified-level stake with 0 verifications → Apprentice
+	tier = keeper.ComputeValidatorTier(ctx, k,
+		"1110000", // 1.11 LGM
+		0,
+		0,
+		0, 0, 0,
+	)
+	if tier != types.TierApprentice {
+		t.Errorf("verified stake but zero verifications: expected apprentice, got %v", tier)
 	}
 }

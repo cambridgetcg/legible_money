@@ -38,8 +38,19 @@ func ExtendVoteHandler(
 	knowledgeKeeper knowledgekeeper.Keeper,
 	config *VoteExtensionConfig,
 ) sdk.ExtendVoteHandler {
-	return func(ctx sdk.Context, req *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
+	return func(ctx sdk.Context, req *abci.RequestExtendVote) (resp *abci.ResponseExtendVote, err error) {
 		logger := ctx.Logger().With("module", "abci", "handler", "ExtendVote")
+
+		// Panic recovery: a panic in ExtendVote must not crash the validator.
+		// Return an empty extension so the vote can still be cast.
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("PANIC in ExtendVote — returning empty extension",
+					"height", req.Height, "panic", fmt.Sprintf("%v", r))
+				resp = &abci.ResponseExtendVote{}
+				err = nil
+			}
+		}()
 
 		ext := VoteExtension{
 			ValidatorAddress: config.ValidatorAddress,
@@ -113,6 +124,12 @@ func ExtendVoteHandler(
 
 // handleCommitPhase generates a commitment for a round in commit phase.
 // Returns nil if the validator is not selected via VRF for this round.
+//
+// P0-1 FIX: If a commitment already exists in the local store for this round,
+// re-use it to prevent false equivocation slashing. Without this check, a
+// validator selected in consecutive blocks would generate different salts,
+// producing different commitment hashes that StoreCommitmentInRound treats
+// as equivocation.
 func handleCommitPhase(
 	ctx sdk.Context,
 	keeper knowledgekeeper.Keeper,
@@ -150,6 +167,21 @@ func handleCommitPhase(
 
 	if !selected {
 		return nil, fmt.Errorf("not selected for round %s", round.Id)
+	}
+
+	// P0-1 FIX: Re-use existing commitment to prevent equivocation.
+	// If we already generated a commitment for this round (in a prior block),
+	// re-emit the same hash so StoreCommitmentInRound sees an idempotent
+	// duplicate rather than a conflicting commitment.
+	if existing, found := config.LocalStore.Get(round.Id); found {
+		commitmentHash := ComputeCommitmentHash(round.Id, existing.Verdict, existing.Confidence, existing.Salt)
+		return &VoteCommitment{
+			RoundID:        round.Id,
+			CommitmentHash: commitmentHash,
+			VRFOutput:      hex.EncodeToString(vrfOutput),
+			VRFProof:       hex.EncodeToString(vrfProof),
+			Height:         uint64(ctx.BlockHeight()),
+		}, nil
 	}
 
 	// Evaluate claim via the deterministic evaluation engine.
@@ -232,8 +264,19 @@ func handleRevealPhase(
 func VerifyVoteExtensionHandler(
 	keeper knowledgekeeper.Keeper,
 ) sdk.VerifyVoteExtensionHandler {
-	return func(ctx sdk.Context, req *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
+	return func(ctx sdk.Context, req *abci.RequestVerifyVoteExtension) (resp *abci.ResponseVerifyVoteExtension, err error) {
 		logger := ctx.Logger().With("module", "abci", "handler", "VerifyVoteExtension")
+
+		// Panic recovery: a panic in VerifyVoteExtension must not crash the node.
+		// Accept the extension to avoid halting consensus over a local error.
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("PANIC in VerifyVoteExtension — accepting extension to preserve liveness",
+					"height", req.Height, "panic", fmt.Sprintf("%v", r))
+				resp = acceptExtension()
+				err = nil
+			}
+		}()
 
 		// Empty extensions are always valid
 		if len(req.VoteExtension) == 0 {
@@ -270,25 +313,37 @@ func VerifyVoteExtensionHandler(
 				return rejectExtension(), nil
 			}
 
-			// Verify VRF proof if present
-			if c.VRFOutput != "" && c.VRFProof != "" {
-				round, found := keeper.GetVerificationRound(ctx, c.RoundID)
-				if !found {
-					logger.Debug("round not found for commitment", "round_id", c.RoundID)
-					continue // Don't reject — round may have been cleaned up
-				}
-
-				err := keeper.VerifyValidatorVRFSelection(
-					ctx, round, ext.ValidatorAddress, c.VRFOutput, c.VRFProof,
+			// GAP-1 FIX: VRF proof is now REQUIRED for all commitments.
+			// Previously "if present" was optional, allowing unverified commitments
+			// from validators who skipped VRF proof generation. Without a VRF proof
+			// the protocol cannot verify that the validator was legitimately selected.
+			if c.VRFOutput == "" || c.VRFProof == "" {
+				logger.Warn("commitment missing VRF proof — rejecting extension",
+					"round_id", c.RoundID,
+					"validator", ext.ValidatorAddress,
 				)
-				if err != nil {
-					logger.Warn("VRF verification failed",
-						"round_id", c.RoundID,
-						"validator", ext.ValidatorAddress,
-						"err", err,
-					)
-					return rejectExtension(), nil
-				}
+				return rejectExtension(), nil
+			}
+
+			round, found := keeper.GetVerificationRound(ctx, c.RoundID)
+			if !found {
+				// Round may have been cleaned up between extension creation and verification.
+				// Accept with benefit of doubt — the round cannot be verified.
+				logger.Debug("round not found for commitment — accepting (may be cleaned up)",
+					"round_id", c.RoundID)
+				continue
+			}
+
+			err := keeper.VerifyValidatorVRFSelection(
+				ctx, round, ext.ValidatorAddress, c.VRFOutput, c.VRFProof,
+			)
+			if err != nil {
+				logger.Warn("VRF verification failed",
+					"round_id", c.RoundID,
+					"validator", ext.ValidatorAddress,
+					"err", err,
+				)
+				return rejectExtension(), nil
 			}
 		}
 

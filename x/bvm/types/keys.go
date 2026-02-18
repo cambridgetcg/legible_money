@@ -29,8 +29,9 @@ var (
 	GasScheduleKey    = []byte{0x06}
 
 	// Index prefixes
-	ContractCreatorIndexPrefix = []byte{0x10}
-	ScheduleBlockIndexPrefix   = []byte{0x11}
+	ContractCreatorIndexPrefix   = []byte{0x10}
+	ScheduleBlockIndexPrefix     = []byte{0x11}
+	ScheduleCapabilityKeyPrefix  = []byte{0x12}
 
 	// Counter keys
 	ContractCounterKey = []byte{0x20}
@@ -90,6 +91,11 @@ func ScheduleBlockPrefix(block uint64) []byte {
 	key = append(key, ScheduleBlockIndexPrefix...)
 	key = append(key, Uint64ToBytes(block)...)
 	return key
+}
+
+// ScheduleCapabilityKey returns the store key for a schedule's stored capabilities.
+func ScheduleCapabilityKey(scheduleId string) []byte {
+	return append(ScheduleCapabilityKeyPrefix, []byte(scheduleId)...)
 }
 
 // Uint64ToBytes converts a uint64 to big-endian bytes.

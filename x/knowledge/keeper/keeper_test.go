@@ -290,11 +290,14 @@ func TestCommitRevealLifecycle(t *testing.T) {
 	}
 
 	// Submit commitments (commit phase)
+	// P0-2: Commitment hashes must be computed from the reveal data that will
+	// be submitted later, so StoreRevealInRound can verify hash consistency.
 	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
 	for _, v := range validators {
+		hash := types.ComputeCommitmentHash(round.Id, "accept", 800000, "salt-"+v)
 		err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
 			Validator:         v,
-			CommitmentHash:    "deadbeef" + v + "deadbeefdeadbeefdeadbeefdeadbeef",
+			CommitmentHash:    hash,
 			SubmittedAtHeight: 11,
 		})
 		if err != nil {
@@ -313,12 +316,13 @@ func TestCommitRevealLifecycle(t *testing.T) {
 	updatedRound.Phase = "reveal"
 	k.SetVerificationRound(ctx, updatedRound)
 
-	// Submit reveals
+	// Submit reveals (must match the commitment hashes)
 	for _, v := range validators {
 		err := k.StoreRevealInRound(ctx, round.Id, types.VerificationReveal{
 			Validator:         v,
 			Verdict:           "accept",
 			Confidence:        800000,
+			Salt:              "salt-" + v,
 			SubmittedAtHeight: 15,
 		})
 		if err != nil {
@@ -821,10 +825,11 @@ func TestRevealStoresSalt(t *testing.T) {
 	k.SetClaim(ctx, claim)
 	round, _ := k.CreateVerificationRound(ctx, claim)
 
-	// Store commitment
+	// Store commitment (P0-2: hash must match the reveal data below)
+	commitHash := types.ComputeCommitmentHash(round.Id, "accept", 800000, "random-salt-value-12345")
 	err := k.StoreCommitmentInRound(ctx, round.Id, types.VerificationCommitment{
 		Validator:         "lgmvaloper1abc",
-		CommitmentHash:    "aaaa" + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		CommitmentHash:    commitHash,
 		SubmittedAtHeight: 11,
 	})
 	if err != nil {
@@ -3572,7 +3577,7 @@ func TestCommitmentDuplicate_SameHash_NoEquivocation(t *testing.T) {
 }
 
 func TestRevealEquivocation_DifferentVerdict(t *testing.T) {
-	k, ctx, mockSK := setupKeeper(t)
+	k, ctx, _ := setupKeeper(t)
 
 	claim := types.Claim{
 		Id:                "reveal-equivoc-1",
@@ -3586,10 +3591,13 @@ func TestRevealEquivocation_DifferentVerdict(t *testing.T) {
 	k.SetClaim(ctx, claim)
 	round, _ := k.CreateVerificationRound(ctx, claim)
 
-	// Add commitment first
+	// Add commitment with hash matching the first reveal's data.
+	// P0-2: The commitment hash is computed from (roundID, verdict, confidence, salt)
+	// so StoreRevealInRound can verify the reveal is authentic.
+	commitHash := types.ComputeCommitmentHash(round.Id, "accept", 900000, "salt-def")
 	c := &types.VerificationCommitment{
 		Validator:      "lgmvaloper1def",
-		CommitmentHash: "hash_commit",
+		CommitmentHash: commitHash,
 	}
 	_ = k.StoreCommitmentInRound(ctx, round.Id, *c)
 
@@ -3598,46 +3606,34 @@ func TestRevealEquivocation_DifferentVerdict(t *testing.T) {
 	round.Phase = "reveal"
 	k.SetVerificationRound(ctx, round)
 
-	// First reveal
+	// First reveal (matches commitment hash)
 	r1 := &types.VerificationReveal{
 		Validator:  "lgmvaloper1def",
 		Verdict:    "accept",
 		Confidence: 900000,
+		Salt:       "salt-def",
 	}
 	err := k.StoreRevealInRound(ctx, round.Id, *r1)
 	if err != nil {
 		t.Fatalf("first reveal should succeed: %v", err)
 	}
 
-	// Second reveal with different verdict → equivocation
+	// Second reveal with different verdict → caught by P0-2 hash verification.
+	// Before P0-2, this would reach the equivocation check. After P0-2, the
+	// hash mismatch is caught first (defense in depth: proposer tampering is
+	// indistinguishable from equivocation at the keeper level).
 	r2 := &types.VerificationReveal{
 		Validator:  "lgmvaloper1def",
 		Verdict:    "reject",
 		Confidence: 200000,
+		Salt:       "salt-def",
 	}
 	err = k.StoreRevealInRound(ctx, round.Id, *r2)
 	if err == nil {
-		t.Fatal("expected error for equivocating reveal")
+		t.Fatal("expected error for reveal with different verdict")
 	}
-	if !strings.Contains(err.Error(), "equivocation") {
-		t.Errorf("expected equivocation error, got: %v", err)
-	}
-
-	// Verify validator was slashed
-	if len(mockSK.slashes) != 1 {
-		t.Fatalf("expected 1 slash, got %d", len(mockSK.slashes))
-	}
-	if mockSK.slashes[0].Amount != "3000000" { // full stake for lgmvaloper1def
-		t.Errorf("expected 100%% slash (3000000), got %s", mockSK.slashes[0].Amount)
-	}
-
-	// Verify evidence
-	evidence, found := k.GetEquivocationEvidence(ctx, round.Id, "lgmvaloper1def")
-	if !found {
-		t.Fatal("expected equivocation evidence to be stored")
-	}
-	if evidence.Type != "reveal" {
-		t.Errorf("expected type=reveal, got %s", evidence.Type)
+	if !strings.Contains(err.Error(), "does not match commitment hash") {
+		t.Errorf("expected commitment hash mismatch error, got: %v", err)
 	}
 }
 
