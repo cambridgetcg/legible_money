@@ -213,51 +213,8 @@ type MsgServer interface {
 	EndorseQualification(context.Context, *MsgEndorseQualification) (*MsgEndorseQualificationResponse, error)
 }
 
-// QueryServer defines the capture defense module's query server interface.
-type QueryServer interface {
-	Qualification(context.Context, *QueryQualificationRequest) (*QueryQualificationResponse, error)
-	ValidatorQualifications(context.Context, *QueryValidatorQualificationsRequest) (*QueryValidatorQualificationsResponse, error)
-	DomainReputation(context.Context, *QueryDomainReputationRequest) (*QueryDomainReputationResponse, error)
-	CaptureRisk(context.Context, *QueryCaptureRiskRequest) (*QueryCaptureRiskResponse, error)
-}
-
-// --- Query Types ---
-
-type QueryQualificationRequest struct {
-	ValidatorAddr string `json:"validator_addr"`
-	Domain        string `json:"domain"`
-}
-
-type QueryQualificationResponse struct {
-	Qualification *DomainQualification `json:"qualification,omitempty"`
-	Found         bool                 `json:"found"`
-}
-
-type QueryValidatorQualificationsRequest struct {
-	ValidatorAddr string `json:"validator_addr"`
-}
-
-type QueryValidatorQualificationsResponse struct {
-	Qualifications []*DomainQualification `json:"qualifications"`
-}
-
-type QueryDomainReputationRequest struct {
-	ValidatorAddr string `json:"validator_addr"`
-	Domain        string `json:"domain"`
-}
-
-type QueryDomainReputationResponse struct {
-	Reputation *EffectiveReputationResult `json:"reputation"`
-}
-
-type QueryCaptureRiskRequest struct {
-	Domain string `json:"domain"`
-}
-
-type QueryCaptureRiskResponse struct {
-	Metrics *CaptureMetrics `json:"metrics,omitempty"`
-	Found   bool            `json:"found"`
-}
+// Query types (QueryServer, QueryQualificationRequest/Response, etc.) are now provided
+// by the proto-generated query.pb.go and query_grpc.pb.go files.
 
 // --- Codec Registration ---
 
@@ -317,79 +274,8 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 	s.RegisterService(&_Msg_serviceDesc, srv)
 }
 
-// gRPC service descriptors for query server
-var _Query_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.capture_defense.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Qualification", Handler: _Query_Qualification_Handler},
-		{MethodName: "ValidatorQualifications", Handler: _Query_ValidatorQualifications_Handler},
-		{MethodName: "DomainReputation", Handler: _Query_DomainReputation_Handler},
-		{MethodName: "CaptureRisk", Handler: _Query_CaptureRisk_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
-}
-
-func _Query_Qualification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryQualificationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Qualification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_defense.v1.Query/Qualification"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Qualification(ctx, req.(*QueryQualificationRequest))
-	})
-}
-
-func _Query_ValidatorQualifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryValidatorQualificationsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).ValidatorQualifications(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_defense.v1.Query/ValidatorQualifications"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ValidatorQualifications(ctx, req.(*QueryValidatorQualificationsRequest))
-	})
-}
-
-func _Query_DomainReputation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryDomainReputationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).DomainReputation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_defense.v1.Query/DomainReputation"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).DomainReputation(ctx, req.(*QueryDomainReputationRequest))
-	})
-}
-
-func _Query_CaptureRisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryCaptureRiskRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).CaptureRisk(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_defense.v1.Query/CaptureRisk"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).CaptureRisk(ctx, req.(*QueryCaptureRiskRequest))
-	})
-}
-
-// RegisterQueryServer registers the capture defense query server.
-func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, srv)
-}
+// Query gRPC service descriptor, handlers, and RegisterQueryServer are now provided
+// by the proto-generated query_grpc.pb.go file.
 
 
 // MsgUpdateParams is the governance message to update module params.

@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a QueryServer implementation.
@@ -23,18 +24,18 @@ var _ types.QueryServer = queryServer{}
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }
 
 // ChannelFlow returns the flow record for a specific IBC channel.
 func (q queryServer) ChannelFlow(goCtx context.Context, req *types.QueryChannelFlowRequest) (*types.QueryChannelFlowResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	if req.ChannelID == "" {
+	if req.ChannelId == "" {
 		return nil, types.ErrFlowNotFound.Wrap("channel_id is required")
 	}
 
-	flow, found := q.Keeper.GetFlow(ctx, req.ChannelID)
+	flow, found := q.Keeper.GetFlow(ctx, req.ChannelId)
 	if !found {
 		return &types.QueryChannelFlowResponse{Found: false}, nil
 	}

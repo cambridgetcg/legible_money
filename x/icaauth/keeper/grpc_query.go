@@ -10,6 +10,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	k Keeper
 }
 
@@ -35,5 +36,5 @@ func (qs *queryServer) InterchainAccounts(goCtx context.Context, req *types.Quer
 func (qs *queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := qs.k.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

@@ -9,6 +9,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -17,11 +18,12 @@ func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 	return &queryServer{Keeper: keeper}
 }
 
-var _ types.QueryServer = queryServer{}
+var _ types.QueryServer = &queryServer{}
 
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	return &types.QueryParamsResponse{Params: q.GetParams(ctx)}, nil
+	params := q.GetParams(ctx)
+	return &types.QueryParamsResponse{Params: &params}, nil
 }
 
 func (q queryServer) Process(goCtx context.Context, req *types.QueryProcessRequest) (*types.QueryProcessResponse, error) {

@@ -189,7 +189,7 @@ func (k msgServer) RegisterLogicZone(goCtx context.Context, msg *types.MsgRegist
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Check if zone already exists
-	if _, found := k.GetLogicZone(ctx, msg.ZoneProperties.Zone); found {
+	if _, found := k.GetLogicZone(ctx, types.LogicZone(msg.ZoneProperties.Zone)); found {
 		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneExists, msg.ZoneProperties.Zone)
 	}
 

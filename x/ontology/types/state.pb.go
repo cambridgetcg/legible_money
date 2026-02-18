@@ -372,6 +372,91 @@ func (x *DomainProposal) GetExpiresAt() uint64 {
 	return 0
 }
 
+// LogicZoneProperties defines the properties of a Godelian logic zone.
+type LogicZoneProperties struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Zone             string                 `protobuf:"bytes,1,opt,name=zone,proto3" json:"zone,omitempty"`
+	Complete         bool                   `protobuf:"varint,2,opt,name=complete,proto3" json:"complete,omitempty"`
+	Decidable        bool                   `protobuf:"varint,3,opt,name=decidable,proto3" json:"decidable,omitempty"`
+	GoedelApplies    bool                   `protobuf:"varint,4,opt,name=goedel_applies,json=goedelApplies,proto3" json:"goedel_applies,omitempty"`
+	MaxConfidenceBps uint64                 `protobuf:"varint,5,opt,name=max_confidence_bps,json=maxConfidenceBps,proto3" json:"max_confidence_bps,omitempty"`
+	Description      string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *LogicZoneProperties) Reset() {
+	*x = LogicZoneProperties{}
+	mi := &file_legible_ontology_v1_state_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogicZoneProperties) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogicZoneProperties) ProtoMessage() {}
+
+func (x *LogicZoneProperties) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_ontology_v1_state_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogicZoneProperties.ProtoReflect.Descriptor instead.
+func (*LogicZoneProperties) Descriptor() ([]byte, []int) {
+	return file_legible_ontology_v1_state_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *LogicZoneProperties) GetZone() string {
+	if x != nil {
+		return x.Zone
+	}
+	return ""
+}
+
+func (x *LogicZoneProperties) GetComplete() bool {
+	if x != nil {
+		return x.Complete
+	}
+	return false
+}
+
+func (x *LogicZoneProperties) GetDecidable() bool {
+	if x != nil {
+		return x.Decidable
+	}
+	return false
+}
+
+func (x *LogicZoneProperties) GetGoedelApplies() bool {
+	if x != nil {
+		return x.GoedelApplies
+	}
+	return false
+}
+
+func (x *LogicZoneProperties) GetMaxConfidenceBps() uint64 {
+	if x != nil {
+		return x.MaxConfidenceBps
+	}
+	return 0
+}
+
+func (x *LogicZoneProperties) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
 // CrossStratumLink represents a relationship between domains in different strata.
 type CrossStratumLink struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -385,7 +470,7 @@ type CrossStratumLink struct {
 
 func (x *CrossStratumLink) Reset() {
 	*x = CrossStratumLink{}
-	mi := &file_legible_ontology_v1_state_proto_msgTypes[3]
+	mi := &file_legible_ontology_v1_state_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -397,7 +482,7 @@ func (x *CrossStratumLink) String() string {
 func (*CrossStratumLink) ProtoMessage() {}
 
 func (x *CrossStratumLink) ProtoReflect() protoreflect.Message {
-	mi := &file_legible_ontology_v1_state_proto_msgTypes[3]
+	mi := &file_legible_ontology_v1_state_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -410,7 +495,7 @@ func (x *CrossStratumLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CrossStratumLink.ProtoReflect.Descriptor instead.
 func (*CrossStratumLink) Descriptor() ([]byte, []int) {
-	return file_legible_ontology_v1_state_proto_rawDescGZIP(), []int{3}
+	return file_legible_ontology_v1_state_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CrossStratumLink) GetSourceDomain() string {
@@ -488,7 +573,14 @@ const file_legible_ontology_v1_state_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\x04R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\v \x01(\x04R\texpiresAt\"\x95\x01\n" +
+	"expires_at\x18\v \x01(\x04R\texpiresAt\"\xda\x01\n" +
+	"\x13LogicZoneProperties\x12\x12\n" +
+	"\x04zone\x18\x01 \x01(\tR\x04zone\x12\x1a\n" +
+	"\bcomplete\x18\x02 \x01(\bR\bcomplete\x12\x1c\n" +
+	"\tdecidable\x18\x03 \x01(\bR\tdecidable\x12%\n" +
+	"\x0egoedel_applies\x18\x04 \x01(\bR\rgoedelApplies\x12,\n" +
+	"\x12max_confidence_bps\x18\x05 \x01(\x04R\x10maxConfidenceBps\x12 \n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\"\x95\x01\n" +
 	"\x10CrossStratumLink\x12#\n" +
 	"\rsource_domain\x18\x01 \x01(\tR\fsourceDomain\x12#\n" +
 	"\rtarget_domain\x18\x02 \x01(\tR\ftargetDomain\x12\x1b\n" +
@@ -507,12 +599,13 @@ func file_legible_ontology_v1_state_proto_rawDescGZIP() []byte {
 	return file_legible_ontology_v1_state_proto_rawDescData
 }
 
-var file_legible_ontology_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_legible_ontology_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_legible_ontology_v1_state_proto_goTypes = []any{
-	(*StratumProperties)(nil), // 0: legible.ontology.v1.StratumProperties
-	(*Domain)(nil),            // 1: legible.ontology.v1.Domain
-	(*DomainProposal)(nil),    // 2: legible.ontology.v1.DomainProposal
-	(*CrossStratumLink)(nil),  // 3: legible.ontology.v1.CrossStratumLink
+	(*StratumProperties)(nil),   // 0: legible.ontology.v1.StratumProperties
+	(*Domain)(nil),              // 1: legible.ontology.v1.Domain
+	(*DomainProposal)(nil),      // 2: legible.ontology.v1.DomainProposal
+	(*LogicZoneProperties)(nil), // 3: legible.ontology.v1.LogicZoneProperties
+	(*CrossStratumLink)(nil),    // 4: legible.ontology.v1.CrossStratumLink
 }
 var file_legible_ontology_v1_state_proto_depIdxs = []int32{
 	1, // 0: legible.ontology.v1.DomainProposal.domain:type_name -> legible.ontology.v1.Domain
@@ -534,7 +627,7 @@ func file_legible_ontology_v1_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_ontology_v1_state_proto_rawDesc), len(file_legible_ontology_v1_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

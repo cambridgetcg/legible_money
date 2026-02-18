@@ -26,8 +26,32 @@ import (
 	stakingcli "github.com/cosmos/cosmos-sdk/x/staking/client/cli"
 
 	legibleapp "github.com/legible-money/legible/app"
+	legibleauthcli "github.com/legible-money/legible/x/auth/client/cli"
+	autopoiesiscli "github.com/legible-money/legible/x/autopoiesis/client/cli"
+	billingcli "github.com/legible-money/legible/x/billing/client/cli"
+	bvmcli "github.com/legible-money/legible/x/bvm/client/cli"
+	capturechallengecli "github.com/legible-money/legible/x/capture_challenge/client/cli"
+	capturedefensecli "github.com/legible-money/legible/x/capture_defense/client/cli"
+	channelscli "github.com/legible-money/legible/x/channels/client/cli"
+	claimingpotcli "github.com/legible-money/legible/x/claiming_pot/client/cli"
+	computepoolcli "github.com/legible-money/legible/x/compute_pool/client/cli"
+	discoverycli "github.com/legible-money/legible/x/discovery/client/cli"
+	disputescli "github.com/legible-money/legible/x/disputes/client/cli"
+	emergencycli "github.com/legible-money/legible/x/emergency/client/cli"
+	evidencemgmtcli "github.com/legible-money/legible/x/evidence_mgmt/client/cli"
 	homecli "github.com/legible-money/legible/x/home/client/cli"
+	ibcratelimitcli "github.com/legible-money/legible/x/ibcratelimit/client/cli"
+	icaauthcli "github.com/legible-money/legible/x/icaauth/client/cli"
 	knowledgecli "github.com/legible-money/legible/x/knowledge/client/cli"
+	ontologycli "github.com/legible-money/legible/x/ontology/client/cli"
+	partnershipscli "github.com/legible-money/legible/x/partnerships/client/cli"
+	qualificationcli "github.com/legible-money/legible/x/qualification/client/cli"
+	researchcli "github.com/legible-money/legible/x/research/client/cli"
+	schedulecli "github.com/legible-money/legible/x/schedule/client/cli"
+	legiblestakingcli "github.com/legible-money/legible/x/staking/client/cli"
+	tokenscli "github.com/legible-money/legible/x/tokens/client/cli"
+	treecli "github.com/legible-money/legible/x/tree/client/cli"
+	vestingrewardscli "github.com/legible-money/legible/x/vesting_rewards/client/cli"
 )
 
 // NewRootCmd creates the root command for the legbled daemon.
@@ -111,7 +135,31 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		server.QueryBlocksCmd(),
 		server.QueryBlockResultsCmd(),
 		// Legible custom modules
+		legibleauthcli.NewQueryCmd(),
+		autopoiesiscli.NewQueryCmd(),
+		billingcli.NewQueryCmd(),
+		bvmcli.NewQueryCmd(),
+		capturechallengecli.NewQueryCmd(),
+		capturedefensecli.NewQueryCmd(),
+		channelscli.NewQueryCmd(),
+		claimingpotcli.NewQueryCmd(),
+		computepoolcli.NewQueryCmd(),
+		discoverycli.NewQueryCmd(),
+		disputescli.NewQueryCmd(),
+		emergencycli.NewQueryCmd(),
+		evidencemgmtcli.NewQueryCmd(),
+		ibcratelimitcli.NewQueryCmd(),
+		icaauthcli.NewQueryCmd(),
 		knowledgecli.NewQueryCmd(),
+		ontologycli.NewQueryCmd(),
+		partnershipscli.NewQueryCmd(),
+		qualificationcli.NewQueryCmd(),
+		researchcli.NewQueryCmd(),
+		schedulecli.NewQueryCmd(),
+		legiblestakingcli.NewQueryCmd(),
+		tokenscli.NewQueryCmd(),
+		treecli.NewQueryCmd(),
+		vestingrewardscli.NewQueryCmd(),
 	)
 	rootCmd.AddCommand(queryCmd)
 
@@ -136,8 +184,33 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		bankcli.NewTxCmd(addrCodec),
 		stakingcli.NewTxCmd(valAddrCodec, addrCodec),
 		govcli.NewTxCmd(nil),
-		knowledgecli.NewTxCmd(),
+		// Legible custom modules
+		legibleauthcli.NewTxCmd(),
+		autopoiesiscli.NewTxCmd(),
+		billingcli.NewTxCmd(),
+		bvmcli.NewTxCmd(),
+		capturechallengecli.NewTxCmd(),
+		capturedefensecli.NewTxCmd(),
+		channelscli.NewTxCmd(),
+		claimingpotcli.NewTxCmd(),
+		computepoolcli.NewTxCmd(),
+		discoverycli.NewTxCmd(),
+		disputescli.NewTxCmd(),
+		emergencycli.NewTxCmd(),
+		evidencemgmtcli.NewTxCmd(),
 		homecli.NewTxCmd(),
+		ibcratelimitcli.NewTxCmd(),
+		icaauthcli.NewTxCmd(),
+		knowledgecli.NewTxCmd(),
+		ontologycli.NewTxCmd(),
+		partnershipscli.NewTxCmd(),
+		qualificationcli.NewTxCmd(),
+		researchcli.NewTxCmd(),
+		schedulecli.NewTxCmd(),
+		legiblestakingcli.NewTxCmd(),
+		tokenscli.NewTxCmd(),
+		treecli.NewTxCmd(),
+		vestingrewardscli.NewTxCmd(),
 	)
 	rootCmd.AddCommand(txCmd)
 

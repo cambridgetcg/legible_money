@@ -1,0 +1,110 @@
+syntax = "proto3";
+package legible.compute_pool.v1;
+
+option go_package = "github.com/legible-money/legible/x/compute_pool/types";
+
+// Params holds governance-tunable parameters for the compute pool module.
+message Params {
+  uint64 compute_pool_share_bps         = 1;
+  uint64 base_cu_per_verification       = 2;
+  uint64 complexity_bonus_bps           = 3;
+  uint64 cross_domain_bonus_bps         = 4;
+  uint64 max_credit_balance_multiplier  = 5;
+  string min_provider_stake             = 6;
+  uint64 min_uptime_bps                 = 7;
+  uint64 heartbeat_interval_blocks      = 8;
+  string max_price_per_cu               = 9;
+  uint64 provider_unbonding_blocks      = 10;
+  uint64 price_change_delay_blocks      = 11;
+  uint64 credit_expiry_blocks           = 12;
+  uint64 max_provider_share_bps         = 13;
+  uint64 redemption_expiry_blocks       = 14;
+  uint64 dispute_window_blocks          = 15;
+  uint64 min_tasks_for_full_share       = 16;
+  uint64 max_latency_ms                 = 17;
+  uint64 sla_window_blocks              = 18;
+  // Utilization-based auto-tuning parameters
+  uint64 target_utilization_low_bps     = 19;
+  uint64 target_utilization_high_bps    = 20;
+  uint64 max_adjustment_per_epoch_bps   = 21;
+  uint64 min_adjustment_factor_bps      = 22;
+  uint64 max_adjustment_factor_bps      = 23;
+}
+
+// ComputeProvider represents a registered compute infrastructure provider.
+message ComputeProvider {
+  string address        = 1;
+  string did            = 2;
+  string service_type   = 3;
+  string endpoint       = 4;
+  string price_per_cu   = 5;
+  string stake          = 6;
+  string status         = 7;
+  uint64 registered_at  = 8;
+  uint64 tasks_served   = 9;
+  uint64 tasks_failed   = 10;
+  uint64 avg_latency_ms = 11;
+  uint64 uptime_bps     = 12;
+  uint64 last_heartbeat = 13;
+  uint64 unbonding_at   = 14;
+  // Pending price change (takes effect after PriceChangeDelayBlocks)
+  string pending_price   = 15;
+  uint64 price_change_at = 16;
+}
+
+// ComputeCredit tracks a validator's compute credit balance.
+message ComputeCredit {
+  string validator_addr = 1;
+  uint64 balance        = 2;
+  uint64 earned_total   = 3;
+  uint64 redeemed_total = 4;
+  uint64 expired_total  = 5;
+  uint64 last_earned_at = 6;
+  uint64 expires_at     = 7;
+}
+
+// RedemptionTicket tracks a credit-to-compute exchange.
+message RedemptionTicket {
+  uint64 id         = 1;
+  string validator  = 2;
+  string provider   = 3;
+  uint64 cu_amount  = 4;
+  string lgm_amount = 5;
+  string status     = 6;
+  uint64 created_at = 7;
+  uint64 expires_at = 8;
+  uint64 actual_cu  = 9;
+}
+
+// UsageReport records confirmed compute usage.
+message UsageReport {
+  uint64 ticket_id    = 1;
+  string validator    = 2;
+  string provider     = 3;
+  uint64 requested_cu = 4;
+  uint64 actual_cu    = 5;
+  string lgm_paid     = 6;
+  uint64 confirmed_at = 7;
+}
+
+// EpochStats tracks per-epoch compute pool statistics.
+message EpochStats {
+  uint64 epoch                = 1;
+  string pool_inflow          = 2;
+  uint64 credits_issued       = 3;
+  uint64 credits_redeemed     = 4;
+  uint64 credits_expired      = 5;
+  string lgm_distributed      = 6;
+  uint32 active_providers     = 7;
+  uint32 active_validators    = 8;
+  uint64 utilization_bps      = 9;
+  uint64 adjustment_factor_bps = 10;
+}
+
+// ProviderEpochFlow tracks how much LGM flowed to a provider in an epoch.
+message ProviderEpochFlow {
+  uint64 epoch        = 1;
+  string provider     = 2;
+  string lgm_received = 3;
+  uint64 tasks_served = 4;
+}

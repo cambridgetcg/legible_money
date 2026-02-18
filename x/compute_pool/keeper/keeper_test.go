@@ -235,8 +235,8 @@ func TestDefaultParams(t *testing.T) {
 	if params.ComputePoolShareBps != types.DefaultComputePoolShareBps {
 		t.Errorf("expected ComputePoolShareBps=%d, got %d", types.DefaultComputePoolShareBps, params.ComputePoolShareBps)
 	}
-	if params.BaseCUPerVerification != 100 {
-		t.Errorf("expected BaseCUPerVerification=100, got %d", params.BaseCUPerVerification)
+	if params.BaseCuPerVerification != 100 {
+		t.Errorf("expected BaseCuPerVerification=100, got %d", params.BaseCuPerVerification)
 	}
 	if params.MinProviderStake != "100000000" {
 		t.Errorf("expected MinProviderStake=100000000, got %s", params.MinProviderStake)
@@ -258,7 +258,7 @@ func TestParamsValidation(t *testing.T) {
 
 	// Invalid: zero base CU
 	bad = params
-	bad.BaseCUPerVerification = 0
+	bad.BaseCuPerVerification = 0
 	if err := bad.Validate(); err == nil {
 		t.Error("expected error for zero base CU")
 	}
@@ -285,7 +285,7 @@ func TestRegisterProvider(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 		Did:         "did:lgm:provider1",
 	}
@@ -303,8 +303,8 @@ func TestRegisterProvider(t *testing.T) {
 	if provider.Status != "active" {
 		t.Errorf("expected status=active, got %s", provider.Status)
 	}
-	if provider.PricePerCU != "5000" {
-		t.Errorf("expected price=5000, got %s", provider.PricePerCU)
+	if provider.PricePerCu != "5000" {
+		t.Errorf("expected price=5000, got %s", provider.PricePerCu)
 	}
 	if provider.Stake != "100000000" {
 		t.Errorf("expected stake=100000000, got %s", provider.Stake)
@@ -326,7 +326,7 @@ func TestRegisterProviderInsufficientStake(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "50000000",
 	}
 
@@ -345,7 +345,7 @@ func TestRegisterProviderDuplicate(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	}
 
@@ -365,7 +365,7 @@ func TestRegisterProviderPriceExceedsCeiling(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "99999999", // way above ceiling of 10000
+		PricePerCu:  "99999999", // way above ceiling of 10000
 		StakeAmount: "100000000",
 	}
 
@@ -389,7 +389,7 @@ func TestProviderDeregistration(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, msg)
@@ -415,7 +415,7 @@ func TestProviderHeartbeat(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, msg)
@@ -442,7 +442,7 @@ func TestProviderLivenessCheck(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, msg)
@@ -473,7 +473,7 @@ func TestProviderPauseUnpause(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -692,7 +692,7 @@ func TestRedemptionLifecycle(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.provider1.example.com",
-		PricePerCU:  "1000", // 0.001 LGM per CU
+		PricePerCu:  "1000", // 0.001 LGM per CU
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -706,11 +706,11 @@ func TestRedemptionLifecycle(t *testing.T) {
 		t.Fatalf("failed to create ticket: %v", err)
 	}
 
-	if ticket.CUAmount != 50 {
-		t.Errorf("expected cu_amount=50, got %d", ticket.CUAmount)
+	if ticket.CuAmount != 50 {
+		t.Errorf("expected cu_amount=50, got %d", ticket.CuAmount)
 	}
-	if ticket.LGMAmount != "50000" { // 50 × 1000
-		t.Errorf("expected lgm_amount=50000, got %s", ticket.LGMAmount)
+	if ticket.LgmAmount != "50000" { // 50 × 1000
+		t.Errorf("expected lgm_amount=50000, got %s", ticket.LgmAmount)
 	}
 	if ticket.Status != "pending" {
 		t.Errorf("expected status=pending, got %s", ticket.Status)
@@ -739,11 +739,11 @@ func TestRedemptionLifecycle(t *testing.T) {
 	if !found {
 		t.Fatal("usage report not found")
 	}
-	if report.ActualCU != 50 {
-		t.Errorf("expected actual_cu=50, got %d", report.ActualCU)
+	if report.ActualCu != 50 {
+		t.Errorf("expected actual_cu=50, got %d", report.ActualCu)
 	}
-	if report.LGMPaid != "50000" {
-		t.Errorf("expected lgm_paid=50000, got %s", report.LGMPaid)
+	if report.LgmPaid != "50000" {
+		t.Errorf("expected lgm_paid=50000, got %s", report.LgmPaid)
 	}
 }
 
@@ -759,7 +759,7 @@ func TestRedemptionPartialUsage(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "1000",
+		PricePerCu:  "1000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -782,11 +782,11 @@ func TestRedemptionPartialUsage(t *testing.T) {
 
 	// Report should show actual amount
 	report, _ := k.GetUsageReport(ctx, ticket.Id)
-	if report.ActualCU != 30 {
-		t.Errorf("expected actual_cu=30, got %d", report.ActualCU)
+	if report.ActualCu != 30 {
+		t.Errorf("expected actual_cu=30, got %d", report.ActualCu)
 	}
-	if report.LGMPaid != "30000" {
-		t.Errorf("expected lgm_paid=30000, got %s", report.LGMPaid)
+	if report.LgmPaid != "30000" {
+		t.Errorf("expected lgm_paid=30000, got %s", report.LgmPaid)
 	}
 }
 
@@ -802,7 +802,7 @@ func TestRedemptionDispute(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "1000",
+		PricePerCu:  "1000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -848,7 +848,7 @@ func TestRedemptionExpiry(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "1000",
+		PricePerCu:  "1000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -886,7 +886,7 @@ func TestRedemptionInsufficientCredits(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "1000",
+		PricePerCu:  "1000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -912,7 +912,7 @@ func TestSelfRedemptionBlocked(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "1000",
+		PricePerCu:  "1000",
 		StakeAmount: "100000000",
 	}
 	_ = k.RegisterProvider(ctx, regMsg)
@@ -969,7 +969,7 @@ func TestGenesisRoundTrip(t *testing.T) {
 		ServiceType: "ai_inference",
 		Status:      "active",
 		Stake:       "100000000",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 	})
 
 	k.SetCredit(ctx, types.ComputeCredit{
@@ -1025,7 +1025,7 @@ func TestGetActiveProvidersByType(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api1.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	})
 
@@ -1033,7 +1033,7 @@ func TestGetActiveProvidersByType(t *testing.T) {
 		Sender:      providerAddr2.String(),
 		ServiceType: "gpu_compute",
 		Endpoint:    "https://api2.example.com",
-		PricePerCU:  "3000",
+		PricePerCu:  "3000",
 		StakeAmount: "100000000",
 	})
 
@@ -1079,7 +1079,7 @@ func TestMsgRegisterValidateBasic(t *testing.T) {
 		Sender:      providerAddr1.String(),
 		ServiceType: "ai_inference",
 		Endpoint:    "https://api.example.com",
-		PricePerCU:  "5000",
+		PricePerCu:  "5000",
 		StakeAmount: "100000000",
 	}
 	if err := msg.ValidateBasic(); err != nil {
@@ -1119,7 +1119,7 @@ func TestMsgRedeemCreditsValidateBasic(t *testing.T) {
 	msg := &types.MsgRedeemCredits{
 		Sender:   validatorAddr.String(),
 		Provider: providerAddr1.String(),
-		CUAmount: 100,
+		CuAmount: 100,
 	}
 	if err := msg.ValidateBasic(); err != nil {
 		t.Errorf("expected valid: %v", err)
@@ -1127,7 +1127,7 @@ func TestMsgRedeemCreditsValidateBasic(t *testing.T) {
 
 	// Zero CU
 	bad := *msg
-	bad.CUAmount = 0
+	bad.CuAmount = 0
 	if err := bad.ValidateBasic(); err == nil {
 		t.Error("expected error for zero CU amount")
 	}
@@ -1183,7 +1183,7 @@ func TestFinalizeEpochUnderutilized(t *testing.T) {
 	epoch0Stats := types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
-		LGMDistributed: "50000", // 5% utilization
+		LgmDistributed: "50000", // 5% utilization
 	}
 	k.SetEpochStats(ctx, epoch0Stats)
 
@@ -1217,7 +1217,7 @@ func TestFinalizeEpochOverutilized(t *testing.T) {
 	epoch0Stats := types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
-		LGMDistributed: "950000", // 95%
+		LgmDistributed: "950000", // 95%
 	}
 	k.SetEpochStats(ctx, epoch0Stats)
 
@@ -1238,7 +1238,7 @@ func TestFinalizeEpochSteadyState(t *testing.T) {
 	epoch0Stats := types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
-		LGMDistributed: "500000", // 50%
+		LgmDistributed: "500000", // 50%
 	}
 	k.SetEpochStats(ctx, epoch0Stats)
 
@@ -1259,7 +1259,7 @@ func TestFinalizeEpochZeroInflow(t *testing.T) {
 	epoch0Stats := types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "0",
-		LGMDistributed: "0",
+		LgmDistributed: "0",
 	}
 	k.SetEpochStats(ctx, epoch0Stats)
 
@@ -1282,7 +1282,7 @@ func TestAdjustmentFactorClampedAtMin(t *testing.T) {
 	epoch0Stats := types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
-		LGMDistributed: "1000000",
+		LgmDistributed: "1000000",
 	}
 	k.SetEpochStats(ctx, epoch0Stats)
 
@@ -1305,7 +1305,7 @@ func TestAdjustmentFactorClampedAtMax(t *testing.T) {
 	epoch0Stats := types.EpochStats{
 		Epoch:          0,
 		PoolInflow:     "1000000",
-		LGMDistributed: "0",
+		LgmDistributed: "0",
 	}
 	k.SetEpochStats(ctx, epoch0Stats)
 
@@ -1385,7 +1385,7 @@ func TestMultiEpochAdjustmentConvergence(t *testing.T) {
 		stats := types.EpochStats{
 			Epoch:          epoch,
 			PoolInflow:     "1000000",
-			LGMDistributed: "100000", // 10% utilization
+			LgmDistributed: "100000", // 10% utilization
 		}
 		k.SetEpochStats(ctx, stats)
 
@@ -1406,7 +1406,7 @@ func TestMultiEpochAdjustmentConvergence(t *testing.T) {
 		stats := types.EpochStats{
 			Epoch:          epoch,
 			PoolInflow:     "1000000",
-			LGMDistributed: "950000", // 95% utilization
+			LgmDistributed: "950000", // 95% utilization
 		}
 		k.SetEpochStats(ctx, stats)
 

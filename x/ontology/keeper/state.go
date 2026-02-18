@@ -288,7 +288,7 @@ func (k Keeper) GetAllLinks(ctx sdk.Context) []types.CrossStratumLink {
 // SetLogicZone stores logic zone properties.
 func (k Keeper) SetLogicZone(ctx sdk.Context, props types.LogicZoneProperties) {
 	store := k.storeService.OpenKVStore(ctx)
-	key := logicZoneKey(props.Zone)
+	key := logicZoneKey(types.LogicZone(props.Zone))
 	bz, err := json.Marshal(props)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal logic zone: %v", err))

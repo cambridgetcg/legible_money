@@ -9,6 +9,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -17,13 +18,11 @@ func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 	return &queryServer{Keeper: keeper}
 }
 
-var _ types.QueryServer = queryServer{}
-
 // Home returns a single agent home by DID or home ID.
 func (q queryServer) Home(goCtx context.Context, req *types.QueryHomeRequest) (*types.QueryHomeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	home, found := q.Keeper.GetHome(ctx, req.DID)
+	home, found := q.Keeper.GetHome(ctx, req.Did)
 	if !found {
 		return &types.QueryHomeResponse{Home: nil, Found: false}, nil
 	}
@@ -35,15 +34,16 @@ func (q queryServer) Home(goCtx context.Context, req *types.QueryHomeRequest) (*
 func (q queryServer) Homes(goCtx context.Context, req *types.QueryHomesRequest) (*types.QueryHomesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	var all []types.AgentHome
+	var all []*types.AgentHome
 	q.Keeper.IterateHomes(ctx, func(home types.AgentHome) bool {
 		if req.Owner != "" && home.OwnerAddress != req.Owner {
 			return false
 		}
-		if req.Status != "" && string(home.Status) != req.Status {
+		if req.Status != "" && home.Status != req.Status {
 			return false
 		}
-		all = append(all, home)
+		h := home // copy for pointer
+		all = append(all, &h)
 		return false
 	})
 
@@ -78,9 +78,10 @@ func (q queryServer) Homes(goCtx context.Context, req *types.QueryHomesRequest) 
 func (q queryServer) Sessions(goCtx context.Context, req *types.QuerySessionsRequest) (*types.QuerySessionsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	var sessions []types.ActiveSession
+	var sessions []*types.ActiveSession
 	q.Keeper.IterateSessions(ctx, req.HomeId, func(session types.ActiveSession) bool {
-		sessions = append(sessions, session)
+		s := session
+		sessions = append(sessions, &s)
 		return false
 	})
 
@@ -91,12 +92,13 @@ func (q queryServer) Sessions(goCtx context.Context, req *types.QuerySessionsReq
 func (q queryServer) Alerts(goCtx context.Context, req *types.QueryAlertsRequest) (*types.QueryAlertsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	var alerts []types.Alert
+	var alerts []*types.Alert
 	q.Keeper.IterateAlerts(ctx, req.HomeId, func(alert types.Alert) bool {
-		if req.Acknowledged != nil && alert.Acknowledged != *req.Acknowledged {
+		if req.Acknowledged && !alert.Acknowledged {
 			return false
 		}
-		alerts = append(alerts, alert)
+		a := alert
+		alerts = append(alerts, &a)
 		return false
 	})
 
@@ -106,5 +108,6 @@ func (q queryServer) Alerts(goCtx context.Context, req *types.QueryAlertsRequest
 // Params returns the module parameters.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	return &types.QueryParamsResponse{Params: q.Keeper.GetParams(ctx)}, nil
+	params := q.Keeper.GetParams(ctx)
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

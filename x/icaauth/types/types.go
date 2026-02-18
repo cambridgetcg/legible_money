@@ -105,49 +105,8 @@ func (msg MsgSendICATransactionResponse) Reset()         {}
 func (msg MsgSendICATransactionResponse) String() string { return "MsgSendICATxResponse{}" }
 func (msg MsgSendICATransactionResponse) ProtoMessage()  {}
 
-// --- Query types ---
-
-// QueryServer defines the gRPC query server for the icaauth module.
-type QueryServer interface {
-	InterchainAccounts(ctx context.Context, req *QueryInterchainAccountsRequest) (*QueryInterchainAccountsResponse, error)
-	Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error)
-}
-
-// QueryInterchainAccountsRequest queries all ICA accounts for a DID.
-type QueryInterchainAccountsRequest struct {
-	Did string `json:"did"`
-}
-
-func (r *QueryInterchainAccountsRequest) Reset()         {}
-func (r *QueryInterchainAccountsRequest) String() string { return fmt.Sprintf("QueryICA{%s}", r.Did) }
-func (r *QueryInterchainAccountsRequest) ProtoMessage()  {}
-
-// QueryInterchainAccountsResponse returns the ICA accounts for a DID.
-type QueryInterchainAccountsResponse struct {
-	Accounts []*RemoteAccount `json:"accounts"`
-}
-
-func (r *QueryInterchainAccountsResponse) Reset() {}
-func (r *QueryInterchainAccountsResponse) String() string {
-	return fmt.Sprintf("QueryICAResp{%d}", len(r.Accounts))
-}
-func (r *QueryInterchainAccountsResponse) ProtoMessage() {}
-
-// QueryParamsRequest queries module parameters.
-type QueryParamsRequest struct{}
-
-func (r *QueryParamsRequest) Reset()         {}
-func (r *QueryParamsRequest) String() string { return "QueryParamsRequest{}" }
-func (r *QueryParamsRequest) ProtoMessage()  {}
-
-// QueryParamsResponse returns module parameters.
-type QueryParamsResponse struct {
-	Params Params `json:"params"`
-}
-
-func (r *QueryParamsResponse) Reset()         {}
-func (r *QueryParamsResponse) String() string { return "QueryParamsResponse{}" }
-func (r *QueryParamsResponse) ProtoMessage()  {}
+// Query types (QueryServer, QueryInterchainAccountsRequest/Response, QueryParamsRequest/Response)
+// are now provided by the proto-generated query.pb.go and query_grpc.pb.go files.
 
 // --- MsgServer interface ---
 
@@ -203,51 +162,8 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 	s.RegisterService(&_Msg_serviceDesc, srv)
 }
 
-// --- Query gRPC handlers ---
-
-func _Query_InterchainAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryInterchainAccountsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).InterchainAccounts(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.icaauth.v1.Query/InterchainAccounts"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).InterchainAccounts(ctx, req.(*QueryInterchainAccountsRequest))
-	})
-}
-
-func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryParamsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Params(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.icaauth.v1.Query/Params"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Params(ctx, req.(*QueryParamsRequest))
-	})
-}
-
-var _Query_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.icaauth.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "InterchainAccounts", Handler: _Query_InterchainAccounts_Handler},
-		{MethodName: "Params", Handler: _Query_Params_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/icaauth/v1/query.proto",
-}
-
-// RegisterQueryServer registers the QueryServer implementation.
-func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, srv)
-}
+// Query gRPC handlers, service descriptor, and RegisterQueryServer are now provided
+// by the proto-generated query_grpc.pb.go file.
 
 
 // MsgUpdateParams is the governance message to update module params.

@@ -279,7 +279,7 @@ func (k Keeper) GetOrCreateEpochStats(ctx sdk.Context, epoch uint64) types.Epoch
 	return types.EpochStats{
 		Epoch:          epoch,
 		PoolInflow:     "0",
-		LGMDistributed: "0",
+		LgmDistributed: "0",
 	}
 }
 
@@ -322,7 +322,7 @@ func (k Keeper) GetOrCreateProviderEpochFlow(ctx sdk.Context, epoch uint64, prov
 	return types.ProviderEpochFlow{
 		Epoch:       epoch,
 		Provider:    provider,
-		LGMReceived: "0",
+		LgmReceived: "0",
 	}
 }
 

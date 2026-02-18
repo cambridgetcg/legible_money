@@ -108,7 +108,7 @@ type Params struct {
 	CallBaseGasCost         uint64                 `protobuf:"varint,5,opt,name=call_base_gas_cost,json=callBaseGasCost,proto3" json:"call_base_gas_cost,omitempty"`                         // base gas cost per call
 	StorageWriteGasCost     uint64                 `protobuf:"varint,6,opt,name=storage_write_gas_cost,json=storageWriteGasCost,proto3" json:"storage_write_gas_cost,omitempty"`             // gas cost per storage write
 	StorageReadGasCost      uint64                 `protobuf:"varint,7,opt,name=storage_read_gas_cost,json=storageReadGasCost,proto3" json:"storage_read_gas_cost,omitempty"`                // gas cost per storage read
-	CurrentBvmVersion       uint32                 `protobuf:"varint,8,opt,name=current_bvm_version,json=currentBvmVersion,proto3" json:"current_bvm_version,omitempty"`                   // current BVM version for new deploys
+	CurrentBvmVersion       uint32                 `protobuf:"varint,8,opt,name=current_bvm_version,json=currentBvmVersion,proto3" json:"current_bvm_version,omitempty"`                     // current BVM version for opcode activation
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -209,7 +209,7 @@ const file_legible_bvm_v1_genesis_proto_rawDesc = "" +
 	"\tcontracts\x18\x02 \x03(\v2 .legible.bvm.v1.DeployedContractR\tcontracts\x120\n" +
 	"\x04code\x18\x03 \x03(\v2\x1c.legible.bvm.v1.ContractCodeR\x04code\x12>\n" +
 	"\tschedules\x18\x04 \x03(\v2 .legible.bvm.v1.ContractScheduleR\tschedules\x128\n" +
-	"\x05state\x18\x05 \x03(\v2\".legible.bvm.v1.ContractStateEntryR\x05state\"\xda\x02\n" +
+	"\x05state\x18\x05 \x03(\v2\".legible.bvm.v1.ContractStateEntryR\x05state\"\x8a\x03\n" +
 	"\x06Params\x12*\n" +
 	"\x11max_bytecode_size\x18\x01 \x01(\x04R\x0fmaxBytecodeSize\x12*\n" +
 	"\x11max_state_entries\x18\x02 \x01(\x04R\x0fmaxStateEntries\x12;\n" +
@@ -217,7 +217,8 @@ const file_legible_bvm_v1_genesis_proto_rawDesc = "" +
 	"\x0fdeploy_gas_cost\x18\x04 \x01(\x04R\rdeployGasCost\x12+\n" +
 	"\x12call_base_gas_cost\x18\x05 \x01(\x04R\x0fcallBaseGasCost\x123\n" +
 	"\x16storage_write_gas_cost\x18\x06 \x01(\x04R\x13storageWriteGasCost\x121\n" +
-	"\x15storage_read_gas_cost\x18\a \x01(\x04R\x12storageReadGasCostB.Z,github.com/legible-money/legible/x/bvm/typesb\x06proto3"
+	"\x15storage_read_gas_cost\x18\a \x01(\x04R\x12storageReadGasCost\x12.\n" +
+	"\x13current_bvm_version\x18\b \x01(\rR\x11currentBvmVersionB.Z,github.com/legible-money/legible/x/bvm/typesb\x06proto3"
 
 var (
 	file_legible_bvm_v1_genesis_proto_rawDescOnce sync.Once

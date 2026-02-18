@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a QueryServer implementation.
@@ -33,9 +34,6 @@ func (q queryServer) Channel(goCtx context.Context, req *types.QueryChannelReque
 func (q queryServer) ChannelsByPayer(goCtx context.Context, req *types.QueryChannelsByPayerRequest) (*types.QueryChannelsByPayerResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	channels := q.Keeper.GetChannelsByPayer(ctx, req.Payer)
-	if channels == nil {
-		channels = []types.PaymentChannel{}
-	}
 
 	// Apply pagination
 	total := uint64(len(channels))
@@ -50,14 +48,20 @@ func (q queryServer) ChannelsByPayer(goCtx context.Context, req *types.QueryChan
 	if uint32(len(channels)) > offset {
 		channels = channels[offset:]
 	} else {
-		channels = []types.PaymentChannel{}
+		channels = nil
 	}
 	if uint32(len(channels)) > limit {
 		channels = channels[:limit]
 	}
 
+	// Convert []PaymentChannel to []*PaymentChannel for proto
+	ptrs := make([]*types.PaymentChannel, len(channels))
+	for i := range channels {
+		ptrs[i] = &channels[i]
+	}
+
 	return &types.QueryChannelsByPayerResponse{
-		Channels: channels,
+		Channels: ptrs,
 		Total:    total,
 	}, nil
 }
@@ -66,9 +70,6 @@ func (q queryServer) ChannelsByPayer(goCtx context.Context, req *types.QueryChan
 func (q queryServer) ChannelsByProvider(goCtx context.Context, req *types.QueryChannelsByProviderRequest) (*types.QueryChannelsByProviderResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	channels := q.Keeper.GetChannelsByProvider(ctx, req.Provider)
-	if channels == nil {
-		channels = []types.PaymentChannel{}
-	}
 
 	// Apply pagination
 	total := uint64(len(channels))
@@ -83,14 +84,20 @@ func (q queryServer) ChannelsByProvider(goCtx context.Context, req *types.QueryC
 	if uint32(len(channels)) > offset {
 		channels = channels[offset:]
 	} else {
-		channels = []types.PaymentChannel{}
+		channels = nil
 	}
 	if uint32(len(channels)) > limit {
 		channels = channels[:limit]
 	}
 
+	// Convert []PaymentChannel to []*PaymentChannel for proto
+	ptrs := make([]*types.PaymentChannel, len(channels))
+	for i := range channels {
+		ptrs[i] = &channels[i]
+	}
+
 	return &types.QueryChannelsByProviderResponse{
-		Channels: channels,
+		Channels: ptrs,
 		Total:    total,
 	}, nil
 }
@@ -112,5 +119,5 @@ func (q queryServer) ActiveDispute(goCtx context.Context, req *types.QueryActive
 func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.Keeper.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

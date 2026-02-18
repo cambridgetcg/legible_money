@@ -8,10 +8,20 @@ import (
 	"github.com/legible-money/legible/x/capture_defense/types"
 )
 
-var _ types.QueryServer = Keeper{}
+type queryServer struct {
+	Keeper
+	types.UnimplementedQueryServer
+}
+
+// NewQueryServerImpl returns a QueryServer implementation.
+func NewQueryServerImpl(keeper Keeper) types.QueryServer {
+	return &queryServer{Keeper: keeper}
+}
+
+var _ types.QueryServer = queryServer{}
 
 // Qualification returns a validator's qualification for a domain.
-func (k Keeper) Qualification(goCtx context.Context, req *types.QueryQualificationRequest) (*types.QueryQualificationResponse, error) {
+func (k queryServer) Qualification(goCtx context.Context, req *types.QueryQualificationRequest) (*types.QueryQualificationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	qual, found := k.GetQualification(ctx, req.ValidatorAddr, req.Domain)
@@ -25,7 +35,7 @@ func (k Keeper) Qualification(goCtx context.Context, req *types.QueryQualificati
 }
 
 // ValidatorQualifications returns all qualifications for a validator.
-func (k Keeper) ValidatorQualifications(goCtx context.Context, req *types.QueryValidatorQualificationsRequest) (*types.QueryValidatorQualificationsResponse, error) {
+func (k queryServer) ValidatorQualifications(goCtx context.Context, req *types.QueryValidatorQualificationsRequest) (*types.QueryValidatorQualificationsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	quals := k.GetValidatorQualifications(ctx, req.ValidatorAddr)
@@ -39,7 +49,7 @@ func (k Keeper) ValidatorQualifications(goCtx context.Context, req *types.QueryV
 }
 
 // DomainReputation returns the effective reputation for a validator in a domain.
-func (k Keeper) DomainReputation(goCtx context.Context, req *types.QueryDomainReputationRequest) (*types.QueryDomainReputationResponse, error) {
+func (k queryServer) DomainReputation(goCtx context.Context, req *types.QueryDomainReputationRequest) (*types.QueryDomainReputationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	result := k.GetEffectiveReputation(ctx, req.ValidatorAddr, req.Domain)
@@ -49,7 +59,7 @@ func (k Keeper) DomainReputation(goCtx context.Context, req *types.QueryDomainRe
 }
 
 // CaptureRisk returns the capture risk metrics for a domain.
-func (k Keeper) CaptureRisk(goCtx context.Context, req *types.QueryCaptureRiskRequest) (*types.QueryCaptureRiskResponse, error) {
+func (k queryServer) CaptureRisk(goCtx context.Context, req *types.QueryCaptureRiskRequest) (*types.QueryCaptureRiskResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	metrics, found := k.GetCaptureMetrics(ctx, req.Domain)

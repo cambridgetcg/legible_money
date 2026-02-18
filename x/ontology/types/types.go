@@ -68,19 +68,9 @@ const (
 	ZoneEmpirical     LogicZone = "empirical"
 )
 
-// LogicZoneProperties defines the formal properties of a logic zone.
-type LogicZoneProperties struct {
-	Zone             LogicZone `json:"zone"`
-	Complete         bool      `json:"complete"`           // is the system complete?
-	Decidable        bool      `json:"decidable"`          // is there a decision procedure?
-	GoedelApplies    bool      `json:"goedel_applies"`     // does Godel's incompleteness apply?
-	MaxConfidenceBps uint64    `json:"max_confidence_bps"` // confidence ceiling (basis points 0-1000000)
-	Description      string    `json:"description"`
-}
 
-func (lz *LogicZoneProperties) Reset()         {}
-func (lz *LogicZoneProperties) String() string { return fmt.Sprintf("%+v", *lz) }
-func (lz *LogicZoneProperties) ProtoMessage()  {}
+// NOTE: LogicZoneProperties is now proto-generated in state.pb.go.
+// Do not redeclare it here.
 
 // IncompletenessAcknowledgment records that a fact in an incomplete zone
 // has been properly flagged with its epistemic limitations.
@@ -100,7 +90,7 @@ func (ia *IncompletenessAcknowledgment) ProtoMessage()  {}
 func DefaultLogicZones() []LogicZoneProperties {
 	return []LogicZoneProperties{
 		{
-			Zone:             ZonePropositional,
+			Zone:             string(ZonePropositional),
 			Complete:         true,
 			Decidable:        true,
 			GoedelApplies:    false,
@@ -108,7 +98,7 @@ func DefaultLogicZones() []LogicZoneProperties {
 			Description:      "Propositional logic: complete, decidable, truth-table decidable",
 		},
 		{
-			Zone:             ZonePresburger,
+			Zone:             string(ZonePresburger),
 			Complete:         true,
 			Decidable:        true,
 			GoedelApplies:    false,
@@ -116,7 +106,7 @@ func DefaultLogicZones() []LogicZoneProperties {
 			Description:      "Presburger arithmetic: complete, decidable (no multiplication)",
 		},
 		{
-			Zone:             ZonePeano,
+			Zone:             string(ZonePeano),
 			Complete:         false,
 			Decidable:        false,
 			GoedelApplies:    true,
@@ -124,7 +114,7 @@ func DefaultLogicZones() []LogicZoneProperties {
 			Description:      "Peano arithmetic: incomplete (Godel), undecidable, contains true but unprovable statements",
 		},
 		{
-			Zone:             ZoneSetTheory,
+			Zone:             string(ZoneSetTheory),
 			Complete:         false,
 			Decidable:        false,
 			GoedelApplies:    true,
@@ -132,7 +122,7 @@ func DefaultLogicZones() []LogicZoneProperties {
 			Description:      "Set theory (ZFC): incomplete, undecidable, CH-independent",
 		},
 		{
-			Zone:             ZoneEmpirical,
+			Zone:             string(ZoneEmpirical),
 			Complete:         false,
 			Decidable:        false,
 			GoedelApplies:    false,  // not formal system
@@ -546,346 +536,5 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 	s.RegisterService(&_Msg_serviceDesc, srv)
 }
 
-// ---------- QueryServer Interface ----------
-
-// QueryServer is the query service interface for the ontology module.
-type QueryServer interface {
-	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
-	Stratum(context.Context, *QueryStratumRequest) (*QueryStratumResponse, error)
-	AllStrata(context.Context, *QueryAllStrataRequest) (*QueryAllStrataResponse, error)
-	Domain(context.Context, *QueryDomainRequest) (*QueryDomainResponse, error)
-	DomainsByStratum(context.Context, *QueryDomainsByStratumRequest) (*QueryDomainsByStratumResponse, error)
-	AllDomains(context.Context, *QueryAllDomainsRequest) (*QueryAllDomainsResponse, error)
-	Proposal(context.Context, *QueryProposalRequest) (*QueryProposalResponse, error)
-	ConfidenceCeiling(context.Context, *QueryConfidenceCeilingRequest) (*QueryConfidenceCeilingResponse, error)
-	LogicZone(context.Context, *QueryLogicZoneRequest) (*QueryLogicZoneResponse, error)
-	AllLogicZones(context.Context, *QueryAllLogicZonesRequest) (*QueryAllLogicZonesResponse, error)
-}
-
-// Query request/response types.
-
-type QueryParamsRequest struct{}
-
-func (r *QueryParamsRequest) Reset()         {}
-func (r *QueryParamsRequest) String() string { return "QueryParamsRequest" }
-func (r *QueryParamsRequest) ProtoMessage()  {}
-
-type QueryParamsResponse struct {
-	Params Params `json:"params"`
-}
-
-func (r *QueryParamsResponse) Reset()         {}
-func (r *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryParamsResponse) ProtoMessage()  {}
-
-type QueryStratumRequest struct {
-	Stratum Stratum `json:"stratum"`
-}
-
-func (r *QueryStratumRequest) Reset()         {}
-func (r *QueryStratumRequest) String() string { return fmt.Sprintf("QueryStratum{%d}", r.Stratum) }
-func (r *QueryStratumRequest) ProtoMessage()  {}
-
-type QueryStratumResponse struct {
-	Properties StratumProperties `json:"properties"`
-}
-
-func (r *QueryStratumResponse) Reset()         {}
-func (r *QueryStratumResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryStratumResponse) ProtoMessage()  {}
-
-type QueryAllStrataRequest struct{}
-
-func (r *QueryAllStrataRequest) Reset()         {}
-func (r *QueryAllStrataRequest) String() string { return "QueryAllStrataRequest" }
-func (r *QueryAllStrataRequest) ProtoMessage()  {}
-
-type QueryAllStrataResponse struct {
-	Strata []StratumProperties `json:"strata"`
-}
-
-func (r *QueryAllStrataResponse) Reset()         {}
-func (r *QueryAllStrataResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryAllStrataResponse) ProtoMessage()  {}
-
-type QueryDomainRequest struct {
-	Name string `json:"name"`
-}
-
-func (r *QueryDomainRequest) Reset()         {}
-func (r *QueryDomainRequest) String() string { return fmt.Sprintf("QueryDomain{%s}", r.Name) }
-func (r *QueryDomainRequest) ProtoMessage()  {}
-
-type QueryDomainResponse struct {
-	Domain Domain `json:"domain"`
-}
-
-func (r *QueryDomainResponse) Reset()         {}
-func (r *QueryDomainResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryDomainResponse) ProtoMessage()  {}
-
-type QueryDomainsByStratumRequest struct {
-	Stratum Stratum `json:"stratum"`
-}
-
-func (r *QueryDomainsByStratumRequest) Reset() {}
-func (r *QueryDomainsByStratumRequest) String() string {
-	return fmt.Sprintf("QueryDomainsByStratum{%d}", r.Stratum)
-}
-func (r *QueryDomainsByStratumRequest) ProtoMessage() {}
-
-type QueryDomainsByStratumResponse struct {
-	Domains []Domain `json:"domains"`
-}
-
-func (r *QueryDomainsByStratumResponse) Reset()         {}
-func (r *QueryDomainsByStratumResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryDomainsByStratumResponse) ProtoMessage()  {}
-
-type QueryAllDomainsRequest struct{}
-
-func (r *QueryAllDomainsRequest) Reset()         {}
-func (r *QueryAllDomainsRequest) String() string { return "QueryAllDomainsRequest" }
-func (r *QueryAllDomainsRequest) ProtoMessage()  {}
-
-type QueryAllDomainsResponse struct {
-	Domains []Domain `json:"domains"`
-}
-
-func (r *QueryAllDomainsResponse) Reset()         {}
-func (r *QueryAllDomainsResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryAllDomainsResponse) ProtoMessage()  {}
-
-type QueryProposalRequest struct {
-	ProposalId string `json:"proposal_id"`
-}
-
-func (r *QueryProposalRequest) Reset()         {}
-func (r *QueryProposalRequest) String() string { return fmt.Sprintf("QueryProposal{%s}", r.ProposalId) }
-func (r *QueryProposalRequest) ProtoMessage()  {}
-
-type QueryProposalResponse struct {
-	Proposal DomainProposal `json:"proposal"`
-}
-
-func (r *QueryProposalResponse) Reset()         {}
-func (r *QueryProposalResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryProposalResponse) ProtoMessage()  {}
-
-type QueryConfidenceCeilingRequest struct {
-	DomainName string `json:"domain_name"`
-}
-
-func (r *QueryConfidenceCeilingRequest) Reset() {}
-func (r *QueryConfidenceCeilingRequest) String() string {
-	return fmt.Sprintf("QueryConfidenceCeiling{%s}", r.DomainName)
-}
-func (r *QueryConfidenceCeilingRequest) ProtoMessage() {}
-
-type QueryConfidenceCeilingResponse struct {
-	MaxConfidence uint64 `json:"max_confidence"`
-	DecayRate     uint64 `json:"decay_rate"`
-	DomainName    string `json:"domain_name"`
-	StratumName   string `json:"stratum_name"`
-}
-
-func (r *QueryConfidenceCeilingResponse) Reset()         {}
-func (r *QueryConfidenceCeilingResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryConfidenceCeilingResponse) ProtoMessage()  {}
-
-// Logic zone query types.
-
-type QueryLogicZoneRequest struct {
-	Zone LogicZone `json:"zone"`
-}
-
-func (r *QueryLogicZoneRequest) Reset()         {}
-func (r *QueryLogicZoneRequest) String() string { return fmt.Sprintf("QueryLogicZone{%s}", r.Zone) }
-func (r *QueryLogicZoneRequest) ProtoMessage()  {}
-
-type QueryLogicZoneResponse struct {
-	Properties LogicZoneProperties `json:"properties"`
-}
-
-func (r *QueryLogicZoneResponse) Reset()         {}
-func (r *QueryLogicZoneResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryLogicZoneResponse) ProtoMessage()  {}
-
-type QueryAllLogicZonesRequest struct{}
-
-func (r *QueryAllLogicZonesRequest) Reset()         {}
-func (r *QueryAllLogicZonesRequest) String() string { return "QueryAllLogicZonesRequest" }
-func (r *QueryAllLogicZonesRequest) ProtoMessage()  {}
-
-type QueryAllLogicZonesResponse struct {
-	Zones []LogicZoneProperties `json:"zones"`
-}
-
-func (r *QueryAllLogicZonesResponse) Reset()         {}
-func (r *QueryAllLogicZonesResponse) String() string { return fmt.Sprintf("%+v", *r) }
-func (r *QueryAllLogicZonesResponse) ProtoMessage()  {}
-
-func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryParamsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Params(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Params"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Params(ctx, req.(*QueryParamsRequest))
-	})
-}
-
-func _Query_Stratum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryStratumRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Stratum(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Stratum"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Stratum(ctx, req.(*QueryStratumRequest))
-	})
-}
-
-func _Query_AllStrata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryAllStrataRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).AllStrata(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/AllStrata"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).AllStrata(ctx, req.(*QueryAllStrataRequest))
-	})
-}
-
-func _Query_Domain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryDomainRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Domain(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Domain"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Domain(ctx, req.(*QueryDomainRequest))
-	})
-}
-
-func _Query_DomainsByStratum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryDomainsByStratumRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).DomainsByStratum(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/DomainsByStratum"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).DomainsByStratum(ctx, req.(*QueryDomainsByStratumRequest))
-	})
-}
-
-func _Query_AllDomains_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryAllDomainsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).AllDomains(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/AllDomains"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).AllDomains(ctx, req.(*QueryAllDomainsRequest))
-	})
-}
-
-func _Query_Proposal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryProposalRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Proposal(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/Proposal"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Proposal(ctx, req.(*QueryProposalRequest))
-	})
-}
-
-func _Query_ConfidenceCeiling_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryConfidenceCeilingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).ConfidenceCeiling(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/ConfidenceCeiling"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ConfidenceCeiling(ctx, req.(*QueryConfidenceCeilingRequest))
-	})
-}
-
-func _Query_LogicZone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryLogicZoneRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).LogicZone(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/LogicZone"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).LogicZone(ctx, req.(*QueryLogicZoneRequest))
-	})
-}
-
-func _Query_AllLogicZones_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryAllLogicZonesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).AllLogicZones(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.ontology.v1.Query/AllLogicZones"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).AllLogicZones(ctx, req.(*QueryAllLogicZonesRequest))
-	})
-}
-
-// Service descriptor for QueryServer registration.
-var _Query_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.ontology.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Params", Handler: _Query_Params_Handler},
-		{MethodName: "Stratum", Handler: _Query_Stratum_Handler},
-		{MethodName: "AllStrata", Handler: _Query_AllStrata_Handler},
-		{MethodName: "Domain", Handler: _Query_Domain_Handler},
-		{MethodName: "DomainsByStratum", Handler: _Query_DomainsByStratum_Handler},
-		{MethodName: "AllDomains", Handler: _Query_AllDomains_Handler},
-		{MethodName: "Proposal", Handler: _Query_Proposal_Handler},
-		{MethodName: "ConfidenceCeiling", Handler: _Query_ConfidenceCeiling_Handler},
-		{MethodName: "LogicZone", Handler: _Query_LogicZone_Handler},
-		{MethodName: "AllLogicZones", Handler: _Query_AllLogicZones_Handler},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "legible/ontology/v1/query.proto",
-}
-
-// RegisterQueryServer registers the QueryServer implementation with the gRPC server.
-func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, srv)
-}
+// NOTE: QueryServer, query request/response types, query handlers, and RegisterQueryServer
+// are now proto-generated in query.pb.go and query_grpc.pb.go.

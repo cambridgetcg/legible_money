@@ -12,6 +12,7 @@ var _ types.QueryServer = queryServer{}
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns an implementation of the QueryServer interface

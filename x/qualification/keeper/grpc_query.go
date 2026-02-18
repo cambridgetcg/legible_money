@@ -2,15 +2,17 @@ package keeper
 
 import (
 	"context"
+	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/qualification/types"
 )
 
-var _ types.QueryServer = queryServer{}
+var _ types.QueryServer = &queryServer{}
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -22,20 +24,23 @@ func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 func (qs queryServer) Qualification(goCtx context.Context, req *types.QueryQualificationRequest) (*types.QueryQualificationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	q, found := qs.Keeper.GetQualification(ctx, req.ValidatorAddr, req.Domain)
+	if !found {
+		return nil, fmt.Errorf("qualification not found for %s in %s", req.ValidatorAddr, req.Domain)
+	}
 	return &types.QueryQualificationResponse{
-		Qualification: q,
-		Found:         found,
+		Qualification: &q,
 	}, nil
 }
 
 func (qs queryServer) QualificationsByValidator(goCtx context.Context, req *types.QueryQualificationsByValidatorRequest) (*types.QueryQualificationsByValidatorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	qualifications := qs.Keeper.GetQualificationsByValidator(ctx, req.ValidatorAddr)
-	if qualifications == nil {
-		qualifications = []types.DomainQualification{}
+	ptrs := make([]*types.DomainQualification, len(qualifications))
+	for i := range qualifications {
+		ptrs[i] = &qualifications[i]
 	}
 	return &types.QueryQualificationsByValidatorResponse{
-		Qualifications: qualifications,
+		Qualifications: ptrs,
 	}, nil
 }
 
@@ -52,21 +57,26 @@ func (qs queryServer) QualifiedValidators(goCtx context.Context, req *types.Quer
 
 func (qs queryServer) Endorsement(goCtx context.Context, req *types.QueryEndorsementRequest) (*types.QueryEndorsementResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	e, found := qs.Keeper.GetEndorsement(ctx, req.EndorsementId)
+	// Compose endorsement key from endorser + target + domain
+	id := fmt.Sprintf("%s/%s/%s", req.Endorser, req.TargetValidator, req.Domain)
+	e, found := qs.Keeper.GetEndorsement(ctx, id)
+	if !found {
+		return nil, fmt.Errorf("endorsement not found: %s", id)
+	}
 	return &types.QueryEndorsementResponse{
-		Endorsement: e,
-		Found:       found,
+		Endorsement: &e,
 	}, nil
 }
 
 func (qs queryServer) EndorsementsForValidator(goCtx context.Context, req *types.QueryEndorsementsForValidatorRequest) (*types.QueryEndorsementsForValidatorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	endorsements := qs.Keeper.GetEndorsementsForValidator(ctx, req.TargetValidator)
-	if endorsements == nil {
-		endorsements = []types.QualificationEndorsement{}
+	endorsements := qs.Keeper.GetEndorsementsForValidator(ctx, req.ValidatorAddr)
+	ptrs := make([]*types.QualificationEndorsement, len(endorsements))
+	for i := range endorsements {
+		ptrs[i] = &endorsements[i]
 	}
 	return &types.QueryEndorsementsForValidatorResponse{
-		Endorsements: endorsements,
+		Endorsements: ptrs,
 	}, nil
 }
 
@@ -74,6 +84,6 @@ func (qs queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest)
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := qs.Keeper.GetParams(ctx)
 	return &types.QueryParamsResponse{
-		Params: params,
+		Params: &params,
 	}, nil
 }

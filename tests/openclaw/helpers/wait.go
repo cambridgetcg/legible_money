@@ -5,6 +5,8 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -69,6 +71,20 @@ func WaitForRoundPhase(ctx context.Context, client agentsdk.QueryClient, roundID
 // Since we use -y (broadcast immediately), we just wait a few blocks.
 func WaitForTx(ctx context.Context, client agentsdk.QueryClient) error {
 	return WaitForBlocks(ctx, client, 2)
+}
+
+// RESTGet performs a simple HTTP GET and returns the response body.
+func RESTGet(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
 }
 
 // WaitForFact polls until a fact appears in the given domain containing

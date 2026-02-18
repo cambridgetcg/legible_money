@@ -1,0 +1,13 @@
+syntax = "proto3";
+package legible.compute_pool.v1;
+
+option go_package = "github.com/legible-money/legible/x/compute_pool/types";
+
+import "legible/compute_pool/v1/state.proto";
+
+// GenesisState defines the compute_pool module genesis state.
+message GenesisState {
+  Params                   params    = 1;
+  repeated ComputeProvider providers = 2;
+  repeated ComputeCredit   credits   = 3;
+}

@@ -1,0 +1,81 @@
+syntax = "proto3";
+package legible.channels.v1;
+
+option go_package = "github.com/legible-money/legible/x/channels/types";
+
+import "google/api/annotations.proto";
+import "legible/channels/v1/state.proto";
+import "legible/channels/v1/genesis.proto";
+
+// Query defines the gRPC query service for the channels module.
+service Query {
+  // Channel returns a single payment channel by ID.
+  rpc Channel(QueryChannelRequest) returns (QueryChannelResponse) {
+    option (google.api.http).get = "/legible/channels/v1/channel/{channel_id}";
+  }
+
+  // ChannelsByPayer returns payment channels for a payer address.
+  rpc ChannelsByPayer(QueryChannelsByPayerRequest) returns (QueryChannelsByPayerResponse) {
+    option (google.api.http).get = "/legible/channels/v1/channels/payer/{payer}";
+  }
+
+  // ChannelsByProvider returns payment channels for a provider address.
+  rpc ChannelsByProvider(QueryChannelsByProviderRequest) returns (QueryChannelsByProviderResponse) {
+    option (google.api.http).get = "/legible/channels/v1/channels/provider/{provider}";
+  }
+
+  // ActiveDispute returns the active dispute for a channel.
+  rpc ActiveDispute(QueryActiveDisputeRequest) returns (QueryActiveDisputeResponse) {
+    option (google.api.http).get = "/legible/channels/v1/dispute/{channel_id}";
+  }
+
+  // Params returns the module parameters.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/channels/v1/params";
+  }
+}
+
+message QueryChannelRequest {
+  string channel_id = 1;
+}
+
+message QueryChannelResponse {
+  PaymentChannel channel = 1;
+}
+
+message QueryChannelsByPayerRequest {
+  string payer = 1;
+  uint32 limit = 2;
+  uint32 offset = 3;
+}
+
+message QueryChannelsByPayerResponse {
+  repeated PaymentChannel channels = 1;
+  uint64 total = 2;
+}
+
+message QueryChannelsByProviderRequest {
+  string provider = 1;
+  uint32 limit = 2;
+  uint32 offset = 3;
+}
+
+message QueryChannelsByProviderResponse {
+  repeated PaymentChannel channels = 1;
+  uint64 total = 2;
+}
+
+message QueryActiveDisputeRequest {
+  string channel_id = 1;
+}
+
+message QueryActiveDisputeResponse {
+  ChannelDispute dispute = 1;
+  bool found = 2;
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1;
+}

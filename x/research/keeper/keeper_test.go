@@ -1094,8 +1094,12 @@ func TestQueryParams(t *testing.T) {
 	if resp.Params.MinReviewerCount != 3 {
 		t.Errorf("expected min_reviewer_count=3, got %d", resp.Params.MinReviewerCount)
 	}
-	if resp.TreasuryBalance != "0" {
-		t.Errorf("expected treasury_balance=0, got %s", resp.TreasuryBalance)
+	if resp.TreasuryBalance == nil || resp.TreasuryBalance.Balance != "0" {
+		bal := ""
+		if resp.TreasuryBalance != nil {
+			bal = resp.TreasuryBalance.Balance
+		}
+		t.Errorf("expected treasury_balance=0, got %s", bal)
 	}
 }
 
