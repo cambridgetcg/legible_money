@@ -14,7 +14,19 @@ COPY tools/agent-sdk/go.mod ./tools/agent-sdk/
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 go build -o /usr/local/bin/legbled -ldflags="-s -w" ./cmd/legbled
+
+ARG VERSION="v0.1.0-dev"
+ARG COMMIT="unknown"
+ARG BUILD_TAGS="netgo,ledger"
+
+RUN CGO_ENABLED=1 go build -o /usr/local/bin/legbled \
+    -ldflags="-s -w \
+      -X github.com/cosmos/cosmos-sdk/version.Name=legible \
+      -X github.com/cosmos/cosmos-sdk/version.AppName=legbled \
+      -X github.com/cosmos/cosmos-sdk/version.Version=${VERSION} \
+      -X github.com/cosmos/cosmos-sdk/version.Commit=${COMMIT} \
+      -X 'github.com/cosmos/cosmos-sdk/version.BuildTags=${BUILD_TAGS}'" \
+    ./cmd/legbled
 
 # ──── Stage 2: Runtime ────
 FROM alpine:3.20

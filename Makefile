@@ -3,6 +3,17 @@
 BINARY := legbled
 BUILD_DIR := build
 
+# Version metadata (injected via ldflags)
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.1.0-dev")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TAGS := netgo,ledger
+
+LDFLAGS := -X github.com/cosmos/cosmos-sdk/version.Name=legible \
+           -X github.com/cosmos/cosmos-sdk/version.AppName=legbled \
+           -X github.com/cosmos/cosmos-sdk/version.Version=$(VERSION) \
+           -X github.com/cosmos/cosmos-sdk/version.Commit=$(COMMIT) \
+           -X "github.com/cosmos/cosmos-sdk/version.BuildTags=$(BUILD_TAGS)"
+
 # Colors
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
@@ -18,7 +29,7 @@ all: build test
 build: ## Build legbled binary
 	@echo "$(GREEN)Building $(BINARY)...$(NC)"
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(BINARY) ./cmd/legbled
+	@go build -ldflags "$(LDFLAGS) -s -w" -o $(BUILD_DIR)/$(BINARY) ./cmd/legbled
 
 build-all: ## Build all packages
 	@echo "$(GREEN)Building all packages...$(NC)"
