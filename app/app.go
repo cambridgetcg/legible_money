@@ -312,7 +312,7 @@ var (
 		// Custom Legible Money module accounts
 		legibleauthtypes.ModuleName:      nil, // holds bootstrap fund, sends to new accounts
 		vestingrewardstypes.ModuleName:   {authtypes.Minter, authtypes.Burner},
-		knowledgetypes.ModuleName:        nil,
+		knowledgetypes.ModuleName:        {authtypes.Burner},
 		legiblestakingtypes.ModuleName:   {authtypes.Burner, authtypes.Staking},
 		tokenstypes.ModuleName:           {authtypes.Minter, authtypes.Burner},
 		ResearchFundName:                 nil, // receives 7% research tax; no mint/burn needed
@@ -328,6 +328,7 @@ var (
 		billingtypes.ModuleName:          {authtypes.Burner},
 		partnershipstypes.ModuleName:     {authtypes.Burner, authtypes.Staking},
 		computepooltypes.ModuleName:      {authtypes.Burner},
+		lgmgovtypes.ModuleName:           {authtypes.Burner}, // LIP deposit escrow + vote stake escrow
 	}
 )
 
