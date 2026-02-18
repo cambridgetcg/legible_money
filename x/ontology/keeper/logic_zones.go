@@ -13,7 +13,7 @@ import (
 func (k Keeper) InitializeDefaultZones(ctx sdk.Context) {
 	for _, zone := range types.DefaultLogicZones() {
 		// Only set if not already registered (preserves governance overrides)
-		if _, found := k.GetLogicZone(ctx, zone.Zone); !found {
+		if _, found := k.GetLogicZone(ctx, types.LogicZone(zone.Zone)); !found {
 			k.SetLogicZone(ctx, zone)
 		}
 	}

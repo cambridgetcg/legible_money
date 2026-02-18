@@ -10,6 +10,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -18,36 +19,41 @@ func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 	return &queryServer{Keeper: keeper}
 }
 
-var _ types.QueryServer = queryServer{}
-
 // Params returns the module parameters.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := q.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }
 
 // Stratum returns the properties of a single stratum.
 func (q queryServer) Stratum(goCtx context.Context, req *types.QueryStratumRequest) (*types.QueryStratumResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	if !req.Stratum.IsValid() {
+	stratum := types.Stratum(req.Stratum)
+	if !stratum.IsValid() {
 		return nil, fmt.Errorf("%w: %d", types.ErrInvalidStratum, req.Stratum)
 	}
 
-	props, found := q.GetStratum(ctx, req.Stratum)
+	props, found := q.GetStratum(ctx, stratum)
 	if !found {
 		return nil, fmt.Errorf("%w: stratum %d not registered", types.ErrInvalidStratum, req.Stratum)
 	}
 
-	return &types.QueryStratumResponse{Properties: props}, nil
+	return &types.QueryStratumResponse{Properties: &props}, nil
 }
 
 // AllStrata returns all registered strata.
 func (q queryServer) AllStrata(goCtx context.Context, _ *types.QueryAllStrataRequest) (*types.QueryAllStrataResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	strata := q.GetAllStrata(ctx)
-	return &types.QueryAllStrataResponse{Strata: strata}, nil
+
+	ptrs := make([]*types.StratumProperties, len(strata))
+	for i := range strata {
+		ptrs[i] = &strata[i]
+	}
+
+	return &types.QueryAllStrataResponse{Strata: ptrs}, nil
 }
 
 // Domain returns a single domain by name.
@@ -62,26 +68,39 @@ func (q queryServer) Domain(goCtx context.Context, req *types.QueryDomainRequest
 		return nil, fmt.Errorf("%w: %s", types.ErrDomainNotFound, req.Name)
 	}
 
-	return &types.QueryDomainResponse{Domain: domain}, nil
+	return &types.QueryDomainResponse{Domain: &domain}, nil
 }
 
 // DomainsByStratum returns all domains belonging to a specific stratum.
 func (q queryServer) DomainsByStratum(goCtx context.Context, req *types.QueryDomainsByStratumRequest) (*types.QueryDomainsByStratumResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	if !req.Stratum.IsValid() {
+	stratum := types.Stratum(req.Stratum)
+	if !stratum.IsValid() {
 		return nil, fmt.Errorf("%w: %d", types.ErrInvalidStratum, req.Stratum)
 	}
 
-	domains := q.GetDomainsByStratum(ctx, req.Stratum)
-	return &types.QueryDomainsByStratumResponse{Domains: domains}, nil
+	domains := q.GetDomainsByStratum(ctx, stratum)
+
+	ptrs := make([]*types.Domain, len(domains))
+	for i := range domains {
+		ptrs[i] = &domains[i]
+	}
+
+	return &types.QueryDomainsByStratumResponse{Domains: ptrs}, nil
 }
 
 // AllDomains returns all registered domains.
 func (q queryServer) AllDomains(goCtx context.Context, _ *types.QueryAllDomainsRequest) (*types.QueryAllDomainsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	domains := q.GetAllDomains(ctx)
-	return &types.QueryAllDomainsResponse{Domains: domains}, nil
+
+	ptrs := make([]*types.Domain, len(domains))
+	for i := range domains {
+		ptrs[i] = &domains[i]
+	}
+
+	return &types.QueryAllDomainsResponse{Domains: ptrs}, nil
 }
 
 // Proposal returns a single domain proposal by ID.
@@ -96,7 +115,7 @@ func (q queryServer) Proposal(goCtx context.Context, req *types.QueryProposalReq
 		return nil, fmt.Errorf("%w: %s", types.ErrProposalNotFound, req.ProposalId)
 	}
 
-	return &types.QueryProposalResponse{Proposal: proposal}, nil
+	return &types.QueryProposalResponse{Proposal: &proposal}, nil
 }
 
 // ConfidenceCeiling returns the maximum confidence and decay rate for a domain.
@@ -132,17 +151,23 @@ func (q queryServer) LogicZone(goCtx context.Context, req *types.QueryLogicZoneR
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	props, found := q.GetLogicZone(ctx, req.Zone)
+	props, found := q.GetLogicZone(ctx, types.LogicZone(req.Zone))
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrLogicZoneNotFound, req.Zone)
 	}
 
-	return &types.QueryLogicZoneResponse{Properties: props}, nil
+	return &types.QueryLogicZoneResponse{Properties: &props}, nil
 }
 
 // AllLogicZones returns all registered logic zones.
 func (q queryServer) AllLogicZones(goCtx context.Context, _ *types.QueryAllLogicZonesRequest) (*types.QueryAllLogicZonesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	zones := q.GetAllLogicZones(ctx)
-	return &types.QueryAllLogicZonesResponse{Zones: zones}, nil
+
+	ptrs := make([]*types.LogicZoneProperties, len(zones))
+	for i := range zones {
+		ptrs[i] = &zones[i]
+	}
+
+	return &types.QueryAllLogicZonesResponse{Zones: ptrs}, nil
 }

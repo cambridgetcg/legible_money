@@ -184,7 +184,7 @@ Max confidence in basis points (1000000 = 100%).`,
 			msg := &types.MsgRegisterLogicZone{
 				Authority: clientCtx.GetFromAddress().String(),
 				ZoneProperties: types.LogicZoneProperties{
-					Zone:             types.LogicZone(args[0]),
+					Zone:             args[0],
 					Complete:         complete,
 					Decidable:        decidable,
 					GoedelApplies:    goedelApplies,

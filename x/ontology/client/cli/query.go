@@ -81,7 +81,7 @@ func NewQueryStratumCmd() *cobra.Command {
 				return fmt.Errorf("invalid stratum level: %w", err)
 			}
 
-			req := &types.QueryStratumRequest{Stratum: types.Stratum(level)}
+			req := &types.QueryStratumRequest{Stratum: uint32(level)}
 			resp := &types.QueryStratumResponse{}
 			if err := clientCtx.Invoke(cmd.Context(), "/legible.ontology.v1.Query/Stratum", req, resp); err != nil {
 				return fmt.Errorf("failed to query stratum: %w", err)
@@ -164,7 +164,7 @@ func NewQueryDomainsByStratumCmd() *cobra.Command {
 				return fmt.Errorf("invalid stratum level: %w", err)
 			}
 
-			req := &types.QueryDomainsByStratumRequest{Stratum: types.Stratum(level)}
+			req := &types.QueryDomainsByStratumRequest{Stratum: uint32(level)}
 			resp := &types.QueryDomainsByStratumResponse{}
 			if err := clientCtx.Invoke(cmd.Context(), "/legible.ontology.v1.Query/DomainsByStratum", req, resp); err != nil {
 				return fmt.Errorf("failed to query domains: %w", err)
@@ -268,7 +268,7 @@ func NewQueryLogicZoneCmd() *cobra.Command {
 				return err
 			}
 
-			req := &types.QueryLogicZoneRequest{Zone: types.LogicZone(args[0])}
+			req := &types.QueryLogicZoneRequest{Zone: args[0]}
 			resp := &types.QueryLogicZoneResponse{}
 			if err := clientCtx.Invoke(cmd.Context(), "/legible.ontology.v1.Query/LogicZone", req, resp); err != nil {
 				return fmt.Errorf("failed to query logic zone: %w", err)

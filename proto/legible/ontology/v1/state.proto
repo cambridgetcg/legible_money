@@ -45,6 +45,16 @@ message DomainProposal {
   uint64 expires_at      = 11; // block height
 }
 
+// LogicZoneProperties defines the properties of a Godelian logic zone.
+message LogicZoneProperties {
+  string zone              = 1;
+  bool   complete          = 2;
+  bool   decidable         = 3;
+  bool   goedel_applies    = 4;
+  uint64 max_confidence_bps = 5;
+  string description       = 6;
+}
+
 // CrossStratumLink represents a relationship between domains in different strata.
 message CrossStratumLink {
   string source_domain = 1;
