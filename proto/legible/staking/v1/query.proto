@@ -1,0 +1,97 @@
+syntax = "proto3";
+package legible.staking.v1;
+
+option go_package = "github.com/legible-money/legible/x/staking/types";
+
+import "google/api/annotations.proto";
+import "legible/staking/v1/state.proto";
+import "legible/staking/v1/genesis.proto";
+
+// Query defines the gRPC query service for the staking module
+service Query {
+  // Validator returns a single validator by operator address
+  rpc Validator(QueryValidatorRequest) returns (QueryValidatorResponse) {
+    option (google.api.http).get = "/legible/staking/v1/validator/{operator_address}";
+  }
+
+  // Validators returns validators with optional filtering
+  rpc Validators(QueryValidatorsRequest) returns (QueryValidatorsResponse) {
+    option (google.api.http).get = "/legible/staking/v1/validators";
+  }
+
+  // Delegation returns a single delegation
+  rpc Delegation(QueryDelegationRequest) returns (QueryDelegationResponse) {
+    option (google.api.http).get = "/legible/staking/v1/delegation/{delegator_address}/{validator_address}";
+  }
+
+  // DelegationsForValidator returns all delegations to a specific validator
+  rpc DelegationsForValidator(QueryDelegationsForValidatorRequest) returns (QueryDelegationsForValidatorResponse) {
+    option (google.api.http).get = "/legible/staking/v1/delegations/{validator_address}";
+  }
+
+  // Unbondings returns unbonding entries for a delegator
+  rpc Unbondings(QueryUnbondingsRequest) returns (QueryUnbondingsResponse) {
+    option (google.api.http).get = "/legible/staking/v1/unbondings/{delegator_address}";
+  }
+
+  // Params returns the module parameters and tier configurations
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/staking/v1/params";
+  }
+}
+
+// ============================================================================
+// Request/Response Messages
+// ============================================================================
+
+message QueryValidatorRequest {
+  string operator_address = 1;
+}
+
+message QueryValidatorResponse {
+  LegibleValidator validator = 1;
+}
+
+message QueryValidatorsRequest {
+  bool active_only = 1;
+  int32 tier = 2;
+  uint32 limit = 3;
+  uint32 offset = 4;
+}
+
+message QueryValidatorsResponse {
+  repeated LegibleValidator validators = 1;
+  uint32 total = 2;
+}
+
+message QueryDelegationRequest {
+  string delegator_address = 1;
+  string validator_address = 2;
+}
+
+message QueryDelegationResponse {
+  Delegation delegation = 1;
+}
+
+message QueryDelegationsForValidatorRequest {
+  string validator_address = 1;
+}
+
+message QueryDelegationsForValidatorResponse {
+  repeated Delegation delegations = 1;
+}
+
+message QueryUnbondingsRequest {
+  string delegator_address = 1;
+}
+
+message QueryUnbondingsResponse {
+  repeated UnbondingEntry unbondings = 1;
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1;
+  repeated TierConfig tier_configs = 2;
+}

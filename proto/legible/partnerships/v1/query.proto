@@ -1,0 +1,26 @@
+syntax = "proto3";
+package legible.partnerships.v1;
+
+option go_package = "github.com/legible-money/legible/x/partnerships/types";
+
+import "google/api/annotations.proto";
+import "legible/partnerships/v1/state.proto";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/partnerships/v1/params";
+  }
+  rpc Partnership(QueryPartnershipRequest) returns (QueryPartnershipResponse) {
+    option (google.api.http).get = "/legible/partnerships/v1/partnership/{partnership_id}";
+  }
+  rpc PartnershipsByParticipant(QueryPartnershipsByParticipantRequest) returns (QueryPartnershipsByParticipantResponse) {
+    option (google.api.http).get = "/legible/partnerships/v1/partnerships/{participant}";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse { Params params = 1; }
+message QueryPartnershipRequest { string partnership_id = 1; }
+message QueryPartnershipResponse { Partnership partnership = 1; }
+message QueryPartnershipsByParticipantRequest { string participant = 1; }
+message QueryPartnershipsByParticipantResponse { repeated Partnership partnerships = 1; }

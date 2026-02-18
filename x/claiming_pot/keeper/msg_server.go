@@ -307,3 +307,20 @@ func (m msgServer) ClosePot(goCtx context.Context, msg *types.MsgClosePot) (*typ
 
 	return &types.MsgClosePotResponse{RefundedAmount: refunded}, nil
 }
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if m.Keeper.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	m.Keeper.SetParams(ctx, *msg.Params)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"claiming_pot_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
+}

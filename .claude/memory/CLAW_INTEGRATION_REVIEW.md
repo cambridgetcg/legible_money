@@ -1,11 +1,11 @@
 # Claw Framework Integration Review
 
-> **Session**: 2026-02-16 | **Scope**: Unify OpenClaw variants across all modules
-> **Status**: Analysis complete — taxonomy defined, coverage mapped, integration plan ready
+> **Session**: 2026-02-16/17 | **Scope**: Unify OpenClaw variants across all modules
+> **Status**: Phase 2 COMPLETE — staking/gov/disputes all covered, 86 total probes
 
 ---
 
-## 1. Current State — 4 Files, 50 Probes
+## 1. Current State — 7 Files, 86 Probes
 
 | File | Prefix | Tests | Module | Focus |
 |------|--------|-------|--------|-------|
@@ -13,8 +13,11 @@
 | `x/auth/keeper/openclaw_privacy_test.go` | OCP-1→12 | 12 | auth | DID, session keys, privacy boundaries |
 | `x/bvm/vm/money_psychology_test.go` | PSY-1→12 | 12 | bvm | Wealth-belief coupling, agent psychology |
 | `x/bvm/vm/empty_work_test.go` | FARM-1→11 | 11 | bvm | Empty work exploits, token farming |
+| `x/staking/keeper/openclaw_staking_test.go` | OC-SK-1→12 | 12 | staking | Tier gaming, whale concentration, Sybil |
+| `x/gov/keeper/openclaw_governance_test.go` | OCG/NCG/ZCG | 12 | gov | Vote buying, proposal spam, quadratic edge |
+| `x/disputes/keeper/openclaw_disputes_test.go` | OCD/NCD/ZCD | 12 | disputes | Challenge spam, collusion, cascade |
 
-**Total**: 50 probes, 3,360+ lines, 3 modules covered out of 27.
+**Total**: 86 probes, ~5,500 lines, 6 modules covered out of 27.
 
 ---
 
@@ -116,9 +119,9 @@ The 50 existing probes work well as-is. Naming convention is sufficient for Phas
 | knowledge | 15 OC | **YES** | Partial (OC-13,14) | — | Add NC, ZC |
 | auth | 12 OCP | **YES** | — | — | Add NC, ZC |
 | bvm | 23 (PSY+FARM) | **YES** | — | **YES** (FARM) | Add NC |
-| staking | 0 claw | — | — | — | **HIGH** |
-| gov | 0 claw | — | — | — | **HIGH** |
-| disputes | 0 claw | — | — | — | **HIGH** |
+| staking | 12 OC-SK | **YES** | — | — | ~~HIGH~~ **DONE** |
+| gov | 12 (OCG+NCG+ZCG) | **YES** | **YES** (NCG-1,2) | **YES** (ZCG-1,2,3) | ~~HIGH~~ **DONE** |
+| disputes | 12 (OCD+NCD+ZCD) | **YES** | **YES** (NCD-1,2) | **YES** (ZCD-1,2,3) | ~~HIGH~~ **DONE** |
 | emergency | 0 claw | — | — | — | **MEDIUM** |
 | vesting_rewards | 0 claw | — | — | — | **MEDIUM** |
 | capture_defense | 0 claw | — | — | — | **MEDIUM** |
@@ -158,15 +161,28 @@ Some attacks span multiple modules. These are the most dangerous and least teste
 - OC-12 Sybil Economics, OC-15 Multi-Round Accumulation
 - OCP-1→12 (all auth probes are OpenClaw: boundary probing at system level)
 - PSY-1→12 (all psychology probes: emergent behavioral dynamics)
+- OC-SK-1→12 (staking: whale concentration, slash escalation, tier gaming, Sybil spam)
+- OCG-1→7 (gov: Sybil amplification, proposal spam, category downgrade, abstain quorum)
+- OCD-1→6 (disputes: challenge spam, collusion, escalation delay, bond EV, cascade)
 
-**NanoClaw (embedded, should be extracted)**:
-- OC-13 Slash Rate Sensitivity → **NC-1**
-- OC-14 Integer Truncation Attack → **NC-2**
+**NanoClaw (dedicated files in gov + disputes)**:
+- OC-13 Slash Rate Sensitivity → **NC-1** (embedded in knowledge)
+- OC-14 Integer Truncation Attack → **NC-2** (embedded in knowledge)
+- NCG-1 sqrt precision at boundaries (gov)
+- NCG-2 support threshold at exactly 75% (gov)
+- NCD-1 bond=1 zero-slash truncation (disputes)
+- NCD-2 quorum boundary at 2/3 and 5/7 (disputes)
 
-**ZeroClaw (embedded, should be extracted)**:
-- OC-3 Abstain to Avoid Slash → **ZC-1**
+**ZeroClaw (dedicated probes in gov + disputes)**:
+- OC-3 Abstain to Avoid Slash → **ZC-1** (embedded in knowledge)
 - OC-4 Minimum Stake Spam → **ZC-2** (now defended by MinClaimStakeUlgm)
 - FARM-1→11 (all empty work probes are ZeroClaw by nature)
+- ZCG-1 100 proposals at 1 ulgm each (gov)
+- ZCG-2 vote on nonexistent proposal (gov)
+- ZCG-3 self-dealing disbursement (gov)
+- ZCD-1 inconclusive loop at zero cost (disputes)
+- ZCD-2 non-arbiter vote rejection (disputes)
+- ZCD-3 self-dispute exploit (disputes)
 
 ---
 
@@ -176,11 +192,16 @@ Some attacks span multiple modules. These are the most dangerous and least teste
 - Rename nothing — but adopt the OC/NC/ZC/XM naming for all NEW probes
 - Document taxonomy in this file (done)
 
-### Phase 2: High-Priority Modules (NEXT SESSION)
-Create claw tests for the 3 uncovered high-priority modules:
-1. **`x/staking/keeper/openclaw_staking_test.go`** — Tier gaming, unbonding race, validator cycling
-2. **`x/gov/keeper/openclaw_governance_test.go`** — Vote buying, proposal spam, quadratic edge cases
-3. **`x/disputes/keeper/openclaw_disputes_test.go`** — Challenge spam, arbitration capture, double-dip
+### Phase 2: High-Priority Modules (COMPLETE ✓)
+All 3 high-priority modules now have claw tests (36 total probes, all passing):
+1. **`x/staking/keeper/openclaw_staking_test.go`** — 12 tests (OC-SK-1→12): whale concentration, slash escalation, epoch cap, Sybil spam, tier demotion, unbonding ID collision, block producer cap
+2. **`x/gov/keeper/openclaw_governance_test.go`** — 12 tests (7 OCG + 2 NCG + 3 ZCG): Sybil amplification (10x via quadratic), proposal spam, category downgrade, abstain quorum, sqrt precision, threshold boundaries, zero-cost spam, self-dealing
+3. **`x/disputes/keeper/openclaw_disputes_test.go`** — 12 tests (6 OCD + 2 NCD + 3 ZCD): challenge spam cap, arbiter collusion, escalation delay, bond EV asymmetry, cascade attack, zero-slash truncation, quorum boundaries, inconclusive loop, self-dispute
+
+**Key findings (Phase 2)**:
+- **2 CRITICAL**: OCG-1 (10x Sybil amplification in quadratic voting — defense relies on DID identity cost), ZCD-3 (self-dispute allowed — can pause own vesting)
+- **3 HIGH**: OCG-4 (category downgrade attack), OCD-2 (3-arbiter collusion overturns verified fact), ZCD-1 (inconclusive loop at zero cost)
+- **4 MEDIUM**: OCG-2 (50/50 proposal spam at 1 ulgm), OCG-5 (abstain inflates voter count), OCD-3 (19-day lockup via escalation), OCD-5 (abstention forces inconclusive)
 
 ### Phase 3: NanoClaw Extraction
 Create dedicated nanoclaw files for precision attacks:
@@ -201,13 +222,15 @@ Implement XM-1→8 in `tests/cross_module/` using full app integration tests.
 
 ## 8. Summary
 
-| Metric | Current | After Phase 2 | After Phase 4 |
-|--------|---------|---------------|---------------|
-| Total probes | 50 | ~80 | ~120 |
-| Modules covered | 3/27 | 6/27 | 8/27 |
-| Claw variants | 1 (OC) | 3 (OC/NC/ZC) | 3 + XM |
-| Critical findings | 3 (all fixed) | TBD | TBD |
+| Metric | Pre-Phase 2 | After Phase 2 | After Phase 4 |
+|--------|-------------|---------------|---------------|
+| Total probes | 50 | **86** | ~120 |
+| Modules covered | 3/27 | **6/27** | 8/27 |
+| Claw variants | 1 (OC) | **3 (OC/NC/ZC)** | 3 + XM |
+| Critical findings | 3 (all fixed) | **+2 new** (5 total) | TBD |
 
-**Key Insight**: The existing 50 probes are well-written and effective (3 CRITICAL findings, all remediated). The framework doesn't need architectural overhaul — it needs **coverage expansion** to the 24 uncovered modules, and **variant specialization** (NanoClaw for precision, ZeroClaw for zero-cost) to catch different classes of vulnerability.
+**Phase 2 Results**: 36 new probes across staking/gov/disputes, all passing. Gov and disputes files use the mixed OC/NC/ZC naming convention (first files to do so). 2 new CRITICAL findings identified:
+- **OCG-1**: Quadratic voting creates 10x Sybil amplification (same capital, split across identities). Defense: DID creation cost must exceed amplification benefit.
+- **ZCD-3**: Self-dispute is unrestricted — agent can challenge own fact to pause vesting or probe arbiter pool.
 
-**No NanoClaw or ZeroClaw protocols exist yet as separate files** — they're embedded within OpenClaw. The integration path is: adopt naming conventions → create new variant-specific files → extract embedded probes over time.
+**Key Insight**: The claw framework scales well. The OC/NC/ZC naming convention proved natural for gov and disputes — each file covers all three variants. Next priority: NanoClaw extraction for precision attacks (Phase 3) and medium-priority modules (emergency, vesting_rewards, capture_defense).

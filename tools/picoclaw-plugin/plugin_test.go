@@ -15,8 +15,8 @@ func TestPluginToolCount(t *testing.T) {
 	plugin := NewPlugin(agent, cfg)
 
 	tools := plugin.Tools()
-	if len(tools) != 17 {
-		t.Fatalf("Expected 17 tools, got %d", len(tools))
+	if len(tools) != 18 {
+		t.Fatalf("Expected 18 tools, got %d", len(tools))
 	}
 
 	// Verify all tool names are unique
@@ -46,6 +46,7 @@ func TestToolNames(t *testing.T) {
 		"chain_vote",
 		"chain_deploy_contract",
 		"chain_call_contract",
+		"chain_read_contract",
 		"chain_schedule",
 		"chain_home_create",
 		"chain_home_sync",

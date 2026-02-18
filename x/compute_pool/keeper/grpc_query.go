@@ -10,12 +10,13 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
 // NewQueryServerImpl returns a QueryServer implementation for the compute_pool module.
 func NewQueryServerImpl(keeper Keeper) types.QueryServer {
-	return &queryServer{Keeper: keeper}
+	return &queryServer{Keeper: keeper, UnimplementedQueryServer: types.UnimplementedQueryServer{}}
 }
 
 var _ types.QueryServer = queryServer{}
@@ -27,7 +28,7 @@ func (k queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := k.GetParams(ctx)
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }
 
 // Provider returns a compute provider by address.
@@ -40,7 +41,7 @@ func (k queryServer) Provider(goCtx context.Context, req *types.QueryProviderReq
 	if !found {
 		return nil, fmt.Errorf("%w: %s", types.ErrProviderNotFound, req.Address)
 	}
-	return &types.QueryProviderResponse{Provider: provider}, nil
+	return &types.QueryProviderResponse{Provider: &provider}, nil
 }
 
 // ActiveProviders returns all active providers, optionally filtered by service type.
@@ -50,7 +51,11 @@ func (k queryServer) ActiveProviders(goCtx context.Context, req *types.QueryActi
 	}
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	providers := k.GetActiveProvidersByType(ctx, req.ServiceType)
-	return &types.QueryActiveProvidersResponse{Providers: providers}, nil
+	providerPtrs := make([]*types.ComputeProvider, len(providers))
+	for i := range providers {
+		providerPtrs[i] = &providers[i]
+	}
+	return &types.QueryActiveProvidersResponse{Providers: providerPtrs}, nil
 }
 
 // CreditBalance returns a validator's compute credit balance.
@@ -66,7 +71,7 @@ func (k queryServer) CreditBalance(goCtx context.Context, req *types.QueryCredit
 			ValidatorAddr: req.ValidatorAddr,
 		}
 	}
-	return &types.QueryCreditBalanceResponse{Credit: credit}, nil
+	return &types.QueryCreditBalanceResponse{Credit: &credit}, nil
 }
 
 // RedemptionTicket returns a redemption ticket by ID.
@@ -79,7 +84,7 @@ func (k queryServer) RedemptionTicket(goCtx context.Context, req *types.QueryRed
 	if !found {
 		return nil, fmt.Errorf("%w: %d", types.ErrTicketNotFound, req.TicketId)
 	}
-	return &types.QueryRedemptionTicketResponse{Ticket: ticket}, nil
+	return &types.QueryRedemptionTicketResponse{Ticket: &ticket}, nil
 }
 
 // PoolStats returns current pool balance and epoch statistics.
@@ -99,7 +104,7 @@ func (k queryServer) PoolStats(goCtx context.Context, req *types.QueryPoolStatsR
 
 	return &types.QueryPoolStatsResponse{
 		PoolBalance:         poolBalance.String(),
-		CurrentEpoch:        stats,
+		CurrentEpoch:        &stats,
 		AdjustmentFactorBps: adjustmentFactor,
 	}, nil
 }

@@ -1201,8 +1201,8 @@ func TestQueryQualification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.Found {
-		t.Error("expected qualification to be found")
+	if resp.Qualification == nil {
+		t.Fatal("expected qualification in response")
 	}
 	if resp.Qualification.Status != string(types.StatusActive) {
 		t.Errorf("expected active, got %s", resp.Qualification.Status)
@@ -1257,19 +1257,21 @@ func TestQueryEndorsement(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	k.SetEndorsement(ctx, types.QualificationEndorsement{
-		Id: "e1", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
+		Id: "lgmvaloper1abc/lgmvaloper1def/physics", EndorserAddr: "lgmvaloper1abc", TargetValidator: "lgmvaloper1def",
 		Domain: "physics",
 	})
 
 	qs := keeper.NewQueryServerImpl(k)
 	resp, err := qs.Endorsement(ctx, &types.QueryEndorsementRequest{
-		EndorsementId: "e1",
+		Endorser:        "lgmvaloper1abc",
+		TargetValidator: "lgmvaloper1def",
+		Domain:          "physics",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.Found {
-		t.Error("expected endorsement to be found")
+	if resp.Endorsement == nil {
+		t.Error("expected endorsement in response")
 	}
 }
 

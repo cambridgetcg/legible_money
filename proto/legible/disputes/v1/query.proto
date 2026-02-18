@@ -1,0 +1,26 @@
+syntax = "proto3";
+package legible.disputes.v1;
+option go_package = "github.com/legible-money/legible/x/disputes/types";
+import "google/api/annotations.proto";
+import "legible/disputes/v1/state.proto";
+import "legible/disputes/v1/genesis.proto";
+service Query {
+  rpc Dispute(QueryDisputeRequest) returns (QueryDisputeResponse) { option (google.api.http).get = "/legible/disputes/v1/dispute/{dispute_id}"; }
+  rpc DisputesByFact(QueryDisputesByFactRequest) returns (QueryDisputesByFactResponse) { option (google.api.http).get = "/legible/disputes/v1/disputes/fact/{fact_id}"; }
+  rpc ActiveDisputes(QueryActiveDisputesRequest) returns (QueryActiveDisputesResponse) { option (google.api.http).get = "/legible/disputes/v1/disputes/active"; }
+  rpc Evidence(QueryEvidenceRequest) returns (QueryEvidenceResponse) { option (google.api.http).get = "/legible/disputes/v1/dispute/{dispute_id}/evidence"; }
+  rpc Votes(QueryVotesRequest) returns (QueryVotesResponse) { option (google.api.http).get = "/legible/disputes/v1/dispute/{dispute_id}/votes"; }
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) { option (google.api.http).get = "/legible/disputes/v1/params"; }
+}
+message QueryDisputeRequest { string dispute_id = 1; }
+message QueryDisputeResponse { Dispute dispute = 1; }
+message QueryDisputesByFactRequest { string fact_id = 1; }
+message QueryDisputesByFactResponse { repeated Dispute disputes = 1; }
+message QueryActiveDisputesRequest {}
+message QueryActiveDisputesResponse { repeated Dispute disputes = 1; }
+message QueryEvidenceRequest { string dispute_id = 1; }
+message QueryEvidenceResponse { repeated DisputeEvidence evidence = 1; }
+message QueryVotesRequest { string dispute_id = 1; }
+message QueryVotesResponse { repeated DisputeVote votes = 1; }
+message QueryParamsRequest {}
+message QueryParamsResponse { Params params = 1; }

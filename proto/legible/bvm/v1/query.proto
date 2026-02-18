@@ -1,0 +1,96 @@
+syntax = "proto3";
+package legible.bvm.v1;
+
+option go_package = "github.com/legible-money/legible/x/bvm/types";
+
+import "google/api/annotations.proto";
+import "legible/bvm/v1/state.proto";
+import "legible/bvm/v1/genesis.proto";
+
+// Query defines the gRPC query service for the bvm module
+service Query {
+  // Contract returns a specific deployed contract
+  rpc Contract(QueryContractRequest) returns (QueryContractResponse) {
+    option (google.api.http).get = "/legible/bvm/v1/contract/{address}";
+  }
+
+  // ContractsByCreator returns all contracts for a creator with pagination
+  rpc ContractsByCreator(QueryContractsByCreatorRequest) returns (QueryContractsByCreatorResponse) {
+    option (google.api.http).get = "/legible/bvm/v1/contracts/{creator}";
+  }
+
+  // Code returns a specific contract code by hash
+  rpc Code(QueryCodeRequest) returns (QueryCodeResponse) {
+    option (google.api.http).get = "/legible/bvm/v1/code/{code_hash}";
+  }
+
+  // ContractState returns a value from a contract's state
+  rpc ContractState(QueryContractStateRequest) returns (QueryContractStateResponse) {
+    option (google.api.http).get = "/legible/bvm/v1/contract/{contract_address}/state/{key}";
+  }
+
+  // Schedule returns a specific schedule by ID
+  rpc Schedule(QueryScheduleRequest) returns (QueryScheduleResponse) {
+    option (google.api.http).get = "/legible/bvm/v1/schedule/{schedule_id}";
+  }
+
+  // Params returns the module parameters
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/bvm/v1/params";
+  }
+}
+
+// ============================================================================
+// Request/Response Messages
+// ============================================================================
+
+message QueryContractRequest {
+  string address = 1;
+}
+
+message QueryContractResponse {
+  DeployedContract contract = 1;
+}
+
+message QueryContractsByCreatorRequest {
+  string creator = 1;
+  uint32 offset = 2;
+  uint32 limit = 3;
+}
+
+message QueryContractsByCreatorResponse {
+  repeated DeployedContract contracts = 1;
+  uint64 total = 2;
+}
+
+message QueryCodeRequest {
+  string code_hash = 1;
+}
+
+message QueryCodeResponse {
+  ContractCode code = 1;
+}
+
+message QueryContractStateRequest {
+  string contract_address = 1;
+  string key = 2;
+}
+
+message QueryContractStateResponse {
+  string value = 1;
+  bool found = 2;
+}
+
+message QueryScheduleRequest {
+  string schedule_id = 1;
+}
+
+message QueryScheduleResponse {
+  ContractSchedule schedule = 1;
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1;
+}

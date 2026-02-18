@@ -87,6 +87,7 @@ func TestPsy_WealthAwarenessLoop_Rich(t *testing.T) {
 
 	ctx := makeCtx(500000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -121,6 +122,7 @@ func TestPsy_WealthAwarenessLoop_Poor(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -150,6 +152,7 @@ func TestPsy_WealthAwarenessLoop_Poor(t *testing.T) {
 
 	ctx2 := makeCtx(200000)
 	ctx2.CallerDID = callerDID
+	ctx2.Capabilities = allCaps()
 	ctx2.Bytecode = bytecode2
 	result2 := interp.Execute(bytecode2, ctx2, state, host)
 	if !result2.Success {
@@ -220,6 +223,7 @@ func TestPsy_TrustFollowsWealth(t *testing.T) {
 
 	ctx := makeCtx(500000)
 	ctx.CallerDID = observer
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -263,6 +267,7 @@ func TestPsy_BeliefConformity(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -310,6 +315,7 @@ func TestPsy_EconomicSelfSurveillance(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -371,7 +377,7 @@ func TestPsy_SpendLimitAsSelfControl(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -417,8 +423,9 @@ func TestPsy_StakeAsEpistemicFilter(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.BlockNumber = 100
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -456,6 +463,7 @@ func TestPsy_ReputationWealthDecoupling(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -496,6 +504,7 @@ func TestPsy_AnonymousAgentDenied(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = "" // Anonymous!
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -546,6 +555,7 @@ func TestPsy_MultiDimensionalEconomicIdentity(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -607,6 +617,7 @@ func TestPsy_GuardianAsAnxietyResponse(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -655,6 +666,7 @@ func TestPsy_BeliefDivergenceAsOpportunity(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)

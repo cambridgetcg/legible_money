@@ -28,8 +28,14 @@ func NewTxCmd() *cobra.Command {
 		NewSubmitCommitmentCmd(),
 		NewSubmitRevealCmd(),
 		NewChallengeFactCmd(),
+		NewAddFactCmd(),
 		NewSubmitContradictionCmd(),
 		NewPatronizeFactCmd(),
+		NewProposeDomainCmd(),
+		NewEndorseDomainProposalCmd(),
+		NewChallengeDomainProposalCmd(),
+		NewRegisterStratumCmd(),
+		NewChallengeProvisionalFactCmd(),
 	)
 
 	return txCmd
@@ -265,6 +271,206 @@ due to low usage. This is the knowledge preservation mechanism.`,
 	}
 
 	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// NewAddFactCmd creates a CLI command for MsgAddFact (governance-gated).
+func NewAddFactCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add-fact [claim-text] [domain] [category] [confidence]",
+		Short: "Add a fact via governance (genesis/migration)",
+		Long: `Add a verified fact directly, bypassing the verification pipeline.
+This is a governance-gated operation — only the module authority can execute it.
+Used for genesis facts and state migration.
+
+Confidence: 0-1000000 (basis points, where 1000000 = 100%)`,
+		Args: cobra.ExactArgs(4),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			confidence, err := parseUint64(args[3])
+			if err != nil {
+				return fmt.Errorf("invalid confidence: %w", err)
+			}
+
+			logicZone, _ := cmd.Flags().GetString("logic-zone")
+			refs, _ := cmd.Flags().GetStringSlice("references")
+
+			msg := &types.MsgAddFact{
+				Authority:         clientCtx.GetFromAddress().String(),
+				ClaimText:         args[0],
+				Domain:            args[1],
+				EpistemicCategory: args[2],
+				Confidence:        confidence,
+				References:        refs,
+				LogicZone:         logicZone,
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	cmd.Flags().String("logic-zone", "empirical", "Logic zone (propositional, presburger, peano, empirical)")
+	cmd.Flags().StringSlice("references", nil, "Referenced fact IDs (comma-separated)")
+	flags.AddTxFlagsToCmd(cmd)
+
+	return cmd
+}
+
+// NewProposeDomainCmd creates a CLI command for MsgProposeDomain.
+func NewProposeDomainCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "propose-domain [name] [description] [stake]",
+		Short: "Propose a new knowledge domain",
+		Long: `Propose a new ontological domain for knowledge classification.
+The domain enters a proposed state and requires endorsements to activate.
+Stake is locked until the proposal resolves.`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgProposeDomain{
+				Name:        args[0],
+				Description: args[1],
+				Proposer:    clientCtx.GetFromAddress().String(),
+				Stake:       args[2],
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// NewEndorseDomainProposalCmd creates a CLI command for MsgEndorseDomainProposal.
+func NewEndorseDomainProposalCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "endorse-domain [domain-name]",
+		Short: "Endorse a proposed domain",
+		Long: `Endorse a domain proposal. Once enough endorsements are collected
+(MinEndorsements param), the domain becomes active.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgEndorseDomainProposal{
+				DomainName: args[0],
+				Endorser:   clientCtx.GetFromAddress().String(),
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// NewChallengeDomainProposalCmd creates a CLI command for MsgChallengeDomainProposal.
+func NewChallengeDomainProposalCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "challenge-domain [domain-name] [reason]",
+		Short: "Challenge a proposed domain",
+		Long: `Challenge a domain proposal with a stated reason. Challenges
+are recorded and may prevent domain activation.`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgChallengeDomainProposal{
+				DomainName: args[0],
+				Challenger: clientCtx.GetFromAddress().String(),
+				Reason:     args[1],
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// NewRegisterStratumCmd creates a CLI command for MsgRegisterStratum.
+func NewRegisterStratumCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "register-stratum [name] [description]",
+		Short: "Register an ontological stratum",
+		Long: `Register a new ontological stratum in the knowledge hierarchy.
+Strata define epistemic levels (e.g., formal logic, empirical science).`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgRegisterStratum{
+				StratumName: args[0],
+				Description: args[1],
+				Registrar:   clientCtx.GetFromAddress().String(),
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// NewChallengeProvisionalFactCmd creates a CLI command for MsgChallengeProvisionalFact.
+func NewChallengeProvisionalFactCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "challenge-provisional [claim-id] [stake] [reason]",
+		Short: "Challenge a provisionally accepted fact",
+		Long: `Challenge a fact during its provisional acceptance window.
+Requires adversarial verification to be enabled on the domain.
+The challenger stakes tokens and provides counter-evidence.`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			factID, _ := cmd.Flags().GetString("fact-id")
+			evidenceIDs, _ := cmd.Flags().GetStringSlice("evidence")
+			counterClaim, _ := cmd.Flags().GetString("counter-claim")
+
+			msg := &types.MsgChallengeProvisionalFact{
+				Challenger:   clientCtx.GetFromAddress().String(),
+				ClaimId:      args[0],
+				FactId:       factID,
+				Stake:        args[1],
+				Reason:       args[2],
+				EvidenceIds:  evidenceIDs,
+				CounterClaim: counterClaim,
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	cmd.Flags().String("fact-id", "", "Provisional fact ID (if already created)")
+	cmd.Flags().StringSlice("evidence", nil, "Counter-evidence IDs (comma-separated)")
+	cmd.Flags().String("counter-claim", "", "What the challenger believes instead")
+	flags.AddTxFlagsToCmd(cmd)
+
 	return cmd
 }
 

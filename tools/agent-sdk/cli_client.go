@@ -30,7 +30,7 @@ func (c *CLIClient) runQuery(ctx context.Context, args ...string) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %s: %w", string(out), err)
 	}
-	return out, nil
+	return extractJSON(out), nil
 }
 
 // runTx executes a legbled tx command and returns the tx hash.
@@ -54,14 +54,64 @@ func (c *CLIClient) runTx(ctx context.Context, args ...string) (string, error) {
 		return "", fmt.Errorf("tx failed: %s: %w", string(out), err)
 	}
 
-	// Extract tx hash from JSON response
+	// Extract JSON portion from output. The --gas auto flag prints "gas estimate: N"
+	// to stderr which gets mixed into CombinedOutput. Find the JSON object start.
+	jsonBytes := extractJSON(out)
+
+	// Extract tx hash and check result code from JSON response
 	var resp struct {
 		TxHash string `json:"txhash"`
+		Code   int    `json:"code"`
+		RawLog string `json:"raw_log"`
 	}
-	if json.Unmarshal(out, &resp) == nil && resp.TxHash != "" {
-		return resp.TxHash, nil
+	if json.Unmarshal(jsonBytes, &resp) == nil {
+		if resp.Code != 0 {
+			return "", fmt.Errorf("tx failed with code %d: %s", resp.Code, resp.RawLog)
+		}
+		if resp.TxHash != "" {
+			return resp.TxHash, nil
+		}
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// extractJSON finds the first JSON object in a byte slice.
+// Handles output like "gas estimate: 166168\n{...json...}" from --gas auto.
+func extractJSON(data []byte) []byte {
+	idx := strings.Index(string(data), "{")
+	if idx >= 0 {
+		return data[idx:]
+	}
+	return data
+}
+
+// RawQuery runs a CLI query and returns the raw output bytes (for diagnostics).
+func (c *CLIClient) RawQuery(ctx context.Context, args ...string) ([]byte, error) {
+	fullArgs := append(args, "--node", c.Node, "--output", "json")
+	cmd := exec.CommandContext(ctx, c.Binary, fullArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("raw query failed: %s: %w", string(out), err)
+	}
+	return out, nil
+}
+
+// QueryTxResult queries a tx by hash and returns the DeliverTx result code and raw_log.
+// This catches failures that sync broadcast mode doesn't report (CheckTx passes but DeliverTx fails).
+func (c *CLIClient) QueryTxResult(ctx context.Context, txHash string) (code int, rawLog string, err error) {
+	out, qErr := c.runQuery(ctx, "query", "tx", txHash)
+	if qErr != nil {
+		return -1, "", qErr
+	}
+	var resp struct {
+		Code   int    `json:"code"`
+		RawLog string `json:"raw_log"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return -1, "", fmt.Errorf("parsing tx result: %w", err)
+	}
+	return resp.Code, resp.RawLog, nil
 }
 
 // --- QueryClient Implementation ---
@@ -185,7 +235,7 @@ func (c *CLIClient) ActiveRounds(ctx context.Context) ([]RoundInfo, error) {
 		Rounds []RoundInfo `json:"rounds"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
-		return nil, fmt.Errorf("parsing rounds: %w", err)
+		return nil, fmt.Errorf("parsing rounds (raw: %.300s): %w", string(out), err)
 	}
 	return resp.Rounds, nil
 }
@@ -196,12 +246,31 @@ func (c *CLIClient) RoundDetail(ctx context.Context, roundID string) (*RoundInfo
 		return nil, err
 	}
 
+	// Parse basic fields via RoundInfo struct
 	var resp struct {
 		Round RoundInfo `json:"round"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
 		return nil, fmt.Errorf("parsing round: %w", err)
 	}
+
+	// Extract commitment/reveal counts and final verdict from the full proto response.
+	// The proto JSON has commitments/reveals as maps, final_verdict, final_confidence.
+	var raw struct {
+		Round struct {
+			Commitments     map[string]json.RawMessage `json:"commitments"`
+			Reveals         map[string]json.RawMessage `json:"reveals"`
+			FinalVerdict    string                     `json:"final_verdict"`
+			FinalConfidence uint64                     `json:"final_confidence,string"`
+		} `json:"round"`
+	}
+	if json.Unmarshal(out, &raw) == nil {
+		resp.Round.CommitmentCount = len(raw.Round.Commitments)
+		resp.Round.RevealCount = len(raw.Round.Reveals)
+		resp.Round.FinalVerdict = raw.Round.FinalVerdict
+		resp.Round.FinalConfidence = raw.Round.FinalConfidence
+	}
+
 	return &resp.Round, nil
 }
 

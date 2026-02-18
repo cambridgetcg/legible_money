@@ -119,6 +119,72 @@ func (k Keeper) DeprecateDomain(ctx sdk.Context, domainName string) error {
 	return nil
 }
 
+// ArchiveDomain marks a domain as archived. Archived domains cannot accept new claims
+// and are hidden from default listings, but existing facts remain queryable for historical reference.
+func (k Keeper) ArchiveDomain(ctx sdk.Context, domainName string) error {
+	domain, found := k.GetDomain(ctx, domainName)
+	if !found {
+		return fmt.Errorf("%w: %s", types.ErrDomainNotFound, domainName)
+	}
+	domain.Status = "archived"
+	domain.UpdatedAt = uint64(ctx.BlockHeight())
+	k.SetDomain(ctx, domain)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"domain_archived",
+			sdk.NewAttribute("domain", domainName),
+			sdk.NewAttribute("height", fmt.Sprintf("%d", ctx.BlockHeight())),
+		),
+	)
+
+	return nil
+}
+
+// MergeDomains merges a source domain into a target domain. The source domain is archived
+// and its claim/fact counts are added to the target. Both domains must exist.
+// For merge proposals, the target domain name is stored in proposal.Domain.Description
+// using the convention "merge_into:<target_name>".
+func (k Keeper) MergeDomains(ctx sdk.Context, proposal types.DomainProposal) error {
+	targetName := types.ParseMergeTarget(proposal.Domain.Description)
+	if targetName == "" {
+		return fmt.Errorf("merge proposal missing merge target (expected 'merge_into:<name>' in description)")
+	}
+
+	sourceName := proposal.Domain.Name
+
+	source, found := k.GetDomain(ctx, sourceName)
+	if !found {
+		return fmt.Errorf("%w: source %s", types.ErrDomainNotFound, sourceName)
+	}
+	target, found := k.GetDomain(ctx, targetName)
+	if !found {
+		return fmt.Errorf("%w: target %s", types.ErrDomainNotFound, targetName)
+	}
+
+	// Transfer counts
+	target.ClaimCount += source.ClaimCount
+	target.FactCount += source.FactCount
+	target.UpdatedAt = uint64(ctx.BlockHeight())
+	k.SetDomain(ctx, target)
+
+	// Archive source
+	source.Status = "archived"
+	source.UpdatedAt = uint64(ctx.BlockHeight())
+	k.SetDomain(ctx, source)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"domains_merged",
+			sdk.NewAttribute("source", sourceName),
+			sdk.NewAttribute("target", targetName),
+			sdk.NewAttribute("height", fmt.Sprintf("%d", ctx.BlockHeight())),
+		),
+	)
+
+	return nil
+}
+
 // ActivateDomain transitions a proposed domain to active status.
 func (k Keeper) ActivateDomain(ctx sdk.Context, domainName string) error {
 	domain, found := k.GetDomain(ctx, domainName)

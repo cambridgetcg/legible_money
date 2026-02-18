@@ -114,3 +114,22 @@ func (ms *msgServer) SendICATransaction(goCtx context.Context, msg *types.MsgSen
 
 	return &types.MsgSendICATransactionResponse{}, nil
 }
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (ms *msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if ms.k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", ms.k.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := ms.k.SetParams(ctx, *msg.Params); err != nil {
+		return nil, fmt.Errorf("failed to set params: %w", err)
+	}
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"icaauth_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
+}

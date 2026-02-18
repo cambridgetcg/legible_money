@@ -4,6 +4,7 @@ package legible.tokens.v1;
 option go_package = "github.com/legible-money/legible/x/tokens/types";
 
 import "cosmos/msg/v1/msg.proto";
+import "legible/tokens/v1/genesis.proto";
 
 // Msg defines the secondary tokens (LGM-20) module's transaction service.
 service Msg {
@@ -23,6 +24,7 @@ service Msg {
   rpc AddLiquidity(MsgAddLiquidity) returns (MsgAddLiquidityResponse);
   rpc RemoveLiquidity(MsgRemoveLiquidity) returns (MsgRemoveLiquidityResponse);
   rpc Swap(MsgSwap) returns (MsgSwapResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
 // ============================================================================
@@ -225,3 +227,15 @@ message LiquidityPool {
   string total_lp_supply = 6;
   uint32 fee_bps = 7;  // Fee in basis points (e.g., 30 = 0.3%)
 }
+
+// ============================================================================
+// Governance Messages
+// ============================================================================
+
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1;
+  Params params = 2;
+}
+
+message MsgUpdateParamsResponse {}

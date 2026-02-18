@@ -1,0 +1,40 @@
+syntax = "proto3";
+package legible.billing.v1;
+
+option go_package = "github.com/legible-money/legible/x/billing/types";
+
+import "google/api/annotations.proto";
+import "legible/billing/v1/state.proto";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/legible/billing/v1/params";
+  }
+
+  rpc Provider(QueryProviderRequest) returns (QueryProviderResponse) {
+    option (google.api.http).get = "/legible/billing/v1/provider/{address}";
+  }
+
+  rpc Quote(QueryQuoteRequest) returns (QueryQuoteResponse) {
+    option (google.api.http).get = "/legible/billing/v1/quote/{quote_id}";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+}
+
+message QueryProviderRequest {
+  string address = 1;
+}
+message QueryProviderResponse {
+  Provider provider = 1;
+}
+
+message QueryQuoteRequest {
+  uint64 quote_id = 1;
+}
+message QueryQuoteResponse {
+  APIQuote quote = 1;
+}

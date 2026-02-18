@@ -1,0 +1,26 @@
+syntax = "proto3";
+package legible.capture_challenge.v1;
+
+option go_package = "github.com/legible-money/legible/x/capture_challenge/types";
+
+import "google/api/annotations.proto";
+import "legible/capture_challenge/v1/state.proto";
+
+service Query {
+  rpc Challenge(QueryChallengeRequest) returns (QueryChallengeResponse) {
+    option (google.api.http).get = "/legible/capture_challenge/v1/challenge/{challenge_id}";
+  }
+  rpc ActiveChallenges(QueryActiveChallengesRequest) returns (QueryActiveChallengesResponse) {
+    option (google.api.http).get = "/legible/capture_challenge/v1/challenges/active";
+  }
+  rpc BountyPool(QueryBountyPoolRequest) returns (QueryBountyPoolResponse) {
+    option (google.api.http).get = "/legible/capture_challenge/v1/bounty/{domain}";
+  }
+}
+
+message QueryChallengeRequest { string challenge_id = 1; }
+message QueryChallengeResponse { CaptureChallenge challenge = 1; bool found = 2; }
+message QueryActiveChallengesRequest { string domain = 1; }
+message QueryActiveChallengesResponse { repeated CaptureChallenge challenges = 1; }
+message QueryBountyPoolRequest { string domain = 1; }
+message QueryBountyPoolResponse { DomainBountyPool pool = 1; bool found = 2; }

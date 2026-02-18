@@ -31,7 +31,7 @@ func (k msgServer) RegisterComputeProvider(goCtx context.Context, msg *types.Msg
 	k.Logger(ctx).Info("registered compute provider",
 		"address", msg.Sender,
 		"service_type", msg.ServiceType,
-		"price_per_cu", msg.PricePerCU,
+		"price_per_cu", msg.PricePerCu,
 	)
 
 	return &types.MsgRegisterComputeProviderResponse{}, nil
@@ -76,7 +76,7 @@ func (k msgServer) ProviderHeartbeat(goCtx context.Context, msg *types.MsgProvid
 func (k msgServer) RedeemCredits(goCtx context.Context, msg *types.MsgRedeemCredits) (*types.MsgRedeemCreditsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	ticket, err := k.CreateRedemptionTicket(ctx, msg.Sender, msg.Provider, msg.CUAmount)
+	ticket, err := k.CreateRedemptionTicket(ctx, msg.Sender, msg.Provider, msg.CuAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (k msgServer) RedeemCredits(goCtx context.Context, msg *types.MsgRedeemCred
 		"ticket_id", ticket.Id,
 		"validator", msg.Sender,
 		"provider", msg.Provider,
-		"cu_amount", msg.CUAmount,
+		"cu_amount", msg.CuAmount,
 	)
 
 	return &types.MsgRedeemCreditsResponse{TicketId: ticket.Id}, nil
@@ -95,13 +95,13 @@ func (k msgServer) RedeemCredits(goCtx context.Context, msg *types.MsgRedeemCred
 func (k msgServer) ConfirmUsage(goCtx context.Context, msg *types.MsgConfirmUsage) (*types.MsgConfirmUsageResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	if err := k.ConfirmRedemption(ctx, msg.Sender, msg.TicketId, msg.ActualCU); err != nil {
+	if err := k.ConfirmRedemption(ctx, msg.Sender, msg.TicketId, msg.ActualCu); err != nil {
 		return nil, err
 	}
 
 	k.Logger(ctx).Info("compute usage confirmed",
 		"ticket_id", msg.TicketId,
-		"actual_cu", msg.ActualCU,
+		"actual_cu", msg.ActualCu,
 	)
 
 	return &types.MsgConfirmUsageResponse{}, nil
@@ -137,4 +137,21 @@ func (k msgServer) UpdateComputeParams(goCtx context.Context, msg *types.MsgUpda
 	)
 
 	return &types.MsgUpdateComputeParamsResponse{}, nil
+}
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (k msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	k.SetParams(ctx, msg.Params)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"compute_pool_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
 }

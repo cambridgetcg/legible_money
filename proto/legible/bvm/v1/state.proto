@@ -13,6 +13,7 @@ message DeployedContract {
   string agent_did         = 6;  // did:lgm:xxx (if agent)
   uint64 bytecode_size     = 7;  // size of bytecode in bytes
   string label             = 8;  // human-readable label
+  uint32 bvm_version       = 9;  // BVM version stamp for opcode activation
 }
 
 // ContractCode stores the bytecode for a deployed contract, keyed by code hash.

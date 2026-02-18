@@ -86,6 +86,11 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 			k.SetBounty(ctx, *bounty)
 		}
 	}
+	for _, review := range genState.PeerReviews {
+		if review != nil {
+			k.SetPeerReview(ctx, *review)
+		}
+	}
 }
 
 // ExportGenesis exports the module's state.
@@ -104,11 +109,23 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		return false
 	})
 
+	// Collect all peer reviews for each research
+	var peerReviews []*types.PeerReview
+	k.IterateResearches(ctx, func(r types.Research) bool {
+		reviews := k.GetReviewsForResearch(ctx, r.Id)
+		for i := range reviews {
+			rCopy := reviews[i]
+			peerReviews = append(peerReviews, &rCopy)
+		}
+		return false
+	})
+
 	params := k.GetParams(ctx)
 	return &types.GenesisState{
 		Params:          &params,
 		Researches:      researches,
 		Bounties:        bounties,
+		PeerReviews:     peerReviews,
 		TreasuryBalance: &types.TreasuryBalance{Balance: k.GetTreasuryBalance(ctx)},
 	}
 }

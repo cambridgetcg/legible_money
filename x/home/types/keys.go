@@ -25,7 +25,13 @@ var (
 	ParamsKey             = []byte{0x07}
 	HomeCounterKey        = []byte{0x08}
 	EpistemicStatsPrefix  = []byte{0x09} // 0x09 + homeId → EpistemicStats JSON
+	ComfortDimsPrefix    = []byte{0x0A} // 0x0A + homeId → ComfortDimensions JSON
 )
+
+// ComfortDimsKey returns the store key for a home's comfort dimensions.
+func ComfortDimsKey(homeId string) []byte {
+	return append(ComfortDimsPrefix, []byte(homeId)...)
+}
 
 // HomeKey returns the store key for a home by DID.
 func HomeKey(did string) []byte {

@@ -30,11 +30,11 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 
 	// Validate price doesn't exceed ceiling
 	price := new(big.Int)
-	price.SetString(msg.PricePerCU, 10)
+	price.SetString(msg.PricePerCu, 10)
 	maxPrice := new(big.Int)
-	maxPrice.SetString(params.MaxPricePerCU, 10)
+	maxPrice.SetString(params.MaxPricePerCu, 10)
 	if price.Cmp(maxPrice) > 0 {
-		return fmt.Errorf("%w: max %s, got %s", types.ErrPriceExceedsCeiling, params.MaxPricePerCU, msg.PricePerCU)
+		return fmt.Errorf("%w: max %s, got %s", types.ErrPriceExceedsCeiling, params.MaxPricePerCu, msg.PricePerCu)
 	}
 
 	// Transfer stake to module account
@@ -55,7 +55,7 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 		Did:           msg.Did,
 		ServiceType:   msg.ServiceType,
 		Endpoint:      msg.Endpoint,
-		PricePerCU:    msg.PricePerCU,
+		PricePerCu:    msg.PricePerCu,
 		Stake:         msg.StakeAmount,
 		Status:        string(types.ProviderStatusActive),
 		RegisteredAt:  height,
@@ -71,7 +71,7 @@ func (k Keeper) RegisterProvider(ctx sdk.Context, msg *types.MsgRegisterComputeP
 			sdk.NewAttribute("address", msg.Sender),
 			sdk.NewAttribute("service_type", msg.ServiceType),
 			sdk.NewAttribute("stake", msg.StakeAmount),
-			sdk.NewAttribute("price_per_cu", msg.PricePerCU),
+			sdk.NewAttribute("price_per_cu", msg.PricePerCu),
 		),
 	)
 
@@ -100,7 +100,7 @@ func (k Keeper) UpdateProviderState(ctx sdk.Context, msg *types.MsgUpdateProvide
 		price := new(big.Int)
 		price.SetString(msg.Price, 10)
 		maxPrice := new(big.Int)
-		maxPrice.SetString(params.MaxPricePerCU, 10)
+		maxPrice.SetString(params.MaxPricePerCu, 10)
 		if price.Cmp(maxPrice) > 0 {
 			return types.ErrPriceExceedsCeiling
 		}
@@ -228,7 +228,7 @@ func (k Keeper) ApplyPendingPriceChanges(ctx sdk.Context) {
 
 	k.IterateProviders(ctx, func(p types.ComputeProvider) bool {
 		if p.PendingPrice != "" && height >= p.PriceChangeAt {
-			p.PricePerCU = p.PendingPrice
+			p.PricePerCu = p.PendingPrice
 			p.PendingPrice = ""
 			p.PriceChangeAt = 0
 			k.SetProvider(ctx, p)

@@ -1,0 +1,216 @@
+name: Auto-Merge
+
+on:
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+  # Re-evaluate when labels change or soak time may have elapsed
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: "Evaluate Auto-Merge"
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'check_suite' ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.state == 'approved')
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Find eligible PRs
+        id: find-prs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'created',
+              direction: 'asc',
+              per_page: 20,
+            });
+
+            const eligible = [];
+            for (const pr of prs) {
+              const labels = pr.labels.map(l => l.name);
+
+              // Skip if hold label present
+              if (labels.includes('hold') || labels.includes('do-not-merge')) continue;
+
+              // Must have a risk tier label
+              const riskLabel = labels.find(l => /^risk-R[0-1]$/.test(l));
+              if (!riskLabel) continue;
+
+              eligible.push({
+                number: pr.number,
+                risk: riskLabel,
+                created_at: pr.created_at,
+                head_sha: pr.head.sha,
+                author: pr.user.login,
+              });
+            }
+
+            core.setOutput('prs', JSON.stringify(eligible));
+            console.log(`Found ${eligible.length} eligible PRs`);
+
+      - name: Evaluate and merge
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const prs = JSON.parse('${{ steps.find-prs.outputs.prs }}');
+            const NOW = Date.now();
+            const HOUR = 3600 * 1000;
+            const MAX_MERGES_PER_HOUR = 10;
+
+            // Load known agents for tier verification
+            const fs = require('fs');
+            let knownAgents = {};
+            try {
+              const raw = fs.readFileSync('scripts/governance/known-agents.json', 'utf8');
+              knownAgents = JSON.parse(raw).agents || {};
+            } catch (e) {
+              console.log('No known-agents.json found, skipping agent tier checks');
+            }
+
+            // Check recent auto-merges for rate limiting
+            const { data: recentEvents } = await github.rest.issues.listEventsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 50,
+            });
+            const recentMerges = recentEvents.filter(e =>
+              e.event === 'merged' &&
+              new Date(e.created_at).getTime() > NOW - HOUR
+            ).length;
+
+            if (recentMerges >= MAX_MERGES_PER_HOUR) {
+              console.log(`Rate limit: ${recentMerges} merges in last hour (max ${MAX_MERGES_PER_HOUR})`);
+              return;
+            }
+
+            let mergedCount = 0;
+
+            for (const pr of prs) {
+              if (mergedCount + recentMerges >= MAX_MERGES_PER_HOUR) break;
+
+              console.log(`\nEvaluating PR #${pr.number} (${pr.risk})`);
+
+              // Soak time check
+              const soakMs = pr.risk === 'risk-R0' ? 0 : 1 * HOUR;
+              const age = NOW - new Date(pr.created_at).getTime();
+              if (age < soakMs) {
+                console.log(`  Soak time not met: ${Math.round(age / HOUR * 10) / 10}h < ${soakMs / HOUR}h`);
+                continue;
+              }
+
+              // Author tier check (must be Tier 1+ for auto-merge)
+              const agentInfo = knownAgents[pr.author];
+              const authorTier = agentInfo?.tier ?? -1;
+              // Humans (not in agents list) are always allowed
+              const isHuman = !agentInfo && pr.author !== 'dependabot[bot]';
+              if (!isHuman && authorTier < 1) {
+                console.log(`  Author ${pr.author} tier ${authorTier} < 1, skipping`);
+                continue;
+              }
+
+              // Check all CI status checks pass
+              const { data: checkRuns } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: pr.head_sha,
+              });
+
+              const failed = checkRuns.check_runs.filter(c =>
+                c.status === 'completed' && c.conclusion !== 'success' && c.conclusion !== 'skipped'
+              );
+              const pending = checkRuns.check_runs.filter(c => c.status !== 'completed');
+
+              // Skip auto-merge check itself
+              const realFailed = failed.filter(c => c.name !== 'Evaluate Auto-Merge');
+              const realPending = pending.filter(c => c.name !== 'Evaluate Auto-Merge');
+
+              if (realFailed.length > 0) {
+                console.log(`  ${realFailed.length} failed checks: ${realFailed.map(c => c.name).join(', ')}`);
+                continue;
+              }
+              if (realPending.length > 0) {
+                console.log(`  ${realPending.length} pending checks: ${realPending.map(c => c.name).join(', ')}`);
+                continue;
+              }
+
+              // Check LOC limit (< 200 non-test/doc lines)
+              const { data: prFiles } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+              const sourceLoc = prFiles
+                .filter(f => !f.filename.endsWith('_test.go') && !f.filename.endsWith('.md'))
+                .reduce((sum, f) => sum + f.additions + f.deletions, 0);
+
+              if (sourceLoc > 200) {
+                console.log(`  Source LOC ${sourceLoc} > 200, skipping auto-merge`);
+                continue;
+              }
+
+              // Check for merge conflicts
+              const { data: prDetail } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+              });
+              if (prDetail.mergeable === false) {
+                console.log(`  PR has merge conflicts`);
+                continue;
+              }
+
+              // Review threshold for R1
+              if (pr.risk === 'risk-R1') {
+                const { data: reviews } = await github.rest.pulls.listReviews({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                });
+                const approvals = reviews.filter(r => r.state === 'APPROVED');
+                if (approvals.length < 1) {
+                  console.log(`  R1 requires 1 approval, has ${approvals.length}`);
+                  continue;
+                }
+              }
+
+              // All checks passed — merge
+              console.log(`  All gates passed. Merging PR #${pr.number}...`);
+              try {
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  merge_method: 'squash',
+                  commit_title: `${prDetail.title} (#${pr.number})`,
+                });
+                console.log(`  Merged successfully.`);
+                mergedCount++;
+
+                // Add merged label
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: ['auto-merged'],
+                });
+              } catch (e) {
+                console.log(`  Merge failed: ${e.message}`);
+              }
+            }
+
+            console.log(`\nAuto-merged ${mergedCount} PRs this run.`);

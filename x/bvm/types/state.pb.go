@@ -32,7 +32,7 @@ type DeployedContract struct {
 	AgentDid        string                 `protobuf:"bytes,6,opt,name=agent_did,json=agentDid,proto3" json:"agent_did,omitempty"`                         // did:lgm:xxx (if agent)
 	BytecodeSize    uint64                 `protobuf:"varint,7,opt,name=bytecode_size,json=bytecodeSize,proto3" json:"bytecode_size,omitempty"`            // size of bytecode in bytes
 	Label           string                 `protobuf:"bytes,8,opt,name=label,proto3" json:"label,omitempty"`                                               // human-readable label
-	BvmVersion      uint32                 `protobuf:"varint,9,opt,name=bvm_version,json=bvmVersion,proto3" json:"bvm_version,omitempty"`                  // BVM version at deploy time
+	BvmVersion      uint32                 `protobuf:"varint,9,opt,name=bvm_version,json=bvmVersion,proto3" json:"bvm_version,omitempty"`                  // BVM version stamp for opcode activation
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -474,7 +474,7 @@ var File_legible_bvm_v1_state_proto protoreflect.FileDescriptor
 
 const file_legible_bvm_v1_state_proto_rawDesc = "" +
 	"\n" +
-	"\x1alegible/bvm/v1/state.proto\x12\x0elegible.bvm.v1\"\x82\x02\n" +
+	"\x1alegible/bvm/v1/state.proto\x12\x0elegible.bvm.v1\"\xa3\x02\n" +
 	"\x10DeployedContract\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x1b\n" +
 	"\tcode_hash\x18\x02 \x01(\tR\bcodeHash\x12\x18\n" +
@@ -483,7 +483,9 @@ const file_legible_bvm_v1_state_proto_rawDesc = "" +
 	"\bis_agent\x18\x05 \x01(\bR\aisAgent\x12\x1b\n" +
 	"\tagent_did\x18\x06 \x01(\tR\bagentDid\x12#\n" +
 	"\rbytecode_size\x18\a \x01(\x04R\fbytecodeSize\x12\x14\n" +
-	"\x05label\x18\b \x01(\tR\x05label\"d\n" +
+	"\x05label\x18\b \x01(\tR\x05label\x12\x1f\n" +
+	"\vbvm_version\x18\t \x01(\rR\n" +
+	"bvmVersion\"d\n" +
 	"\fContractCode\x12\x1b\n" +
 	"\tcode_hash\x18\x01 \x01(\tR\bcodeHash\x12\x1a\n" +
 	"\bbytecode\x18\x02 \x01(\fR\bbytecode\x12\x1b\n" +

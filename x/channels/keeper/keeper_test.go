@@ -898,6 +898,275 @@ func TestClaimExpired_NotPayer(t *testing.T) {
 	}
 }
 
+// ==================== UpdateParams Tests ====================
+
+func TestUpdateParams_Success(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgServer := keeper.NewFullMsgServerImpl(k)
+
+	newParams := &types.Params{
+		MinDeposit:            "500000",
+		MaxChannelDuration:    200000,
+		DefaultSettlementFreq: 50,
+		DisputePeriodBlocks:   500,
+		ExpiryGracePeriod:     200,
+		FraudPenaltyBps:       1000,
+		MaxChannelsPerPayer:   10,
+	}
+	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: "lgm1authority",
+		Params:    newParams,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := k.GetParams(ctx)
+	if got.MinDeposit != "500000" {
+		t.Errorf("expected min deposit 500000, got %s", got.MinDeposit)
+	}
+	if got.MaxChannelsPerPayer != 10 {
+		t.Errorf("expected max channels 10, got %d", got.MaxChannelsPerPayer)
+	}
+}
+
+func TestUpdateParams_Unauthorized(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	msgServer := keeper.NewFullMsgServerImpl(k)
+
+	_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+		Authority: payer1, // not the authority
+		Params:    types.DefaultParams(),
+	})
+	if err == nil {
+		t.Error("expected unauthorized error")
+	}
+}
+
+// ==================== UpdateChannel (protobuf) Tests ====================
+
+func TestUpdateChannel_Success(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	_, err := msgServer.UpdateChannel(ctx, &types.MsgUpdateChannel{
+		Sender:              payer1,
+		ChannelId:           resp.ChannelId,
+		Sequence:            1,
+		NewBalanceReceiver:  "2000000",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ch, _ := k.GetChannel(ctx, resp.ChannelId)
+	if ch.Nonce != 1 {
+		t.Errorf("expected nonce 1, got %d", ch.Nonce)
+	}
+	if ch.Spent != "2000000" {
+		t.Errorf("expected spent 2000000, got %s", ch.Spent)
+	}
+	if ch.Available != "3000000" {
+		t.Errorf("expected available 3000000, got %s", ch.Available)
+	}
+}
+
+func TestUpdateChannel_SpentExceedsDeposit(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	_, err := msgServer.UpdateChannel(ctx, &types.MsgUpdateChannel{
+		Sender: payer1, ChannelId: resp.ChannelId,
+		Sequence: 1, NewBalanceReceiver: "99999999",
+	})
+	if err == nil {
+		t.Error("expected spent exceeds deposit error")
+	}
+}
+
+func TestUpdateChannel_NotParty(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	_, err := msgServer.UpdateChannel(ctx, &types.MsgUpdateChannel{
+		Sender: payer2, ChannelId: resp.ChannelId,
+		Sequence: 1, NewBalanceReceiver: "1000000",
+	})
+	if err == nil {
+		t.Error("expected not party error")
+	}
+}
+
+// ==================== DisputeChannel Counter Tests ====================
+
+func TestDisputeChannel_HigherSequenceSupersedes(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	// First dispute with sequence 1
+	msgServer.DisputeChannel(ctx, &types.MsgDisputeChannel{
+		Disputer: payer1, ChannelId: resp.ChannelId,
+		Sequence: 1, ClaimedBalanceReceiver: "1000000",
+	})
+
+	// Counter-dispute with higher sequence should succeed
+	_, err := msgServer.DisputeChannel(ctx, &types.MsgDisputeChannel{
+		Disputer: provider1, ChannelId: resp.ChannelId,
+		Sequence: 5, ClaimedBalanceReceiver: "3000000",
+	})
+	if err != nil {
+		t.Fatalf("expected higher sequence dispute to succeed: %v", err)
+	}
+
+	d, found := k.GetDispute(ctx, resp.ChannelId)
+	if !found {
+		t.Fatal("dispute not found")
+	}
+	if d.DisputedNonce != 5 {
+		t.Errorf("expected nonce 5, got %d", d.DisputedNonce)
+	}
+	if d.DisputedSpent != "3000000" {
+		t.Errorf("expected disputed spent 3000000, got %s", d.DisputedSpent)
+	}
+}
+
+func TestDisputeChannel_NotParty(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	_, err := msgServer.DisputeChannel(ctx, &types.MsgDisputeChannel{
+		Disputer: payer2, ChannelId: resp.ChannelId,
+		Sequence: 1, ClaimedBalanceReceiver: "1000000",
+	})
+	if err == nil {
+		t.Error("expected not party error")
+	}
+}
+
+// ==================== SettleChannel Edge Cases ====================
+
+func TestSettleChannel_AlreadyClosed(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	ch := types.PaymentChannel{
+		ChannelId: "pc-sc", Payer: payer1, Provider: provider1,
+		Status: types.ChannelStatusClosed, Deposited: "5000000", Spent: "0", Available: "5000000",
+	}
+	k.SetChannel(ctx, ch)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	_, err := msgServer.SettleChannel(ctx, &types.MsgSettleChannel{
+		Authority: payer1, ChannelId: "pc-sc",
+	})
+	if err == nil {
+		t.Error("expected already closed error")
+	}
+}
+
+func TestSettleChannel_DisputePeriodStillActive(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	// Dispute
+	msgServer.DisputeChannel(ctx, &types.MsgDisputeChannel{
+		Disputer: payer1, ChannelId: resp.ChannelId,
+		Sequence: 1, ClaimedBalanceReceiver: "2000000",
+	})
+
+	// Try to settle without advancing past deadline
+	_, err := msgServer.SettleChannel(ctx, &types.MsgSettleChannel{
+		Authority: payer1, ChannelId: resp.ChannelId,
+	})
+	if err == nil {
+		t.Error("expected dispute period active error")
+	}
+}
+
+// ==================== CloseChannel Edge Cases ====================
+
+func TestCloseChannel_SpentExceedsDeposit(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	_, err := msgServer.CloseChannel(ctx, &types.MsgCloseChannel{
+		Closer: payer1, ChannelId: resp.ChannelId,
+		Sequence: 1, FinalBalanceReceiver: "99999999",
+	})
+	if err == nil {
+		t.Error("expected spent exceeds deposit error")
+	}
+}
+
+func TestCloseChannel_NotParty(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	bk.setBalance(payer1, "ulgm", 20000000)
+
+	msgServer := keeper.NewFullMsgServerImpl(k)
+	resp, _ := msgServer.OpenChannel(ctx, &types.MsgOpenChannel{
+		Sender: payer1, Receiver: provider1, Deposit: "5000000", TimeoutHeight: 10000,
+	})
+
+	_, err := msgServer.CloseChannel(ctx, &types.MsgCloseChannel{
+		Closer: payer2, ChannelId: resp.ChannelId,
+		Sequence: 1, FinalBalanceReceiver: "1000000",
+	})
+	if err == nil {
+		t.Error("expected not party error")
+	}
+}
+
+// ==================== QueryChannelsByProvider Tests ====================
+
+func TestQueryChannelsByProvider(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qpr-1", Payer: payer1, Provider: provider1})
+	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qpr-2", Payer: payer2, Provider: provider1})
+	k.SetChannel(ctx, types.PaymentChannel{ChannelId: "pc-qpr-3", Payer: payer1, Provider: provider2})
+
+	qs := keeper.NewQueryServerImpl(k)
+	resp, err := qs.ChannelsByProvider(ctx, &types.QueryChannelsByProviderRequest{Provider: provider1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
+	}
+}
+
 // ==================== Genesis Tests ====================
 
 func TestGenesisRoundtrip(t *testing.T) {

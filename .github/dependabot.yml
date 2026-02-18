@@ -1,57 +1,24 @@
 version: 2
 
+# Dependabot version updates disabled pre-launch.
+# Security alerts still work independently (via GitHub repo settings).
+# Re-enable post-launch when ready for managed dependency upgrades.
+
 updates:
-  # Go modules
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "yournameisai"
-    labels:
-      - "dependencies"
-      - "go"
-    commit-message:
-      prefix: "deps(go):"
-    ignore:
-      # Cosmos SDK major version bumps require planned migration
-      - dependency-name: "github.com/cosmos/cosmos-sdk"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "cosmossdk.io/x/tx"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "cosmossdk.io/errors"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "cosmossdk.io/collections"
-        update-types: ["version-update:semver-major"]
+    open-pull-requests-limit: 0
 
-  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "yournameisai"
-    labels:
-      - "dependencies"
-      - "ci"
-    commit-message:
-      prefix: "deps(actions):"
+    open-pull-requests-limit: 0
 
-  # npm
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "yournameisai"
-    labels:
-      - "dependencies"
-      - "npm"
-    commit-message:
-      prefix: "deps(npm):"
+    open-pull-requests-limit: 0

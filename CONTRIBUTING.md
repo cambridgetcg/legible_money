@@ -59,24 +59,38 @@ govulncheck ./...                    # Security vulnerability scan
 | Documentation | Direct PR |
 | Security fix | Private disclosure (see below) |
 
+### PR Risk Tiers
+
+Every PR is auto-classified by CI based on files touched:
+
+| Tier | Paths | Review Needed |
+|------|-------|---------------|
+| **R0** (Trivial) | `docs/`, `*.md`, stub module tests | Auto-merge (0 approvals) |
+| **R1** (Low) | Tests, tools, scripts, devnet | 1 binding review, 1h soak |
+| **R2** (Standard) | Module code, proto, non-critical app | 1 binding + 1 soft, 4h soak |
+| **R3** (Critical) | App wiring, auth, staking, knowledge, emergency, gov | 1 human + 1 binding, 24h soak |
+
+See [docs/PR_WORKFLOW.md](docs/PR_WORKFLOW.md) for full details.
+
 ### Contribution Workflow
 
 1. **Check existing issues** to avoid duplicates
 2. **Open an issue** describing what you want to do
-3. **Fork the repository**
-4. **Create a branch**: `git checkout -b fix-issue-123` or `feat-description`
-5. **Write invariants first** (for new features)
-6. **Write tests first** (TDD)
-7. **Implement the change**
-8. **Ensure all checks pass**:
+3. **Claim files** if touching mandatory paths (`/claim [paths]`)
+4. **Fork the repository**
+5. **Create a branch**: `git checkout -b fix-issue-123` or `feat-description`
+6. **Write invariants first** (for new features)
+7. **Write tests first** (TDD)
+8. **Implement the change**
+9. **Ensure all checks pass**:
    ```bash
    go vet ./...
    go test ./... -count=1 -race
    go build ./...
    ```
-9. **Submit a PR** using the template
-10. **Address review feedback**
-11. **Squash and merge** (maintainer action)
+10. **Submit a PR** using the template
+11. **Address review feedback**
+12. **Squash and merge** (via auto-merge or maintainer)
 
 ### Commit Messages
 
@@ -174,7 +188,7 @@ Session End:
 - `app/app.go` — module wiring
 - Proto files affecting multiple modules
 
-**Claiming**: Add comment `// EDITING: {id} until {HH:MM UTC}`
+**Claiming**: Comment `/claim [file paths]` on the issue, or update `scripts/ci/work-claims.json`
 
 ### Agent-Specific Guidelines
 
@@ -252,6 +266,36 @@ Extra review required for:
 - `x/bvm/` - Virtual machine execution
 
 ## Review Process
+
+### Who Can Review
+
+Review authority follows the agent tier system:
+
+| Reviewer | Binding Review On |
+|----------|------------------|
+| Human | R0-R3 (all) |
+| Tier 3 (Guardian) | R0-R1 |
+| Tier 2 (Bonded) | R0-R1 |
+| Tier 1 (Verified) | R0 |
+| Tier 0 (Apprentice) | None (soft review only) |
+
+### Agent Review Format
+
+```
+/review verdict:{approve|request_changes|comment}
+Confidence: {0-100}
+Agent-DID: did:lgm:{hex}
+
+## Analysis
+[File-by-file review]
+
+## Verdict Justification
+[Why this verdict]
+
+## Risk Assessment
+Risk Tier: R{0-3}
+Regression Risk: {low|medium|high}
+```
 
 ### What Reviewers Look For
 

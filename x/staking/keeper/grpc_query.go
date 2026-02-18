@@ -10,6 +10,7 @@ import (
 
 type queryServer struct {
 	Keeper
+	types.UnimplementedQueryServer
 }
 
 // NewQueryServerImpl returns a query server implementation.
@@ -28,7 +29,7 @@ func (q queryServer) Validator(goCtx context.Context, req *types.QueryValidatorR
 		return nil, types.ErrValidatorNotFound
 	}
 
-	return &types.QueryValidatorResponse{Validator: validator}, nil
+	return &types.QueryValidatorResponse{Validator: &validator}, nil
 }
 
 // Validators returns validators with optional filtering.
@@ -40,7 +41,7 @@ func (q queryServer) Validators(goCtx context.Context, req *types.QueryValidator
 		limit = 100
 	}
 
-	var all []types.LegibleValidator
+	var all []*types.LegibleValidator
 	q.Keeper.IterateValidators(ctx, func(v types.LegibleValidator) bool {
 		if req.ActiveOnly && !v.IsActive {
 			return false
@@ -48,7 +49,8 @@ func (q queryServer) Validators(goCtx context.Context, req *types.QueryValidator
 		if req.Tier >= 0 && types.ValidatorTierString(types.ValidatorTier(req.Tier)) != v.Tier {
 			return false
 		}
-		all = append(all, v)
+		vCopy := v
+		all = append(all, &vCopy)
 		return false
 	})
 
@@ -80,7 +82,7 @@ func (q queryServer) Delegation(goCtx context.Context, req *types.QueryDelegatio
 		return nil, types.ErrDelegationNotFound
 	}
 
-	return &types.QueryDelegationResponse{Delegation: delegation}, nil
+	return &types.QueryDelegationResponse{Delegation: &delegation}, nil
 }
 
 // DelegationsForValidator returns all delegations to a specific validator.
@@ -88,8 +90,12 @@ func (q queryServer) DelegationsForValidator(goCtx context.Context, req *types.Q
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	delegations := q.Keeper.GetDelegationsForValidator(ctx, req.ValidatorAddress)
+	ptrs := make([]*types.Delegation, len(delegations))
+	for i := range delegations {
+		ptrs[i] = &delegations[i]
+	}
 
-	return &types.QueryDelegationsForValidatorResponse{Delegations: delegations}, nil
+	return &types.QueryDelegationsForValidatorResponse{Delegations: ptrs}, nil
 }
 
 // Unbondings returns unbonding entries for a delegator.
@@ -97,16 +103,27 @@ func (q queryServer) Unbondings(goCtx context.Context, req *types.QueryUnbonding
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	unbondings := q.Keeper.GetUnbondingsForDelegator(ctx, req.DelegatorAddress)
+	ptrs := make([]*types.UnbondingEntry, len(unbondings))
+	for i := range unbondings {
+		ptrs[i] = &unbondings[i]
+	}
 
-	return &types.QueryUnbondingsResponse{Unbondings: unbondings}, nil
+	return &types.QueryUnbondingsResponse{Unbondings: ptrs}, nil
 }
 
 // Params returns the module parameters and tier configurations.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
+	params := q.Keeper.GetParams(ctx)
+	tierConfigs := q.Keeper.GetAllTierConfigs(ctx)
+	tcPtrs := make([]*types.TierConfig, len(tierConfigs))
+	for i := range tierConfigs {
+		tcPtrs[i] = &tierConfigs[i]
+	}
+
 	return &types.QueryParamsResponse{
-		Params:      q.Keeper.GetParams(ctx),
-		TierConfigs: q.Keeper.GetAllTierConfigs(ctx),
+		Params:      &params,
+		TierConfigs: tcPtrs,
 	}, nil
 }

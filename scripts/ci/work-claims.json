@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "description": "Work claim registry — prevents merge conflicts when multiple agents work in parallel",
+    "mandatory_paths": [
+      "app/app.go",
+      "x/knowledge/keeper/",
+      "proto/"
+    ],
+    "claim_ttl_hours": 4,
+    "format": {
+      "claims": [
+        {
+          "id": "<unique claim ID>",
+          "agent": "<GitHub username>",
+          "agent_did": "<did:lgm:hex>",
+          "paths": ["<file or directory paths>"],
+          "issue": "<issue number or null>",
+          "status": "<active|expired|completed>",
+          "created_at": "<ISO 8601>",
+          "expires_at": "<ISO 8601>"
+        }
+      ]
+    }
+  },
+  "claims": []
+}

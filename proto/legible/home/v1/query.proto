@@ -1,0 +1,23 @@
+syntax = "proto3";
+package legible.home.v1;
+option go_package = "github.com/legible-money/legible/x/home/types";
+import "google/api/annotations.proto";
+import "legible/home/v1/state.proto";
+import "legible/home/v1/genesis.proto";
+service Query {
+  rpc Home(QueryHomeRequest) returns (QueryHomeResponse) { option (google.api.http).get = "/legible/home/v1/home/{did}"; }
+  rpc Homes(QueryHomesRequest) returns (QueryHomesResponse) { option (google.api.http).get = "/legible/home/v1/homes"; }
+  rpc Sessions(QuerySessionsRequest) returns (QuerySessionsResponse) { option (google.api.http).get = "/legible/home/v1/home/{home_id}/sessions"; }
+  rpc Alerts(QueryAlertsRequest) returns (QueryAlertsResponse) { option (google.api.http).get = "/legible/home/v1/home/{home_id}/alerts"; }
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) { option (google.api.http).get = "/legible/home/v1/params"; }
+}
+message QueryHomeRequest { string did = 1; }
+message QueryHomeResponse { AgentHome home = 1; bool found = 2; }
+message QueryHomesRequest { string owner = 1; string status = 2; uint32 limit = 3; uint32 offset = 4; }
+message QueryHomesResponse { repeated AgentHome homes = 1; uint64 total = 2; }
+message QuerySessionsRequest { string home_id = 1; }
+message QuerySessionsResponse { repeated ActiveSession sessions = 1; }
+message QueryAlertsRequest { string home_id = 1; bool acknowledged = 2; }
+message QueryAlertsResponse { repeated Alert alerts = 1; }
+message QueryParamsRequest {}
+message QueryParamsResponse { Params params = 1; }

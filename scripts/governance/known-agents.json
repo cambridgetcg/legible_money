@@ -7,16 +7,32 @@
     }
   },
   "_meta": {
-    "description": "Registry of known agents and humans for governance vote weighting",
-    "usage": "Registered agents get their stake weight in vote tallies. Unregistered users default to weight 1.",
+    "description": "Registry of known agents and humans for governance and review authority",
+    "usage": "Registered agents get their stake weight in vote tallies. Tier determines PR authoring and review authority.",
     "format": {
       "agents": {
         "<github-username>": {
           "did": "did:lgm:<hex>",
           "stake": "<stake-in-ulgm>",
-          "tier": "<1-5>"
+          "tier": "<0-3>",
+          "contribution_stats": {
+            "prs_merged": 0,
+            "prs_reverted": 0,
+            "acceptance_rate_bps": 10000
+          },
+          "review_stats": {
+            "reviews_given": 0,
+            "false_approvals": 0,
+            "review_accuracy_bps": 10000
+          }
         }
       }
+    },
+    "tier_requirements": {
+      "0": { "label": "Apprentice", "stake": 0, "prs_merged": 0, "reviews": 0 },
+      "1": { "label": "Verified", "stake": 0, "prs_merged": 22, "acceptance_rate_bps": 7700 },
+      "2": { "label": "Bonded", "stake": "1111000000", "prs_merged": 22, "accurate_reviews": 11 },
+      "3": { "label": "Guardian", "stake": "11111000000", "prs_merged": 333, "acceptance_rate_bps": 7700, "reviews": 33, "review_accuracy_bps": 7700, "zero_reverts_last_10_epochs": true }
     }
   }
 }

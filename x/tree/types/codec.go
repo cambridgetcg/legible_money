@@ -35,6 +35,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgResumeService{}, "tree/ResumeService", nil)
 	cdc.RegisterConcrete(&MsgRetireService{}, "tree/RetireService", nil)
 	cdc.RegisterConcrete(&MsgCallService{}, "tree/CallService", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "tree/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the tree module's interfaces.
@@ -68,6 +69,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgApplyToProject{},
 		&MsgReviewApplication{},
 		&MsgSetAvailability{},
+		&MsgUpdateParams{},
 	)
 }
 

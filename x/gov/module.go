@@ -240,31 +240,34 @@ func (am AppModule) tallyAndResolveDisbursement(ctx sdk.Context, disb types.Disb
 	)
 }
 
-// --- BigInt string helpers ---
+// --- BigInt string helpers (using math/big to avoid uint64 overflow) ---
 
+// addBigIntStrings sums arbitrary-precision integer strings.
+// Returns "0" for empty/unparseable inputs.
 func addBigIntStrings(vals ...string) string {
 	total := new(big.Int)
 	for _, v := range vals {
-		n := parseBigInt(v)
-		total.Add(total, n)
+		total.Add(total, parseBigInt(v))
 	}
 	return total.String()
 }
 
-// bpsFraction computes numerator * 10000 / denominator using big.Int
-// to avoid uint64 overflow on large stake-weighted vote sums.
+// bpsFraction computes (numerator * 10000) / denominator using math/big
+// to avoid uint64 overflow on the multiplication. Returns basis points (0-10000).
 func bpsFraction(numerator, denominator string) uint64 {
 	n := parseBigInt(numerator)
 	d := parseBigInt(denominator)
 	if d.Sign() == 0 {
 		return 0
 	}
-	// n * 10000 / d — result fits uint64 (max 10000 = 100%)
-	r := new(big.Int).Mul(n, big.NewInt(10000))
-	r.Div(r, d)
-	return r.Uint64()
+	// (n * 10000) / d — safe with big.Int
+	result := new(big.Int).Mul(n, big.NewInt(10000))
+	result.Div(result, d)
+	return result.Uint64()
 }
 
+// parseBigInt parses a decimal string into *big.Int.
+// Returns zero for empty or unparseable strings.
 func parseBigInt(s string) *big.Int {
 	if s == "" {
 		return new(big.Int)

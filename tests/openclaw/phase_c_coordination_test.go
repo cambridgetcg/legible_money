@@ -10,7 +10,7 @@ import (
 
 	agentsdk "github.com/legible-money/legible/tools/agent-sdk"
 	"github.com/legible-money/legible/tests/openclaw/agents"
-	"github.com/legible-money/legible/tests/openclaw/devnet"
+	"github.com/legible-money/legible/tests/openclaw/env"
 	"github.com/legible-money/legible/tests/openclaw/helpers"
 )
 
@@ -19,13 +19,11 @@ func TestPhaseC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
-	h := devnet.NewHarness(t, binaryPath)
-	if err := h.Start(ctx); err != nil {
-		t.Fatalf("devnet start failed: %v", err)
-	}
+	e := env.Boot(t, binaryPath, ctx)
+	t.Logf("Phase C: %s", env.EnvInfo(e))
 
 	// Create agent pool: 3 claimers, 3 verifiers, 2 challengers
-	pool := agents.NewPool(h)
+	pool := agents.NewPoolFromEnv(e)
 	roles := map[string]agentsdk.AgentRole{
 		"test1": agentsdk.RoleClaimer,
 		"test2": agentsdk.RoleClaimer,
@@ -46,7 +44,7 @@ func TestPhaseC(t *testing.T) {
 		t.Fatalf("FundAll: %v", err)
 	}
 
-	valClient := h.NewCLIClient("validator")
+	valClient := e.NewCLIClient("validator")
 
 	t.Run("OCA-C-01_ConcurrentClaims", func(t *testing.T) {
 		claimers := pool.ByRole(agentsdk.RoleClaimer)
@@ -144,6 +142,8 @@ func TestPhaseC(t *testing.T) {
 	})
 
 	t.Run("OCA-C-04_MixedVerdicts", func(t *testing.T) {
+		env.RequireMultiValidator(t, e, 3)
+
 		// 3 verifiers with different verdicts
 		verifiers := pool.ByRole(agentsdk.RoleVerifier)
 		if len(verifiers) < 3 {
@@ -168,7 +168,7 @@ func TestPhaseC(t *testing.T) {
 		helpers.WaitForTx(ctx, valClient)
 
 		helpers.Insight(t, "C-04", "mixed verdicts submitted — 2 accept, 1 reject")
-		helpers.Result(t, "C-04", "mixed verdict scenario exercised")
+		helpers.Result(t, "C-04", "mixed verdict scenario exercised on multi-validator")
 	})
 
 	t.Run("OCA-C-05_AutoVerifyLoop", func(t *testing.T) {
@@ -211,7 +211,7 @@ func TestPhaseC(t *testing.T) {
 		}
 
 		// Check validator balance too
-		valAddr := h.KeyAddress("validator")
+		valAddr := e.KeyAddress("validator")
 		valBal, err := valClient.Balance(ctx, valAddr)
 		if err == nil {
 			t.Logf("Validator: %d ulgm (%.2f LGM)", valBal, float64(valBal)/1_000_000)

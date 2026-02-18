@@ -74,7 +74,7 @@ func (k Keeper) FinalizeEpoch(ctx sdk.Context) {
 	inflow.SetString(stats.PoolInflow, 10)
 
 	outflow := new(big.Int)
-	outflow.SetString(stats.LGMDistributed, 10)
+	outflow.SetString(stats.LgmDistributed, 10)
 
 	var utilizationBps uint64
 	if inflow.Sign() > 0 {
@@ -147,7 +147,7 @@ func (k Keeper) FinalizeEpoch(ctx sdk.Context) {
 	k.Logger(ctx).Info("finalized compute pool epoch",
 		"epoch", previousEpoch,
 		"pool_inflow", stats.PoolInflow,
-		"lgm_distributed", stats.LGMDistributed,
+		"lgm_distributed", stats.LgmDistributed,
 		"utilization_bps", utilizationBps,
 		"adjustment_factor_bps", newFactor,
 		"credits_issued", stats.CreditsIssued,

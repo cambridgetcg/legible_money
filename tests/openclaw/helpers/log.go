@@ -32,3 +32,15 @@ func Result(t *testing.T, testID, outcome string) {
 	t.Helper()
 	claw.Result(t, "OCA-"+testID, claw.Defended, outcome)
 }
+
+// AgentInsight logs a structured insight from a Phase D agent probe.
+func AgentInsight(t *testing.T, testID, msg string) {
+	t.Helper()
+	claw.Insight(t, "OCA-D-"+testID, msg)
+}
+
+// AgentResult logs the outcome of a Phase D agent test.
+func AgentResult(t *testing.T, testID, outcome string) {
+	t.Helper()
+	claw.Result(t, "OCA-D-"+testID, claw.Defended, outcome)
+}

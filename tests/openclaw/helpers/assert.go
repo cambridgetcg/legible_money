@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	agentsdk "github.com/legible-money/legible/tools/agent-sdk"
-	"github.com/legible-money/legible/tests/openclaw/devnet"
 )
 
 // AssertBalanceGTE asserts that an address holds at least minBalance ulgm.
@@ -68,16 +67,5 @@ func AssertRoundCompleted(t *testing.T, client agentsdk.QueryClient, roundID, ex
 	if detail.Phase != "complete" {
 		t.Errorf("round %s phase: got %s, want complete", roundID, detail.Phase)
 	}
-	// Verdict check would be in the round detail — if the RoundInfo struct
-	// gains a Verdict field in the future, check it here.
 	_ = expectedVerdict
-}
-
-// AssertTxFails asserts that a legbled tx command fails (exit code != 0).
-func AssertTxFails(t *testing.T, h *devnet.Harness, keyName string, args ...string) {
-	t.Helper()
-	client := h.NewCLIClient(keyName)
-	_ = client // The actual assertion depends on what we're testing
-	// For now, we run the tx via harness and check for error
-	t.Logf("AssertTxFails: testing rejection of tx with args %v", args)
 }

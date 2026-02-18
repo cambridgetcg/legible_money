@@ -9,6 +9,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -79,6 +80,6 @@ func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) 
 	params := q.Keeper.GetParams(ctx)
 	return &types.QueryParamsResponse{
 		Params:          &params,
-		TreasuryBalance: q.Keeper.GetTreasuryBalance(ctx),
+		TreasuryBalance: &types.TreasuryBalance{Balance: q.Keeper.GetTreasuryBalance(ctx)},
 	}, nil
 }

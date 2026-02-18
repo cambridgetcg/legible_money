@@ -8,7 +8,7 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m
 
-.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c test-claw test-claw-oc test-claw-nc test-claw-zc test-claw-catalog
+.PHONY: all build test vet clean help pr-check devnet devnet-reset devnet-stop devnet-health test-tx-lifecycle test-e2e test-openclaw test-openclaw-devnet test-openclaw-testnet test-openclaw-report test-openclaw-phase-a test-openclaw-phase-b test-openclaw-phase-c test-openclaw-phase-d test-claw test-claw-oc test-claw-nc test-claw-zc test-claw-catalog
 
 # Default target
 all: build test
@@ -65,9 +65,22 @@ test-e2e: devnet devnet-health test-tx-lifecycle devnet-stop ## Full E2E: start 
 
 # === OpenClaw Agent Tests ===
 
-test-openclaw: build ## Run all OpenClaw agent integration tests
+test-openclaw: build ## Run all OpenClaw agent integration tests (alias for devnet)
 	@echo "$(GREEN)Running OpenClaw agent tests...$(NC)"
 	@go test ./tests/openclaw/... -tags openclaw -v -count=1 -timeout 600s
+
+test-openclaw-devnet: build ## Run OpenClaw on single-validator devnet
+	@echo "$(GREEN)Running OpenClaw tests (devnet)...$(NC)"
+	@LGM_ENV=devnet go test ./tests/openclaw/... -tags openclaw -v -count=1 -timeout 600s
+
+test-openclaw-testnet: build ## Run OpenClaw on 3-validator testnet
+	@echo "$(GREEN)Running OpenClaw tests (testnet, 3 validators)...$(NC)"
+	@LGM_ENV=testnet go test ./tests/openclaw/... -tags openclaw -v -count=1 -timeout 900s
+
+test-openclaw-report: build ## Run OpenClaw with JSON report
+	@echo "$(GREEN)Running OpenClaw tests with JSON report...$(NC)"
+	@LGM_REPORT_PATH=tests/openclaw/report.json go test ./tests/openclaw/... \
+		-tags openclaw -v -count=1 -timeout 600s
 
 test-openclaw-phase-a: build ## Run OpenClaw Phase A (lifecycle) only
 	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseA -v -count=1 -timeout 300s
@@ -77,6 +90,9 @@ test-openclaw-phase-b: build ## Run OpenClaw Phase B (adversarial) only
 
 test-openclaw-phase-c: build ## Run OpenClaw Phase C (coordination) only
 	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseC -v -count=1 -timeout 300s
+
+test-openclaw-phase-d: build ## Run OpenClaw Phase D (agent) only
+	@go test ./tests/openclaw/... -tags openclaw -run TestPhaseD -v -count=1 -timeout 600s
 
 # === Claw Adversarial Tests (unit-level, no devnet) ===
 

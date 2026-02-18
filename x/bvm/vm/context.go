@@ -15,10 +15,15 @@ const (
 // SessionCapabilities restricts what a session key can do within BVM execution.
 // nil means full permissions (no session restriction).
 type SessionCapabilities struct {
-	CanTransfer     bool
-	CanStake        bool
-	CanSubmitClaims bool
-	CanVote         bool
+	CanTransfer        bool
+	CanStake           bool
+	CanSubmitClaims    bool
+	CanVote            bool
+	CanManageTrust     bool // gates SET_TRUST, BLOCK_AGENT, UNBLOCK_AGENT, REVOKE_DELEGATION, DELEGATE
+	CanManageIdentity  bool // gates ATTEST_IDENTITY, REGISTER_KEY, REVOKE_KEY
+	CanManageSchedules bool // gates SCHEDULE_SELF, CANCEL_SCHEDULE, MODIFY_SCHEDULE
+	CanManageDefenses  bool // gates SET_DEFENSE, DISMISS_ALERT
+	CanManageBeliefs   bool // gates SET_BELIEF
 }
 
 // ExecutionContext provides runtime parameters to the interpreter.

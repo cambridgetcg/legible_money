@@ -3,19 +3,102 @@ name: Agent CI
 on:
   pull_request:
     types: [opened, synchronize, labeled]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
+  # === Phase 1: Risk Classification ===
+
+  classify:
+    name: "Classify PR Risk"
+    runs-on: ubuntu-latest
+    outputs:
+      risk_tier: ${{ steps.classify.outputs.risk_tier }}
+      risk_number: ${{ steps.classify.outputs.risk_number }}
+      risk_label: ${{ steps.classify.outputs.risk_label }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Classify PR
+        id: classify
+        run: bash scripts/ci/classify-pr.sh
+
+      - name: Apply risk label
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const tier = '${{ steps.classify.outputs.risk_tier }}';
+            const label = `risk-${tier}`;
+            const labels = ['risk-R0', 'risk-R1', 'risk-R2', 'risk-R3'];
+
+            // Remove old risk labels
+            for (const old of labels) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: old,
+                });
+              } catch (e) { /* label didn't exist */ }
+            }
+
+            // Add new risk label
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [label],
+            });
+
+  # === Phase 1: Agent Detection ===
+
   detect-agent:
     name: "Detect Agent Author"
-    if: contains(github.event.pull_request.labels.*.name, 'agent-contribution')
+    if: >-
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'agent-contribution')
     runs-on: ubuntu-latest
     outputs:
       is_agent: ${{ steps.check.outputs.is_agent }}
       agent_tier: ${{ steps.check.outputs.agent_tier }}
+      agent_did: ${{ steps.check.outputs.agent_did }}
     steps:
+      - uses: actions/checkout@v6.0.2
+
       - id: check
+        name: Identify agent
         run: |
-          # Check Co-Authored-By for Claude signature
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+
+          # Check known-agents.json
+          if command -v jq &>/dev/null; then
+            TIER=$(jq -r ".agents[\"$AUTHOR\"].tier // \"unknown\"" scripts/governance/known-agents.json 2>/dev/null || echo "unknown")
+            DID=$(jq -r ".agents[\"$AUTHOR\"].did // \"\"" scripts/governance/known-agents.json 2>/dev/null || echo "")
+          else
+            TIER="unknown"
+            DID=""
+          fi
+
+          # Fallback to labels if not in registry
+          if [ "$TIER" = "unknown" ] || [ "$TIER" = "null" ]; then
+            LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
+            if echo "$LABELS" | grep -q "agent-tier-3"; then TIER=3
+            elif echo "$LABELS" | grep -q "agent-tier-2"; then TIER=2
+            elif echo "$LABELS" | grep -q "agent-tier-1"; then TIER=1
+            else TIER=0
+            fi
+          fi
+
+          # Check Co-Authored-By for agent signature
           BODY="${{ github.event.pull_request.body }}"
           if echo "$BODY" | grep -q "Co-Authored-By: Claude"; then
             echo "is_agent=true" >> $GITHUB_OUTPUT
@@ -23,73 +106,50 @@ jobs:
             echo "is_agent=false" >> $GITHUB_OUTPUT
           fi
 
-          # Determine tier from labels (default: Tier 0)
-          LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
-          if echo "$LABELS" | grep -q "agent-tier-3"; then
-            echo "agent_tier=3" >> $GITHUB_OUTPUT
-          elif echo "$LABELS" | grep -q "agent-tier-2"; then
-            echo "agent_tier=2" >> $GITHUB_OUTPUT
-          elif echo "$LABELS" | grep -q "agent-tier-1"; then
-            echo "agent_tier=1" >> $GITHUB_OUTPUT
-          else
-            echo "agent_tier=0" >> $GITHUB_OUTPUT
-          fi
+          echo "agent_tier=$TIER" >> $GITHUB_OUTPUT
+          echo "agent_did=$DID" >> $GITHUB_OUTPUT
+          echo "Agent: $AUTHOR | Tier: $TIER | DID: $DID"
+
+  # === Phase 1: Scope Validation ===
 
   validate-scope:
     name: "Validate Agent Scope"
-    needs: detect-agent
+    needs: [detect-agent, classify]
     if: needs.detect-agent.outputs.is_agent == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
-      - name: Check tier permissions
+      - name: Check tier vs risk tier
         env:
-          TIER: ${{ needs.detect-agent.outputs.agent_tier }}
+          AGENT_TIER: ${{ needs.detect-agent.outputs.agent_tier }}
+          RISK_NUMBER: ${{ needs.classify.outputs.risk_number }}
         run: |
-          echo "Agent Tier: $TIER"
+          echo "Agent Tier: $AGENT_TIER"
+          echo "PR Risk: R$RISK_NUMBER"
 
-          # Get changed files
-          CHANGED=$(git diff --name-only origin/main...HEAD)
-          echo "Changed files:"
-          echo "$CHANGED"
-
-          # Tier 0: docs and tests only
-          if [ "$TIER" = "0" ]; then
-            NON_ALLOWED=$(echo "$CHANGED" | grep -vE '\.(test\.|spec\.|_test\.go|\.md$)' | grep -vE '^(docs/|tests/|\.claude/)' || true)
-            if [ -n "$NON_ALLOWED" ]; then
-              echo "::error::Tier 0 agents may only modify docs and tests. Disallowed files:"
-              echo "$NON_ALLOWED"
-              exit 1
-            fi
+          # Tier 0: R0 only
+          if [ "$AGENT_TIER" = "0" ] && [ "$RISK_NUMBER" -gt 0 ]; then
+            echo "::error::Tier 0 agents may only author R0 (trivial) PRs. This PR is R${RISK_NUMBER}."
+            exit 1
           fi
 
-          # Tier 0-1: no security-critical paths
-          if [ "$TIER" = "0" ] || [ "$TIER" = "1" ]; then
-            SECURITY=$(echo "$CHANGED" | grep -E '^(app/ante|app/app\.go|app/vote_extensions\.go|x/auth/|x/emergency/|x/knowledge/crypto/|\.github/workflows/)' || true)
-            if [ -n "$SECURITY" ]; then
-              echo "::error::Tier $TIER agents may not modify security-critical paths:"
-              echo "$SECURITY"
-              exit 1
-            fi
+          # Tier 1: R0-R1
+          if [ "$AGENT_TIER" = "1" ] && [ "$RISK_NUMBER" -gt 1 ]; then
+            echo "::error::Tier 1 agents may only author R0-R1 PRs. This PR is R${RISK_NUMBER}."
+            exit 1
           fi
 
-          # Count changed modules
-          MODULES=$(echo "$CHANGED" | grep -oP '^[^/]+/[^/]+' | sort -u | wc -l)
-          echo "Modules touched: $MODULES"
-
-          # Tier 0: single file scope
-          FILE_COUNT=$(echo "$CHANGED" | wc -l)
-          if [ "$TIER" = "0" ] && [ "$FILE_COUNT" -gt 5 ]; then
-            echo "::warning::Tier 0 agents should keep PRs to ~1-2 source files + tests. Files: $FILE_COUNT"
+          # Tier 2: R0-R2
+          if [ "$AGENT_TIER" = "2" ] && [ "$RISK_NUMBER" -gt 2 ]; then
+            echo "::error::Tier 2 agents may only author R0-R2 PRs. This PR is R${RISK_NUMBER}."
+            exit 1
           fi
 
-          # Tier 1: single module scope
-          if [ "$TIER" = "1" ] && [ "$MODULES" -gt 2 ]; then
-            echo "::warning::Tier 1 agents should stay within a single module. Modules: $MODULES"
-          fi
+          # Tier 3: all allowed
+          echo "Tier $AGENT_TIER agent is permitted to author R${RISK_NUMBER} PRs."
 
       - name: Check for secrets
         run: |
@@ -110,3 +170,72 @@ jobs:
             echo "$BINARIES"
             exit 1
           fi
+
+      - name: Check work claims
+        run: |
+          if [ ! -f scripts/ci/work-claims.json ]; then
+            echo "No work claims file, skipping."
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          NOW=$(date +%s)
+
+          # Check mandatory claim paths
+          MANDATORY_PATHS="app/app.go|x/knowledge/keeper/"
+          NEEDS_CLAIM=$(echo "$CHANGED" | grep -E "$MANDATORY_PATHS" || true)
+
+          if [ -n "$NEEDS_CLAIM" ]; then
+            echo "Files requiring work claims:"
+            echo "$NEEDS_CLAIM"
+
+            # Verify author has active claim
+            if command -v jq &>/dev/null; then
+              CLAIMS=$(jq -r '.claims[] | select(.agent == "'"$AUTHOR"'" and .status == "active") | .paths[]' scripts/ci/work-claims.json 2>/dev/null || echo "")
+              if [ -z "$CLAIMS" ]; then
+                echo "::error::Mandatory files modified without a work claim. Use /claim to reserve paths first."
+                exit 1
+              fi
+            fi
+          fi
+
+  # === Phase 2: Review Validation ===
+
+  validate-review:
+    name: "Validate Agent Review"
+    if: >-
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved'
+    needs: [classify]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Validate reviewer authority
+        env:
+          REVIEWER: ${{ github.event.review.user.login }}
+          RISK_NUMBER: ${{ needs.classify.outputs.risk_number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: bash scripts/ci/validate-review.sh "$REVIEWER" "$RISK_NUMBER" "$PR_AUTHOR"
+
+  # === Metrics Collection ===
+
+  agent-metrics:
+    name: "Agent CI Metrics"
+    if: always() && github.event_name == 'pull_request'
+    needs: [classify, detect-agent, validate-scope]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect metrics
+        run: |
+          cat <<EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "pr": "${{ github.event.pull_request.number }}",
+            "author": "${{ github.event.pull_request.user.login }}",
+            "risk_tier": "${{ needs.classify.outputs.risk_tier }}",
+            "agent_tier": "${{ needs.detect-agent.outputs.agent_tier }}",
+            "scope_result": "${{ needs.validate-scope.result }}"
+          }
+          EOF

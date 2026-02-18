@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"context"
 	"fmt"
 
 	"cosmossdk.io/core/store"
@@ -13,18 +12,12 @@ import (
 	"github.com/legible-money/legible/x/ontology/types"
 )
 
-// BankKeeper defines the expected bank keeper interface for the ontology module.
-type BankKeeper interface {
-	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
-	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
-}
-
 // Keeper manages the ontology module's state.
 type Keeper struct {
 	cdc          codec.Codec
 	storeService store.KVStoreService
 
-	bankKeeper BankKeeper
+	bankKeeper types.BankKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -34,7 +27,7 @@ type Keeper struct {
 func NewKeeper(
 	cdc codec.Codec,
 	storeService store.KVStoreService,
-	bankKeeper BankKeeper,
+	bankKeeper types.BankKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{

@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "description": "Ledger of agent reviews for reputation tracking",
+    "format": {
+      "reviews": [
+        {
+          "pr": "<PR number>",
+          "reviewer": "<GitHub username>",
+          "reviewer_did": "<did:lgm:hex>",
+          "reviewer_tier": "<0-3>",
+          "verdict": "<approve|request_changes|comment>",
+          "confidence": "<0-100>",
+          "review_type": "<binding|soft>",
+          "risk_tier": "<R0-R3>",
+          "timestamp": "<ISO 8601>",
+          "outcome": "<correct|false_approval|false_rejection|pending>"
+        }
+      ]
+    }
+  },
+  "reviews": []
+}

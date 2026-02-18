@@ -1,23 +1,28 @@
 # CODEOWNERS - Default reviewers for pull requests
+#
+# Review authority follows the agent tier system:
+#   @yournameisai          — human maintainer, all paths
+#   @legible-guardians     — Tier 3 agents, non-critical paths
+#   @legible-bonded        — Tier 2 agents, tests & scripts
 
 # Default: All files require owner review
 *                                   @yournameisai
 
-# ============ Security-Critical Paths ============
+# ============ R3: Critical Paths (human-only review) ============
 
-# Application wiring (ABCI, ante handlers)
+# Application wiring (ABCI, ante handlers, vote extensions)
 /app/                               @yournameisai
 
 # Chain binary
 /cmd/legbled/                       @yournameisai
 
-# Knowledge module (consensus-critical)
+# Knowledge module (consensus-critical evaluation pipeline)
 /x/knowledge/                       @yournameisai
 
-# Auth module (identity, keys)
+# Auth module (identity, keys, sessions)
 /x/auth/                            @yournameisai
 
-# Staking module (validator management)
+# Staking module (validator management, tiers)
 /x/staking/                         @yournameisai
 
 # Emergency kill switch
@@ -26,26 +31,55 @@
 # Governance
 /x/gov/                             @yournameisai
 
-# ============ High-Sensitivity Paths ============
+# BVM core execution
+/x/bvm/vm/                          @yournameisai
 
-# All custom modules
-/x/                                 @yournameisai
+# CI/CD configuration
+/.github/                           @yournameisai
+
+# ============ R2: Standard Paths (human + guardian review) ============
+
+# Active modules — guardians can provide binding review
+/x/tokens/                          @yournameisai @legible-guardians
+/x/vesting_rewards/                 @yournameisai @legible-guardians
+/x/bvm/                             @yournameisai @legible-guardians
+/x/home/                            @yournameisai @legible-guardians
+/x/claiming_pot/                    @yournameisai @legible-guardians
 
 # Protobuf definitions
-/proto/                             @yournameisai
+/proto/                             @yournameisai @legible-guardians
+
+# ============ R1: Low-Risk Paths (bonded agents can review) ============
+
+# Stub modules — guardians can review
+/x/ontology/                        @yournameisai @legible-guardians
+/x/channels/                        @yournameisai @legible-guardians
+/x/disputes/                        @yournameisai @legible-guardians
+/x/evidence_mgmt/                   @yournameisai @legible-guardians
+/x/research/                        @yournameisai @legible-guardians
+/x/tree/                            @yournameisai @legible-guardians
+
+# Tests — bonded agents can review
+*_test.go                           @yournameisai @legible-bonded
+
+# Scripts and tooling
+/scripts/                           @yournameisai @legible-bonded
+/tools/                             @yournameisai @legible-bonded
+/devnet/                            @yournameisai @legible-bonded
+/tests/                             @yournameisai @legible-bonded
+
+# ============ R0: Trivial Paths ============
+
+# Documentation — guardians can review
+/docs/                              @yournameisai @legible-guardians
 
 # ============ Governance ============
 
-# Project documentation
-/docs/                              @yournameisai
 /CONTRIBUTING.md                    @yournameisai
 /SECURITY.md                        @yournameisai
 /CODE_OF_CONDUCT.md                 @yournameisai
 
-# GitHub configuration
-/.github/                           @yournameisai
-
-# LIPs (Legible Improvement Proposals)
+# LIPs (require human review for protocol changes)
 /docs/lips/                         @yournameisai
 
 # Governance scripts

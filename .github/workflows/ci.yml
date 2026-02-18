@@ -15,6 +15,14 @@ on:
         options:
           - 'false'
           - 'true'
+      run_openclaw:
+        description: 'Run OpenClaw agent integration tests'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: read
@@ -108,6 +116,36 @@ jobs:
       - name: Stop devnet
         if: always()
         run: bash devnet/scripts/cosmos-devnet.sh stop || true
+
+  # === OpenClaw Agent Integration Tests (manual or label trigger) ===
+
+  openclaw-devnet:
+    name: "OpenClaw: DevNet"
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_openclaw == 'true') ||
+      contains(github.event.pull_request.labels.*.name, 'openclaw')
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run OpenClaw devnet tests
+        run: |
+          LGM_ENV=devnet LGM_REPORT_PATH=tests/openclaw/report.json \
+            go test ./tests/openclaw/... -tags openclaw -v -count=1 -timeout 600s
+
+      - name: Upload report
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: openclaw-report-${{ github.run_id }}
+          path: tests/openclaw/report.json
+          retention-days: 30
 
   # === Agent Contribution Checks (conditional) ===
 

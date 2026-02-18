@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 func RegisterCodec(cdc *codec.LegacyAmino) {
@@ -13,7 +14,15 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "billing/UpdateParams", nil)
 }
 
-func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {}
+func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgRegisterProvider{},
+		&MsgDeregisterProvider{},
+		&MsgRequestQuote{},
+		&MsgExecutePayment{},
+		&MsgUpdateParams{},
+	)
+}
 
 var (
 	Amino     = codec.NewLegacyAmino()

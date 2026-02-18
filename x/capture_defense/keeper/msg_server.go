@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"fmt"
 	"context"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -63,4 +64,21 @@ func (k Keeper) EndorseQualification(goCtx context.Context, msg *types.MsgEndors
 	)
 
 	return &types.MsgEndorseQualificationResponse{Success: true}, nil
+}
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (k Keeper) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if k.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", k.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	k.SetParams(ctx, *msg.Params)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"capture_defense_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
 }

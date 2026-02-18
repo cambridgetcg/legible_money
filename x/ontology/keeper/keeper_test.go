@@ -1068,7 +1068,7 @@ func TestQueryStratum(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	resp, err := qSrv.Stratum(sdk.WrapSDKContext(ctx), &types.QueryStratumRequest{
-		Stratum: types.StratumEmpirical,
+		Stratum: uint32(types.StratumEmpirical),
 	})
 	if err != nil {
 		t.Fatalf("query stratum failed: %v", err)
@@ -1083,7 +1083,7 @@ func TestQueryStratumInvalid(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	_, err := qSrv.Stratum(sdk.WrapSDKContext(ctx), &types.QueryStratumRequest{
-		Stratum: types.Stratum(99),
+		Stratum: uint32(types.Stratum(99)),
 	})
 	if err == nil {
 		t.Error("expected error for invalid stratum query")
@@ -1135,7 +1135,7 @@ func TestQueryDomainsByStratum(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	resp, err := qSrv.DomainsByStratum(sdk.WrapSDKContext(ctx), &types.QueryDomainsByStratumRequest{
-		Stratum: types.StratumEmpirical,
+		Stratum: uint32(types.StratumEmpirical),
 	})
 	if err != nil {
 		t.Fatalf("query domains by stratum failed: %v", err)
@@ -1618,7 +1618,7 @@ func TestMsgRegisterLogicZoneDuplicate(t *testing.T) {
 	_, err := msgSrv.RegisterLogicZone(sdk.WrapSDKContext(ctx), &types.MsgRegisterLogicZone{
 		Authority: "authority",
 		ZoneProperties: types.LogicZoneProperties{
-			Zone:             types.ZonePropositional,
+			Zone:             string(types.ZonePropositional),
 			Complete:         true,
 			MaxConfidenceBps: 1000000,
 		},
@@ -1714,7 +1714,7 @@ func TestQueryLogicZone(t *testing.T) {
 	qSrv := keeper.NewQueryServerImpl(k)
 
 	resp, err := qSrv.LogicZone(sdk.WrapSDKContext(ctx), &types.QueryLogicZoneRequest{
-		Zone: types.ZonePeano,
+		Zone: string(types.ZonePeano),
 	})
 	if err != nil {
 		t.Fatalf("query logic zone failed: %v", err)
@@ -1871,5 +1871,208 @@ func TestValidateZoneForCategory_BackwardCompat(t *testing.T) {
 	// Unknown category — pass through (knowledge module validates categories)
 	if err := k.ValidateZoneForCategory(ctx, "propositional", "unknown_category"); err != nil {
 		t.Errorf("unknown category should pass through: %v", err)
+	}
+}
+
+// ---------- Archive Domain Tests ----------
+
+func TestArchiveDomain(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	err := k.ArchiveDomain(ctx, "general")
+	if err != nil {
+		t.Fatalf("failed to archive: %v", err)
+	}
+
+	domain, _ := k.GetDomain(ctx, "general")
+	if domain.Status != "archived" {
+		t.Errorf("expected status=archived, got %s", domain.Status)
+	}
+
+	// Archived domain should not accept claims
+	err = k.ValidateDomainForClaim(ctx, "general")
+	if err == nil {
+		t.Error("expected archived domain to reject claims")
+	}
+}
+
+func TestArchiveDomainNotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	err := k.ArchiveDomain(ctx, "nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent domain")
+	}
+}
+
+// ---------- Merge Domain Tests ----------
+
+func TestMergeDomains(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Add some counts to physics
+	_ = k.IncrementClaimCount(ctx, "physics")
+	_ = k.IncrementClaimCount(ctx, "physics")
+	_ = k.IncrementFactCount(ctx, "physics")
+
+	// Add counts to general
+	_ = k.IncrementClaimCount(ctx, "general")
+	_ = k.IncrementFactCount(ctx, "general")
+
+	proposal := types.DomainProposal{
+		Domain: &types.Domain{
+			Name:        "general",
+			Description: types.FormatMergeDescription("physics"),
+		},
+		ProposalType: "merge",
+	}
+
+	err := k.ExecuteProposal(ctx, proposal)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	// Source should be archived
+	source, _ := k.GetDomain(ctx, "general")
+	if source.Status != "archived" {
+		t.Errorf("expected source status=archived, got %s", source.Status)
+	}
+
+	// Target should have combined counts
+	target, _ := k.GetDomain(ctx, "physics")
+	if target.ClaimCount != 3 { // 2 + 1
+		t.Errorf("expected target claim_count=3, got %d", target.ClaimCount)
+	}
+	if target.FactCount != 2 { // 1 + 1
+		t.Errorf("expected target fact_count=2, got %d", target.FactCount)
+	}
+}
+
+func TestMergeDomainsNoTarget(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	proposal := types.DomainProposal{
+		Domain: &types.Domain{
+			Name:        "general",
+			Description: "no merge target here",
+		},
+		ProposalType: "merge",
+	}
+
+	err := k.ExecuteProposal(ctx, proposal)
+	if err == nil {
+		t.Error("expected error for merge without target")
+	}
+}
+
+func TestMergeDomainsTargetNotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	proposal := types.DomainProposal{
+		Domain: &types.Domain{
+			Name:        "general",
+			Description: types.FormatMergeDescription("nonexistent"),
+		},
+		ProposalType: "merge",
+	}
+
+	err := k.ExecuteProposal(ctx, proposal)
+	if err == nil {
+		t.Error("expected error when merge target doesn't exist")
+	}
+}
+
+// ---------- Execute Proposal Archive Tests ----------
+
+func TestExecuteProposalArchive(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	proposal := types.DomainProposal{
+		Domain: &types.Domain{
+			Name: "history",
+		},
+		ProposalType: "archive",
+	}
+
+	err := k.ExecuteProposal(ctx, proposal)
+	if err != nil {
+		t.Fatalf("failed to execute archive: %v", err)
+	}
+
+	domain, _ := k.GetDomain(ctx, "history")
+	if domain.Status != "archived" {
+		t.Errorf("expected status=archived, got %s", domain.Status)
+	}
+}
+
+// ---------- Stake Refund Tests ----------
+
+func TestStakeRefundOnPassedProposal(t *testing.T) {
+	k, ctx, bk := setupKeeper(t)
+	msgSrv := keeper.NewMsgServerImpl(k)
+
+	proposer := testAddr("alice")
+	bk.fundAccount(proposer, largeBalance)
+
+	// Propose domain (deducts stake)
+	resp, err := msgSrv.ProposeDomain(sdk.WrapSDKContext(ctx), &types.MsgProposeDomain{
+		Name:        "chemistry",
+		DisplayName: "Chemistry",
+		Description: "Chemical sciences",
+		Stratum:     types.StratumEmpirical,
+		Proposer:    proposer,
+		Stake:       "1000000",
+	})
+	if err != nil {
+		t.Fatalf("propose failed: %v", err)
+	}
+
+	balanceAfterPropose := bk.balances[proposer]["ulgm"]
+	expectedAfterPropose := largeBalance.Sub(sdkmath.NewInt(1000000))
+	if !balanceAfterPropose.Equal(expectedAfterPropose) {
+		t.Fatalf("expected balance after propose=%s, got %s", expectedAfterPropose, balanceAfterPropose)
+	}
+
+	// Vote to pass (3 endorsements)
+	for i := 1; i <= 3; i++ {
+		_, err = msgSrv.VoteDomainProposal(sdk.WrapSDKContext(ctx), &types.MsgVoteDomainProposal{
+			ProposalId: resp.ProposalId,
+			Voter:      testAddr(fmt.Sprintf("voter%d", i)),
+			Approve:    true,
+		})
+		if err != nil {
+			t.Fatalf("vote %d failed: %v", i, err)
+		}
+	}
+
+	// Stake should be refunded
+	balanceAfterPass := bk.balances[proposer]["ulgm"]
+	if !balanceAfterPass.Equal(largeBalance) {
+		t.Errorf("expected balance after pass=%s (full refund), got %s", largeBalance, balanceAfterPass)
+	}
+}
+
+// ---------- ParseMergeTarget Tests ----------
+
+func TestParseMergeTarget(t *testing.T) {
+	target := types.ParseMergeTarget("merge_into:physics")
+	if target != "physics" {
+		t.Errorf("expected physics, got %s", target)
+	}
+
+	target = types.ParseMergeTarget("no merge here")
+	if target != "" {
+		t.Errorf("expected empty, got %s", target)
+	}
+
+	target = types.ParseMergeTarget("")
+	if target != "" {
+		t.Errorf("expected empty, got %s", target)
+	}
+
+	desc := types.FormatMergeDescription("mathematics")
+	target = types.ParseMergeTarget(desc)
+	if target != "mathematics" {
+		t.Errorf("expected mathematics, got %s", target)
 	}
 }

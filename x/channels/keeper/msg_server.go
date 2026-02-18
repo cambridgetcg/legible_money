@@ -170,8 +170,8 @@ func (m msgServer) DisputeChannel(goCtx context.Context, msg *types.MsgDisputeCh
 	if !found {
 		return nil, types.ErrChannelNotFound
 	}
-	if ch.Status != types.ChannelStatusOpen && ch.Status != types.ChannelStatusClosing {
-		return nil, types.ErrChannelNotOpen.Wrap("channel must be open or closing to dispute")
+	if ch.Status != types.ChannelStatusOpen && ch.Status != types.ChannelStatusClosing && ch.Status != types.ChannelStatusDisputed {
+		return nil, types.ErrChannelNotOpen.Wrap("channel must be open, closing, or disputed to dispute")
 	}
 
 	// Verify disputer is payer or provider
@@ -539,4 +539,21 @@ func (m msgServer) ClaimExpired(goCtx context.Context, msg *types.MsgClaimExpire
 	))
 
 	return &types.MsgClaimExpiredResponse{RefundedAmount: payerRefund.String()}, nil
+}
+
+
+// UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
+func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if m.Keeper.GetAuthority() != msg.Authority {
+		return nil, fmt.Errorf("unauthorized: expected %s, got %s", m.Keeper.GetAuthority(), msg.Authority)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	m.Keeper.SetParams(ctx, *msg.Params)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			"channels_params_updated",
+			sdk.NewAttribute("authority", msg.Authority),
+		),
+	)
+	return &types.MsgUpdateParamsResponse{}, nil
 }

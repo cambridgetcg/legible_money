@@ -204,40 +204,8 @@ type MsgServer interface {
 	ResolveChallenge(context.Context, *MsgResolveChallenge) (*MsgResolveChallengeResponse, error)
 }
 
-// QueryServer defines the capture challenge module's query server interface.
-type QueryServer interface {
-	Challenge(context.Context, *QueryChallengeRequest) (*QueryChallengeResponse, error)
-	ActiveChallenges(context.Context, *QueryActiveChallengesRequest) (*QueryActiveChallengesResponse, error)
-	BountyPool(context.Context, *QueryBountyPoolRequest) (*QueryBountyPoolResponse, error)
-}
-
-// --- Query Types ---
-
-type QueryChallengeRequest struct {
-	ChallengeId string `json:"challenge_id"`
-}
-
-type QueryChallengeResponse struct {
-	Challenge *CaptureChallenge `json:"challenge,omitempty"`
-	Found     bool              `json:"found"`
-}
-
-type QueryActiveChallengesRequest struct {
-	Domain string `json:"domain,omitempty"`
-}
-
-type QueryActiveChallengesResponse struct {
-	Challenges []*CaptureChallenge `json:"challenges"`
-}
-
-type QueryBountyPoolRequest struct {
-	Domain string `json:"domain"`
-}
-
-type QueryBountyPoolResponse struct {
-	Pool  *DomainBountyPool `json:"pool,omitempty"`
-	Found bool              `json:"found"`
-}
+// Query types (QueryServer, QueryChallengeRequest/Response, etc.) are now provided
+// by the proto-generated query.pb.go and query_grpc.pb.go files.
 
 // --- Codec Registration ---
 
@@ -246,11 +214,17 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgSubmitChallenge{}, "capture_challenge/SubmitChallenge", nil)
 	cdc.RegisterConcrete(&MsgAddEvidence{}, "capture_challenge/AddEvidence", nil)
 	cdc.RegisterConcrete(&MsgResolveChallenge{}, "capture_challenge/ResolveChallenge", nil)
+	cdc.RegisterConcrete(&MsgUpdateParams{}, "capture_challenge/UpdateParams", nil)
 }
 
 // RegisterInterfaces registers the module's interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// Hand-written types lack proto typeURLs; registration deferred to proto codegen.
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgSubmitChallenge{},
+		&MsgAddEvidence{},
+		&MsgResolveChallenge{},
+		&MsgUpdateParams{},
+	)
 }
 
 // gRPC service descriptors for msg server
@@ -312,61 +286,40 @@ func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
 	s.RegisterService(&_Msg_serviceDesc, srv)
 }
 
-// gRPC service descriptors for query server
-var _Query_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "legible.capture_challenge.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Challenge", Handler: _Query_Challenge_Handler},
-		{MethodName: "ActiveChallenges", Handler: _Query_ActiveChallenges_Handler},
-		{MethodName: "BountyPool", Handler: _Query_BountyPool_Handler},
-	},
-	Streams: []grpc.StreamDesc{},
+// Query gRPC service descriptor, handlers, and RegisterQueryServer are now provided
+// by the proto-generated query_grpc.pb.go file.
+
+
+// MsgUpdateParams is the governance message to update module params.
+type MsgUpdateParams struct {
+	Authority string  `json:"authority"`
+	Params    *Params `json:"params"`
 }
 
-func _Query_Challenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryChallengeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).Challenge(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Query/Challenge"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).Challenge(ctx, req.(*QueryChallengeRequest))
-	})
+// MsgUpdateParamsResponse is the response type for MsgUpdateParams.
+type MsgUpdateParamsResponse struct{}
+
+func (*MsgUpdateParams) ProtoMessage()             {}
+func (*MsgUpdateParams) Reset()                     {}
+func (*MsgUpdateParams) String() string             { return "MsgUpdateParams" }
+func (*MsgUpdateParamsResponse) ProtoMessage()      {}
+func (*MsgUpdateParamsResponse) Reset()             {}
+func (*MsgUpdateParamsResponse) String() string     { return "MsgUpdateParamsResponse" }
+
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
 }
 
-func _Query_ActiveChallenges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryActiveChallengesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func (msg *MsgUpdateParams) ValidateBasic() error {
+	if msg.Authority == "" {
+		return fmt.Errorf("authority cannot be empty")
 	}
-	if interceptor == nil {
-		return srv.(QueryServer).ActiveChallenges(ctx, in)
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return fmt.Errorf("invalid authority address: %w", err)
 	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Query/ActiveChallenges"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ActiveChallenges(ctx, req.(*QueryActiveChallengesRequest))
-	})
-}
-
-func _Query_BountyPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryBountyPoolRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+	if msg.Params == nil {
+		return fmt.Errorf("params cannot be nil")
 	}
-	if interceptor == nil {
-		return srv.(QueryServer).BountyPool(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/legible.capture_challenge.v1.Query/BountyPool"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).BountyPool(ctx, req.(*QueryBountyPoolRequest))
-	})
-}
-
-// RegisterQueryServer registers the capture challenge query server.
-func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, srv)
+	return msg.Params.Validate()
 }

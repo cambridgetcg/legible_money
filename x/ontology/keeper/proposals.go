@@ -3,7 +3,9 @@ package keeper
 import (
 	"crypto/sha256"
 	"fmt"
+	"math/big"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/legible-money/legible/x/ontology/types"
@@ -93,6 +95,12 @@ func (k Keeper) VoteProposal(ctx sdk.Context, proposalId string, voter string, a
 			proposal.Status = "active"
 			proposal.VotesFor--
 			proposal.Voters = proposal.Voters[:len(proposal.Voters)-1]
+		} else {
+			// Refund stake on successful execution
+			if err := k.RefundProposalStake(ctx, proposal); err != nil {
+				k.Logger(ctx).Error("failed to refund proposal stake",
+					"proposal_id", proposalId, "error", err)
+			}
 		}
 	}
 
@@ -162,6 +170,8 @@ func (k Keeper) ExecuteProposal(ctx sdk.Context, proposal types.DomainProposal) 
 		return k.ActivateDomain(ctx, proposal.Domain.Name)
 	case "deprecate":
 		return k.DeprecateDomain(ctx, proposal.Domain.Name)
+	case "archive":
+		return k.ArchiveDomain(ctx, proposal.Domain.Name)
 	case "modify":
 		domain, found := k.GetDomain(ctx, proposal.Domain.Name)
 		if !found {
@@ -177,9 +187,44 @@ func (k Keeper) ExecuteProposal(ctx sdk.Context, proposal types.DomainProposal) 
 		domain.UpdatedAt = uint64(ctx.BlockHeight())
 		k.SetDomain(ctx, domain)
 		return nil
+	case "merge":
+		return k.MergeDomains(ctx, proposal)
 	default:
 		return fmt.Errorf("unknown proposal type: %s", proposal.ProposalType)
 	}
+}
+
+// RefundProposalStake returns the staked tokens to the proposer.
+// Called when a proposal is resolved (passed or expired).
+func (k Keeper) RefundProposalStake(ctx sdk.Context, proposal types.DomainProposal) error {
+	if proposal.Stake == "" || proposal.Stake == "0" || proposal.Proposer == "" {
+		return nil
+	}
+
+	proposerAddr, err := sdk.AccAddressFromBech32(proposal.Proposer)
+	if err != nil {
+		return fmt.Errorf("invalid proposer address for refund: %w", err)
+	}
+
+	stakeAmount := new(big.Int)
+	if _, ok := stakeAmount.SetString(proposal.Stake, 10); !ok || stakeAmount.Sign() <= 0 {
+		return nil // no valid stake to refund
+	}
+
+	stakeCoin := sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(stakeAmount))
+	if err := k.bankKeeper.SendCoinsFromModuleToAccount(
+		ctx, types.ModuleName, proposerAddr, sdk.NewCoins(stakeCoin),
+	); err != nil {
+		return fmt.Errorf("failed to refund stake: %w", err)
+	}
+
+	k.Logger(ctx).Info("proposal stake refunded",
+		"proposal_id", proposal.Id,
+		"proposer", proposal.Proposer,
+		"amount", proposal.Stake,
+	)
+
+	return nil
 }
 
 // GenerateProposalID generates a deterministic proposal ID from the proposer and domain.

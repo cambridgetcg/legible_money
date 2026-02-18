@@ -10,6 +10,7 @@ import (
 )
 
 type queryServer struct {
+	types.UnimplementedQueryServer
 	Keeper
 }
 
@@ -17,8 +18,6 @@ type queryServer struct {
 func NewQueryServerImpl(keeper Keeper) types.QueryServer {
 	return &queryServer{Keeper: keeper}
 }
-
-var _ types.QueryServer = queryServer{}
 
 // Dispute returns a single dispute by ID.
 func (k queryServer) Dispute(goCtx context.Context, req *types.QueryDisputeRequest) (*types.QueryDisputeResponse, error) {
@@ -32,7 +31,7 @@ func (k queryServer) Dispute(goCtx context.Context, req *types.QueryDisputeReque
 		return nil, fmt.Errorf("%w: %s", types.ErrDisputeNotFound, req.DisputeId)
 	}
 
-	return &types.QueryDisputeResponse{Dispute: dispute}, nil
+	return &types.QueryDisputeResponse{Dispute: &dispute}, nil
 }
 
 // DisputesByFact returns all disputes for a given fact.
@@ -44,15 +43,25 @@ func (k queryServer) DisputesByFact(goCtx context.Context, req *types.QueryDispu
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	disputes := k.GetDisputesByFact(ctx, req.FactId)
 
-	return &types.QueryDisputesByFactResponse{Disputes: disputes}, nil
+	ptrs := make([]*types.Dispute, len(disputes))
+	for i := range disputes {
+		ptrs[i] = &disputes[i]
+	}
+
+	return &types.QueryDisputesByFactResponse{Disputes: ptrs}, nil
 }
 
 // ActiveDisputes returns all non-resolved, non-expired disputes.
-func (k queryServer) ActiveDisputes(goCtx context.Context, req *types.QueryActiveDisputesRequest) (*types.QueryActiveDisputesResponse, error) {
+func (k queryServer) ActiveDisputes(goCtx context.Context, _ *types.QueryActiveDisputesRequest) (*types.QueryActiveDisputesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	disputes := k.GetActiveDisputes(ctx)
 
-	return &types.QueryActiveDisputesResponse{Disputes: disputes}, nil
+	ptrs := make([]*types.Dispute, len(disputes))
+	for i := range disputes {
+		ptrs[i] = &disputes[i]
+	}
+
+	return &types.QueryActiveDisputesResponse{Disputes: ptrs}, nil
 }
 
 // Evidence returns all evidence for a given dispute.
@@ -64,7 +73,12 @@ func (k queryServer) Evidence(goCtx context.Context, req *types.QueryEvidenceReq
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	evidence := k.GetEvidenceByDispute(ctx, req.DisputeId)
 
-	return &types.QueryEvidenceResponse{Evidence: evidence}, nil
+	ptrs := make([]*types.DisputeEvidence, len(evidence))
+	for i := range evidence {
+		ptrs[i] = &evidence[i]
+	}
+
+	return &types.QueryEvidenceResponse{Evidence: ptrs}, nil
 }
 
 // Votes returns all votes for a given dispute.
@@ -76,13 +90,18 @@ func (k queryServer) Votes(goCtx context.Context, req *types.QueryVotesRequest) 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	votes := k.GetVotes(ctx, req.DisputeId)
 
-	return &types.QueryVotesResponse{Votes: votes}, nil
+	ptrs := make([]*types.DisputeVote, len(votes))
+	for i := range votes {
+		ptrs[i] = &votes[i]
+	}
+
+	return &types.QueryVotesResponse{Votes: ptrs}, nil
 }
 
 // Params returns the module parameters.
-func (k queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
+func (k queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := k.GetParams(ctx)
 
-	return &types.QueryParamsResponse{Params: params}, nil
+	return &types.QueryParamsResponse{Params: &params}, nil
 }

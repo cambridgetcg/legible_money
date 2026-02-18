@@ -51,6 +51,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgAdvanceDeployment{},
 		&MsgApproveDeployment{},
 		&MsgRollbackDeployment{},
+		// Hand-written (types.go) — have XXX_MessageName in proto_names.go
+		&MsgUpdateParams{},
+		&MsgAttachUpgradePlan{},
 	)
 }
 

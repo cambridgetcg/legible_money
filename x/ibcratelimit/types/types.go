@@ -81,53 +81,5 @@ type MsgServer interface {
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 
-// QueryServer defines the ibcratelimit query interface.
-type QueryServer interface {
-	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
-	ChannelFlow(context.Context, *QueryChannelFlowRequest) (*QueryChannelFlowResponse, error)
-}
-
-// --- Query Types (not in proto-generated files) ---
-
-// QueryParamsRequest is the request for the Params query.
-type QueryParamsRequest struct{}
-
-func (m *QueryParamsRequest) Reset()         { *m = QueryParamsRequest{} }
-func (m *QueryParamsRequest) String() string { return "QueryParamsRequest{}" }
-func (m *QueryParamsRequest) ProtoMessage()  {}
-
-// QueryParamsResponse is the response for the Params query.
-type QueryParamsResponse struct {
-	Params Params `json:"params"`
-}
-
-func (m *QueryParamsResponse) Reset() { *m = QueryParamsResponse{} }
-func (m *QueryParamsResponse) String() string {
-	return fmt.Sprintf("QueryParamsResponse{%+v}", m.Params)
-}
-func (m *QueryParamsResponse) ProtoMessage() {}
-
-// QueryChannelFlowRequest is the request for the ChannelFlow query.
-// NOTE: The proto-generated ChannelFlow type uses ChannelId (not ChannelID).
-// Keeper code referencing ChannelID will need to be updated to ChannelId.
-type QueryChannelFlowRequest struct {
-	ChannelID string `json:"channel_id"`
-}
-
-func (m *QueryChannelFlowRequest) Reset() { *m = QueryChannelFlowRequest{} }
-func (m *QueryChannelFlowRequest) String() string {
-	return fmt.Sprintf("QueryChannelFlowRequest{%s}", m.ChannelID)
-}
-func (m *QueryChannelFlowRequest) ProtoMessage() {}
-
-// QueryChannelFlowResponse is the response for the ChannelFlow query.
-type QueryChannelFlowResponse struct {
-	Flow  *ChannelFlow `json:"flow"`
-	Found bool         `json:"found"`
-}
-
-func (m *QueryChannelFlowResponse) Reset() { *m = QueryChannelFlowResponse{} }
-func (m *QueryChannelFlowResponse) String() string {
-	return fmt.Sprintf("QueryChannelFlowResponse{found:%v}", m.Found)
-}
-func (m *QueryChannelFlowResponse) ProtoMessage() {}
+// Query types (QueryServer, QueryParamsRequest/Response, QueryChannelFlowRequest/Response)
+// are now provided by the proto-generated query.pb.go and query_grpc.pb.go files.

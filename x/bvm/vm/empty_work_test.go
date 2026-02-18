@@ -51,7 +51,7 @@ func TestFarm_RubberStampVerifier(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state_for_farm(), host)
@@ -126,8 +126,9 @@ func TestFarm_TrivialClaimSpam(t *testing.T) {
 
 		ctx := makeCtx(200000)
 		ctx.CallerDID = callerDID
+		ctx.Capabilities = allCaps()
 		ctx.BlockNumber = uint64(100 + i)
-		ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+		ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 		ctx.Bytecode = bytecode
 		interp := NewInterpreter()
 		result := interp.Execute(bytecode, ctx, state_for_farm(), host)
@@ -197,6 +198,7 @@ func TestFarm_SelfCitationLoop(t *testing.T) {
 
 		ctx := makeCtx(200000)
 		ctx.CallerDID = callerDID
+		ctx.Capabilities = allCaps()
 		ctx.Bytecode = bytecode
 		interp := NewInterpreter()
 		result := interp.Execute(bytecode, ctx, state, host)
@@ -216,6 +218,7 @@ func TestFarm_SelfCitationLoop(t *testing.T) {
 
 		ctx := makeCtx(100000)
 		ctx.CallerDID = callerDID
+		ctx.Capabilities = allCaps()
 		ctx.Bytecode = bytecode
 		interp := NewInterpreter()
 		result := interp.Execute(bytecode, ctx, state, host)
@@ -300,6 +303,7 @@ func TestFarm_ConfidenceHerding(t *testing.T) {
 
 	ctx := makeCtx(300000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -370,7 +374,7 @@ func TestFarm_AbstainFarming(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = callerDID
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state_for_farm(), host)
@@ -430,6 +434,7 @@ func TestFarm_VestingWhileMisbehaving(t *testing.T) {
 
 	ctx := makeCtx(100000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -504,8 +509,9 @@ func TestFarm_DomainSquatting(t *testing.T) {
 
 		ctx := makeCtx(200000)
 		ctx.CallerDID = callerDID
+		ctx.Capabilities = allCaps()
 		ctx.BlockNumber = uint64(100 + i)
-		ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+		ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 		ctx.Bytecode = bytecode
 		interp := NewInterpreter()
 		result := interp.Execute(bytecode, ctx, state_for_farm(), host)
@@ -575,7 +581,7 @@ func TestFarm_StakeWithoutVerifying(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = callerDID
-	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true}
+	ctx.Capabilities = &SessionCapabilities{CanTransfer: true, CanStake: true, CanSubmitClaims: true, CanVote: true, CanManageTrust: true, CanManageIdentity: true, CanManageSchedules: true, CanManageDefenses: true, CanManageBeliefs: true}
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
@@ -643,6 +649,7 @@ func TestFarm_ChallengeSpam(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.BlockNumber = 200
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
@@ -720,6 +727,7 @@ func TestFarm_MinimumEffortEvidence(t *testing.T) {
 
 	ctx := makeCtx(200000)
 	ctx.CallerDID = callerDID
+	ctx.Capabilities = allCaps()
 	ctx.Bytecode = bytecode
 	interp := NewInterpreter()
 	result := interp.Execute(bytecode, ctx, state, host)
