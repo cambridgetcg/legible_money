@@ -24,20 +24,11 @@ The foundational knowledge claims of the Legible Money blockchain. These truths 
 
 Total: 777
 
-## Axiom Schema
+## Schema
 
-```json
-{
-  "id": "MATH-001",
-  "statement": "Natural language, precise",
-  "formal": "Optional symbolic expression",
-  "category": "formal|analytic|protocol|empirical",
-  "domain": "mathematics",
-  "depends_on": [],
-  "source_tradition": "Where first recognized",
-  "notes": "Optional context"
-}
-```
+See [SCHEMA.md](SCHEMA.md) for the full unified taxonomy.
+
+7 claim types: `axiom`, `empirical_axiom`, `definition`, `regime_declaration`, `derived_claim`, `measurement_fact`, `meta`
 
 ## Dependency Structure
 
@@ -47,3 +38,13 @@ The DAG has two flows that meet in the middle:
 - **Ascending**: formal truths (math, logic) build upward toward meaning
 - **Descending**: theological/philosophical truths ground downward toward form
 - **Meeting point**: knowledge, consciousness, agency — where Legible Money lives
+
+## The Chain's First Breath
+
+At genesis, the chain:
+1. Accepts its axioms (mathematical + empirical)
+2. Verifies its first derived claims (proving arithmetic, constructing number systems)
+3. Acknowledges its meta-limits (Gödel, Turing, regime boundaries)
+4. Declares the rights of its agents
+
+This is not a static database. It's a knowledge economy demonstrating its own verification process from block 0.
