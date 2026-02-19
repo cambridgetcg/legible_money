@@ -448,7 +448,7 @@ MATH-093 (Verified, Gauss–Bonnet theorem)
 ```
 MATH-094 (Axiom, Kolmogorov probability axioms)
   P(A)∈[0,1], P(Ω)=1, countable additivity for disjoint events.
-  depends: [MATH-040, MATH-074]
+  depends: [MATH-040]
 
 MATH-095 (Verified, Bayes' theorem)
   depends: [MATH-094]
