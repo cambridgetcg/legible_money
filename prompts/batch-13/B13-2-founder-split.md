@@ -1,12 +1,19 @@
 # B13-2 — Founder Auto-Split from Research Fund
 
 ## Context
-7% of the research fund (which is 3.33% of total rewards) automatically
-routes to the founder's address for operational expenses. This is 0.23%
-of total block rewards.
+7% of all research fund deposits (which total 3.33% of all reward streams)
+automatically routes to the founder's address for operational expenses.
+This is 0.23% of total rewards.
 
-The split happens at the point of research fund deposit — not via manual
-disbursement. Clean, automatic, transparent.
+After B13-1, research tax is collected at four points:
+1. Block reward minting (vesting_rewards)
+2. Transaction fee sweep (vesting_rewards)
+3. Citation reward disbursement (knowledge)
+4. Falsification reward disbursement (knowledge)
+
+The founder split should apply to ALL four, at the point the tax enters
+the research_fund account. The cleanest approach: intercept at the
+research_fund module account, not at each collection point.
 
 ## Implementation
 

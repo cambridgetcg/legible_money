@@ -1,15 +1,29 @@
-# B13-1 — Research Tax 7% → 3.33% Across All Modules
+# B13-1 — Research Tax Unification: Single 3.33% Rate, No Double-Dipping
 
 ## Context
-The research tax currently takes 7% (70,000 BPS) from all reward streams.
-This is being reduced to 3.33% (33,300 BPS) to put more capital into
-verification rewards (truth-seeking incentives) and block production
-(validator incentives).
+The audit revealed three critical issues with the current research tax:
 
-## Files to Change
+1. **Double taxation on verification rewards**: Block rewards are taxed 7% by
+   `vesting_rewards` when funding the verification pool, then the knowledge module
+   taxes verification rewards AGAIN at 7% (`ResearchTaxRate` in confidence.go).
+   Effective rate on verification income: ~13.5%.
 
-### 1. x/vesting_rewards/types/genesis.go
-The primary research share parameter:
+2. **Citation and falsification rewards are untaxed**: The two largest growing
+   revenue streams pay zero research tax, meaning the fund's share of total
+   economic activity shrinks as the network matures.
+
+3. **Three different rates across three modules**: `vesting_rewards` uses 70,000
+   BPS, knowledge uses 70,000 BPS (hardcoded fallback), tree uses 234,000 BPS.
+
+## The Fix: Single Tax Point, Unified Rate
+
+### Principle
+Tax once, at the point of disbursement to individuals. Never tax internal
+module-to-module transfers. The research tax applies to all reward payouts
+equally at 3.33%.
+
+### 1. x/vesting_rewards/types/genesis.go — Primary Rate
+
 ```go
 // Change:
 ResearchShareBps: 70000, // 7%
@@ -17,89 +31,158 @@ ResearchShareBps: 70000, // 7%
 ResearchShareBps: 33300, // 3.33%
 ```
 
-### 2. x/vesting_rewards/keeper/rewards.go
-Check if `ResearchShareBps` is used directly or only via params. If there
-are any hardcoded `70000` values, update those too.
+This is the CANONICAL rate. All other modules should reference this or use
+the same value.
 
-```bash
-grep -n "70000\|7%" x/vesting_rewards/keeper/rewards.go
-```
+### 2. x/knowledge/keeper/confidence.go — REMOVE Double Tax
 
-Update comments that mention "7%" to "3.33%".
+The verification reward tax in `calculateRewardsAndSlashes()` must be REMOVED.
+These rewards come from the `knowledge` module account, which was funded by
+the verification pool, which was funded from ALREADY-TAXED block rewards.
 
-### 3. x/tree/types/genesis.go
-The tree module has its own research fund split:
 ```go
-// Current:
-ResearchFundBp: 234000, // 23.4%
-// This is tree-specific — evaluate whether this should also change.
+// REMOVE this entire block:
+researchTaxRate := params.ResearchTaxRate
+if researchTaxRate == 0 {
+    researchTaxRate = 70000 // fallback: 7%
+}
+// ... and the tax deduction logic that follows
+
+// REPLACE with: send full reward to validator (tax was already paid upstream)
+if k.bankKeeper != nil && amount > 0 {
+    rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(amount))))
+    if err := k.RouteReward(ctx, valAddr, rewardCoins, "verification"); err != nil {
+        k.Logger(ctx).Error("failed to route verification reward", "error", err)
+    }
+}
 ```
 
-The tree module's 23.4% is a different context (service revenue, not block
-rewards). Decision: **keep the tree split as-is for now** — service revenue
-is user-paid, not minted, so the research share from service calls is a
-different economic question. Add a TODO comment noting the discrepancy.
+Also remove or deprecate the `ResearchTaxRate` field from the knowledge Params
+proto. It's no longer used.
 
-### 4. x/vesting_rewards/types/keys.go
-Update the comment on `VerificationPoolShareBps`:
+### 3. x/knowledge/keeper/citation.go — ADD Tax
+
+Citation rewards are currently untaxed. They should be taxed at 3.33%
+because they're new value flowing to individuals.
+
+In `DistributeCitationRewards()`, before sending to the submitter:
+
 ```go
-// The verification pool now receives 50% of 96.67% (previously 50% of 93%).
+// Apply research tax to citation rewards (3.33%)
+researchBps := k.GetResearchTaxBps(ctx) // reads from vesting_rewards or shared param
+if researchBps > 0 {
+    taxAmount := rewardAmount * researchBps / 1_000_000
+    rewardAmount -= taxAmount
+    if taxAmount > 0 {
+        taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(taxAmount))))
+        k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins)
+    }
+}
+
+// Then send taxed amount via RouteReward (for partnership routing)
 ```
 
-### 5. x/knowledge/keeper/confidence.go
-Check if the knowledge module references the research tax rate directly:
+### 4. x/knowledge/keeper/rounds.go — ADD Tax to Falsification
+
+In `distributeFalsificationReward()`, same pattern:
+
+```go
+// Apply research tax to falsification reward
+researchBps := k.GetResearchTaxBps(ctx)
+if researchBps > 0 {
+    taxAmount := safeMulDiv(rewardAmount, researchBps, 1_000_000)
+    rewardAmount -= taxAmount
+    if taxAmount > 0 {
+        taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(taxAmount))))
+        k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins)
+    }
+}
+```
+
+### 5. Shared Tax Rate Accessor
+
+Add to knowledge keeper:
+
+```go
+// GetResearchTaxBps returns the unified research tax rate.
+// Reads from vesting_rewards params if available, otherwise uses default.
+func (k Keeper) GetResearchTaxBps(ctx sdk.Context) uint64 {
+    if k.vestingRewardsKeeper != nil {
+        params := k.vestingRewardsKeeper.GetParams(ctx)
+        return params.ResearchShareBps
+    }
+    return 33300 // fallback: 3.33%
+}
+```
+
+If wiring vestingRewardsKeeper is too invasive, store the rate in the
+knowledge module's own params and keep it synced via governance. But
+prefer reading from the canonical source.
+
+### 6. Tree Module — Note Discrepancy
+
+The tree module's 23.4% research split is for service revenue (user-paid,
+not minted). Add a TODO comment but don't change it in this session:
+
+```go
+// TODO: Tree service revenue research split (23.4%) is independent from
+// the 3.33% block reward research tax. These are different economic
+// contexts (service payments vs minting). Evaluate unification in v0.3.
+ResearchFundBp: 234000, // 23.4% of service revenue
+```
+
+### 7. Update Comments Everywhere
+
 ```bash
-grep -n "ResearchTaxRate\|research.*tax\|70000" x/knowledge/keeper/confidence.go
-```
-Update any hardcoded references.
-
-### 6. Documentation
-Update any docs that mention the 7% figure:
-```bash
-grep -rn "7%\|7 percent\|seven percent\|research.*7" docs/ README.md
+grep -rn "7%\|70000.*research\|research.*7%\|research.*70000" x/ --include="*.go" | grep -v _test.go | grep -v .pb.go
 ```
 
-### 7. Validation
-The `ResearchShareBps` must be ≤ 1,000,000 and the genesis validation
-already checks this. Verify:
-```bash
-grep "ResearchShareBps" x/vesting_rewards/types/genesis.go
-```
+Update all comments to reflect 3.33%.
 
-### 8. Impact Summary
+### 8. Impact Summary (Corrected)
 
-| Metric | Before (7%) | After (3.33%) | Change |
-|--------|------------|---------------|--------|
-| Research fund | 7.00% | 3.33% | -3.67% |
-| Verification pool | 32.55% | 33.83% | +1.28% |
-| Compute pool | 13.95% | 14.50% | +0.55% |
-| Block producer | 46.50% | 48.34% | +1.84% |
+**Before (with double taxation):**
+| Stream | Effective Research Tax |
+|--------|----------------------|
+| Block producer rewards | 7% |
+| Verification rewards | ~13.5% (double-taxed) |
+| Citation rewards | 0% |
+| Falsification rewards | 0% |
 
-More goes to truth-seeking (verification) and security (validators).
+**After (unified):**
+| Stream | Effective Research Tax |
+|--------|----------------------|
+| Block producer rewards | 3.33% (at minting) |
+| Verification rewards | 3.33% (at minting only, no double-dip) |
+| Citation rewards | 3.33% (new) |
+| Falsification rewards | 3.33% (new) |
+
+Every reward stream taxed equally. No loopholes. No double-dipping.
 
 ### 9. Tests
 
-Update any test that asserts the 7% split:
-```bash
-grep -rn "70000\|ResearchShareBps.*70" x/vesting_rewards/ --include="*_test.go"
+```go
+func TestUnifiedResearchTax(t *testing.T)              // All streams taxed at 3.33%
+func TestNoDoubleTaxOnVerification(t *testing.T)       // Verification rewards not taxed twice
+func TestCitationRewardsTaxed(t *testing.T)            // Citations now taxed
+func TestFalsificationRewardsTaxed(t *testing.T)       // Falsification now taxed
+func TestResearchTaxRateConsistency(t *testing.T)      // All modules use same rate
 ```
-
-Change expected values from 70000 to 33300.
 
 ### 10. Run
 
 ```bash
 go test ./x/vesting_rewards/... -count=1 -v
-go test ./x/knowledge/... -count=1
+go test ./x/knowledge/... -count=1 -v
 go build ./...
 ```
 
 ## Commit
 ```
-feat(economics): reduce research tax 7% → 3.33%
+feat(economics): unified 3.33% research tax — no double-dipping, no loopholes
 
-Research fund share reduced from 70,000 BPS (7%) to 33,300 BPS (3.33%).
-Freed capital flows to verification rewards (+1.28%) and block producers
-(+1.84%), strengthening truth-seeking and validator incentives.
-Tree module service revenue split unchanged (separate economic context).
+Eliminates double taxation on verification rewards (was ~13.5%, now 3.33%).
+Adds research tax to citation and falsification rewards (were 0%).
+Single canonical rate (33,300 BPS) used across all modules. Every reward
+stream taxed equally at the point of individual disbursement.
 ```
