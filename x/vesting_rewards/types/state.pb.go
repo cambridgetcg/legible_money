@@ -313,6 +313,7 @@ type RewardRouting struct {
 	Recipient       string                 `protobuf:"bytes,5,opt,name=recipient,proto3" json:"recipient,omitempty"`                                    // bech32 recipient address
 	FactId          string                 `protobuf:"bytes,6,opt,name=fact_id,json=factId,proto3" json:"fact_id,omitempty"`                            // related fact
 	BlockNumber     uint64                 `protobuf:"varint,7,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`            // block height
+	FounderShare    string                 `protobuf:"bytes,8,opt,name=founder_share,json=founderShare,proto3" json:"founder_share,omitempty"`          // founder's operational share (bigint as string)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -396,6 +397,13 @@ func (x *RewardRouting) GetBlockNumber() uint64 {
 	return 0
 }
 
+func (x *RewardRouting) GetFounderShare() string {
+	if x != nil {
+		return x.FounderShare
+	}
+	return ""
+}
+
 // BlockRewardDistribution records block reward distribution.
 type BlockRewardDistribution struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -405,6 +413,7 @@ type BlockRewardDistribution struct {
 	TotalMinted      string                 `protobuf:"bytes,4,opt,name=total_minted,json=totalMinted,proto3" json:"total_minted,omitempty"`                  // total new tokens (bigint as string)
 	ValidatorCount   uint32                 `protobuf:"varint,5,opt,name=validator_count,json=validatorCount,proto3" json:"validator_count,omitempty"`        // active validators
 	FundBalanceAfter string                 `protobuf:"bytes,6,opt,name=fund_balance_after,json=fundBalanceAfter,proto3" json:"fund_balance_after,omitempty"` // remaining fund balance after this block (finite fund mode only)
+	FounderShare     string                 `protobuf:"bytes,7,opt,name=founder_share,json=founderShare,proto3" json:"founder_share,omitempty"`               // founder's operational share from research (bigint as string)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -477,6 +486,13 @@ func (x *BlockRewardDistribution) GetValidatorCount() uint32 {
 func (x *BlockRewardDistribution) GetFundBalanceAfter() string {
 	if x != nil {
 		return x.FundBalanceAfter
+	}
+	return ""
+}
+
+func (x *BlockRewardDistribution) GetFounderShare() string {
+	if x != nil {
+		return x.FounderShare
 	}
 	return ""
 }
@@ -610,7 +626,7 @@ const file_legible_vesting_rewards_v1_state_proto_rawDesc = "" +
 	"\x10half_life_blocks\x18\x02 \x01(\x04R\x0ehalfLifeBlocks\x12!\n" +
 	"\fcliff_blocks\x18\x03 \x01(\x04R\vcliffBlocks\x12\x1f\n" +
 	"\vmax_release\x18\x04 \x01(\x04R\n" +
-	"maxRelease\"\xfc\x01\n" +
+	"maxRelease\"\xa1\x02\n" +
 	"\rRewardRouting\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12'\n" +
 	"\x0foriginal_amount\x18\x02 \x01(\tR\x0eoriginalAmount\x12%\n" +
@@ -618,14 +634,16 @@ const file_legible_vesting_rewards_v1_state_proto_rawDesc = "" +
 	"\x10recipient_amount\x18\x04 \x01(\tR\x0frecipientAmount\x12\x1c\n" +
 	"\trecipient\x18\x05 \x01(\tR\trecipient\x12\x17\n" +
 	"\afact_id\x18\x06 \x01(\tR\x06factId\x12!\n" +
-	"\fblock_number\x18\a \x01(\x04R\vblockNumber\"\x86\x02\n" +
+	"\fblock_number\x18\a \x01(\x04R\vblockNumber\x12#\n" +
+	"\rfounder_share\x18\b \x01(\tR\ffounderShare\"\xab\x02\n" +
 	"\x17BlockRewardDistribution\x12!\n" +
 	"\fblock_height\x18\x01 \x01(\x04R\vblockHeight\x12'\n" +
 	"\x0fproducer_reward\x18\x02 \x01(\tR\x0eproducerReward\x12%\n" +
 	"\x0eresearch_share\x18\x03 \x01(\tR\rresearchShare\x12!\n" +
 	"\ftotal_minted\x18\x04 \x01(\tR\vtotalMinted\x12'\n" +
 	"\x0fvalidator_count\x18\x05 \x01(\rR\x0evalidatorCount\x12,\n" +
-	"\x12fund_balance_after\x18\x06 \x01(\tR\x10fundBalanceAfter\"\x98\x02\n" +
+	"\x12fund_balance_after\x18\x06 \x01(\tR\x10fundBalanceAfter\x12#\n" +
+	"\rfounder_share\x18\a \x01(\tR\ffounderShare\"\x98\x02\n" +
 	"\x0eClawbackRecord\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +

@@ -27,4 +27,7 @@ message Params {
   string floor_reward                   = 11; // minimum reward per block in ulgm (bigint as string)
   uint64 fund_health_threshold_bps      = 12; // fund health taper threshold in bps (100000 = 10% on 1,000,000 scale)
   uint64 api_suppression_exponent       = 13; // API suppression power (deferred, stored for future use)
+  uint64 founder_share_bps              = 14; // founder's share of research fund (70000 = 7%, on 1,000,000 scale)
+  string founder_address                = 15; // bech32 address for founder operational share
+  uint64 governance_activation_height   = 16; // block height when founder share sunsets (0 = never)
 }

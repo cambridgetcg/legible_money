@@ -19,9 +19,9 @@ const (
 )
 
 // RouteReward routes a reward through the research share deduction.
-// 7% goes to the research fund, 93% goes to the recipient.
+// 3.33% goes to the research fund, remainder goes to the recipient.
 //
-// All rewards in the protocol flow through this router to ensure
+// All block-level rewards in the protocol flow through this router to ensure
 // consistent funding for research verification.
 func (k Keeper) RouteReward(
 	ctx sdk.Context,
@@ -45,8 +45,17 @@ func (k Keeper) RouteReward(
 	researchShare := new(big.Int).Mul(amountBig, big.NewInt(int64(params.ResearchShareBps)))
 	researchShare.Div(researchShare, big.NewInt(1000000))
 
+	// Calculate founder's operational share (7% of research, if active)
+	founderShare := new(big.Int)
+	if k.isFounderShareActive(ctx, params) {
+		founderShare = new(big.Int).Mul(researchShare, big.NewInt(int64(params.FounderShareBps)))
+		founderShare.Div(founderShare, big.NewInt(1000000))
+		researchShare.Sub(researchShare, founderShare) // reduce research by founder portion
+	}
+
 	// Remaining goes to recipient
 	recipientAmount := new(big.Int).Sub(amountBig, researchShare)
+	recipientAmount.Sub(recipientAmount, founderShare) // also subtract founder share from total
 
 	routing := &types.RewardRouting{
 		Source:          string(source),
@@ -56,13 +65,14 @@ func (k Keeper) RouteReward(
 		Recipient:       recipient,
 		FactId:          factId,
 		BlockNumber:     uint64(ctx.BlockHeight()),
+		FounderShare:    founderShare.String(),
 	}
 
 	return routing, nil
 }
 
-// RouteFees sweeps 7% of accumulated transaction fees from fee_collector to research_fund.
-// Called in BeginBlock before x/distribution sweeps the remaining 78% to validators.
+// RouteFees sweeps 3.33% of accumulated transaction fees from fee_collector to research_fund.
+// Called in BeginBlock before x/distribution sweeps the remainder to validators.
 //
 // The standard Cosmos SDK fee flow is: tx fees → fee_collector → x/distribution → validators.
 // This intercept pulls the research share out before distribution gets it.
@@ -92,6 +102,13 @@ func (k Keeper) RouteFees(ctx sdk.Context) error {
 		totalAmount := coin.Amount
 		researchAmount := totalAmount.MulRaw(int64(researchBps)).QuoRaw(1000000)
 
+		// Split founder share from research sweep
+		founderAmount := sdkmath.ZeroInt()
+		if k.isFounderShareActive(ctx, params) {
+			founderAmount = researchAmount.MulRaw(int64(params.FounderShareBps)).QuoRaw(1000000)
+			researchAmount = researchAmount.Sub(founderAmount) // net research
+		}
+
 		if researchAmount.IsPositive() {
 			researchCoins := sdk.NewCoins(sdk.NewCoin("ulgm", researchAmount))
 			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, authtypes.FeeCollectorName, ResearchFundModuleName, researchCoins); err != nil {
@@ -99,6 +116,17 @@ func (k Keeper) RouteFees(ctx sdk.Context) error {
 					"amount", researchAmount.String(),
 					"err", err,
 				)
+			}
+		}
+
+		// Send founder portion directly to founder address
+		if founderAmount.IsPositive() {
+			founderAddr, addrErr := sdk.AccAddressFromBech32(params.FounderAddress)
+			if addrErr == nil {
+				founderCoins := sdk.NewCoins(sdk.NewCoin("ulgm", founderAmount))
+				if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, authtypes.FeeCollectorName, founderAddr, founderCoins); err != nil {
+					k.Logger(ctx).Warn("failed to send founder fee share", "error", err)
+				}
 			}
 		}
 	}
@@ -314,6 +342,7 @@ func (k Keeper) DistributeBlockReward(
 		ResearchShare:  routing.ResearchShare,
 		TotalMinted:    routing.OriginalAmount,
 		ValidatorCount: activeValidatorCount,
+		FounderShare:   routing.FounderShare,
 	}
 
 	// Distribute minted coins via bank keeper (nil-safe for tests)
@@ -329,7 +358,7 @@ func (k Keeper) DistributeBlockReward(
 			}
 		}
 
-		// Send research share (7%) to research fund
+		// Send research share (3.33% minus founder portion) to research fund
 		researchBig := new(big.Int)
 		researchBig.SetString(routing.ResearchShare, 10)
 		if researchBig.Sign() > 0 {
@@ -337,6 +366,25 @@ func (k Keeper) DistributeBlockReward(
 			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, ResearchFundModuleName, researchCoins); err != nil {
 				k.Logger(ctx).Error("failed to send research share", "error", err)
 			}
+		}
+
+		// Send founder operational share (7% of research, if active)
+		founderBig := new(big.Int)
+		founderBig.SetString(routing.FounderShare, 10)
+		if founderBig.Sign() > 0 {
+			founderAddr, addrErr := sdk.AccAddressFromBech32(params.FounderAddress)
+			if addrErr == nil {
+				founderCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(founderBig)))
+				if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, founderAddr, founderCoins); err != nil {
+					k.Logger(ctx).Error("failed to send founder share", "error", err)
+				}
+			}
+			ctx.EventManager().EmitEvent(sdk.NewEvent(
+				"founder_share_distributed",
+				sdk.NewAttribute("amount", routing.FounderShare),
+				sdk.NewAttribute("recipient", params.FounderAddress),
+				sdk.NewAttribute("block", fmt.Sprintf("%d", height)),
+			))
 		}
 
 		// Split verification pool between knowledge module and compute pool.

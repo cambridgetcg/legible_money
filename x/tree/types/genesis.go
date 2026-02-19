@@ -14,6 +14,9 @@ func DefaultParams() *Params {
 		MinContributorsToStart: 1,
 		EvidenceTaxBp:          220000,
 		ContributorsBp:         390000,
+		// TODO: Tree service revenue research split (23.4%) is independent from
+		// the 3.33% block reward research tax. These are different economic
+		// contexts (service payments vs minting). Evaluate unification in v0.3.
 		ResearchFundBp:         234000,
 		ProtocolTreasuryBp:     156000,
 	}

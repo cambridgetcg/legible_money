@@ -117,6 +117,26 @@ func (k Keeper) GetParams(ctx sdk.Context) *types.Params {
 	return &params
 }
 
+// GetResearchShareBps returns the canonical research tax rate (BPS on 1,000,000 scale).
+// This is the single source of truth for the research tax rate across all modules.
+func (k Keeper) GetResearchShareBps(ctx sdk.Context) uint64 {
+	params := k.GetParams(ctx)
+	return params.ResearchShareBps
+}
+
+// isFounderShareActive returns whether the founder auto-split is active at the current block.
+// The split is disabled when: FounderShareBps is 0, FounderAddress is empty, or
+// GovernanceActivationHeight has been reached (governance sunset).
+func (k Keeper) isFounderShareActive(ctx sdk.Context, params *types.Params) bool {
+	if params.FounderShareBps == 0 || params.FounderAddress == "" {
+		return false
+	}
+	if params.GovernanceActivationHeight > 0 && uint64(ctx.BlockHeight()) >= params.GovernanceActivationHeight {
+		return false // governance active — founder auto-split disabled
+	}
+	return true
+}
+
 // SetParams sets the module parameters.
 func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	store := k.storeService.OpenKVStore(ctx)

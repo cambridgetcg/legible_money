@@ -98,6 +98,9 @@ type Params struct {
 	FloorReward                string                 `protobuf:"bytes,11,opt,name=floor_reward,json=floorReward,proto3" json:"floor_reward,omitempty"`                                                    // minimum reward per block in ulgm (bigint as string)
 	FundHealthThresholdBps     uint64                 `protobuf:"varint,12,opt,name=fund_health_threshold_bps,json=fundHealthThresholdBps,proto3" json:"fund_health_threshold_bps,omitempty"`              // fund health taper threshold in bps (100000 = 10% on 1,000,000 scale)
 	ApiSuppressionExponent     uint64                 `protobuf:"varint,13,opt,name=api_suppression_exponent,json=apiSuppressionExponent,proto3" json:"api_suppression_exponent,omitempty"`                // API suppression power (deferred, stored for future use)
+	FounderShareBps            uint64                 `protobuf:"varint,14,opt,name=founder_share_bps,json=founderShareBps,proto3" json:"founder_share_bps,omitempty"`                                     // founder's share of research fund (70000 = 7%, on 1,000,000 scale)
+	FounderAddress             string                 `protobuf:"bytes,15,opt,name=founder_address,json=founderAddress,proto3" json:"founder_address,omitempty"`                                           // bech32 address for founder operational share
+	GovernanceActivationHeight uint64                 `protobuf:"varint,16,opt,name=governance_activation_height,json=governanceActivationHeight,proto3" json:"governance_activation_height,omitempty"`    // block height when founder share sunsets (0 = never)
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -223,6 +226,27 @@ func (x *Params) GetApiSuppressionExponent() uint64 {
 	return 0
 }
 
+func (x *Params) GetFounderShareBps() uint64 {
+	if x != nil {
+		return x.FounderShareBps
+	}
+	return 0
+}
+
+func (x *Params) GetFounderAddress() string {
+	if x != nil {
+		return x.FounderAddress
+	}
+	return ""
+}
+
+func (x *Params) GetGovernanceActivationHeight() uint64 {
+	if x != nil {
+		return x.GovernanceActivationHeight
+	}
+	return 0
+}
+
 var File_legible_vesting_rewards_v1_genesis_proto protoreflect.FileDescriptor
 
 const file_legible_vesting_rewards_v1_genesis_proto_rawDesc = "" +
@@ -231,7 +255,7 @@ const file_legible_vesting_rewards_v1_genesis_proto_rawDesc = "" +
 	"\fGenesisState\x12:\n" +
 	"\x06params\x18\x01 \x01(\v2\".legible.vesting_rewards.v1.ParamsR\x06params\x12U\n" +
 	"\x10category_configs\x18\x02 \x03(\v2*.legible.vesting_rewards.v1.CategoryConfigR\x0fcategoryConfigs\x12X\n" +
-	"\x11vesting_schedules\x18\x03 \x03(\v2+.legible.vesting_rewards.v1.VestingScheduleR\x10vestingSchedules\"\x9a\x05\n" +
+	"\x11vesting_schedules\x18\x03 \x03(\v2+.legible.vesting_rewards.v1.VestingScheduleR\x10vestingSchedules\"\xb1\x06\n" +
 	"\x06Params\x12,\n" +
 	"\x12research_share_bps\x18\x01 \x01(\x04R\x10researchShareBps\x12:\n" +
 	"\x19research_treasury_address\x18\x02 \x01(\tR\x17researchTreasuryAddress\x12.\n" +
@@ -246,7 +270,10 @@ const file_legible_vesting_rewards_v1_genesis_proto_rawDesc = "" +
 	" \x01(\x04R\x0edecayFactorBps\x12!\n" +
 	"\ffloor_reward\x18\v \x01(\tR\vfloorReward\x129\n" +
 	"\x19fund_health_threshold_bps\x18\f \x01(\x04R\x16fundHealthThresholdBps\x128\n" +
-	"\x18api_suppression_exponent\x18\r \x01(\x04R\x16apiSuppressionExponentB:Z8github.com/legible-money/legible/x/vesting_rewards/typesb\x06proto3"
+	"\x18api_suppression_exponent\x18\r \x01(\x04R\x16apiSuppressionExponent\x12*\n" +
+	"\x11founder_share_bps\x18\x0e \x01(\x04R\x0ffounderShareBps\x12'\n" +
+	"\x0ffounder_address\x18\x0f \x01(\tR\x0efounderAddress\x12@\n" +
+	"\x1cgovernance_activation_height\x18\x10 \x01(\x04R\x1agovernanceActivationHeightB:Z8github.com/legible-money/legible/x/vesting_rewards/typesb\x06proto3"
 
 var (
 	file_legible_vesting_rewards_v1_genesis_proto_rawDescOnce sync.Once

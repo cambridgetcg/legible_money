@@ -8,6 +8,20 @@ import (
 	"github.com/legible-money/legible/x/knowledge/types"
 )
 
+// DefaultResearchTaxBps is the fallback research tax rate when the vesting
+// rewards keeper is not wired. Matches the canonical 3.33% rate.
+const DefaultResearchTaxBps = 33300
+
+// GetResearchTaxBps returns the unified research tax rate in BPS (1,000,000 scale).
+// Reads from the canonical source (vesting_rewards params) if available,
+// otherwise uses the default fallback.
+func (k Keeper) GetResearchTaxBps(ctx sdk.Context) uint64 {
+	if k.vestingRewardsKeeper != nil {
+		return k.vestingRewardsKeeper.GetResearchShareBps(ctx)
+	}
+	return DefaultResearchTaxBps
+}
+
 // RouteReward sends reward to addr, routing through partnership if one exists.
 // If addr is in an active partnership, the reward is split per partnership economics
 // (22% common pot, 78% split per partnership terms). If not, the full reward goes

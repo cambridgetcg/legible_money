@@ -932,6 +932,26 @@ func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf *types.Counter
 		return
 	}
 
+	// Apply unified research tax (3.33%) — falsification rewards are new value flowing to individuals
+	researchBps := k.GetResearchTaxBps(ctx)
+	if researchBps > 0 && k.bankKeeper != nil {
+		taxAmount := new(big.Int).Mul(rewardAmount, new(big.Int).SetUint64(researchBps))
+		taxAmount.Div(taxAmount, big.NewInt(1_000_000))
+		if taxAmount.Sign() > 0 {
+			taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(taxAmount)))
+			if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins); err != nil {
+				k.Logger(ctx).Error("falsification research tax transfer failed",
+					"counter_fact_id", cf.Id, "tax", taxAmount.String(), "error", err)
+			} else {
+				rewardAmount.Sub(rewardAmount, taxAmount)
+			}
+		}
+	}
+
+	if rewardAmount.Sign() <= 0 {
+		return
+	}
+
 	// Route through vesting system (clawback-protected) if available, else direct bank transfer
 	if k.vestingRewardsKeeper != nil {
 		if err := k.vestingRewardsKeeper.DistributeFalsificationReward(

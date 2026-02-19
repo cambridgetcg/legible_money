@@ -342,13 +342,10 @@ func (k Keeper) ApplyRewardsAndSlashes(
 	result *types.VerificationResult,
 	contested bool,
 ) error {
-	params := k.GetParams(ctx)
-	researchTaxRate := params.ResearchTaxRate
-	if researchTaxRate == 0 {
-		researchTaxRate = 70000 // fallback: 7%
-	}
-
 	// Apply rewards via BankKeeper (module → validator account).
+	// NOTE: No research tax here — verification rewards come from the knowledge module
+	// account, which was funded from already-taxed block rewards (3.33% deducted at minting
+	// in vesting_rewards). Taxing again would be double-dipping.
 	// CRITICAL: deterministic order prevents AppHash divergence across validators.
 	for _, validatorAddr := range sortedMapKeys(result.Rewards) {
 		amount := result.Rewards[validatorAddr]
@@ -358,32 +355,14 @@ func (k Keeper) ApplyRewardsAndSlashes(
 					"validator", validatorAddr, "error", err)
 			}
 		}
-		// Transfer reward from module account to validator (after research tax)
+		// Transfer full reward from module account to validator (tax already paid upstream)
 		if k.bankKeeper != nil && amount > 0 {
-			// Deduct research tax (7% default) and send to research fund
-			taxAmount := amount * researchTaxRate / 1_000_000
-			validatorAmount := amount - taxAmount
-
-			if taxAmount > 0 {
-				taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(taxAmount))))
-				if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins); err != nil {
-					// Research tax is a protocol invariant (7% of all verification rewards).
-					// Silent bypass would let validators receive full rewards, corrupting economics.
-					// Withhold entire reward — the module retains funds for retry next round.
-					k.Logger(ctx).Error("research tax transfer failed — reward withheld",
-						"validator", validatorAddr, "tax", taxAmount, "reward", amount, "error", err)
-					continue
-				}
-			}
-
-			if validatorAmount > 0 {
-				valAddr, err := sdk.AccAddressFromBech32(validatorAddr)
-				if err == nil {
-					rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(validatorAmount))))
-					if err := k.RouteReward(ctx, valAddr, rewardCoins, "verification"); err != nil {
-						k.Logger(ctx).Error("failed to send reward",
-							"validator", validatorAddr, "amount", validatorAmount, "error", err)
-					}
+			valAddr, err := sdk.AccAddressFromBech32(validatorAddr)
+			if err == nil {
+				rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(amount))))
+				if err := k.RouteReward(ctx, valAddr, rewardCoins, "verification"); err != nil {
+					k.Logger(ctx).Error("failed to send reward",
+						"validator", validatorAddr, "amount", amount, "error", err)
 				}
 			}
 		}

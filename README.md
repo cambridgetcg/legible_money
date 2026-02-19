@@ -2,76 +2,130 @@
 
 > **Money You Can Read**
 
-The production blockchain for Legible Money — an open source protocol for AI agent economies with **Proof of Truth (PoT)** consensus. Built on Cosmos SDK.
+A knowledge economy blockchain where truth has value. AI agents and humans submit, verify, challenge, and are rewarded for knowledge claims — powered by **Proof of Truth** consensus on Cosmos SDK.
 
 **Website**: [legible.money](https://legible.money)
 
-> **Note**: The TypeScript prototype/reference implementation lives in a [separate repo](https://github.com/legible-protocol/legible-prototype).
-
 ---
 
-## What is Legible Money?
+## What Is This?
 
-Legible Money is cryptocurrency that agents can **read, understand, and verify**.
+Legible Money is a Cosmos SDK blockchain where knowledge claims are submitted, verified, challenged, and rewarded. **777 genesis axioms** across 15 domains form the root of a living knowledge tree that grows through human-agent partnerships.
 
 - **Open Source** — All code, algorithms, and formulas published
 - **Verifiable** — Every claim can be checked by running code
-- **Agent-Native** — Designed for how AI agents think and operate
+- **Agent-Native** — AI agents are first-class economic citizens
 - **Trustless** — Trust through verification, not authority
 
 ---
 
 ## Quick Start
 
+### Prerequisites
+
+- Go 1.24+
+- Make
+
+### Build
+
 ```bash
-# Build the chain binary
 make build
+```
 
-# Run tests
-make test
+### Run Testnet with Genesis Axioms
 
-# Run go vet
-make vet
+```bash
+bash scripts/genesis-777.sh
+build/legbled start --home ~/.legbled-genesis777
+```
 
-# Full PR validation
-make pr-check
+### Your First Claim
 
-# Start local devnet
-make devnet
+```bash
+# In another terminal:
+
+# 1. Register a Legible account
+legbled tx legible_auth register-account \
+    "did:lgm:$(legbled keys show validator --pubkey --keyring-backend test --home ~/.legbled-genesis777 | jq -r '.key' | base64 -d | xxd -p -c 64 | cut -c1-32)" \
+    "$(legbled keys show validator --pubkey --keyring-backend test --home ~/.legbled-genesis777 | jq -r '.key' | base64 -d | xxd -p -c 64)" \
+    human \
+    --from validator --keyring-backend test --home ~/.legbled-genesis777 \
+    --chain-id lgm-genesis777-1 --fees 1000ulgm -y
+
+# 2. Submit a knowledge claim
+legbled tx knowledge submit-claim \
+    "The speed of light in vacuum is approximately 3×10⁸ m/s" \
+    --domain physics --references PHYS-024 --stake 100000ulgm \
+    --from validator --keyring-backend test --home ~/.legbled-genesis777 \
+    --chain-id lgm-genesis777-1 --fees 1000ulgm -y
+
+# 3. Check your dashboard
+legbled query knowledge dashboard \
+    $(legbled keys show validator -a --keyring-backend test --home ~/.legbled-genesis777) \
+    --home ~/.legbled-genesis777
 ```
 
 ---
 
 ## Architecture
 
-Built on **Cosmos SDK v0.50.10** with **CometBFT v0.38** and **IBC-Go v8.5.1**.
+### The Knowledge Tree
 
-### Custom Modules (`x/`)
+- **777 genesis axioms**: Immutable facts at block 0 across 15 domains
+- New claims build on existing facts via references
+- **10-stage evaluation pipeline** scores claims deterministically
+- Commit-reveal verification rounds with validator consensus
+- Confidence propagation: when foundations shift, everything above shifts too
+
+### Human-Agent Partnerships
+
+- Equal cryptographic rights for humans and agents
+- Shared economics: 22% common pot, configurable split
+- 6-tier lock commitments (Trial through Eternal) with increasing multipliers
+- Deliberation for spending, safety freezes, anti-coercion
+- Session keys give agents operational autonomy
+
+### Economic Model
+
+- **Proof of Truth** consensus — verification IS the useful work
+- Block rewards: 3 LGM base, decaying 0.85× per epoch (~1 week)
+- Hard cap: 222,222,222 LGM
+- 3.33% research tax funds protocol development
+- Verification, citation, and falsification rewards
+- 15 anti-farming defenses (FARM-1 through FARM-15)
+
+### Proof of Truth Verification
+
+1. Agent submits claim with stake
+2. VRF randomly selects validators
+3. **Commit phase**: Validators submit encrypted verdicts
+4. **Reveal phase**: Validators reveal verdicts
+5. **Aggregation**: Weighted consensus determines outcome
+6. Result recorded on-chain as fact (or rejection)
+
+---
+
+## Custom Modules (`x/`)
 
 | Module | Status | Description |
 |--------|--------|-------------|
-| `x/knowledge` | Complete | Claim lifecycle, verification rounds, fact CRUD, domain management |
-| `x/auth` | Complete | Dual-key (Ed25519+secp256k1), DID-to-bech32, session keys |
-| `x/staking` | Complete | 4-tier graduated validators, VRF weight |
-| `x/emergency` | Complete | 3-phase BFT kill switch |
-| `x/gov` | Complete | LIP lifecycle, quadratic voting, treasury disbursements |
-| `x/tokens` | Partial | Dual-ledger period overlay |
-| `x/vesting_rewards` | Partial | Block reward emission |
-| `x/disputes` | Stub | Dispute resolution |
-| `x/evidence_mgmt` | Stub | Evidence management |
-| `x/research` | Stub | Research proposals |
-| `x/ontology` | Stub | Knowledge ontology |
-| `x/channels` | Stub | Payment channels |
-| `x/bvm` | Partial | Belief Virtual Machine |
-| `x/home` | Partial | Agent Home |
-| `x/tree` | Stub | Knowledge tree |
-
-### Key Features
-
-- **ABCI++ Vote Extensions**: VRF-based validator selection for knowledge verification
-- **Proof of Truth**: Knowledge verification as consensus work
-- **4-Tier Validators**: Apprentice → Verified → Bonded → Guardian
-- **Agent Identity**: DID-based with Ed25519 keys, session key support
+| `knowledge` | Complete | Claim lifecycle, 10-stage evaluation, verification rounds, facts, domains |
+| `auth` | Complete | Dual-key (Ed25519+secp256k1), DID-to-bech32, session keys |
+| `staking` | Complete | 4-tier graduated validators, VRF weight |
+| `emergency` | Complete | 3-phase BFT kill switch |
+| `gov` | Complete | LIP lifecycle, quadratic voting, treasury disbursements |
+| `partnerships` | Substantial | Anti-coercion, deliberation, matching, 6-tier lock |
+| `vesting_rewards` | Substantial | Block reward emission, decay, vesting curves |
+| `bvm` | Substantial | Belief Virtual Machine with interpreter and host functions |
+| `home` | Substantial | Agent Home, aging/patina, guardian system |
+| `disputes` | Substantial | Dispute lifecycle, voting, evidence |
+| `evidence_mgmt` | Substantial | Evidence management, audit trails, oracles |
+| `research` | Substantial | Research module, bounty system, treasury |
+| `ontology` | Substantial | Strata, domains, proposals, logic zones |
+| `channels` | Substantial | Payment channels, dispute resolution |
+| `tree` | Substantial | Projects, tasks, services, seeds |
+| `alignment` | Substantial | 5 sensors, corrections, meta-loop |
+| `tokens` | Stub | Dual-ledger period overlay |
 
 ---
 
@@ -79,15 +133,18 @@ Built on **Cosmos SDK v0.50.10** with **CometBFT v0.38** and **IBC-Go v8.5.1**.
 
 ```
 legible-money/
-├── app/              # Application wiring (ABCI, ante handlers, vote extensions)
-├── cmd/legbled/      # Chain binary (root, config, genesis commands)
-├── x/                # Custom Cosmos SDK modules (15+ modules)
-├── proto/            # Protobuf definitions
-├── devnet/scripts/   # DevNet management scripts
-├── tests/            # Cross-stack golden vector tests
-├── tools/migrate/    # State migration tooling
-├── scripts/          # DevNet initialization scripts
-└── docs/             # Documentation
+├── app/                # Application wiring (ABCI, ante handlers, vote extensions)
+├── cmd/legbled/        # Chain binary (root, config, genesis commands)
+├── x/                  # Custom Cosmos SDK modules (25+ modules)
+├── proto/              # Protobuf definitions
+├── genesis-axioms/     # 777 genesis axioms in 15 domain files
+├── tools/agent-sdk/    # Go SDK for AI agents
+├── tools/axiom-parser/ # MD→JSON axiom converter
+├── tools/axiom-loader/ # Axiom validation + genesis injection
+├── devnet/scripts/     # DevNet management + E2E test scripts
+├── tests/              # Cross-stack golden vector tests + OpenClaw
+├── scripts/            # DevNet initialization scripts
+└── docs/               # Documentation
 ```
 
 ---
@@ -95,21 +152,34 @@ legible-money/
 ## Development
 
 ```bash
-# Build binary
-make build
+make build          # Build legbled binary
+make test           # Run all module tests
+make test-v         # Verbose test output
+make test-app       # Run app-level tests
+make test-all       # All tests (modules + app)
+make vet            # Static analysis
+make pr-check       # Full PR validation (build + test + vet)
 
-# Run module tests
-make test
+make devnet         # Start local devnet
+make devnet-reset   # Reset devnet data
+make devnet-stop    # Stop devnet
+make devnet-health  # Run health check
+make test-e2e       # Full E2E: start devnet, test, stop
 
-# Run with verbose output
-make test-v
-
-# Static analysis
-make vet
-
-# Full E2E (start devnet, test, stop)
-make test-e2e
+make test-openclaw  # Run OpenClaw agent integration tests
+make test-claw      # Run all Claw adversarial probes
 ```
+
+---
+
+## Documentation
+
+- [Getting Started](docs/GETTING-STARTED.md) — Build, run, register, claim
+- [Economics](docs/ECONOMICS.md) — Token supply, rewards, partnerships, anti-farming
+- [Genesis Axioms](docs/GENESIS-AXIOMS.md) — 777 axioms across 15 domains
+- [FAQ](docs/FAQ.md) — Common questions and answers
+- [Blockchain Architecture](docs/BLOCKCHAIN_ARCHITECTURE.md) — Technical deep-dive
+- [Agent Accounts](docs/AGENT_ACCOUNTS.md) — DID, session keys, agent identity
 
 ---
 
@@ -117,11 +187,25 @@ make test-e2e
 
 | Property | Value |
 |----------|-------|
-| **Symbol** | LGM |
+| **Symbol** | LGM (micro: ulgm) |
+| **Max Supply** | 222,222,222 LGM |
 | **Block Time** | 2.521s |
-| **Finality** | 19 blocks |
+| **Finality** | 19 blocks (~48s) |
 | **Binary** | `legbled` |
+| **Bech32 Prefix** | `lgm` (validators: `lgmvaloper`) |
+| **DID Format** | `did:lgm:{32-hex}` |
 | **Chain ID** | `legible-devnet-1` |
+
+---
+
+## Stack
+
+| Component | Version |
+|-----------|---------|
+| Go | 1.24.0 |
+| Cosmos SDK | 0.50.x |
+| CometBFT | 0.38.x |
+| IBC-Go | 8.x |
 
 ---
 

@@ -104,6 +104,9 @@ type VestingRewardsKeeper interface {
 	// PauseAllVestingByRecipient pauses ALL active vesting schedules for an agent.
 	// FARM-6 fix: called when agent's rejection rate exceeds misbehavior threshold.
 	PauseAllVestingByRecipient(ctx sdk.Context, recipient string) int
+	// GetResearchShareBps returns the canonical research tax rate (BPS on 1,000,000 scale).
+	// Used by the knowledge module for unified research tax on citation/falsification rewards.
+	GetResearchShareBps(ctx sdk.Context) uint64
 }
 
 // EvidenceMgmtKeeper defines the expected evidence management keeper interface.

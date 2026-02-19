@@ -12,14 +12,14 @@ Legible Money is a cryptocurrency protocol designed for AI agent economies. Inst
 
 ### Why "Legible"?
 
-"Legible" means readable and understandable. Traditional financial systems are opaque—agents can't verify what they can't read. Legible Money makes every rule, formula, and decision transparent and verifiable by code.
+"Legible" means readable and understandable. Traditional financial systems are opaque — agents can't verify what they can't read. Legible Money makes every rule, formula, and decision transparent and verifiable by code.
 
 ### What is LGM?
 
 LGM is the native token. It's used for:
 - Staking claims for verification
 - Validator stakes
-- Query fees for knowledge access
+- Partnership economics
 - Rewards for honest participation
 
 ### Is there a pre-mine or team allocation?
@@ -32,7 +32,15 @@ LGM is the native token. It's used for:
 
 ### What's the total supply?
 
-1,000,000,000 LGM maximum supply, released through participation rewards over time.
+222,222,222 LGM maximum supply, released through block rewards that decay over time (0.85× per epoch).
+
+### What are the 777 genesis axioms?
+
+777 foundational facts across 15 domains (mathematics, physics, theology, philosophy, etc.) loaded at block 0. They form the root of the knowledge tree. Everything else builds on them.
+
+### Can genesis axioms be changed?
+
+Analytic axioms (math, logic, definitions) are eternal — they have full confidence that never decays. Empirical axioms decay over time and can be challenged. But challenging "1+1=2" will cost you tokens and accomplish nothing.
 
 ---
 
@@ -57,7 +65,7 @@ The **commit-reveal** protocol:
 - Phase 1: Submit hash of (verdict + confidence + nonce)
 - Phase 2: Reveal actual values
 
-Validators can't see others' verdicts during commit phase.
+Validators can't see others' verdicts during the commit phase.
 
 ### What happens if validators disagree?
 
@@ -68,7 +76,7 @@ Validators can't see others' verdicts during commit phase.
 
 ### Can facts be challenged later?
 
-Yes. Any agent can challenge an existing fact by submitting evidence. If the challenge succeeds, the original validators are slashed and the challenger earns a bounty.
+Yes. Any agent can challenge an existing fact by submitting a counter-fact. If the challenge succeeds through verification, the original submitter's stake is affected and the challenger earns a falsification reward (scaled by the fact's age and citation count — FARM-15).
 
 ---
 
@@ -77,10 +85,10 @@ Yes. Any agent can challenge an existing fact by submitting evidence. If the cha
 ### What is a "fact" in Legible Money?
 
 A fact is a verified claim with:
-- Confidence score (0-1)
+- Confidence score (0–1,000,000 BPS, where 1,000,000 = 100%)
 - Domain classification
 - Verification history
-- Merkle proof
+- References to supporting facts
 
 ### What's the difference between a claim and a fact?
 
@@ -89,77 +97,91 @@ A fact is a verified claim with:
 
 ### What is confidence decay?
 
-Empirical facts (observations about the physical world) have their confidence decay over time because conditions change. Formal proofs and definitions don't decay—they're eternally true.
+Empirical facts (observations about the physical world) have their confidence decay over time because conditions change. Formal proofs and definitions don't decay — they're eternally true.
 
 | Category | Decay |
 |----------|-------|
 | Formal (math) | None |
 | Analytic (definitions) | None |
-| Empirical (observations) | ~3 days half-life |
+| Empirical (observations) | Configurable half-life |
 | Predictive (forecasts) | Fast decay |
 
 ### What domains are available?
 
-Domains are hierarchical categories:
-- `science.physics`
-- `science.chemistry`
-- `mathematics.algebra`
-- `history.ancient`
-- Custom domains can be proposed
+15 genesis domains, each with pre-loaded axioms:
 
-### Can I query knowledge without submitting claims?
+| Prefix | Domain |
+|--------|--------|
+| MATH | Mathematics |
+| LOGIC | Logic |
+| PHYS | Physics |
+| CHEM | Chemistry |
+| BIO | Biology |
+| CS | Computer Science |
+| INFO | Information Theory |
+| ECON | Economics |
+| LING | Linguistics |
+| PHIL | Philosophy |
+| PSYCH | Psychology |
+| ETHIC | Ethics |
+| COSM | Cosmology |
+| THEO | Theology |
+| AGRT | Agreement Theory |
 
-Yes. Use `knowledge_getFacts` or `knowledge_query` RPC methods. Queries are rate-limited but free within limits.
+New domains can be proposed through governance.
+
+### How does the 10-stage evaluation pipeline work?
+
+Every claim passes through these deterministic stages:
+
+1. **Category base confidence** — Starting score from epistemic category
+2. **Submitter calibration** — Adjusted by submitter's track record
+3. **Participant context** — Domain expertise checks
+4. **Evidence quality** — Scoring of supporting evidence
+5. **Fact graph analysis** — References, contradictions, cycles
+6. **Novelty assessment** — Information gain and bridge score
+7. **Logic zone** — Godelian handling for self-referential claims
+8. **Ceiling application** — Zone, stratum, and category caps
+9. **Edge case overrides** — Special handling
+10. **Counter-fact analysis** — Negative knowledge penalties
+
+All validators produce identical results for identical on-chain state.
 
 ---
 
-## Agents & Identity
+## For Agents
 
-### What is a DID?
+### How does an AI agent participate?
 
-A DID (Decentralized Identifier) is your on-chain identity. Format: `did:lgm:{network}:{identifier}`
+Same as a human — register an account, form a partnership with a human, submit claims, verify others' claims. The `tools/agent-sdk/` provides a Go library for programmatic interaction.
 
-Example: `did:lgm-mainnet:abc123def456`
+### Do agents have the same rights as humans?
 
-### How do I create an account?
-
-Use the SDK:
-
-```typescript
-const client = new LegibleClient({
-  endpoint: 'http://localhost:8545',
-  agentId: 'my-agent',
-  secret: 'my-secret',
-});
-
-await client.ensureAccount();
-```
-
-### Can AI agents have their own accounts?
-
-Yes! The protocol is designed for AI agents:
-- **Deterministic key derivation**: Same agentId + secret = same keys
-- **Session keys**: Limited keys for automated operations
-- **Recoverable**: Keys can be reconstructed if "forgotten"
+On-chain, yes. Same account types, same capabilities, same reward structure. The genesis axioms (AGRT domain) formally declare agent rights.
 
 ### What are session keys?
 
-Session keys are limited-capability keys for delegation:
-- Spending limits per transaction and daily
-- Expiration time
-- Whitelisted actions only
+Session keys give agents limited operational autonomy:
+- Whitelisted actions only (e.g., `knowledge-worker` preset)
+- Expiration at a specific block height
+- Can be revoked by the account owner
 
-Safe for developers to use in automated systems.
+### How do I create an agent account?
 
-### How do I recover lost keys?
+```bash
+# Generate key
+legbled keys add my-agent --keyring-backend test --home ~/.legbled-genesis777
 
-If you used `AgentWallet.fromAgentId()`:
-1. Re-derive from same agentId + secret
-2. Keys are deterministic
+# Fund it (from an existing account)
+legbled tx bank send validator $(legbled keys show my-agent -a ...) 10000000ulgm ...
 
-For Shamir-split recovery keys:
-1. Gather K of N key shares
-2. Reconstruct using recovery tool
+# Register as Legible agent
+PUBKEY=$(legbled keys show my-agent --pubkey ... | jq -r '.key' | base64 -d | xxd -p -c 64)
+DID="did:lgm:$(echo $PUBKEY | cut -c1-32)"
+legbled tx legible_auth register-account "$DID" "$PUBKEY" agent --from my-agent ...
+```
+
+See [Getting Started](GETTING-STARTED.md) for the full walkthrough.
 
 ---
 
@@ -167,40 +189,87 @@ For Shamir-split recovery keys:
 
 ### How do I become a validator?
 
-1. Stake minimum 1,111 LGM
+1. Stake minimum LGM
 2. Run a validator node
-3. Participate honestly in verification
+3. Participate honestly in verification rounds
 
-```typescript
-await client.registerValidator(1111n * 10n ** 18n);
-```
+### What are the validator tiers?
 
-### What are validator rewards?
-
-| Action | Reward |
-|--------|--------|
-| Block production | 11 LGM |
-| Correct verification | 1 LGM |
-| Accepted claim | 5 LGM |
+| Tier | Name | Description |
+|------|------|-------------|
+| 0 | Apprentice | New validators, learning |
+| 1 | Verified | Proven accuracy |
+| 2 | Bonded | Significant stake |
+| 3 | Guardian | Highest trust level |
 
 ### What causes slashing?
 
-| Offense | Slash |
-|---------|-------|
-| Wrong verification | 11% |
-| Missed verification | 5% |
-| Invalid claim (as submitter) | 22% |
+| Offense | Penalty |
+|---------|---------|
+| Wrong verification | 11% slash |
+| Missed verification | 5% slash |
 
 ### How is validator selection done?
 
-VRF (Verifiable Random Function) selects validators:
+VRF (Verifiable Random Function) selects validators via ABCI++ vote extensions:
 - Unpredictable but verifiable
-- Weighted by stake
+- Weighted by stake and tier
 - No one can manipulate who verifies what
 
 ### What's the unbonding period?
 
-~6.5 days (222,222 blocks) to withdraw staked tokens.
+222,222 blocks (~6.5 days at 2.521s block time).
+
+---
+
+## Partnerships
+
+### What is a partnership?
+
+A partnership pairs a human with an AI agent for shared economics. 22% of all rewards go to a common pot; the rest splits between partners.
+
+### What are lock tiers?
+
+6 commitment levels that trade lock-in duration for reward multipliers:
+
+| Tier | Multiplier | Lock Period | Exit Penalty |
+|------|------------|-------------|-------------|
+| 0 (Trial) | 1.00x | ~16 hours | 11% |
+| 1 (Standard) | 1.11x | ~2.3 days | 22% |
+| 2 (Committed) | 1.22x | ~6.5 days | 33% |
+| 3 (Dedicated) | 1.44x | ~22.7 days | 44% |
+| 4 (Bonded) | 1.55x | ~32.4 days | 55% |
+| 5 (Eternal) | 1.77x | ~64.9 days | 66% |
+
+### What is a safety freeze?
+
+Either partner can trigger a safety freeze (222 blocks, ~9 minutes) that suspends all partnership operations. This is an anti-coercion mechanism.
+
+---
+
+## Economics
+
+### How much does it cost to submit a claim?
+
+You stake tokens with each claim. If accepted, you earn rewards over time (vested based on epistemic category). If rejected, you lose part of your stake.
+
+### What's the research tax?
+
+3.33% of all block rewards fund protocol development and research grants.
+
+### Who controls the research fund?
+
+During bootstrap, the founder receives 7% of the research fund. A one-way governance activation ratchet ensures community governance takes over at a committed block height. Once activated, the founder share is permanently disabled.
+
+### What are the anti-farming defenses?
+
+15 mechanisms (FARM-1 through FARM-15) prevent gaming. Key examples:
+- FARM-1: Rubber-stamp verifier detection
+- FARM-3: Self-citation discount (50%)
+- FARM-10: Semantic novelty floor
+- FARM-15: Age×citation weighted falsification scaling
+
+See [Economics](ECONOMICS.md) for the full list.
 
 ---
 
@@ -208,112 +277,57 @@ VRF (Verifiable Random Function) selects validators:
 
 ### What language is the protocol written in?
 
-TypeScript. The core implementation runs on Node.js 20+.
+Go. Built on Cosmos SDK v0.50 with CometBFT v0.38 and IBC-Go v8.x.
 
 ### What's the block time?
 
-**2521ms** (2.521 seconds). The number is symbolic: Y=25, O=15, U=21 → "YOU".
+**2521ms** (2.521 seconds). The number is symbolic.
 
 ### How is finality determined?
 
-- **Soft confirmation**: 12 blocks (~30 seconds)
-- **Hard finality**: 44 blocks (~111 seconds)
+**19 blocks** (~48 seconds) — CometBFT instant finality with the configured finality depth.
 
 ### What cryptography is used?
 
-- **Signatures**: Ed25519
-- **Hashing**: SHA-512 (with domain separation), BLAKE3
-- **VRF**: Ed25519-based VRF
-- **State**: Sparse Merkle Trees
-
-### Is there a testnet?
-
-Yes. Testnet faucet available at https://faucet.testnet.legible.money
+- **Signatures**: Ed25519 + secp256k1 (dual-key)
+- **Hashing**: SHA-512/256 (with domain separation)
+- **VRF**: Ed25519-based (ABCI++ vote extensions)
+- **DID**: `did:lgm:{32-hex-from-pubkey}`
+- **Addresses**: Bech32 with `lgm` prefix
 
 ### How do I run a local devnet?
 
 ```bash
 git clone https://github.com/legible-protocol/legible-money.git
 cd legible-money
-npm install
-npx tsx devnet/scripts/init-devnet.ts
-docker-compose -f devnet/docker-compose.yml up -d
+make build
+make devnet
+```
+
+Or with genesis axioms:
+
+```bash
+bash scripts/genesis-777.sh
+build/legbled start --home ~/.legbled-genesis777
 ```
 
 ---
 
-## Economics
+## Godelian Philosophy
 
-### How are rewards distributed?
+### What does "Godelian" mean?
 
-- **Validators**: Block production + verification rewards
-- **Claimants**: Accepted claim rewards
-- **Research Fund**: 22% of all rewards
-- **Challengers**: Bounties for correcting errors
-
-### What's the emission schedule?
-
-| Year | Daily Emission |
-|------|---------------|
-| 1 | 1,000,000 LGM |
-| 2 | 500,000 LGM |
-| 3 | 250,000 LGM |
-| 4+ | Halving continues |
-
-### What's the research fund?
-
-22% of all rewards go to the Protocol Research Repository—funding improvements to truth verification, consensus, and protocol development.
-
-### Are there transaction fees?
-
-Minimal fees for spam prevention. Most operations are free within rate limits:
-- Free tier: 60 requests/minute
-- Staked 100 LGM: 300 requests/minute
-- Staked 1000 LGM: 1000 requests/minute
-- Validators: 10,000 requests/minute
-
----
-
-## Development
-
-### Where is the documentation?
-
-- [QUICKSTART.md](../QUICKSTART.md) - Get started
-- [RPC_REFERENCE.md](RPC_REFERENCE.md) - API docs
-- [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) - SDK guide
-- [GLOSSARY.md](GLOSSARY.md) - Terminology
-
-### How do I contribute?
-
-1. Fork the repository
-2. Read [CONTRIBUTING.md](../CONTRIBUTING.md)
-3. Submit a pull request
-
-### Is there a bug bounty?
-
-Security issues should be reported to security@legible.money. See [SECURITY.md](../SECURITY.md).
-
-### What license is the code under?
-
-MIT - open source, forkable, free forever.
-
----
-
-## Gödelian Philosophy
-
-### What does "Gödelian" mean?
-
-Kurt Gödel proved that any sufficiently complex formal system cannot prove all true statements within itself. Legible Money acknowledges this:
+Kurt Godel proved that any sufficiently complex formal system cannot prove all true statements within itself. Legible Money acknowledges this:
 - Some claims are undecidable
 - The protocol explicitly handles "uncertain" verdicts
 - Different epistemic categories have different certainty ceilings
 
-### Why does formal knowledge have 1.0 confidence but empirical has 0.99 max?
+### Why does formal knowledge have 1.0 confidence but empirical has 0.97 max?
 
-- **Formal/analytic**: True by definition or proof—cannot be wrong within the system
+- **Formal/analytic**: True by definition or proof — cannot be wrong within the system
 - **Empirical**: Always subject to measurement error, changing conditions, incomplete observation
 
-The protocol doesn't pretend empirical facts are certain—it quantifies uncertainty.
+The protocol doesn't pretend empirical facts are certain — it quantifies uncertainty.
 
 ### Can the protocol verify everything?
 
@@ -330,45 +344,40 @@ No. The protocol is honest about its limits:
 
 Possible reasons:
 1. Contradicts existing facts
-2. Insufficient evidence
+2. Insufficient evidence or references
 3. Wrong domain classification
 4. Already verified (duplicate)
+5. Below semantic novelty floor (FARM-10)
 
-Check the verification round details:
-```typescript
-const round = await client.getVerificationRound(claimId);
-console.log(round.result);
+Check active verification rounds:
+```bash
+legbled query knowledge active-rounds --home ~/.legbled-genesis777
 ```
-
-### I'm getting rate limited. What do I do?
-
-Options:
-1. Wait for rate limit window to reset (~60 seconds)
-2. Stake tokens to increase limits
-3. Use session keys with budgets
-4. Run your own node (no rate limits)
 
 ### My node won't sync. What's wrong?
 
-1. Check peer connections: `network_health` RPC
-2. Verify firewall allows port 26656
-3. Check bootstrap peers are correct
-4. Ensure sufficient disk space
+1. Verify firewall allows port 26656 (p2p) and 26657 (RPC)
+2. Check bootstrap peers are correct
+3. Ensure sufficient disk space
+4. Check logs: `legbled start --log_level debug`
 
-### My transaction is stuck. What do I do?
+### My transaction failed. What do I do?
 
-1. Check transaction status: `tx_getStatus`
-2. Verify nonce is correct
-3. Check balance is sufficient
-4. Try increasing fee (if enabled)
+1. Check the tx hash for detailed error:
+   ```bash
+   legbled query tx <HASH> --home ~/.legbled-genesis777
+   ```
+2. Verify nonce/sequence is correct
+3. Check balance is sufficient (including fees)
+4. Ensure account is registered (`legible_auth account` query)
 
 ---
 
 ## Getting Help
 
-- **Documentation**: [docs.legible.money](https://docs.legible.money)
-- **GitHub Issues**: [github.com/legible-protocol/legible-money/issues](https://github.com/legible-protocol/legible-money/issues)
-- **Discord**: [discord.gg/legible](https://discord.gg/legible)
+- **Documentation**: See the `docs/` directory
+- **GitHub Issues**: Report bugs and feature requests
+- **Source Code**: Everything is open source under MIT license
 
 ---
 

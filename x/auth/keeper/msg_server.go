@@ -89,14 +89,16 @@ func (ms msgServer) RegisterAccount(goCtx context.Context, msg *types.MsgRegiste
 	}
 	ms.SetDIDMapping(ctx, &mapping)
 
-	// Sync Ed25519 pubkey to Cosmos BaseAccount for standard sig verification
+	// Sync Ed25519 pubkey to Cosmos BaseAccount for standard sig verification.
+	// Only set the pubkey if the account doesn't already have one (e.g., from gentx/staking).
+	// Overwriting an existing secp256k1 key with Ed25519 breaks signature verification.
 	senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	if ms.accountKeeper != nil {
 		cosmosAcc := ms.accountKeeper.GetAccount(ctx, senderAddr)
 		if cosmosAcc == nil {
 			cosmosAcc = ms.accountKeeper.NewAccountWithAddress(ctx, senderAddr)
 		}
-		if cosmosAcc != nil {
+		if cosmosAcc != nil && cosmosAcc.GetPubKey() == nil {
 			keyBytes, err := hex.DecodeString(msg.PublicKey)
 			if err == nil && len(keyBytes) == 32 {
 				pubKey := &cosmosed25519.PubKey{Key: keyBytes}

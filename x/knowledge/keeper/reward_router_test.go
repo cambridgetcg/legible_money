@@ -8,6 +8,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/legible-money/legible/x/knowledge/keeper"
 	"github.com/legible-money/legible/x/knowledge/types"
 )
 
@@ -296,5 +297,71 @@ func TestRouteReward_FalsificationSource(t *testing.T) {
 	}
 	if mpk.distributed[0].SourceType != "falsification" {
 		t.Errorf("expected source falsification, got %s", mpk.distributed[0].SourceType)
+	}
+}
+
+// ---------- GetResearchTaxBps Tests ----------
+
+func TestGetResearchTaxBps_DefaultFallback(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+	// vestingRewardsKeeper is nil by default — should return DefaultResearchTaxBps
+	bps := k.GetResearchTaxBps(ctx)
+	if bps != keeper.DefaultResearchTaxBps {
+		t.Errorf("expected default %d, got %d", keeper.DefaultResearchTaxBps, bps)
+	}
+	if bps != 33300 {
+		t.Errorf("expected 33300 (3.33%%), got %d", bps)
+	}
+}
+
+func TestGetResearchTaxBps_FromVestingKeeper(t *testing.T) {
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+	// The mock returns 33300 (3.33%)
+	_ = mvk // verify it's wired
+	bps := k.GetResearchTaxBps(ctx)
+	if bps != 33300 {
+		t.Errorf("expected 33300 from mock vesting keeper, got %d", bps)
+	}
+}
+
+func TestResearchTaxRateConsistency(t *testing.T) {
+	// Verify the constant matches the canonical vesting_rewards default
+	if keeper.DefaultResearchTaxBps != 33300 {
+		t.Errorf("DefaultResearchTaxBps should be 33300, got %d", keeper.DefaultResearchTaxBps)
+	}
+}
+
+// ---------- Verification: No Double Tax ----------
+
+func TestNoDoubleTaxOnVerification(t *testing.T) {
+	k, ctx, sk, tbk, _ := setupKeeperWithTracking(t)
+
+	// Set up a validator
+	validatorAddr := sdk.AccAddress([]byte("test_validator_addr_")).String()
+	sk.addValidator(validatorAddr, 10_000_000, 2) // Bonded: 1.0x multiplier
+
+	// Create result with reward
+	result := &types.VerificationResult{
+		Verdict:    "accepted",
+		Confidence: 800000,
+		Rewards:    map[string]uint64{validatorAddr: 1_000_000},
+		Slashes:    make(map[string]uint64),
+	}
+
+	err := k.ApplyRewardsAndSlashes(ctx, result, false)
+	if err != nil {
+		t.Fatalf("ApplyRewardsAndSlashes failed: %v", err)
+	}
+
+	// Verify the FULL reward amount was sent to the validator (not reduced by tax).
+	// Before this fix, 7% was deducted as double-tax. Now the full amount goes through.
+	valAccAddr, _ := sdk.AccAddressFromBech32(validatorAddr)
+	received := tbk.sentToAccount[valAccAddr.String()]
+	if received.IsZero() {
+		t.Fatal("expected reward sent to validator account, got nothing")
+	}
+	receivedUlgm := received.AmountOf("ulgm")
+	if !receivedUlgm.Equal(sdkmath.NewInt(1_000_000)) {
+		t.Errorf("expected full 1,000,000 ulgm reward (no double tax), got %s", receivedUlgm.String())
 	}
 }

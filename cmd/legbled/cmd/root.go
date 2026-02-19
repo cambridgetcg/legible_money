@@ -163,6 +163,9 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		treecli.NewQueryCmd(),
 		vestingrewardscli.NewQueryCmd(),
 		lgmgovcli.NewQueryCmd(),
+		// Convenience queries
+		NewDashboardCmd(),
+		NewExploreCmd(),
 	)
 	rootCmd.AddCommand(queryCmd)
 
@@ -215,6 +218,11 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		treecli.NewTxCmd(),
 		vestingrewardscli.NewTxCmd(),
 		lgmgovcli.NewTxCmd(),
+		// Convenience shortcuts
+		NewQuickRegisterCmd(),
+		NewQuickPartnerCmd(),
+		NewQuickAcceptCmd(),
+		NewClaimCmd(),
 	)
 	rootCmd.AddCommand(txCmd)
 

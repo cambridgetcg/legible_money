@@ -25,7 +25,7 @@ const (
 //
 // Matches TS prototype's getEffectiveResearchShareBps():
 //   - At block 0: returns ResearchMinBps (5% default)
-//   - At ResearchRampBlocks: returns ResearchShareBps (7% default)
+//   - At ResearchRampBlocks: returns ResearchShareBps (7% default for service revenue)
 //   - After ramp: returns ResearchShareBps
 //   - If ResearchRampBlocks is 0: returns ResearchShareBps immediately (backward compatible)
 func GetEffectiveResearchShareBps(blockHeight int64, params *types.Params) uint64 {
@@ -51,7 +51,7 @@ func GetEffectiveResearchShareBps(blockHeight int64, params *types.Params) uint6
 // CalculateDistribution computes the payment distribution for a billing payment.
 //
 // Distribution flow (all bigint math):
-//  1. Research share FIRST: totalPayment * effectiveResearchBps / 1000000 (ramps from 5% → 7%)
+//  1. Research share FIRST: totalPayment * effectiveResearchBps / 1000000 (ramps from 5% → 7% for service revenue)
 //  2. Research 5-way split: 77% research, 7% foundation, 7% community, 7% developers, 2% reserve
 //  3. Remaining: 60% provider, 30% knowledge pool, 10% protocol
 //  4. Protocol 10% split: 50% burn, 50% treasury

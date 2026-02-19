@@ -139,8 +139,22 @@ func (k Keeper) DistributeCitationRewards(
 				continue
 			}
 
+			// Apply unified research tax (3.33%) — citation rewards are new value flowing to individuals
+			researchBps := k.GetResearchTaxBps(ctx)
+			if researchBps > 0 && k.bankKeeper != nil {
+				taxAmount := safeMulDiv(adjustedShare, researchBps, 1_000_000)
+				if taxAmount > 0 {
+					adjustedShare -= taxAmount
+					taxCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(taxAmount))))
+					if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleName, "research_fund", taxCoins); err != nil {
+						k.Logger(ctx).Error("citation research tax transfer failed",
+							"fact_id", ref.ToFactId, "tax", taxAmount, "error", err)
+					}
+				}
+			}
+
 			// Transfer reward to the cited fact's submitter (routed through partnership if active)
-			if k.bankKeeper != nil {
+			if k.bankKeeper != nil && adjustedShare > 0 {
 				submitterAddr, err := sdk.AccAddressFromBech32(fact.Submitter)
 				if err == nil {
 					rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(adjustedShare))))

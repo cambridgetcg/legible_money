@@ -137,8 +137,8 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 // BeginBlock executes begin-block logic.
-// 1. Routes 7% of accumulated transaction fees to research fund.
-// 2. Distributes block rewards to the block producer with 7% research tax.
+// 1. Routes 3.33% of accumulated transaction fees to research fund.
+// 2. Distributes block rewards to the block producer with 3.33% research tax.
 func (am AppModule) BeginBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	height := sdkCtx.BlockHeight()
@@ -148,7 +148,7 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 		return nil
 	}
 
-	// Route accumulated transaction fees: 7% to research fund, 93% stays in fee_collector.
+	// Route accumulated transaction fees: 3.33% to research fund, remainder stays in fee_collector.
 	// Must run BEFORE x/distribution's BeginBlocker sweeps fee_collector to validators.
 	if err := am.keeper.RouteFees(sdkCtx); err != nil {
 		am.keeper.Logger(sdkCtx).Error("failed to route fees to research fund",

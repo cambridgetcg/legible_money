@@ -2367,6 +2367,10 @@ func (m *mockVestingRewardsKeeper) PauseAllVestingByRecipient(_ sdk.Context, rec
 	return 0
 }
 
+func (m *mockVestingRewardsKeeper) GetResearchShareBps(_ sdk.Context) uint64 {
+	return 33300 // 3.33% — matches canonical rate
+}
+
 // ---------- Setup with tracking keepers ----------
 
 func setupKeeperWithTracking(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper, *trackingBankKeeper, *mockVestingRewardsKeeper) {
@@ -3996,10 +4000,11 @@ func TestContradictionAccepted_StakeReturnedAndRewarded(t *testing.T) {
 	if lastVesting.category != "falsification" {
 		t.Errorf("expected vesting category=falsification, got %s", lastVesting.category)
 	}
-	// Reward = targetStake(20M) * confidence(800k) / 1M = 16M ulgm = 16 LGM
+	// Reward = targetStake(20M) * confidence(800k) / 1M = 16M ulgm pre-tax
+	// Research tax = 16M * 33300 / 1M = 532800 → net = 15467200
 	// Cap = cfStake(10M) * 3M / 1M = 30M (not binding)
-	if lastVesting.totalAmount != "16000000" {
-		t.Errorf("expected reward=16000000, got %s", lastVesting.totalAmount)
+	if lastVesting.totalAmount != "15467200" {
+		t.Errorf("expected reward=15467200, got %s", lastVesting.totalAmount)
 	}
 }
 
@@ -4052,13 +4057,14 @@ func TestFalsificationReward_CappedAt3x(t *testing.T) {
 	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
 
 	// Without cap: reward = 1000M * 900k / 1M = 900M ulgm = 900 LGM
-	// With 3x cap: reward = 5M * 3M / 1M = 15M ulgm = 15 LGM
+	// With 3x cap: reward = 5M * 3M / 1M = 15M pre-tax
+	// Research tax = 15M * 33300 / 1M = 499500 → net = 14500500
 	if len(mvk.created) == 0 {
 		t.Fatal("expected falsification reward")
 	}
 	lastVesting := mvk.created[len(mvk.created)-1]
-	if lastVesting.totalAmount != "15000000" {
-		t.Errorf("expected capped reward=15000000, got %s", lastVesting.totalAmount)
+	if lastVesting.totalAmount != "14500500" {
+		t.Errorf("expected capped reward=14500500, got %s", lastVesting.totalAmount)
 	}
 }
 
@@ -4102,14 +4108,15 @@ func TestFalsificationReward_FallbackForPreMigrationFacts(t *testing.T) {
 	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
 	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
 
-	// Fallback: reward = confidence ulgm = 700,000 ulgm = 0.7 LGM
+	// Fallback: reward = confidence ulgm = 700,000 pre-tax
+	// Research tax = 700000 * 33300 / 1M = 23310 → net = 676690
 	// 3x cap = 30M, so cap doesn't bind
 	if len(mvk.created) == 0 {
 		t.Fatal("expected fallback reward")
 	}
 	lastVesting := mvk.created[len(mvk.created)-1]
-	if lastVesting.totalAmount != "700000" {
-		t.Errorf("expected fallback reward=700000, got %s", lastVesting.totalAmount)
+	if lastVesting.totalAmount != "676690" {
+		t.Errorf("expected fallback reward=676690, got %s", lastVesting.totalAmount)
 	}
 }
 
@@ -4227,8 +4234,9 @@ func TestFARM15_MediumFactMediumReward(t *testing.T) {
 	// ageBonusBps = 1M * 171360 / 342720 = 500,000 (exactly 50%)
 	// citeBonusBps = 1M * 25 / 50 = 500,000 (exactly 50%)
 	// dynamicCapBps = 1M + 500k + 500k = 2,000,000 (2×)
-	// rewardCap = 10M * 2M / 1M = 20M
-	// rewardBase = 100M * 900k / 1M = 90M → capped to 20M
+	// rewardCap = 10M * 2M / 1M = 20M pre-tax
+	// Research tax = 20M * 33300 / 1M = 666000 → net = 19334000
+	// rewardBase = 100M * 900k / 1M = 90M → capped to 20M pre-tax
 	expiryCtx := ctx.WithBlockHeight(171_360)
 	k.ProcessCounterFactChallengeExpiry(expiryCtx, 171_360)
 
@@ -4236,8 +4244,8 @@ func TestFARM15_MediumFactMediumReward(t *testing.T) {
 		t.Fatal("expected falsification reward")
 	}
 	lastVesting := mvk.created[len(mvk.created)-1]
-	if lastVesting.totalAmount != "20000000" {
-		t.Errorf("FARM-15: medium fact reward should be 20M (2×), got %s", lastVesting.totalAmount)
+	if lastVesting.totalAmount != "19334000" {
+		t.Errorf("FARM-15: medium fact reward should be 19334000 (2× minus 3.33%% tax), got %s", lastVesting.totalAmount)
 	}
 }
 
@@ -4272,8 +4280,9 @@ func TestFARM15_OldHighlyCitedFactMaxReward(t *testing.T) {
 	// Finalize at block 500,000 → age = 500k > 342720 → ageBonusBps = 1M (maxed)
 	// citeBonusBps = 1M (100 > 50, maxed)
 	// dynamicCapBps = 1M + 1M + 1M = 3M (full 3×)
-	// rewardCap = 10M * 3M / 1M = 30M
-	// rewardBase = 100M * 900k / 1M = 90M → capped to 30M
+	// rewardCap = 10M * 3M / 1M = 30M pre-tax
+	// Research tax = 30M * 33300 / 1M = 999000 → net = 29001000
+	// rewardBase = 100M * 900k / 1M = 90M → capped to 30M pre-tax
 	expiryCtx := ctx.WithBlockHeight(500_000)
 	k.ProcessCounterFactChallengeExpiry(expiryCtx, 500_000)
 
@@ -4281,8 +4290,8 @@ func TestFARM15_OldHighlyCitedFactMaxReward(t *testing.T) {
 		t.Fatal("expected falsification reward")
 	}
 	lastVesting := mvk.created[len(mvk.created)-1]
-	if lastVesting.totalAmount != "30000000" {
-		t.Errorf("FARM-15: old cited fact reward should be 30M (3×), got %s", lastVesting.totalAmount)
+	if lastVesting.totalAmount != "29001000" {
+		t.Errorf("FARM-15: old cited fact reward should be 29001000 (3× minus 3.33%% tax), got %s", lastVesting.totalAmount)
 	}
 }
 
@@ -4323,8 +4332,9 @@ func TestFARM15_VeryNewFactMinimumReward(t *testing.T) {
 	// ageBonusBps = 1M * 10 / 342720 ≈ 29
 	// citeBonusBps = 0
 	// dynamicCapBps = 1,000,029
-	// rewardCap = 10M * 1,000,029 / 1M = 10,000,290
-	// rewardBase = 100M * 900k / 1M = 90M → capped to ~10M
+	// rewardCap = 10M * 1,000,029 / 1M = 10,000,290 pre-tax
+	// Research tax = ~333,009 → net ≈ 9,667,281
+	// rewardBase = 100M * 900k / 1M = 90M → capped to ~10M pre-tax
 	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
 	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
 
@@ -4334,12 +4344,12 @@ func TestFARM15_VeryNewFactMinimumReward(t *testing.T) {
 	lastVesting := mvk.created[len(mvk.created)-1]
 	reward, _ := new(big.Int).SetString(lastVesting.totalAmount, 10)
 
-	// Should be barely above 10M (1× stake), almost no bonus
-	if reward.Int64() > 10_100_000 {
-		t.Errorf("FARM-15: very new fact reward should be ~1×, got %s", lastVesting.totalAmount)
+	// Should be barely above 1× stake minus 3.33% research tax (~9.667M)
+	if reward.Int64() > 9_800_000 {
+		t.Errorf("FARM-15: very new fact reward should be ~1× after tax, got %s", lastVesting.totalAmount)
 	}
-	if reward.Int64() < 10_000_000 {
-		t.Errorf("FARM-15: reward should be >= base 1×, got %s", lastVesting.totalAmount)
+	if reward.Int64() < 9_600_000 {
+		t.Errorf("FARM-15: reward should be >= base 1× after tax, got %s", lastVesting.totalAmount)
 	}
 }
 

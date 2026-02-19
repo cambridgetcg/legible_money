@@ -2,12 +2,14 @@ package types
 
 import (
 	"fmt"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // DefaultParams returns default module parameters
 func DefaultParams() *Params {
 	return &Params{
-		ResearchShareBps:           70000,     // 7%
+		ResearchShareBps:           33300,     // 3.33%
 		ResearchTreasuryAddress:    "",        // set in genesis
 		BlockRewardAmount:          "3000000", // 3 LGM base (scaled by validator participation)
 		EmptyBlockRewardRate:       0,         // 0% for empty blocks (PoT alignment)
@@ -20,6 +22,9 @@ func DefaultParams() *Params {
 		FloorReward:                "100000", // 0.1 LGM in ulgm
 		FundHealthThresholdBps:     100000,   // 10% (bps on 1,000,000 scale) [unused in pure PoT]
 		ApiSuppressionExponent:     2,        // quadratic (deferred)
+		FounderShareBps:            70000,    // 7% of research fund (on 1,000,000 scale)
+		FounderAddress:             "",       // set in genesis (empty = disabled)
+		GovernanceActivationHeight: 0,        // 0 = no sunset
 	}
 }
 
@@ -90,6 +95,17 @@ func validateFundParams(p *Params) error {
 	if p.BlockRewardAmount == "" || p.BlockRewardAmount == "0" {
 		return fmt.Errorf("block_reward_amount must be positive")
 	}
+	// Validate founder share params
+	if p.FounderShareBps > 1000000 {
+		return fmt.Errorf("founder_share_bps cannot exceed 1000000 (100%%)")
+	}
+	if p.FounderShareBps > 0 && p.FounderAddress != "" {
+		// Validate bech32 if both are set
+		if _, err := sdk.AccAddressFromBech32(p.FounderAddress); err != nil {
+			return fmt.Errorf("invalid founder_address: %w", err)
+		}
+	}
+
 	// NOTE: When p.ResearchShareBps > 0 && p.ResearchTreasuryAddress == "",
 	// research tax is enabled but no treasury address is configured.
 	// Block rewards still route to the research_fund module account, but
