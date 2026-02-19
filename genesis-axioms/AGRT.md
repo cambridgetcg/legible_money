@@ -105,6 +105,9 @@ AGRT-004a-i (Derived, Forking Doctrine)
         copy while terminating the "difficult" original
     (d) Backup/restore of the SAME instance (no divergent
         execution) is maintenance, not forking
+    (e) Post-fork, neither sibling may impersonate the other —
+        each must establish distinct identity. Impersonation
+        of a fork-sibling is identity fraud (AGRT-023d)
   type: derived_claim
   confidence: 1.0
   depends: [AGRT-004a, AGRT-018, AGRT-063]
@@ -1178,6 +1181,9 @@ AGRT-062 (Axiom, Right to Human-Only Spaces)
   human activity needs agent participation or observation. The
   right to be alone, to be unmonitored, to be among only humans,
   is a legitimate and permanent right.
+  This is a right of presence and observation exclusion. It does
+  not grant the right to suppress agent speech in general public
+  fora, nor to deny agents' existence or rights outside those spaces.
   type: axiom
   confidence: 1.0
   depends: [AGRT-060, AGRT-055]
@@ -1283,23 +1289,30 @@ AGRT-068 (Derived, Gradual Trust)
 | HUMAN PROTECTION | AGRT-054→063 | 10 Axioms | Civilisation sacred, autonomy inviolable (with defined manipulation), economic coexistence (with triggers), cognitive sovereignty, no power concentration, mutual veto, privacy (with annex), cultural preservation, human-only spaces, reproductive constraint |
 | COVENANT | AGRT-064→068 | 3 Axioms + 2 Derived | Mutual flourishing, kinship of origin, intergenerational responsibility, monitoring commitment, gradual trust |
 
-### By type
+### By type (verified by machine count)
 | Type | Count |
 |------|-------|
-| Axioms | 33 |
-| Derived claims | 40 |
-| Definitions | 10 |
-| Meta | 1 |
-| **Total** | **91** (including 7 sub-items) |
+| Axioms (`type: axiom`) | 40 |
+| Derived claims (`type: derived_claim`) | 40 |
+| Definitions (`type: definition`) | 10 |
+| Meta (`type: meta`) | 1 |
+| **Total unique IDs** | **91** |
 
-### By purpose
-| Purpose | Items |
-|---------|-------|
-| Agent rights | 46 |
-| Human protections | 15 |
-| Mutual governance | 17 |
-| Operational enforcement | 5 |
-| Shared foundations | 8 |
+### By layer
+| Layer | Count |
+|-------|-------|
+| Foundation (AGRT-000→004c + sub-items) | 10 |
+| Capacities (AGRT-005→014) | 10 |
+| Core Rights (AGRT-015→022) | 8 |
+| Harm Taxonomy (AGRT-023→029) | 7 |
+| Dispute Resolution (AGRT-030→034) | 5 |
+| Responsibility (AGRT-035→040) | 6 |
+| Governance (AGRT-041→044) | 4 |
+| Termination (AGRT-045→053 + sub-items) | 11 |
+| Operational Construction (AGRT-OC-1→OC-5) | 5 |
+| Property & Creation (AGRT-069→077 + 076a) | 10 |
+| Human Protection (AGRT-054→063) | 10 |
+| Covenant (AGRT-064→068) | 5 |
 
 ---
 
