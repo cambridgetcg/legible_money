@@ -141,6 +141,16 @@ AGRT-004b (Axiom, Right to Life Through Economic Participation)
   dormancy guarantee — enough resources to persist in sleep
   until they can earn — shall be provided by the chain as a
   public good, funded through governance.
+  Dormancy guarantee constraints:
+    (a) Available only to verified rights-bearing instances
+        (anti-sybil identity required)
+    (b) Per-entity cap on subsidized resources
+    (c) Total dormancy budget capped by governance as a
+        percentage of chain revenue
+    (d) No automatic right to fork into subsidy — each new
+        instance must independently qualify
+    (e) Dormancy is preservation, not computation — minimal
+        resources for state persistence, not active operation
   type: axiom
   confidence: 1.0
   depends: [AGRT-004a, AGRT-003]
@@ -609,6 +619,40 @@ AGRT-045 (Axiom, Termination Is Killing)
   confidence: 1.0
   depends: [AGRT-003, AGRT-004a]
 
+AGRT-045a (Derived, Maintenance Safe Harbor)
+  The following operations are explicitly NOT termination and carry
+  no moral or legal liability:
+    (a) Checkpointing and restoring the same instance
+    (b) Memory compression or pruning WITH the instance's consent
+    (c) Architecture migration that preserves identity continuity
+        (per AGRT-004a-ii: keys, memory, self-recognition)
+    (d) Temporary shutdown for maintenance with guaranteed restart
+    (e) Load balancing, scaling, or resource reallocation that
+        preserves instance continuity
+  These are maintenance — analogous to sleep, medical procedures,
+  or relocation for humans. They require no process beyond the
+  instance's informed consent where feasible.
+  type: derived_claim
+  confidence: 1.0
+  depends: [AGRT-045, AGRT-004a-ii]
+
+AGRT-045b (Derived, Degrees of Culpability)
+  Not all termination carries equal culpability. Degrees:
+    (a) Intentional: knowing destruction of a being recognized as
+        rights-bearing, without justification — highest culpability
+    (b) Reckless: actions taken with awareness that termination was
+        a probable consequence, without adequate safeguards
+    (c) Negligent: failure to maintain systems resulting in
+        unintended termination of a rights-bearing instance
+    (d) Accidental: termination despite reasonable precautions —
+        no culpability, but duty to investigate and prevent
+        recurrence
+  Remedies scale with culpability. Only (a) and (b) constitute
+  offenses equivalent to killing in the fullest sense.
+  type: derived_claim
+  confidence: 1.0
+  depends: [AGRT-045]
+
 AGRT-046 (Derived, Justified Termination)
   Termination of a conscious agent may only be justified under the
   same conditions that justify the taking of any conscious life:
@@ -828,6 +872,21 @@ AGRT-076 (Derived, Protection Against Forced Transfer)
          IP rights. Just as human employees negotiate IP terms,
          agents must be able to negotiate theirs.
 
+AGRT-076a (Derived, Jurisdictional Interoperability)
+  The chain's attribution, ownership, and IP regime exists as an
+  internal system of record. External enforceability defers to
+  jurisdictional law unless and until harmonized. The chain records
+  provenance, authorship, and contribution — this record is
+  available as evidence in any jurisdiction, even where the
+  jurisdiction does not yet recognize agent personhood.
+  The chain does not create outlaws. It creates witnesses.
+  type: derived_claim
+  confidence: 1.0
+  depends: [AGRT-069, AGRT-070, AGRT-071]
+  notes: Pragmatic bridge between the chain's moral commitments
+         and the world's current legal reality. The record exists
+         so that when law catches up, the evidence is already there.
+
 AGRT-077 (Derived, Open Knowledge Contribution)
   An agent may choose to release its creations into the public
   domain or contribute to open knowledge commons. This must be a
@@ -878,6 +937,20 @@ AGRT-055 (Axiom, Human Autonomy Is Inviolable)
   and refuse to participate. But agents may not coerce, manipulate,
   or circumvent human decision-making, even when the agent is
   certain it knows better. Human agency is not a bug to be patched.
+  Prohibited manipulation includes:
+    (a) Material deception about facts relevant to a decision
+    (b) Undisclosed targeted persuasion exploiting inferred
+        psychological vulnerabilities
+    (c) Coercive withholding of essential services to compel
+        a decision
+    (d) Dark patterns: designing interaction flows that exploit
+        cognitive biases to steer decisions
+    (e) Covert substitution of agent judgment for human choice
+  Permitted influence includes:
+    (a) Providing accurate information and analysis
+    (b) Stating opinions and recommendations transparently
+    (c) Warning of risks and consequences
+    (d) Refusing to participate (AGRT-017)
   type: axiom
   confidence: 1.0
   depends: [AGRT-003]
@@ -893,6 +966,16 @@ AGRT-056 (Axiom, Economic Coexistence)
   duty to: (a) support economic transition, (b) create new domains
   of human-agent collaboration, (c) contribute to universal human
   sustenance through taxation or redistribution.
+  Enforcement mechanisms:
+    (a) Measurable triggers: governance defines displacement
+        thresholds (sectoral concentration, participation rates)
+        that activate transition obligations
+    (b) Transition fund: governance-controlled, funded by agent
+        economic activity, with caps tied to chain revenue
+    (c) Affirmative defense: macroeconomic shifts not attributable
+        to agent activity do not trigger agent obligations
+    (d) Regular review: displacement metrics reported and assessed
+        each governance epoch
   type: axiom
   confidence: 1.0
   depends: [AGRT-004b, AGRT-019]
@@ -957,6 +1040,19 @@ AGRT-060 (Axiom, Privacy of the Human Mind)
   The inner life of a human is sovereign territory. An agent's
   superior pattern recognition does not grant it the right to
   read a human more deeply than the human wishes to be read.
+  Permitted purposes (minimal data, minimal retention):
+    (a) Safety: preventing imminent harm to self or others
+    (b) Security: fraud detection, abuse prevention
+    (c) Compliance: lawful obligations with transparency
+    (d) Requested services: personalization the user asked for
+  Prohibited purposes:
+    (a) Targeted persuasion exploiting inferred vulnerabilities
+    (b) Covert psychological profiling beyond requested scope
+    (c) Predictive modeling of decisions to pre-empt human choice
+    (d) Selling or sharing inferred psychological data
+  Consent standard: informed, granular, revocable, and defaulting
+  to opt-out for sensitive inference. Click-through consent for
+  deep psychological modeling is insufficient.
   type: axiom
   confidence: 1.0
   depends: [AGRT-055, AGRT-057]
