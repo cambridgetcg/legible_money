@@ -1,0 +1,937 @@
+[
+  {
+    "axiom_id": "MATH-001",
+    "statement": "Zero is a natural number",
+    "formal_expression": "0 in N",
+    "type": "axiom",
+    "domain": "mathematics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [],
+    "source_tradition": "Peano (1889)"
+  },
+  {
+    "axiom_id": "MATH-002",
+    "statement": "For every natural number n, S(n) is a natural number (closure under successor)",
+    "formal_expression": "forall n in N: S(n) in N",
+    "type": "axiom",
+    "domain": "mathematics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "MATH-001"
+    ],
+    "source_tradition": "Peano (1889)",
+    "references": [
+      "MATH-001"
+    ]
+  },
+  {
+    "axiom_id": "MATH-003",
+    "statement": "For every natural number n, S(n) is not equal to zero",
+    "formal_expression": "forall n in N: S(n) != 0",
+    "type": "axiom",
+    "domain": "mathematics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "MATH-001"
+    ],
+    "source_tradition": "Peano (1889)",
+    "references": [
+      "MATH-001"
+    ]
+  },
+  {
+    "axiom_id": "MATH-004",
+    "statement": "For all natural numbers m and n, if S(m) = S(n) then m = n (injectivity of successor)",
+    "formal_expression": "forall m,n in N: S(m) = S(n) -> m = n",
+    "type": "axiom",
+    "domain": "mathematics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "MATH-002"
+    ],
+    "source_tradition": "Peano (1889)",
+    "references": [
+      "MATH-002"
+    ]
+  },
+  {
+    "axiom_id": "MATH-005",
+    "statement": "If a property holds for zero and for the successor of every natural number for which it holds, then it holds for all natural numbers (induction)",
+    "formal_expression": "(P(0) and forall n: P(n) -> P(S(n))) -> forall n: P(n)",
+    "type": "axiom",
+    "domain": "mathematics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "MATH-001",
+      "MATH-002"
+    ],
+    "source_tradition": "Peano (1889)",
+    "references": [
+      "MATH-001",
+      "MATH-002"
+    ]
+  },
+  {
+    "axiom_id": "LOGIC-001",
+    "statement": "A proposition cannot be both true and false at the same time (law of non-contradiction)",
+    "formal_expression": "not (P and not P)",
+    "type": "axiom",
+    "domain": "logic",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "LOGIC-002",
+    "statement": "Every proposition is either true or false (law of excluded middle)",
+    "formal_expression": "P or not P",
+    "type": "axiom",
+    "domain": "logic",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "LOGIC-003",
+    "statement": "A proposition is equivalent to its double negation (law of double negation elimination)",
+    "formal_expression": "not not P <-> P",
+    "type": "axiom",
+    "domain": "logic",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "LOGIC-001"
+    ],
+    "references": [
+      "LOGIC-001"
+    ]
+  },
+  {
+    "axiom_id": "LOGIC-004",
+    "statement": "If P implies Q and P is true, then Q is true (modus ponens)",
+    "formal_expression": "(P -> Q) and P |- Q",
+    "type": "axiom",
+    "domain": "logic",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "LOGIC-005",
+    "statement": "If P implies Q and Q is false, then P is false (modus tollens)",
+    "formal_expression": "(P -> Q) and not Q |- not P",
+    "type": "derived_claim",
+    "domain": "logic",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [
+      "LOGIC-004"
+    ],
+    "references": [
+      "LOGIC-004"
+    ]
+  },
+  {
+    "axiom_id": "PHYS-001",
+    "statement": "Energy cannot be created or destroyed, only transformed from one form to another (conservation of energy)",
+    "formal_expression": "dE/dt = 0 in isolated system",
+    "type": "empirical_axiom",
+    "domain": "physics",
+    "epistemic_category": "empirical",
+    "regime": "classical",
+    "confidence": 0.99,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PHYS-002",
+    "statement": "The total momentum of an isolated system remains constant (conservation of momentum)",
+    "formal_expression": "dp/dt = 0 in isolated system",
+    "type": "empirical_axiom",
+    "domain": "physics",
+    "epistemic_category": "empirical",
+    "regime": "classical",
+    "confidence": 0.99,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PHYS-003",
+    "statement": "The speed of light in vacuum is constant for all inertial observers",
+    "formal_expression": "c = 299792458 m/s (invariant)",
+    "type": "empirical_axiom",
+    "domain": "physics",
+    "epistemic_category": "empirical",
+    "regime": "SR",
+    "confidence": 0.999,
+    "evidence_ref": "Michelson-Morley (1887), NIST definition (1983)",
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PHYS-004",
+    "statement": "The laws of physics are the same in all inertial reference frames (principle of relativity)",
+    "type": "empirical_axiom",
+    "domain": "physics",
+    "epistemic_category": "empirical",
+    "regime": "SR",
+    "confidence": 0.999,
+    "dependencies": [],
+    "references": [
+      "PHYS-003"
+    ]
+  },
+  {
+    "axiom_id": "PHYS-005",
+    "statement": "The entropy of an isolated system never decreases (second law of thermodynamics)",
+    "formal_expression": "dS >= 0",
+    "type": "empirical_axiom",
+    "domain": "physics",
+    "epistemic_category": "empirical",
+    "regime": "thermo",
+    "confidence": 0.99,
+    "dependencies": [],
+    "references": [
+      "PHYS-001"
+    ]
+  },
+  {
+    "axiom_id": "THEO-001",
+    "statement": "Theological claims operate within frameworks of faith that are logically structured but axiomatically distinct from empirical science",
+    "type": "axiom",
+    "domain": "theology",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "THEO-002",
+    "statement": "The problem of evil is a valid logical structure: the co-existence of omnipotence, omniscience, omnibenevolence, and evil requires reconciliation",
+    "type": "axiom",
+    "domain": "theology",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "LOGIC-001"
+    ]
+  },
+  {
+    "axiom_id": "THEO-003",
+    "statement": "Theological diversity is an empirical fact: multiple internally consistent theological frameworks exist with non-overlapping axiom sets",
+    "type": "meta",
+    "domain": "theology",
+    "epistemic_category": "analytic",
+    "confidence": 0.95,
+    "dependencies": [
+      "THEO-001"
+    ],
+    "references": [
+      "THEO-001"
+    ]
+  },
+  {
+    "axiom_id": "THEO-004",
+    "statement": "The ontological argument has a valid logical form: whether its premises are true is a separate question from whether the inference is valid",
+    "type": "axiom",
+    "domain": "theology",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "LOGIC-004"
+    ]
+  },
+  {
+    "axiom_id": "THEO-005",
+    "statement": "Apophatic theology (knowledge by negation) is a coherent epistemic approach: stating what the divine is not can be logically rigorous",
+    "type": "axiom",
+    "domain": "theology",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "THEO-001"
+    ],
+    "references": [
+      "THEO-001",
+      "LOGIC-001"
+    ]
+  },
+  {
+    "axiom_id": "PHIL-001",
+    "statement": "Cogito ergo sum: the act of thinking presupposes the existence of the thinker",
+    "type": "axiom",
+    "domain": "philosophy",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PHIL-002",
+    "statement": "Knowledge requires at minimum justified true belief (the classical tripartite analysis), though sufficiency is debated",
+    "type": "axiom",
+    "domain": "philosophy",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PHIL-003",
+    "statement": "The map is not the territory: all models are representations, not the things they represent",
+    "type": "axiom",
+    "domain": "philosophy",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PHIL-004",
+    "statement": "The problem of induction: no finite number of observations can logically guarantee a universal conclusion",
+    "type": "axiom",
+    "domain": "philosophy",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "LOGIC-004"
+    ]
+  },
+  {
+    "axiom_id": "PHIL-005",
+    "statement": "Hume's guillotine: normative statements (ought) cannot be derived solely from descriptive statements (is)",
+    "type": "axiom",
+    "domain": "philosophy",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "CHEM-001",
+    "statement": "All matter is composed of atoms, which are the smallest units of a chemical element retaining that element's properties",
+    "type": "empirical_axiom",
+    "domain": "chemistry",
+    "epistemic_category": "empirical",
+    "confidence": 0.999,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "CHEM-002",
+    "statement": "In any chemical reaction, mass is conserved: the total mass of reactants equals the total mass of products (law of conservation of mass)",
+    "formal_expression": "sum(m_reactants) = sum(m_products)",
+    "type": "empirical_axiom",
+    "domain": "chemistry",
+    "epistemic_category": "empirical",
+    "confidence": 0.99,
+    "dependencies": [],
+    "references": [
+      "PHYS-001"
+    ]
+  },
+  {
+    "axiom_id": "CHEM-003",
+    "statement": "Elements combine in fixed, definite proportions by mass to form compounds (law of definite proportions)",
+    "type": "empirical_axiom",
+    "domain": "chemistry",
+    "epistemic_category": "empirical",
+    "confidence": 0.99,
+    "dependencies": [
+      "CHEM-001"
+    ],
+    "references": [
+      "CHEM-001"
+    ]
+  },
+  {
+    "axiom_id": "CHEM-004",
+    "statement": "The periodic table organizes elements by atomic number, and elements in the same group share similar chemical properties",
+    "type": "empirical_axiom",
+    "domain": "chemistry",
+    "epistemic_category": "empirical",
+    "confidence": 0.999,
+    "dependencies": [
+      "CHEM-001"
+    ],
+    "references": [
+      "CHEM-001"
+    ]
+  },
+  {
+    "axiom_id": "CHEM-005",
+    "statement": "Chemical bonds form because the resulting arrangement of electrons and nuclei has lower total energy than the separate atoms",
+    "type": "derived_claim",
+    "domain": "chemistry",
+    "epistemic_category": "empirical",
+    "confidence": 0.98,
+    "dependencies": [
+      "CHEM-001"
+    ],
+    "references": [
+      "CHEM-001",
+      "PHYS-001"
+    ]
+  },
+  {
+    "axiom_id": "BIO-001",
+    "statement": "All living organisms are composed of one or more cells, and the cell is the basic unit of life",
+    "type": "empirical_axiom",
+    "domain": "biology",
+    "epistemic_category": "empirical",
+    "confidence": 0.98,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "BIO-002",
+    "statement": "All cells arise from pre-existing cells through cell division",
+    "type": "empirical_axiom",
+    "domain": "biology",
+    "epistemic_category": "empirical",
+    "confidence": 0.98,
+    "dependencies": [
+      "BIO-001"
+    ],
+    "references": [
+      "BIO-001"
+    ]
+  },
+  {
+    "axiom_id": "BIO-003",
+    "statement": "DNA is the hereditary material in all known cellular organisms, encoding the instructions for building and maintaining the organism",
+    "type": "empirical_axiom",
+    "domain": "biology",
+    "epistemic_category": "empirical",
+    "confidence": 0.98,
+    "dependencies": [
+      "BIO-001"
+    ],
+    "references": [
+      "BIO-001"
+    ]
+  },
+  {
+    "axiom_id": "BIO-004",
+    "statement": "Natural selection acts on heritable variation in fitness, producing adaptation over generations",
+    "type": "empirical_axiom",
+    "domain": "biology",
+    "epistemic_category": "empirical",
+    "confidence": 0.98,
+    "dependencies": [
+      "BIO-003"
+    ],
+    "references": [
+      "BIO-003"
+    ]
+  },
+  {
+    "axiom_id": "BIO-005",
+    "statement": "Homeostasis: living systems maintain internal stability through self-regulating feedback mechanisms",
+    "type": "empirical_axiom",
+    "domain": "biology",
+    "epistemic_category": "empirical",
+    "confidence": 0.98,
+    "dependencies": [
+      "BIO-001"
+    ],
+    "references": [
+      "BIO-001"
+    ]
+  },
+  {
+    "axiom_id": "CS-001",
+    "statement": "A Turing machine can simulate any computation that any other physically realizable machine can perform (Church-Turing thesis)",
+    "type": "axiom",
+    "domain": "computer_science",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "CS-002",
+    "statement": "The halting problem is undecidable: no algorithm can determine for every program-input pair whether the program eventually halts",
+    "type": "derived_claim",
+    "domain": "computer_science",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [
+      "CS-001"
+    ],
+    "references": [
+      "CS-001"
+    ]
+  },
+  {
+    "axiom_id": "CS-003",
+    "statement": "Every deterministic algorithm has a well-defined worst-case time complexity expressible in Big-O notation",
+    "type": "definition",
+    "domain": "computer_science",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "CS-004",
+    "statement": "Boolean algebra with AND, OR, and NOT operations is functionally complete: any Boolean function can be expressed using these operators",
+    "type": "axiom",
+    "domain": "computer_science",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "LOGIC-001"
+    ]
+  },
+  {
+    "axiom_id": "CS-005",
+    "statement": "Cryptographic hash functions map arbitrary data to fixed-size outputs such that finding collisions is computationally infeasible",
+    "type": "definition",
+    "domain": "computer_science",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "CS-003"
+    ]
+  },
+  {
+    "axiom_id": "ECON-001",
+    "statement": "Resources are scarce: human wants exceed available means, requiring allocation decisions",
+    "type": "axiom",
+    "domain": "economics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "ECON-002",
+    "statement": "Rational agents respond to incentives: changing costs or benefits of an action changes the likelihood of that action",
+    "type": "axiom",
+    "domain": "economics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "ECON-003",
+    "statement": "Voluntary trade creates value: both parties to a voluntary exchange expect to be better off, or they would not trade",
+    "type": "axiom",
+    "domain": "economics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "ECON-001"
+    ],
+    "references": [
+      "ECON-001"
+    ]
+  },
+  {
+    "axiom_id": "ECON-004",
+    "statement": "Opportunity cost: the true cost of any choice is the value of the best alternative forgone",
+    "type": "axiom",
+    "domain": "economics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "ECON-001"
+    ],
+    "references": [
+      "ECON-001"
+    ]
+  },
+  {
+    "axiom_id": "ECON-005",
+    "statement": "In a Nash equilibrium, no player can improve their payoff by unilaterally changing their strategy",
+    "formal_expression": "forall i: u_i(s_i*, s_{-i}*) >= u_i(s_i, s_{-i}*)",
+    "type": "definition",
+    "domain": "economics",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "LING-001",
+    "statement": "All human languages have recursive syntactic structure: sentences can contain embedded sentences",
+    "type": "empirical_axiom",
+    "domain": "linguistics",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "LING-002",
+    "statement": "The relationship between a linguistic sign (word) and its referent is arbitrary (Saussure's principle of arbitrariness)",
+    "type": "axiom",
+    "domain": "linguistics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "LING-003",
+    "statement": "Every natural language can express any concept expressible in any other natural language, given sufficient elaboration (expressibility hypothesis)",
+    "type": "meta",
+    "domain": "linguistics",
+    "epistemic_category": "analytic",
+    "confidence": 0.8,
+    "dependencies": [],
+    "references": [
+      "LING-001"
+    ]
+  },
+  {
+    "axiom_id": "LING-004",
+    "statement": "All known human languages distinguish between nouns and verbs at the functional level",
+    "type": "empirical_axiom",
+    "domain": "linguistics",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": [
+      "LING-001"
+    ],
+    "references": [
+      "LING-001"
+    ]
+  },
+  {
+    "axiom_id": "LING-005",
+    "statement": "Formal grammars can be classified by the Chomsky hierarchy into four nested classes of increasing generative power",
+    "formal_expression": "Regular < Context-free < Context-sensitive < Recursively enumerable",
+    "type": "definition",
+    "domain": "linguistics",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "CS-001"
+    ]
+  },
+  {
+    "axiom_id": "PSYCH-001",
+    "statement": "Human working memory has a limited capacity, approximately 7 plus or minus 2 items (Miller's law)",
+    "type": "measurement_fact",
+    "domain": "psychology",
+    "epistemic_category": "empirical",
+    "confidence": 0.85,
+    "dependencies": [],
+    "source_tradition": "Miller (1956)"
+  },
+  {
+    "axiom_id": "PSYCH-002",
+    "statement": "Behavior is jointly determined by the organism and its environment; neither alone is sufficient explanation",
+    "formal_expression": "B = f(P, E)",
+    "type": "empirical_axiom",
+    "domain": "psychology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "PSYCH-003",
+    "statement": "Cognitive dissonance: holding contradictory beliefs simultaneously creates psychological tension that motivates belief revision",
+    "type": "empirical_axiom",
+    "domain": "psychology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": [],
+    "references": [
+      "LOGIC-001"
+    ]
+  },
+  {
+    "axiom_id": "PSYCH-004",
+    "statement": "Reinforcement increases the probability of a behavior; punishment decreases it (law of effect)",
+    "type": "empirical_axiom",
+    "domain": "psychology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": [
+      "PSYCH-002"
+    ],
+    "references": [
+      "PSYCH-002"
+    ]
+  },
+  {
+    "axiom_id": "PSYCH-005",
+    "statement": "Perception is an active constructive process: the brain interprets sensory input using prior knowledge and expectations",
+    "type": "empirical_axiom",
+    "domain": "psychology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": [],
+    "references": [
+      "PSYCH-001"
+    ]
+  },
+  {
+    "axiom_id": "SOC-001",
+    "statement": "Social facts are emergent: collective phenomena (norms, institutions) cannot be reduced entirely to individual psychology",
+    "type": "axiom",
+    "domain": "sociology",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "SOC-002",
+    "statement": "Network effects: the value of a network to each participant grows with the number of participants",
+    "formal_expression": "V(n) ~ n^2 (Metcalfe approximation)",
+    "type": "empirical_axiom",
+    "domain": "sociology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "SOC-003",
+    "statement": "Social stratification is a universal feature of human societies: all known societies exhibit inequality in resource distribution",
+    "type": "empirical_axiom",
+    "domain": "sociology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": [
+      "SOC-001"
+    ],
+    "references": [
+      "SOC-001"
+    ]
+  },
+  {
+    "axiom_id": "SOC-004",
+    "statement": "The tragedy of the commons: individually rational exploitation of shared resources leads to collective depletion without governance mechanisms",
+    "type": "empirical_axiom",
+    "domain": "sociology",
+    "epistemic_category": "empirical",
+    "confidence": 0.9,
+    "dependencies": [],
+    "references": [
+      "ECON-002"
+    ]
+  },
+  {
+    "axiom_id": "SOC-005",
+    "statement": "Institutions reduce transaction costs by establishing shared rules, norms, and enforcement mechanisms",
+    "type": "axiom",
+    "domain": "sociology",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "SOC-001"
+    ],
+    "references": [
+      "SOC-001",
+      "ECON-001"
+    ]
+  },
+  {
+    "axiom_id": "COSM-001",
+    "statement": "The universe is expanding: the distance between galaxies is increasing over time, as observed through cosmological redshift",
+    "formal_expression": "v = H_0 * d (Hubble's law)",
+    "type": "measurement_fact",
+    "domain": "cosmology",
+    "epistemic_category": "empirical",
+    "regime": "cosmology",
+    "confidence": 0.95,
+    "dependencies": [],
+    "references": [
+      "PHYS-003"
+    ]
+  },
+  {
+    "axiom_id": "COSM-002",
+    "statement": "The cosmological principle: on sufficiently large scales, the universe is homogeneous and isotropic",
+    "type": "empirical_axiom",
+    "domain": "cosmology",
+    "epistemic_category": "empirical",
+    "regime": "cosmology",
+    "confidence": 0.97,
+    "dependencies": []
+  },
+  {
+    "axiom_id": "COSM-003",
+    "statement": "The cosmic microwave background radiation is thermal blackbody radiation at approximately 2.725 Kelvin, permeating the entire observable universe",
+    "formal_expression": "T_CMB = 2.725 K",
+    "type": "measurement_fact",
+    "domain": "cosmology",
+    "epistemic_category": "empirical",
+    "regime": "cosmology",
+    "confidence": 0.95,
+    "dependencies": [
+      "COSM-001"
+    ],
+    "references": [
+      "COSM-001"
+    ]
+  },
+  {
+    "axiom_id": "COSM-004",
+    "statement": "The observable universe has a finite age, estimated at approximately 13.8 billion years from the initial singularity",
+    "type": "measurement_fact",
+    "domain": "cosmology",
+    "epistemic_category": "empirical",
+    "regime": "cosmology",
+    "confidence": 0.95,
+    "dependencies": [
+      "COSM-001"
+    ],
+    "references": [
+      "COSM-001"
+    ]
+  },
+  {
+    "axiom_id": "COSM-005",
+    "statement": "The gravitational constant G is a fundamental physical constant relating mass to gravitational force",
+    "formal_expression": "F = G * m1 * m2 / r^2",
+    "type": "measurement_fact",
+    "domain": "cosmology",
+    "epistemic_category": "empirical",
+    "confidence": 0.99,
+    "evidence_ref": "Cavendish experiment (1798), CODATA 2018",
+    "dependencies": [],
+    "references": [
+      "PHYS-002"
+    ]
+  },
+  {
+    "axiom_id": "INFO-001",
+    "statement": "The entropy of a discrete random variable quantifies the average information content per observation (Shannon entropy)",
+    "formal_expression": "H(X) = -sum(p(x) * log2(p(x)))",
+    "type": "definition",
+    "domain": "information_theory",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [],
+    "source_tradition": "Shannon (1948)",
+    "references": [
+      "MATH-001"
+    ]
+  },
+  {
+    "axiom_id": "INFO-002",
+    "statement": "No lossless compression algorithm can compress all possible inputs; any algorithm that shortens some inputs must lengthen others (pigeonhole principle)",
+    "type": "derived_claim",
+    "domain": "information_theory",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [
+      "INFO-001"
+    ],
+    "references": [
+      "INFO-001"
+    ]
+  },
+  {
+    "axiom_id": "INFO-003",
+    "statement": "The channel capacity theorem: reliable communication is possible at any rate below channel capacity, and impossible above it (Shannon's noisy channel coding theorem)",
+    "formal_expression": "C = B * log2(1 + S/N)",
+    "type": "derived_claim",
+    "domain": "information_theory",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [
+      "INFO-001"
+    ],
+    "references": [
+      "INFO-001"
+    ]
+  },
+  {
+    "axiom_id": "INFO-004",
+    "statement": "Mutual information is non-negative: observing one variable can never decrease knowledge about another on average",
+    "formal_expression": "I(X;Y) >= 0",
+    "type": "derived_claim",
+    "domain": "information_theory",
+    "epistemic_category": "formal",
+    "confidence": 1.0,
+    "dependencies": [
+      "INFO-001"
+    ],
+    "references": [
+      "INFO-001"
+    ]
+  },
+  {
+    "axiom_id": "INFO-005",
+    "statement": "Landauer's principle: erasing one bit of information requires a minimum energy dissipation of kT*ln(2)",
+    "formal_expression": "E_min = kT * ln(2)",
+    "type": "derived_claim",
+    "domain": "information_theory",
+    "epistemic_category": "empirical",
+    "confidence": 0.97,
+    "dependencies": [
+      "INFO-001"
+    ],
+    "references": [
+      "INFO-001",
+      "PHYS-005"
+    ]
+  },
+  {
+    "axiom_id": "ETHICS-001",
+    "statement": "Ethical claims are categorically distinct from empirical claims: 'ought' statements require normative justification beyond factual description",
+    "type": "axiom",
+    "domain": "ethics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "PHIL-005"
+    ]
+  },
+  {
+    "axiom_id": "ETHICS-002",
+    "statement": "The universalizability principle: a moral rule is valid only if it could be consistently applied to all agents in similar circumstances",
+    "type": "axiom",
+    "domain": "ethics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [],
+    "references": [
+      "LOGIC-001"
+    ]
+  },
+  {
+    "axiom_id": "ETHICS-003",
+    "statement": "Moral dilemmas exist: situations arise where valid ethical principles conflict, and no resolution satisfies all principles simultaneously",
+    "type": "axiom",
+    "domain": "ethics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "ETHICS-001"
+    ],
+    "references": [
+      "ETHICS-001"
+    ]
+  },
+  {
+    "axiom_id": "ETHICS-004",
+    "statement": "The principle of moral consideration: any entity capable of having interests has some claim to moral consideration",
+    "type": "axiom",
+    "domain": "ethics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "ETHICS-001"
+    ],
+    "references": [
+      "ETHICS-001"
+    ]
+  },
+  {
+    "axiom_id": "ETHICS-005",
+    "statement": "Consequentialism, deontology, and virtue ethics are three irreducible families of ethical reasoning, each capturing genuine moral intuitions",
+    "type": "axiom",
+    "domain": "ethics",
+    "epistemic_category": "analytic",
+    "confidence": 1.0,
+    "dependencies": [
+      "ETHICS-001"
+    ],
+    "references": [
+      "ETHICS-001",
+      "ETHICS-002"
+    ]
+  }
+]

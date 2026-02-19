@@ -55,4 +55,4 @@ dist/
 # Coverage
 coverage/
 # gRPC gateway stubs (WIP — dependency not yet in go.mod)
-x/*/types/query.pb.gw.go
+# x/*/types/query.pb.gw.go  # enabled by B8-2

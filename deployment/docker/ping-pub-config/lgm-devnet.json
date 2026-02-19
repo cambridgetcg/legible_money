@@ -1,8 +1,8 @@
 {
   "chain_name": "lgm-devnet",
-  "api": ["http://lgm-validator-1:1317"],
-  "rpc": ["http://lgm-validator-1:26657"],
-  "grpc": ["http://lgm-validator-1:9090"],
+  "api": ["http://localhost:1317"],
+  "rpc": ["http://localhost:26657"],
+  "grpc": ["http://localhost:9090"],
   "sdk_version": "0.50.10",
   "coin_type": "118",
   "min_tx_fee": "5000",

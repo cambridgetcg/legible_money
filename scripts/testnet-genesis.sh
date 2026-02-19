@@ -29,6 +29,7 @@ DENOM="ulgm"
 BINARY="build/legbled"
 TESTNET_HOME="${HOME}/.lgm/testnet"
 GENESIS="${TESTNET_HOME}/config/genesis.json"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Testnet economics (lower than mainnet for faster iteration)
 FOUNDATION_BALANCE="1000000000000"    # 1,000,000 LGM  — operational fund
@@ -354,6 +355,17 @@ cmd_init() {
     .app_state.knowledge.params.successful_challenge_reward_bps = 300000 |
     .app_state.knowledge.params.adversarial_verification_enabled = true
   '
+
+  # ── knowledge (genesis axioms) ─────────────────────────────────────────
+  # Inject foundational axioms as pre-verified Facts at genesis
+  AXIOM_FILE="${PROJECT_ROOT}/scripts/genesis-axioms-template.json"
+  if [ -f "${AXIOM_FILE}" ]; then
+    info "knowledge (genesis axioms)..."
+    go run "${PROJECT_ROOT}/tools/axiom-loader/main.go" inject \
+      "${AXIOM_FILE}" "$GENESIS"
+  else
+    info "Skipping genesis axioms (${AXIOM_FILE} not found)"
+  fi
 
   # ── legible_auth (dual-key accounts, DID, session keys) ───────────────
   info "legible_auth..."

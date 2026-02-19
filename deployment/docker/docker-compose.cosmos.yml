@@ -21,6 +21,7 @@
 #
 # Profiles:
 #   --profile explorer    — Ping.pub block explorer on :8080
+#   --profile faucet      — LGM faucet on :8088
 #   --profile monitoring  — Prometheus (:9093) + Grafana (:3000)
 
 name: lgm-devnet
@@ -115,6 +116,32 @@ services:
       - validator-1
     profiles:
       - explorer
+
+  # ──── Faucet ────
+  faucet:
+    build:
+      context: ../..
+      dockerfile: tools/faucet/Dockerfile
+    image: lgm-faucet:latest
+    container_name: lgm-faucet
+    environment:
+      CHAIN_ID: lgm-devnet-1
+      NODE_URL: "http://lgm-validator-1:26657"
+      KEYRING_DIR: /root/.legbled
+      FAUCET_KEY_NAME: faucet
+      FAUCET_AMOUNT: "10000000ulgm"
+      LISTEN_ADDR: ":8088"
+    ports:
+      - "8088:8088"
+    volumes:
+      - validator-1-data:/root/.legbled:ro
+    networks:
+      - lgm-net
+    depends_on:
+      - validator-1
+    profiles:
+      - faucet
+    restart: unless-stopped
 
   # ──── Prometheus ────
   prometheus:

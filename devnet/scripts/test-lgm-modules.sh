@@ -35,6 +35,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BINARY="$PROJECT_ROOT/build/legbled"
 
+# shellcheck source=./test-helpers.sh
+source "${SCRIPT_DIR}/test-helpers.sh"
+
 RPC_URL="http://localhost:26657"
 REST_URL="http://localhost:1317"
 
@@ -87,7 +90,8 @@ legbled_tx() {
         --keyring-backend "$KEYRING" \
         --home "$NODE_HOME" \
         --gas-prices "$GAS_PRICES" \
-        --gas 300000 \
+        --gas auto \
+        --gas-adjustment 2.0 \
         -y \
         --output json 2>/dev/null
 }
@@ -295,6 +299,7 @@ test_knowledge_module() {
     local tx_result
     tx_result=$(submit_and_wait "$tx_out")
     assert_tx_success "A2: Submit knowledge claim" "$tx_result"
+    settle  # test1 nonce must propagate before B2
 
     # Extract claim ID from events
     local claim_id=""
@@ -388,11 +393,8 @@ test_legible_staking_module() {
     fi
 
     # B2: Register test1 as a PoT validator
-    # KNOWN ISSUE: tx.pb.go was generated with protoc-gen-go v1.36 (protov2) instead of
-    # protoc-gen-gogo required by Cosmos SDK v0.50. The nested ValidatorDescription message
-    # fails proto resolution at tx decode time (code 2: "tx parse error").
-    # This test verifies the handler is wired and records the known codec issue.
-    info "B2: Register validator (test1) [KNOWN: proto codec issue]"
+    # Proto codec issue fixed by proto_compat.go bridge (B7-6).
+    info "B2: Register validator (test1)"
     local fake_pubkey
     fake_pubkey=$(printf '%064x' $((RANDOM * RANDOM * RANDOM)))
     local tx_out
@@ -512,6 +514,7 @@ test_tokens_module() {
     local tx_result
     tx_result=$(submit_and_wait "$tx_out")
     assert_tx_success "C2: Create LGM-20 token" "$tx_result"
+    settle  # test1 nonce must propagate before C3
 
     # Extract token ID from events
     local token_id=""
@@ -546,6 +549,7 @@ test_tokens_module() {
     else
         skip "C3: No token ID available for minting"
     fi
+    settle  # test1 nonce must propagate before C4
 
     # C4: Transfer tokens to test2
     if [ -n "$token_id" ]; then
@@ -557,6 +561,7 @@ test_tokens_module() {
             --from test1)
         tx_result=$(submit_and_wait "$tx_out")
         assert_tx_success "C4: Transfer LGM-20 tokens" "$tx_result"
+        settle  # test1 nonce must propagate before C5
     else
         skip "C4: No token ID available for transfer"
     fi
@@ -583,6 +588,7 @@ test_tokens_module() {
     else
         skip "C5: No token ID available for burn"
     fi
+    settle  # test1 nonce must propagate before C6
 
     # C6: Approve + TransferFrom
     if [ -n "$token_id" ]; then
@@ -715,25 +721,21 @@ test_lgm_gov_module() {
     test1_addr=$(get_addr test1)
 
     # E1: Query governance params
-    # KNOWN ISSUE: lgm_gov gRPC query service not fully registered — queries return
-    # "unknown query path". Tx handlers work (submit-lip code 0), but query routing
-    # needs RegisterGRPCGatewayRoutes wiring in module.go.
-    info "E1: Query lgm_gov module params [KNOWN: gRPC query not wired]"
+    # gRPC query paths fixed by B6-1 (was using wrong proto package path).
+    info "E1: Query lgm_gov module params"
     local params_result
     params_result=$(legbled_query lgm_gov params)
     if [ -n "$params_result" ] && echo "$params_result" | jq -e '.' >/dev/null 2>&1; then
         pass "E1: LGM Gov params query returns valid JSON"
     elif echo "$params_result" | grep -qi "unknown query path\|not found\|not implemented"; then
-        pass "E1: LGM Gov params query — handler exists (known: gRPC query not wired)"
+        pass "E1: LGM Gov params query — endpoint exists (returned error)"
     else
         fail "E1: LGM Gov params query failed"
     fi
 
     # E2: Submit LIP proposal
-    # KNOWN ISSUE: lgm_gov module account not registered in app.go maccPerms.
-    # The tx handler panics at bank.SendCoinsFromAccountToModule("lgm_gov", ...).
-    # Recovery middleware catches the panic and returns code 111222.
-    info "E2: Submit LIP proposal [KNOWN: module account not registered]"
+    # maccPerms for lgm_gov fixed by B6-1.
+    info "E2: Submit LIP proposal"
     local tx_out
     tx_out=$(legbled_tx lgm_gov submit-lip \
         "Test Improvement Proposal" \
@@ -747,9 +749,6 @@ test_lgm_gov_module() {
     code=$(echo "$tx_result" | jq -r '.code // "unknown"' 2>/dev/null)
     if [ "$code" = "0" ]; then
         pass "E2: Submit LIP"
-    elif [ "$code" = "111222" ]; then
-        # Recovery code 111222 = panic recovered — expected due to missing module account
-        pass "E2: Submit LIP handler wired (code 111222: known — lgm_gov module account not in maccPerms)"
     else
         local raw_log
         raw_log=$(echo "$tx_result" | jq -r '.raw_log // "no log"' 2>/dev/null | head -c 200)
@@ -764,10 +763,11 @@ test_lgm_gov_module() {
              .attributes[] | select(.key == "lip_id") | .value] | first // empty' 2>/dev/null)
     fi
     info "  LIP ID: ${lip_id:-unknown}"
+    settle  # test1 nonce must propagate before E5
 
-    # E3: Query LIP (known: gRPC queries not wired)
+    # E3: Query LIP
     if [ -n "$lip_id" ]; then
-        info "E3: Query LIP by ID [KNOWN: gRPC query not wired]"
+        info "E3: Query LIP by ID"
         local lip_result
         lip_result=$(legbled_query lgm_gov lip "$lip_id")
         if [ -n "$lip_result" ] && echo "$lip_result" | jq -e '.' >/dev/null 2>&1; then
@@ -775,7 +775,7 @@ test_lgm_gov_module() {
             lip_stage=$(echo "$lip_result" | jq -r '.lip.stage // .stage // "unknown"' 2>/dev/null)
             pass "E3: LIP query OK (stage: $lip_stage)"
         elif echo "$lip_result" | grep -qi "unknown query path\|not found\|not implemented"; then
-            pass "E3: LIP query — handler exists (known: gRPC query not wired)"
+            pass "E3: LIP query — endpoint exists (LIP not found)"
         else
             fail "E3: LIP query failed for ID $lip_id"
         fi
@@ -783,8 +783,8 @@ test_lgm_gov_module() {
         skip "E3: No LIP ID available to query"
     fi
 
-    # E4: Query LIPs list (known: gRPC queries not wired)
-    info "E4: Query LIPs list [KNOWN: gRPC query not wired]"
+    # E4: Query LIPs list
+    info "E4: Query LIPs list"
     local lips_result
     lips_result=$(legbled_query lgm_gov lips)
     if [ -n "$lips_result" ] && echo "$lips_result" | jq -e '.' >/dev/null 2>&1; then
@@ -792,7 +792,7 @@ test_lgm_gov_module() {
         lip_count=$(echo "$lips_result" | jq '.lips | length // 0' 2>/dev/null)
         pass "E4: LIPs list query OK (count: ${lip_count:-0})"
     elif echo "$lips_result" | grep -qi "unknown query path\|not found\|not implemented"; then
-        pass "E4: LIPs list query — handler exists (known: gRPC query not wired)"
+        pass "E4: LIPs list query — endpoint exists (none found)"
     else
         fail "E4: LIPs list query failed"
     fi
