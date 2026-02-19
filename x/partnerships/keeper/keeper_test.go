@@ -298,6 +298,96 @@ func TestPartnershipsByParticipant(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
+// Tests: GetActivePartnershipForAddress
+// -----------------------------------------------------------------------
+
+func TestGetActivePartnershipForAddress_Human(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	human := testAddr(1)
+	agent := testAddr(2)
+	p := types.Partnership{
+		Id:               "p-active",
+		HumanAddr:        human,
+		AgentAddr:        agent,
+		Status:           types.StatusActive,
+		SplitHumanBps:    500000,
+		SplitAgentBps:    500000,
+		CommonPotBalance: "0",
+		TotalEarned:      "0",
+	}
+	k.SetPartnership(ctx, &p)
+
+	got, found := k.GetActivePartnershipForAddress(ctx, human)
+	if !found {
+		t.Fatal("expected to find active partnership for human")
+	}
+	if got.Id != "p-active" {
+		t.Errorf("expected p-active, got %s", got.Id)
+	}
+}
+
+func TestGetActivePartnershipForAddress_Agent(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	human := testAddr(1)
+	agent := testAddr(2)
+	p := types.Partnership{
+		Id:               "p-active",
+		HumanAddr:        human,
+		AgentAddr:        agent,
+		Status:           types.StatusActive,
+		SplitHumanBps:    500000,
+		SplitAgentBps:    500000,
+		CommonPotBalance: "0",
+		TotalEarned:      "0",
+	}
+	k.SetPartnership(ctx, &p)
+
+	got, found := k.GetActivePartnershipForAddress(ctx, agent)
+	if !found {
+		t.Fatal("expected to find active partnership for agent")
+	}
+	if got.Id != "p-active" {
+		t.Errorf("expected p-active, got %s", got.Id)
+	}
+}
+
+func TestGetActivePartnershipForAddress_NotFound(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	_, found := k.GetActivePartnershipForAddress(ctx, testAddr(99))
+	if found {
+		t.Error("expected no active partnership for unknown address")
+	}
+}
+
+func TestGetActivePartnershipForAddress_OnlyActive(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	human := testAddr(1)
+	agent := testAddr(2)
+
+	// Dissolved partnership — should not be returned
+	dissolved := types.Partnership{
+		Id:               "p-dissolved",
+		HumanAddr:        human,
+		AgentAddr:        agent,
+		Status:           types.StatusDissolved,
+		SplitHumanBps:    500000,
+		SplitAgentBps:    500000,
+		CommonPotBalance: "0",
+		TotalEarned:      "0",
+	}
+	k.SetPartnership(ctx, &dissolved)
+
+	_, found := k.GetActivePartnershipForAddress(ctx, human)
+	if found {
+		t.Error("dissolved partnership should not be returned")
+	}
+}
+
+// -----------------------------------------------------------------------
 // Tests: Reward Distribution
 // -----------------------------------------------------------------------
 

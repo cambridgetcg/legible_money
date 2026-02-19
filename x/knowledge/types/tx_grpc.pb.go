@@ -33,6 +33,9 @@ const (
 	Msg_ChallengeProvisionalFact_FullMethodName = "/legible.knowledge.v1.Msg/ChallengeProvisionalFact"
 	Msg_UpdateParams_FullMethodName             = "/legible.knowledge.v1.Msg/UpdateParams"
 	Msg_UpdateExtendedParams_FullMethodName     = "/legible.knowledge.v1.Msg/UpdateExtendedParams"
+	Msg_ProposeResearchFund_FullMethodName      = "/legible.knowledge.v1.Msg/ProposeResearchFund"
+	Msg_VoteResearchProposal_FullMethodName     = "/legible.knowledge.v1.Msg/VoteResearchProposal"
+	Msg_ExecuteResearchProposal_FullMethodName  = "/legible.knowledge.v1.Msg/ExecuteResearchProposal"
 )
 
 // MsgClient is the client API for Msg service.
@@ -61,6 +64,10 @@ type MsgClient interface {
 	// Governance
 	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 	UpdateExtendedParams(ctx context.Context, in *MsgUpdateExtendedParams, opts ...grpc.CallOption) (*MsgUpdateExtendedParamsResponse, error)
+	// Research fund governance
+	ProposeResearchFund(ctx context.Context, in *MsgProposeResearchFund, opts ...grpc.CallOption) (*MsgProposeResearchFundResponse, error)
+	VoteResearchProposal(ctx context.Context, in *MsgVoteResearchProposal, opts ...grpc.CallOption) (*MsgVoteResearchProposalResponse, error)
+	ExecuteResearchProposal(ctx context.Context, in *MsgExecuteResearchProposal, opts ...grpc.CallOption) (*MsgExecuteResearchProposalResponse, error)
 }
 
 type msgClient struct {
@@ -211,6 +218,36 @@ func (c *msgClient) UpdateExtendedParams(ctx context.Context, in *MsgUpdateExten
 	return out, nil
 }
 
+func (c *msgClient) ProposeResearchFund(ctx context.Context, in *MsgProposeResearchFund, opts ...grpc.CallOption) (*MsgProposeResearchFundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgProposeResearchFundResponse)
+	err := c.cc.Invoke(ctx, Msg_ProposeResearchFund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) VoteResearchProposal(ctx context.Context, in *MsgVoteResearchProposal, opts ...grpc.CallOption) (*MsgVoteResearchProposalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgVoteResearchProposalResponse)
+	err := c.cc.Invoke(ctx, Msg_VoteResearchProposal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) ExecuteResearchProposal(ctx context.Context, in *MsgExecuteResearchProposal, opts ...grpc.CallOption) (*MsgExecuteResearchProposalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MsgExecuteResearchProposalResponse)
+	err := c.cc.Invoke(ctx, Msg_ExecuteResearchProposal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 // All implementations must embed UnimplementedMsgServer
 // for forward compatibility.
@@ -237,6 +274,10 @@ type MsgServer interface {
 	// Governance
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 	UpdateExtendedParams(context.Context, *MsgUpdateExtendedParams) (*MsgUpdateExtendedParamsResponse, error)
+	// Research fund governance
+	ProposeResearchFund(context.Context, *MsgProposeResearchFund) (*MsgProposeResearchFundResponse, error)
+	VoteResearchProposal(context.Context, *MsgVoteResearchProposal) (*MsgVoteResearchProposalResponse, error)
+	ExecuteResearchProposal(context.Context, *MsgExecuteResearchProposal) (*MsgExecuteResearchProposalResponse, error)
 	mustEmbedUnimplementedMsgServer()
 }
 
@@ -288,6 +329,15 @@ func (UnimplementedMsgServer) UpdateParams(context.Context, *MsgUpdateParams) (*
 }
 func (UnimplementedMsgServer) UpdateExtendedParams(context.Context, *MsgUpdateExtendedParams) (*MsgUpdateExtendedParamsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateExtendedParams not implemented")
+}
+func (UnimplementedMsgServer) ProposeResearchFund(context.Context, *MsgProposeResearchFund) (*MsgProposeResearchFundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProposeResearchFund not implemented")
+}
+func (UnimplementedMsgServer) VoteResearchProposal(context.Context, *MsgVoteResearchProposal) (*MsgVoteResearchProposalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VoteResearchProposal not implemented")
+}
+func (UnimplementedMsgServer) ExecuteResearchProposal(context.Context, *MsgExecuteResearchProposal) (*MsgExecuteResearchProposalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteResearchProposal not implemented")
 }
 func (UnimplementedMsgServer) mustEmbedUnimplementedMsgServer() {}
 func (UnimplementedMsgServer) testEmbeddedByValue()             {}
@@ -562,6 +612,60 @@ func _Msg_UpdateExtendedParams_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_ProposeResearchFund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgProposeResearchFund)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ProposeResearchFund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_ProposeResearchFund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ProposeResearchFund(ctx, req.(*MsgProposeResearchFund))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_VoteResearchProposal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgVoteResearchProposal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).VoteResearchProposal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_VoteResearchProposal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).VoteResearchProposal(ctx, req.(*MsgVoteResearchProposal))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_ExecuteResearchProposal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgExecuteResearchProposal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ExecuteResearchProposal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_ExecuteResearchProposal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ExecuteResearchProposal(ctx, req.(*MsgExecuteResearchProposal))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Msg_ServiceDesc is the grpc.ServiceDesc for Msg service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -624,6 +728,18 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateExtendedParams",
 			Handler:    _Msg_UpdateExtendedParams_Handler,
+		},
+		{
+			MethodName: "ProposeResearchFund",
+			Handler:    _Msg_ProposeResearchFund_Handler,
+		},
+		{
+			MethodName: "VoteResearchProposal",
+			Handler:    _Msg_VoteResearchProposal_Handler,
+		},
+		{
+			MethodName: "ExecuteResearchProposal",
+			Handler:    _Msg_ExecuteResearchProposal_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

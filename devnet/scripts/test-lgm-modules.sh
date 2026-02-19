@@ -96,6 +96,20 @@ legbled_tx() {
         --output json 2>/dev/null
 }
 
+# legbled_tx_gas: like legbled_tx but with explicit gas limit.
+# Use for msgs whose ante-handler minimum exceeds --gas auto estimates.
+legbled_tx_gas() {
+    local gas_limit="$1"; shift
+    "$BINARY" tx "$@" \
+        --chain-id "$CHAIN_ID" \
+        --keyring-backend "$KEYRING" \
+        --home "$NODE_HOME" \
+        --gas-prices "$GAS_PRICES" \
+        --gas "$gas_limit" \
+        -y \
+        --output json 2>/dev/null
+}
+
 legbled_query() {
     "$BINARY" query "$@" \
         --home "$NODE_HOME" \
@@ -504,7 +518,7 @@ test_tokens_module() {
     local token_symbol="TST${token_suffix}"
     info "C2: Create secondary token (TestToken/${token_symbol})"
     local tx_out
-    tx_out=$(legbled_tx tokens create-token \
+    tx_out=$(legbled_tx_gas 200000 tokens create-token \
         "TestToken${token_suffix}" \
         "$token_symbol" \
         "6" \
@@ -531,7 +545,7 @@ test_tokens_module() {
     # This test validates the handler responds properly (not panics).
     if [ -n "$token_id" ]; then
         info "C3: Mint tokens (expects rejection — CLI has no --mintable flag)"
-        tx_out=$(legbled_tx tokens mint-token \
+        tx_out=$(legbled_tx_gas 200000 tokens mint-token \
             "$token_id" \
             "$test1_addr" \
             "500000" \
@@ -571,7 +585,7 @@ test_tokens_module() {
     # The handler correctly rejects with "token does not have burnable feature".
     if [ -n "$token_id" ]; then
         info "C5: Burn tokens (expects rejection — CLI has no --burnable flag)"
-        tx_out=$(legbled_tx tokens burn-token \
+        tx_out=$(legbled_tx_gas 200000 tokens burn-token \
             "$token_id" \
             "50000" \
             --from test1)
@@ -631,7 +645,7 @@ test_home_module() {
     # D2: Create agent home
     info "D2: Create agent home (from $home_creator)"
     local tx_out
-    tx_out=$(legbled_tx home create-home \
+    tx_out=$(legbled_tx_gas 200000 home create-home \
         "test-agent-home-$(date +%s)" \
         --from "$home_creator")
     local tx_result
@@ -800,7 +814,7 @@ test_lgm_gov_module() {
     # E5: Cast vote on LIP (quadratic voting)
     if [ -n "$lip_id" ]; then
         info "E5: Cast vote on LIP"
-        tx_out=$(legbled_tx lgm_gov cast-vote \
+        tx_out=$(legbled_tx_gas 200000 lgm_gov cast-vote \
             "$lip_id" \
             "yes" \
             "50000" \

@@ -1605,6 +1605,15 @@ type CitationSourceRecord struct {
 	TotalCites   uint64            `json:"total_cites"`
 }
 
+// PartnershipCitationStats tracks citation metrics for a partnership (B12-4).
+// Enables partnership knowledge profiles and fundamentality tracking.
+type PartnershipCitationStats struct {
+	PartnershipId     string   `json:"partnership_id"`
+	TotalFactsCreated uint64   `json:"total_facts_created"`
+	TotalCitations    uint64   `json:"total_citations"`
+	DomainsCovered    []string `json:"domains_covered"`
+}
+
 // PatronageRecord tracks a patron's stake in keeping a fact alive.
 type PatronageRecord struct {
 	FactId    string `json:"fact_id"`
@@ -1632,6 +1641,139 @@ func (msg *MsgPatronizeFact) ValidateBasic() error {
 	}
 	if msg.Amount == "" {
 		return fmt.Errorf("amount cannot be empty")
+	}
+	return nil
+}
+
+// ============ Research Fund Governance ============
+
+// Research fund governance constants
+const (
+	ResearchProposalDeposit    = 1_000_000  // 1 LGM in ulgm
+	ResearchVotingPeriodBlocks = 34_272     // ~1 day (BlocksPerDay)
+	ResearchQuorumBps          = 200_000    // 20% of eligible voters
+	ResearchPassThresholdBps   = 600_000    // 60% of weighted votes
+	ResearchMaxDisburseBps     = 100_000    // 10% of fund balance per proposal
+	ResearchDepositSlashBps    = 100_000    // 10% slash on rejection
+	ResearchMinVerifiedFacts   = 3          // proposer eligibility: min verified facts
+	ResearchVoterMinFacts      = 1          // voter eligibility: min verified facts
+	ResearchVoterMinRounds     = 10         // voter eligibility: alternative via verifier participation
+
+	// Research proposal statuses
+	ResearchProposalStatusVoting   = "voting"
+	ResearchProposalStatusApproved = "approved"
+	ResearchProposalStatusRejected = "rejected"
+	ResearchProposalStatusExecuted = "executed"
+
+	// Max field lengths
+	MaxResearchTitleLength       = 200
+	MaxResearchDescriptionLength = 5000
+)
+
+// ResearchProposal is a hand-written type for research fund governance proposals.
+// JSON-serialized in the KV store (same pattern as PatronageRecord).
+type ResearchProposal struct {
+	ProposalId   string `json:"proposal_id"`
+	Proposer     string `json:"proposer"`     // bech32 address
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Amount       string `json:"amount"`       // ulgm
+	Recipient    string `json:"recipient"`    // bech32 address
+	Domain       string `json:"domain"`       // knowledge domain
+	Status       string `json:"status"`       // voting, approved, rejected, executed
+	VotesFor     uint64 `json:"votes_for"`    // weighted votes for
+	VotesAgainst uint64 `json:"votes_against"` // weighted votes against
+	VotingEndsAt uint64 `json:"voting_ends_at"` // block height
+	CreatedAt    uint64 `json:"created_at"`   // block height
+}
+
+// ResearchVote records a single vote on a research proposal.
+type ResearchVote struct {
+	ProposalId string `json:"proposal_id"`
+	Voter      string `json:"voter"`   // bech32 address
+	VoteYes    bool   `json:"vote_yes"`
+	Weight     uint64 `json:"weight"`  // voting weight at time of vote
+}
+
+// ResearchFundStats tracks cumulative research fund accounting.
+type ResearchFundStats struct {
+	TotalCollected uint64 `json:"total_collected"` // cumulative ulgm collected
+	TotalDisbursed uint64 `json:"total_disbursed"` // cumulative ulgm disbursed
+}
+
+// --- GetSigners and ValidateBasic for research fund governance messages ---
+
+func (msg *MsgProposeResearchFund) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Proposer)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgProposeResearchFund) ValidateBasic() error {
+	if msg.Proposer == "" {
+		return fmt.Errorf("proposer cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Proposer); err != nil {
+		return fmt.Errorf("invalid proposer address: %w", err)
+	}
+	if msg.Title == "" {
+		return fmt.Errorf("title cannot be empty")
+	}
+	if len(msg.Title) > MaxResearchTitleLength {
+		return fmt.Errorf("title too long: %d (max %d)", len(msg.Title), MaxResearchTitleLength)
+	}
+	if msg.Description == "" {
+		return fmt.Errorf("description cannot be empty")
+	}
+	if len(msg.Description) > MaxResearchDescriptionLength {
+		return fmt.Errorf("description too long: %d (max %d)", len(msg.Description), MaxResearchDescriptionLength)
+	}
+	if msg.Amount == "" {
+		return fmt.Errorf("amount cannot be empty")
+	}
+	if msg.Recipient == "" {
+		return fmt.Errorf("recipient cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Recipient); err != nil {
+		return fmt.Errorf("invalid recipient address: %w", err)
+	}
+	if msg.Domain == "" {
+		return fmt.Errorf("domain cannot be empty")
+	}
+	return nil
+}
+
+func (msg *MsgVoteResearchProposal) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Voter)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgVoteResearchProposal) ValidateBasic() error {
+	if msg.Voter == "" {
+		return fmt.Errorf("voter cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Voter); err != nil {
+		return fmt.Errorf("invalid voter address: %w", err)
+	}
+	if msg.ProposalId == "" {
+		return fmt.Errorf("proposal_id cannot be empty")
+	}
+	return nil
+}
+
+func (msg *MsgExecuteResearchProposal) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Executor)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgExecuteResearchProposal) ValidateBasic() error {
+	if msg.Executor == "" {
+		return fmt.Errorf("executor cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Executor); err != nil {
+		return fmt.Errorf("invalid executor address: %w", err)
+	}
+	if msg.ProposalId == "" {
+		return fmt.Errorf("proposal_id cannot be empty")
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"github.com/legible-money/legible/x/knowledge/types"
 )
@@ -134,6 +135,14 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 		RoundId:           roundID,
 		Evidence:          msg.Evidence,
 	}
+
+	// Record partnership attribution for joint credit (B12-4)
+	if k.partnershipsKeeper != nil {
+		if partnership, found := k.partnershipsKeeper.GetActivePartnershipForAddress(ctx, msg.Submitter); found {
+			claim.PartnershipId = partnership.Id
+		}
+	}
+
 	k.SetClaim(ctx, &claim)
 
 	// Notify home module of claim submission for epistemic stats
@@ -988,4 +997,259 @@ func writeLP(h interface{ Write([]byte) (int, error) }, data []byte) {
 	lenBytes[3] = byte(l)
 	h.Write(lenBytes)
 	h.Write(data)
+}
+
+// ============================================================================
+// Research Fund Governance Handlers
+// ============================================================================
+
+// ProposeResearchFund creates a new research fund disbursement proposal.
+func (k msgServer) ProposeResearchFund(goCtx context.Context, msg *types.MsgProposeResearchFund) (*types.MsgProposeResearchFundResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Validate proposer eligibility (≥3 verified facts)
+	if !k.IsEligibleProposer(ctx, msg.Proposer) {
+		return nil, fmt.Errorf("proposer not eligible: requires at least %d verified facts", types.ResearchMinVerifiedFacts)
+	}
+
+	// Validate domain exists
+	_, domainFound := k.GetDomainFromState(ctx, msg.Domain)
+	if !domainFound {
+		return nil, fmt.Errorf("%w: domain %q not found", types.ErrDomainNotFound, msg.Domain)
+	}
+
+	// Parse and validate amount
+	requestAmount := new(big.Int)
+	if _, ok := requestAmount.SetString(msg.Amount, 10); !ok || requestAmount.Sign() <= 0 {
+		return nil, fmt.Errorf("invalid amount: must be a positive integer")
+	}
+
+	// Validate amount ≤ 10% of fund balance
+	fundBalance := k.GetResearchFundBalance(ctx)
+	if fundBalance.Amount.IsPositive() {
+		maxDisburse := new(big.Int).Mul(fundBalance.Amount.BigInt(), big.NewInt(int64(types.ResearchMaxDisburseBps)))
+		maxDisburse.Div(maxDisburse, big.NewInt(1_000_000))
+		if requestAmount.Cmp(maxDisburse) > 0 {
+			return nil, fmt.Errorf("amount exceeds maximum disbursement (10%% of fund balance: %s ulgm)", maxDisburse.String())
+		}
+	} else {
+		return nil, fmt.Errorf("research fund has no balance")
+	}
+
+	// Deduct deposit from proposer → knowledge module
+	proposerAddr, _ := sdk.AccAddressFromBech32(msg.Proposer)
+	depositCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(types.ResearchProposalDeposit)))
+	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, proposerAddr, types.ModuleName, depositCoins); err != nil {
+		return nil, fmt.Errorf("failed to collect deposit: %w", err)
+	}
+
+	// Generate deterministic proposal ID
+	currentHeight := uint64(ctx.BlockHeight())
+	idInput := fmt.Sprintf("research_proposal:%s:%s:%d", msg.Proposer, msg.Title, currentHeight)
+	proposalId := fmt.Sprintf("rp-%x", sha256.Sum256([]byte(idInput)))[:24]
+
+	proposal := &types.ResearchProposal{
+		ProposalId:   proposalId,
+		Proposer:     msg.Proposer,
+		Title:        msg.Title,
+		Description:  msg.Description,
+		Amount:       msg.Amount,
+		Recipient:    msg.Recipient,
+		Domain:       msg.Domain,
+		Status:       types.ResearchProposalStatusVoting,
+		VotesFor:     0,
+		VotesAgainst: 0,
+		VotingEndsAt: currentHeight + types.ResearchVotingPeriodBlocks,
+		CreatedAt:    currentHeight,
+	}
+
+	k.SetResearchProposal(ctx, proposal)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("research_proposal_created",
+			sdk.NewAttribute("proposal_id", proposalId),
+			sdk.NewAttribute("proposer", msg.Proposer),
+			sdk.NewAttribute("amount", msg.Amount),
+			sdk.NewAttribute("domain", msg.Domain),
+		),
+	)
+
+	k.Logger(ctx).Info("research fund proposal created",
+		"proposal_id", proposalId,
+		"proposer", msg.Proposer,
+		"amount", msg.Amount,
+	)
+
+	return &types.MsgProposeResearchFundResponse{ProposalId: proposalId}, nil
+}
+
+// VoteResearchProposal casts a vote on a research fund proposal.
+func (k msgServer) VoteResearchProposal(goCtx context.Context, msg *types.MsgVoteResearchProposal) (*types.MsgVoteResearchProposalResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Get proposal
+	proposal, found := k.GetResearchProposal(ctx, msg.ProposalId)
+	if !found {
+		return nil, fmt.Errorf("proposal %s not found", msg.ProposalId)
+	}
+
+	// Check proposal is in voting status
+	if proposal.Status != types.ResearchProposalStatusVoting {
+		return nil, fmt.Errorf("proposal %s is not in voting status (current: %s)", msg.ProposalId, proposal.Status)
+	}
+
+	// Check voting deadline
+	currentHeight := uint64(ctx.BlockHeight())
+	if currentHeight > proposal.VotingEndsAt {
+		return nil, fmt.Errorf("voting period has ended for proposal %s", msg.ProposalId)
+	}
+
+	// Validate voter eligibility
+	if !k.IsEligibleVoter(ctx, msg.Voter) {
+		return nil, fmt.Errorf("voter not eligible: requires at least %d verified fact or %d verification round participations",
+			types.ResearchVoterMinFacts, types.ResearchVoterMinRounds)
+	}
+
+	// Check for duplicate vote
+	if _, alreadyVoted := k.GetResearchVote(ctx, msg.ProposalId, msg.Voter); alreadyVoted {
+		return nil, fmt.Errorf("voter %s has already voted on proposal %s", msg.Voter, msg.ProposalId)
+	}
+
+	// Get voting weight and record vote
+	weight := k.GetVotingWeight(ctx, msg.Voter)
+	vote := &types.ResearchVote{
+		ProposalId: msg.ProposalId,
+		Voter:      msg.Voter,
+		VoteYes:    msg.VoteYes,
+		Weight:     weight,
+	}
+	k.SetResearchVote(ctx, vote)
+
+	// Accumulate weighted votes on proposal
+	if msg.VoteYes {
+		proposal.VotesFor += weight
+	} else {
+		proposal.VotesAgainst += weight
+	}
+	k.SetResearchProposal(ctx, proposal)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("research_proposal_vote",
+			sdk.NewAttribute("proposal_id", msg.ProposalId),
+			sdk.NewAttribute("voter", msg.Voter),
+			sdk.NewAttribute("vote_yes", fmt.Sprintf("%t", msg.VoteYes)),
+			sdk.NewAttribute("weight", fmt.Sprintf("%d", weight)),
+		),
+	)
+
+	return &types.MsgVoteResearchProposalResponse{}, nil
+}
+
+// ExecuteResearchProposal tallies and executes a research fund proposal.
+func (k msgServer) ExecuteResearchProposal(goCtx context.Context, msg *types.MsgExecuteResearchProposal) (*types.MsgExecuteResearchProposalResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	proposal, found := k.GetResearchProposal(ctx, msg.ProposalId)
+	if !found {
+		return nil, fmt.Errorf("proposal %s not found", msg.ProposalId)
+	}
+
+	currentHeight := uint64(ctx.BlockHeight())
+
+	// Must be past voting deadline or already tallied
+	switch proposal.Status {
+	case types.ResearchProposalStatusVoting:
+		if currentHeight <= proposal.VotingEndsAt {
+			return nil, fmt.Errorf("voting period has not ended for proposal %s (ends at block %d, current %d)",
+				msg.ProposalId, proposal.VotingEndsAt, currentHeight)
+		}
+	case types.ResearchProposalStatusApproved:
+		// Already tallied and approved, proceed to execute
+	default:
+		return nil, fmt.Errorf("proposal %s cannot be executed (status: %s)", msg.ProposalId, proposal.Status)
+	}
+
+	// Tally if still in voting status
+	if proposal.Status == types.ResearchProposalStatusVoting {
+		pass, quorumMet := k.TallyResearchProposal(ctx, proposal)
+		if !quorumMet || !pass {
+			// Rejected: return 90% of deposit, burn 10%
+			proposal.Status = types.ResearchProposalStatusRejected
+			k.SetResearchProposal(ctx, proposal)
+			k.returnDeposit(ctx, proposal.Proposer, false)
+
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent("research_proposal_rejected",
+					sdk.NewAttribute("proposal_id", msg.ProposalId),
+					sdk.NewAttribute("quorum_met", fmt.Sprintf("%t", quorumMet)),
+				),
+			)
+
+			return &types.MsgExecuteResearchProposalResponse{AmountDisbursed: "0"}, nil
+		}
+		proposal.Status = types.ResearchProposalStatusApproved
+	}
+
+	// Execute: transfer funds from research_fund → recipient
+	recipientAddr, _ := sdk.AccAddressFromBech32(proposal.Recipient)
+	disburseAmount := new(big.Int)
+	disburseAmount.SetString(proposal.Amount, 10)
+	disburseCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(disburseAmount)))
+
+	moduleAddr := authtypes.NewModuleAddress("research_fund")
+	if err := k.bankKeeper.SendCoins(ctx, moduleAddr, recipientAddr, disburseCoins); err != nil {
+		return nil, fmt.Errorf("failed to disburse funds: %w", err)
+	}
+
+	// Return full deposit to proposer (proposal passed)
+	k.returnDeposit(ctx, proposal.Proposer, true)
+
+	// Update stats
+	stats := k.GetResearchFundStats(ctx)
+	stats.TotalDisbursed += disburseAmount.Uint64()
+	k.SetResearchFundStats(ctx, stats)
+
+	proposal.Status = types.ResearchProposalStatusExecuted
+	k.SetResearchProposal(ctx, proposal)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("research_proposal_executed",
+			sdk.NewAttribute("proposal_id", msg.ProposalId),
+			sdk.NewAttribute("amount", proposal.Amount),
+			sdk.NewAttribute("recipient", proposal.Recipient),
+		),
+	)
+
+	k.Logger(ctx).Info("research fund proposal executed",
+		"proposal_id", msg.ProposalId,
+		"amount", proposal.Amount,
+		"recipient", proposal.Recipient,
+	)
+
+	return &types.MsgExecuteResearchProposalResponse{AmountDisbursed: proposal.Amount}, nil
+}
+
+// returnDeposit returns the proposal deposit to the proposer.
+// If approved, returns 100%. If rejected, returns 90% and burns 10%.
+func (k msgServer) returnDeposit(ctx sdk.Context, proposer string, approved bool) {
+	proposerAddr, _ := sdk.AccAddressFromBech32(proposer)
+	deposit := int64(types.ResearchProposalDeposit)
+
+	if approved {
+		returnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(deposit)))
+		_ = k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, proposerAddr, returnCoins)
+	} else {
+		// Return 90%
+		returnAmount := deposit * (1_000_000 - int64(types.ResearchDepositSlashBps)) / 1_000_000
+		if returnAmount > 0 {
+			returnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(returnAmount)))
+			_ = k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, proposerAddr, returnCoins)
+		}
+		// Burn 10%
+		burnAmount := deposit - returnAmount
+		if burnAmount > 0 {
+			burnCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(burnAmount)))
+			_ = k.bankKeeper.BurnCoins(ctx, types.ModuleName, burnCoins)
+		}
+	}
 }

@@ -17,3 +17,22 @@
 settle() {
     sleep 3
 }
+
+# wait_for_block: Wait until the chain reaches at least the given height.
+# Usage: wait_for_block 5
+wait_for_block() {
+    local target="${1:-2}"
+    local rpc="${RPC_URL:-http://localhost:26657}"
+    local max_attempts=20
+    local attempt=0
+    while [ $attempt -lt $max_attempts ]; do
+        local h
+        h=$(curl -s "$rpc/status" | jq -r '.result.sync_info.latest_block_height' 2>/dev/null || echo "0")
+        if [ "$h" -ge "$target" ] 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    return 1
+}

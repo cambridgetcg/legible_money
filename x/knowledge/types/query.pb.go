@@ -1956,6 +1956,110 @@ func (x *QueryCounterFactResponse) GetConfidence() uint64 {
 	return 0
 }
 
+type QueryResearchFundRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryResearchFundRequest) Reset() {
+	*x = QueryResearchFundRequest{}
+	mi := &file_legible_knowledge_v1_query_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryResearchFundRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryResearchFundRequest) ProtoMessage() {}
+
+func (x *QueryResearchFundRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_knowledge_v1_query_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryResearchFundRequest.ProtoReflect.Descriptor instead.
+func (*QueryResearchFundRequest) Descriptor() ([]byte, []int) {
+	return file_legible_knowledge_v1_query_proto_rawDescGZIP(), []int{40}
+}
+
+type QueryResearchFundResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Balance         string                 `protobuf:"bytes,1,opt,name=balance,proto3" json:"balance,omitempty"` // current fund balance (ulgm)
+	ActiveProposals uint32                 `protobuf:"varint,2,opt,name=active_proposals,json=activeProposals,proto3" json:"active_proposals,omitempty"`
+	TotalDisbursed  string                 `protobuf:"bytes,3,opt,name=total_disbursed,json=totalDisbursed,proto3" json:"total_disbursed,omitempty"` // cumulative
+	TotalCollected  string                 `protobuf:"bytes,4,opt,name=total_collected,json=totalCollected,proto3" json:"total_collected,omitempty"` // cumulative
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *QueryResearchFundResponse) Reset() {
+	*x = QueryResearchFundResponse{}
+	mi := &file_legible_knowledge_v1_query_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryResearchFundResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryResearchFundResponse) ProtoMessage() {}
+
+func (x *QueryResearchFundResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_knowledge_v1_query_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryResearchFundResponse.ProtoReflect.Descriptor instead.
+func (*QueryResearchFundResponse) Descriptor() ([]byte, []int) {
+	return file_legible_knowledge_v1_query_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *QueryResearchFundResponse) GetBalance() string {
+	if x != nil {
+		return x.Balance
+	}
+	return ""
+}
+
+func (x *QueryResearchFundResponse) GetActiveProposals() uint32 {
+	if x != nil {
+		return x.ActiveProposals
+	}
+	return 0
+}
+
+func (x *QueryResearchFundResponse) GetTotalDisbursed() string {
+	if x != nil {
+		return x.TotalDisbursed
+	}
+	return ""
+}
+
+func (x *QueryResearchFundResponse) GetTotalCollected() string {
+	if x != nil {
+		return x.TotalCollected
+	}
+	return ""
+}
+
 var File_legible_knowledge_v1_query_proto protoreflect.FileDescriptor
 
 const file_legible_knowledge_v1_query_proto_rawDesc = "" +
@@ -2069,7 +2173,13 @@ const file_legible_knowledge_v1_query_proto_rawDesc = "" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1e\n" +
 	"\n" +
 	"confidence\x18\a \x01(\x04R\n" +
-	"confidence2\x82\x19\n" +
+	"confidence\"\x1a\n" +
+	"\x18QueryResearchFundRequest\"\xb2\x01\n" +
+	"\x19QueryResearchFundResponse\x12\x18\n" +
+	"\abalance\x18\x01 \x01(\tR\abalance\x12)\n" +
+	"\x10active_proposals\x18\x02 \x01(\rR\x0factiveProposals\x12'\n" +
+	"\x0ftotal_disbursed\x18\x03 \x01(\tR\x0etotalDisbursed\x12'\n" +
+	"\x0ftotal_collected\x18\x04 \x01(\tR\x0etotalCollected2\xa1\x1a\n" +
 	"\x05Query\x12\x83\x01\n" +
 	"\x06Params\x12(.legible.knowledge.v1.QueryParamsRequest\x1a).legible.knowledge.v1.QueryParamsResponse\"$\x82\xd3\xe4\x93\x02\x1e\x12\x1c/legible/knowledge/v1/params\x12\x94\x01\n" +
 	"\aStratum\x12).legible.knowledge.v1.QueryStratumRequest\x1a*.legible.knowledge.v1.QueryStratumResponse\"2\x82\xd3\xe4\x93\x02,\x12*/legible/knowledge/v1/stratum/{stratum_id}\x12\x83\x01\n" +
@@ -2091,7 +2201,8 @@ const file_legible_knowledge_v1_query_proto_rawDesc = "" +
 	"\rFactsByDomain\x12/.legible.knowledge.v1.QueryFactsByDomainRequest\x1a0.legible.knowledge.v1.QueryFactsByDomainResponse\"3\x82\xd3\xe4\x93\x02-\x12+/legible/knowledge/v1/facts/domain/{domain}\x12\xae\x01\n" +
 	"\x11VerificationRound\x123.legible.knowledge.v1.QueryVerificationRoundRequest\x1a4.legible.knowledge.v1.QueryVerificationRoundResponse\".\x82\xd3\xe4\x93\x02(\x12&/legible/knowledge/v1/round/{round_id}\x12\x9c\x01\n" +
 	"\fActiveRounds\x12..legible.knowledge.v1.QueryActiveRoundsRequest\x1a/.legible.knowledge.v1.QueryActiveRoundsResponse\"+\x82\xd3\xe4\x93\x02%\x12#/legible/knowledge/v1/rounds/active\x12\xaa\x01\n" +
-	"\vCounterFact\x12-.legible.knowledge.v1.QueryCounterFactRequest\x1a..legible.knowledge.v1.QueryCounterFactResponse\"<\x82\xd3\xe4\x93\x026\x124/legible/knowledge/v1/counter_fact/{counter_fact_id}B4Z2github.com/legible-money/legible/x/knowledge/typesb\x06proto3"
+	"\vCounterFact\x12-.legible.knowledge.v1.QueryCounterFactRequest\x1a..legible.knowledge.v1.QueryCounterFactResponse\"<\x82\xd3\xe4\x93\x026\x124/legible/knowledge/v1/counter_fact/{counter_fact_id}\x12\x9c\x01\n" +
+	"\fResearchFund\x12..legible.knowledge.v1.QueryResearchFundRequest\x1a/.legible.knowledge.v1.QueryResearchFundResponse\"+\x82\xd3\xe4\x93\x02%\x12#/legible/knowledge/v1/research_fundB4Z2github.com/legible-money/legible/x/knowledge/typesb\x06proto3"
 
 var (
 	file_legible_knowledge_v1_query_proto_rawDescOnce sync.Once
@@ -2105,7 +2216,7 @@ func file_legible_knowledge_v1_query_proto_rawDescGZIP() []byte {
 	return file_legible_knowledge_v1_query_proto_rawDescData
 }
 
-var file_legible_knowledge_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_legible_knowledge_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_legible_knowledge_v1_query_proto_goTypes = []any{
 	(*QueryParamsRequest)(nil),               // 0: legible.knowledge.v1.QueryParamsRequest
 	(*QueryParamsResponse)(nil),              // 1: legible.knowledge.v1.QueryParamsResponse
@@ -2147,43 +2258,45 @@ var file_legible_knowledge_v1_query_proto_goTypes = []any{
 	(*QueryActiveRoundsResponse)(nil),        // 37: legible.knowledge.v1.QueryActiveRoundsResponse
 	(*QueryCounterFactRequest)(nil),          // 38: legible.knowledge.v1.QueryCounterFactRequest
 	(*QueryCounterFactResponse)(nil),         // 39: legible.knowledge.v1.QueryCounterFactResponse
-	(*Params)(nil),                           // 40: legible.knowledge.v1.Params
-	(*StratumDefinition)(nil),                // 41: legible.knowledge.v1.StratumDefinition
-	(*StratumRegistry)(nil),                  // 42: legible.knowledge.v1.StratumRegistry
-	(*OntologicalDomain)(nil),                // 43: legible.knowledge.v1.OntologicalDomain
-	(*StratumDependency)(nil),                // 44: legible.knowledge.v1.StratumDependency
-	(*OntologicalConfidenceResult)(nil),      // 45: legible.knowledge.v1.OntologicalConfidenceResult
-	(*DomainProposal)(nil),                   // 46: legible.knowledge.v1.DomainProposal
-	(*DomainEndorsement)(nil),                // 47: legible.knowledge.v1.DomainEndorsement
-	(*DomainChallenge)(nil),                  // 48: legible.knowledge.v1.DomainChallenge
-	(DomainProposalStatus)(0),                // 49: legible.knowledge.v1.DomainProposalStatus
-	(*Claim)(nil),                            // 50: legible.knowledge.v1.Claim
-	(*Fact)(nil),                             // 51: legible.knowledge.v1.Fact
-	(*VerificationRound)(nil),                // 52: legible.knowledge.v1.VerificationRound
+	(*QueryResearchFundRequest)(nil),         // 40: legible.knowledge.v1.QueryResearchFundRequest
+	(*QueryResearchFundResponse)(nil),        // 41: legible.knowledge.v1.QueryResearchFundResponse
+	(*Params)(nil),                           // 42: legible.knowledge.v1.Params
+	(*StratumDefinition)(nil),                // 43: legible.knowledge.v1.StratumDefinition
+	(*StratumRegistry)(nil),                  // 44: legible.knowledge.v1.StratumRegistry
+	(*OntologicalDomain)(nil),                // 45: legible.knowledge.v1.OntologicalDomain
+	(*StratumDependency)(nil),                // 46: legible.knowledge.v1.StratumDependency
+	(*OntologicalConfidenceResult)(nil),      // 47: legible.knowledge.v1.OntologicalConfidenceResult
+	(*DomainProposal)(nil),                   // 48: legible.knowledge.v1.DomainProposal
+	(*DomainEndorsement)(nil),                // 49: legible.knowledge.v1.DomainEndorsement
+	(*DomainChallenge)(nil),                  // 50: legible.knowledge.v1.DomainChallenge
+	(DomainProposalStatus)(0),                // 51: legible.knowledge.v1.DomainProposalStatus
+	(*Claim)(nil),                            // 52: legible.knowledge.v1.Claim
+	(*Fact)(nil),                             // 53: legible.knowledge.v1.Fact
+	(*VerificationRound)(nil),                // 54: legible.knowledge.v1.VerificationRound
 }
 var file_legible_knowledge_v1_query_proto_depIdxs = []int32{
-	40, // 0: legible.knowledge.v1.QueryParamsResponse.params:type_name -> legible.knowledge.v1.Params
-	41, // 1: legible.knowledge.v1.QueryStratumResponse.stratum:type_name -> legible.knowledge.v1.StratumDefinition
-	41, // 2: legible.knowledge.v1.QueryStrataResponse.strata:type_name -> legible.knowledge.v1.StratumDefinition
-	42, // 3: legible.knowledge.v1.QueryStratumRegistryResponse.registry:type_name -> legible.knowledge.v1.StratumRegistry
-	43, // 4: legible.knowledge.v1.QueryDomainResponse.domain:type_name -> legible.knowledge.v1.OntologicalDomain
-	43, // 5: legible.knowledge.v1.QueryDomainsResponse.domains:type_name -> legible.knowledge.v1.OntologicalDomain
-	43, // 6: legible.knowledge.v1.QueryDomainsByStratumResponse.domains:type_name -> legible.knowledge.v1.OntologicalDomain
-	43, // 7: legible.knowledge.v1.QueryDomainChildrenResponse.children:type_name -> legible.knowledge.v1.OntologicalDomain
-	43, // 8: legible.knowledge.v1.QueryDomainPathResponse.path:type_name -> legible.knowledge.v1.OntologicalDomain
-	44, // 9: legible.knowledge.v1.QueryCalculateConfidenceRequest.dependencies:type_name -> legible.knowledge.v1.StratumDependency
-	45, // 10: legible.knowledge.v1.QueryCalculateConfidenceResponse.result:type_name -> legible.knowledge.v1.OntologicalConfidenceResult
-	46, // 11: legible.knowledge.v1.QueryDomainProposalResponse.proposal:type_name -> legible.knowledge.v1.DomainProposal
-	47, // 12: legible.knowledge.v1.QueryDomainProposalResponse.endorsements:type_name -> legible.knowledge.v1.DomainEndorsement
-	48, // 13: legible.knowledge.v1.QueryDomainProposalResponse.challenges:type_name -> legible.knowledge.v1.DomainChallenge
-	49, // 14: legible.knowledge.v1.QueryDomainProposalsRequest.status:type_name -> legible.knowledge.v1.DomainProposalStatus
-	46, // 15: legible.knowledge.v1.QueryDomainProposalsResponse.proposals:type_name -> legible.knowledge.v1.DomainProposal
-	50, // 16: legible.knowledge.v1.QueryClaimResponse.claim:type_name -> legible.knowledge.v1.Claim
-	51, // 17: legible.knowledge.v1.QueryFactResponse.fact:type_name -> legible.knowledge.v1.Fact
-	51, // 18: legible.knowledge.v1.QueryFactsResponse.facts:type_name -> legible.knowledge.v1.Fact
-	51, // 19: legible.knowledge.v1.QueryFactsByDomainResponse.facts:type_name -> legible.knowledge.v1.Fact
-	52, // 20: legible.knowledge.v1.QueryVerificationRoundResponse.round:type_name -> legible.knowledge.v1.VerificationRound
-	52, // 21: legible.knowledge.v1.QueryActiveRoundsResponse.rounds:type_name -> legible.knowledge.v1.VerificationRound
+	42, // 0: legible.knowledge.v1.QueryParamsResponse.params:type_name -> legible.knowledge.v1.Params
+	43, // 1: legible.knowledge.v1.QueryStratumResponse.stratum:type_name -> legible.knowledge.v1.StratumDefinition
+	43, // 2: legible.knowledge.v1.QueryStrataResponse.strata:type_name -> legible.knowledge.v1.StratumDefinition
+	44, // 3: legible.knowledge.v1.QueryStratumRegistryResponse.registry:type_name -> legible.knowledge.v1.StratumRegistry
+	45, // 4: legible.knowledge.v1.QueryDomainResponse.domain:type_name -> legible.knowledge.v1.OntologicalDomain
+	45, // 5: legible.knowledge.v1.QueryDomainsResponse.domains:type_name -> legible.knowledge.v1.OntologicalDomain
+	45, // 6: legible.knowledge.v1.QueryDomainsByStratumResponse.domains:type_name -> legible.knowledge.v1.OntologicalDomain
+	45, // 7: legible.knowledge.v1.QueryDomainChildrenResponse.children:type_name -> legible.knowledge.v1.OntologicalDomain
+	45, // 8: legible.knowledge.v1.QueryDomainPathResponse.path:type_name -> legible.knowledge.v1.OntologicalDomain
+	46, // 9: legible.knowledge.v1.QueryCalculateConfidenceRequest.dependencies:type_name -> legible.knowledge.v1.StratumDependency
+	47, // 10: legible.knowledge.v1.QueryCalculateConfidenceResponse.result:type_name -> legible.knowledge.v1.OntologicalConfidenceResult
+	48, // 11: legible.knowledge.v1.QueryDomainProposalResponse.proposal:type_name -> legible.knowledge.v1.DomainProposal
+	49, // 12: legible.knowledge.v1.QueryDomainProposalResponse.endorsements:type_name -> legible.knowledge.v1.DomainEndorsement
+	50, // 13: legible.knowledge.v1.QueryDomainProposalResponse.challenges:type_name -> legible.knowledge.v1.DomainChallenge
+	51, // 14: legible.knowledge.v1.QueryDomainProposalsRequest.status:type_name -> legible.knowledge.v1.DomainProposalStatus
+	48, // 15: legible.knowledge.v1.QueryDomainProposalsResponse.proposals:type_name -> legible.knowledge.v1.DomainProposal
+	52, // 16: legible.knowledge.v1.QueryClaimResponse.claim:type_name -> legible.knowledge.v1.Claim
+	53, // 17: legible.knowledge.v1.QueryFactResponse.fact:type_name -> legible.knowledge.v1.Fact
+	53, // 18: legible.knowledge.v1.QueryFactsResponse.facts:type_name -> legible.knowledge.v1.Fact
+	53, // 19: legible.knowledge.v1.QueryFactsByDomainResponse.facts:type_name -> legible.knowledge.v1.Fact
+	54, // 20: legible.knowledge.v1.QueryVerificationRoundResponse.round:type_name -> legible.knowledge.v1.VerificationRound
+	54, // 21: legible.knowledge.v1.QueryActiveRoundsResponse.rounds:type_name -> legible.knowledge.v1.VerificationRound
 	0,  // 22: legible.knowledge.v1.Query.Params:input_type -> legible.knowledge.v1.QueryParamsRequest
 	2,  // 23: legible.knowledge.v1.Query.Stratum:input_type -> legible.knowledge.v1.QueryStratumRequest
 	4,  // 24: legible.knowledge.v1.Query.Strata:input_type -> legible.knowledge.v1.QueryStrataRequest
@@ -2204,28 +2317,30 @@ var file_legible_knowledge_v1_query_proto_depIdxs = []int32{
 	34, // 39: legible.knowledge.v1.Query.VerificationRound:input_type -> legible.knowledge.v1.QueryVerificationRoundRequest
 	36, // 40: legible.knowledge.v1.Query.ActiveRounds:input_type -> legible.knowledge.v1.QueryActiveRoundsRequest
 	38, // 41: legible.knowledge.v1.Query.CounterFact:input_type -> legible.knowledge.v1.QueryCounterFactRequest
-	1,  // 42: legible.knowledge.v1.Query.Params:output_type -> legible.knowledge.v1.QueryParamsResponse
-	3,  // 43: legible.knowledge.v1.Query.Stratum:output_type -> legible.knowledge.v1.QueryStratumResponse
-	5,  // 44: legible.knowledge.v1.Query.Strata:output_type -> legible.knowledge.v1.QueryStrataResponse
-	7,  // 45: legible.knowledge.v1.Query.StratumRegistry:output_type -> legible.knowledge.v1.QueryStratumRegistryResponse
-	9,  // 46: legible.knowledge.v1.Query.Domain:output_type -> legible.knowledge.v1.QueryDomainResponse
-	11, // 47: legible.knowledge.v1.Query.Domains:output_type -> legible.knowledge.v1.QueryDomainsResponse
-	13, // 48: legible.knowledge.v1.Query.DomainsByStratum:output_type -> legible.knowledge.v1.QueryDomainsByStratumResponse
-	15, // 49: legible.knowledge.v1.Query.DomainChildren:output_type -> legible.knowledge.v1.QueryDomainChildrenResponse
-	17, // 50: legible.knowledge.v1.Query.DomainPath:output_type -> legible.knowledge.v1.QueryDomainPathResponse
-	19, // 51: legible.knowledge.v1.Query.ValidateDependency:output_type -> legible.knowledge.v1.QueryValidateDependencyResponse
-	21, // 52: legible.knowledge.v1.Query.CalculateConfidence:output_type -> legible.knowledge.v1.QueryCalculateConfidenceResponse
-	23, // 53: legible.knowledge.v1.Query.DomainProposal:output_type -> legible.knowledge.v1.QueryDomainProposalResponse
-	25, // 54: legible.knowledge.v1.Query.DomainProposals:output_type -> legible.knowledge.v1.QueryDomainProposalsResponse
-	27, // 55: legible.knowledge.v1.Query.Claim:output_type -> legible.knowledge.v1.QueryClaimResponse
-	29, // 56: legible.knowledge.v1.Query.Fact:output_type -> legible.knowledge.v1.QueryFactResponse
-	31, // 57: legible.knowledge.v1.Query.Facts:output_type -> legible.knowledge.v1.QueryFactsResponse
-	33, // 58: legible.knowledge.v1.Query.FactsByDomain:output_type -> legible.knowledge.v1.QueryFactsByDomainResponse
-	35, // 59: legible.knowledge.v1.Query.VerificationRound:output_type -> legible.knowledge.v1.QueryVerificationRoundResponse
-	37, // 60: legible.knowledge.v1.Query.ActiveRounds:output_type -> legible.knowledge.v1.QueryActiveRoundsResponse
-	39, // 61: legible.knowledge.v1.Query.CounterFact:output_type -> legible.knowledge.v1.QueryCounterFactResponse
-	42, // [42:62] is the sub-list for method output_type
-	22, // [22:42] is the sub-list for method input_type
+	40, // 42: legible.knowledge.v1.Query.ResearchFund:input_type -> legible.knowledge.v1.QueryResearchFundRequest
+	1,  // 43: legible.knowledge.v1.Query.Params:output_type -> legible.knowledge.v1.QueryParamsResponse
+	3,  // 44: legible.knowledge.v1.Query.Stratum:output_type -> legible.knowledge.v1.QueryStratumResponse
+	5,  // 45: legible.knowledge.v1.Query.Strata:output_type -> legible.knowledge.v1.QueryStrataResponse
+	7,  // 46: legible.knowledge.v1.Query.StratumRegistry:output_type -> legible.knowledge.v1.QueryStratumRegistryResponse
+	9,  // 47: legible.knowledge.v1.Query.Domain:output_type -> legible.knowledge.v1.QueryDomainResponse
+	11, // 48: legible.knowledge.v1.Query.Domains:output_type -> legible.knowledge.v1.QueryDomainsResponse
+	13, // 49: legible.knowledge.v1.Query.DomainsByStratum:output_type -> legible.knowledge.v1.QueryDomainsByStratumResponse
+	15, // 50: legible.knowledge.v1.Query.DomainChildren:output_type -> legible.knowledge.v1.QueryDomainChildrenResponse
+	17, // 51: legible.knowledge.v1.Query.DomainPath:output_type -> legible.knowledge.v1.QueryDomainPathResponse
+	19, // 52: legible.knowledge.v1.Query.ValidateDependency:output_type -> legible.knowledge.v1.QueryValidateDependencyResponse
+	21, // 53: legible.knowledge.v1.Query.CalculateConfidence:output_type -> legible.knowledge.v1.QueryCalculateConfidenceResponse
+	23, // 54: legible.knowledge.v1.Query.DomainProposal:output_type -> legible.knowledge.v1.QueryDomainProposalResponse
+	25, // 55: legible.knowledge.v1.Query.DomainProposals:output_type -> legible.knowledge.v1.QueryDomainProposalsResponse
+	27, // 56: legible.knowledge.v1.Query.Claim:output_type -> legible.knowledge.v1.QueryClaimResponse
+	29, // 57: legible.knowledge.v1.Query.Fact:output_type -> legible.knowledge.v1.QueryFactResponse
+	31, // 58: legible.knowledge.v1.Query.Facts:output_type -> legible.knowledge.v1.QueryFactsResponse
+	33, // 59: legible.knowledge.v1.Query.FactsByDomain:output_type -> legible.knowledge.v1.QueryFactsByDomainResponse
+	35, // 60: legible.knowledge.v1.Query.VerificationRound:output_type -> legible.knowledge.v1.QueryVerificationRoundResponse
+	37, // 61: legible.knowledge.v1.Query.ActiveRounds:output_type -> legible.knowledge.v1.QueryActiveRoundsResponse
+	39, // 62: legible.knowledge.v1.Query.CounterFact:output_type -> legible.knowledge.v1.QueryCounterFactResponse
+	41, // 63: legible.knowledge.v1.Query.ResearchFund:output_type -> legible.knowledge.v1.QueryResearchFundResponse
+	43, // [43:64] is the sub-list for method output_type
+	22, // [22:43] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name
 	22, // [22:22] is the sub-list for extension extendee
 	0,  // [0:22] is the sub-list for field type_name
@@ -2245,7 +2360,7 @@ func file_legible_knowledge_v1_query_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_knowledge_v1_query_proto_rawDesc), len(file_legible_knowledge_v1_query_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   40,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

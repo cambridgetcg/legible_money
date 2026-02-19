@@ -116,6 +116,25 @@ func (k Keeper) GetPartnershipsByParticipant(ctx sdk.Context, addr string) []*ty
 	return result
 }
 
+// GetActivePartnershipForAddress finds the first active partnership where addr is a participant.
+// Returns nil, false if no active partnership exists for this address.
+// An address should have at most one active partnership for v0.1.
+func (k Keeper) GetActivePartnershipForAddress(ctx sdk.Context, addr string) (*types.Partnership, bool) {
+	// Check human partnerships first
+	for _, id := range k.GetPartnershipsByHuman(ctx, addr) {
+		if p, found := k.GetPartnership(ctx, id); found && p.Status == types.StatusActive {
+			return p, true
+		}
+	}
+	// Check agent partnerships
+	for _, id := range k.GetPartnershipsByAgent(ctx, addr) {
+		if p, found := k.GetPartnership(ctx, id); found && p.Status == types.StatusActive {
+			return p, true
+		}
+	}
+	return nil, false
+}
+
 func (k Keeper) getPartnershipIdsByPrefix(ctx sdk.Context, prefix []byte) []string {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))

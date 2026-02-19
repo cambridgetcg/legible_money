@@ -1372,3 +1372,143 @@ func (k Keeper) GetParticipationPenaltyBPS(ctx sdk.Context, validatorAddr string
 	// Below threshold: apply flat PassiveStakingPenaltyBps
 	return ep.PassiveStakingPenaltyBps
 }
+
+// ---------- Research Fund Governance Operations ----------
+
+func researchProposalKey(id string) []byte {
+	return append(types.ResearchProposalPrefix, []byte(id)...)
+}
+
+func researchVoteKey(proposalId, voter string) []byte {
+	return append(types.ResearchVotePrefix, []byte(proposalId+":"+voter)...)
+}
+
+func researchFundStatsKey() []byte {
+	return types.ResearchFundStatsPrefix
+}
+
+// SetResearchProposal stores a research proposal (JSON-encoded).
+func (k Keeper) SetResearchProposal(ctx sdk.Context, proposal *types.ResearchProposal) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(proposal)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal research proposal: %v", err))
+	}
+	if err := kvStore.Set(researchProposalKey(proposal.ProposalId), bz); err != nil {
+		panic(fmt.Sprintf("failed to set research proposal: %v", err))
+	}
+}
+
+// GetResearchProposal retrieves a research proposal by ID.
+func (k Keeper) GetResearchProposal(ctx sdk.Context, proposalId string) (*types.ResearchProposal, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(researchProposalKey(proposalId))
+	if err != nil || bz == nil {
+		return nil, false
+	}
+	var proposal types.ResearchProposal
+	if err := json.Unmarshal(bz, &proposal); err != nil {
+		return nil, false
+	}
+	return &proposal, true
+}
+
+// IterateResearchProposals iterates over all research proposals. Return true from cb to stop.
+func (k Keeper) IterateResearchProposals(ctx sdk.Context, cb func(*types.ResearchProposal) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.ResearchProposalPrefix, prefixEndBytes(types.ResearchProposalPrefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var proposal types.ResearchProposal
+		if err := json.Unmarshal(iter.Value(), &proposal); err != nil {
+			continue
+		}
+		if cb(&proposal) {
+			break
+		}
+	}
+}
+
+// SetResearchVote stores a vote on a research proposal (JSON-encoded).
+func (k Keeper) SetResearchVote(ctx sdk.Context, vote *types.ResearchVote) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(vote)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal research vote: %v", err))
+	}
+	if err := kvStore.Set(researchVoteKey(vote.ProposalId, vote.Voter), bz); err != nil {
+		panic(fmt.Sprintf("failed to set research vote: %v", err))
+	}
+}
+
+// GetResearchVote retrieves a specific vote.
+func (k Keeper) GetResearchVote(ctx sdk.Context, proposalId, voter string) (*types.ResearchVote, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(researchVoteKey(proposalId, voter))
+	if err != nil || bz == nil {
+		return nil, false
+	}
+	var vote types.ResearchVote
+	if err := json.Unmarshal(bz, &vote); err != nil {
+		return nil, false
+	}
+	return &vote, true
+}
+
+// GetVotesByProposal returns all votes for a given proposal.
+func (k Keeper) GetVotesByProposal(ctx sdk.Context, proposalId string) []*types.ResearchVote {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := append(types.ResearchVotePrefix, []byte(proposalId+":")...)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var votes []*types.ResearchVote
+	for ; iter.Valid(); iter.Next() {
+		var vote types.ResearchVote
+		if err := json.Unmarshal(iter.Value(), &vote); err != nil {
+			continue
+		}
+		votes = append(votes, &vote)
+	}
+	return votes
+}
+
+// GetResearchFundStats retrieves research fund accounting stats.
+func (k Keeper) GetResearchFundStats(ctx sdk.Context) types.ResearchFundStats {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(researchFundStatsKey())
+	if err != nil || bz == nil {
+		return types.ResearchFundStats{}
+	}
+	var stats types.ResearchFundStats
+	if err := json.Unmarshal(bz, &stats); err != nil {
+		return types.ResearchFundStats{}
+	}
+	return stats
+}
+
+// SetResearchFundStats stores research fund accounting stats.
+func (k Keeper) SetResearchFundStats(ctx sdk.Context, stats types.ResearchFundStats) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(stats)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal research fund stats: %v", err))
+	}
+	if err := kvStore.Set(researchFundStatsKey(), bz); err != nil {
+		panic(fmt.Sprintf("failed to set research fund stats: %v", err))
+	}
+}
+
+// IncrementResearchFundCollected adds to the cumulative collected total.
+func (k Keeper) IncrementResearchFundCollected(ctx sdk.Context, amount uint64) {
+	stats := k.GetResearchFundStats(ctx)
+	stats.TotalCollected += amount
+	k.SetResearchFundStats(ctx, stats)
+}

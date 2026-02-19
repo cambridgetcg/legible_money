@@ -37,6 +37,9 @@ type Keeper struct {
 	// Autopoiesis keeper for adaptive multipliers
 	autopoiesisKeeper types.AutopoiesisKeeper
 
+	// Partnerships keeper for routing rewards through partnerships
+	partnershipsKeeper types.PartnershipsKeeper
+
 	// Verification hooks (staking reputation, qualification metrics, etc.)
 	verificationHooks types.VerificationHooks
 
@@ -117,6 +120,13 @@ func (k Keeper) GetSlashMultiplier(ctx sdk.Context) uint64 {
 // and challenges flow to agent homes for patina score calculation.
 func (k *Keeper) SetHomeKeeper(hk types.HomeKeeper) {
 	k.homeKeeper = hk
+}
+
+// SetPartnershipsKeeper sets the partnerships keeper after initialization (avoids circular deps).
+// Enables reward routing: verification, citation, and falsification rewards flow through
+// active partnerships (22% common pot, 78% split per partnership terms).
+func (k *Keeper) SetPartnershipsKeeper(pk types.PartnershipsKeeper) {
+	k.partnershipsKeeper = pk
 }
 
 // SetVerificationHooks sets the verification hooks (called after keeper construction

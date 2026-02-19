@@ -380,7 +380,7 @@ func (k Keeper) ApplyRewardsAndSlashes(
 				valAddr, err := sdk.AccAddressFromBech32(validatorAddr)
 				if err == nil {
 					rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(validatorAmount))))
-					if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, valAddr, rewardCoins); err != nil {
+					if err := k.RouteReward(ctx, valAddr, rewardCoins, "verification"); err != nil {
 						k.Logger(ctx).Error("failed to send reward",
 							"validator", validatorAddr, "amount", validatorAmount, "error", err)
 					}

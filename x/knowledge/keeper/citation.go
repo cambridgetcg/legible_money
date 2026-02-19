@@ -23,6 +23,9 @@ func (k Keeper) IncrementCitationCount(ctx sdk.Context, factID string) error {
 	fact.LastUtilizedBlock = uint64(ctx.BlockHeight())
 	k.SetFact(ctx, fact)
 
+	// B12-4: Track partnership citation stats
+	k.RecordPartnershipCitation(ctx, factID)
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent("fact_cited",
 			sdk.NewAttribute("fact_id", factID),
@@ -136,14 +139,12 @@ func (k Keeper) DistributeCitationRewards(
 				continue
 			}
 
-			// Transfer reward to the cited fact's submitter
+			// Transfer reward to the cited fact's submitter (routed through partnership if active)
 			if k.bankKeeper != nil {
 				submitterAddr, err := sdk.AccAddressFromBech32(fact.Submitter)
 				if err == nil {
 					rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(int64(adjustedShare))))
-					if err := k.bankKeeper.SendCoinsFromModuleToAccount(
-						ctx, types.ModuleName, submitterAddr, rewardCoins,
-					); err != nil {
+					if err := k.RouteReward(ctx, submitterAddr, rewardCoins, "citation"); err != nil {
 						k.Logger(ctx).Error("failed to send citation reward",
 							"fact_id", ref.ToFactId, "amount", adjustedShare, "error", err)
 						continue

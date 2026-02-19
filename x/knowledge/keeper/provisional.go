@@ -103,6 +103,7 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim *types.Claim, p
 			IsProvisional:        true,
 			ChallengeWindowEnd:   claim.ChallengeWindowEnd,
 			OriginalClaimId:      claim.Id,
+			PartnershipId:        claim.PartnershipId, // B12-4: propagate partnership attribution
 		}
 		k.SetFact(ctx, &fact)
 
@@ -173,6 +174,10 @@ func (k Keeper) TransitionToVerified(ctx sdk.Context, claim *types.Claim, curren
 			fact.LastVerifiedHeight = currentHeight
 			k.SetFact(ctx, fact)
 
+			// B12-4: Record partnership fact creation and credit both partners
+			k.RecordPartnershipFactCreation(ctx, fact)
+			k.CreditPartnershipReputation(ctx, fact, true)
+
 			// Create fact references from claim references
 			for _, refID := range claim.References {
 				k.SetFactReference(ctx, &types.FactReference{
@@ -217,8 +222,14 @@ func (k Keeper) TransitionToVerified(ctx sdk.Context, claim *types.Claim, curren
 			BaseConfidence:       claim.StructuralScore,
 			Maturity:             types.MaturityEmerging,
 			OriginalClaimId:      claim.Id,
+			PartnershipId:        claim.PartnershipId, // B12-4: propagate partnership attribution
 		}
 		k.SetFact(ctx, &fact)
+
+		// B12-4: Record partnership fact creation and credit both partners
+		k.RecordPartnershipFactCreation(ctx, &fact)
+		k.CreditPartnershipReputation(ctx, &fact, true)
+
 		claim.ProvisionalFactId = factID
 
 		for _, refID := range claim.References {

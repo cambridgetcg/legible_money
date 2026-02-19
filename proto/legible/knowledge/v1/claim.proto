@@ -41,6 +41,7 @@ message Claim {
   string provisional_fact_id = 18;    // fact created during provisional acceptance
   uint32 active_challenge_count = 19; // concurrent challenges against this claim
   string reverification_fact_id = 20; // fact ID when claim is a reverification
+  string partnership_id = 21;         // partnership ID if submitter was in active partnership
 }
 
 enum ClaimStatus {
@@ -105,6 +106,7 @@ message Fact {
   uint64 bridge_score = 37;              // verified cross-domain reference score (0-1,000,000 bps)
   bool is_prophetic = 38;                // true if barely-accepted fact later gained citations
   uint64 citation_growth_rate = 39;      // citations per epoch (smoothed, bps where 1000000 = 1 citation/epoch)
+  string partnership_id = 40;             // partnership ID if submitter was in active partnership at fact creation
 }
 
 // FactEvidenceSummary is a snapshot of evidence that supported a fact at verification time.
@@ -459,5 +461,45 @@ message MsgPatronizeFact {
 message MsgPatronizeFactResponse {
   string patronage_id = 1;
   uint64 new_kms_bonus = 2;            // updated patronage bonus (basis points)
+}
+
+// ============================================================================
+// Research Fund Governance Messages
+// ============================================================================
+
+// MsgProposeResearchFund proposes a disbursement from the research fund.
+message MsgProposeResearchFund {
+  option (cosmos.msg.v1.signer) = "proposer";
+  string proposer = 1;                 // bech32 address
+  string title = 2;
+  string description = 3;
+  string amount = 4;                   // ulgm
+  string recipient = 5;               // bech32 address
+  string domain = 6;                   // knowledge domain this serves
+}
+
+message MsgProposeResearchFundResponse {
+  string proposal_id = 1;
+}
+
+// MsgVoteResearchProposal casts a vote on a research fund proposal.
+message MsgVoteResearchProposal {
+  option (cosmos.msg.v1.signer) = "voter";
+  string voter = 1;                    // bech32 address
+  string proposal_id = 2;
+  bool vote_yes = 3;
+}
+
+message MsgVoteResearchProposalResponse {}
+
+// MsgExecuteResearchProposal executes an approved research fund proposal.
+message MsgExecuteResearchProposal {
+  option (cosmos.msg.v1.signer) = "executor";
+  string executor = 1;                 // bech32 address
+  string proposal_id = 2;
+}
+
+message MsgExecuteResearchProposalResponse {
+  string amount_disbursed = 1;
 }
 

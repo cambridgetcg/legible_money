@@ -37,4 +37,9 @@ var (
 	ByDIDSeedIndexPrefix       = []byte{0x14}
 	ByDIDIntentIndexPrefix     = []byte{0x15}
 	BySponsorMentorIndexPrefix = []byte{0x16}
+
+	// Consortium key prefixes (0x20-0x22, separated from partnership 0x01-0x16)
+	ConsortiumKeyPrefix       = []byte{0x20} // consortium-id -> Consortium JSON
+	ConsortiumFormationPrefix = []byte{0x21} // consortium-id -> expiry block
+	ByMemberIndexPrefix       = []byte{0x22} // member-addr/consortium-id -> consortium-id
 )

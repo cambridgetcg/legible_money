@@ -696,3 +696,27 @@ func isDirectChild(name, parent string) bool {
 	rest := strings.TrimPrefix(name, prefix)
 	return !strings.Contains(rest, ".")
 }
+
+// ResearchFund returns the research fund balance and statistics.
+func (q queryServer) ResearchFund(goCtx context.Context, _ *types.QueryResearchFundRequest) (*types.QueryResearchFundResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	balance := q.GetResearchFundBalance(ctx)
+	stats := q.GetResearchFundStats(ctx)
+
+	// Count active proposals
+	var activeCount uint32
+	q.IterateResearchProposals(ctx, func(p *types.ResearchProposal) bool {
+		if p.Status == types.ResearchProposalStatusVoting {
+			activeCount++
+		}
+		return false
+	})
+
+	return &types.QueryResearchFundResponse{
+		Balance:         balance.Amount.String(),
+		ActiveProposals: activeCount,
+		TotalDisbursed:  strconv.FormatUint(stats.TotalDisbursed, 10),
+		TotalCollected:  strconv.FormatUint(stats.TotalCollected, 10),
+	}, nil
+}

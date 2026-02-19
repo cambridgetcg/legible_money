@@ -203,6 +203,19 @@ create_gentx() {
 }
 
 # ---------------------------------------------------------------------------
+# Inject genesis axioms (optional — if template file exists)
+# ---------------------------------------------------------------------------
+inject_axioms() {
+    local axiom_file="$PROJECT_ROOT/scripts/genesis-axioms-template.json"
+    local genesis="$NODE_HOME/config/genesis.json"
+    if [ -f "$axiom_file" ]; then
+        info "Injecting genesis axioms..."
+        go run "$PROJECT_ROOT/tools/axiom-loader/main.go" inject "$axiom_file" "$genesis" >/dev/null 2>&1
+        ok "Axioms injected ($(jq '.app_state.knowledge.facts | length' "$genesis") facts)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Validate genesis
 # ---------------------------------------------------------------------------
 validate_genesis() {
@@ -336,6 +349,7 @@ main() {
             add_genesis_accounts
             patch_genesis
             create_gentx
+            inject_axioms
             validate_genesis
             patch_configs
             print_summary

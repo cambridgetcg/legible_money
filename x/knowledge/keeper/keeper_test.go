@@ -18,6 +18,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
@@ -138,6 +139,10 @@ func (m mockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _, _ stri
 
 func (m mockBankKeeper) BurnCoins(_ context.Context, _ string, _ sdk.Coins) error {
 	return nil
+}
+
+func (m mockBankKeeper) GetBalance(_ context.Context, _ sdk.AccAddress, denom string) sdk.Coin {
+	return sdk.NewCoin(denom, sdkmath.ZeroInt())
 }
 
 // ---------- Mock AccountKeeper ----------
@@ -2288,12 +2293,14 @@ type trackingBankKeeper struct {
 	sentToAccount map[string]sdk.Coins // addr → coins sent
 	sentToModule  map[string]sdk.Coins // module → coins sent
 	burned        sdk.Coins            // total burned
+	balances      map[string]sdk.Coin  // addr → balance (for GetBalance)
 }
 
 func newTrackingBankKeeper() *trackingBankKeeper {
 	return &trackingBankKeeper{
 		sentToAccount: make(map[string]sdk.Coins),
 		sentToModule:  make(map[string]sdk.Coins),
+		balances:      make(map[string]sdk.Coin),
 	}
 }
 
@@ -2318,6 +2325,13 @@ func (m *trackingBankKeeper) SendCoinsFromModuleToModule(_ context.Context, _, _
 func (m *trackingBankKeeper) BurnCoins(_ context.Context, _ string, amt sdk.Coins) error {
 	m.burned = m.burned.Add(amt...)
 	return nil
+}
+
+func (m *trackingBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddress, denom string) sdk.Coin {
+	if coin, ok := m.balances[addr.String()]; ok {
+		return coin
+	}
+	return sdk.NewCoin(denom, sdkmath.ZeroInt())
 }
 
 // ---------- Mock VestingRewardsKeeper ----------
@@ -5080,5 +5094,435 @@ func TestFARM12_UnknownDomainFallback(t *testing.T) {
 	// Social ceiling = 850k, so 950k confidence should be clamped
 	if result.Confidence > 850_000 {
 		t.Errorf("FARM-12: unknown domain confidence=%d, should be clamped to 850000 (social ceiling)", result.Confidence)
+	}
+}
+
+// ============================================================================
+// Research Fund Governance Tests
+// ============================================================================
+
+// researchFundTestAddr generates a valid lgm bech32 address from a seed string.
+func researchFundTestAddr(seed string) string {
+	return sdk.AccAddress([]byte(seed)).String()
+}
+
+// setupResearchFundKeeper creates a keeper with tracking bank keeper and pre-populates
+// verified facts for test addresses. Returns the keeper, context, and bank keeper.
+func setupResearchFundKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *trackingBankKeeper) {
+	t.Helper()
+
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	memKey := storetypes.NewMemoryStoreKey(types.MemStoreKey)
+
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	stateStore.MountStoreWithDB(memKey, storetypes.StoreTypeMemory, nil)
+	if err := stateStore.LoadLatestVersion(); err != nil {
+		t.Fatalf("failed to load latest version: %v", err)
+	}
+
+	registry := codectypes.NewInterfaceRegistry()
+	cdc := codec.NewProtoCodec(registry)
+	mockSK := newMockStakingKeeper()
+
+	tbk := newTrackingBankKeeper()
+	// Pre-seed research_fund module account with 100 LGM using real authtypes address
+	fundAddr := authtypes.NewModuleAddress("research_fund")
+	tbk.balances[fundAddr.String()] = sdk.NewCoin("ulgm", sdkmath.NewInt(100_000_000)) // 100 LGM
+
+	k := keeper.NewKeeper(
+		cdc,
+		runtime.NewKVStoreService(storeKey),
+		memKey,
+		mockAccountKeeper{},
+		tbk,
+		mockSK,
+		nil, nil, nil, nil,
+		"lgm10d07y265gmmuvt4z0w9aw880jnsr700jefnezl",
+	)
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 100}, false, log.NewNopLogger())
+	defaultParams := types.DefaultParams()
+	k.SetParams(ctx, &defaultParams)
+	k.SetExtendedParams(ctx, types.DefaultExtendedParams())
+	for _, domain := range types.DefaultDomains() {
+		k.SetDomainInState(ctx, domain)
+		if stratum, ok := types.BootstrapDomainStrata[domain.Name]; ok {
+			k.SetDomainStratum(ctx, domain.Name, stratum)
+		}
+	}
+
+	return k, ctx, tbk
+}
+
+// createVerifiedFactsForAddr creates N verified facts with the given submitter.
+func createVerifiedFactsForAddr(k keeper.Keeper, ctx sdk.Context, submitter string, count int) {
+	// Use last 12 chars of address to avoid bech32 prefix collision
+	suffix := submitter
+	if len(suffix) > 12 {
+		suffix = suffix[len(suffix)-12:]
+	}
+	for i := 0; i < count; i++ {
+		fact := &types.Fact{
+			Id:        fmt.Sprintf("fact_%s_%d", suffix, i),
+			ClaimText: fmt.Sprintf("Test fact %d by %s", i, suffix),
+			Domain:    "mathematics",
+			Status:    types.FactStatusVerified,
+			Submitter: submitter,
+		}
+		k.SetFact(ctx, fact)
+	}
+}
+
+func TestResearchFundProposal(t *testing.T) {
+	k, ctx, tbk := setupResearchFundKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	proposer := researchFundTestAddr("rf_proposer_________")
+	voter1 := researchFundTestAddr("rf_voter1___________")
+	voter2 := researchFundTestAddr("rf_voter2___________")
+	voter3 := researchFundTestAddr("rf_voter3___________")
+	recipient := researchFundTestAddr("rf_recipient________")
+
+	// Create verified facts for proposer (3) and voters (1 each)
+	createVerifiedFactsForAddr(k, ctx, proposer, 3)
+	createVerifiedFactsForAddr(k, ctx, voter1, 2)
+	createVerifiedFactsForAddr(k, ctx, voter2, 1)
+	createVerifiedFactsForAddr(k, ctx, voter3, 1)
+
+	// Ensure the fund module account balance is set (may already be from setup,
+	// but override to ensure correct amount for this specific test).
+	realModuleAddr := authtypes.NewModuleAddress("research_fund")
+	tbk.balances[realModuleAddr.String()] = sdk.NewCoin("ulgm", sdkmath.NewInt(100_000_000))
+
+	// 1. Submit proposal
+	resp, err := msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    proposer,
+		Title:       "Fund domain expansion research",
+		Description: "Research into knowledge domain hierarchy improvements",
+		Amount:      "5000000", // 5 LGM (5% of 100 LGM fund)
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err != nil {
+		t.Fatalf("ProposeResearchFund failed: %v", err)
+	}
+	if resp.ProposalId == "" {
+		t.Fatal("expected non-empty proposal_id")
+	}
+
+	// Verify proposal stored
+	proposal, found := k.GetResearchProposal(ctx, resp.ProposalId)
+	if !found {
+		t.Fatal("proposal not found in store")
+	}
+	if proposal.Status != types.ResearchProposalStatusVoting {
+		t.Errorf("expected status=voting, got %s", proposal.Status)
+	}
+
+	// 2. Cast votes (3 voters, all yes)
+	for _, voter := range []string{voter1, voter2, voter3} {
+		_, err := msgServer.VoteResearchProposal(ctx, &types.MsgVoteResearchProposal{
+			Voter:      voter,
+			ProposalId: resp.ProposalId,
+			VoteYes:    true,
+		})
+		if err != nil {
+			t.Fatalf("VoteResearchProposal failed for %s: %v", voter[:16], err)
+		}
+	}
+
+	// Verify votes accumulated
+	proposal, _ = k.GetResearchProposal(ctx, resp.ProposalId)
+	if proposal.VotesFor == 0 {
+		t.Error("expected VotesFor > 0 after voting")
+	}
+
+	// 3. Advance past voting deadline and execute
+	ctx = ctx.WithBlockHeight(int64(proposal.VotingEndsAt + 1))
+	execResp, err := msgServer.ExecuteResearchProposal(ctx, &types.MsgExecuteResearchProposal{
+		Executor:   proposer,
+		ProposalId: resp.ProposalId,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteResearchProposal failed: %v", err)
+	}
+	if execResp.AmountDisbursed != "5000000" {
+		t.Errorf("expected amount_disbursed=5000000, got %s", execResp.AmountDisbursed)
+	}
+
+	// Verify proposal now executed
+	proposal, _ = k.GetResearchProposal(ctx, resp.ProposalId)
+	if proposal.Status != types.ResearchProposalStatusExecuted {
+		t.Errorf("expected status=executed, got %s", proposal.Status)
+	}
+
+	// Verify stats updated
+	stats := k.GetResearchFundStats(ctx)
+	if stats.TotalDisbursed != 5_000_000 {
+		t.Errorf("expected TotalDisbursed=5000000, got %d", stats.TotalDisbursed)
+	}
+}
+
+func TestResearchFundEligibility(t *testing.T) {
+	k, ctx, tbk := setupResearchFundKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	ineligible := researchFundTestAddr("rf_noob_____________")
+	recipient := researchFundTestAddr("rf_recipient________")
+
+	// Set fund balance
+	realModuleAddr := authtypes.NewModuleAddress("research_fund")
+	tbk.balances[realModuleAddr.String()] = sdk.NewCoin("ulgm", sdkmath.NewInt(100_000_000))
+
+	// Proposer with 0 verified facts should be rejected
+	_, err := msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    ineligible,
+		Title:       "Bad proposal",
+		Description: "Should fail",
+		Amount:      "1000000",
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err == nil {
+		t.Error("expected error for ineligible proposer (0 verified facts)")
+	}
+	if !strings.Contains(err.Error(), "not eligible") {
+		t.Errorf("expected eligibility error, got: %v", err)
+	}
+
+	// Now give them 2 facts (still below threshold of 3)
+	createVerifiedFactsForAddr(k, ctx, ineligible, 2)
+	_, err = msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    ineligible,
+		Title:       "Still bad",
+		Description: "Should still fail",
+		Amount:      "1000000",
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err == nil {
+		t.Error("expected error for proposer with only 2 verified facts")
+	}
+
+	// Voter with 0 facts + 0 rounds should be rejected
+	// First create a valid proposal
+	proposer := researchFundTestAddr("rf_proposer_________")
+	createVerifiedFactsForAddr(k, ctx, proposer, 3)
+	resp, err := msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    proposer,
+		Title:       "Valid proposal",
+		Description: "This one should work",
+		Amount:      "1000000",
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err != nil {
+		t.Fatalf("ProposeResearchFund failed: %v", err)
+	}
+
+	noFactsVoter := researchFundTestAddr("rf_no_facts_voter___")
+	_, err = msgServer.VoteResearchProposal(ctx, &types.MsgVoteResearchProposal{
+		Voter:      noFactsVoter,
+		ProposalId: resp.ProposalId,
+		VoteYes:    true,
+	})
+	if err == nil {
+		t.Error("expected error for ineligible voter (0 facts, 0 rounds)")
+	}
+	if !strings.Contains(err.Error(), "not eligible") {
+		t.Errorf("expected eligibility error, got: %v", err)
+	}
+}
+
+func TestResearchFundQuorum(t *testing.T) {
+	k, ctx, tbk := setupResearchFundKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	proposer := researchFundTestAddr("rf_proposer_________")
+	voter1 := researchFundTestAddr("rf_voter1___________")
+	recipient := researchFundTestAddr("rf_recipient________")
+
+	// Create 10 eligible voters (each with 1 verified fact)
+	createVerifiedFactsForAddr(k, ctx, proposer, 3)
+	createVerifiedFactsForAddr(k, ctx, voter1, 1)
+	for i := 2; i <= 10; i++ {
+		addr := researchFundTestAddr(fmt.Sprintf("rf_voter%02d__________", i))
+		createVerifiedFactsForAddr(k, ctx, addr, 1)
+	}
+
+	realModuleAddr := authtypes.NewModuleAddress("research_fund")
+	tbk.balances[realModuleAddr.String()] = sdk.NewCoin("ulgm", sdkmath.NewInt(100_000_000))
+
+	resp, err := msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    proposer,
+		Title:       "Quorum test proposal",
+		Description: "Testing quorum requirements",
+		Amount:      "1000000",
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err != nil {
+		t.Fatalf("ProposeResearchFund failed: %v", err)
+	}
+
+	// Only 1 voter out of 11 eligible → well below 20% quorum
+	_, err = msgServer.VoteResearchProposal(ctx, &types.MsgVoteResearchProposal{
+		Voter:      voter1,
+		ProposalId: resp.ProposalId,
+		VoteYes:    true,
+	})
+	if err != nil {
+		t.Fatalf("VoteResearchProposal failed: %v", err)
+	}
+
+	// Advance past voting deadline and execute → should reject
+	proposal, _ := k.GetResearchProposal(ctx, resp.ProposalId)
+	ctx = ctx.WithBlockHeight(int64(proposal.VotingEndsAt + 1))
+
+	execResp, err := msgServer.ExecuteResearchProposal(ctx, &types.MsgExecuteResearchProposal{
+		Executor:   proposer,
+		ProposalId: resp.ProposalId,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteResearchProposal failed: %v", err)
+	}
+	if execResp.AmountDisbursed != "0" {
+		t.Errorf("expected amount_disbursed=0 (quorum not met), got %s", execResp.AmountDisbursed)
+	}
+
+	// Verify rejected
+	proposal, _ = k.GetResearchProposal(ctx, resp.ProposalId)
+	if proposal.Status != types.ResearchProposalStatusRejected {
+		t.Errorf("expected status=rejected, got %s", proposal.Status)
+	}
+}
+
+func TestResearchFundMaxDisburse(t *testing.T) {
+	k, ctx, tbk := setupResearchFundKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	proposer := researchFundTestAddr("rf_proposer_________")
+	recipient := researchFundTestAddr("rf_recipient________")
+
+	createVerifiedFactsForAddr(k, ctx, proposer, 3)
+
+	// Fund has 100 LGM (100_000_000 ulgm), max disburse = 10% = 10 LGM
+	realModuleAddr := authtypes.NewModuleAddress("research_fund")
+	tbk.balances[realModuleAddr.String()] = sdk.NewCoin("ulgm", sdkmath.NewInt(100_000_000))
+
+	// Request 15 LGM (15_000_000 ulgm) → exceeds 10% cap
+	_, err := msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    proposer,
+		Title:       "Too much money",
+		Description: "Exceeds 10% cap",
+		Amount:      "15000000", // 15 LGM > 10 LGM max
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err == nil {
+		t.Error("expected error for amount exceeding 10% of fund balance")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum disbursement") {
+		t.Errorf("expected max disbursement error, got: %v", err)
+	}
+
+	// Request exactly 10 LGM → should succeed
+	_, err = msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    proposer,
+		Title:       "Just right amount",
+		Description: "Exactly 10% of fund",
+		Amount:      "10000000", // 10 LGM = 10% of 100 LGM
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err != nil {
+		t.Fatalf("expected proposal at 10%% cap to succeed, got: %v", err)
+	}
+}
+
+func TestResearchFundDepositReturn(t *testing.T) {
+	k, ctx, tbk := setupResearchFundKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	proposer := researchFundTestAddr("rf_proposer_________")
+	voter1 := researchFundTestAddr("rf_voter1___________")
+	recipient := researchFundTestAddr("rf_recipient________")
+
+	createVerifiedFactsForAddr(k, ctx, proposer, 3)
+	createVerifiedFactsForAddr(k, ctx, voter1, 1)
+
+	realModuleAddr := authtypes.NewModuleAddress("research_fund")
+	tbk.balances[realModuleAddr.String()] = sdk.NewCoin("ulgm", sdkmath.NewInt(100_000_000))
+
+	resp, err := msgServer.ProposeResearchFund(ctx, &types.MsgProposeResearchFund{
+		Proposer:    proposer,
+		Title:       "Rejected proposal",
+		Description: "This will be voted down",
+		Amount:      "1000000",
+		Recipient:   recipient,
+		Domain:      "mathematics",
+	})
+	if err != nil {
+		t.Fatalf("ProposeResearchFund failed: %v", err)
+	}
+
+	// Vote NO
+	_, err = msgServer.VoteResearchProposal(ctx, &types.MsgVoteResearchProposal{
+		Voter:      voter1,
+		ProposalId: resp.ProposalId,
+		VoteYes:    false,
+	})
+	if err != nil {
+		t.Fatalf("VoteResearchProposal failed: %v", err)
+	}
+
+	// Need enough voters for quorum — add more NO voters
+	for i := 2; i <= 5; i++ {
+		addr := researchFundTestAddr(fmt.Sprintf("rf_novoter%02d________", i))
+		createVerifiedFactsForAddr(k, ctx, addr, 1)
+		_, _ = msgServer.VoteResearchProposal(ctx, &types.MsgVoteResearchProposal{
+			Voter:      addr,
+			ProposalId: resp.ProposalId,
+			VoteYes:    false,
+		})
+	}
+
+	proposal, _ := k.GetResearchProposal(ctx, resp.ProposalId)
+	ctx = ctx.WithBlockHeight(int64(proposal.VotingEndsAt + 1))
+
+	// Reset tracking to isolate deposit return
+	tbk.sentToAccount = make(map[string]sdk.Coins)
+	tbk.burned = nil
+
+	_, err = msgServer.ExecuteResearchProposal(ctx, &types.MsgExecuteResearchProposal{
+		Executor:   proposer,
+		ProposalId: resp.ProposalId,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteResearchProposal failed: %v", err)
+	}
+
+	// Verify deposit handling: 90% returned, 10% burned
+	// Deposit = 1_000_000 ulgm. 10% slash = 100_000 burned. 90% = 900_000 returned.
+	proposerAddr, _ := sdk.AccAddressFromBech32(proposer)
+	returnedCoins := tbk.sentToAccount[proposerAddr.String()]
+	expectedReturn := sdkmath.NewInt(900_000)
+	if returnedCoins.AmountOf("ulgm").LT(expectedReturn) {
+		t.Errorf("expected at least %s ulgm returned to proposer, got %s",
+			expectedReturn.String(), returnedCoins.AmountOf("ulgm").String())
+	}
+
+	expectedBurn := sdkmath.NewInt(100_000)
+	if tbk.burned.AmountOf("ulgm").LT(expectedBurn) {
+		t.Errorf("expected at least %s ulgm burned, got %s",
+			expectedBurn.String(), tbk.burned.AmountOf("ulgm").String())
+	}
+
+	// Verify proposal rejected
+	proposal, _ = k.GetResearchProposal(ctx, resp.ProposalId)
+	if proposal.Status != types.ResearchProposalStatusRejected {
+		t.Errorf("expected status=rejected, got %s", proposal.Status)
 	}
 }

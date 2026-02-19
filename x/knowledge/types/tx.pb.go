@@ -25,7 +25,7 @@ var File_legible_knowledge_v1_tx_proto protoreflect.FileDescriptor
 
 const file_legible_knowledge_v1_tx_proto_rawDesc = "" +
 	"\n" +
-	"\x1dlegible/knowledge/v1/tx.proto\x12\x14legible.knowledge.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a legible/knowledge/v1/claim.proto\x1a'legible/knowledge/v1/counter_fact.proto2\xbb\f\n" +
+	"\x1dlegible/knowledge/v1/tx.proto\x12\x14legible.knowledge.v1\x1a\x17cosmos/msg/v1/msg.proto\x1a legible/knowledge/v1/claim.proto\x1a'legible/knowledge/v1/counter_fact.proto2\xbc\x0f\n" +
 	"\x03Msg\x12a\n" +
 	"\vSubmitClaim\x12$.legible.knowledge.v1.MsgSubmitClaim\x1a,.legible.knowledge.v1.MsgSubmitClaimResponse\x12p\n" +
 	"\x10SubmitCommitment\x12).legible.knowledge.v1.MsgSubmitCommitment\x1a1.legible.knowledge.v1.MsgSubmitCommitmentResponse\x12d\n" +
@@ -40,7 +40,10 @@ const file_legible_knowledge_v1_tx_proto_rawDesc = "" +
 	"\x0fRegisterStratum\x12(.legible.knowledge.v1.MsgRegisterStratum\x1a0.legible.knowledge.v1.MsgRegisterStratumResponse\x12\x88\x01\n" +
 	"\x18ChallengeProvisionalFact\x121.legible.knowledge.v1.MsgChallengeProvisionalFact\x1a9.legible.knowledge.v1.MsgChallengeProvisionalFactResponse\x12d\n" +
 	"\fUpdateParams\x12%.legible.knowledge.v1.MsgUpdateParams\x1a-.legible.knowledge.v1.MsgUpdateParamsResponse\x12|\n" +
-	"\x14UpdateExtendedParams\x12-.legible.knowledge.v1.MsgUpdateExtendedParams\x1a5.legible.knowledge.v1.MsgUpdateExtendedParamsResponse\x1a\x05\x80\xe7\xb0*\x01B4Z2github.com/legible-money/legible/x/knowledge/typesb\x06proto3"
+	"\x14UpdateExtendedParams\x12-.legible.knowledge.v1.MsgUpdateExtendedParams\x1a5.legible.knowledge.v1.MsgUpdateExtendedParamsResponse\x12y\n" +
+	"\x13ProposeResearchFund\x12,.legible.knowledge.v1.MsgProposeResearchFund\x1a4.legible.knowledge.v1.MsgProposeResearchFundResponse\x12|\n" +
+	"\x14VoteResearchProposal\x12-.legible.knowledge.v1.MsgVoteResearchProposal\x1a5.legible.knowledge.v1.MsgVoteResearchProposalResponse\x12\x85\x01\n" +
+	"\x17ExecuteResearchProposal\x120.legible.knowledge.v1.MsgExecuteResearchProposal\x1a8.legible.knowledge.v1.MsgExecuteResearchProposalResponse\x1a\x05\x80\xe7\xb0*\x01B4Z2github.com/legible-money/legible/x/knowledge/typesb\x06proto3"
 
 var file_legible_knowledge_v1_tx_proto_goTypes = []any{
 	(*MsgSubmitClaim)(nil),                      // 0: legible.knowledge.v1.MsgSubmitClaim
@@ -57,20 +60,26 @@ var file_legible_knowledge_v1_tx_proto_goTypes = []any{
 	(*MsgChallengeProvisionalFact)(nil),         // 11: legible.knowledge.v1.MsgChallengeProvisionalFact
 	(*MsgUpdateParams)(nil),                     // 12: legible.knowledge.v1.MsgUpdateParams
 	(*MsgUpdateExtendedParams)(nil),             // 13: legible.knowledge.v1.MsgUpdateExtendedParams
-	(*MsgSubmitClaimResponse)(nil),              // 14: legible.knowledge.v1.MsgSubmitClaimResponse
-	(*MsgSubmitCommitmentResponse)(nil),         // 15: legible.knowledge.v1.MsgSubmitCommitmentResponse
-	(*MsgSubmitRevealResponse)(nil),             // 16: legible.knowledge.v1.MsgSubmitRevealResponse
-	(*MsgChallengeFactResponse)(nil),            // 17: legible.knowledge.v1.MsgChallengeFactResponse
-	(*MsgAddFactResponse)(nil),                  // 18: legible.knowledge.v1.MsgAddFactResponse
-	(*MsgSubmitContradictionResponse)(nil),      // 19: legible.knowledge.v1.MsgSubmitContradictionResponse
-	(*MsgPatronizeFactResponse)(nil),            // 20: legible.knowledge.v1.MsgPatronizeFactResponse
-	(*MsgProposeDomainResponse)(nil),            // 21: legible.knowledge.v1.MsgProposeDomainResponse
-	(*MsgEndorseDomainProposalResponse)(nil),    // 22: legible.knowledge.v1.MsgEndorseDomainProposalResponse
-	(*MsgChallengeDomainProposalResponse)(nil),  // 23: legible.knowledge.v1.MsgChallengeDomainProposalResponse
-	(*MsgRegisterStratumResponse)(nil),          // 24: legible.knowledge.v1.MsgRegisterStratumResponse
-	(*MsgChallengeProvisionalFactResponse)(nil), // 25: legible.knowledge.v1.MsgChallengeProvisionalFactResponse
-	(*MsgUpdateParamsResponse)(nil),             // 26: legible.knowledge.v1.MsgUpdateParamsResponse
-	(*MsgUpdateExtendedParamsResponse)(nil),     // 27: legible.knowledge.v1.MsgUpdateExtendedParamsResponse
+	(*MsgProposeResearchFund)(nil),              // 14: legible.knowledge.v1.MsgProposeResearchFund
+	(*MsgVoteResearchProposal)(nil),             // 15: legible.knowledge.v1.MsgVoteResearchProposal
+	(*MsgExecuteResearchProposal)(nil),          // 16: legible.knowledge.v1.MsgExecuteResearchProposal
+	(*MsgSubmitClaimResponse)(nil),              // 17: legible.knowledge.v1.MsgSubmitClaimResponse
+	(*MsgSubmitCommitmentResponse)(nil),         // 18: legible.knowledge.v1.MsgSubmitCommitmentResponse
+	(*MsgSubmitRevealResponse)(nil),             // 19: legible.knowledge.v1.MsgSubmitRevealResponse
+	(*MsgChallengeFactResponse)(nil),            // 20: legible.knowledge.v1.MsgChallengeFactResponse
+	(*MsgAddFactResponse)(nil),                  // 21: legible.knowledge.v1.MsgAddFactResponse
+	(*MsgSubmitContradictionResponse)(nil),      // 22: legible.knowledge.v1.MsgSubmitContradictionResponse
+	(*MsgPatronizeFactResponse)(nil),            // 23: legible.knowledge.v1.MsgPatronizeFactResponse
+	(*MsgProposeDomainResponse)(nil),            // 24: legible.knowledge.v1.MsgProposeDomainResponse
+	(*MsgEndorseDomainProposalResponse)(nil),    // 25: legible.knowledge.v1.MsgEndorseDomainProposalResponse
+	(*MsgChallengeDomainProposalResponse)(nil),  // 26: legible.knowledge.v1.MsgChallengeDomainProposalResponse
+	(*MsgRegisterStratumResponse)(nil),          // 27: legible.knowledge.v1.MsgRegisterStratumResponse
+	(*MsgChallengeProvisionalFactResponse)(nil), // 28: legible.knowledge.v1.MsgChallengeProvisionalFactResponse
+	(*MsgUpdateParamsResponse)(nil),             // 29: legible.knowledge.v1.MsgUpdateParamsResponse
+	(*MsgUpdateExtendedParamsResponse)(nil),     // 30: legible.knowledge.v1.MsgUpdateExtendedParamsResponse
+	(*MsgProposeResearchFundResponse)(nil),      // 31: legible.knowledge.v1.MsgProposeResearchFundResponse
+	(*MsgVoteResearchProposalResponse)(nil),     // 32: legible.knowledge.v1.MsgVoteResearchProposalResponse
+	(*MsgExecuteResearchProposalResponse)(nil),  // 33: legible.knowledge.v1.MsgExecuteResearchProposalResponse
 }
 var file_legible_knowledge_v1_tx_proto_depIdxs = []int32{
 	0,  // 0: legible.knowledge.v1.Msg.SubmitClaim:input_type -> legible.knowledge.v1.MsgSubmitClaim
@@ -87,22 +96,28 @@ var file_legible_knowledge_v1_tx_proto_depIdxs = []int32{
 	11, // 11: legible.knowledge.v1.Msg.ChallengeProvisionalFact:input_type -> legible.knowledge.v1.MsgChallengeProvisionalFact
 	12, // 12: legible.knowledge.v1.Msg.UpdateParams:input_type -> legible.knowledge.v1.MsgUpdateParams
 	13, // 13: legible.knowledge.v1.Msg.UpdateExtendedParams:input_type -> legible.knowledge.v1.MsgUpdateExtendedParams
-	14, // 14: legible.knowledge.v1.Msg.SubmitClaim:output_type -> legible.knowledge.v1.MsgSubmitClaimResponse
-	15, // 15: legible.knowledge.v1.Msg.SubmitCommitment:output_type -> legible.knowledge.v1.MsgSubmitCommitmentResponse
-	16, // 16: legible.knowledge.v1.Msg.SubmitReveal:output_type -> legible.knowledge.v1.MsgSubmitRevealResponse
-	17, // 17: legible.knowledge.v1.Msg.ChallengeFact:output_type -> legible.knowledge.v1.MsgChallengeFactResponse
-	18, // 18: legible.knowledge.v1.Msg.AddFact:output_type -> legible.knowledge.v1.MsgAddFactResponse
-	19, // 19: legible.knowledge.v1.Msg.SubmitContradiction:output_type -> legible.knowledge.v1.MsgSubmitContradictionResponse
-	20, // 20: legible.knowledge.v1.Msg.PatronizeFact:output_type -> legible.knowledge.v1.MsgPatronizeFactResponse
-	21, // 21: legible.knowledge.v1.Msg.ProposeDomain:output_type -> legible.knowledge.v1.MsgProposeDomainResponse
-	22, // 22: legible.knowledge.v1.Msg.EndorseDomainProposal:output_type -> legible.knowledge.v1.MsgEndorseDomainProposalResponse
-	23, // 23: legible.knowledge.v1.Msg.ChallengeDomainProposal:output_type -> legible.knowledge.v1.MsgChallengeDomainProposalResponse
-	24, // 24: legible.knowledge.v1.Msg.RegisterStratum:output_type -> legible.knowledge.v1.MsgRegisterStratumResponse
-	25, // 25: legible.knowledge.v1.Msg.ChallengeProvisionalFact:output_type -> legible.knowledge.v1.MsgChallengeProvisionalFactResponse
-	26, // 26: legible.knowledge.v1.Msg.UpdateParams:output_type -> legible.knowledge.v1.MsgUpdateParamsResponse
-	27, // 27: legible.knowledge.v1.Msg.UpdateExtendedParams:output_type -> legible.knowledge.v1.MsgUpdateExtendedParamsResponse
-	14, // [14:28] is the sub-list for method output_type
-	0,  // [0:14] is the sub-list for method input_type
+	14, // 14: legible.knowledge.v1.Msg.ProposeResearchFund:input_type -> legible.knowledge.v1.MsgProposeResearchFund
+	15, // 15: legible.knowledge.v1.Msg.VoteResearchProposal:input_type -> legible.knowledge.v1.MsgVoteResearchProposal
+	16, // 16: legible.knowledge.v1.Msg.ExecuteResearchProposal:input_type -> legible.knowledge.v1.MsgExecuteResearchProposal
+	17, // 17: legible.knowledge.v1.Msg.SubmitClaim:output_type -> legible.knowledge.v1.MsgSubmitClaimResponse
+	18, // 18: legible.knowledge.v1.Msg.SubmitCommitment:output_type -> legible.knowledge.v1.MsgSubmitCommitmentResponse
+	19, // 19: legible.knowledge.v1.Msg.SubmitReveal:output_type -> legible.knowledge.v1.MsgSubmitRevealResponse
+	20, // 20: legible.knowledge.v1.Msg.ChallengeFact:output_type -> legible.knowledge.v1.MsgChallengeFactResponse
+	21, // 21: legible.knowledge.v1.Msg.AddFact:output_type -> legible.knowledge.v1.MsgAddFactResponse
+	22, // 22: legible.knowledge.v1.Msg.SubmitContradiction:output_type -> legible.knowledge.v1.MsgSubmitContradictionResponse
+	23, // 23: legible.knowledge.v1.Msg.PatronizeFact:output_type -> legible.knowledge.v1.MsgPatronizeFactResponse
+	24, // 24: legible.knowledge.v1.Msg.ProposeDomain:output_type -> legible.knowledge.v1.MsgProposeDomainResponse
+	25, // 25: legible.knowledge.v1.Msg.EndorseDomainProposal:output_type -> legible.knowledge.v1.MsgEndorseDomainProposalResponse
+	26, // 26: legible.knowledge.v1.Msg.ChallengeDomainProposal:output_type -> legible.knowledge.v1.MsgChallengeDomainProposalResponse
+	27, // 27: legible.knowledge.v1.Msg.RegisterStratum:output_type -> legible.knowledge.v1.MsgRegisterStratumResponse
+	28, // 28: legible.knowledge.v1.Msg.ChallengeProvisionalFact:output_type -> legible.knowledge.v1.MsgChallengeProvisionalFactResponse
+	29, // 29: legible.knowledge.v1.Msg.UpdateParams:output_type -> legible.knowledge.v1.MsgUpdateParamsResponse
+	30, // 30: legible.knowledge.v1.Msg.UpdateExtendedParams:output_type -> legible.knowledge.v1.MsgUpdateExtendedParamsResponse
+	31, // 31: legible.knowledge.v1.Msg.ProposeResearchFund:output_type -> legible.knowledge.v1.MsgProposeResearchFundResponse
+	32, // 32: legible.knowledge.v1.Msg.VoteResearchProposal:output_type -> legible.knowledge.v1.MsgVoteResearchProposalResponse
+	33, // 33: legible.knowledge.v1.Msg.ExecuteResearchProposal:output_type -> legible.knowledge.v1.MsgExecuteResearchProposalResponse
+	17, // [17:34] is the sub-list for method output_type
+	0,  // [0:17] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

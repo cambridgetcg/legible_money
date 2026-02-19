@@ -323,6 +323,7 @@ func (k Keeper) CompleteRound(
 				BaseConfidence:       result.Confidence,
 				Maturity:             types.MaturityEmerging,
 				OriginalStake:        claim.StakeAmount,
+				PartnershipId:        claim.PartnershipId, // B12-4: propagate partnership attribution
 			}
 
 			// Transfer evidence summaries from claim to fact (evidence provenance survives)
@@ -350,6 +351,10 @@ func (k Keeper) CompleteRound(
 			}
 
 			k.SetFact(ctx, &fact)
+
+			// B12-4: Record partnership fact creation and credit both partners
+			k.RecordPartnershipFactCreation(ctx, &fact)
+			k.CreditPartnershipReputation(ctx, &fact, true)
 
 			// Return staked amount to submitter (G-1 fix)
 			k.returnClaimStake(ctx, claim)
@@ -937,11 +942,9 @@ func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf *types.Counter
 			return
 		}
 	} else {
-		// Fallback: direct bank transfer (no clawback protection)
+		// Fallback: direct bank transfer (no clawback protection), routed through partnership if active
 		rewardCoins := sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewIntFromBigInt(rewardAmount)))
-		if err := k.bankKeeper.SendCoinsFromModuleToAccount(
-			ctx, types.ModuleName, submitterAddr, rewardCoins,
-		); err != nil {
+		if err := k.RouteReward(ctx, submitterAddr, rewardCoins, "falsification"); err != nil {
 			k.Logger(ctx).Error("failed to distribute falsification reward",
 				"counter_fact_id", cf.Id, "submitter", cf.Submitter, "amount", rewardAmount.String(), "error", err)
 			return

@@ -18,6 +18,7 @@ type BankKeeper interface {
 	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
 	SendCoinsFromModuleToModule(ctx context.Context, senderModule string, recipientModule string, amt sdk.Coins) error
 	BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
+	GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin
 }
 
 // OntologyKeeper defines the expected ontology keeper interface.
@@ -143,6 +144,34 @@ type AutopoiesisKeeper interface {
 	// GetMultiplier returns the current multiplier value for a path (BPS, 1M = 1.0x).
 	// Returns DefaultMultiplier (1M) if path not set.
 	GetMultiplier(ctx sdk.Context, path string) uint64
+}
+
+// PartnershipsKeeper defines the expected partnerships keeper interface.
+// The knowledge module uses this to route rewards through active partnerships,
+// splitting rewards between human/agent participants and the common pot.
+type PartnershipsKeeper interface {
+	// GetActivePartnershipForAddress returns the first active partnership
+	// where addr is a participant (human or agent side).
+	// Returns nil, false if no active partnership exists.
+	GetActivePartnershipForAddress(ctx sdk.Context, addr string) (*Partnership, bool)
+
+	// DistributeReward splits a reward through the partnership economics.
+	// Returns (humanShare, agentShare, commonPotAdd) as string amounts.
+	DistributeReward(ctx sdk.Context, partnership *Partnership, grossAmount string, sourceType string) (humanShare, agentShare, commonPotAdd string, err error)
+}
+
+// Partnership is a minimal view of partnerships.Partnership for cross-module use.
+// Defined here to avoid importing x/partnerships/types directly (circular dep prevention).
+type Partnership struct {
+	Id             string `json:"id"`
+	HumanAddr      string `json:"human_addr"`
+	AgentAddr      string `json:"agent_addr"`
+	Status         string `json:"status"`
+	LockTier       uint32 `json:"lock_tier"`
+	SplitHumanBps  uint64 `json:"split_human_bps"`
+	SplitAgentBps  uint64 `json:"split_agent_bps"`
+	CommonPotBalance string `json:"common_pot_balance"`
+	TotalEarned    string `json:"total_earned"`
 }
 
 // StakingKeeper defines the expected staking keeper interface.

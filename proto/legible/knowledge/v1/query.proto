@@ -111,6 +111,11 @@ service Query {
   rpc CounterFact(QueryCounterFactRequest) returns (QueryCounterFactResponse) {
     option (google.api.http).get = "/legible/knowledge/v1/counter_fact/{counter_fact_id}";
   }
+
+  // ResearchFund queries the research fund balance and statistics
+  rpc ResearchFund(QueryResearchFundRequest) returns (QueryResearchFundResponse) {
+    option (google.api.http).get = "/legible/knowledge/v1/research_fund";
+  }
 }
 
 // ============================================================================
@@ -303,4 +308,17 @@ message QueryCounterFactResponse {
   string submitter = 5;
   string status = 6;
   uint64 confidence = 7;
+}
+
+// ============================================================================
+// Research Fund Query Messages
+// ============================================================================
+
+message QueryResearchFundRequest {}
+
+message QueryResearchFundResponse {
+  string balance = 1;                  // current fund balance (ulgm)
+  uint32 active_proposals = 2;
+  string total_disbursed = 3;          // cumulative
+  string total_collected = 4;          // cumulative
 }

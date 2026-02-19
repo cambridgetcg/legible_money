@@ -66,4 +66,12 @@ var (
 
 	CitationSourcePrefix = []byte{0x27} // factId → CitationSourceRecord (FARM-11)
 	DomainStratumPrefix  = []byte{0x28} // domainName → stratum string (FARM-12)
+
+	// Research fund governance store keys
+	ResearchProposalPrefix  = []byte{0x29} // proposalId → ResearchProposal (JSON)
+	ResearchVotePrefix      = []byte{0x2a} // proposalId:voter → ResearchVote (JSON)
+	ResearchFundStatsPrefix = []byte{0x2b} // singleton → ResearchFundStats (JSON)
+
+	// Partnership citation credit store keys (B12-4)
+	PartnershipCitationStatsPrefix = []byte{0x2c} // partnershipId → PartnershipCitationStats (JSON)
 )

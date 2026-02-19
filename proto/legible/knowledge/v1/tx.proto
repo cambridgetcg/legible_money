@@ -36,4 +36,9 @@ service Msg {
   // Governance
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
   rpc UpdateExtendedParams(MsgUpdateExtendedParams) returns (MsgUpdateExtendedParamsResponse);
+
+  // Research fund governance
+  rpc ProposeResearchFund(MsgProposeResearchFund) returns (MsgProposeResearchFundResponse);
+  rpc VoteResearchProposal(MsgVoteResearchProposal) returns (MsgVoteResearchProposalResponse);
+  rpc ExecuteResearchProposal(MsgExecuteResearchProposal) returns (MsgExecuteResearchProposalResponse);
 }

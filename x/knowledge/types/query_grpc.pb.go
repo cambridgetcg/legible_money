@@ -39,6 +39,7 @@ const (
 	Query_VerificationRound_FullMethodName   = "/legible.knowledge.v1.Query/VerificationRound"
 	Query_ActiveRounds_FullMethodName        = "/legible.knowledge.v1.Query/ActiveRounds"
 	Query_CounterFact_FullMethodName         = "/legible.knowledge.v1.Query/CounterFact"
+	Query_ResearchFund_FullMethodName        = "/legible.knowledge.v1.Query/ResearchFund"
 )
 
 // QueryClient is the client API for Query service.
@@ -87,6 +88,8 @@ type QueryClient interface {
 	ActiveRounds(ctx context.Context, in *QueryActiveRoundsRequest, opts ...grpc.CallOption) (*QueryActiveRoundsResponse, error)
 	// CounterFact queries a counter-fact by ID
 	CounterFact(ctx context.Context, in *QueryCounterFactRequest, opts ...grpc.CallOption) (*QueryCounterFactResponse, error)
+	// ResearchFund queries the research fund balance and statistics
+	ResearchFund(ctx context.Context, in *QueryResearchFundRequest, opts ...grpc.CallOption) (*QueryResearchFundResponse, error)
 }
 
 type queryClient struct {
@@ -297,6 +300,16 @@ func (c *queryClient) CounterFact(ctx context.Context, in *QueryCounterFactReque
 	return out, nil
 }
 
+func (c *queryClient) ResearchFund(ctx context.Context, in *QueryResearchFundRequest, opts ...grpc.CallOption) (*QueryResearchFundResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryResearchFundResponse)
+	err := c.cc.Invoke(ctx, Query_ResearchFund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility.
@@ -343,6 +356,8 @@ type QueryServer interface {
 	ActiveRounds(context.Context, *QueryActiveRoundsRequest) (*QueryActiveRoundsResponse, error)
 	// CounterFact queries a counter-fact by ID
 	CounterFact(context.Context, *QueryCounterFactRequest) (*QueryCounterFactResponse, error)
+	// ResearchFund queries the research fund balance and statistics
+	ResearchFund(context.Context, *QueryResearchFundRequest) (*QueryResearchFundResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -412,6 +427,9 @@ func (UnimplementedQueryServer) ActiveRounds(context.Context, *QueryActiveRounds
 }
 func (UnimplementedQueryServer) CounterFact(context.Context, *QueryCounterFactRequest) (*QueryCounterFactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CounterFact not implemented")
+}
+func (UnimplementedQueryServer) ResearchFund(context.Context, *QueryResearchFundRequest) (*QueryResearchFundResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResearchFund not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 func (UnimplementedQueryServer) testEmbeddedByValue()               {}
@@ -794,6 +812,24 @@ func _Query_CounterFact_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_ResearchFund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryResearchFundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ResearchFund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Query_ResearchFund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ResearchFund(ctx, req.(*QueryResearchFundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -880,6 +916,10 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CounterFact",
 			Handler:    _Query_CounterFact_Handler,
+		},
+		{
+			MethodName: "ResearchFund",
+			Handler:    _Query_ResearchFund_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

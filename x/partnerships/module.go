@@ -109,23 +109,63 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	}
 }
 
+// combinedGenesisExport wraps the proto GenesisState plus hand-written consortium data for JSON export.
+// Uses json.RawMessage to avoid copying the proto mutex.
+type combinedGenesisExport struct {
+	Base      json.RawMessage     `json:"base"`
+	Consortia []*types.Consortium `json:"consortia,omitempty"`
+}
+
+// combinedGenesisImport is the import-side counterpart.
+type combinedGenesisImport struct {
+	Consortia []*types.Consortium `json:"consortia,omitempty"`
+}
+
 // InitGenesis initializes the module from genesis.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
+	// Unmarshal proto GenesisState (tolerates extra fields)
 	var genState types.GenesisState
 	if err := json.Unmarshal(data, &genState); err != nil {
 		panic("failed to unmarshal genesis: " + err.Error())
 	}
 	am.keeper.InitGenesis(ctx, &genState)
+
+	// Unmarshal consortium data
+	var extra combinedGenesisImport
+	if err := json.Unmarshal(data, &extra); err == nil {
+		am.keeper.InitConsortiumGenesis(ctx, extra.Consortia)
+	}
 }
 
 // ExportGenesis exports the module's genesis state.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	genState := am.keeper.ExportGenesis(ctx)
-	bz, err := json.Marshal(genState)
+	baseBz, err := json.Marshal(genState)
 	if err != nil {
 		panic("failed to marshal genesis: " + err.Error())
 	}
-	return bz
+
+	// Merge consortium data into the JSON
+	consortia := am.keeper.ExportConsortiumGenesis(ctx)
+	if len(consortia) == 0 {
+		return baseBz
+	}
+
+	// Unmarshal base into map, add consortia, re-marshal
+	var baseMap map[string]json.RawMessage
+	if err := json.Unmarshal(baseBz, &baseMap); err != nil {
+		panic("failed to unmarshal base genesis: " + err.Error())
+	}
+	consortiaBz, err := json.Marshal(consortia)
+	if err != nil {
+		panic("failed to marshal consortia: " + err.Error())
+	}
+	baseMap["consortia"] = consortiaBz
+	combined, err := json.Marshal(baseMap)
+	if err != nil {
+		panic("failed to marshal combined genesis: " + err.Error())
+	}
+	return combined
 }
 
 // ConsensusVersion returns the module's consensus version.
@@ -148,6 +188,9 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 	// 3. Expire coercion signals past their review period
 	am.keeper.ExpireCoercionSignals(sdkCtx)
 
+	// 4. Expire consortium formations past their window
+	am.keeper.ExpireConsortiumFormations(sdkCtx)
+
 	return nil
 }
 
@@ -157,5 +200,6 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	am.keeper.SettleCoolingPartnerships(sdkCtx)
+	am.keeper.SettleCoolingConsortia(sdkCtx)
 	return nil
 }
