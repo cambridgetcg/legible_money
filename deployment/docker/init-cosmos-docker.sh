@@ -224,8 +224,9 @@ for i in $(seq 1 $NUM_VALIDATORS); do
   sed -i.bak 's|laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|' "$CONFIG"
   sed -i.bak 's|laddr = "tcp://127.0.0.1:26656"|laddr = "tcp://0.0.0.0:26656"|' "$CONFIG"
 
-  # Prometheus
+  # Prometheus (bind all interfaces for Docker scraping on :26660)
   sed -i.bak 's/^prometheus = false/prometheus = true/' "$CONFIG"
+  sed -i.bak 's|^prometheus_listen_addr = .*|prometheus_listen_addr = ":26660"|' "$CONFIG"
 
   # CORS for devnet
   sed -i.bak 's/cors_allowed_origins = \[\]/cors_allowed_origins = ["*"]/' "$CONFIG"
