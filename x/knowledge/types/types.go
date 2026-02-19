@@ -418,8 +418,14 @@ func (msg *MsgSubmitClaim) ValidateBasic() error {
 	if msg.ClaimText == "" {
 		return fmt.Errorf("claim text cannot be empty")
 	}
+	if len(msg.ClaimText) > MaxClaimTextLength {
+		return fmt.Errorf("claim text too long: %d (max %d)", len(msg.ClaimText), MaxClaimTextLength)
+	}
 	if msg.Domain == "" {
 		return fmt.Errorf("domain cannot be empty")
+	}
+	if len(msg.Domain) > MaxDomainNameLength {
+		return fmt.Errorf("domain name too long: %d (max %d)", len(msg.Domain), MaxDomainNameLength)
 	}
 	if msg.Submitter == "" {
 		return fmt.Errorf("submitter cannot be empty")
@@ -517,6 +523,12 @@ func (msg *MsgChallengeProvisionalFact) ValidateBasic() error {
 	if msg.Reason == "" {
 		return fmt.Errorf("reason cannot be empty")
 	}
+	if len(msg.Reason) > MaxReasonLength {
+		return fmt.Errorf("reason too long: %d (max %d)", len(msg.Reason), MaxReasonLength)
+	}
+	if len(msg.EvidenceIds) > MaxEvidenceIdsPerMsg {
+		return fmt.Errorf("too many evidence IDs: %d (max %d)", len(msg.EvidenceIds), MaxEvidenceIdsPerMsg)
+	}
 	return nil
 }
 
@@ -535,6 +547,9 @@ func (msg *MsgAddFact) ValidateBasic() error {
 	if msg.ClaimText == "" {
 		return fmt.Errorf("claim text cannot be empty")
 	}
+	if len(msg.ClaimText) > MaxClaimTextLength {
+		return fmt.Errorf("claim text too long: %d (max %d)", len(msg.ClaimText), MaxClaimTextLength)
+	}
 	return nil
 }
 
@@ -550,6 +565,9 @@ func (msg *MsgSubmitContradiction) ValidateBasic() error {
 	if msg.CounterClaim == "" {
 		return fmt.Errorf("counter-claim text cannot be empty")
 	}
+	if len(msg.CounterClaim) > MaxCounterClaimLength {
+		return fmt.Errorf("counter-claim too long: %d (max %d)", len(msg.CounterClaim), MaxCounterClaimLength)
+	}
 	if msg.Submitter == "" {
 		return fmt.Errorf("submitter cannot be empty")
 	}
@@ -561,6 +579,9 @@ func (msg *MsgSubmitContradiction) ValidateBasic() error {
 	}
 	if len(msg.EvidenceIds) == 0 {
 		return fmt.Errorf("at least one evidence ID required for contradiction")
+	}
+	if len(msg.EvidenceIds) > MaxEvidenceIdsPerMsg {
+		return fmt.Errorf("too many evidence IDs: %d (max %d)", len(msg.EvidenceIds), MaxEvidenceIdsPerMsg)
 	}
 	return nil
 }

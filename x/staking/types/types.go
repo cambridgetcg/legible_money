@@ -138,6 +138,21 @@ func (m *MsgRegisterValidator) ValidateBasic() error {
 	if m.CommissionRate > 10000 {
 		return fmt.Errorf("commission cannot exceed 100%% (10000 basis points)")
 	}
+	// Description field bounds (prevent state bloat)
+	if m.Description != nil {
+		if len(m.Description.Moniker) > 70 {
+			return fmt.Errorf("moniker too long (max 70)")
+		}
+		if len(m.Description.Identity) > 70 {
+			return fmt.Errorf("identity too long (max 70)")
+		}
+		if len(m.Description.Website) > 140 {
+			return fmt.Errorf("website too long (max 140)")
+		}
+		if len(m.Description.Details) > 2000 {
+			return fmt.Errorf("details too long (max 2000)")
+		}
+	}
 	return nil
 }
 
