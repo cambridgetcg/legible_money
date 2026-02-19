@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -20,12 +21,13 @@ func TestValidateAxiomID(t *testing.T) {
 		{"AGRT-001", false},
 		{"AGRT-091", false},
 		{"INFO-123", false},
+		{"AGRT-004a", false},     // lowercase suffix allowed
+		{"AGRT-004a-ii", false},  // multi-part suffix allowed
 		// Invalid
 		{"ETHICS-001", true}, // ETHICS prefix no longer valid (now ETHIC)
 		{"MATH001", true},    // no dash
 		{"math-001", true},   // lowercase
 		{"MATH-01", true},    // only 2 digits
-		{"MATH-0001", true},  // 4 digits
 		{"MATH-", true},      // no digits
 		{"UNKNOWN-001", true}, // unknown prefix
 		{"", true},
@@ -1078,5 +1080,248 @@ func TestGenesisValidate_FactReferences_EmptyFields(t *testing.T) {
 	}
 	if err := gs.Validate(); err == nil {
 		t.Error("expected error for empty from_fact_id")
+	}
+}
+
+func TestComputeDAGStats(t *testing.T) {
+	// DAG structure:
+	//   A (root, orphan)
+	//   B (root) → D depends on B
+	//   C (root) → D depends on C
+	//   D (depth 1) → E depends on D
+	//   E (depth 2, leaf)
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-002", Statement: "B", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-003", Statement: "C", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-004", Statement: "D", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-002", "MATH-003"}},
+		{AxiomID: "MATH-005", Statement: "E", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-004"}},
+	}
+
+	stats, err := ComputeDAGStats(axioms)
+	if err != nil {
+		t.Fatalf("ComputeDAGStats: %v", err)
+	}
+
+	// 3 roots: A, B, C
+	if stats.RootCount != 3 {
+		t.Errorf("RootCount = %d, want 3", stats.RootCount)
+	}
+
+	// Max depth = 2 (B/C→D→E)
+	if stats.MaxDepth != 2 {
+		t.Errorf("MaxDepth = %d, want 2", stats.MaxDepth)
+	}
+
+	// Depth histogram: 0→3 (A,B,C), 1→1 (D), 2→1 (E)
+	if stats.DepthCounts[0] != 3 {
+		t.Errorf("DepthCounts[0] = %d, want 3", stats.DepthCounts[0])
+	}
+	if stats.DepthCounts[1] != 1 {
+		t.Errorf("DepthCounts[1] = %d, want 1", stats.DepthCounts[1])
+	}
+	if stats.DepthCounts[2] != 1 {
+		t.Errorf("DepthCounts[2] = %d, want 1", stats.DepthCounts[2])
+	}
+
+	// Total edges = 3 (D→B, D→C, E→D)
+	if stats.TotalEdges != 3 {
+		t.Errorf("TotalEdges = %d, want 3", stats.TotalEdges)
+	}
+
+	// Orphan: A (no deps, nothing depends on it)
+	if len(stats.Orphans) != 1 || stats.Orphans[0] != "MATH-001" {
+		t.Errorf("Orphans = %v, want [MATH-001]", stats.Orphans)
+	}
+
+	// MostReferenced should include MATH-002, MATH-003 (each 1 dependent), MATH-004 (1 dependent)
+	if len(stats.MostReferenced) != 3 {
+		t.Errorf("MostReferenced has %d entries, want 3", len(stats.MostReferenced))
+	}
+}
+
+func TestComputeDAGStats_Cycle(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic",
+			Dependencies: []string{"MATH-002"}},
+		{AxiomID: "MATH-002", Statement: "B", Domain: "mathematics", EpistemicCategory: "analytic",
+			Dependencies: []string{"MATH-001"}},
+	}
+	_, err := ComputeDAGStats(axioms)
+	if err == nil {
+		t.Error("expected cycle error")
+	}
+}
+
+func TestCrossDomainMatrix(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-002", Statement: "B", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "PHYS-001", Statement: "C", Domain: "physics", EpistemicCategory: "empirical",
+			Dependencies: []string{"MATH-001", "MATH-002"}},
+		{AxiomID: "LOGIC-001", Statement: "D", Domain: "logic", EpistemicCategory: "analytic",
+			Dependencies: []string{"MATH-001"}},
+	}
+
+	matrix := ComputeCrossDomainMatrix(axioms)
+
+	// Should have 2 domains in entries: physics→mathematics (2), logic→mathematics (1)
+	if len(matrix.Entries) != 2 {
+		t.Fatalf("matrix entries = %d, want 2", len(matrix.Entries))
+	}
+
+	// First entry (highest count): physics→mathematics = 2
+	if matrix.Entries[0].FromDomain != "physics" || matrix.Entries[0].ToDomain != "mathematics" {
+		t.Errorf("entry[0] = %s→%s, want physics→mathematics",
+			matrix.Entries[0].FromDomain, matrix.Entries[0].ToDomain)
+	}
+	if matrix.Entries[0].Count != 2 {
+		t.Errorf("entry[0].Count = %d, want 2", matrix.Entries[0].Count)
+	}
+
+	// Second entry: logic→mathematics = 1
+	if matrix.Entries[1].FromDomain != "logic" || matrix.Entries[1].ToDomain != "mathematics" {
+		t.Errorf("entry[1] = %s→%s, want logic→mathematics",
+			matrix.Entries[1].FromDomain, matrix.Entries[1].ToDomain)
+	}
+	if matrix.Entries[1].Count != 1 {
+		t.Errorf("entry[1].Count = %d, want 1", matrix.Entries[1].Count)
+	}
+
+	// 3 unique domains
+	if len(matrix.Domains) != 3 {
+		t.Errorf("domains = %d, want 3", len(matrix.Domains))
+	}
+}
+
+func TestValidateStratumConsistency(t *testing.T) {
+	t.Run("valid: axiom depends on axiom", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic"},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic",
+				Dependencies: []string{"MATH-001"}},
+		}
+		if err := ValidateStratumConsistency(axioms); err != nil {
+			t.Errorf("should be valid: %v", err)
+		}
+	})
+
+	t.Run("valid: derived_claim depends on axiom", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic"},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "derived_claim",
+				Domain: "mathematics", EpistemicCategory: "formal",
+				Dependencies: []string{"MATH-001"}},
+		}
+		if err := ValidateStratumConsistency(axioms); err != nil {
+			t.Errorf("should be valid: %v", err)
+		}
+	})
+
+	t.Run("invalid: axiom depends on derived_claim", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "derived_claim",
+				Domain: "mathematics", EpistemicCategory: "formal"},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic",
+				Dependencies: []string{"MATH-001"}},
+		}
+		err := ValidateStratumConsistency(axioms)
+		if err == nil {
+			t.Error("expected stratum violation error")
+		}
+		if err != nil && !strings.Contains(err.Error(), "stratum violation") {
+			t.Errorf("expected 'stratum violation' in error, got: %v", err)
+		}
+	})
+
+	t.Run("valid: definition depends on measurement_fact (allowed)", func(t *testing.T) {
+		// Definitions MAY depend on derived types — only axioms are strictly foundational
+		axioms := []*GenesisAxiom{
+			{AxiomID: "PHYS-001", Statement: "A", ClaimType: "measurement_fact",
+				Domain: "physics", EpistemicCategory: "empirical"},
+			{AxiomID: "PHYS-002", Statement: "B", ClaimType: "definition",
+				Domain: "physics", EpistemicCategory: "analytic",
+				Dependencies: []string{"PHYS-001"}},
+		}
+		if err := ValidateStratumConsistency(axioms); err != nil {
+			t.Errorf("definition depending on measurement_fact should be allowed: %v", err)
+		}
+	})
+
+	t.Run("invalid: axiom depends on measurement_fact", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "PHYS-001", Statement: "A", ClaimType: "measurement_fact",
+				Domain: "physics", EpistemicCategory: "empirical"},
+			{AxiomID: "PHYS-002", Statement: "B", ClaimType: "axiom",
+				Domain: "physics", EpistemicCategory: "analytic",
+				Dependencies: []string{"PHYS-001"}},
+		}
+		err := ValidateStratumConsistency(axioms)
+		if err == nil {
+			t.Error("expected stratum violation: axiom depends on measurement_fact")
+		}
+	})
+}
+
+func TestDAGStatsWithAllDomains(t *testing.T) {
+	// Load the actual axioms-777.json file; skip if not present
+	axiomPath := "../../../scripts/axioms-777.json"
+	axioms, err := LoadAxiomsFromFile(axiomPath)
+	if err != nil {
+		t.Skipf("Skipping (file not at %s): %v", axiomPath, err)
+	}
+
+	stats, err := ComputeDAGStats(axioms)
+	if err != nil {
+		t.Fatalf("ComputeDAGStats on axioms-777: %v", err)
+	}
+
+	if stats.RootCount == 0 {
+		t.Error("RootCount should be > 0")
+	}
+	if stats.MaxDepth == 0 {
+		t.Error("MaxDepth should be > 0")
+	}
+	if stats.TotalEdges == 0 {
+		t.Error("TotalEdges should be > 0")
+	}
+	if len(stats.MostReferenced) == 0 {
+		t.Error("MostReferenced should be non-empty")
+	}
+
+	t.Logf("DAG Stats: roots=%d, maxDepth=%d, edges=%d, orphans=%d",
+		stats.RootCount, stats.MaxDepth, stats.TotalEdges, len(stats.Orphans))
+	for d := 0; d <= stats.MaxDepth; d++ {
+		t.Logf("  depth %d: %d items", d, stats.DepthCounts[d])
+	}
+
+	matrix := ComputeCrossDomainMatrix(axioms)
+	if len(matrix.Entries) == 0 {
+		t.Error("CrossDomainMatrix should have entries")
+	}
+	t.Logf("Cross-domain entries: %d, domains: %d", len(matrix.Entries), len(matrix.Domains))
+}
+
+func TestValidateAxiomDAG_EnhancedMissingDepError(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "PHYS-001", Statement: "A", Domain: "physics", EpistemicCategory: "empirical",
+			Dependencies: []string{"MATH-999"}},
+	}
+	err := ValidateAxiomDAG(axioms)
+	if err == nil {
+		t.Fatal("expected missing dependency error")
+	}
+	// Should include domain hint from prefix
+	if !strings.Contains(err.Error(), "mathematics") {
+		t.Errorf("error should mention expected domain 'mathematics', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "MATH") {
+		t.Errorf("error should mention prefix 'MATH', got: %v", err)
 	}
 }

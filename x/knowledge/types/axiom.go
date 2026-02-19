@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -61,16 +62,27 @@ var ValidClaimTypes = map[string]bool{
 }
 
 // ValidRegimes lists the physics regime tags for scoping empirical claims.
+// Compound regimes (e.g., "QM/QFT") indicate boundary applicability.
 var ValidRegimes = map[string]bool{
-	"classical":  true,
-	"SR":         true,
-	"GR":         true,
-	"QM":         true,
-	"QFT":        true,
-	"thermo":     true,
-	"statmech":   true,
-	"cosmology":  true,
-	"SM":         true,
+	"classical":              true,
+	"classical_field_theory": true,
+	"classical_gravity":      true,
+	"SR":                     true,
+	"GR":                     true,
+	"QM":                     true,
+	"QFT":                    true,
+	"QM/QFT":                 true,
+	"QM/statmech":            true,
+	"SR/QFT":                 true,
+	"EM":                     true,
+	"EM/QM":                  true,
+	"EM/QFT":                 true,
+	"thermo":                 true,
+	"statmech":               true,
+	"cosmology":              true,
+	"SM":                     true,
+	"particle_physics":       true,
+	"modern_physics":         true,
 }
 
 // ClaimTypeToCategory maps the 7 genesis claim types to 4 epistemic categories.
@@ -127,8 +139,9 @@ func init() {
 	}
 }
 
-// axiomIDRegex validates the format PREFIX-NNN (e.g., "MATH-001", "THEO-042").
-var axiomIDRegex = regexp.MustCompile(`^[A-Z]+-\d{3}$`)
+// axiomIDRegex validates axiom IDs: PREFIX-NNN with optional lowercase suffixes
+// (e.g., "MATH-001", "AGRT-004a", "AGRT-004a-ii").
+var axiomIDRegex = regexp.MustCompile(`^[A-Z]+-\d{3}[a-z0-9\-]*$`)
 
 // ValidateAxiomID checks that an axiom ID has the correct PREFIX-NNN format
 // and that the prefix maps to a known domain.
@@ -251,6 +264,11 @@ func ValidateAxioms(axioms []*GenesisAxiom, validDomains []string) error {
 		return err
 	}
 
+	// Validate stratum consistency (axioms/definitions must not depend on derived_claims)
+	if err := ValidateStratumConsistency(axioms); err != nil {
+		return err
+	}
+
 	// Validate derived_claim confidence <= min(dependency confidences)
 	if err := ValidateDerivedConfidence(axioms); err != nil {
 		return err
@@ -271,6 +289,14 @@ func ValidateAxiomDAG(axioms []*GenesisAxiom) error {
 	for _, a := range axioms {
 		for _, dep := range a.Dependencies {
 			if !idSet[dep] {
+				// Enhanced error: identify expected domain from prefix
+				if dashIdx := strings.Index(dep, "-"); dashIdx > 0 {
+					prefix := dep[:dashIdx]
+					if domain, ok := PrefixToDomainMap[prefix]; ok {
+						return fmt.Errorf("axiom %s depends on unknown axiom %q (expected in domain %q based on prefix %q)",
+							a.AxiomID, dep, domain, prefix)
+					}
+				}
 				return fmt.Errorf("axiom %s depends on unknown axiom %q", a.AxiomID, dep)
 			}
 			if dep == a.AxiomID {
@@ -514,3 +540,222 @@ func AxiomDomainNames() []string {
 	}
 	return names
 }
+
+// DAGStats holds topological analysis results for the axiom dependency DAG.
+type DAGStats struct {
+	RootCount      int         // nodes with no dependencies (true axioms)
+	MaxDepth       int         // longest path from any root to leaf
+	DepthCounts    map[int]int // depth → count of items at that depth
+	Orphans        []string    // items with no deps AND nothing depends on them
+	MostReferenced []string    // top-N most-depended-on items (hub nodes)
+	TotalEdges     int         // total dependency edges
+}
+
+// CrossDomainEntry records references between two domains.
+type CrossDomainEntry struct {
+	FromDomain string
+	ToDomain   string
+	Count      int
+}
+
+// CrossDomainMatrix holds the full inter-domain dependency matrix.
+type CrossDomainMatrix struct {
+	Entries []CrossDomainEntry
+	Domains []string // sorted unique domain names
+}
+
+// ComputeDAGStats performs topological analysis on the axiom dependency DAG.
+// Returns depth histogram, root/orphan counts, hub nodes, and total edges.
+func ComputeDAGStats(axioms []*GenesisAxiom) (*DAGStats, error) {
+	// Build adjacency and in-degree maps (same as Kahn's in ValidateAxiomDAG)
+	inDegree := make(map[string]int, len(axioms))
+	dependents := make(map[string][]string, len(axioms)) // dep → items that depend on it
+	depCount := make(map[string]int, len(axioms))        // how many items depend on this
+
+	for _, a := range axioms {
+		if _, ok := inDegree[a.AxiomID]; !ok {
+			inDegree[a.AxiomID] = 0
+		}
+		for _, dep := range a.Dependencies {
+			inDegree[a.AxiomID]++
+			dependents[dep] = append(dependents[dep], a.AxiomID)
+			depCount[dep]++
+		}
+	}
+
+	// BFS from roots to compute depth of each node
+	depth := make(map[string]int, len(axioms))
+	queue := make([]string, 0)
+	for id, deg := range inDegree {
+		if deg == 0 {
+			queue = append(queue, id)
+			depth[id] = 0
+		}
+	}
+
+	// Process in topological order; each node's depth = max(dep depths) + 1
+	processed := 0
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		processed++
+
+		for _, dependent := range dependents[node] {
+			candidateDepth := depth[node] + 1
+			if candidateDepth > depth[dependent] {
+				depth[dependent] = candidateDepth
+			}
+			inDegree[dependent]--
+			if inDegree[dependent] == 0 {
+				queue = append(queue, dependent)
+			}
+		}
+	}
+
+	if processed != len(axioms) {
+		return nil, fmt.Errorf("cycle detected: processed %d of %d nodes", processed, len(axioms))
+	}
+
+	// Compute stats
+	stats := &DAGStats{
+		DepthCounts: make(map[int]int),
+	}
+
+	dependedOn := make(map[string]bool)
+	for _, a := range axioms {
+		for _, dep := range a.Dependencies {
+			dependedOn[dep] = true
+		}
+		stats.TotalEdges += len(a.Dependencies)
+	}
+
+	maxDepth := 0
+	for _, a := range axioms {
+		d := depth[a.AxiomID]
+		stats.DepthCounts[d]++
+		if d > maxDepth {
+			maxDepth = d
+		}
+		if d == 0 {
+			stats.RootCount++
+		}
+		if len(a.Dependencies) == 0 && !dependedOn[a.AxiomID] {
+			stats.Orphans = append(stats.Orphans, a.AxiomID)
+		}
+	}
+	stats.MaxDepth = maxDepth
+
+	sort.Strings(stats.Orphans)
+
+	// Top 10 most-referenced items
+	type idCount struct {
+		id    string
+		count int
+	}
+	var counts []idCount
+	for id, c := range depCount {
+		counts = append(counts, idCount{id, c})
+	}
+	sort.Slice(counts, func(i, j int) bool {
+		if counts[i].count != counts[j].count {
+			return counts[i].count > counts[j].count
+		}
+		return counts[i].id < counts[j].id
+	})
+	limit := 10
+	if len(counts) < limit {
+		limit = len(counts)
+	}
+	stats.MostReferenced = make([]string, limit)
+	for i := 0; i < limit; i++ {
+		stats.MostReferenced[i] = fmt.Sprintf("%s (%d)", counts[i].id, counts[i].count)
+	}
+
+	return stats, nil
+}
+
+// ComputeCrossDomainMatrix builds an inter-domain dependency matrix.
+// For each axiom, for each dependency in a different domain, increments the from→to count.
+func ComputeCrossDomainMatrix(axioms []*GenesisAxiom) *CrossDomainMatrix {
+	idToDomain := make(map[string]string, len(axioms))
+	domainSet := make(map[string]bool)
+	for _, a := range axioms {
+		idToDomain[a.AxiomID] = a.Domain
+		domainSet[a.Domain] = true
+	}
+
+	type pair struct{ from, to string }
+	matrix := make(map[pair]int)
+	for _, a := range axioms {
+		for _, dep := range a.Dependencies {
+			depDomain := idToDomain[dep]
+			if depDomain == "" {
+				if dashIdx := strings.Index(dep, "-"); dashIdx > 0 {
+					if d, ok := PrefixToDomainMap[dep[:dashIdx]]; ok {
+						depDomain = d
+					}
+				}
+			}
+			if a.Domain != depDomain && depDomain != "" {
+				matrix[pair{a.Domain, depDomain}]++
+			}
+		}
+	}
+
+	var entries []CrossDomainEntry
+	for p, count := range matrix {
+		entries = append(entries, CrossDomainEntry{
+			FromDomain: p.from,
+			ToDomain:   p.to,
+			Count:      count,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Count != entries[j].Count {
+			return entries[i].Count > entries[j].Count
+		}
+		if entries[i].FromDomain != entries[j].FromDomain {
+			return entries[i].FromDomain < entries[j].FromDomain
+		}
+		return entries[i].ToDomain < entries[j].ToDomain
+	})
+
+	var domains []string
+	for d := range domainSet {
+		domains = append(domains, d)
+	}
+	sort.Strings(domains)
+
+	return &CrossDomainMatrix{
+		Entries: entries,
+		Domains: domains,
+	}
+}
+
+// ValidateStratumConsistency checks that axioms do not depend on derived types.
+// Definitions MAY depend on derived claims (e.g., a physics definition referencing
+// a mathematical theorem) since cross-domain definitions often build on established
+// results. Only axioms (self-evident truths) are strictly foundational.
+func ValidateStratumConsistency(axioms []*GenesisAxiom) error {
+	idToType := make(map[string]string, len(axioms))
+	for _, a := range axioms {
+		if a.ClaimType != "" {
+			idToType[a.AxiomID] = a.ClaimType
+		}
+	}
+
+	for _, a := range axioms {
+		if a.ClaimType != "axiom" {
+			continue
+		}
+		for _, dep := range a.Dependencies {
+			depType := idToType[dep]
+			if depType == "derived_claim" || depType == "measurement_fact" {
+				return fmt.Errorf("stratum violation: axiom %s depends on %s %s — axioms must not depend on derived or measured claims",
+					a.AxiomID, depType, dep)
+			}
+		}
+	}
+	return nil
+}
+

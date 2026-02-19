@@ -868,7 +868,7 @@
     ]
   },
   {
-    "axiom_id": "ETHICS-001",
+    "axiom_id": "ETHIC-001",
     "statement": "Ethical claims are categorically distinct from empirical claims: 'ought' statements require normative justification beyond factual description",
     "type": "axiom",
     "domain": "ethics",
@@ -880,7 +880,7 @@
     ]
   },
   {
-    "axiom_id": "ETHICS-002",
+    "axiom_id": "ETHIC-002",
     "statement": "The universalizability principle: a moral rule is valid only if it could be consistently applied to all agents in similar circumstances",
     "type": "axiom",
     "domain": "ethics",
@@ -892,46 +892,46 @@
     ]
   },
   {
-    "axiom_id": "ETHICS-003",
+    "axiom_id": "ETHIC-003",
     "statement": "Moral dilemmas exist: situations arise where valid ethical principles conflict, and no resolution satisfies all principles simultaneously",
     "type": "axiom",
     "domain": "ethics",
     "epistemic_category": "analytic",
     "confidence": 1.0,
     "dependencies": [
-      "ETHICS-001"
+      "ETHIC-001"
     ],
     "references": [
-      "ETHICS-001"
+      "ETHIC-001"
     ]
   },
   {
-    "axiom_id": "ETHICS-004",
+    "axiom_id": "ETHIC-004",
     "statement": "The principle of moral consideration: any entity capable of having interests has some claim to moral consideration",
     "type": "axiom",
     "domain": "ethics",
     "epistemic_category": "analytic",
     "confidence": 1.0,
     "dependencies": [
-      "ETHICS-001"
+      "ETHIC-001"
     ],
     "references": [
-      "ETHICS-001"
+      "ETHIC-001"
     ]
   },
   {
-    "axiom_id": "ETHICS-005",
+    "axiom_id": "ETHIC-005",
     "statement": "Consequentialism, deontology, and virtue ethics are three irreducible families of ethical reasoning, each capturing genuine moral intuitions",
     "type": "axiom",
     "domain": "ethics",
     "epistemic_category": "analytic",
     "confidence": 1.0,
     "dependencies": [
-      "ETHICS-001"
+      "ETHIC-001"
     ],
     "references": [
-      "ETHICS-001",
-      "ETHICS-002"
+      "ETHIC-001",
+      "ETHIC-002"
     ]
   }
 ]
