@@ -63,8 +63,9 @@ if [ "$UNSAFE_CORS" = "true" ]; then
   sed -i 's/^enabled-unsafe-cors = false/enabled-unsafe-cors = true/' "$APP_TOML"
 fi
 
-# Prometheus metrics
+# Prometheus metrics (bind to all interfaces for Docker scraping)
 sed -i 's/^prometheus = false/prometheus = true/' "$CONFIG_TOML"
+sed -i 's|^prometheus_listen_addr = .*|prometheus_listen_addr = ":26660"|' "$CONFIG_TOML"
 
 # REST API
 if [ "$ENABLE_API" = "true" ]; then
@@ -89,7 +90,7 @@ fi
 # ──── Run command ────
 case "${1:-start}" in
   start)
-    echo "[entrypoint] Starting legbled (chain=$CHAIN_ID, gas=$MINIMUM_GAS)"
+    echo "[entrypoint] Starting legbled (chain=$CHAIN_ID, gas=$MINIMUM_GAS, metrics=:26660)"
     exec legbled start \
       --home "$HOME_DIR" \
       --minimum-gas-prices "$MINIMUM_GAS"

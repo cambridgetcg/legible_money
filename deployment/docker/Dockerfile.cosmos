@@ -39,12 +39,17 @@ COPY --from=builder /usr/local/bin/legbled /usr/local/bin/legbled
 ENV LGM_HOME=/root/.legbled
 ENV MONIKER=legible-node
 
-EXPOSE 26656 26657 9090 1317
+EXPOSE 26656 26657 9090 1317 26660
 
 VOLUME ["/root/.legbled"]
 
+# Liveness check: node responds to RPC.
+# For sync-aware checks, use docker compose healthcheck override.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD curl -sf http://localhost:26657/status || exit 1
+  CMD curl -sf http://localhost:26657/status | grep -q '"catching_up"' || exit 1
+
+# CometBFT handles SIGTERM gracefully — flushes WAL, closes DB.
+STOPSIGNAL SIGTERM
 
 # Entrypoint: if node is already initialized, just start; otherwise init first
 COPY deployment/docker/entrypoint-cosmos.sh /entrypoint.sh

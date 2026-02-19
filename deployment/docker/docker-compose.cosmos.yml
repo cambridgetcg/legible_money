@@ -13,8 +13,15 @@
 #   # 4. Check status
 #   curl -s localhost:26657/status | jq .result.sync_info.latest_block_height
 #
-#   # 5. Tear down
+#   # 5. Tear down (keep volumes)
+#   docker compose -f deployment/docker/docker-compose.cosmos.yml down
+#
+#   # 6. Tear down (destroy volumes)
 #   docker compose -f deployment/docker/docker-compose.cosmos.yml down -v
+#
+# Profiles:
+#   --profile explorer    — Ping.pub block explorer on :8080
+#   --profile monitoring  — Prometheus (:9093) + Grafana (:3000)
 
 name: lgm-devnet
 
@@ -32,14 +39,16 @@ services:
       ENABLE_GRPC: "true"
       PRUNING: default
     ports:
-      - "26656:26656"  # P2P
-      - "26657:26657"  # RPC
-      - "1317:1317"    # REST API
-      - "9090:9090"    # gRPC
+      - "26656:26656"   # P2P
+      - "26657:26657"   # RPC
+      - "1317:1317"     # REST API
+      - "9090:9090"     # gRPC
+      - "26660:26660"   # Prometheus metrics
     volumes:
       - validator-1-data:/root/.legbled
     networks:
       - lgm-net
+    stop_grace_period: 30s
     restart: unless-stopped
 
   # ──── Validator 2 ────
@@ -55,14 +64,16 @@ services:
       ENABLE_GRPC: "true"
       PRUNING: default
     ports:
-      - "26666:26656"  # P2P
-      - "26667:26657"  # RPC
-      - "1318:1317"    # REST API
-      - "9091:9090"    # gRPC
+      - "26666:26656"   # P2P
+      - "26667:26657"   # RPC
+      - "1318:1317"     # REST API
+      - "9091:9090"     # gRPC
+      - "26661:26660"   # Prometheus metrics
     volumes:
       - validator-2-data:/root/.legbled
     networks:
       - lgm-net
+    stop_grace_period: 30s
     restart: unless-stopped
 
   # ──── Validator 3 ────
@@ -78,14 +89,16 @@ services:
       ENABLE_GRPC: "true"
       PRUNING: default
     ports:
-      - "26676:26656"  # P2P
-      - "26677:26657"  # RPC
-      - "1319:1317"    # REST API
-      - "9092:9090"    # gRPC
+      - "26676:26656"   # P2P
+      - "26677:26657"   # RPC
+      - "1319:1317"     # REST API
+      - "9092:9090"     # gRPC
+      - "26662:26660"   # Prometheus metrics
     volumes:
       - validator-3-data:/root/.legbled
     networks:
       - lgm-net
+    stop_grace_period: 30s
     restart: unless-stopped
 
   # ──── Block Explorer (Ping.pub) ────
@@ -103,10 +116,50 @@ services:
     profiles:
       - explorer
 
+  # ──── Prometheus ────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: lgm-prometheus
+    ports:
+      - "9093:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - lgm-net
+    depends_on:
+      - validator-1
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+  # ──── Grafana ────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: lgm-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: lgmdevnet
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - lgm-net
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
 volumes:
   validator-1-data:
   validator-2-data:
   validator-3-data:
+  prometheus-data:
+  grafana-data:
 
 networks:
   lgm-net:
