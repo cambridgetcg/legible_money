@@ -1,0 +1,11 @@
+# Legible Money Testnet — Seed Nodes
+# Format: node_id@host:port
+# Chain ID: lgm-testnet-1
+# Updated: 2026-02-19
+
+# Seed node 1 (coordinator)
+# Replace <IP> with the actual seed node IP address before distribution
+f8d9931bdadf9aef92f53fc16e5f3cf1a2a86bd5@<SEED_IP>:26656
+
+# Validator 1
+cb72bf38996a9ea44e28871a7bddb789a66876f9@<VAL1_IP>:26656
