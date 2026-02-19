@@ -285,6 +285,11 @@ func (lcd LegibleCapabilityDecorator) findSessionByPubKey(ctx sdk.Context, owner
 
 // checkCapability verifies the session key has capability for the given message type.
 // Default-deny: unrecognized message types are rejected for session keys.
+//
+// Capability check order:
+// 1. Boolean capabilities on SessionCapabilities (primary)
+// 2. CapabilityGrant entries with independent expiry/use limits (extension)
+// 3. Default deny for unrecognized message types
 func (lcd LegibleCapabilityDecorator) checkCapability(session *legibleauthtypes.SessionKey, msg sdk.Msg) error {
 	if session.Capabilities == nil {
 		return legibleauthtypes.ErrSessionCapabilityDenied
@@ -321,6 +326,21 @@ func (lcd LegibleCapabilityDecorator) checkCapability(session *legibleauthtypes.
 		// ICA registration requires operational key — session keys can only
 		// send transactions to already-registered ICAs.
 		if msgType == "/legible.icaauth.v1.MsgRegisterInterchainAccount" {
+			return legibleauthtypes.ErrSessionCapabilityDenied
+		}
+		return nil
+	case isPartnershipMsg(msgType):
+		if !session.Capabilities.CanPartnership {
+			return legibleauthtypes.ErrSessionCapabilityDenied
+		}
+		return nil
+	case isResearchMsg(msgType):
+		if !session.Capabilities.CanResearch {
+			return legibleauthtypes.ErrSessionCapabilityDenied
+		}
+		return nil
+	case isDisputeMsg(msgType):
+		if !session.Capabilities.CanDispute {
 			return legibleauthtypes.ErrSessionCapabilityDenied
 		}
 		return nil
@@ -365,6 +385,98 @@ func isVoteMsg(msgType string) bool {
 		msgType == "/legible.emergency.v1.MsgVoteHalt" ||
 		msgType == "/legible.emergency.v1.MsgVoteRevert" ||
 		msgType == "/legible.emergency.v1.MsgVoteResume"
+}
+
+func isPartnershipMsg(msgType string) bool {
+	return msgType == "/legible.partnerships.v1.MsgDepositToPot" ||
+		msgType == "/legible.partnerships.v1.MsgProposeOperation" ||
+		msgType == "/legible.partnerships.v1.MsgApproveOperation" ||
+		msgType == "/legible.partnerships.v1.MsgRejectOperation" ||
+		msgType == "/legible.partnerships.v1.MsgSafetyFreeze" ||
+		msgType == "/legible.partnerships.v1.MsgInitiatePartnership" ||
+		msgType == "/legible.partnerships.v1.MsgAcceptPartnership" ||
+		msgType == "/legible.partnerships.v1.MsgInitiateExit" ||
+		msgType == "/legible.partnerships.v1.MsgDistributeReward" ||
+		msgType == "/legible.partnerships.v1.MsgRaiseCoercionSignal" ||
+		msgType == "/legible.partnerships.v1.MsgDeclareIntent" ||
+		msgType == "/legible.partnerships.v1.MsgRegisterInPool" ||
+		msgType == "/legible.partnerships.v1.MsgSponsorPartnership"
+}
+
+func isResearchMsg(msgType string) bool {
+	return msgType == "/legible.research.v1.MsgSubmitResearch" ||
+		msgType == "/legible.research.v1.MsgChallengeResearch" ||
+		msgType == "/legible.research.v1.MsgReviewResearch" ||
+		msgType == "/legible.research.v1.MsgResolveResearch" ||
+		msgType == "/legible.research.v1.MsgCreateBounty" ||
+		msgType == "/legible.research.v1.MsgClaimBounty" ||
+		msgType == "/legible.research.v1.MsgFulfillBounty" ||
+		msgType == "/legible.research.v1.MsgFundResearch"
+}
+
+func isDisputeMsg(msgType string) bool {
+	return msgType == "/legible.disputes.v1.MsgInitiateDispute" ||
+		msgType == "/legible.disputes.v1.MsgOpenDispute" ||
+		msgType == "/legible.disputes.v1.MsgCommitEvidence" ||
+		msgType == "/legible.disputes.v1.MsgSubmitEvidence" ||
+		msgType == "/legible.disputes.v1.MsgRevealEvidence" ||
+		msgType == "/legible.disputes.v1.MsgVoteDispute" ||
+		msgType == "/legible.disputes.v1.MsgArbiterVote" ||
+		msgType == "/legible.disputes.v1.MsgEscalateDispute"
+}
+
+// ---------- Capability Presets ----------
+
+// CapabilityPresets defines common session key capability bundles for agent roles.
+// Use ResolvePreset() to convert a preset name to a SessionCapabilities struct.
+var CapabilityPresets = map[string]*legibleauthtypes.SessionCapabilities{
+	// knowledge-worker: Submit claims, verify facts, challenge, vote on governance
+	"knowledge-worker": {
+		CanSubmitClaims: true,
+		CanVote:         true,
+	},
+	// partnership-operator: Manage partnership pots, proposals, safety operations
+	"partnership-operator": {
+		CanPartnership: true,
+	},
+	// researcher: Submit research, fund, create bounties
+	"researcher": {
+		CanResearch: true,
+	},
+	// autonomous-agent: Full operational autonomy for independent agents
+	"autonomous-agent": {
+		CanSubmitClaims: true,
+		CanVote:         true,
+		CanPartnership:  true,
+		CanResearch:     true,
+		CanDispute:      true,
+		CanTransfer:     true, // subject to spending limits
+	},
+	// dispute-arbiter: Participate in dispute resolution
+	"dispute-arbiter": {
+		CanDispute: true,
+		CanVote:    true,
+	},
+}
+
+// ResolvePreset returns the SessionCapabilities for a named preset.
+// Returns nil if the preset name is not recognized.
+func ResolvePreset(name string) *legibleauthtypes.SessionCapabilities {
+	caps, ok := CapabilityPresets[name]
+	if !ok {
+		return nil
+	}
+	// Return a copy to prevent mutation of the preset map
+	return &legibleauthtypes.SessionCapabilities{
+		CanTransfer:     caps.CanTransfer,
+		CanStake:        caps.CanStake,
+		CanSubmitClaims: caps.CanSubmitClaims,
+		CanVote:         caps.CanVote,
+		CanIca:          caps.CanIca,
+		CanPartnership:  caps.CanPartnership,
+		CanResearch:     caps.CanResearch,
+		CanDispute:      caps.CanDispute,
+	}
 }
 
 // ---------- LegibleDIDDecorator ----------

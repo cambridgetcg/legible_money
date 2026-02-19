@@ -53,6 +53,8 @@ message SessionKey {
   SessionCapabilities capabilities = 4;
   uint64 expires_at_block = 5;
   uint64 created_at_block = 6;
+  // Fine-grained capability grants with independent expiry/use limits
+  repeated CapabilityGrant capability_grants = 7;
 }
 
 // SessionCapabilities defines what a session key can do.
@@ -67,6 +69,18 @@ message SessionCapabilities {
   bool can_ica = 7;                               // Allow ICA registration and transactions
   repeated string allowed_ica_connections = 8;     // Connection ID whitelist (empty = all)
   repeated string allowed_ica_msg_types = 9;       // Proto URL whitelist for ICA msgs (empty = all allowed by account)
+  // Agent autonomy capabilities (B12-7)
+  bool can_partnership = 10;                       // Partnership deposit, propose, approve operations
+  bool can_research = 11;                          // Research submit, fund, bounty operations
+  bool can_dispute = 12;                           // Dispute initiate, evidence, vote operations
+}
+
+// CapabilityGrant provides fine-grained control over individual capabilities
+// with independent expiry and use-count limits.
+message CapabilityGrant {
+  string capability = 1;                           // Capability identifier (e.g., "bank.send", "knowledge.submit_claim")
+  uint64 expires_at_block = 2;                     // 0 = same as session expiry
+  int64  max_uses_remaining = 3;                   // -1 = unlimited, 0 = exhausted
 }
 
 // RecoveryConfig defines the recovery configuration for an account.

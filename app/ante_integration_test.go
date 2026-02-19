@@ -1190,3 +1190,415 @@ func TestDIDDecorator_DIDMismatch_Rejected(t *testing.T) {
 		t.Fatal("expected DID mismatch (signed by different key) to be rejected")
 	}
 }
+
+// ============================================================
+// Session Key Capability Expansion Tests (B12-7)
+// ============================================================
+
+func TestSessionKey_Partnership_DepositToPot_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanPartnership: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgDepositToPot"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected partnership-capable session key to pass MsgDepositToPot, got: %v", err)
+	}
+}
+
+func TestSessionKey_Partnership_ProposeApprove_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanPartnership: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	// Multi-msg: propose + approve in same tx
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgProposeOperation"},
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgApproveOperation"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected partnership-capable session key to pass propose+approve, got: %v", err)
+	}
+}
+
+func TestSessionKey_Partnership_Denied_ForClaimOnly(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanSubmitClaims: true, // claims only, NOT partnerships
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgDepositToPot"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err == nil {
+		t.Fatal("expected claim-only session key to be rejected for partnership msg")
+	}
+	if err != legibleauthtypes.ErrSessionCapabilityDenied {
+		t.Fatalf("expected ErrSessionCapabilityDenied, got: %v", err)
+	}
+}
+
+func TestSessionKey_Research_SubmitResearch_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanResearch: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.research.v1.MsgSubmitResearch"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected research-capable session key to pass MsgSubmitResearch, got: %v", err)
+	}
+}
+
+func TestSessionKey_Research_FundAndBounty_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanResearch: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.research.v1.MsgFundResearch"},
+		mockMsg{typeURL: "/legible.research.v1.MsgCreateBounty"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected research-capable session key to pass fund+bounty, got: %v", err)
+	}
+}
+
+func TestSessionKey_Research_Denied_ForVoteOnly(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanVote: true, // vote only, NOT research
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.research.v1.MsgSubmitResearch"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err == nil {
+		t.Fatal("expected vote-only session key to be rejected for research msg")
+	}
+	if err != legibleauthtypes.ErrSessionCapabilityDenied {
+		t.Fatalf("expected ErrSessionCapabilityDenied, got: %v", err)
+	}
+}
+
+func TestSessionKey_Dispute_InitiateAndVote_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanDispute: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.disputes.v1.MsgInitiateDispute"},
+		mockMsg{typeURL: "/legible.disputes.v1.MsgVoteDispute"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected dispute-capable session key to pass initiate+vote, got: %v", err)
+	}
+}
+
+func TestSessionKey_Dispute_Denied_ForTransferOnly(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanTransfer: true, // transfer only
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.disputes.v1.MsgOpenDispute"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err == nil {
+		t.Fatal("expected transfer-only session key to be rejected for dispute msg")
+	}
+	if err != legibleauthtypes.ErrSessionCapabilityDenied {
+		t.Fatalf("expected ErrSessionCapabilityDenied, got: %v", err)
+	}
+}
+
+func TestSessionKey_PartnershipSafetyFreeze_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanPartnership: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgSafetyFreeze"},
+	})
+
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected partnership-capable session key to pass MsgSafetyFreeze, got: %v", err)
+	}
+}
+
+func TestCapabilityPresets_KnowledgeWorker(t *testing.T) {
+	caps := ResolvePreset("knowledge-worker")
+	if caps == nil {
+		t.Fatal("expected knowledge-worker preset to resolve")
+	}
+	if !caps.CanSubmitClaims {
+		t.Error("knowledge-worker should have CanSubmitClaims")
+	}
+	if !caps.CanVote {
+		t.Error("knowledge-worker should have CanVote")
+	}
+	if caps.CanTransfer {
+		t.Error("knowledge-worker should NOT have CanTransfer")
+	}
+	if caps.CanPartnership {
+		t.Error("knowledge-worker should NOT have CanPartnership")
+	}
+}
+
+func TestCapabilityPresets_AutonomousAgent(t *testing.T) {
+	caps := ResolvePreset("autonomous-agent")
+	if caps == nil {
+		t.Fatal("expected autonomous-agent preset to resolve")
+	}
+	if !caps.CanSubmitClaims {
+		t.Error("autonomous-agent should have CanSubmitClaims")
+	}
+	if !caps.CanVote {
+		t.Error("autonomous-agent should have CanVote")
+	}
+	if !caps.CanTransfer {
+		t.Error("autonomous-agent should have CanTransfer")
+	}
+	if !caps.CanPartnership {
+		t.Error("autonomous-agent should have CanPartnership")
+	}
+	if !caps.CanResearch {
+		t.Error("autonomous-agent should have CanResearch")
+	}
+	if !caps.CanDispute {
+		t.Error("autonomous-agent should have CanDispute")
+	}
+	if caps.CanStake {
+		t.Error("autonomous-agent should NOT have CanStake (requires identity key)")
+	}
+}
+
+func TestCapabilityPresets_Unknown_ReturnsNil(t *testing.T) {
+	caps := ResolvePreset("nonexistent-preset")
+	if caps != nil {
+		t.Error("expected nil for unknown preset")
+	}
+}
+
+func TestCapabilityPresets_DisputeArbiter(t *testing.T) {
+	caps := ResolvePreset("dispute-arbiter")
+	if caps == nil {
+		t.Fatal("expected dispute-arbiter preset to resolve")
+	}
+	if !caps.CanDispute {
+		t.Error("dispute-arbiter should have CanDispute")
+	}
+	if !caps.CanVote {
+		t.Error("dispute-arbiter should have CanVote")
+	}
+	if caps.CanTransfer {
+		t.Error("dispute-arbiter should NOT have CanTransfer")
+	}
+}
+
+func TestCapabilityPresets_ImmutableCopy(t *testing.T) {
+	// Verify ResolvePreset returns a copy, not a reference to the preset map
+	caps1 := ResolvePreset("knowledge-worker")
+	caps1.CanTransfer = true // mutate the copy
+
+	caps2 := ResolvePreset("knowledge-worker")
+	if caps2.CanTransfer {
+		t.Error("mutating resolved preset should not affect the original")
+	}
+}
+
+func TestSessionKey_AutonomousPreset_FullWorkflow(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	// Register with autonomous-agent preset capabilities
+	caps := ResolvePreset("autonomous-agent")
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, caps)
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+
+	// Should pass: all autonomous-agent capabilities
+	for _, msgType := range []string{
+		"/legible.knowledge.v1.MsgSubmitClaim",
+		"/legible.knowledge.v1.MsgChallengeFact",
+		"/cosmos.gov.v1.MsgVote",
+		"/legible.partnerships.v1.MsgDepositToPot",
+		"/legible.partnerships.v1.MsgProposeOperation",
+		"/legible.research.v1.MsgSubmitResearch",
+		"/legible.research.v1.MsgFundResearch",
+		"/legible.disputes.v1.MsgInitiateDispute",
+		"/legible.disputes.v1.MsgVoteDispute",
+		"/cosmos.bank.v1beta1.MsgSend",
+	} {
+		tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+			mockMsg{typeURL: msgType},
+		})
+		_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+		if err != nil {
+			t.Errorf("autonomous-agent should allow %s, got: %v", msgType, err)
+		}
+	}
+
+	// Should fail: staking (not in autonomous-agent preset)
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/cosmos.staking.v1beta1.MsgDelegate"},
+	})
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err == nil {
+		t.Error("autonomous-agent should NOT allow MsgDelegate (staking requires identity key)")
+	}
+}
+
+func TestSessionKey_DisputeEvidence_Passes(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanDispute: true,
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	// All dispute message types should work
+	for _, msgType := range []string{
+		"/legible.disputes.v1.MsgInitiateDispute",
+		"/legible.disputes.v1.MsgOpenDispute",
+		"/legible.disputes.v1.MsgCommitEvidence",
+		"/legible.disputes.v1.MsgSubmitEvidence",
+		"/legible.disputes.v1.MsgRevealEvidence",
+		"/legible.disputes.v1.MsgVoteDispute",
+		"/legible.disputes.v1.MsgArbiterVote",
+		"/legible.disputes.v1.MsgEscalateDispute",
+	} {
+		tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+			mockMsg{typeURL: msgType},
+		})
+		_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+		if err != nil {
+			t.Errorf("dispute-capable session key should allow %s, got: %v", msgType, err)
+		}
+	}
+}
+
+func TestSessionKey_CrossCapability_Denied(t *testing.T) {
+	authKeeper, _, ctx := setupBothKeepers(t)
+
+	identityKey := cosmosed25519.GenPrivKey()
+	addr := registerLegibleAccount(t, authKeeper, ctx, identityKey, false)
+
+	sessionKey := cosmosed25519.GenPrivKey()
+	registerSessionKey(t, authKeeper, ctx, addr, sessionKey, &legibleauthtypes.SessionCapabilities{
+		CanPartnership: true,
+		CanResearch:    true,
+		// CanDispute: false — NOT granted
+	})
+
+	decorator := NewLegibleCapabilityDecorator(authKeeper, mockCosmosAccountKeeperForAnte{})
+	// Partnership + research in same tx should pass
+	tx := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgDepositToPot"},
+		mockMsg{typeURL: "/legible.research.v1.MsgFundResearch"},
+	})
+	_, err := decorator.AnteHandle(ctx, tx, false, passThroughHandler)
+	if err != nil {
+		t.Fatalf("expected partnership+research to pass, got: %v", err)
+	}
+
+	// Adding a dispute msg should fail the whole tx
+	tx2 := newMockSignedTx([]*cosmosed25519.PrivKey{sessionKey}, []sdk.Msg{
+		mockMsg{typeURL: "/legible.partnerships.v1.MsgDepositToPot"},
+		mockMsg{typeURL: "/legible.disputes.v1.MsgOpenDispute"}, // denied
+	})
+	_, err = decorator.AnteHandle(ctx, tx2, false, passThroughHandler)
+	if err == nil {
+		t.Fatal("expected tx with denied dispute msg to fail")
+	}
+	if err != legibleauthtypes.ErrSessionCapabilityDenied {
+		t.Fatalf("expected ErrSessionCapabilityDenied, got: %v", err)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -117,6 +118,15 @@ Both arguments are hex-encoded byte strings.`,
 	return cmd
 }
 
+// validPresets lists the recognized capability preset names.
+var validPresets = []string{
+	"knowledge-worker",
+	"partnership-operator",
+	"researcher",
+	"autonomous-agent",
+	"dispute-arbiter",
+}
+
 // NewCreateSessionCmd creates a CLI command for MsgCreateSession.
 func NewCreateSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -125,7 +135,16 @@ func NewCreateSessionCmd() *cobra.Command {
 		Long: `Create a session key for delegated operations.
 
 The session public key is a hex-encoded Ed25519 key.
-Capabilities are controlled via boolean flags.`,
+Capabilities are controlled via boolean flags or --preset.
+
+Available presets:
+  knowledge-worker       Submit claims, vote in governance
+  partnership-operator   Partnership deposit, propose, approve, safety freeze
+  researcher             Submit research, fund, create bounties
+  autonomous-agent       Full operational autonomy (claims, vote, partnerships, research, disputes, transfer)
+  dispute-arbiter        Dispute participation and voting
+
+Presets can be combined with individual flags (flags override preset defaults).`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)
@@ -138,21 +157,46 @@ Capabilities are controlled via boolean flags.`,
 				return fmt.Errorf("invalid hex for session-pub-key: %w", err)
 			}
 
-			canTransfer, _ := cmd.Flags().GetBool("can-transfer")
-			canStake, _ := cmd.Flags().GetBool("can-stake")
-			canSubmitClaims, _ := cmd.Flags().GetBool("can-submit-claims")
-			canVote, _ := cmd.Flags().GetBool("can-vote")
 			expiresAt, _ := cmd.Flags().GetUint64("expires-at")
+
+			// Start with preset if specified
+			caps := &types.SessionCapabilities{}
+			preset, _ := cmd.Flags().GetString("preset")
+			if preset != "" {
+				presetCaps := resolvePresetCaps(preset)
+				if presetCaps == nil {
+					return fmt.Errorf("unknown preset %q, valid presets: %s", preset, strings.Join(validPresets, ", "))
+				}
+				caps = presetCaps
+			}
+
+			// Override with explicit flags (only if the flag was actually set)
+			if cmd.Flags().Changed("can-transfer") {
+				caps.CanTransfer, _ = cmd.Flags().GetBool("can-transfer")
+			}
+			if cmd.Flags().Changed("can-stake") {
+				caps.CanStake, _ = cmd.Flags().GetBool("can-stake")
+			}
+			if cmd.Flags().Changed("can-submit-claims") {
+				caps.CanSubmitClaims, _ = cmd.Flags().GetBool("can-submit-claims")
+			}
+			if cmd.Flags().Changed("can-vote") {
+				caps.CanVote, _ = cmd.Flags().GetBool("can-vote")
+			}
+			if cmd.Flags().Changed("can-partnership") {
+				caps.CanPartnership, _ = cmd.Flags().GetBool("can-partnership")
+			}
+			if cmd.Flags().Changed("can-research") {
+				caps.CanResearch, _ = cmd.Flags().GetBool("can-research")
+			}
+			if cmd.Flags().Changed("can-dispute") {
+				caps.CanDispute, _ = cmd.Flags().GetBool("can-dispute")
+			}
 
 			msg := &types.MsgCreateSession{
 				Owner:         clientCtx.GetFromAddress().String(),
 				SessionPubKey: sessionKey,
-				Capabilities: &types.SessionCapabilities{
-					CanTransfer:     canTransfer,
-					CanStake:        canStake,
-					CanSubmitClaims: canSubmitClaims,
-					CanVote:         canVote,
-				},
+				Capabilities:  caps,
 				ExpiresAtHeight: expiresAt,
 			}
 
@@ -160,13 +204,53 @@ Capabilities are controlled via boolean flags.`,
 		},
 	}
 
+	cmd.Flags().String("preset", "", "Capability preset (knowledge-worker, partnership-operator, researcher, autonomous-agent, dispute-arbiter)")
 	cmd.Flags().Bool("can-transfer", false, "Allow transfers")
 	cmd.Flags().Bool("can-stake", false, "Allow staking")
 	cmd.Flags().Bool("can-submit-claims", false, "Allow submitting claims")
 	cmd.Flags().Bool("can-vote", false, "Allow voting")
+	cmd.Flags().Bool("can-partnership", false, "Allow partnership operations")
+	cmd.Flags().Bool("can-research", false, "Allow research operations")
+	cmd.Flags().Bool("can-dispute", false, "Allow dispute operations")
 	cmd.Flags().Uint64("expires-at", 0, "Block height at which session expires")
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
+}
+
+// resolvePresetCaps returns a copy of the SessionCapabilities for a preset name.
+// Defined here to avoid circular import with app package.
+func resolvePresetCaps(name string) *types.SessionCapabilities {
+	switch name {
+	case "knowledge-worker":
+		return &types.SessionCapabilities{
+			CanSubmitClaims: true,
+			CanVote:         true,
+		}
+	case "partnership-operator":
+		return &types.SessionCapabilities{
+			CanPartnership: true,
+		}
+	case "researcher":
+		return &types.SessionCapabilities{
+			CanResearch: true,
+		}
+	case "autonomous-agent":
+		return &types.SessionCapabilities{
+			CanSubmitClaims: true,
+			CanVote:         true,
+			CanPartnership:  true,
+			CanResearch:     true,
+			CanDispute:      true,
+			CanTransfer:     true,
+		}
+	case "dispute-arbiter":
+		return &types.SessionCapabilities{
+			CanDispute: true,
+			CanVote:    true,
+		}
+	default:
+		return nil
+	}
 }
 
 // NewRevokeSessionCmd creates a CLI command for MsgRevokeSession.

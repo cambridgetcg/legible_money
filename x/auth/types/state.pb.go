@@ -311,8 +311,10 @@ type SessionKey struct {
 	Capabilities   *SessionCapabilities   `protobuf:"bytes,4,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
 	ExpiresAtBlock uint64                 `protobuf:"varint,5,opt,name=expires_at_block,json=expiresAtBlock,proto3" json:"expires_at_block,omitempty"`
 	CreatedAtBlock uint64                 `protobuf:"varint,6,opt,name=created_at_block,json=createdAtBlock,proto3" json:"created_at_block,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Fine-grained capability grants with independent expiry/use limits
+	CapabilityGrants []*CapabilityGrant `protobuf:"bytes,7,rep,name=capability_grants,json=capabilityGrants,proto3" json:"capability_grants,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SessionKey) Reset() {
@@ -387,6 +389,13 @@ func (x *SessionKey) GetCreatedAtBlock() uint64 {
 	return 0
 }
 
+func (x *SessionKey) GetCapabilityGrants() []*CapabilityGrant {
+	if x != nil {
+		return x.CapabilityGrants
+	}
+	return nil
+}
+
 // SessionCapabilities defines what a session key can do.
 type SessionCapabilities struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
@@ -400,8 +409,12 @@ type SessionCapabilities struct {
 	CanIca                bool     `protobuf:"varint,7,opt,name=can_ica,json=canIca,proto3" json:"can_ica,omitempty"`                                               // Allow ICA registration and transactions
 	AllowedIcaConnections []string `protobuf:"bytes,8,rep,name=allowed_ica_connections,json=allowedIcaConnections,proto3" json:"allowed_ica_connections,omitempty"` // Connection ID whitelist (empty = all)
 	AllowedIcaMsgTypes    []string `protobuf:"bytes,9,rep,name=allowed_ica_msg_types,json=allowedIcaMsgTypes,proto3" json:"allowed_ica_msg_types,omitempty"`        // Proto URL whitelist for ICA msgs (empty = all allowed by account)
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Agent autonomy capabilities (B12-7)
+	CanPartnership bool `protobuf:"varint,10,opt,name=can_partnership,json=canPartnership,proto3" json:"can_partnership,omitempty"` // Partnership deposit, propose, approve operations
+	CanResearch    bool `protobuf:"varint,11,opt,name=can_research,json=canResearch,proto3" json:"can_research,omitempty"`          // Research submit, fund, bounty operations
+	CanDispute     bool `protobuf:"varint,12,opt,name=can_dispute,json=canDispute,proto3" json:"can_dispute,omitempty"`             // Dispute initiate, evidence, vote operations
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SessionCapabilities) Reset() {
@@ -497,6 +510,89 @@ func (x *SessionCapabilities) GetAllowedIcaMsgTypes() []string {
 	return nil
 }
 
+func (x *SessionCapabilities) GetCanPartnership() bool {
+	if x != nil {
+		return x.CanPartnership
+	}
+	return false
+}
+
+func (x *SessionCapabilities) GetCanResearch() bool {
+	if x != nil {
+		return x.CanResearch
+	}
+	return false
+}
+
+func (x *SessionCapabilities) GetCanDispute() bool {
+	if x != nil {
+		return x.CanDispute
+	}
+	return false
+}
+
+// CapabilityGrant provides fine-grained control over individual capabilities
+// with independent expiry and use-count limits.
+type CapabilityGrant struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Capability       string                 `protobuf:"bytes,1,opt,name=capability,proto3" json:"capability,omitempty"`                                        // Capability identifier (e.g., "bank.send", "knowledge.submit_claim")
+	ExpiresAtBlock   uint64                 `protobuf:"varint,2,opt,name=expires_at_block,json=expiresAtBlock,proto3" json:"expires_at_block,omitempty"`       // 0 = same as session expiry
+	MaxUsesRemaining int64                  `protobuf:"varint,3,opt,name=max_uses_remaining,json=maxUsesRemaining,proto3" json:"max_uses_remaining,omitempty"` // -1 = unlimited, 0 = exhausted
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CapabilityGrant) Reset() {
+	*x = CapabilityGrant{}
+	mi := &file_legible_auth_v1_state_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapabilityGrant) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapabilityGrant) ProtoMessage() {}
+
+func (x *CapabilityGrant) ProtoReflect() protoreflect.Message {
+	mi := &file_legible_auth_v1_state_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapabilityGrant.ProtoReflect.Descriptor instead.
+func (*CapabilityGrant) Descriptor() ([]byte, []int) {
+	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CapabilityGrant) GetCapability() string {
+	if x != nil {
+		return x.Capability
+	}
+	return ""
+}
+
+func (x *CapabilityGrant) GetExpiresAtBlock() uint64 {
+	if x != nil {
+		return x.ExpiresAtBlock
+	}
+	return 0
+}
+
+func (x *CapabilityGrant) GetMaxUsesRemaining() int64 {
+	if x != nil {
+		return x.MaxUsesRemaining
+	}
+	return 0
+}
+
 // RecoveryConfig defines the recovery configuration for an account.
 type RecoveryConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -514,7 +610,7 @@ type RecoveryConfig struct {
 
 func (x *RecoveryConfig) Reset() {
 	*x = RecoveryConfig{}
-	mi := &file_legible_auth_v1_state_proto_msgTypes[5]
+	mi := &file_legible_auth_v1_state_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +622,7 @@ func (x *RecoveryConfig) String() string {
 func (*RecoveryConfig) ProtoMessage() {}
 
 func (x *RecoveryConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_legible_auth_v1_state_proto_msgTypes[5]
+	mi := &file_legible_auth_v1_state_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +635,7 @@ func (x *RecoveryConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecoveryConfig.ProtoReflect.Descriptor instead.
 func (*RecoveryConfig) Descriptor() ([]byte, []int) {
-	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{5}
+	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RecoveryConfig) GetAccountAddress() string {
@@ -604,7 +700,7 @@ type ShardHolder struct {
 
 func (x *ShardHolder) Reset() {
 	*x = ShardHolder{}
-	mi := &file_legible_auth_v1_state_proto_msgTypes[6]
+	mi := &file_legible_auth_v1_state_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -616,7 +712,7 @@ func (x *ShardHolder) String() string {
 func (*ShardHolder) ProtoMessage() {}
 
 func (x *ShardHolder) ProtoReflect() protoreflect.Message {
-	mi := &file_legible_auth_v1_state_proto_msgTypes[6]
+	mi := &file_legible_auth_v1_state_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -629,7 +725,7 @@ func (x *ShardHolder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardHolder.ProtoReflect.Descriptor instead.
 func (*ShardHolder) Descriptor() ([]byte, []int) {
-	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{6}
+	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ShardHolder) GetType() string {
@@ -680,7 +776,7 @@ type RecoveryRequest struct {
 
 func (x *RecoveryRequest) Reset() {
 	*x = RecoveryRequest{}
-	mi := &file_legible_auth_v1_state_proto_msgTypes[7]
+	mi := &file_legible_auth_v1_state_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -692,7 +788,7 @@ func (x *RecoveryRequest) String() string {
 func (*RecoveryRequest) ProtoMessage() {}
 
 func (x *RecoveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_legible_auth_v1_state_proto_msgTypes[7]
+	mi := &file_legible_auth_v1_state_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -705,7 +801,7 @@ func (x *RecoveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecoveryRequest.ProtoReflect.Descriptor instead.
 func (*RecoveryRequest) Descriptor() ([]byte, []int) {
-	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{7}
+	return file_legible_auth_v1_state_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RecoveryRequest) GetAccountAddress() string {
@@ -816,7 +912,7 @@ const file_legible_auth_v1_state_proto_rawDesc = "" +
 	"DIDMapping\x12\x10\n" +
 	"\x03did\x18\x01 \x01(\tR\x03did\x12\x16\n" +
 	"\x06bech32\x18\x02 \x01(\tR\x06bech32\x12\x17\n" +
-	"\apub_key\x18\x03 \x01(\tR\x06pubKey\"\xfa\x01\n" +
+	"\apub_key\x18\x03 \x01(\tR\x06pubKey\"\xc9\x02\n" +
 	"\n" +
 	"SessionKey\x12\x19\n" +
 	"\bkey_hash\x18\x01 \x01(\tR\akeyHash\x12\x1d\n" +
@@ -825,7 +921,8 @@ const file_legible_auth_v1_state_proto_rawDesc = "" +
 	"\x05owner\x18\x03 \x01(\tR\x05owner\x12H\n" +
 	"\fcapabilities\x18\x04 \x01(\v2$.legible.auth.v1.SessionCapabilitiesR\fcapabilities\x12(\n" +
 	"\x10expires_at_block\x18\x05 \x01(\x04R\x0eexpiresAtBlock\x12(\n" +
-	"\x10created_at_block\x18\x06 \x01(\x04R\x0ecreatedAtBlock\"\xff\x02\n" +
+	"\x10created_at_block\x18\x06 \x01(\x04R\x0ecreatedAtBlock\x12M\n" +
+	"\x11capability_grants\x18\a \x03(\v2 .legible.auth.v1.CapabilityGrantR\x10capabilityGrants\"\xec\x03\n" +
 	"\x13SessionCapabilities\x12!\n" +
 	"\fcan_transfer\x18\x01 \x01(\bR\vcanTransfer\x12\x1b\n" +
 	"\tcan_stake\x18\x02 \x01(\bR\bcanStake\x12*\n" +
@@ -835,7 +932,18 @@ const file_legible_auth_v1_state_proto_rawDesc = "" +
 	"\x12allowed_recipients\x18\x06 \x03(\tR\x11allowedRecipients\x12\x17\n" +
 	"\acan_ica\x18\a \x01(\bR\x06canIca\x126\n" +
 	"\x17allowed_ica_connections\x18\b \x03(\tR\x15allowedIcaConnections\x121\n" +
-	"\x15allowed_ica_msg_types\x18\t \x03(\tR\x12allowedIcaMsgTypes\"\xd5\x02\n" +
+	"\x15allowed_ica_msg_types\x18\t \x03(\tR\x12allowedIcaMsgTypes\x12'\n" +
+	"\x0fcan_partnership\x18\n" +
+	" \x01(\bR\x0ecanPartnership\x12!\n" +
+	"\fcan_research\x18\v \x01(\bR\vcanResearch\x12\x1f\n" +
+	"\vcan_dispute\x18\f \x01(\bR\n" +
+	"canDispute\"\x89\x01\n" +
+	"\x0fCapabilityGrant\x12\x1e\n" +
+	"\n" +
+	"capability\x18\x01 \x01(\tR\n" +
+	"capability\x12(\n" +
+	"\x10expires_at_block\x18\x02 \x01(\x04R\x0eexpiresAtBlock\x12,\n" +
+	"\x12max_uses_remaining\x18\x03 \x01(\x03R\x10maxUsesRemaining\"\xd5\x02\n" +
 	"\x0eRecoveryConfig\x12'\n" +
 	"\x0faccount_address\x18\x01 \x01(\tR\x0eaccountAddress\x12*\n" +
 	"\x11recovery_key_hash\x18\x02 \x01(\tR\x0frecoveryKeyHash\x12\x1c\n" +
@@ -878,26 +986,28 @@ func file_legible_auth_v1_state_proto_rawDescGZIP() []byte {
 	return file_legible_auth_v1_state_proto_rawDescData
 }
 
-var file_legible_auth_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_legible_auth_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_legible_auth_v1_state_proto_goTypes = []any{
 	(*LegibleAccount)(nil),      // 0: legible.auth.v1.LegibleAccount
 	(*AccountFlags)(nil),        // 1: legible.auth.v1.AccountFlags
 	(*DIDMapping)(nil),          // 2: legible.auth.v1.DIDMapping
 	(*SessionKey)(nil),          // 3: legible.auth.v1.SessionKey
 	(*SessionCapabilities)(nil), // 4: legible.auth.v1.SessionCapabilities
-	(*RecoveryConfig)(nil),      // 5: legible.auth.v1.RecoveryConfig
-	(*ShardHolder)(nil),         // 6: legible.auth.v1.ShardHolder
-	(*RecoveryRequest)(nil),     // 7: legible.auth.v1.RecoveryRequest
+	(*CapabilityGrant)(nil),     // 5: legible.auth.v1.CapabilityGrant
+	(*RecoveryConfig)(nil),      // 6: legible.auth.v1.RecoveryConfig
+	(*ShardHolder)(nil),         // 7: legible.auth.v1.ShardHolder
+	(*RecoveryRequest)(nil),     // 8: legible.auth.v1.RecoveryRequest
 }
 var file_legible_auth_v1_state_proto_depIdxs = []int32{
 	1, // 0: legible.auth.v1.LegibleAccount.flags:type_name -> legible.auth.v1.AccountFlags
 	4, // 1: legible.auth.v1.SessionKey.capabilities:type_name -> legible.auth.v1.SessionCapabilities
-	6, // 2: legible.auth.v1.RecoveryConfig.shard_holders:type_name -> legible.auth.v1.ShardHolder
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	5, // 2: legible.auth.v1.SessionKey.capability_grants:type_name -> legible.auth.v1.CapabilityGrant
+	7, // 3: legible.auth.v1.RecoveryConfig.shard_holders:type_name -> legible.auth.v1.ShardHolder
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_legible_auth_v1_state_proto_init() }
@@ -911,7 +1021,7 @@ func file_legible_auth_v1_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_legible_auth_v1_state_proto_rawDesc), len(file_legible_auth_v1_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
