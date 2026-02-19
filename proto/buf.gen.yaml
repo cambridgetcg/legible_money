@@ -8,3 +8,9 @@ plugins:
     out: ..
     opt:
       - module=github.com/legible-money/legible
+  - name: grpc-gateway
+    out: ..
+    opt:
+      - module=github.com/legible-money/legible
+      - logtostderr=true
+    path: /Users/yu/go/bin/protoc-gen-grpc-gateway
