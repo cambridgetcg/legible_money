@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"fmt"
+	"sort"
 
 	sdkmath "cosmossdk.io/math"
 
@@ -112,6 +113,14 @@ func (k Keeper) DistributeCitationRewards(
 				adjustedShare = (adjustedShare * (1_000_000 - ep.SelfCitationDiscountBps)) / 1_000_000
 			}
 
+			// FARM-11: Citation concentration discount — when a fact's citations
+			// are concentrated among a small set of addresses (sybil ring pattern),
+			// apply a 70% discount to the citation reward.
+			concentrationDiscount := k.GetCitationConcentrationDiscount(ctx, ref.ToFactId, citingSubmitter, ep)
+			if concentrationDiscount > 0 {
+				adjustedShare = (adjustedShare * (1_000_000 - concentrationDiscount)) / 1_000_000
+			}
+
 			// Enforce protocol floor
 			protocolFloor := (totalReward * ep.CitationProtocolFloorBps) / 1_000_000
 			if adjustedShare < protocolFloor {
@@ -148,6 +157,11 @@ func (k Keeper) DistributeCitationRewards(
 			k.SetFact(ctx, fact)
 
 			totalDistributed += adjustedShare
+
+			// FARM-11: Track citation source for concentration detection
+			if citingSubmitter != "" {
+				k.UpdateCitationSource(ctx, ref.ToFactId, citingSubmitter)
+			}
 
 			ctx.EventManager().EmitEvent(
 				sdk.NewEvent("citation_reward",
@@ -217,4 +231,51 @@ func GetFundamentalityMultiplier(score uint64, ep types.ExtendedParams) uint64 {
 	default:
 		return 1_000_000 // 1.0x
 	}
+}
+
+// ---------- FARM-11: Citation Concentration Detection ----------
+
+// TopNSum returns the sum of the top N values from a map.
+// Used to detect whether a small set of addresses dominates a fact's citations.
+func TopNSum(counts map[string]uint64, n uint64) uint64 {
+	if len(counts) == 0 || n == 0 {
+		return 0
+	}
+	vals := make([]uint64, 0, len(counts))
+	for _, v := range counts {
+		vals = append(vals, v)
+	}
+	sort.Slice(vals, func(i, j int) bool { return vals[i] > vals[j] })
+	var sum uint64
+	for i := uint64(0); i < n && i < uint64(len(vals)); i++ {
+		sum += vals[i]
+	}
+	return sum
+}
+
+// GetCitationConcentrationDiscount returns the discount to apply when a fact's
+// citations are concentrated among a small set of addresses.
+// Returns 0 (no discount) if the fact has too few citations or if the top-N
+// addresses don't exceed the concentration threshold.
+func (k Keeper) GetCitationConcentrationDiscount(
+	ctx sdk.Context,
+	factID, citingAddr string,
+	ep types.ExtendedParams,
+) uint64 {
+	if ep.CitationConcentrationDiscount == 0 || ep.CitationConcentrationThreshold == 0 {
+		return 0
+	}
+
+	record, found := k.GetCitationSourceRecord(ctx, factID)
+	if !found || record.TotalCites < ep.CitationConcentrationMinCites {
+		return 0
+	}
+
+	topN := TopNSum(record.SourceCounts, ep.CitationConcentrationMaxAddrs)
+	// concentration = topN * 1_000_000 / totalCites
+	// Compare: topN * 1_000_000 >= totalCites * threshold (cross-multiply to avoid division)
+	if topN*1_000_000 >= record.TotalCites*ep.CitationConcentrationThreshold {
+		return ep.CitationConcentrationDiscount
+	}
+	return 0
 }

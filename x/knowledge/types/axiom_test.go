@@ -1325,3 +1325,60 @@ func TestValidateAxiomDAG_EnhancedMissingDepError(t *testing.T) {
 		t.Errorf("error should mention prefix 'MATH', got: %v", err)
 	}
 }
+
+// ---------- FARM-12: Stratum Types Tests ----------
+
+func TestValidStrata(t *testing.T) {
+	expectedStrata := []string{"fundamental", "physical", "chemical", "biological", "cognitive", "social", "technological"}
+	if len(ValidStrata) != 7 {
+		t.Errorf("ValidStrata has %d entries, want 7", len(ValidStrata))
+	}
+	for _, s := range expectedStrata {
+		if !ValidStrata[s] {
+			t.Errorf("ValidStrata missing %q", s)
+		}
+	}
+}
+
+func TestBootstrapDomainStrataComplete(t *testing.T) {
+	domains := DefaultDomains()
+	if len(BootstrapDomainStrata) != len(domains) {
+		t.Errorf("BootstrapDomainStrata has %d entries, want %d (matching DefaultDomains)",
+			len(BootstrapDomainStrata), len(domains))
+	}
+
+	// Every genesis domain must have a stratum assignment
+	for _, d := range domains {
+		stratum, ok := BootstrapDomainStrata[d.Name]
+		if !ok {
+			t.Errorf("domain %q missing from BootstrapDomainStrata", d.Name)
+			continue
+		}
+		// Assigned stratum must be valid
+		if !ValidStrata[stratum] {
+			t.Errorf("domain %q has invalid stratum %q", d.Name, stratum)
+		}
+	}
+}
+
+func TestStratumStakeMultiplierComplete(t *testing.T) {
+	// Every valid stratum must have a stake multiplier
+	for stratum := range ValidStrata {
+		if _, ok := StratumStakeMultiplier[stratum]; !ok {
+			t.Errorf("stratum %q missing from StratumStakeMultiplier", stratum)
+		}
+	}
+	// Multipliers should be monotonically non-decreasing as strata get more fundamental
+	if StratumStakeMultiplier["fundamental"] <= StratumStakeMultiplier["social"] {
+		t.Error("fundamental multiplier should be > social multiplier")
+	}
+}
+
+func TestDefaultProposalStratum(t *testing.T) {
+	if DefaultProposalStratum != "social" {
+		t.Errorf("DefaultProposalStratum = %q, want social", DefaultProposalStratum)
+	}
+	if !ValidStrata[DefaultProposalStratum] {
+		t.Errorf("DefaultProposalStratum %q is not a valid stratum", DefaultProposalStratum)
+	}
+}

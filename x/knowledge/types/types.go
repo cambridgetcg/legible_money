@@ -778,12 +778,25 @@ const (
 	FailedContradictionSlashBps = 330_000 // 33%
 
 	// FalsificationRewardCapBps caps the reward for disproving a fact
-	// at 3× the original claim's stake.
+	// at 3× the original claim's stake. Used as the overall maximum when
+	// FARM-15 dynamic scaling is enabled.
 	FalsificationRewardCapBps = 3_000_000
 
 	// FalsificationPoolShareBps is the max share of epoch block reward pool
 	// that can go to falsification rewards.
 	FalsificationPoolShareBps = 150_000 // 15%
+
+	// FARM-15: Falsification reward scaling — age×citation weighted.
+	// Base multiplier applied to all successful falsifications.
+	FalsificationBaseMultiplierBps = 1_000_000 // 1×
+	// Age scale: number of blocks for max age bonus (~10 days at 2521ms).
+	FalsificationAgeScaleBlocks = 342_720
+	// Max bonus from fact age.
+	FalsificationAgeMaxBonusBps = 1_000_000 // +1× max
+	// Citation scale: number of citations for max citation bonus.
+	FalsificationCiteScaleCount uint64 = 50
+	// Max bonus from citation count.
+	FalsificationCiteMaxBonusBps = 1_000_000 // +1× max
 
 	// CounterFactHighConfidence is the threshold above which a counter-fact
 	// significantly penalizes new claims referencing the target fact.
@@ -858,6 +871,17 @@ const (
 	// PropheticCitationThreshold is how many citations a barely-accepted fact
 	// needs to earn "prophetic" status (ahead of its time, later vindicated).
 	PropheticCitationThreshold = uint64(10)
+
+	// FARM-13: Prophetic facts require citation diversity to prevent sybil manipulation.
+
+	// PropheticMinUniqueCiters is the minimum number of unique addresses that must
+	// have cited a fact for it to qualify for prophetic status.
+	PropheticMinUniqueCiters = uint64(5)
+
+	// PropheticMaxSingleCiterShare is the maximum fraction of total citations that
+	// any single address may account for. If exceeded, prophetic status is denied.
+	// In BPS: 300,000 = 30%.
+	PropheticMaxSingleCiterShare = uint64(300_000) // 30%
 
 	// NoveltyImmunityThreshold is the novelty score above which a fact gets
 	// extended grace period before pruning (protecting novel but underutilized knowledge).
@@ -946,6 +970,12 @@ type ExtendedParams struct {
 	FailedContradictionSlashBps       uint64 `json:"failed_contradiction_slash_bps"`         // default 330000 = 33%
 	FalsificationRewardCapBps         uint64 `json:"falsification_reward_cap_bps"`           // default 3000000 = 3x
 	FalsificationPoolShareBps         uint64 `json:"falsification_pool_share_bps"`           // default 150000 = 15%
+	// FARM-15: Dynamic falsification reward scaling (age × citation).
+	FalsificationBaseMultiplierBps    uint64 `json:"falsification_base_multiplier_bps"`      // default 1000000 = 1×
+	FalsificationAgeScaleBlocks       uint64 `json:"falsification_age_scale_blocks"`         // default 342720 (~10 days)
+	FalsificationAgeMaxBonusBps       uint64 `json:"falsification_age_max_bonus_bps"`        // default 1000000 = +1×
+	FalsificationCiteScaleCount       uint64 `json:"falsification_cite_scale_count"`         // default 50
+	FalsificationCiteMaxBonusBps      uint64 `json:"falsification_cite_max_bonus_bps"`       // default 1000000 = +1×
 	CounterFactChallengeWindowBlocks  uint64 `json:"counter_fact_challenge_window_blocks"`   // default 34272 = ~1 day
 	CounterFactChallengeMinStake      uint64 `json:"counter_fact_challenge_min_stake"`       // default 50000 ulgm
 	CounterFactChallengeSlashBps      uint64 `json:"counter_fact_challenge_slash_bps"`       // default 220000 = 22%
@@ -988,12 +1018,20 @@ type ExtendedParams struct {
 	PropheticConfidenceCapBps      uint64 `json:"prophetic_confidence_cap_bps"`       // max confidence for prophetic facts (default 920000 = 92%)
 	PropheticBaseThresholdBps      uint64 `json:"prophetic_base_threshold_bps"`       // max acceptance conf for prophetic eligibility (default 650000 = 65%)
 	PropheticCitationThreshold     uint64 `json:"prophetic_citation_threshold"`       // citations needed for prophetic status (default 10)
+	PropheticMinUniqueCiters       uint64 `json:"prophetic_min_unique_citers"`        // FARM-13: min unique citers for prophetic (default 5)
+	PropheticMaxSingleCiterShare   uint64 `json:"prophetic_max_single_citer_share"`   // FARM-13: max share per citer in BPS (default 300000 = 30%)
 	NoveltyImmunityThresholdBps    uint64 `json:"novelty_immunity_threshold_bps"`     // novelty score for extended grace (default 500000 = 50%)
 	NoveltyGraceMultiplier         uint64 `json:"novelty_grace_multiplier"`           // grace period multiplier for novel facts (default 3)
 	NoveltyDecayHalfLifeMultiplier uint64 `json:"novelty_decay_half_life_multiplier"` // half-life extension for novel facts (default 2)
 
 	// Citation self-referencing
 	SelfCitationDiscountBps uint64 `json:"self_citation_discount_bps"` // discount for citing own facts (default 500000 = 50%)
+
+	// FARM-11: Citation concentration detection
+	CitationConcentrationThreshold uint64 `json:"citation_concentration_threshold"` // top-N share triggering discount (default 800000 = 80%)
+	CitationConcentrationMinCites  uint64 `json:"citation_concentration_min_cites"` // min citations before checking (default 5)
+	CitationConcentrationMaxAddrs  uint64 `json:"citation_concentration_max_addrs"` // N in top-N sum (default 3)
+	CitationConcentrationDiscount  uint64 `json:"citation_concentration_discount"`  // discount when triggered (default 700000 = 70%)
 
 	// Fundamentality thresholds — score brackets for citation fundamentality
 	FundamentalityNotableBps      uint64 `json:"fundamentality_notable_bps"`      // 0.25 threshold (default 250000)
@@ -1021,6 +1059,12 @@ type ExtendedParams struct {
 
 	// FARM-7: Domain squatting prevention
 	MinDomainContributorsForNovelty uint64 `json:"min_domain_contributors_for_novelty"` // min unique contributors for full novelty (default 3)
+
+	// FARM-10: Semantic novelty floor — block claims that restate existing knowledge.
+	// Claims with info gain below this threshold AND referencing only canonical/established
+	// facts get a heavy penalty. Prevents genesis axiom restating for citation farming.
+	MinInformationGainBps uint64 `json:"min_information_gain_bps"` // default 250000 (25%)
+	RestatingPenaltyBps   uint64 `json:"restating_penalty_bps"`   // default 200000 (20%)
 
 	// FARM-1: Rubber-stamp verifier detection
 	ConformityThresholdBps  uint64 `json:"conformity_threshold_bps"`   // conformity rate triggering penalty (default 950000 = 95%)
@@ -1102,6 +1146,11 @@ func DefaultExtendedParams() ExtendedParams {
 		FailedContradictionSlashBps:       FailedContradictionSlashBps,
 		FalsificationRewardCapBps:         FalsificationRewardCapBps,
 		FalsificationPoolShareBps:         FalsificationPoolShareBps,
+		FalsificationBaseMultiplierBps:    FalsificationBaseMultiplierBps,
+		FalsificationAgeScaleBlocks:       FalsificationAgeScaleBlocks,
+		FalsificationAgeMaxBonusBps:       FalsificationAgeMaxBonusBps,
+		FalsificationCiteScaleCount:       FalsificationCiteScaleCount,
+		FalsificationCiteMaxBonusBps:      FalsificationCiteMaxBonusBps,
 		CounterFactChallengeWindowBlocks:  CounterFactChallengeWindowBlocks,
 		CounterFactChallengeMinStake:      CounterFactChallengeMinStake,
 		CounterFactChallengeSlashBps:      CounterFactChallengeSlashBps,
@@ -1139,12 +1188,20 @@ func DefaultExtendedParams() ExtendedParams {
 		PropheticConfidenceCapBps:      PropheticConfidenceCap,
 		PropheticBaseThresholdBps:      PropheticBaseThreshold,
 		PropheticCitationThreshold:     PropheticCitationThreshold,
+		PropheticMinUniqueCiters:       PropheticMinUniqueCiters,
+		PropheticMaxSingleCiterShare:   PropheticMaxSingleCiterShare,
 		NoveltyImmunityThresholdBps:    NoveltyImmunityThreshold,
 		NoveltyGraceMultiplier:         NoveltyGraceMultiplier,
 		NoveltyDecayHalfLifeMultiplier: NoveltyDecayHalfLifeMultiplier,
 
 		// Citation self-referencing
 		SelfCitationDiscountBps: SelfCitationDiscountBPS,
+
+		// FARM-11: Citation concentration detection
+		CitationConcentrationThreshold: 800_000,  // 80%
+		CitationConcentrationMinCites:  5,
+		CitationConcentrationMaxAddrs:  3,
+		CitationConcentrationDiscount:  700_000,  // 70% discount
 
 		// Fundamentality thresholds
 		FundamentalityNotableBps:      FundamentalityNotable,
@@ -1172,6 +1229,10 @@ func DefaultExtendedParams() ExtendedParams {
 
 		// FARM-7: Domain squatting prevention
 		MinDomainContributorsForNovelty: MinDomainContributorsForNovelty,
+
+		// FARM-10: Semantic novelty floor
+		MinInformationGainBps: 250_000, // 25% — catches dense-domain same-domain restating (info gain ~224k for 2 refs)
+		RestatingPenaltyBps:   200_000, // 20% — heavy enough to push below acceptance
 
 		// FARM-1: Rubber-stamp verifier detection
 		ConformityThresholdBps:  ConformityThresholdBPS,
@@ -1344,6 +1405,18 @@ func (ep ExtendedParams) ValidateExtendedParams() error {
 	if ep.FailedContradictionSlashBps > 1_000_000 {
 		return fmt.Errorf("failed_contradiction_slash_bps must be <= 1000000")
 	}
+	// FARM-15: Falsification reward scaling validation
+	if ep.FalsificationBaseMultiplierBps+ep.FalsificationAgeMaxBonusBps+ep.FalsificationCiteMaxBonusBps > ep.FalsificationRewardCapBps {
+		return fmt.Errorf("FARM-15: base(%d) + age_max(%d) + cite_max(%d) exceeds reward cap(%d)",
+			ep.FalsificationBaseMultiplierBps, ep.FalsificationAgeMaxBonusBps,
+			ep.FalsificationCiteMaxBonusBps, ep.FalsificationRewardCapBps)
+	}
+	if ep.FalsificationAgeScaleBlocks == 0 {
+		return fmt.Errorf("falsification_age_scale_blocks must be > 0")
+	}
+	if ep.FalsificationCiteScaleCount == 0 {
+		return fmt.Errorf("falsification_cite_scale_count must be > 0")
+	}
 	if ep.MaxEvidenceBonus > 1_000_000 {
 		return fmt.Errorf("max_evidence_bonus must be <= 1000000")
 	}
@@ -1380,12 +1453,29 @@ func (ep ExtendedParams) ValidateExtendedParams() error {
 	if ep.PropheticBaseThresholdBps > 1_000_000 {
 		return fmt.Errorf("prophetic_base_threshold_bps must be <= 1000000")
 	}
+	if ep.PropheticMaxSingleCiterShare > 1_000_000 {
+		return fmt.Errorf("prophetic_max_single_citer_share must be <= 1000000")
+	}
 	if ep.NoveltyDecayHalfLifeMultiplier == 0 {
 		return fmt.Errorf("novelty_decay_half_life_multiplier must be > 0")
+	}
+	// FARM-10: Semantic novelty floor
+	if ep.MinInformationGainBps > 1_000_000 {
+		return fmt.Errorf("min_information_gain_bps must be <= 1000000")
+	}
+	if ep.RestatingPenaltyBps > 1_000_000 {
+		return fmt.Errorf("restating_penalty_bps must be <= 1000000")
 	}
 	// Self-citation discount
 	if ep.SelfCitationDiscountBps > 1_000_000 {
 		return fmt.Errorf("self_citation_discount_bps must be <= 1000000")
+	}
+	// FARM-11: Citation concentration detection
+	if ep.CitationConcentrationThreshold > 1_000_000 {
+		return fmt.Errorf("citation_concentration_threshold must be <= 1000000")
+	}
+	if ep.CitationConcentrationDiscount > 1_000_000 {
+		return fmt.Errorf("citation_concentration_discount must be <= 1000000")
 	}
 	// Fundamentality thresholds must be strictly increasing
 	if ep.FundamentalityNotableBps > 0 && ep.FundamentalityFoundationalBps > 0 &&
@@ -1505,6 +1595,14 @@ func (msg *MsgUpdateExtendedParams) ValidateBasic() error {
 		return fmt.Errorf("invalid extended params JSON: %w", err)
 	}
 	return ep.ValidateExtendedParams()
+}
+
+// CitationSourceRecord tracks which addresses have cited a fact (FARM-11).
+// Used to detect sybil-ring citation concentration.
+type CitationSourceRecord struct {
+	FactID       string            `json:"fact_id"`
+	SourceCounts map[string]uint64 `json:"source_counts"` // citingAddr → count
+	TotalCites   uint64            `json:"total_cites"`
 }
 
 // PatronageRecord tracks a patron's stake in keeping a fact alive.

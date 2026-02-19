@@ -305,6 +305,156 @@ func TestNoveltyStage_NoRefsNoDomain(t *testing.T) {
 }
 
 // ==========================================================================
+// FARM-10: Semantic Novelty Floor (Axiom Restating Prevention)
+// ==========================================================================
+
+func TestFARM10_LowInfoGainCanonicalRefsPenalized(t *testing.T) {
+	// Claim with low info gain + all canonical refs → penalized
+	facts := map[string]*types.Fact{
+		"MATH-001": {Id: "MATH-001", Domain: "mathematics", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+		"MATH-002": {Id: "MATH-002", Domain: "mathematics", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+	}
+	domainCounts := map[string]uint64{
+		"mathematics": 100, // dense domain → low sparsity → low info gain
+	}
+
+	claim := &types.Claim{
+		Domain:     "mathematics",
+		References: []string{"MATH-001", "MATH-002"},
+	}
+
+	ctx := mockCtx()
+	evalCtx := noveltyEvalCtx(facts, domainCounts, 10)
+
+	result := evaluateNovelty(ctx, evalCtx, claim, 600_000) // good evidence
+	if result.Adjustment >= 0 {
+		t.Errorf("FARM-10: axiom-restating claim should be penalized, got adjustment %d", result.Adjustment)
+	}
+	if result.Adjustment != -int64(evalCtx.ExtendedParams.RestatingPenaltyBps) {
+		t.Errorf("FARM-10: expected penalty %d, got %d", -int64(evalCtx.ExtendedParams.RestatingPenaltyBps), result.Adjustment)
+	}
+}
+
+func TestFARM10_LowInfoGainMixedMaturityNotPenalized(t *testing.T) {
+	// Claim with low info gain + mixed maturity refs → NOT penalized
+	facts := map[string]*types.Fact{
+		"MATH-001": {Id: "MATH-001", Domain: "mathematics", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+		"new-001":  {Id: "new-001", Domain: "mathematics", Maturity: types.MaturityEmerging, Confidence: 600_000},
+	}
+	domainCounts := map[string]uint64{
+		"mathematics": 100, // dense → low info gain
+	}
+
+	claim := &types.Claim{
+		Domain:     "mathematics",
+		References: []string{"MATH-001", "new-001"},
+	}
+
+	ctx := mockCtx()
+	evalCtx := noveltyEvalCtx(facts, domainCounts, 10)
+
+	result := evaluateNovelty(ctx, evalCtx, claim, 600_000)
+	// Mixed maturity → FARM-10 does not trigger; normal novelty score
+	if result.Adjustment < 0 {
+		t.Errorf("FARM-10: mixed maturity refs should not be penalized, got %d", result.Adjustment)
+	}
+}
+
+func TestFARM10_HighInfoGainCanonicalRefsNotPenalized(t *testing.T) {
+	// Claim with high info gain + all canonical refs → NOT penalized
+	facts := map[string]*types.Fact{
+		"MATH-001": {Id: "MATH-001", Domain: "mathematics", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+	}
+	domainCounts := map[string]uint64{
+		"new_field": 0, // empty domain → max sparsity → high info gain
+	}
+
+	claim := &types.Claim{
+		Domain:     "new_field",
+		References: []string{"MATH-001"},
+	}
+
+	ctx := mockCtx()
+	evalCtx := noveltyEvalCtx(facts, domainCounts, 10)
+
+	result := evaluateNovelty(ctx, evalCtx, claim, 600_000)
+	if result.Adjustment < 0 {
+		t.Errorf("FARM-10: high info gain should not trigger penalty, got %d", result.Adjustment)
+	}
+}
+
+func TestFARM10_CrossDomainCanonicalRefsNotPenalized(t *testing.T) {
+	// Cross-domain claim with canonical refs → NOT penalized (high info gain from synthesis)
+	facts := map[string]*types.Fact{
+		"MATH-001": {Id: "MATH-001", Domain: "mathematics", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+		"PHYS-001": {Id: "PHYS-001", Domain: "physics", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+		"BIO-001":  {Id: "BIO-001", Domain: "biology", Maturity: types.MaturityCanonical, Confidence: 1_000_000},
+	}
+	domainCounts := map[string]uint64{
+		"biophysics": 5, // sparse-ish
+	}
+
+	claim := &types.Claim{
+		Domain:     "biophysics",
+		References: []string{"MATH-001", "PHYS-001", "BIO-001"}, // 3 unique domains
+	}
+
+	ctx := mockCtx()
+	evalCtx := noveltyEvalCtx(facts, domainCounts, 10)
+
+	result := evaluateNovelty(ctx, evalCtx, claim, 600_000)
+	// Cross-domain synthesis produces high reference novelty → high info gain
+	if result.Adjustment < 0 {
+		t.Errorf("FARM-10: cross-domain synthesis should not be penalized, got %d", result.Adjustment)
+	}
+}
+
+func TestFARM10_NoRefsNotPenalized(t *testing.T) {
+	// Claim with no refs → FARM-10 does not trigger (requires len(refs) > 0)
+	domainCounts := map[string]uint64{
+		"mathematics": 100,
+	}
+
+	claim := &types.Claim{
+		Domain:     "mathematics",
+		References: []string{},
+	}
+
+	ctx := mockCtx()
+	evalCtx := noveltyEvalCtx(nil, domainCounts, 10)
+
+	result := evaluateNovelty(ctx, evalCtx, claim, 600_000)
+	if result.Adjustment < 0 {
+		t.Errorf("FARM-10: no refs should not trigger penalty, got %d", result.Adjustment)
+	}
+}
+
+func TestFARM10_EstablishedRefsTrigger(t *testing.T) {
+	// Established maturity refs (not just canonical) should also trigger FARM-10.
+	// Uses 2 same-domain refs → info gain ~224k < 250k threshold.
+	facts := map[string]*types.Fact{
+		"f1": {Id: "f1", Domain: "mathematics", Maturity: types.MaturityEstablished, Confidence: 900_000},
+		"f2": {Id: "f2", Domain: "mathematics", Maturity: types.MaturityEstablished, Confidence: 850_000},
+	}
+	domainCounts := map[string]uint64{
+		"mathematics": 100,
+	}
+
+	claim := &types.Claim{
+		Domain:     "mathematics",
+		References: []string{"f1", "f2"},
+	}
+
+	ctx := mockCtx()
+	evalCtx := noveltyEvalCtx(facts, domainCounts, 10)
+
+	result := evaluateNovelty(ctx, evalCtx, claim, 600_000)
+	if result.Adjustment >= 0 {
+		t.Errorf("FARM-10: established-only refs in dense domain should be penalized, got %d", result.Adjustment)
+	}
+}
+
+// ==========================================================================
 // AH-3 Verified Bridge Exemption Tests
 // ==========================================================================
 

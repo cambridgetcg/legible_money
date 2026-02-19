@@ -61,7 +61,8 @@ func getStratumCeiling(ctx sdk.Context, evalCtx *EvaluationContext, domain strin
 }
 
 // inferStratum maps known domain names to their ontological stratum.
-// Mirrors the logic in x/knowledge/keeper/confidence.go:inferDomainStratum.
+// Mirrors the logic in x/knowledge/keeper/confidence.go:inferDomainStratumHardcoded.
+// FARM-12: default changed from "technological" to "social" to prevent ceiling abuse.
 func inferStratum(domain string) string {
 	switch domain {
 	case "mathematics", "logic", "formal_systems":
@@ -79,6 +80,6 @@ func inferStratum(domain string) string {
 	case "computer_science", "engineering", "technology":
 		return "technological"
 	default:
-		return "technological" // default to highest ceiling
+		return "social" // FARM-12: default to most restrictive ceiling
 	}
 }

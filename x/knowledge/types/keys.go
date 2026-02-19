@@ -63,4 +63,7 @@ var (
 	// 0x1f-0x26 reserved for secondary query indexes (B8-6)
 	// Defined in keeper/indices.go: claim status, active rounds, claim domain,
 	// claim submitter, claim category, fact submitter, fact category, fact status
+
+	CitationSourcePrefix = []byte{0x27} // factId → CitationSourceRecord (FARM-11)
+	DomainStratumPrefix  = []byte{0x28} // domainName → stratum string (FARM-12)
 )

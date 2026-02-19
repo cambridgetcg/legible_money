@@ -143,6 +143,10 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState *types.GenesisState) {
 	for _, domain := range genState.Domains {
 		if domain != nil {
 			k.SetDomainInState(ctx, domain)
+			// FARM-12: Bootstrap domain→stratum mapping from canonical strata
+			if stratum, ok := types.BootstrapDomainStrata[domain.Name]; ok {
+				k.SetDomainStratum(ctx, domain.Name, stratum)
+			}
 		}
 	}
 	for _, fact := range genState.Facts {

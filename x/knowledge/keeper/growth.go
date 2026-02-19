@@ -199,6 +199,12 @@ func (k Keeper) DetectPropheticFacts(ctx sdk.Context, currentHeight uint64) {
 			return false
 		}
 
+		// FARM-13: Require citation diversity for prophetic status.
+		// Prophetic recognition is about community vindication, not self-promotion.
+		if !k.ValidatePropheticDiversity(ctx, fact, ep) {
+			return false
+		}
+
 		// Prophetic! Mark it and apply confidence boost.
 		fact.IsProphetic = true
 
@@ -261,6 +267,21 @@ func (k Keeper) ApplyPropheticGrowth(ctx sdk.Context, currentHeight uint64) {
 			return false
 		}
 		if fact.IsProvisional {
+			return false
+		}
+
+		// FARM-13: Re-validate prophetic diversity each growth epoch.
+		// If citations become concentrated (e.g., sybil accounts banned,
+		// citations removed), revoke prophetic status.
+		if !k.ValidatePropheticDiversity(ctx, fact, ep) {
+			fact.IsProphetic = false
+			k.SetFact(ctx, fact)
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent("prophetic_status_revoked",
+					sdk.NewAttribute("fact_id", fact.Id),
+					sdk.NewAttribute("reason", "FARM-13: citation diversity below threshold"),
+				),
+			)
 			return false
 		}
 
@@ -361,4 +382,37 @@ func (k Keeper) AdvanceMaturityLevels(ctx sdk.Context, currentHeight uint64) {
 
 		return false
 	})
+}
+
+// ValidatePropheticDiversity checks if a fact's citation sources meet the
+// diversity requirements for prophetic status (FARM-13).
+// Returns true if diversity check is disabled or if citations are sufficiently diverse.
+func (k Keeper) ValidatePropheticDiversity(ctx sdk.Context, fact *types.Fact, ep types.ExtendedParams) bool {
+	if ep.PropheticMinUniqueCiters == 0 {
+		return true // diversity check disabled
+	}
+
+	record, found := k.GetCitationSourceRecord(ctx, fact.Id)
+	if !found {
+		return false // no citation source data → can't verify diversity
+	}
+
+	// Check unique citers
+	uniqueCiters := uint64(len(record.SourceCounts))
+	if uniqueCiters < ep.PropheticMinUniqueCiters {
+		return false
+	}
+
+	// Check no single address dominates
+	if ep.PropheticMaxSingleCiterShare > 0 && record.TotalCites > 0 {
+		for _, count := range record.SourceCounts {
+			// share = count * 1_000_000 / totalCites
+			// Cross-multiply to avoid division: count * 1_000_000 > totalCites * maxShare
+			if count*1_000_000 > record.TotalCites*ep.PropheticMaxSingleCiterShare {
+				return false
+			}
+		}
+	}
+
+	return true
 }

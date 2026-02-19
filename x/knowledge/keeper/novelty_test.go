@@ -22,6 +22,12 @@ func TestDetectPropheticFacts_BarelyAcceptedWithCitations(t *testing.T) {
 	fact.CreatedAtHeight = 10
 	k.SetFact(ctx, &fact)
 
+	// FARM-13: Set up diverse citation sources (need ≥5 unique citers, no >30% share)
+	for i := 0; i < 15; i++ {
+		addr := testSubmitterAddr + string(rune('a'+(i%10)))
+		k.UpdateCitationSource(ctx, "fact-prophetic", addr)
+	}
+
 	k.DetectPropheticFacts(ctx, 100_000) // well after creation
 
 	updated, found := k.GetFact(ctx, "fact-prophetic")
@@ -105,6 +111,12 @@ func TestApplyPropheticGrowth_DoublesGrowth(t *testing.T) {
 	propheticFact.IsProvisional = false
 	k.SetFact(ctx, &propheticFact)
 
+	// FARM-13: Set up diverse citation sources for prophetic fact re-validation
+	for i := 0; i < 10; i++ {
+		addr := testSubmitterAddr + string(rune('a'+i))
+		k.UpdateCitationSource(ctx, "fact-p", addr)
+	}
+
 	normalFact := createTestFact("fact-n", "physics", "empirical", types.FactStatusVerified, 700_000)
 	normalFact.IsProvisional = false
 	k.SetFact(ctx, &normalFact)
@@ -134,6 +146,12 @@ func TestApplyPropheticGrowth_CappedAtPropheticCap(t *testing.T) {
 	fact := createTestFact("fact-capped", "physics", "empirical", types.FactStatusVerified, 910_000)
 	fact.IsProphetic = true
 	k.SetFact(ctx, &fact)
+
+	// FARM-13: Set up diverse citation sources for prophetic re-validation
+	for i := 0; i < 10; i++ {
+		addr := testSubmitterAddr + string(rune('a'+i))
+		k.UpdateCitationSource(ctx, "fact-capped", addr)
+	}
 
 	k.ApplyPropheticGrowth(ctx, 100_000)
 

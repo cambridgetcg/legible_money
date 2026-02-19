@@ -606,10 +606,9 @@ func TestOC8_DifficultyBonusExploitation(t *testing.T) {
 		result, _ := k.AggregateVerificationResult(ctx, round)
 
 		tier2Reward := result.Rewards["lgmvaloper1abc"]
-		difficultyBonus := uint64(0)
-		if cl.conf < 1_000_000 {
-			difficultyBonus = baseReward * (1_000_000 - cl.conf) / 1_000_000
-		}
+		// FARM-14: difficulty bonus is now normalized by domain ceiling
+		// "general" maps to "technological" stratum → ceiling 1M, so old formula still applies
+		difficultyBonus := tier2Reward - baseReward
 
 		t.Logf("  %s → reward=%d ulgm (%.3f LGM), difficulty_bonus=%d ulgm, verdict=%s",
 			cl.label, tier2Reward, float64(tier2Reward)/1_000_000,
@@ -943,10 +942,11 @@ func TestOC15_MultiRoundAccumulation(t *testing.T) {
 		roll := float64(i) / float64(numRounds)
 
 		if roll < correctRate {
-			// Correct verdict — earn base reward with difficulty bonus
-			// Average confidence ~800k → difficulty bonus = 200k/1M * 3M = 600k ulgm
+			// Correct verdict — earn base reward with normalized difficulty bonus (FARM-14)
+			// Average confidence ~800k, general domain ceiling=1M → (1M-800k)/1M = 20%
 			avgConf := uint64(800_000)
-			difficultyBonus := baseReward * (1_000_000 - avgConf) / 1_000_000
+			ceiling := uint64(1_000_000)
+			difficultyBonus := baseReward * (ceiling - avgConf) / ceiling
 			totalRewards += int64(baseReward + difficultyBonus)
 		} else if roll < correctRate+wrongRate {
 			// Wrong verdict — slashed 6% of stake

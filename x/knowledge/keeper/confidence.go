@@ -48,9 +48,10 @@ func (k Keeper) AggregateVerificationResult(
 ) (*types.VerificationResult, error) {
 	params := k.GetParams(ctx)
 
-	// Resolve domain from claim for reputation weighting
+	// Resolve domain from claim (used for reputation weighting, stratum ceiling,
+	// category ceiling, and FARM-14 difficulty normalization).
 	var roundDomain string
-	if k.captureDefenseKeeper != nil && round.ClaimId != "" {
+	if round.ClaimId != "" {
 		if claim, found := k.GetClaim(ctx, round.ClaimId); found {
 			roundDomain = claim.Domain
 		}
@@ -275,14 +276,18 @@ func (k Keeper) calculateRewardsAndSlashes(
 			if info, found := k.stakingKeeper.GetValidatorInfo(ctx, validatorAddr); found {
 				reward = applyTierMultiplier(reward, info.Tier)
 			}
-			// Difficulty bonus: harder verifications (lower confidence) pay more.
-			// A verifier who correctly evaluates a borderline claim did more
-			// valuable work than one who rubber-stamped an obvious truth.
-			// bonus = reward * (1_000_000 - avgConfidence) / 1_000_000
-			// → at confidence 500k: +50%, at 900k: +10%, at 300k: +70%
-			if result.Confidence > 0 && result.Confidence < 1_000_000 {
-				difficulty := 1_000_000 - result.Confidence
-				reward = reward + reward*difficulty/1_000_000
+			// FARM-14: Normalized difficulty bonus — adjust by domain ceiling.
+			// Difficulty is measured relative to the domain's confidence ceiling,
+			// not the absolute maximum. A claim near its domain ceiling is "easy"
+			// even if the absolute confidence is low.
+			if result.Confidence > 0 {
+				ceiling := k.getDomainConfidenceCeiling(ctx, result.Domain)
+				if result.Confidence < ceiling {
+					// Normalized difficulty: (ceiling - confidence) / ceiling
+					difficulty := safeMulDiv(ceiling-result.Confidence, 1_000_000, ceiling)
+					reward = reward + safeMulDiv(reward, difficulty, 1_000_000)
+				}
+				// At or above ceiling → no difficulty bonus (claim was "expected")
 			}
 
 			// FARM-1: Rubber-stamp verifier penalty — reduce rewards for validators
@@ -402,36 +407,49 @@ func (k Keeper) ApplyRewardsAndSlashes(
 	return nil
 }
 
-// applyStratumCeiling clamps confidence by the domain's stratum ceiling.
-// Queries the ontology module first; falls back to hardcoded mapping for bootstrap domains.
-func (k Keeper) applyStratumCeiling(ctx sdk.Context, domain string, confidence uint64) uint64 {
-	// Try ontology module first (dynamic, user-defined domains)
+// getDomainConfidenceCeiling returns the confidence ceiling for a domain.
+// Checks ontology keeper first, falls back to stratum-based mapping.
+func (k Keeper) getDomainConfidenceCeiling(ctx sdk.Context, domain string) uint64 {
 	if k.ontologyKeeper != nil {
 		maxConf, _, err := k.ontologyKeeper.GetConfidenceCeiling(ctx, domain)
 		if err == nil && maxConf > 0 {
-			if confidence > maxConf {
-				return maxConf
-			}
-			return confidence
+			return maxConf
 		}
-		// Fall through to hardcoded on error (domain not in ontology yet)
 	}
-
-	// Fallback: parameterized mapping for bootstrap domains
 	ep := k.GetExtendedParams(ctx)
-	domainStratum := inferDomainStratum(domain)
+	domainStratum := k.inferDomainStratum(ctx, domain)
 	ceiling, ok := ep.GetStratumConfidenceCeiling(domainStratum)
-	if !ok {
-		return confidence // no ceiling for unknown stratum
+	if ok {
+		return ceiling
 	}
+	return 1_000_000
+}
+
+// applyStratumCeiling clamps confidence by the domain's stratum ceiling.
+// Queries the ontology module first; falls back to hardcoded mapping for bootstrap domains.
+func (k Keeper) applyStratumCeiling(ctx sdk.Context, domain string, confidence uint64) uint64 {
+	ceiling := k.getDomainConfidenceCeiling(ctx, domain)
 	if confidence > ceiling {
 		return ceiling
 	}
 	return confidence
 }
 
-// inferDomainStratum maps known domains to their ontological stratum.
-func inferDomainStratum(domain string) string {
+// inferDomainStratum resolves a domain's stratum by checking the KV store first
+// (set via InitGenesis or ProposeDomain), then falling back to the hardcoded map.
+// FARM-12: unknown domains now default to "social" (most restrictive ceiling).
+func (k Keeper) inferDomainStratum(ctx sdk.Context, domain string) string {
+	// Check stored stratum (set during InitGenesis bootstrap or ProposeDomain)
+	if stratum, found := k.GetDomainStratum(ctx, domain); found {
+		return stratum
+	}
+	// Fallback to hardcoded mapping for domains not yet in the KV index
+	return inferDomainStratumHardcoded(domain)
+}
+
+// inferDomainStratumHardcoded maps known domains to their ontological stratum.
+// FARM-12: default changed from "technological" to "social" to prevent ceiling abuse.
+func inferDomainStratumHardcoded(domain string) string {
 	switch domain {
 	case "mathematics", "logic", "formal_systems":
 		return "fundamental"
@@ -448,7 +466,7 @@ func inferDomainStratum(domain string) string {
 	case "computer_science", "engineering", "technology":
 		return "technological"
 	default:
-		return "technological" // default to highest ceiling
+		return "social" // FARM-12: default to most restrictive ceiling
 	}
 }
 

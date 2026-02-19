@@ -558,11 +558,15 @@ func (k msgServer) ProposeDomain(goCtx context.Context, msg *types.MsgProposeDom
 	}
 	k.Keeper.SetDomainInState(ctx, &domain)
 
+	// FARM-12: Assign default stratum to newly proposed domains (most restrictive ceiling)
+	k.Keeper.SetDomainStratum(ctx, msg.Name, types.DefaultProposalStratum)
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"domain_proposed",
 			sdk.NewAttribute("domain", msg.Name),
 			sdk.NewAttribute("proposer", msg.Proposer),
+			sdk.NewAttribute("stratum", types.DefaultProposalStratum),
 		),
 	)
 

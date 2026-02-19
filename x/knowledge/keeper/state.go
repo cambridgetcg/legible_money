@@ -1037,6 +1037,50 @@ func (k Keeper) GetCounterFactChallenge(ctx sdk.Context, challengeId string) (ty
 	return challenge, true
 }
 
+// ---------- Citation Source Record Operations (FARM-11) ----------
+
+func citationSourceKey(factID string) []byte {
+	return append(types.CitationSourcePrefix, []byte(factID)...)
+}
+
+// GetCitationSourceRecord retrieves citation source tracking for a fact.
+func (k Keeper) GetCitationSourceRecord(ctx sdk.Context, factID string) (types.CitationSourceRecord, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(citationSourceKey(factID))
+	if err != nil || bz == nil {
+		return types.CitationSourceRecord{}, false
+	}
+	var record types.CitationSourceRecord
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.CitationSourceRecord{}, false
+	}
+	return record, true
+}
+
+// SetCitationSourceRecord stores citation source tracking for a fact.
+func (k Keeper) SetCitationSourceRecord(ctx sdk.Context, record types.CitationSourceRecord) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := json.Marshal(record)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal citation source record: %v", err))
+	}
+	_ = kvStore.Set(citationSourceKey(record.FactID), bz)
+}
+
+// UpdateCitationSource increments the citation count for a citing address on a fact.
+func (k Keeper) UpdateCitationSource(ctx sdk.Context, factID, citingAddr string) {
+	record, found := k.GetCitationSourceRecord(ctx, factID)
+	if !found {
+		record = types.CitationSourceRecord{
+			FactID:       factID,
+			SourceCounts: make(map[string]uint64),
+		}
+	}
+	record.SourceCounts[citingAddr]++
+	record.TotalCites++
+	k.SetCitationSourceRecord(ctx, record)
+}
+
 // ---------- Patronage Record Operations ----------
 
 func patronageRecordKey(factId, patron string) []byte {
@@ -1161,6 +1205,30 @@ func (k Keeper) GetDomainCount(ctx sdk.Context) uint64 {
 		return false
 	})
 	return count
+}
+
+// ---------- Domain Stratum (FARM-12) ----------
+
+func domainStratumKey(name string) []byte {
+	return append(types.DomainStratumPrefix, []byte(name)...)
+}
+
+// SetDomainStratum stores the stratum assignment for a domain.
+func (k Keeper) SetDomainStratum(ctx sdk.Context, name, stratum string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	if err := kvStore.Set(domainStratumKey(name), []byte(stratum)); err != nil {
+		panic(fmt.Sprintf("failed to set domain stratum: %v", err))
+	}
+}
+
+// GetDomainStratum retrieves the stratum assignment for a domain.
+func (k Keeper) GetDomainStratum(ctx sdk.Context, name string) (string, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(domainStratumKey(name))
+	if err != nil || bz == nil {
+		return "", false
+	}
+	return string(bz), true
 }
 
 // ---------- Verifier Conformity (FARM-1) ----------

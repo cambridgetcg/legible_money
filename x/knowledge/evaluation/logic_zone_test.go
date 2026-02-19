@@ -356,7 +356,7 @@ func TestInferStratum(t *testing.T) {
 		{"cognitive_science", "cognitive"},
 		{"sociology", "social"},
 		{"computer_science", "technological"},
-		{"unknown_domain", "technological"},
+		{"unknown_domain", "social"}, // FARM-12: unknown defaults to social (most restrictive)
 	}
 
 	for _, tt := range tests {

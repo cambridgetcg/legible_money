@@ -32,6 +32,7 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.C
 		return result
 	}
 
+	ep := evalCtx.ExtendedParams
 	var totalBonus int64
 	var bridgeScore uint64
 
@@ -51,6 +52,35 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.C
 	infoGainBps := calculateInformationGain(ctx, evalCtx, claim)
 
 	// ========================================================================
+	// 1b. FARM-10: Check for axiom restating.
+	// ========================================================================
+	//
+	// If info gain is below floor AND all references are canonical/established,
+	// this claim is likely restating existing knowledge for citation farming.
+	if ep.MinInformationGainBps > 0 && infoGainBps < ep.MinInformationGainBps && len(claim.References) > 0 {
+		allHighMaturity := true
+		for _, refId := range claim.References {
+			fact, found := evalCtx.GetFact(ctx, refId)
+			if !found {
+				allHighMaturity = false
+				break
+			}
+			if fact.Maturity != types.MaturityCanonical && fact.Maturity != types.MaturityEstablished {
+				allHighMaturity = false
+				break
+			}
+		}
+		if allHighMaturity {
+			result.Adjustment = -int64(ep.RestatingPenaltyBps)
+			result.Justification = fmt.Sprintf(
+				"FARM-10: information gain %d below floor %d with all canonical/established refs",
+				infoGainBps, ep.MinInformationGainBps,
+			)
+			return result
+		}
+	}
+
+	// ========================================================================
 	// 2. Bridge Score: verified cross-domain references
 	// ========================================================================
 	//
@@ -60,7 +90,6 @@ func evaluateNovelty(ctx sdk.Context, evalCtx *EvaluationContext, claim *types.C
 
 	bridgeScore = calculateBridgeScore(ctx, evalCtx, claim)
 
-	ep := evalCtx.ExtendedParams
 	// Combined novelty = (info_gain + bridge_score) / 2, capped at NoveltyMaxBonusBps
 	combined := (infoGainBps + bridgeScore) / 2
 	if combined > ep.NoveltyMaxBonusBps {

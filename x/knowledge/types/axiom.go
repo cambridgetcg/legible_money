@@ -732,6 +732,46 @@ func ComputeCrossDomainMatrix(axioms []*GenesisAxiom) *CrossDomainMatrix {
 	}
 }
 
+// ValidStrata lists the 7 valid ontological strata.
+var ValidStrata = map[string]bool{
+	"fundamental": true, "physical": true, "chemical": true,
+	"biological": true, "cognitive": true, "social": true,
+	"technological": true,
+}
+
+// StratumStakeMultiplier defines the minimum stake multiplier for proposing a domain
+// at each stratum level. Higher strata (more fundamental) require more stake.
+var StratumStakeMultiplier = map[string]uint64{
+	"technological": 1, "social": 2, "cognitive": 3,
+	"biological": 5, "chemical": 5, "physical": 10, "fundamental": 20,
+}
+
+// BootstrapDomainStrata maps each genesis domain to its canonical stratum.
+// Used during InitGenesis to seed the domain→stratum KV index.
+var BootstrapDomainStrata = map[string]string{
+	"mathematics":        "fundamental",
+	"logic":              "fundamental",
+	"theology":           "fundamental",
+	"philosophy":         "fundamental",
+	"information_theory": "fundamental",
+	"physics":            "physical",
+	"cosmology":          "physical",
+	"chemistry":          "chemical",
+	"biology":            "biological",
+	"psychology":         "cognitive",
+	"linguistics":        "cognitive",
+	"economics":          "social",
+	"sociology":          "social",
+	"ethics":             "social",
+	"agent_rights":       "social",
+	"computer_science":   "technological",
+	"general":            "technological",
+}
+
+// DefaultProposalStratum is the stratum assigned to newly proposed domains.
+// Uses "social" (most restrictive ceiling: 850,000 BPS) to prevent ceiling abuse.
+const DefaultProposalStratum = "social"
+
 // ValidateStratumConsistency checks that axioms do not depend on derived types.
 // Definitions MAY depend on derived claims (e.g., a physics definition referencing
 // a mathematical theorem) since cross-domain definitions often build on established

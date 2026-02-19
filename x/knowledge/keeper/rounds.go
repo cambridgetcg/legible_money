@@ -813,13 +813,18 @@ func (k Keeper) completeContradictionRound(
 
 // distributeFalsificationReward pays the contradiction submitter for successfully
 // disproving a fact. The reward is proportional to the target fact's original stake,
-// scaled by the counter-fact's confidence, and capped at 3x the contradiction stake.
+// scaled by the counter-fact's confidence, and dynamically capped based on the
+// target fact's age and citation impact (FARM-15).
 //
 // Reward formula:
 //
 //	rewardBase = targetFact.OriginalStake * cf.Confidence / 1_000_000
-//	rewardCap  = cf.StakeAmount * FalsificationRewardCapBps / 1_000_000  (3x stake)
-//	reward     = min(rewardBase, rewardCap)
+//	dynamicCap = cfStake * (baseMultiplier + ageBonus + citationBonus) / 1_000_000
+//	reward     = min(rewardBase, dynamicCap)
+//
+// Where ageBonus scales linearly from 0 to FalsificationAgeMaxBonusBps over
+// FalsificationAgeScaleBlocks, and citationBonus scales linearly from 0 to
+// FalsificationCiteMaxBonusBps over FalsificationCiteScaleCount citations.
 //
 // The reward is minted from the knowledge module account. The submitter's locked
 // stake is returned separately in completeContradictionRound (accepted case).
@@ -852,12 +857,37 @@ func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf *types.Counter
 		rewardAmount = new(big.Int).SetUint64(cf.Confidence)
 	}
 
-	// Apply FalsificationRewardCapBps (3x) cap relative to contradiction stake
+	// FARM-15: Dynamic reward cap based on target fact's age and citation impact.
+	// Replaces the flat FalsificationRewardCapBps (3x) with:
+	//   dynamicCapBps = baseMultiplier + ageBonus + citationBonus
+	// where ageBonus and citationBonus ramp linearly from 0 to their max values.
 	if cf.StakeAmount != "" {
 		cfStake := new(big.Int)
 		if _, ok := cfStake.SetString(cf.StakeAmount, 10); ok && cfStake.Sign() > 0 {
-			// rewardCap = cfStake * FalsificationRewardCapBps / 1_000_000
-			rewardCap := new(big.Int).Mul(cfStake, big.NewInt(types.FalsificationRewardCapBps))
+			ep := k.GetExtendedParams(ctx)
+
+			// Age bonus: linear ramp from 0 to FalsificationAgeMaxBonusBps
+			currentHeight := uint64(ctx.BlockHeight())
+			ageBlocks := uint64(0)
+			if currentHeight > targetFact.CreatedAtHeight {
+				ageBlocks = currentHeight - targetFact.CreatedAtHeight
+			}
+			ageBonusBps := ep.FalsificationAgeMaxBonusBps
+			if ageBlocks < ep.FalsificationAgeScaleBlocks {
+				ageBonusBps = safeMulDiv(ep.FalsificationAgeMaxBonusBps, ageBlocks, ep.FalsificationAgeScaleBlocks)
+			}
+
+			// Citation bonus: linear ramp from 0 to FalsificationCiteMaxBonusBps
+			citeBonusBps := ep.FalsificationCiteMaxBonusBps
+			if targetFact.CitationCount < ep.FalsificationCiteScaleCount {
+				citeBonusBps = safeMulDiv(ep.FalsificationCiteMaxBonusBps, targetFact.CitationCount, ep.FalsificationCiteScaleCount)
+			}
+
+			// Total multiplier: base + age + citation
+			dynamicCapBps := ep.FalsificationBaseMultiplierBps + ageBonusBps + citeBonusBps
+
+			// rewardCap = cfStake * dynamicCapBps / 1_000_000
+			rewardCap := new(big.Int).Mul(cfStake, new(big.Int).SetUint64(dynamicCapBps))
 			rewardCap.Div(rewardCap, big.NewInt(1_000_000))
 			if rewardAmount.Cmp(rewardCap) > 0 {
 				rewardAmount.Set(rewardCap)
@@ -930,7 +960,7 @@ func (k Keeper) distributeFalsificationReward(ctx sdk.Context, cf *types.Counter
 			sdk.NewAttribute("target_stake", targetStake.String()),
 			sdk.NewAttribute("cf_confidence", fmt.Sprintf("%d", cf.Confidence)),
 			sdk.NewAttribute("cf_stake", cf.StakeAmount),
-			sdk.NewAttribute("reward_cap_bps", fmt.Sprintf("%d", types.FalsificationRewardCapBps)),
+			sdk.NewAttribute("reward_cap_bps", "dynamic"), // FARM-15: age×citation weighted
 			sdk.NewAttribute("epoch", fmt.Sprintf("%d", epoch)),
 			sdk.NewAttribute("epoch_paid_before", fmt.Sprintf("%d", epochPaid)),
 		),

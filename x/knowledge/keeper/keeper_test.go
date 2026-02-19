@@ -3,6 +3,7 @@ package keeper_test
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -192,11 +193,16 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context, *mockStakingKeeper) 
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 
-	// Initialize params and default domains
+	// Initialize params and default domains (mirrors InitGenesis)
 	defaultParams := types.DefaultParams()
 	k.SetParams(ctx, &defaultParams)
+	k.SetExtendedParams(ctx, types.DefaultExtendedParams())
 	for _, domain := range types.DefaultDomains() {
 		k.SetDomainInState(ctx, domain)
+		// FARM-12: Bootstrap domain→stratum mapping
+		if stratum, ok := types.BootstrapDomainStrata[domain.Name]; ok {
+			k.SetDomainStratum(ctx, domain.Name, stratum)
+		}
 	}
 
 	return k, ctx, mockSK
@@ -2392,8 +2398,13 @@ func setupKeeperWithTracking(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 	defaultParams := types.DefaultParams()
 	k.SetParams(ctx, &defaultParams)
+	k.SetExtendedParams(ctx, types.DefaultExtendedParams())
 	for _, domain := range types.DefaultDomains() {
 		k.SetDomainInState(ctx, domain)
+		// FARM-12: Bootstrap domain→stratum mapping
+		if stratum, ok := types.BootstrapDomainStrata[domain.Name]; ok {
+			k.SetDomainStratum(ctx, domain.Name, stratum)
+		}
 	}
 
 	return k, ctx, mockSK, tbk, mvk
@@ -2817,8 +2828,13 @@ func setupKeeperWithEvidence(t *testing.T) (keeper.Keeper, sdk.Context, *mockSta
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{Height: 10}, false, log.NewNopLogger())
 	defaultParams := types.DefaultParams()
 	k.SetParams(ctx, &defaultParams)
+	k.SetExtendedParams(ctx, types.DefaultExtendedParams())
 	for _, domain := range types.DefaultDomains() {
 		k.SetDomainInState(ctx, domain)
+		// FARM-12: Bootstrap domain→stratum mapping
+		if stratum, ok := types.BootstrapDomainStrata[domain.Name]; ok {
+			k.SetDomainStratum(ctx, domain.Name, stratum)
+		}
 	}
 
 	return k, ctx, mockSK, mockEM
@@ -3894,12 +3910,14 @@ func TestContradictionRejected_StakeSlashedAndBurned(t *testing.T) {
 func TestContradictionAccepted_StakeReturnedAndRewarded(t *testing.T) {
 	k, ctx, _, tbk, mvk := setupKeeperWithTracking(t)
 
-	// Create target fact with 20 LGM original stake
+	// Create target fact with 20 LGM original stake.
+	// CitationCount=50 ensures FARM-15 citation bonus is maxed, so the dynamic
+	// cap (~2.1×) doesn't bind on the 16 LGM reward (cap = 21 LGM).
 	k.SetFact(ctx, &types.Fact{
 		Id: "f1", ClaimText: "Target fact", Domain: "physics",
 		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
 		Submitter: "lgm1other", OriginalStake: "20000000", // 20 LGM
-		Confidence: 800000,
+		Confidence: 800000, CitationCount: 50,
 	})
 
 	// Set up counter-fact with 10 LGM stake
@@ -3974,12 +3992,13 @@ func TestContradictionAccepted_StakeReturnedAndRewarded(t *testing.T) {
 func TestFalsificationReward_CappedAt3x(t *testing.T) {
 	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
 
-	// Target fact with huge original stake (1000 LGM)
+	// Target fact with huge original stake (1000 LGM).
+	// CitationCount=50 + high block height ensures FARM-15 dynamic cap = 3×.
 	k.SetFact(ctx, &types.Fact{
 		Id: "f1", ClaimText: "High stake fact", Domain: "physics",
 		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
 		Submitter: "lgm1other", OriginalStake: "1000000000", // 1000 LGM
-		Confidence: 900000,
+		Confidence: 900000, CitationCount: 50,
 	})
 
 	// Counter-fact with small stake (5 LGM) → cap should be 15 LGM (3x)
@@ -4011,8 +4030,10 @@ func TestFalsificationReward_CappedAt3x(t *testing.T) {
 
 	_ = k.CompleteRound(ctx, &round, &result)
 
-	// R-2: Counter-fact now provisional, finalize via window expiry
-	windowEnd := uint64(10) + types.CounterFactChallengeWindowBlocks + 1
+	// R-2: Counter-fact now provisional, finalize via window expiry.
+	// Use block height 500000 to ensure age bonus is maxed (> 342720 blocks).
+	// FARM-15: dynamic cap = base(1M) + age(1M) + cite(1M) = 3M → same as old flat 3x.
+	windowEnd := uint64(500_000)
 	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
 	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
 
@@ -4098,6 +4119,213 @@ func TestFalsificationEpochPaid_Tracking(t *testing.T) {
 	paid1 := k.GetFalsificationEpochPaid(ctx, 1)
 	if paid1 != 0 {
 		t.Errorf("expected 0 for epoch 1, got %d", paid1)
+	}
+}
+
+// ─── FARM-15: Falsification Reward Scaling Tests ───────────────────────
+
+func TestFARM15_NewFactMinimalReward(t *testing.T) {
+	// New fact (age=100 blocks, 0 citations) → reward capped at ~1× stake.
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+
+	// Challenge window = 34272. CompleteRound at height 10 → provisional.
+	// Finalization at windowEnd = 10 + 34272 + 1 = 34283.
+	// Set CreatedAtHeight = 34183 so age = 34283 - 34183 = 100 blocks.
+	windowEnd := uint64(10) + types.CounterFactChallengeWindowBlocks + 1
+
+	k.SetFact(ctx, &types.Fact{
+		Id: "f-new", ClaimText: "New fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "100000000", // 100 LGM (high)
+		Confidence: 900000, CreatedAtHeight: windowEnd - 100, CitationCount: 0,
+	})
+
+	cf := types.CounterFact{
+		Id: "cfact-new", TargetFactId: "f-new",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, &cf)
+
+	round := types.VerificationRound{
+		Id: "r-new", ClaimId: "cfact-new", Type: types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{"val1": {Verdict: "accepted", Confidence: 900000}},
+	}
+	k.SetVerificationRound(ctx, &round)
+	_ = k.CompleteRound(ctx, &round, &types.VerificationResult{Verdict: "accepted", Confidence: 900000})
+
+	// age = 100 blocks
+	// ageBonusBps = 1M * 100 / 342720 ≈ 291
+	// citeBonusBps = 0
+	// dynamicCapBps = 1M + 291 + 0 = 1,000,291
+	// rewardCap = 10M * 1,000,291 / 1M = 10,002,910
+	// rewardBase = 100M * 900k / 1M = 90M → capped to ~10M
+	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
+
+	if len(mvk.created) == 0 {
+		t.Fatal("expected falsification reward")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	reward, _ := new(big.Int).SetString(lastVesting.totalAmount, 10)
+
+	// Should be ~10M (about 1× stake), NOT 30M (old 3× cap)
+	if reward.Int64() > 11_000_000 {
+		t.Errorf("FARM-15: new fact reward should be ~1×, got %s (expected <= 11M)", lastVesting.totalAmount)
+	}
+	if reward.Int64() < 9_000_000 {
+		t.Errorf("FARM-15: reward too low, got %s (expected >= 9M)", lastVesting.totalAmount)
+	}
+}
+
+func TestFARM15_MediumFactMediumReward(t *testing.T) {
+	// Medium fact (age=171,360 blocks ~5 days, 25 citations) → ~2× reward.
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+
+	k.SetFact(ctx, &types.Fact{
+		Id: "f-med", ClaimText: "Medium fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "100000000", // 100 LGM (high)
+		Confidence: 900000, CreatedAtHeight: 0, CitationCount: 25,
+	})
+
+	cf := types.CounterFact{
+		Id: "cfact-med", TargetFactId: "f-med",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, &cf)
+
+	round := types.VerificationRound{
+		Id: "r-med", ClaimId: "cfact-med", Type: types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{"val1": {Verdict: "accepted", Confidence: 900000}},
+	}
+	k.SetVerificationRound(ctx, &round)
+	_ = k.CompleteRound(ctx, &round, &types.VerificationResult{Verdict: "accepted", Confidence: 900000})
+
+	// Finalize at block 171,360 → age = 171,360 blocks (~5 days)
+	// ageBonusBps = 1M * 171360 / 342720 = 500,000 (exactly 50%)
+	// citeBonusBps = 1M * 25 / 50 = 500,000 (exactly 50%)
+	// dynamicCapBps = 1M + 500k + 500k = 2,000,000 (2×)
+	// rewardCap = 10M * 2M / 1M = 20M
+	// rewardBase = 100M * 900k / 1M = 90M → capped to 20M
+	expiryCtx := ctx.WithBlockHeight(171_360)
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, 171_360)
+
+	if len(mvk.created) == 0 {
+		t.Fatal("expected falsification reward")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	if lastVesting.totalAmount != "20000000" {
+		t.Errorf("FARM-15: medium fact reward should be 20M (2×), got %s", lastVesting.totalAmount)
+	}
+}
+
+func TestFARM15_OldHighlyCitedFactMaxReward(t *testing.T) {
+	// Old fact (age=500k blocks, 100 citations) → 3× reward (max).
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+
+	k.SetFact(ctx, &types.Fact{
+		Id: "f-old-cited", ClaimText: "Old highly-cited fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "100000000", // 100 LGM
+		Confidence: 900000, CreatedAtHeight: 0, CitationCount: 100,
+	})
+
+	cf := types.CounterFact{
+		Id: "cfact-old-cited", TargetFactId: "f-old-cited",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, &cf)
+
+	round := types.VerificationRound{
+		Id: "r-old-cited", ClaimId: "cfact-old-cited", Type: types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{"val1": {Verdict: "accepted", Confidence: 900000}},
+	}
+	k.SetVerificationRound(ctx, &round)
+	_ = k.CompleteRound(ctx, &round, &types.VerificationResult{Verdict: "accepted", Confidence: 900000})
+
+	// Finalize at block 500,000 → age = 500k > 342720 → ageBonusBps = 1M (maxed)
+	// citeBonusBps = 1M (100 > 50, maxed)
+	// dynamicCapBps = 1M + 1M + 1M = 3M (full 3×)
+	// rewardCap = 10M * 3M / 1M = 30M
+	// rewardBase = 100M * 900k / 1M = 90M → capped to 30M
+	expiryCtx := ctx.WithBlockHeight(500_000)
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, 500_000)
+
+	if len(mvk.created) == 0 {
+		t.Fatal("expected falsification reward")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	if lastVesting.totalAmount != "30000000" {
+		t.Errorf("FARM-15: old cited fact reward should be 30M (3×), got %s", lastVesting.totalAmount)
+	}
+}
+
+func TestFARM15_VeryNewFactMinimumReward(t *testing.T) {
+	// Very new fact (age=10 blocks, 0 citations) → barely above 1× stake.
+	k, ctx, _, _, mvk := setupKeeperWithTracking(t)
+
+	// Challenge window = 34272. CompleteRound at height 10 → provisional.
+	// Finalization at windowEnd = 10 + 34272 + 1 = 34283.
+	// Set CreatedAtHeight = 34273 so age = 34283 - 34273 = 10 blocks.
+	windowEnd := uint64(10) + types.CounterFactChallengeWindowBlocks + 1
+
+	k.SetFact(ctx, &types.Fact{
+		Id: "f-tiny", ClaimText: "Very new fact", Domain: "physics",
+		EpistemicCategory: "empirical", Status: types.FactStatusVerified,
+		Submitter: "lgm1other", OriginalStake: "100000000", // 100 LGM
+		Confidence: 900000, CreatedAtHeight: windowEnd - 10, CitationCount: 0,
+	})
+
+	cf := types.CounterFact{
+		Id: "cfact-tiny", TargetFactId: "f-tiny",
+		NegationType: types.NegationTypeContradiction,
+		Submitter:    "lgm1w3jhxarpv3j8yv2lta047h6lta047h6l6m7hcw",
+		StakeAmount:  "10000000", // 10 LGM
+		Status:       types.CounterFactStatusPending,
+	}
+	k.SetCounterFact(ctx, &cf)
+
+	round := types.VerificationRound{
+		Id: "r-tiny", ClaimId: "cfact-tiny", Type: types.RoundTypeContradiction,
+		Phase:   "reveal",
+		Reveals: map[string]*types.VerificationReveal{"val1": {Verdict: "accepted", Confidence: 900000}},
+	}
+	k.SetVerificationRound(ctx, &round)
+	_ = k.CompleteRound(ctx, &round, &types.VerificationResult{Verdict: "accepted", Confidence: 900000})
+
+	// age = 10 blocks
+	// ageBonusBps = 1M * 10 / 342720 ≈ 29
+	// citeBonusBps = 0
+	// dynamicCapBps = 1,000,029
+	// rewardCap = 10M * 1,000,029 / 1M = 10,000,290
+	// rewardBase = 100M * 900k / 1M = 90M → capped to ~10M
+	expiryCtx := ctx.WithBlockHeight(int64(windowEnd))
+	k.ProcessCounterFactChallengeExpiry(expiryCtx, windowEnd)
+
+	if len(mvk.created) == 0 {
+		t.Fatal("expected falsification reward")
+	}
+	lastVesting := mvk.created[len(mvk.created)-1]
+	reward, _ := new(big.Int).SetString(lastVesting.totalAmount, 10)
+
+	// Should be barely above 10M (1× stake), almost no bonus
+	if reward.Int64() > 10_100_000 {
+		t.Errorf("FARM-15: very new fact reward should be ~1×, got %s", lastVesting.totalAmount)
+	}
+	if reward.Int64() < 10_000_000 {
+		t.Errorf("FARM-15: reward should be >= base 1×, got %s", lastVesting.totalAmount)
 	}
 }
 
@@ -4543,5 +4771,314 @@ func TestR5_NonStaleContestedNotDecayed(t *testing.T) {
 	updatedFact, _ := k.GetFact(ctx, "r5-fresh-fact")
 	if updatedFact.Confidence != 400000 {
 		t.Errorf("expected no decay (confidence=400000), got %d", updatedFact.Confidence)
+	}
+}
+
+// ==========================================================================
+// FARM-14: Normalized Difficulty Bonus Tests
+// ==========================================================================
+// Verifies that the difficulty bonus is computed relative to the domain's
+// confidence ceiling, not the absolute maximum of 1M.
+//
+// Key insight: result.Confidence is the agreement ratio after stratum/category
+// ceiling clamping. With unanimous agreement it always reaches 1M, then gets
+// clamped to the domain ceiling. So difficulty bonus only activates in
+// contested rounds where result.Confidence < domain ceiling.
+
+// safeMulDivTest mirrors safeMulDiv for test expectations.
+func safeMulDivTest(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	r := new(big.Int).SetUint64(a)
+	r.Mul(r, new(big.Int).SetUint64(b))
+	r.Div(r, new(big.Int).SetUint64(c))
+	return r.Uint64()
+}
+
+func TestFARM14_NormalizedDifficulty_Contested(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Create contested rounds (2 accept, 1 reject) across domains.
+	// Validators: abc=5M/T2, def=3M/T2, ghi=2M/T1
+	// acceptWeight = 900k*(5M+3M)/1M = 7.2M, rejectWeight = 900k*2M/1M = 1.8M
+	// agreementRatio = 7.2M/9M * 1M = 800,000
+	// result.Confidence = min(800k, stratum_ceiling, category_ceiling)
+	getContestedReward := func(domain string) (uint64, uint64) {
+		claimID := fmt.Sprintf("farm14-contested-%s", domain)
+		claim := types.Claim{
+			Id: claimID, ClaimText: "Contested FARM-14 test",
+			Domain: domain, EpistemicCategory: "empirical",
+			Submitter: testSubmitterAddr, StakeAmount: "1000000", Status: "pending",
+		}
+		k.SetClaim(ctx, &claim)
+		round, _ := k.CreateVerificationRound(ctx, &claim)
+		validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+		for _, v := range validators {
+			round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		}
+		round.Reveals["lgmvaloper1abc"] = &types.VerificationReveal{Validator: "lgmvaloper1abc", Verdict: "accept", Confidence: 900_000}
+		round.Reveals["lgmvaloper1def"] = &types.VerificationReveal{Validator: "lgmvaloper1def", Verdict: "accept", Confidence: 900_000}
+		round.Reveals["lgmvaloper1ghi"] = &types.VerificationReveal{Validator: "lgmvaloper1ghi", Verdict: "reject", Confidence: 900_000}
+		round.SelectedValidators = validators
+		k.SetVerificationRound(ctx, round)
+		result, err := k.AggregateVerificationResult(ctx, round)
+		if err != nil {
+			t.Fatalf("AggregateVerificationResult failed for %s: %v", domain, err)
+		}
+		return result.Rewards["lgmvaloper1abc"], result.Confidence
+	}
+
+	mathReward, mathConf := getContestedReward("mathematics")
+	socReward, socConf := getContestedReward("sociology")
+	bioReward, bioConf := getContestedReward("biology")
+
+	params := k.GetParams(ctx)
+	base := params.VerificationRewardAmount
+
+	t.Logf("FARM-14 CONTESTED (base=%d):", base)
+	t.Logf("  math     → reward=%d, conf=%d (ceiling=1M)", mathReward, mathConf)
+	t.Logf("  sociology → reward=%d, conf=%d (ceiling=850k)", socReward, socConf)
+	t.Logf("  biology  → reward=%d, conf=%d (ceiling=950k)", bioReward, bioConf)
+
+	// Math gets MORE bonus: 800k is further from 1M than from 850k or 950k
+	if mathReward <= socReward {
+		t.Errorf("math reward (%d) should exceed sociology reward (%d)", mathReward, socReward)
+	}
+	if mathReward <= bioReward {
+		t.Errorf("math reward (%d) should exceed biology reward (%d)", mathReward, bioReward)
+	}
+	if bioReward <= socReward {
+		t.Errorf("biology reward (%d) should exceed sociology reward (%d)", bioReward, socReward)
+	}
+
+	// Verify exact values (Tier 2 = 1.0x)
+	// Math: ceiling=1M, conf=800k → difficulty=(200k*1M)/1M=200k → +600k → 3.6M
+	if mathReward != base+safeMulDivTest(base, 200_000, 1_000_000) {
+		t.Errorf("math: expected %d, got %d", base+safeMulDivTest(base, 200_000, 1_000_000), mathReward)
+	}
+	// Sociology: ceiling=850k, conf=800k → difficulty=(50k*1M)/850k=58823 → +176k
+	socDiff := safeMulDivTest(50_000, 1_000_000, 850_000)
+	if socReward != base+safeMulDivTest(base, socDiff, 1_000_000) {
+		t.Errorf("sociology: expected %d, got %d", base+safeMulDivTest(base, socDiff, 1_000_000), socReward)
+	}
+}
+
+func TestFARM14_OldVsNew_Arithmetic(t *testing.T) {
+	// Pure arithmetic: old formula gives identical bonus regardless of domain.
+	// New formula scales by ceiling distance.
+	base := uint64(3_000_000)
+	conf := uint64(800_000)
+	cases := []struct{ domain string; ceiling uint64 }{
+		{"mathematics", 1_000_000}, {"biology", 950_000}, {"sociology", 850_000},
+	}
+	t.Logf("OLD vs NEW at conf=%dk:", conf/1000)
+	for _, tc := range cases {
+		oldDiff := 1_000_000 - conf
+		newDiff := safeMulDivTest(tc.ceiling-conf, 1_000_000, tc.ceiling)
+		t.Logf("  %s (ceil=%dk): OLD +%.1f%%, NEW +%.1f%%",
+			tc.domain, tc.ceiling/1000, float64(oldDiff)/10_000, float64(newDiff)/10_000)
+	}
+	mathD := safeMulDivTest(1_000_000-conf, 1_000_000, 1_000_000)
+	socD := safeMulDivTest(850_000-conf, 1_000_000, 850_000)
+	if mathD <= socD {
+		t.Errorf("math difficulty (%d) should exceed sociology (%d)", mathD, socD)
+	}
+	_ = base // used for logging context
+}
+
+func TestFARM14_AtCeilingNoBonus(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Unanimous sociology → agreement=1M → clamped to 850k → at ceiling → no bonus
+	claimID := "farm14-at-ceiling"
+	claim := types.Claim{
+		Id: claimID, ClaimText: "At-ceiling claim",
+		Domain: "sociology", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "1000000", Status: "pending",
+	}
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900_000}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	params := k.GetParams(ctx)
+	reward := result.Rewards["lgmvaloper1abc"]
+	if reward != params.VerificationRewardAmount {
+		t.Errorf("at-ceiling: expected %d (no bonus), got %d", params.VerificationRewardAmount, reward)
+	}
+}
+
+func TestFARM14_UnknownDomainFallback(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// FARM-12: Unknown domain → "social" stratum → ceiling 850k
+	// Unanimous → agreement=1M → clamped to 850k → at ceiling → no bonus
+	claimID := "farm14-unknown"
+	claim := types.Claim{
+		Id: claimID, ClaimText: "Unknown domain claim",
+		Domain: "cryptozoology", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "1000000", Status: "pending",
+	}
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{Validator: v, Verdict: "accept", Confidence: 900_000}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult failed: %v", err)
+	}
+
+	// Unanimous → at ceiling → no bonus
+	params := k.GetParams(ctx)
+	reward := result.Rewards["lgmvaloper1abc"]
+	if reward != params.VerificationRewardAmount {
+		t.Errorf("unknown domain: expected %d (no bonus at ceiling), got %d", params.VerificationRewardAmount, reward)
+	}
+	// Confidence clamped to social ceiling
+	if result.Confidence > 850_000 {
+		t.Errorf("FARM-12: confidence %d should be clamped to 850k", result.Confidence)
+	}
+}
+
+// ---------- FARM-12: Domain Stratum Governance Tests ----------
+
+func TestFARM12_BootstrapDomainStrata(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// setupKeeper calls InitGenesis with DefaultDomains → should bootstrap all 17 strata
+	for domainName, expectedStratum := range types.BootstrapDomainStrata {
+		stratum, found := k.GetDomainStratum(ctx, domainName)
+		if !found {
+			t.Errorf("domain %q: stratum not found in store (expected %q)", domainName, expectedStratum)
+			continue
+		}
+		if stratum != expectedStratum {
+			t.Errorf("domain %q: stratum=%q, want %q", domainName, stratum, expectedStratum)
+		}
+	}
+
+	// Verify count matches DefaultDomains count
+	if len(types.BootstrapDomainStrata) != 17 {
+		t.Errorf("BootstrapDomainStrata has %d entries, want 17", len(types.BootstrapDomainStrata))
+	}
+}
+
+func TestFARM12_InferDomainStratum_StoredOverridesHardcoded(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// "physics" is bootstrapped as "physical" — verify baseline
+	stratum, found := k.GetDomainStratum(ctx, "physics")
+	if !found || stratum != "physical" {
+		t.Fatalf("physics baseline: stratum=%q found=%v, want physical/true", stratum, found)
+	}
+
+	// Override physics to "social" in the store
+	k.SetDomainStratum(ctx, "physics", "social")
+
+	// getDomainConfidenceCeiling should now use social ceiling (850k) not physical (990k)
+	// We test via aggregation: a claim in physics domain should now get social ceiling
+	claim := types.Claim{
+		Id: "farm12-override", ClaimText: "Physics with social ceiling",
+		Domain: "physics", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "1000000", Status: "pending",
+	}
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator: v, Verdict: "accept", Confidence: 900_000,
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult: %v", err)
+	}
+
+	// With social ceiling (850k), confidence 900k should be clamped to 850k
+	if result.Confidence > 850_000 {
+		t.Errorf("FARM-12 override: confidence=%d, should be clamped to social ceiling 850000", result.Confidence)
+	}
+}
+
+func TestFARM12_NewDomainDefaultStratum(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Manually simulate what ProposeDomain handler does
+	domain := types.OntologicalDomain{
+		Name: "my_special_science", Description: "test",
+		Proposer: "lgm1test", Status: "proposed",
+		CreatedAtHeight: uint64(ctx.BlockHeight()),
+	}
+	k.SetDomainInState(ctx, &domain)
+	k.SetDomainStratum(ctx, "my_special_science", types.DefaultProposalStratum)
+
+	stratum, found := k.GetDomainStratum(ctx, "my_special_science")
+	if !found {
+		t.Fatal("newly proposed domain should have stratum set")
+	}
+	if stratum != "social" {
+		t.Errorf("new domain stratum=%q, want %q", stratum, "social")
+	}
+}
+
+func TestFARM12_UnknownDomainFallback(t *testing.T) {
+	k, ctx, _ := setupKeeper(t)
+
+	// Domain not in store and not in hardcoded map → should default to "social"
+	stratum, found := k.GetDomainStratum(ctx, "totally_unknown_domain")
+	if found {
+		t.Errorf("unknown domain should not be in store, got stratum=%q", stratum)
+	}
+
+	// The ceiling for this domain should be social (850k)
+	claim := types.Claim{
+		Id: "farm12-fallback", ClaimText: "Unknown domain fallback test",
+		Domain: "totally_unknown_domain", EpistemicCategory: "empirical",
+		Submitter: testSubmitterAddr, StakeAmount: "1000000", Status: "pending",
+	}
+	k.SetClaim(ctx, &claim)
+	round, _ := k.CreateVerificationRound(ctx, &claim)
+
+	validators := []string{"lgmvaloper1abc", "lgmvaloper1def", "lgmvaloper1ghi"}
+	for _, v := range validators {
+		round.Commitments[v] = &types.VerificationCommitment{Validator: v}
+		round.Reveals[v] = &types.VerificationReveal{
+			Validator: v, Verdict: "accept", Confidence: 950_000,
+		}
+	}
+	round.SelectedValidators = validators
+	k.SetVerificationRound(ctx, round)
+
+	result, err := k.AggregateVerificationResult(ctx, round)
+	if err != nil {
+		t.Fatalf("AggregateVerificationResult: %v", err)
+	}
+
+	// Social ceiling = 850k, so 950k confidence should be clamped
+	if result.Confidence > 850_000 {
+		t.Errorf("FARM-12: unknown domain confidence=%d, should be clamped to 850000 (social ceiling)", result.Confidence)
 	}
 }
