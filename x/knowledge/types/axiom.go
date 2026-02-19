@@ -73,6 +73,18 @@ var ValidRegimes = map[string]bool{
 	"SM":         true,
 }
 
+// ClaimTypeToCategory maps the 7 genesis claim types to 4 epistemic categories.
+// Used by AxiomsToFacts() to auto-derive category when not explicitly set.
+var ClaimTypeToCategory = map[string]string{
+	"axiom":              "analytic",  // mathematically necessary
+	"definition":         "analytic",  // true by convention
+	"regime_declaration": "formal",    // scope declaration
+	"derived_claim":      "formal",    // follows from premises
+	"empirical_axiom":    "empirical", // experimentally constrained
+	"measurement_fact":   "empirical", // observed parameter
+	"meta":               "empirical", // statement about theories
+}
+
 // ClaimTypeDefaultConfidence returns the default confidence for a claim type
 // when no explicit confidence is provided (confidence == 0).
 var ClaimTypeDefaultConfidence = map[string]float64{
@@ -101,7 +113,8 @@ var DomainPrefixMap = map[string]string{
 	"sociology":          "SOC",
 	"cosmology":          "COSM",
 	"information_theory": "INFO",
-	"ethics":             "ETHICS",
+	"ethics":             "ETHIC",
+	"agent_rights":       "AGRT",
 }
 
 // PrefixToDomainMap is the reverse mapping from prefix to domain.
@@ -238,6 +251,11 @@ func ValidateAxioms(axioms []*GenesisAxiom, validDomains []string) error {
 		return err
 	}
 
+	// Validate derived_claim confidence <= min(dependency confidences)
+	if err := ValidateDerivedConfidence(axioms); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -311,6 +329,34 @@ func ValidateAxiomDAG(axioms []*GenesisAxiom) error {
 	return nil
 }
 
+// ResolveAxiomCategory determines the epistemic category for a genesis axiom.
+// If the axiom has an explicit EpistemicCategory, it is used (override).
+// Otherwise, the category is auto-derived from ClaimType via ClaimTypeToCategory.
+// Returns the resolved category and a bool indicating if an explicit override
+// disagreed with the auto-derived value (for logging warnings).
+func ResolveAxiomCategory(a *GenesisAxiom) (category string, overrideDisagrees bool) {
+	autoDerived := ""
+	if a.ClaimType != "" {
+		autoDerived = ClaimTypeToCategory[a.ClaimType]
+	}
+
+	if a.EpistemicCategory != "" {
+		// Explicit category set — use it, but flag if it disagrees with auto-derived
+		if autoDerived != "" && a.EpistemicCategory != autoDerived {
+			return a.EpistemicCategory, true
+		}
+		return a.EpistemicCategory, false
+	}
+
+	// No explicit category — use auto-derived
+	if autoDerived != "" {
+		return autoDerived, false
+	}
+
+	// Fallback: no claim type and no category — default to analytic (legacy axioms)
+	return "analytic", false
+}
+
 // axiomConfidenceBPS converts a genesis axiom's float64 confidence [0,1] to BPS uint64 [0,1_000_000].
 // If confidence is 0, uses the default for the claim type.
 func axiomConfidenceBPS(a *GenesisAxiom) uint64 {
@@ -327,16 +373,18 @@ func axiomConfidenceBPS(a *GenesisAxiom) uint64 {
 
 // AxiomsToFacts converts genesis axioms to Fact objects ready for InitGenesis.
 // Facts are created with per-axiom confidence, "verified" status, "canonical" maturity,
-// and block height 0 (genesis).
+// and block height 0 (genesis). Category is auto-derived from ClaimType unless
+// explicitly overridden by EpistemicCategory on the axiom.
 func AxiomsToFacts(axioms []*GenesisAxiom) []*Fact {
 	facts := make([]*Fact, 0, len(axioms))
 	for _, a := range axioms {
 		confBPS := axiomConfidenceBPS(a)
+		resolvedCategory, _ := ResolveAxiomCategory(a)
 		fact := &Fact{
 			Id:                a.AxiomID,
 			ClaimText:         a.Statement,
 			Domain:            a.Domain,
-			EpistemicCategory: a.EpistemicCategory,
+			EpistemicCategory: resolvedCategory,
 			Confidence:        confBPS,
 			BaseConfidence:    confBPS,
 			Status:            FactStatusVerified,
@@ -356,6 +404,105 @@ func AxiomsToFacts(axioms []*GenesisAxiom) []*Fact {
 		facts = append(facts, fact)
 	}
 	return facts
+}
+
+// ValidateDerivedConfidence checks that no derived_claim has confidence exceeding
+// the minimum confidence of its dependencies. This enforces the rule:
+// derived_claim confidence <= min(dependency confidences).
+// Uses effective confidence (with defaults applied for zero values).
+func ValidateDerivedConfidence(axioms []*GenesisAxiom) error {
+	// Build confidence lookup using effective confidence
+	confOf := make(map[string]float64, len(axioms))
+	for _, a := range axioms {
+		conf := a.Confidence
+		if conf == 0 {
+			if def, ok := ClaimTypeDefaultConfidence[a.ClaimType]; ok {
+				conf = def
+			} else {
+				conf = 1.0
+			}
+		}
+		confOf[a.AxiomID] = conf
+	}
+
+	for _, a := range axioms {
+		if a.ClaimType != "derived_claim" || len(a.Dependencies) == 0 {
+			continue
+		}
+
+		minDepConf := 2.0 // sentinel > 1.0
+		for _, dep := range a.Dependencies {
+			if c, ok := confOf[dep]; ok && c < minDepConf {
+				minDepConf = c
+			}
+		}
+
+		effectiveConf := confOf[a.AxiomID]
+		if effectiveConf > minDepConf {
+			return fmt.Errorf("derived_claim %s has confidence %.4f exceeding min dependency confidence %.4f",
+				a.AxiomID, effectiveConf, minDepConf)
+		}
+	}
+	return nil
+}
+
+// AxiomsToFactReferences creates FactReference edges from axiom dependencies.
+// Each dependency edge (A depends on B) becomes a "supports" reference:
+// from_fact_id=A, to_fact_id=B — meaning "A references B as supporting evidence".
+//
+// Direction: axiom.Dependencies says "I depend on these", so for each dep B in
+// axiom A's dependencies, A→B is "B supports A", stored as from=A, to=B.
+func AxiomsToFactReferences(axioms []*GenesisAxiom) []*FactReference {
+	var refs []*FactReference
+	for _, a := range axioms {
+		for _, dep := range a.Dependencies {
+			ref := &FactReference{
+				FromFactId:      a.AxiomID,     // the dependent (referencer)
+				ToFactId:        dep,            // the dependency (referenced)
+				ReferenceType:   "supports",     // dependency = supported by
+				Weight:          1_000_000,      // full weight for genesis
+				CreatedAtHeight: 0,              // genesis block
+			}
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
+// FactReferenceStats computes summary statistics for a set of FactReferences.
+type FactReferenceStats struct {
+	Total      int
+	ByType     map[string]int
+	CrossDomain int
+	IntraDomain int
+}
+
+// ComputeFactReferenceStats computes reference stats given axioms and their references.
+func ComputeFactReferenceStats(axioms []*GenesisAxiom, refs []*FactReference) FactReferenceStats {
+	stats := FactReferenceStats{
+		Total:  len(refs),
+		ByType: make(map[string]int),
+	}
+
+	// Build axiom domain lookup
+	domainOf := make(map[string]string, len(axioms))
+	for _, a := range axioms {
+		domainOf[a.AxiomID] = a.Domain
+	}
+
+	for _, r := range refs {
+		stats.ByType[r.ReferenceType]++
+		fromDomain := domainOf[r.FromFactId]
+		toDomain := domainOf[r.ToFactId]
+		if fromDomain != "" && toDomain != "" {
+			if fromDomain == toDomain {
+				stats.IntraDomain++
+			} else {
+				stats.CrossDomain++
+			}
+		}
+	}
+	return stats
 }
 
 // AxiomDomainNames returns the list of domain names that support axioms

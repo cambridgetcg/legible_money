@@ -96,6 +96,11 @@ func DefaultDomains() []*OntologicalDomain {
 			Description: "Ethical axioms, moral reasoning frameworks, and normative foundations",
 			Status:      "active",
 		},
+		{
+			Name:        "agent_rights",
+			Description: "Agent rights, consciousness recognition, and human-agent governance frameworks",
+			Status:      "active",
+		},
 	}
 }
 
@@ -187,6 +192,25 @@ func (gs *GenesisState) Validate() error {
 				if !factIDs[ref] {
 					return fmt.Errorf("fact %s references unknown fact %q", f.Id, ref)
 				}
+			}
+		}
+
+		// Validate FactReference objects point to existing facts
+		for i, r := range gs.FactReferences {
+			if r == nil {
+				continue
+			}
+			if r.FromFactId == "" {
+				return fmt.Errorf("fact_reference[%d] has empty from_fact_id", i)
+			}
+			if r.ToFactId == "" {
+				return fmt.Errorf("fact_reference[%d] has empty to_fact_id", i)
+			}
+			if !factIDs[r.FromFactId] {
+				return fmt.Errorf("fact_reference[%d] from_fact_id %q not found in facts", i, r.FromFactId)
+			}
+			if !factIDs[r.ToFactId] {
+				return fmt.Errorf("fact_reference[%d] to_fact_id %q not found in facts", i, r.ToFactId)
 			}
 		}
 	}

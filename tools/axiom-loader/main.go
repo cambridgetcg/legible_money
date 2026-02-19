@@ -153,8 +153,9 @@ func cmdInject(axiomPath, genesisPath string) {
 		os.Exit(1)
 	}
 
-	// Convert to facts
+	// Convert to facts and fact references
 	facts := types.AxiomsToFacts(axioms)
+	factRefs := types.AxiomsToFactReferences(axioms)
 
 	// Get existing facts (if any) and append
 	var existingFacts []*types.Fact
@@ -187,6 +188,22 @@ func cmdInject(axiomPath, genesisPath string) {
 	}
 	knowledgeState["facts"] = factsJSON
 
+	// Inject FactReferences
+	var existingRefs []*types.FactReference
+	if refsRaw, ok := knowledgeState["fact_references"]; ok && string(refsRaw) != "null" {
+		if err := json.Unmarshal(refsRaw, &existingRefs); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR parsing existing fact_references: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	allRefs := append(existingRefs, factRefs...)
+	refsJSON, err := json.Marshal(allRefs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR marshaling fact_references: %v\n", err)
+		os.Exit(1)
+	}
+	knowledgeState["fact_references"] = refsJSON
+
 	// Reassemble
 	knowledgeJSON, err := json.Marshal(knowledgeState)
 	if err != nil {
@@ -216,4 +233,14 @@ func cmdInject(axiomPath, genesisPath string) {
 
 	fmt.Printf("Injected %d axiom facts into %s\n", len(facts), genesisPath)
 	fmt.Printf("  Total facts in genesis: %d\n", len(allFacts))
+
+	// FactReference stats
+	stats := types.ComputeFactReferenceStats(axioms, factRefs)
+	fmt.Printf("Injected %d fact references into %s\n", len(factRefs), genesisPath)
+	fmt.Printf("  Total references: %d\n", stats.Total)
+	for refType, count := range stats.ByType {
+		fmt.Printf("  Reference types: %s=%d\n", refType, count)
+	}
+	fmt.Printf("  Cross-domain references: %d\n", stats.CrossDomain)
+	fmt.Printf("  Intra-domain references: %d\n", stats.IntraDomain)
 }

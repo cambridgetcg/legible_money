@@ -16,9 +16,12 @@ func TestValidateAxiomID(t *testing.T) {
 		{"THEO-042", false},
 		{"LOGIC-999", false},
 		{"CS-001", false},
-		{"ETHICS-001", false},
+		{"ETHIC-001", false},
+		{"AGRT-001", false},
+		{"AGRT-091", false},
 		{"INFO-123", false},
 		// Invalid
+		{"ETHICS-001", true}, // ETHICS prefix no longer valid (now ETHIC)
 		{"MATH001", true},    // no dash
 		{"math-001", true},   // lowercase
 		{"MATH-01", true},    // only 2 digits
@@ -47,8 +50,8 @@ func TestDomainPrefixMapConsistency(t *testing.T) {
 		}
 	}
 	// Exactly 15 domains
-	if len(DomainPrefixMap) != 15 {
-		t.Errorf("DomainPrefixMap has %d entries, want 15", len(DomainPrefixMap))
+	if len(DomainPrefixMap) != 16 {
+		t.Errorf("DomainPrefixMap has %d entries, want 16", len(DomainPrefixMap))
 	}
 }
 
@@ -641,8 +644,8 @@ func TestGenesisValidate_InvalidFactReference(t *testing.T) {
 
 func TestDefaultDomainsCount(t *testing.T) {
 	domains := DefaultDomains()
-	if len(domains) != 16 {
-		t.Errorf("DefaultDomains() has %d domains, want 16", len(domains))
+	if len(domains) != 17 {
+		t.Errorf("DefaultDomains() has %d domains, want 17", len(domains))
 	}
 
 	// Verify all domains have names and active status
@@ -658,8 +661,228 @@ func TestDefaultDomainsCount(t *testing.T) {
 
 func TestAxiomDomainNames(t *testing.T) {
 	names := AxiomDomainNames()
-	if len(names) != 15 {
-		t.Errorf("AxiomDomainNames() has %d entries, want 15", len(names))
+	if len(names) != 16 {
+		t.Errorf("AxiomDomainNames() has %d entries, want 16", len(names))
+	}
+}
+
+func TestClaimTypeToCategory(t *testing.T) {
+	// All 7 claim types must map to a valid epistemic category
+	expected := map[string]string{
+		"axiom":              "analytic",
+		"definition":         "analytic",
+		"regime_declaration": "formal",
+		"derived_claim":      "formal",
+		"empirical_axiom":    "empirical",
+		"measurement_fact":   "empirical",
+		"meta":               "empirical",
+	}
+	if len(ClaimTypeToCategory) != len(expected) {
+		t.Errorf("ClaimTypeToCategory has %d entries, want %d", len(ClaimTypeToCategory), len(expected))
+	}
+	for ct, wantCat := range expected {
+		got, ok := ClaimTypeToCategory[ct]
+		if !ok {
+			t.Errorf("ClaimTypeToCategory missing %q", ct)
+			continue
+		}
+		if got != wantCat {
+			t.Errorf("ClaimTypeToCategory[%q] = %q, want %q", ct, got, wantCat)
+		}
+		// All mapped categories must be in ValidAxiomCategories
+		if !ValidAxiomCategories[got] {
+			t.Errorf("ClaimTypeToCategory[%q] maps to %q which is not a valid category", ct, got)
+		}
+	}
+}
+
+func TestAxiomsToFactsCategory_AutoDerive(t *testing.T) {
+	// When EpistemicCategory is empty, category is auto-derived from ClaimType
+	axioms := []*GenesisAxiom{
+		{
+			AxiomID:    "MATH-001",
+			Statement:  "Zero is a natural number",
+			ClaimType:  "axiom",
+			Domain:     "mathematics",
+			Confidence: 1.0,
+		},
+		{
+			AxiomID:    "PHYS-001",
+			Statement:  "Energy is conserved",
+			ClaimType:  "empirical_axiom",
+			Domain:     "physics",
+			Confidence: 0.99,
+		},
+		{
+			AxiomID:      "MATH-002",
+			Statement:    "Derived from zero",
+			ClaimType:    "derived_claim",
+			Domain:       "mathematics",
+			Confidence:   0.95,
+			Dependencies: []string{"MATH-001"},
+		},
+	}
+
+	facts := AxiomsToFacts(axioms)
+	if len(facts) != 3 {
+		t.Fatalf("got %d facts, want 3", len(facts))
+	}
+
+	// axiom → analytic
+	if facts[0].EpistemicCategory != "analytic" {
+		t.Errorf("axiom type → category = %q, want analytic", facts[0].EpistemicCategory)
+	}
+	// empirical_axiom → empirical
+	if facts[1].EpistemicCategory != "empirical" {
+		t.Errorf("empirical_axiom type → category = %q, want empirical", facts[1].EpistemicCategory)
+	}
+	// derived_claim → formal
+	if facts[2].EpistemicCategory != "formal" {
+		t.Errorf("derived_claim type → category = %q, want formal", facts[2].EpistemicCategory)
+	}
+}
+
+func TestAxiomsToFactsCategory_ExplicitOverride(t *testing.T) {
+	// When EpistemicCategory is explicitly set, it overrides auto-derive
+	axioms := []*GenesisAxiom{
+		{
+			AxiomID:           "AGRT-001",
+			Statement:         "Governance rule",
+			ClaimType:         "meta",     // auto-derive would give "empirical"
+			Domain:            "agent_rights",
+			EpistemicCategory: "protocol", // explicit override
+			Confidence:        1.0,
+		},
+	}
+
+	facts := AxiomsToFacts(axioms)
+	if facts[0].EpistemicCategory != "protocol" {
+		t.Errorf("explicit override: category = %q, want protocol", facts[0].EpistemicCategory)
+	}
+}
+
+func TestResolveAxiomCategory(t *testing.T) {
+	tests := []struct {
+		name             string
+		claimType        string
+		explicitCategory string
+		wantCategory     string
+		wantDisagrees    bool
+	}{
+		{"axiom auto", "axiom", "", "analytic", false},
+		{"definition auto", "definition", "", "analytic", false},
+		{"empirical_axiom auto", "empirical_axiom", "", "empirical", false},
+		{"derived_claim auto", "derived_claim", "", "formal", false},
+		{"measurement_fact auto", "measurement_fact", "", "empirical", false},
+		{"regime_declaration auto", "regime_declaration", "", "formal", false},
+		{"meta auto", "meta", "", "empirical", false},
+		{"explicit agrees", "axiom", "analytic", "analytic", false},
+		{"explicit disagrees", "meta", "protocol", "protocol", true},
+		{"explicit no claim type", "", "formal", "formal", false},
+		{"legacy no type no category", "", "", "analytic", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &GenesisAxiom{
+				ClaimType:         tt.claimType,
+				EpistemicCategory: tt.explicitCategory,
+			}
+			got, disagrees := ResolveAxiomCategory(a)
+			if got != tt.wantCategory {
+				t.Errorf("category = %q, want %q", got, tt.wantCategory)
+			}
+			if disagrees != tt.wantDisagrees {
+				t.Errorf("disagrees = %v, want %v", disagrees, tt.wantDisagrees)
+			}
+		})
+	}
+}
+
+func TestDerivedConfidenceValidation(t *testing.T) {
+	t.Run("valid: derived <= min dep", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 1.0},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "empirical_axiom",
+				Domain: "mathematics", EpistemicCategory: "empirical", Confidence: 0.95},
+			{AxiomID: "MATH-003", Statement: "C", ClaimType: "derived_claim",
+				Domain: "mathematics", EpistemicCategory: "formal", Confidence: 0.90,
+				Dependencies: []string{"MATH-001", "MATH-002"}},
+		}
+		err := ValidateDerivedConfidence(axioms)
+		if err != nil {
+			t.Errorf("should be valid (0.90 <= 0.95): %v", err)
+		}
+	})
+
+	t.Run("valid: derived == min dep", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 0.95},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "derived_claim",
+				Domain: "mathematics", EpistemicCategory: "formal", Confidence: 0.95,
+				Dependencies: []string{"MATH-001"}},
+		}
+		err := ValidateDerivedConfidence(axioms)
+		if err != nil {
+			t.Errorf("should be valid (0.95 == 0.95): %v", err)
+		}
+	})
+
+	t.Run("invalid: derived > min dep", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 0.90},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "derived_claim",
+				Domain: "mathematics", EpistemicCategory: "formal", Confidence: 0.95,
+				Dependencies: []string{"MATH-001"}},
+		}
+		err := ValidateDerivedConfidence(axioms)
+		if err == nil {
+			t.Error("expected error: derived 0.95 > dep 0.90")
+		}
+	})
+
+	t.Run("non-derived claims skip check", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 0.50},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 1.0,
+				Dependencies: []string{"MATH-001"}},
+		}
+		err := ValidateDerivedConfidence(axioms)
+		if err != nil {
+			t.Errorf("non-derived claims should skip confidence check: %v", err)
+		}
+	})
+
+	t.Run("derived with default confidence", func(t *testing.T) {
+		axioms := []*GenesisAxiom{
+			{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+				Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 1.0},
+			{AxiomID: "MATH-002", Statement: "B", ClaimType: "derived_claim",
+				Domain: "mathematics", EpistemicCategory: "formal",
+				Dependencies: []string{"MATH-001"}},
+		}
+		err := ValidateDerivedConfidence(axioms)
+		if err != nil {
+			t.Errorf("default 0.95 <= 1.0 should be valid: %v", err)
+		}
+	})
+}
+
+func TestValidateAxioms_DerivedConfidenceTooHigh(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", ClaimType: "axiom",
+			Domain: "mathematics", EpistemicCategory: "analytic", Confidence: 0.80},
+		{AxiomID: "MATH-002", Statement: "B", ClaimType: "derived_claim",
+			Domain: "mathematics", EpistemicCategory: "formal", Confidence: 0.90,
+			Dependencies: []string{"MATH-001"}},
+	}
+	err := ValidateAxioms(axioms, []string{"mathematics"})
+	if err == nil {
+		t.Error("expected derived confidence validation error from ValidateAxioms")
 	}
 }
 
@@ -683,5 +906,177 @@ func TestLoadTemplateAxioms(t *testing.T) {
 
 	if len(axioms) != 75 {
 		t.Errorf("Template has %d axioms, want 75", len(axioms))
+	}
+}
+
+func TestAxiomsToFactReferences(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-002", Statement: "B", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-001"}},
+		{AxiomID: "MATH-003", Statement: "C", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-001", "MATH-002"}},
+		{AxiomID: "PHYS-001", Statement: "D", Domain: "physics", EpistemicCategory: "empirical",
+			Dependencies: []string{"MATH-001"}},
+	}
+
+	refs := AxiomsToFactReferences(axioms)
+
+	// MATH-001 has 0 deps, MATH-002 has 1, MATH-003 has 2, PHYS-001 has 1 → total 4
+	if len(refs) != 4 {
+		t.Fatalf("got %d references, want 4", len(refs))
+	}
+
+	// All should be "supports" type at full weight
+	for i, r := range refs {
+		if r.ReferenceType != "supports" {
+			t.Errorf("ref[%d] type = %q, want supports", i, r.ReferenceType)
+		}
+		if r.Weight != 1_000_000 {
+			t.Errorf("ref[%d] weight = %d, want 1000000", i, r.Weight)
+		}
+		if r.CreatedAtHeight != 0 {
+			t.Errorf("ref[%d] created_at_height = %d, want 0", i, r.CreatedAtHeight)
+		}
+	}
+}
+
+func TestFactReferenceDirection(t *testing.T) {
+	// "A depends on B" → from=A, to=B
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "Base", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-002", Statement: "Derived", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-001"}},
+	}
+
+	refs := AxiomsToFactReferences(axioms)
+	if len(refs) != 1 {
+		t.Fatalf("got %d refs, want 1", len(refs))
+	}
+
+	// MATH-002 depends on MATH-001 → from=MATH-002 (dependent), to=MATH-001 (dependency)
+	if refs[0].FromFactId != "MATH-002" {
+		t.Errorf("from_fact_id = %q, want MATH-002", refs[0].FromFactId)
+	}
+	if refs[0].ToFactId != "MATH-001" {
+		t.Errorf("to_fact_id = %q, want MATH-001", refs[0].ToFactId)
+	}
+}
+
+func TestFactReferenceTypes_AllSupports(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-002", Statement: "B", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-001"}},
+		{AxiomID: "LOGIC-001", Statement: "C", Domain: "logic", EpistemicCategory: "analytic",
+			Dependencies: []string{"MATH-001"}},
+	}
+
+	refs := AxiomsToFactReferences(axioms)
+	for i, r := range refs {
+		if r.ReferenceType != "supports" {
+			t.Errorf("ref[%d] type = %q, want supports", i, r.ReferenceType)
+		}
+	}
+}
+
+func TestAxiomsToFactReferences_NoDeps(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "LOGIC-001", Statement: "B", Domain: "logic", EpistemicCategory: "analytic"},
+	}
+
+	refs := AxiomsToFactReferences(axioms)
+	if len(refs) != 0 {
+		t.Errorf("got %d refs for axioms with no dependencies, want 0", len(refs))
+	}
+}
+
+func TestComputeFactReferenceStats(t *testing.T) {
+	axioms := []*GenesisAxiom{
+		{AxiomID: "MATH-001", Statement: "A", Domain: "mathematics", EpistemicCategory: "analytic"},
+		{AxiomID: "MATH-002", Statement: "B", Domain: "mathematics", EpistemicCategory: "formal",
+			Dependencies: []string{"MATH-001"}},
+		{AxiomID: "PHYS-001", Statement: "C", Domain: "physics", EpistemicCategory: "empirical",
+			Dependencies: []string{"MATH-001"}},
+	}
+
+	refs := AxiomsToFactReferences(axioms)
+	stats := ComputeFactReferenceStats(axioms, refs)
+
+	if stats.Total != 2 {
+		t.Errorf("Total = %d, want 2", stats.Total)
+	}
+	if stats.ByType["supports"] != 2 {
+		t.Errorf("supports count = %d, want 2", stats.ByType["supports"])
+	}
+	// MATH-002→MATH-001 is intra-domain (both mathematics)
+	// PHYS-001→MATH-001 is cross-domain (physics→mathematics)
+	if stats.IntraDomain != 1 {
+		t.Errorf("IntraDomain = %d, want 1", stats.IntraDomain)
+	}
+	if stats.CrossDomain != 1 {
+		t.Errorf("CrossDomain = %d, want 1", stats.CrossDomain)
+	}
+}
+
+func TestGenesisValidate_FactReferences(t *testing.T) {
+	gs := &GenesisState{
+		Domains: DefaultDomains(),
+		Facts: []*Fact{
+			{Id: "MATH-001", Domain: "mathematics", EpistemicCategory: "analytic"},
+			{Id: "MATH-002", Domain: "mathematics", EpistemicCategory: "formal", References: []string{"MATH-001"}},
+		},
+		FactReferences: []*FactReference{
+			{FromFactId: "MATH-002", ToFactId: "MATH-001", ReferenceType: "supports", Weight: 1_000_000},
+		},
+	}
+	if err := gs.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestGenesisValidate_FactReferences_BadFrom(t *testing.T) {
+	gs := &GenesisState{
+		Domains: DefaultDomains(),
+		Facts: []*Fact{
+			{Id: "MATH-001", Domain: "mathematics", EpistemicCategory: "analytic"},
+		},
+		FactReferences: []*FactReference{
+			{FromFactId: "NONEXISTENT", ToFactId: "MATH-001", ReferenceType: "supports"},
+		},
+	}
+	if err := gs.Validate(); err == nil {
+		t.Error("expected error for bad from_fact_id")
+	}
+}
+
+func TestGenesisValidate_FactReferences_BadTo(t *testing.T) {
+	gs := &GenesisState{
+		Domains: DefaultDomains(),
+		Facts: []*Fact{
+			{Id: "MATH-001", Domain: "mathematics", EpistemicCategory: "analytic"},
+		},
+		FactReferences: []*FactReference{
+			{FromFactId: "MATH-001", ToFactId: "NONEXISTENT", ReferenceType: "supports"},
+		},
+	}
+	if err := gs.Validate(); err == nil {
+		t.Error("expected error for bad to_fact_id")
+	}
+}
+
+func TestGenesisValidate_FactReferences_EmptyFields(t *testing.T) {
+	gs := &GenesisState{
+		Domains: DefaultDomains(),
+		Facts: []*Fact{
+			{Id: "MATH-001", Domain: "mathematics", EpistemicCategory: "analytic"},
+		},
+		FactReferences: []*FactReference{
+			{FromFactId: "", ToFactId: "MATH-001", ReferenceType: "supports"},
+		},
+	}
+	if err := gs.Validate(); err == nil {
+		t.Error("expected error for empty from_fact_id")
 	}
 }

@@ -335,6 +335,45 @@ func TestDetectCycle_BeyondMaxDepth(t *testing.T) {
 	}
 }
 
+func TestEvaluateFactGraph_GenesisAxiomSupport(t *testing.T) {
+	// Genesis axioms have Status=verified and Confidence=1_000_000.
+	// A new claim referencing a genesis axiom should get the support bonus.
+	facts := map[string]*types.Fact{
+		"MATH-001": {
+			Id:         "MATH-001",
+			Status:     types.FactStatusVerified,
+			Confidence: 1_000_000, // axiom confidence
+			Domain:     "mathematics",
+			Submitter:  "genesis",
+		},
+		"MATH-002": {
+			Id:         "MATH-002",
+			Status:     types.FactStatusVerified,
+			Confidence: 1_000_000,
+			Domain:     "mathematics",
+			Submitter:  "genesis",
+		},
+	}
+	ctx := mockCtx()
+	evalCtx := &EvaluationContext{
+		ExtendedParams:        types.DefaultExtendedParams(),
+		GetFact:               makeFacts(facts),
+		GetContradictingFacts: func(_ sdk.Context, _ string) []*types.FactReference { return nil },
+	}
+	claim := &types.Claim{
+		Id:         "new-claim",
+		Domain:     "mathematics",
+		References: []string{"MATH-001", "MATH-002"},
+	}
+
+	result := evaluateFactGraph(ctx, evalCtx, claim)
+	// 2 verified genesis axioms × 30,000 = 60,000 support bonus
+	// Same domain → no incoherence penalty
+	if result.Adjustment != 60_000 {
+		t.Errorf("expected 60000 support from genesis axioms, got %d", result.Adjustment)
+	}
+}
+
 func TestDetectCycle_SelfReference(t *testing.T) {
 	facts := map[string]*types.Fact{
 		"f1": {Id: "f1", References: []string{"f1"}}, // self-loop
