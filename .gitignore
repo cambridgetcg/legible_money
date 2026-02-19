@@ -33,7 +33,7 @@ devnet/data/
 deployment/docker/.devnet-data/
 
 # Go build output
-legbled
+/legbled
 coverage.out
 
 # Test output
