@@ -45,7 +45,7 @@ func (a AppModuleBasic) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// No REST gateway routes; gRPC queries are registered via RegisterServices.
+	types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)) //nolint:errcheck
 }
 
 // DefaultGenesis returns the module's default genesis state as JSON.

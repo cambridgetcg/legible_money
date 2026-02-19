@@ -34,6 +34,13 @@ const (
 
 // --- Extension methods for proto-generated message types ---
 
+// MaxDeployBytecodeSize is the stateless upper bound for bytecode in ValidateBasic.
+// The params-based MaxBytecodeSize is checked in the keeper (stateful).
+const MaxDeployBytecodeSize = 1_048_576 // 1 MB
+
+// MaxInputDataSize is the stateless upper bound for call/schedule input data.
+const MaxInputDataSize = 65_536 // 64 KB
+
 // ValidateBasic performs stateless validation on MsgDeployContract.
 func (m *MsgDeployContract) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Deployer); err != nil {
@@ -41,6 +48,9 @@ func (m *MsgDeployContract) ValidateBasic() error {
 	}
 	if len(m.Bytecode) == 0 {
 		return fmt.Errorf("bytecode cannot be empty")
+	}
+	if len(m.Bytecode) > MaxDeployBytecodeSize {
+		return fmt.Errorf("bytecode too large: %d bytes (max %d)", len(m.Bytecode), MaxDeployBytecodeSize)
 	}
 	return nil
 }
@@ -64,6 +74,9 @@ func (m *MsgCallContract) ValidateBasic() error {
 	}
 	if m.GasLimit > MaxContractGasLimit {
 		return fmt.Errorf("gas limit %d exceeds maximum %d", m.GasLimit, MaxContractGasLimit)
+	}
+	if len(m.InputData) > MaxInputDataSize {
+		return fmt.Errorf("input data too large: %d bytes (max %d)", len(m.InputData), MaxInputDataSize)
 	}
 	return nil
 }

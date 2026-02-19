@@ -28,8 +28,6 @@ const (
 // QueryClient is the client API for Query service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Query defines the emergency module's query service.
 type QueryClient interface {
 	Status(ctx context.Context, in *QueryStatusRequest, opts ...grpc.CallOption) (*QueryStatusResponse, error)
 	ActiveCeremony(ctx context.Context, in *QueryActiveCeremonyRequest, opts ...grpc.CallOption) (*QueryActiveCeremonyResponse, error)
@@ -88,8 +86,6 @@ func (c *queryClient) AuditLog(ctx context.Context, in *QueryAuditLogRequest, op
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility.
-//
-// Query defines the emergency module's query service.
 type QueryServer interface {
 	Status(context.Context, *QueryStatusRequest) (*QueryStatusResponse, error)
 	ActiveCeremony(context.Context, *QueryActiveCeremonyRequest) (*QueryActiveCeremonyResponse, error)

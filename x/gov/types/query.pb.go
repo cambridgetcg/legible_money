@@ -7,6 +7,7 @@
 package types
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -409,7 +410,7 @@ var File_legible_gov_v1_query_proto protoreflect.FileDescriptor
 
 const file_legible_gov_v1_query_proto_rawDesc = "" +
 	"\n" +
-	"\x1alegible/gov/v1/query.proto\x12\x0elegible.gov.v1\x1a\x1alegible/gov/v1/state.proto\x1a\x1clegible/gov/v1/genesis.proto\"(\n" +
+	"\x1alegible/gov/v1/query.proto\x12\x0elegible.gov.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1alegible/gov/v1/state.proto\x1a\x1clegible/gov/v1/genesis.proto\"(\n" +
 	"\x0fQueryLIPRequest\x12\x15\n" +
 	"\x06lip_id\x18\x01 \x01(\tR\x05lipId\"n\n" +
 	"\x10QueryLIPResponse\x12%\n" +
@@ -429,12 +430,12 @@ const file_legible_gov_v1_query_proto_rawDesc = "" +
 	"\x05votes\x18\x02 \x03(\v2\x1d.legible.gov.v1.QuadraticVoteR\x05votes\"\x14\n" +
 	"\x12QueryParamsRequest\"E\n" +
 	"\x13QueryParamsResponse\x12.\n" +
-	"\x06params\x18\x01 \x01(\v2\x16.legible.gov.v1.ParamsR\x06params2\xd6\x02\n" +
-	"\x05Query\x12H\n" +
-	"\x03LIP\x12\x1f.legible.gov.v1.QueryLIPRequest\x1a .legible.gov.v1.QueryLIPResponse\x12K\n" +
-	"\x04LIPs\x12 .legible.gov.v1.QueryLIPsRequest\x1a!.legible.gov.v1.QueryLIPsResponse\x12c\n" +
-	"\fDisbursement\x12(.legible.gov.v1.QueryDisbursementRequest\x1a).legible.gov.v1.QueryDisbursementResponse\x12Q\n" +
-	"\x06Params\x12\".legible.gov.v1.QueryParamsRequest\x1a#.legible.gov.v1.QueryParamsResponseB.Z,github.com/legible-money/legible/x/gov/typesb\x06proto3"
+	"\x06params\x18\x01 \x01(\v2\x16.legible.gov.v1.ParamsR\x06params2\xf3\x03\n" +
+	"\x05Query\x12n\n" +
+	"\x03LIP\x12\x1f.legible.gov.v1.QueryLIPRequest\x1a .legible.gov.v1.QueryLIPResponse\"$\x82\xd3\xe4\x93\x02\x1e\x12\x1c/legible/gov/v1/lip/{lip_id}\x12i\n" +
+	"\x04LIPs\x12 .legible.gov.v1.QueryLIPsRequest\x1a!.legible.gov.v1.QueryLIPsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/legible/gov/v1/lips\x12\x9b\x01\n" +
+	"\fDisbursement\x12(.legible.gov.v1.QueryDisbursementRequest\x1a).legible.gov.v1.QueryDisbursementResponse\"6\x82\xd3\xe4\x93\x020\x12./legible/gov/v1/disbursement/{disbursement_id}\x12q\n" +
+	"\x06Params\x12\".legible.gov.v1.QueryParamsRequest\x1a#.legible.gov.v1.QueryParamsResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/legible/gov/v1/paramsB.Z,github.com/legible-money/legible/x/gov/typesb\x06proto3"
 
 var (
 	file_legible_gov_v1_query_proto_rawDescOnce sync.Once

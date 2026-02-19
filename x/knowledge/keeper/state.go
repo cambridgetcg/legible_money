@@ -22,6 +22,9 @@ var deterministicMarshal = proto.MarshalOptions{Deterministic: true}.Marshal
 
 // SetFact stores a fact in the KV store.
 func (k Keeper) SetFact(ctx sdk.Context, fact *types.Fact) {
+	// Read old fact for index delta detection
+	oldFact, _ := k.GetFact(ctx, fact.Id)
+
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := factKey(fact.Id)
 	bz, err := deterministicMarshal(fact)
@@ -37,6 +40,9 @@ func (k Keeper) SetFact(ctx sdk.Context, fact *types.Fact) {
 	if err := kvStore.Set(indexKey, []byte(fact.Id)); err != nil {
 		panic(fmt.Sprintf("failed to set domain fact index: %v", err))
 	}
+
+	// Maintain secondary indexes (B8-6)
+	k.maintainFactIndexes(ctx, fact, oldFact)
 }
 
 // GetFact retrieves a fact by ID.
@@ -63,6 +69,9 @@ func (k Keeper) DeleteFact(ctx sdk.Context, factID string) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	_ = kvStore.Delete(factKey(factID))
 	_ = kvStore.Delete(domainFactIndexKey(fact.Domain, factID))
+
+	// Remove secondary indexes (B8-6)
+	k.removeFactIndexes(ctx, fact)
 }
 
 // IterateFacts iterates over all facts. Return true from cb to stop.
@@ -120,6 +129,9 @@ func (k Keeper) GetFactCount(ctx sdk.Context) uint64 {
 
 // SetClaim stores a claim and maintains the content hash index.
 func (k Keeper) SetClaim(ctx sdk.Context, claim *types.Claim) {
+	// Read old claim for index delta detection
+	oldClaim, _ := k.GetClaim(ctx, claim.Id)
+
 	kvStore := k.storeService.OpenKVStore(ctx)
 	key := claimKey(claim.Id)
 	bz, err := deterministicMarshal(claim)
@@ -136,6 +148,9 @@ func (k Keeper) SetClaim(ctx sdk.Context, claim *types.Claim) {
 			panic(fmt.Sprintf("failed to set content hash index: %v", err))
 		}
 	}
+
+	// Maintain secondary indexes (B8-6)
+	k.maintainClaimIndexes(ctx, claim, oldClaim)
 }
 
 // GetClaim retrieves a claim by ID.
@@ -168,8 +183,12 @@ func (k Keeper) DeleteClaim(ctx sdk.Context, claimID string) {
 	claim, found := k.GetClaim(ctx, claimID)
 	kvStore := k.storeService.OpenKVStore(ctx)
 	_ = kvStore.Delete(claimKey(claimID))
-	if found && claim.ContentHash != "" {
-		_ = kvStore.Delete(contentHashIndexKey(claim.ContentHash))
+	if found {
+		if claim.ContentHash != "" {
+			_ = kvStore.Delete(contentHashIndexKey(claim.ContentHash))
+		}
+		// Remove secondary indexes (B8-6)
+		k.removeClaimIndexes(ctx, claim)
 	}
 }
 
@@ -193,16 +212,9 @@ func (k Keeper) IterateClaims(ctx sdk.Context, cb func(*types.Claim) bool) {
 	}
 }
 
-// GetPendingClaims returns claims awaiting verification.
+// GetPendingClaims returns claims awaiting verification using the status index.
 func (k Keeper) GetPendingClaims(ctx sdk.Context) []*types.Claim {
-	var claims []*types.Claim
-	k.IterateClaims(ctx, func(c *types.Claim) bool {
-		if c.Status == "pending" {
-			claims = append(claims, c)
-		}
-		return false
-	})
-	return claims
+	return k.GetClaimsByStatus(ctx, "pending")
 }
 
 // ---------- Verification Round Operations ----------
@@ -230,6 +242,9 @@ func (k Keeper) SetVerificationRound(ctx sdk.Context, round *types.VerificationR
 			_ = kvStore.Delete(claimRoundIndexKey(round.ClaimId))
 		}
 	}
+
+	// Maintain active round index (B8-6)
+	k.maintainActiveRoundIndex(ctx, round)
 }
 
 // GetVerificationRound retrieves a round by ID.
@@ -269,8 +284,12 @@ func (k Keeper) DeleteVerificationRound(ctx sdk.Context, roundID string) {
 	round, found := k.GetVerificationRound(ctx, roundID)
 	kvStore := k.storeService.OpenKVStore(ctx)
 	_ = kvStore.Delete(roundKey(roundID))
-	if found && round.ClaimId != "" {
-		_ = kvStore.Delete(claimRoundIndexKey(round.ClaimId))
+	if found {
+		if round.ClaimId != "" {
+			_ = kvStore.Delete(claimRoundIndexKey(round.ClaimId))
+		}
+		// Remove active round index entry (B8-6)
+		_ = kvStore.Delete(activeRoundIndexKey(round.Id))
 	}
 }
 
@@ -294,16 +313,9 @@ func (k Keeper) IterateVerificationRounds(ctx sdk.Context, cb func(*types.Verifi
 	}
 }
 
-// GetActiveRounds returns all non-complete rounds.
+// GetActiveRounds returns all non-complete rounds using the active round index.
 func (k Keeper) GetActiveRounds(ctx sdk.Context) []*types.VerificationRound {
-	var rounds []*types.VerificationRound
-	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
-		if r.Phase != "complete" {
-			rounds = append(rounds, r)
-		}
-		return false
-	})
-	return rounds
+	return k.GetActiveRoundsIndexed(ctx)
 }
 
 // GetActiveRoundsForValidator returns rounds where a validator is selected.
@@ -325,17 +337,11 @@ func (k Keeper) GetActiveRoundsForValidator(ctx sdk.Context, validatorAddr strin
 }
 
 // HasActiveRoundForClaim checks if any non-complete round exists for the given claim.
-// Used to prevent creating duplicate reverification rounds.
+// Uses the O(1) ClaimRoundIndex (0x0a) instead of full-scan iteration.
 func (k Keeper) HasActiveRoundForClaim(ctx sdk.Context, claimId string) bool {
-	found := false
-	k.IterateVerificationRounds(ctx, func(r *types.VerificationRound) bool {
-		if r.ClaimId == claimId && r.Phase != "complete" {
-			found = true
-			return true // stop iteration
-		}
-		return false
-	})
-	return found
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(claimRoundIndexKey(claimId))
+	return err == nil && bz != nil
 }
 
 // GetExpiredRounds returns rounds that have passed their deadlines.

@@ -143,6 +143,15 @@ func IsTerminalDisbStage(stage DisbursementStage) bool {
 	return stage == DisbStageExecuted || stage == DisbStageRejected || stage == DisbStageCancelled
 }
 
+// Maximum field lengths for ValidateBasic (stateless).
+const (
+	MaxTitleLength         = 200
+	MaxDescriptionLength   = 2000
+	MaxSpecificationLength = 51200 // 50 KB
+	MaxReasonLength        = 5000
+	MaxUpgradeInfoLength   = 10000
+)
+
 // --- ValidateBasic / GetSigners for proto-generated message types ---
 // These methods extend the proto-generated structs.
 
@@ -153,11 +162,14 @@ func (msg *MsgSubmitLIP) ValidateBasic() error {
 	if strings.TrimSpace(msg.Title) == "" {
 		return fmt.Errorf("title cannot be empty")
 	}
-	if len(msg.Title) > 200 {
-		return fmt.Errorf("title too long (max 200)")
+	if len(msg.Title) > MaxTitleLength {
+		return fmt.Errorf("title too long (max %d)", MaxTitleLength)
 	}
-	if len(msg.Description) > 2000 {
-		return fmt.Errorf("description too long (max 2000)")
+	if len(msg.Description) > MaxDescriptionLength {
+		return fmt.Errorf("description too long (max %d)", MaxDescriptionLength)
+	}
+	if len(msg.Specification) > MaxSpecificationLength {
+		return fmt.Errorf("specification too long (max %d)", MaxSpecificationLength)
 	}
 	// Require positive initial stake to prevent zero-cost proposal spam
 	if msg.InitialStake == "" || msg.InitialStake == "0" {
@@ -167,6 +179,28 @@ func (msg *MsgSubmitLIP) ValidateBasic() error {
 }
 
 func (msg *MsgSubmitLIP) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Proposer)
+	return []sdk.AccAddress{addr}
+}
+
+// ValidateBasic performs stateless validation on MsgAmendLIP.
+func (msg *MsgAmendLIP) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Proposer); err != nil {
+		return fmt.Errorf("invalid proposer address: %w", err)
+	}
+	if msg.LipId == "" {
+		return fmt.Errorf("lip_id cannot be empty")
+	}
+	if strings.TrimSpace(msg.AmendedSpecification) == "" {
+		return fmt.Errorf("amended_specification cannot be empty")
+	}
+	if len(msg.AmendedSpecification) > MaxSpecificationLength {
+		return fmt.Errorf("amended_specification too long (max %d)", MaxSpecificationLength)
+	}
+	return nil
+}
+
+func (msg *MsgAmendLIP) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Proposer)
 	return []sdk.AccAddress{addr}
 }
@@ -244,6 +278,15 @@ func (msg *MsgSubmitDisbursement) ValidateBasic() error {
 	}
 	if strings.TrimSpace(msg.Title) == "" {
 		return fmt.Errorf("title cannot be empty")
+	}
+	if len(msg.Title) > MaxTitleLength {
+		return fmt.Errorf("title too long (max %d)", MaxTitleLength)
+	}
+	if len(msg.Description) > MaxDescriptionLength {
+		return fmt.Errorf("description too long (max %d)", MaxDescriptionLength)
+	}
+	if len(msg.Justification) > MaxReasonLength {
+		return fmt.Errorf("justification too long (max %d)", MaxReasonLength)
 	}
 	if _, err := sdk.AccAddressFromBech32(msg.Recipient); err != nil {
 		return fmt.Errorf("invalid recipient address: %w", err)
@@ -346,6 +389,9 @@ func (msg MsgAttachUpgradePlan) ValidateBasic() error {
 	}
 	if msg.Height <= 0 {
 		return fmt.Errorf("upgrade height must be > 0")
+	}
+	if len(msg.Info) > MaxUpgradeInfoLength {
+		return fmt.Errorf("info too long (max %d)", MaxUpgradeInfoLength)
 	}
 	return nil
 }

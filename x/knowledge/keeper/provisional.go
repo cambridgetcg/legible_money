@@ -13,14 +13,9 @@ import (
 
 // EvaluatePendingClaims runs the deterministic structural evaluation engine
 // on all claims with status "pending_evaluation". Called in BeginBlocker.
+// Uses claim status index (B8-6) instead of full-store scan.
 func (k Keeper) EvaluatePendingClaims(ctx sdk.Context, currentHeight uint64) {
-	var pendingClaims []*types.Claim
-	k.IterateClaims(ctx, func(c *types.Claim) bool {
-		if c.Status == types.ClaimStatusPendingEvaluation {
-			pendingClaims = append(pendingClaims, c)
-		}
-		return false
-	})
+	pendingClaims := k.GetClaimsByStatus(ctx, types.ClaimStatusPendingEvaluation)
 
 	params := k.GetParams(ctx)
 	for _, claim := range pendingClaims {
@@ -142,27 +137,27 @@ func (k Keeper) EvaluateAndProvisionClaim(ctx sdk.Context, claim *types.Claim, p
 
 // ProcessChallengeWindowExpiry checks claims whose challenge window has closed
 // and transitions them to verified (or final rejection). Called in BeginBlocker.
+// Uses claim status indexes (B8-6) instead of full-store scan.
 func (k Keeper) ProcessChallengeWindowExpiry(ctx sdk.Context, currentHeight uint64) {
-	k.IterateClaims(ctx, func(claim *types.Claim) bool {
-		// Only process claims in challenge window
-		if claim.Status != types.ClaimStatusProvisional && claim.Status != types.ClaimStatusEvaluated {
-			return false
-		}
-		// Skip if window hasn't closed yet
-		if currentHeight < claim.ChallengeWindowEnd {
-			return false
-		}
-		// Skip if there are active challenges
-		if claim.ActiveChallengeCount > 0 {
-			return false
-		}
+	// Process both provisional and evaluated claims via indexed lookup
+	for _, status := range []string{types.ClaimStatusProvisional, types.ClaimStatusEvaluated} {
+		claims := k.GetClaimsByStatus(ctx, status)
+		for _, claim := range claims {
+			// Skip if window hasn't closed yet
+			if currentHeight < claim.ChallengeWindowEnd {
+				continue
+			}
+			// Skip if there are active challenges
+			if claim.ActiveChallengeCount > 0 {
+				continue
+			}
 
-		if err := k.TransitionToVerified(ctx, claim, currentHeight); err != nil {
-			k.Logger(ctx).Error("failed to transition claim to verified",
-				"claim_id", claim.Id, "error", err)
+			if err := k.TransitionToVerified(ctx, claim, currentHeight); err != nil {
+				k.Logger(ctx).Error("failed to transition claim to verified",
+					"claim_id", claim.Id, "error", err)
+			}
 		}
-		return false
-	})
+	}
 }
 
 // TransitionToVerified transitions a claim from provisional/evaluated to verified

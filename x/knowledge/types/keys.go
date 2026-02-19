@@ -59,4 +59,8 @@ var (
 	PruningQueuePrefix               = []byte{0x1c} // graceEndBlock:factId → index for batch pruning
 	VerifierConformityPrefix         = []byte{0x1d} // validatorAddr → VerifierConformityRecord (FARM-1)
 	ValidatorParticipationPrefix     = []byte{0x1e} // validatorAddr → ValidatorParticipationRecord (FARM-8)
+
+	// 0x1f-0x26 reserved for secondary query indexes (B8-6)
+	// Defined in keeper/indices.go: claim status, active rounds, claim domain,
+	// claim submitter, claim category, fact submitter, fact category, fact status
 )

@@ -18,10 +18,10 @@ func initAppConfig() (string, interface{}) {
 	srvCfg.API.Enable = true
 	srvCfg.API.Swagger = true
 
-	// Disable gRPC by default — v2alpha1 reflection service panics when
-	// hand-written Msg types lack proto type URLs (11 modules pending proto codegen).
-	// Re-enable once all x/ modules have generated .pb.go files.
-	srvCfg.GRPC.Enable = false
+	// Enable gRPC — required for gRPC-gateway REST proxy (B8-2).
+	// All modules now have proto-generated .pb.go and .pb.gw.go files.
+	// Reflection disabled in production to avoid v2alpha1 panics.
+	srvCfg.GRPC.Enable = true
 
 	return serverconfig.DefaultConfigTemplate, srvCfg
 }

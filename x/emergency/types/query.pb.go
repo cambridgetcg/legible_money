@@ -7,6 +7,7 @@
 package types
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -417,7 +418,7 @@ var File_legible_emergency_v1_query_proto protoreflect.FileDescriptor
 
 const file_legible_emergency_v1_query_proto_rawDesc = "" +
 	"\n" +
-	" legible/emergency/v1/query.proto\x12\x14legible.emergency.v1\x1a legible/emergency/v1/state.proto\x1a\"legible/emergency/v1/genesis.proto\"\x14\n" +
+	" legible/emergency/v1/query.proto\x12\x14legible.emergency.v1\x1a\x1cgoogle/api/annotations.proto\x1a legible/emergency/v1/state.proto\x1a\"legible/emergency/v1/genesis.proto\"\x14\n" +
 	"\x12QueryStatusRequest\"\x81\x01\n" +
 	"\x13QueryStatusResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x1b\n" +
@@ -440,12 +441,12 @@ const file_legible_emergency_v1_query_proto_rawDesc = "" +
 	"\x06offset\x18\x02 \x01(\rR\x06offset\"r\n" +
 	"\x15QueryAuditLogResponse\x12C\n" +
 	"\aentries\x18\x01 \x03(\v2).legible.emergency.v1.EmergencyAuditEntryR\aentries\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x04R\x05total2\xc9\x03\n" +
-	"\x05Query\x12]\n" +
-	"\x06Status\x12(.legible.emergency.v1.QueryStatusRequest\x1a).legible.emergency.v1.QueryStatusResponse\x12u\n" +
-	"\x0eActiveCeremony\x120.legible.emergency.v1.QueryActiveCeremonyRequest\x1a1.legible.emergency.v1.QueryActiveCeremonyResponse\x12\x84\x01\n" +
-	"\x13CompletedCeremonies\x125.legible.emergency.v1.QueryCompletedCeremoniesRequest\x1a6.legible.emergency.v1.QueryCompletedCeremoniesResponse\x12c\n" +
-	"\bAuditLog\x12*.legible.emergency.v1.QueryAuditLogRequest\x1a+.legible.emergency.v1.QueryAuditLogResponseB4Z2github.com/legible-money/legible/x/emergency/typesb\x06proto3"
+	"\x05total\x18\x02 \x01(\x04R\x05total2\xfe\x04\n" +
+	"\x05Query\x12\x83\x01\n" +
+	"\x06Status\x12(.legible.emergency.v1.QueryStatusRequest\x1a).legible.emergency.v1.QueryStatusResponse\"$\x82\xd3\xe4\x93\x02\x1e\x12\x1c/legible/emergency/v1/status\x12\xa4\x01\n" +
+	"\x0eActiveCeremony\x120.legible.emergency.v1.QueryActiveCeremonyRequest\x1a1.legible.emergency.v1.QueryActiveCeremonyResponse\"-\x82\xd3\xe4\x93\x02'\x12%/legible/emergency/v1/ceremony/active\x12\xb8\x01\n" +
+	"\x13CompletedCeremonies\x125.legible.emergency.v1.QueryCompletedCeremoniesRequest\x1a6.legible.emergency.v1.QueryCompletedCeremoniesResponse\"2\x82\xd3\xe4\x93\x02,\x12*/legible/emergency/v1/ceremonies/completed\x12\x8c\x01\n" +
+	"\bAuditLog\x12*.legible.emergency.v1.QueryAuditLogRequest\x1a+.legible.emergency.v1.QueryAuditLogResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/legible/emergency/v1/audit_logB4Z2github.com/legible-money/legible/x/emergency/typesb\x06proto3"
 
 var (
 	file_legible_emergency_v1_query_proto_rawDescOnce sync.Once

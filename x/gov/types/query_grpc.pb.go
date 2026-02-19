@@ -28,8 +28,6 @@ const (
 // QueryClient is the client API for Query service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Query defines the governance module's query service.
 type QueryClient interface {
 	LIP(ctx context.Context, in *QueryLIPRequest, opts ...grpc.CallOption) (*QueryLIPResponse, error)
 	LIPs(ctx context.Context, in *QueryLIPsRequest, opts ...grpc.CallOption) (*QueryLIPsResponse, error)
@@ -88,8 +86,6 @@ func (c *queryClient) Params(ctx context.Context, in *QueryParamsRequest, opts .
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility.
-//
-// Query defines the governance module's query service.
 type QueryServer interface {
 	LIP(context.Context, *QueryLIPRequest) (*QueryLIPResponse, error)
 	LIPs(context.Context, *QueryLIPsRequest) (*QueryLIPsResponse, error)

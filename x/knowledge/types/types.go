@@ -7,6 +7,15 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// Maximum field lengths for ValidateBasic (stateless bounds).
+const (
+	MaxClaimTextLength     = 10000  // 10 KB
+	MaxReasonLength        = 5000   // 5 KB
+	MaxCounterClaimLength  = 10000  // 10 KB
+	MaxEvidenceIdsPerMsg   = 50     // max evidence references per message
+	MaxDomainNameLength    = 200    // max domain name length
+)
+
 // Fact status constants (10-state lifecycle from TS reference + adversarial verification)
 const (
 	FactStatusPending     = "pending"
