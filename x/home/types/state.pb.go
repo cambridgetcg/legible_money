@@ -35,6 +35,7 @@ type AgentHome struct {
 	Guardian        *HomeGuardian          `protobuf:"bytes,9,opt,name=guardian,proto3" json:"guardian,omitempty"`
 	CreatedAtBlock  uint64                 `protobuf:"varint,10,opt,name=created_at_block,json=createdAtBlock,proto3" json:"created_at_block,omitempty"`
 	LastActiveBlock uint64                 `protobuf:"varint,11,opt,name=last_active_block,json=lastActiveBlock,proto3" json:"last_active_block,omitempty"`
+	PartnershipId   string                 `protobuf:"bytes,12,opt,name=partnership_id,json=partnershipId,proto3" json:"partnership_id,omitempty"` // linked partnership ID (auto-set on AcceptPartnership)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -144,6 +145,13 @@ func (x *AgentHome) GetLastActiveBlock() uint64 {
 		return x.LastActiveBlock
 	}
 	return 0
+}
+
+func (x *AgentHome) GetPartnershipId() string {
+	if x != nil {
+		return x.PartnershipId
+	}
+	return ""
 }
 
 // HomeTreasury holds the treasury state for a home.
@@ -268,6 +276,7 @@ type HomeGuardian struct {
 	Deadman           *DeadmanConfig         `protobuf:"bytes,3,opt,name=deadman,proto3" json:"deadman,omitempty"`
 	RecoveryDids      []string               `protobuf:"bytes,4,rep,name=recovery_dids,json=recoveryDids,proto3" json:"recovery_dids,omitempty"`
 	RecoveryThreshold uint32                 `protobuf:"varint,5,opt,name=recovery_threshold,json=recoveryThreshold,proto3" json:"recovery_threshold,omitempty"`
+	GuardianAddress   string                 `protobuf:"bytes,6,opt,name=guardian_address,json=guardianAddress,proto3" json:"guardian_address,omitempty"` // bech32 address of primary guardian (human partner)
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -335,6 +344,13 @@ func (x *HomeGuardian) GetRecoveryThreshold() uint32 {
 		return x.RecoveryThreshold
 	}
 	return 0
+}
+
+func (x *HomeGuardian) GetGuardianAddress() string {
+	if x != nil {
+		return x.GuardianAddress
+	}
+	return ""
 }
 
 // DeadmanConfig defines the dead-man's switch configuration.
@@ -782,7 +798,7 @@ var File_legible_home_v1_state_proto protoreflect.FileDescriptor
 
 const file_legible_home_v1_state_proto_rawDesc = "" +
 	"\n" +
-	"\x1blegible/home/v1/state.proto\x12\x0flegible.home.v1\"\xa2\x03\n" +
+	"\x1blegible/home/v1/state.proto\x12\x0flegible.home.v1\"\xc9\x03\n" +
 	"\tAgentHome\x12\x17\n" +
 	"\ahome_id\x18\x01 \x01(\tR\x06homeId\x12\x1b\n" +
 	"\towner_did\x18\x02 \x01(\tR\bownerDid\x12#\n" +
@@ -796,7 +812,8 @@ const file_legible_home_v1_state_proto_rawDesc = "" +
 	"\bguardian\x18\t \x01(\v2\x1d.legible.home.v1.HomeGuardianR\bguardian\x12(\n" +
 	"\x10created_at_block\x18\n" +
 	" \x01(\x04R\x0ecreatedAtBlock\x12*\n" +
-	"\x11last_active_block\x18\v \x01(\x04R\x0flastActiveBlock\"~\n" +
+	"\x11last_active_block\x18\v \x01(\x04R\x0flastActiveBlock\x12%\n" +
+	"\x0epartnership_id\x18\f \x01(\tR\rpartnershipId\"~\n" +
 	"\fHomeTreasury\x12)\n" +
 	"\x10reserved_balance\x18\x01 \x01(\tR\x0freservedBalance\x12C\n" +
 	"\n" +
@@ -805,14 +822,15 @@ const file_legible_home_v1_state_proto_rawDesc = "" +
 	"\x12TreasuryAutomation\x12,\n" +
 	"\x12auto_claim_vesting\x18\x01 \x01(\bR\x10autoClaimVesting\x122\n" +
 	"\x15auto_compound_rewards\x18\x02 \x01(\bR\x13autoCompoundRewards\x12,\n" +
-	"\x12min_liquid_balance\x18\x03 \x01(\tR\x10minLiquidBalance\"\xe8\x01\n" +
+	"\x12min_liquid_balance\x18\x03 \x01(\tR\x10minLiquidBalance\"\x93\x02\n" +
 	"\fHomeGuardian\x12)\n" +
 	"\x10defense_strategy\x18\x01 \x01(\tR\x0fdefenseStrategy\x12\x1f\n" +
 	"\vauto_defend\x18\x02 \x01(\bR\n" +
 	"autoDefend\x128\n" +
 	"\adeadman\x18\x03 \x01(\v2\x1e.legible.home.v1.DeadmanConfigR\adeadman\x12#\n" +
 	"\rrecovery_dids\x18\x04 \x03(\tR\frecoveryDids\x12-\n" +
-	"\x12recovery_threshold\x18\x05 \x01(\rR\x11recoveryThreshold\"\x9d\x01\n" +
+	"\x12recovery_threshold\x18\x05 \x01(\rR\x11recoveryThreshold\x12)\n" +
+	"\x10guardian_address\x18\x06 \x01(\tR\x0fguardianAddress\"\x9d\x01\n" +
 	"\rDeadmanConfig\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x121\n" +
 	"\x14inactivity_threshold\x18\x02 \x01(\x04R\x13inactivityThreshold\x12\x16\n" +

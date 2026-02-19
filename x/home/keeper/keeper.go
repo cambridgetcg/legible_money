@@ -19,6 +19,9 @@ type Keeper struct {
 	storeService store.KVStoreService
 	bankKeeper   types.BankKeeper
 
+	// Cross-module keepers (set via setter to avoid circular deps)
+	partnershipKeeper types.PartnershipKeeper
+
 	// Module authority (typically governance module address)
 	authority string
 }
@@ -59,6 +62,11 @@ func prefixEndBytes(prefix []byte) []byte {
 // Logger returns a module-specific logger.
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))
+}
+
+// SetPartnershipKeeper sets the partnerships module keeper reference.
+func (k *Keeper) SetPartnershipKeeper(pk types.PartnershipKeeper) {
+	k.partnershipKeeper = pk
 }
 
 // GetAuthority returns the module authority address.

@@ -324,6 +324,52 @@ func (k Keeper) GetSpendingLimit(ctx sdk.Context, homeId, keyType string) (*type
 	return &limit, true
 }
 
+// --- Partnership Integration (HomeKeeper interface for x/partnerships) ---
+
+// GetHomeGuardianAddress returns the guardian_address for a home.
+func (k Keeper) GetHomeGuardianAddress(ctx sdk.Context, homeId string) string {
+	home, found := k.GetHome(ctx, homeId)
+	if !found || home.Guardian == nil {
+		return ""
+	}
+	return home.Guardian.GuardianAddress
+}
+
+// LinkHomeToPartnership sets the partnership_id on a home and maintains the
+// reverse index (partnership_id → home_id) for freeze sync lookups.
+func (k Keeper) LinkHomeToPartnership(ctx sdk.Context, homeId string, partnershipId string) {
+	home, found := k.GetHome(ctx, homeId)
+	if !found {
+		return
+	}
+	home.PartnershipId = partnershipId
+	k.SetHome(ctx, home)
+
+	// Maintain reverse index
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Set(types.HomeByPartnershipKey(partnershipId), []byte(homeId))
+}
+
+// SetHomeStatus sets the status of a home by ID.
+func (k Keeper) SetHomeStatus(ctx sdk.Context, homeId string, status string) {
+	home, found := k.GetHome(ctx, homeId)
+	if !found {
+		return
+	}
+	home.Status = status
+	k.SetHome(ctx, home)
+}
+
+// GetHomeByPartnership returns the home ID linked to a partnership via reverse index.
+func (k Keeper) GetHomeByPartnership(ctx sdk.Context, partnershipId string) (string, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.HomeByPartnershipKey(partnershipId))
+	if err != nil || bz == nil {
+		return "", false
+	}
+	return string(bz), true
+}
+
 // --- Home Counter ---
 
 // GetNextHomeId returns a unique home ID and increments the counter.

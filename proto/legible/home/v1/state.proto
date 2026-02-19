@@ -16,6 +16,7 @@ message AgentHome {
   HomeGuardian guardian    = 9;
   uint64 created_at_block  = 10;
   uint64 last_active_block = 11;
+  string partnership_id    = 12; // linked partnership ID (auto-set on AcceptPartnership)
 }
 
 // HomeTreasury holds the treasury state for a home.
@@ -38,6 +39,7 @@ message HomeGuardian {
   DeadmanConfig deadman      = 3;
   repeated string recovery_dids = 4;
   uint32 recovery_threshold  = 5;
+  string guardian_address    = 6;  // bech32 address of primary guardian (human partner)
 }
 
 // DeadmanConfig defines the dead-man's switch configuration.

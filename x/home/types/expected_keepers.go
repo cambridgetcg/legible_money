@@ -12,6 +12,25 @@ type BankKeeper interface {
 	SendCoins(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error
 }
 
+// PartnershipKeeper defines the expected partnerships module interface.
+// Used for guardian-partner consistency checks and spending limit deliberation.
+type PartnershipKeeper interface {
+	// GetPartnership returns partnership info by ID.
+	GetPartnership(ctx sdk.Context, id string) (*PartnershipInfo, bool)
+	// CalculateAmountTier determines the deliberation tier for an amount vs pot balance.
+	CalculateAmountTier(amount string, potBalance string) string
+}
+
+// PartnershipInfo is a minimal view of a partnership for cross-module use.
+// Defined here to avoid importing x/partnerships/types (circular dep prevention).
+type PartnershipInfo struct {
+	Id               string
+	HumanAddr        string
+	AgentAddr        string
+	Status           string
+	CommonPotBalance string
+}
+
 // ComfortDimensions represents the 10-dimension comfort system for an agent home.
 // Each dimension is scored 0-100.
 type ComfortDimensions struct {

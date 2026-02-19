@@ -21,6 +21,9 @@ type Keeper struct {
 	bankKeeper    types.BankKeeper
 	stakingKeeper types.StakingKeeper
 
+	// Cross-module keepers (set via setter to avoid circular deps)
+	homeKeeper types.HomeKeeper
+
 	// Module authority (typically governance module address)
 	authority string
 }
@@ -61,6 +64,11 @@ func prefixEndBytes(prefix []byte) []byte {
 // Logger returns a module-specific logger.
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))
+}
+
+// SetHomeKeeper sets the home module keeper reference.
+func (k *Keeper) SetHomeKeeper(hk types.HomeKeeper) {
+	k.homeKeeper = hk
 }
 
 // GetAuthority returns the module authority address.

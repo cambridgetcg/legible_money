@@ -57,6 +57,13 @@ func (k Keeper) HandleSafetyFreeze(ctx sdk.Context, partnershipId string, freeze
 	partnership.Status = types.StatusSuspended
 	k.SetPartnership(ctx, partnership)
 
+	// Sync linked home to guarded status
+	if k.homeKeeper != nil {
+		if homeId, found := k.homeKeeper.GetHomeByPartnership(ctx, partnershipId); found {
+			k.homeKeeper.SetHomeStatus(ctx, homeId, "guarded")
+		}
+	}
+
 	// Self-punishing: reduce cooperation score by 100 bps per freeze
 	// (abuse prevention: freezing too often hurts the freezer's partnership)
 	penalty := uint64(100) * uint64(sf.FreezeCountThisEpoch)
@@ -167,6 +174,13 @@ func (k Keeper) LiftExpiredFreezes(ctx sdk.Context) {
 					if !k.hasActiveCoercionSignal(ctx, sf.PartnershipId, currentBlock) {
 						partnership.Status = types.StatusActive
 						k.SetPartnership(ctx, partnership)
+
+						// Restore linked home to active status
+						if k.homeKeeper != nil {
+							if homeId, found := k.homeKeeper.GetHomeByPartnership(ctx, sf.PartnershipId); found {
+								k.homeKeeper.SetHomeStatus(ctx, homeId, "active")
+							}
+						}
 					}
 				}
 			}

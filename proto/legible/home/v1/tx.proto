@@ -112,6 +112,7 @@ message MsgConfigureGuardian {
   DeadmanConfig deadman     = 5;
   repeated string recovery_dids = 6;
   uint32 recovery_threshold = 7;
+  string guardian_address   = 8;  // bech32 address of primary guardian (human partner)
 }
 
 message MsgConfigureGuardianResponse {}

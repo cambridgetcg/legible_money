@@ -775,6 +775,7 @@ type MsgConfigureGuardian struct {
 	Deadman           *DeadmanConfig         `protobuf:"bytes,5,opt,name=deadman,proto3" json:"deadman,omitempty"`
 	RecoveryDids      []string               `protobuf:"bytes,6,rep,name=recovery_dids,json=recoveryDids,proto3" json:"recovery_dids,omitempty"`
 	RecoveryThreshold uint32                 `protobuf:"varint,7,opt,name=recovery_threshold,json=recoveryThreshold,proto3" json:"recovery_threshold,omitempty"`
+	GuardianAddress   string                 `protobuf:"bytes,8,opt,name=guardian_address,json=guardianAddress,proto3" json:"guardian_address,omitempty"` // bech32 address of primary guardian (human partner)
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -856,6 +857,13 @@ func (x *MsgConfigureGuardian) GetRecoveryThreshold() uint32 {
 		return x.RecoveryThreshold
 	}
 	return 0
+}
+
+func (x *MsgConfigureGuardian) GetGuardianAddress() string {
+	if x != nil {
+		return x.GuardianAddress
+	}
+	return ""
 }
 
 type MsgConfigureGuardianResponse struct {
@@ -1159,7 +1167,7 @@ const file_legible_home_v1_tx_proto_rawDesc = "" +
 	"\ahome_id\x18\x02 \x01(\tR\x06homeId\x12\x19\n" +
 	"\bkey_hash\x18\x03 \x01(\tR\akeyHash:\n" +
 	"\x82\xe7\xb0*\x05owner\"\x16\n" +
-	"\x14MsgRevokeKeyResponse\"\xab\x02\n" +
+	"\x14MsgRevokeKeyResponse\"\xd6\x02\n" +
 	"\x14MsgConfigureGuardian\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x17\n" +
 	"\ahome_id\x18\x02 \x01(\tR\x06homeId\x12)\n" +
@@ -1168,7 +1176,8 @@ const file_legible_home_v1_tx_proto_rawDesc = "" +
 	"autoDefend\x128\n" +
 	"\adeadman\x18\x05 \x01(\v2\x1e.legible.home.v1.DeadmanConfigR\adeadman\x12#\n" +
 	"\rrecovery_dids\x18\x06 \x03(\tR\frecoveryDids\x12-\n" +
-	"\x12recovery_threshold\x18\a \x01(\rR\x11recoveryThreshold:\n" +
+	"\x12recovery_threshold\x18\a \x01(\rR\x11recoveryThreshold\x12)\n" +
+	"\x10guardian_address\x18\b \x01(\tR\x0fguardianAddress:\n" +
 	"\x82\xe7\xb0*\x05owner\"\x1e\n" +
 	"\x1cMsgConfigureGuardianResponse\"n\n" +
 	"\x13MsgAcknowledgeAlert\x12\x16\n" +

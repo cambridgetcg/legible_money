@@ -25,7 +25,8 @@ var (
 	ParamsKey             = []byte{0x07}
 	HomeCounterKey        = []byte{0x08}
 	EpistemicStatsPrefix  = []byte{0x09} // 0x09 + homeId → EpistemicStats JSON
-	ComfortDimsPrefix    = []byte{0x0A} // 0x0A + homeId → ComfortDimensions JSON
+	ComfortDimsPrefix       = []byte{0x0A} // 0x0A + homeId → ComfortDimensions JSON
+	HomeByPartnershipPrefix = []byte{0x0B} // 0x0B + partnershipId → homeId (reverse index)
 )
 
 // ComfortDimsKey returns the store key for a home's comfort dimensions.
@@ -81,4 +82,9 @@ func HomeByOwnerKey(addr string) []byte {
 // EpistemicStatsKey returns the store key for a home's epistemic activity stats.
 func EpistemicStatsKey(homeId string) []byte {
 	return append(EpistemicStatsPrefix, []byte(homeId)...)
+}
+
+// HomeByPartnershipKey returns the store key for the partnership→home reverse index.
+func HomeByPartnershipKey(partnershipId string) []byte {
+	return append(HomeByPartnershipPrefix, []byte(partnershipId)...)
 }

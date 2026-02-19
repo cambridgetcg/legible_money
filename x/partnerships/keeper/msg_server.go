@@ -147,6 +147,22 @@ func (k msgServer) AcceptPartnership(goCtx context.Context, msg *types.MsgAccept
 	// Clean up formation record
 	_ = kvStore.Delete(append(types.FormationKeyPrefix, []byte(msg.PartnershipId)...))
 
+	// Auto-link agent home to partnership if guardian matches the human partner
+	if k.homeKeeper != nil {
+		homeIds := k.homeKeeper.GetHomesByOwner(ctx, partnership.AgentAddr)
+		for _, homeId := range homeIds {
+			guardianAddr := k.homeKeeper.GetHomeGuardianAddress(ctx, homeId)
+			if guardianAddr == partnership.HumanAddr {
+				k.homeKeeper.LinkHomeToPartnership(ctx, homeId, partnership.Id)
+				k.Logger(ctx).Info("auto-linked agent home to partnership",
+					"home_id", homeId,
+					"partnership_id", partnership.Id,
+				)
+				break // Link first matching home only
+			}
+		}
+	}
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"partnership_accepted",

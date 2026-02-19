@@ -986,6 +986,15 @@ func NewLegibleApp(
 	// (verifications, claims, challenges → agent home patina scores)
 	app.KnowledgeKeeper.SetHomeKeeper(app.HomeKeeper)
 
+	// Wire partnerships keeper into knowledge for reward routing
+	// (verification, citation, falsification rewards flow through active partnerships)
+	app.KnowledgeKeeper.SetPartnershipsKeeper(NewKnowledgePartnershipsAdapter(app.PartnershipsKeeper))
+
+	// Wire home ↔ partnerships cross-module integration
+	// (auto-link homes on partnership accept, freeze sync, spending limit deliberation)
+	app.HomeKeeper.SetPartnershipKeeper(NewHomePartnershipAdapter(app.PartnershipsKeeper))
+	app.PartnershipsKeeper.SetHomeKeeper(app.HomeKeeper)
+
 	// Wire verification hooks: staking (reputation) + qualification (domain metrics)
 	app.KnowledgeKeeper.SetVerificationHooks(
 		knowledgetypes.NewMultiVerificationHooks(

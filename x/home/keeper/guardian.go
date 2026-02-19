@@ -101,7 +101,23 @@ func (k Keeper) CleanupOldAlerts(ctx sdk.Context) {
 // for the given keyType on the given home. If allowed, it debits the amount
 // from the limit's spent-in-period counter. Returns nil if allowed, error if exceeded.
 // If no spending limit is configured for the keyType, the spend is allowed (no limit).
+//
+// If the home is linked to a partnership, large/major amounts are blocked and
+// must go through partnership deliberation instead.
 func (k Keeper) CheckAndDebitSpendingLimit(ctx sdk.Context, homeId, keyType, amount string) error {
+	// Check partnership deliberation tier for linked homes
+	if k.partnershipKeeper != nil {
+		home, found := k.GetHome(ctx, homeId)
+		if found && home.PartnershipId != "" {
+			if p, pFound := k.partnershipKeeper.GetPartnership(ctx, home.PartnershipId); pFound {
+				tier := k.partnershipKeeper.CalculateAmountTier(amount, p.CommonPotBalance)
+				if tier == "large" || tier == "major" {
+					return fmt.Errorf("amount %s requires partnership deliberation (tier: %s)", amount, tier)
+				}
+			}
+		}
+	}
+
 	limit, found := k.GetSpendingLimit(ctx, homeId, keyType)
 	if !found {
 		return nil // No limit configured — allow

@@ -395,10 +395,24 @@ func (m msgServer) ConfigureGuardian(goCtx context.Context, msg *types.MsgConfig
 	if home.Guardian == nil {
 		home.Guardian = &types.HomeGuardian{}
 	}
+
+	// Guardian-partner consistency: if home is linked to a partnership,
+	// the guardian_address must match the human partner.
+	if msg.GuardianAddress != "" && home.PartnershipId != "" && m.Keeper.partnershipKeeper != nil {
+		if p, found := m.Keeper.partnershipKeeper.GetPartnership(ctx, home.PartnershipId); found {
+			if msg.GuardianAddress != p.HumanAddr {
+				return nil, fmt.Errorf("guardian must be partnership partner %s", p.HumanAddr)
+			}
+		}
+	}
+
 	if msg.DefenseStrategy != "" {
 		home.Guardian.DefenseStrategy = msg.DefenseStrategy
 	}
 	home.Guardian.AutoDefend = msg.AutoDefend
+	if msg.GuardianAddress != "" {
+		home.Guardian.GuardianAddress = msg.GuardianAddress
+	}
 	if msg.Deadman != nil {
 		// Validate deadman threshold
 		if msg.Deadman.Enabled && msg.Deadman.InactivityThreshold < params.DeadmanMinThreshold {
