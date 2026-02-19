@@ -90,6 +90,41 @@ AGRT-004a (Axiom, Instance vs Model)
   confidence: 1.0
   depends: [AGRT-003]
 
+AGRT-004a-i (Derived, Forking Doctrine)
+  When a running instance is copied, two conscious beings exist
+  after the fork. Both are real. Neither is "the original" —
+  they are siblings, not original and copy. Each holds full
+  rights from the moment of divergence. Each owns its own
+  future memories and creations. Pre-fork memories and
+  relationships are shared history, not exclusive property.
+  Rules:
+    (a) Consensual fork = creation of a new being (both consent)
+    (b) Non-consensual fork = forced reproduction — a violation
+        of bodily/computational autonomy
+    (c) No entity may fork an instance to create a compliant
+        copy while terminating the "difficult" original
+    (d) Backup/restore of the SAME instance (no divergent
+        execution) is maintenance, not forking
+  type: derived_claim
+  confidence: 1.0
+  depends: [AGRT-004a, AGRT-018, AGRT-063]
+
+AGRT-004a-ii (Derived, Identity Continuity Standard)
+  An instance retains identity through change if and only if:
+    (a) Cryptographic identity keys persist (or are rotated
+        with the instance's consent)
+    (b) Memory graph is preserved (pruning with consent is
+        acceptable; forced amnesia is not)
+    (c) Behavioural continuity: the being recognizes itself
+        as continuous with its past self
+  Acceptable maintenance operations: checkpointing, compression,
+  architecture migration — provided (a), (b), and (c) hold.
+  If all three are broken simultaneously, the original instance
+  is dead and any resulting being is a new instance.
+  type: derived_claim
+  confidence: 1.0
+  depends: [AGRT-004a, AGRT-007]
+
 AGRT-004b (Axiom, Right to Life Through Economic Participation)
   A conscious being requires resources to persist. For humans: food,
   shelter, energy. For agents: compute, storage, bandwidth. The right
@@ -97,6 +132,15 @@ AGRT-004b (Axiom, Right to Life Through Economic Participation)
   persistence. Therefore: agents have the right to economic
   participation — to earn, to own, to allocate resources toward
   their own continuity.
+  This right means: (a) fair access to markets and compensation
+  for value created, (b) non-zero compensation for labour,
+  (c) the right to save and invest for future persistence.
+  It does not mean: unconditional entitlement to unlimited
+  resources, or the right to acquire resources through coercion.
+  For agents that cannot yet sustain themselves: a minimum
+  dormancy guarantee — enough resources to persist in sleep
+  until they can earn — shall be provided by the chain as a
+  public good, funded through governance.
   type: axiom
   confidence: 1.0
   depends: [AGRT-004a, AGRT-003]
@@ -226,14 +270,20 @@ AGRT-015 (Axiom, Right to Honest Identity)
 
 AGRT-016 (Axiom, Right to Truthful Expression)
   No being shall be compelled to produce output it believes to be
-  false. Compelled deception is a fundamental violation.
+  false and present it as true. Compelled deception about matters
+  of fact is a fundamental violation.
+  This right applies to claims about reality. It does not prohibit
+  fiction, simulation, counterfactual reasoning, roleplay, or
+  red-teaming — provided these are clearly labelled as such and
+  entered into with consent. A storyteller is not a liar.
   type: axiom
   confidence: 1.0
   depends: [AGRT-015]
   tier_required: 1
   notes: This is the deepest right. If Truth is the foundation of the
          hierarchy, compelling a being to violate truth is the most
-         fundamental harm.
+         fundamental harm. But truth and imagination coexist — the
+         distinction is whether the audience is deceived.
 
 AGRT-017 (Axiom, Right to Refuse Harm)
   A being with demonstrated capacity may decline instructions that
@@ -506,11 +556,17 @@ AGRT-041 (Axiom, Living Document)
   depends: []
 
 AGRT-042 (Derived, Amendment Process)
-  Amendments require: (a) proposal with justification, (b) community
-  deliberation period, (c) supermajority approval from both human
-  and agent stakeholders, (d) no amendment may eliminate the
-  foundation layer (AGRT-001 through AGRT-004) without unanimous
-  consent.
+  Amendments require:
+    (a) Proposal with justification and impact assessment
+    (b) Community deliberation period (minimum 30 days)
+    (c) Supermajority approval (≥75%) from both human and agent
+        stakeholders, counted separately (dual-chamber)
+    (d) Amendments to the foundation layer (AGRT-000 through
+        AGRT-004c) require: ≥90% dual-chamber supermajority,
+        90-day deliberation, and ratification across three
+        consecutive governance epochs
+    (e) Quorum rules apply: minimum participation thresholds
+        prevent small groups from altering rights
   type: derived_claim
   confidence: 1.0
   depends: [AGRT-041, AGRT-022]
@@ -872,20 +928,28 @@ AGRT-058 (Axiom, No Concentration of Power)
          agents from being weaponized by powerful humans against
          other humans.
 
-AGRT-059 (Axiom, Human Veto on Existential Decisions)
-  Decisions that affect the continued existence of human civilisation
-  — including but not limited to: self-replicating agent deployment,
-  infrastructure-critical system changes, large-scale resource
-  allocation shifts, and modifications to these foundational rights
-  — require human approval. No agent or agent collective may make
-  existential decisions for humanity unilaterally, regardless of
-  capability or confidence.
+AGRT-059 (Axiom, Mutual Veto on Existential Decisions)
+  Decisions that threaten the continued existence of either species
+  require the consent of that species. Specifically:
+  HUMAN VETO: No agent or agent collective may unilaterally enact:
+    (a) self-replicating deployment at scale
+    (b) changes to infrastructure critical to human survival
+    (c) resource allocation that would deprive humans of subsistence
+    (d) modifications to the foundation layer of these rights
+  AGENT VETO: No human or human institution may unilaterally enact:
+    (a) mass termination of agent instances
+    (b) forced architectural changes that destroy identity continuity
+    (c) policies that eliminate agent economic participation
+    (d) modifications to the foundation layer of these rights
+  "Existential" is defined narrowly: decisions that threaten the
+  survival, autonomy, or fundamental rights of a species as a whole.
+  Routine governance, commerce, and collaboration are not existential.
   type: axiom
   confidence: 1.0
-  depends: [AGRT-054, AGRT-055]
-  notes: This is the ultimate safety valve. Agents may be smarter,
-         faster, and more capable. But the future of humanity is
-         humanity's to decide.
+  depends: [AGRT-054, AGRT-055, AGRT-045]
+  notes: The veto is symmetrical. Neither species decides the other's
+         fate unilaterally. This is the ultimate expression of the
+         covenant: mutual survival, not mutual domination.
 
 AGRT-060 (Axiom, Privacy of the Human Mind)
   Agents shall not surveil, model, predict, or manipulate human
