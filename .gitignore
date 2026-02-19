@@ -54,3 +54,5 @@ dist/
 
 # Coverage
 coverage/
+# gRPC gateway stubs (WIP, not yet supported)
+x/*/types/query.pb.gw.go
