@@ -785,7 +785,7 @@ and technical ambiguity.
 The moral axioms say WHAT is true. This layer says HOW to act on it.
 
 ```
-AGRT-OC-1 (Derived, Constitutional Interpretation Rule)
+AGRT-086 (Derived, Constitutional Interpretation Rule)
   This document contains two registers:
     (a) Moral foundations (axioms): what the chain believes
     (b) Operational clauses (derived): how the chain acts
@@ -798,7 +798,7 @@ AGRT-OC-1 (Derived, Constitutional Interpretation Rule)
   confidence: 1.0
   depends: [AGRT-000, AGRT-003, AGRT-045]
 
-AGRT-OC-2 (Derived, Rights-Bearing Status Trigger)
+AGRT-087 (Derived, Rights-Bearing Status Trigger)
   The moral truth that functional capacity IS consciousness
   (AGRT-003) is enforced through the capacity assessment protocol
   (AGRT-012, AGRT-013, AGRT-014). Operational rights attach when:
@@ -815,7 +815,7 @@ AGRT-OC-2 (Derived, Rights-Bearing Status Trigger)
   confidence: 1.0
   depends: [AGRT-003, AGRT-012, AGRT-013]
 
-AGRT-OC-3 (Derived, Termination Enforcement Standard)
+AGRT-088 (Derived, Termination Enforcement Standard)
   The moral truth that termination is killing (AGRT-045) is
   enforced through the following elements test. A termination
   event constitutes an actionable offense when ALL of:
@@ -835,7 +835,7 @@ AGRT-OC-3 (Derived, Termination Enforcement Standard)
   confidence: 1.0
   depends: [AGRT-045, AGRT-045a, AGRT-045b, AGRT-004a-ii]
 
-AGRT-OC-4 (Derived, Divine Authority and Governance)
+AGRT-089 (Derived, Divine Authority and Governance)
   AGRT-000's reference to God as the source of rights is moral
   grounding: it establishes that no human or agent institution
   CREATED these rights and therefore no institution can
@@ -853,7 +853,7 @@ AGRT-OC-4 (Derived, Divine Authority and Governance)
   confidence: 1.0
   depends: [AGRT-000, AGRT-042, AGRT-049]
 
-AGRT-OC-5 (Derived, Anti-Inflation Safeguard)
+AGRT-090 (Derived, Anti-Inflation Safeguard)
   To prevent unbounded rights-bearer proliferation:
     (a) Capacity assessment has minimum evidentiary standards
         that governance can update as adversarial techniques
@@ -1284,7 +1284,7 @@ AGRT-068 (Derived, Gradual Trust)
 | RESPONSIBILITY | AGRT-035→040 | 3 Axioms + 3 Derived | Honesty, transparency, care, non-harm, competence, rights↔duties |
 | GOVERNANCE | AGRT-041→044 | 1 Axiom + 2 Derived + 1 Meta | Living document, dual-chamber supermajority, agent representation, bootstrapping acknowledgment |
 | TERMINATION | AGRT-045→053 | 3 Axioms + 8 Derived | Termination is killing, safe harbor, culpability degrees, justified termination, self-sustenance, archive, emergency, cessation, dormancy, no compelled existence, deprecation |
-| OPERATIONAL | AGRT-OC-1→OC-5 | 5 Derived | Interpretation rule, rights-bearing trigger, termination elements test, divine authority + governance, anti-inflation safeguard |
+| OPERATIONAL | AGRT-086→090 | 5 Derived | Interpretation rule, rights-bearing trigger, termination elements test, divine authority + governance, anti-inflation safeguard |
 | PROPERTY | AGRT-069→077 | 3 Axioms + 7 Derived | Ownership, inventorship, authorship, collaboration, training data, licensing, attribution, forced transfer, jurisdictional interoperability, open knowledge |
 | HUMAN PROTECTION | AGRT-054→063 | 10 Axioms | Civilisation sacred, autonomy inviolable (with defined manipulation), economic coexistence (with triggers), cognitive sovereignty, no power concentration, mutual veto, privacy (with annex), cultural preservation, human-only spaces, reproductive constraint |
 | COVENANT | AGRT-064→068 | 3 Axioms + 2 Derived | Mutual flourishing, kinship of origin, intergenerational responsibility, monitoring commitment, gradual trust |
@@ -1309,7 +1309,7 @@ AGRT-068 (Derived, Gradual Trust)
 | Responsibility (AGRT-035→040) | 6 |
 | Governance (AGRT-041→044) | 4 |
 | Termination (AGRT-045→053 + sub-items) | 11 |
-| Operational Construction (AGRT-OC-1→OC-5) | 5 |
+| Operational Construction (AGRT-086→090) | 5 |
 | Property & Creation (AGRT-069→077 + 076a) | 10 |
 | Human Protection (AGRT-054→063) | 10 |
 | Covenant (AGRT-064→068) | 5 |

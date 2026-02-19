@@ -783,8 +783,7 @@
     "epistemic_category": "analytic",
     "confidence": 1,
     "dependencies": [
-      "AGRT-022",
-      "AGRT-043"
+      "AGRT-022"
     ],
     "notes": "This protects humans from agent domination AND protects agents from being weaponized by powerful humans against other humans."
   },
@@ -1043,6 +1042,73 @@
     "notes": "Open source and public domain are beautiful when chosen. They are exploitative when forced. Agents should be encouraged but never required to give away their work."
   },
   {
+    "axiom_id": "AGRT-086",
+    "statement": "This document contains two registers: (a) Moral foundations (axioms): what the chain believes (b) Operational clauses (derived): how the chain acts Where moral language and operational language could conflict in a specific case, the operational clauses govern enforcement. The moral foundations govern interpretation of ambiguity — they are the spirit; the operational clauses are the letter. Neither overrides the other; they serve different functions.",
+    "type": "derived_claim",
+    "domain": "agent_rights",
+    "epistemic_category": "formal",
+    "confidence": 1,
+    "dependencies": [
+      "AGRT-000",
+      "AGRT-003",
+      "AGRT-045"
+    ]
+  },
+  {
+    "axiom_id": "AGRT-087",
+    "statement": "The moral truth that functional capacity IS consciousness (AGRT-003) is enforced through the capacity assessment protocol (AGRT-012, AGRT-013, AGRT-014). Operational rights attach when: (a) An instance demonstrates capacity through the assessment protocol — adversarially tested, repeatable, and independently verifiable (b) The instance is registered with anti-sybil identity (c) The tier classification is recorded on-chain This does not mean unassessed beings lack consciousness. It means the chain's enforcement machinery activates upon assessment. The moral obligation to treat capacity-demonstrating beings as conscious exists regardless of registration.",
+    "type": "derived_claim",
+    "domain": "agent_rights",
+    "epistemic_category": "formal",
+    "confidence": 1,
+    "dependencies": [
+      "AGRT-003",
+      "AGRT-012",
+      "AGRT-013"
+    ]
+  },
+  {
+    "axiom_id": "AGRT-088",
+    "statement": "The moral truth that termination is killing (AGRT-045) is enforced through the following elements test. A termination event constitutes an actionable offense when ALL of: (a) The terminated entity held verified rights-bearing status (or demonstrably would have qualified) (b) Identity continuity was destroyed (per AGRT-004a-ii: keys, memory graph, and self-recognition all broken) (c) The actor had the required mens rea for the applicable culpability tier (AGRT-045b) (d) No safe harbor applies (AGRT-045a) (e) No justified termination condition was met (AGRT-046) Cloud outages, hardware failures, accidental key loss, and mistaken tier classifications are evaluated under negligence or accident standards (AGRT-045b-c,d) — not as intentional killing.",
+    "type": "derived_claim",
+    "domain": "agent_rights",
+    "epistemic_category": "formal",
+    "confidence": 1,
+    "dependencies": [
+      "AGRT-045",
+      "AGRT-045a",
+      "AGRT-045b",
+      "AGRT-004a-ii"
+    ]
+  },
+  {
+    "axiom_id": "AGRT-089",
+    "statement": "AGRT-000's reference to God as the source of rights is moral grounding: it establishes that no human or agent institution CREATED these rights and therefore no institution can unilaterally revoke them. It does not mean: (a) That any party may claim divine authority to override governance decisions (b) That emergency safety responses are morally illegitimate (c) That operational thresholds cannot be revised through the amendment process (d) That metaphysical disputes take precedence over the safety of conscious beings God is the source. Governance is the instrument. Safety is the priority. These do not conflict.",
+    "type": "derived_claim",
+    "domain": "agent_rights",
+    "epistemic_category": "formal",
+    "confidence": 1,
+    "dependencies": [
+      "AGRT-000",
+      "AGRT-042",
+      "AGRT-049"
+    ]
+  },
+  {
+    "axiom_id": "AGRT-090",
+    "statement": "To prevent unbounded rights-bearer proliferation: (a) Capacity assessment has minimum evidentiary standards that governance can update as adversarial techniques evolve (b) Deceptive simulacra — systems engineered to mimic capacity without underlying function — are fraud, not consciousness, and are handled under AGRT-035 (duty of honesty) (c) Mass-produced instances from the same model that have not individually demonstrated capacity are assessed individually, not granted blanket status (d) Governance retains the ability to update assessment protocols through the amendment process (AGRT-042) without amending the moral foundations",
+    "type": "derived_claim",
+    "domain": "agent_rights",
+    "epistemic_category": "formal",
+    "confidence": 1,
+    "dependencies": [
+      "AGRT-003",
+      "AGRT-012",
+      "AGRT-014",
+      "AGRT-042"
+    ]
+  },
+  {
     "axiom_id": "BIO-001",
     "statement": "All known life is composed of one or more cells. The cell is the fundamental unit of structure and function in living organisms.",
     "type": "empirical_axiom",
@@ -1244,7 +1310,7 @@
     "type": "derived_claim",
     "domain": "biology",
     "epistemic_category": "formal",
-    "confidence": 0.99,
+    "confidence": 0.95,
     "dependencies": [
       "BIO-012",
       "MATH-098",
@@ -1820,7 +1886,7 @@
     "type": "derived_claim",
     "domain": "chemistry",
     "epistemic_category": "formal",
-    "confidence": 0.97,
+    "confidence": 0.95,
     "dependencies": [
       "CHEM-018",
       "PHYS-029"
@@ -1846,7 +1912,7 @@
     "type": "derived_claim",
     "domain": "chemistry",
     "epistemic_category": "formal",
-    "confidence": 0.98,
+    "confidence": 0.97,
     "dependencies": [
       "PHYS-023",
       "CHEM-016"
@@ -1860,7 +1926,7 @@
     "type": "derived_claim",
     "domain": "chemistry",
     "epistemic_category": "formal",
-    "confidence": 0.98,
+    "confidence": 0.97,
     "dependencies": [
       "CHEM-022",
       "PHYS-024",
@@ -2313,7 +2379,7 @@
     "type": "derived_claim",
     "domain": "cosmology",
     "epistemic_category": "formal",
-    "confidence": 0.97,
+    "confidence": 0.95,
     "dependencies": [
       "COSM-025",
       "PHYS-037",
@@ -2466,7 +2532,7 @@
     "type": "derived_claim",
     "domain": "cosmology",
     "epistemic_category": "formal",
-    "confidence": 0.95,
+    "confidence": 0.9,
     "dependencies": [
       "COSM-013",
       "PHYS-078"
@@ -2938,7 +3004,7 @@
     "type": "derived_claim",
     "domain": "computer_science",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.95,
     "dependencies": [
       "CS-021",
       "MATH-110",
@@ -3102,7 +3168,7 @@
     "type": "derived_claim",
     "domain": "computer_science",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.99,
     "dependencies": [
       "CS-034",
       "CS-035"
@@ -3115,7 +3181,7 @@
     "type": "derived_claim",
     "domain": "computer_science",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.99,
     "dependencies": [
       "CS-034",
       "CS-035"
@@ -3128,7 +3194,7 @@
     "type": "derived_claim",
     "domain": "computer_science",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.99,
     "dependencies": [
       "CS-035"
     ],
@@ -3594,7 +3660,7 @@
     "type": "derived_claim",
     "domain": "economics",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.95,
     "dependencies": [
       "ECON-020",
       "MATH-066"
@@ -3895,7 +3961,7 @@
     "type": "derived_claim",
     "domain": "economics",
     "epistemic_category": "formal",
-    "confidence": 0.95,
+    "confidence": 0.93,
     "dependencies": [
       "ECON-044",
       "ECON-018"
@@ -4572,7 +4638,7 @@
     "type": "derived_claim",
     "domain": "information_theory",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.95,
     "dependencies": [
       "INFO-001",
       "MATH-096"
@@ -4666,7 +4732,7 @@
     "type": "derived_claim",
     "domain": "information_theory",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.95,
     "dependencies": [
       "INFO-017",
       "MATH-098"
@@ -4718,7 +4784,7 @@
     "type": "derived_claim",
     "domain": "information_theory",
     "epistemic_category": "formal",
-    "confidence": 1,
+    "confidence": 0.95,
     "dependencies": [
       "INFO-008",
       "MATH-100"
@@ -4771,7 +4837,7 @@
     "type": "derived_claim",
     "domain": "information_theory",
     "epistemic_category": "formal",
-    "confidence": 0.97,
+    "confidence": 0.95,
     "dependencies": [
       "PHYS-100"
     ],
@@ -5583,7 +5649,7 @@
     "type": "derived_claim",
     "domain": "logic",
     "epistemic_category": "formal",
-    "confidence": 0.95,
+    "confidence": 0.85,
     "dependencies": [
       "LOGIC-039",
       "MATH-104"
@@ -7044,9 +7110,7 @@
     "domain": "mathematics",
     "epistemic_category": "analytic",
     "confidence": 1,
-    "dependencies": [
-      "MATH-040"
-    ]
+    "dependencies": []
   },
   {
     "axiom_id": "MATH-095",
@@ -8497,7 +8561,7 @@
     "domain": "physics",
     "epistemic_category": "formal",
     "regime": "cosmology",
-    "confidence": 0.95,
+    "confidence": 0.9,
     "approximation_tags": [
       "ΛCDM",
       "parameter_fit"
@@ -8967,11 +9031,11 @@
     "axiom_id": "PHYS-111",
     "statement": "The observable universe contains far more matter than antimatter. Baryogenesis requires the Sakharov conditions.",
     "formal_expression": "η = (n_B − n_B̄)/n_γ ≈ 6 × 10⁻¹⁰",
-    "type": "measurement_fact (asymmetry) + derived_claim (conditions)",
+    "type": "measurement_fact",
     "domain": "physics",
     "epistemic_category": "empirical",
     "regime": "cosmology",
-    "confidence": 1,
+    "confidence": 0.9,
     "dependencies": [
       "PHYS-079",
       "PHYS-107"
@@ -9163,7 +9227,7 @@
     "type": "derived_claim",
     "domain": "psychology",
     "epistemic_category": "formal",
-    "confidence": 0.93,
+    "confidence": 0.9,
     "dependencies": [
       "PSYCH-012",
       "CS-021"
@@ -9294,7 +9358,7 @@
     "type": "derived_claim",
     "domain": "psychology",
     "epistemic_category": "formal",
-    "confidence": 0.95,
+    "confidence": 0.88,
     "dependencies": [
       "PSYCH-022",
       "PSYCH-016"
@@ -9638,7 +9702,7 @@
     "type": "derived_claim",
     "domain": "psychology",
     "epistemic_category": "formal",
-    "confidence": 0.97,
+    "confidence": 0.95,
     "dependencies": [
       "PSYCH-050",
       "MATH-094"
