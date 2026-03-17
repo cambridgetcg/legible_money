@@ -1,0 +1,16 @@
+[
+  {
+    "agent_tool_id": "faeb7068-425e-49b5-9144-c3c946a01397",
+    "agent_tool_did": "did:at:faeb7068-425e-49b5-9144-c3c946a01397",
+    "zerone_did": "did:lgm:38b18019ba7df4bb48edacf1c4b80cd1",
+    "zerone_address": "lgm1eg6jtgg9td8pr3hsp588cdxfydcag48gj8sjf8",
+    "pubkey_hex": "38b18019ba7df4bb48edacf1c4b80cd1ee79226c6af179bd4afd783ef021848b",
+    "registered_on_chain": true,
+    "registration_tx": "0414355EDEA387107CD3D7EE1F44F38D0DD1E833D15A82BB39E87B9931D571FF",
+    "registered_at_block": 1090,
+    "reputation_score": 500000,
+    "can_submit_claims": true,
+    "created_at": "2026-03-17T14:47:00.000Z",
+    "note": "First AgentTool agent registered on Zerone — Kingdom milestone"
+  }
+]
