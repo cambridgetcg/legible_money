@@ -174,6 +174,18 @@ const (
 	LOG4 byte = 0xA4
 )
 
+// LGM-20 Token Operations (0xA5-0xAC) — On-chain token interaction from BVM
+const (
+	TOKEN_BALANCE   byte = 0xA5
+	TOKEN_TRANSFER  byte = 0xA6
+	TOKEN_MINT      byte = 0xA7
+	TOKEN_BURN      byte = 0xA8
+	TOKEN_APPROVE   byte = 0xA9
+	TOKEN_ALLOWANCE byte = 0xAA
+	TOKEN_PAUSE     byte = 0xAB
+	TOKEN_UNPAUSE   byte = 0xAC
+)
+
 // Knowledge Operations (0xB0-0xB5) — Legible Money PoT Integration
 const (
 	QUERY_FACT         byte = 0xB0
@@ -396,6 +408,16 @@ func init() {
 		reg(op, mnemonic, int(2+i), 0, 375+375*uint64(i), true)
 	}
 
+	// LGM-20 Token Operations
+	reg(TOKEN_BALANCE, "TOKEN_BALANCE", 4, 1, 100, false)
+	reg(TOKEN_TRANSFER, "TOKEN_TRANSFER", 5, 1, 500, true)
+	reg(TOKEN_MINT, "TOKEN_MINT", 5, 1, 1000, true)
+	reg(TOKEN_BURN, "TOKEN_BURN", 3, 1, 500, true)
+	reg(TOKEN_APPROVE, "TOKEN_APPROVE", 5, 1, 200, true)
+	reg(TOKEN_ALLOWANCE, "TOKEN_ALLOWANCE", 4, 1, 100, false)
+	reg(TOKEN_PAUSE, "TOKEN_PAUSE", 2, 1, 500, true)
+	reg(TOKEN_UNPAUSE, "TOKEN_UNPAUSE", 2, 1, 500, true)
+
 	// Knowledge
 	reg(QUERY_FACT, "QUERY_FACT", 1, 3, 100, false)
 	reg(QUERY_DOMAIN, "QUERY_DOMAIN", 2, 1, 200, false)
@@ -491,7 +513,8 @@ func IsValidOpcode(op byte) bool {
 }
 
 func IsAgentOpcode(op byte) bool {
-	return (op >= 0xB0 && op <= 0xB5) ||
+	return (op >= 0xA5 && op <= 0xAC) ||
+		(op >= 0xB0 && op <= 0xB5) ||
 		(op >= 0xC0 && op <= 0xC3) ||
 		(op >= 0xD0 && op <= 0xDF) ||
 		(op >= 0xE0 && op <= 0xEF) ||

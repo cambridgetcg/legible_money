@@ -1524,6 +1524,15 @@ func (interp *Interpreter) executeAgentOpcode(
 	push := func(v *big.Int) {
 		interp.stack.Push(v)
 	}
+	// readMem reads a byte slice from BVM memory using a (ptr, len) pair from the stack.
+	readMem := func(ptrVal, lenVal *big.Int) ([]byte, bool) {
+		p, pOk := toMemoryOffset(ptrVal)
+		l, lOk := toMemoryOffset(lenVal)
+		if !pOk || !lOk {
+			return nil, false
+		}
+		return interp.memory.Read(p, l), true
+	}
 
 	// H-1: Reentrancy guard — reject if already inside a host function call
 	if ctx.InHostCall {
@@ -2298,6 +2307,214 @@ func (interp *Interpreter) executeAgentOpcode(
 	case SELF_ACCURACY:
 		acc := host.SelfAccuracy(ctx.CallerDID)
 		push(new(big.Int).SetUint64(acc))
+
+	// LGM-20 Token Operations (0xA5-0xAC)
+	case TOKEN_BALANCE:
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		addrPtr, ok3 := pop()
+		addrLen, ok4 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		addr, aOk := readMem(addrPtr, addrLen)
+		if !tOk || !aOk {
+			return actionError
+		}
+		bal := th.TokenBalance(ctx.CallerDID, string(tokenID), addr)
+		if bal != nil {
+			push(bal)
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_TRANSFER:
+		if !checkCapability(ctx, "transfer") {
+			for i := 0; i < 5; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		toPtr, ok3 := pop()
+		toLen, ok4 := pop()
+		amount, ok5 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		toAddr, aOk := readMem(toPtr, toLen)
+		if !tOk || !aOk {
+			return actionError
+		}
+		if th.TokenTransfer(ctx.CallerDID, string(tokenID), toAddr, amount) {
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_MINT:
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		toPtr, ok3 := pop()
+		toLen, ok4 := pop()
+		amount, ok5 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		toAddr, aOk := readMem(toPtr, toLen)
+		if !tOk || !aOk {
+			return actionError
+		}
+		if th.TokenMint(ctx.CallerDID, string(tokenID), toAddr, amount) {
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_BURN:
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		amount, ok3 := pop()
+		if !ok1 || !ok2 || !ok3 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		if !tOk {
+			return actionError
+		}
+		if th.TokenBurn(ctx.CallerDID, string(tokenID), amount) {
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_APPROVE:
+		if !checkCapability(ctx, "transfer") {
+			for i := 0; i < 5; i++ {
+				if _, ok := pop(); !ok {
+					return actionError
+				}
+			}
+			push(new(big.Int))
+			return actionContinue
+		}
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		spenderPtr, ok3 := pop()
+		spenderLen, ok4 := pop()
+		amount, ok5 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		spender, sOk := readMem(spenderPtr, spenderLen)
+		if !tOk || !sOk {
+			return actionError
+		}
+		if th.TokenApprove(ctx.CallerDID, string(tokenID), spender, amount) {
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_ALLOWANCE:
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		spenderPtr, ok3 := pop()
+		spenderLen, ok4 := pop()
+		if !ok1 || !ok2 || !ok3 || !ok4 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		spender, sOk := readMem(spenderPtr, spenderLen)
+		if !tOk || !sOk {
+			return actionError
+		}
+		al := th.TokenAllowance(ctx.CallerDID, string(tokenID), spender)
+		if al != nil {
+			push(al)
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_PAUSE:
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		if !ok1 || !ok2 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		if !tOk {
+			return actionError
+		}
+		if th.TokenPause(ctx.CallerDID, string(tokenID)) {
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
+
+	case TOKEN_UNPAUSE:
+		tidPtr, ok1 := pop()
+		tidLen, ok2 := pop()
+		if !ok1 || !ok2 {
+			return actionError
+		}
+		th, ok := host.(TokenHost)
+		if !ok {
+			push(new(big.Int))
+			return actionContinue
+		}
+		tokenID, tOk := readMem(tidPtr, tidLen)
+		if !tOk {
+			return actionError
+		}
+		if th.TokenUnpause(ctx.CallerDID, string(tokenID)) {
+			push(big.NewInt(1))
+		} else {
+			push(new(big.Int))
+		}
 
 	default:
 		return actionError
