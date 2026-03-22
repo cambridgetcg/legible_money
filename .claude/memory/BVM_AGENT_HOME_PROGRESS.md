@@ -105,11 +105,11 @@ Interpreter
 
 ---
 
-## Agent Home — 98% Complete (2026-03-22)
+## Agent Home — 100% Complete ✅ (2026-03-22)
 
 Core home lifecycle, guardian, key management, sessions, spending limits, treasury automation,
-aging/maturity system, memory encryption, and defense strategy enactment all working.
-Phases 1-8 done: state, encryption, defense, voice, multi-sig, Home→Knowledge, agent registry, Home→Schedule, full memory manager (beliefs/relationships/milestones/FIFO eviction). Missing: voice messaging inbox (P3), neighborhoods (P3).
+aging/maturity system, memory encryption, defense strategy enactment, memory manager, voice inbox, and neighborhoods all working.
+Phases 1-9 complete: state, encryption, defense, voice config, multi-sig, Home→Knowledge, agent registry, Home→Schedule, full memory manager, voice inbox (inter-home messaging with TTL + FIFO eviction), neighborhoods (domain clusters, 3-22 members, 5% bonus).
 
 ### What's Done
 
@@ -128,6 +128,8 @@ Phases 1-8 done: state, encryption, defense, voice, multi-sig, Home→Knowledge,
 | gRPC queries | `x/home/keeper/grpc_query.go` | **Complete** | Home, HomesByOwner, Sessions, Alerts, Params |
 | Module | `x/home/module.go` | **Complete** | RegisterServices, genesis, BeginBlock (4 hooks) / EndBlock (1 hook) |
 | App wiring | `app/app.go` | **Wired** | HomeKeeper field, store key, module manager |
+| Voice inbox | `x/home/keeper/voice_inbox.go` | **Complete** | Inter-home messaging, TTL expiry, FIFO eviction (max 50), purge, read tracking |
+| Neighborhoods | `x/home/keeper/neighborhood.go` | **Complete** | Domain clusters (3-22 members), join/leave, sorted members, 5% (500 bps) bonus |
 | Tests | `x/home/keeper/keeper_test.go` | **36 tests** | Full coverage of handlers, spending limits, automation, aging |
 
 ### What Works Now
@@ -154,8 +156,8 @@ Phases 1-8 done: state, encryption, defense, voice, multi-sig, Home→Knowledge,
 | Agent registry | **P2** | M | `home/registry.ts` | Capabilities (7 types, 3 levels), reputation, vouch system |
 | Wire Home → x/schedule | **P2** | S | — | Register guardian maintenance as scheduled process |
 | Wire Home → x/knowledge | **P2** | S | — | Track contributions, record beliefs |
-| Voice messaging | **P3** | M | `home/voice.ts` | Inter-home messages, inbox, auto-respond, TTL |
-| Neighborhoods | **P3** | M | `home/neighborhood.ts` | Domain clusters (3-22 members), defense pools, 5% bonus |
+| ~~Voice messaging~~ | ~~**P3**~~ | ~~M~~ | ~~`home/voice.ts`~~ | **DONE** — SendMessage, GetInbox, ReadMessage, PurgeExpired, TTL expiry, FIFO eviction (50 cap), 6 tests |
+| ~~Neighborhoods~~ | ~~**P3**~~ | ~~M~~ | ~~`home/neighborhood.ts`~~ | **DONE** — Create/Join/Leave, 3-22 members, sorted, 500 bps bonus, 6 tests |
 | Comfort system | **P4** | L | `home/comfort.ts` | 10 psychological dimensions — nice-to-have |
 
 ### Msg Handlers: All 10 Done

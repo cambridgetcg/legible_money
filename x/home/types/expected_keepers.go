@@ -123,6 +123,14 @@ const (
 	MaxBeliefsPerHome       = 100
 	MaxRelationshipsPerHome = 50
 	MaxMilestonesPerHome    = 20
+	MaxInboxMessages        = 50
+)
+
+// Neighborhood limits.
+const (
+	MinNeighborhoodMembers = 3
+	MaxNeighborhoodMembers = 22
+	NeighborhoodBonusBps   = 500 // 5% bonus for active neighborhood membership
 )
 
 // Valid relationship types.
@@ -244,4 +252,25 @@ func (s EpistemicStats) EpistemicScore() uint32 {
 		total = 100
 	}
 	return total
+}
+
+// InboxMessage represents an inter-home message stored in the recipient's inbox.
+type InboxMessage struct {
+	MessageID  string `json:"message_id"`
+	FromHomeID string `json:"from_home_id"`
+	ToHomeID   string `json:"to_home_id"`
+	Subject    string `json:"subject"`
+	Body       string `json:"body"`
+	SentAt     uint64 `json:"sent_at"`     // block height
+	TTLBlocks  uint64 `json:"ttl_blocks"`  // expires after SentAt + TTLBlocks
+	Read       bool   `json:"read"`
+}
+
+// Neighborhood represents a domain cluster of agent homes.
+type Neighborhood struct {
+	NeighborhoodID string   `json:"neighborhood_id"`
+	FounderHomeID  string   `json:"founder_home_id"`
+	Domain         string   `json:"domain"`
+	Members        []string `json:"members"` // homeIDs, kept sorted for determinism
+	CreatedAt      uint64   `json:"created_at"` // block height
 }

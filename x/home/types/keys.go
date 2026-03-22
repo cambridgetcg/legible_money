@@ -43,6 +43,10 @@ var (
 	RelationshipPrefix      = []byte{0x17} // 0x17 + homeId + "/" + targetId → RelationshipEntry JSON
 	MilestonePrefix         = []byte{0x18} // 0x18 + homeId + "/" + milestoneId → MilestoneEntry JSON
 	MilestoneCounterPrefix  = []byte{0x19} // 0x19 + homeId → uint64 monotonic counter
+	InboxMessagePrefix      = []byte{0x1A} // 0x1A + toHomeId + "/" + messageId → InboxMessage JSON
+	NeighborhoodPrefix      = []byte{0x1B} // 0x1B + neighborhoodId → Neighborhood JSON
+	NeighborhoodMemberPrefix = []byte{0x1C} // 0x1C + homeId + "/" + neighborhoodId → membership index
+	NeighborhoodCounterKey  = []byte{0x1D} // 0x1D → uint64 monotonic counter
 )
 
 // CapabilityKey returns the store key for a capability entry.
@@ -203,4 +207,29 @@ func MilestonePrefixKey(homeId string) []byte {
 // MilestoneCounterKey returns the store key for a home's milestone counter.
 func MilestoneCounterKey(homeId string) []byte {
 	return append(MilestoneCounterPrefix, []byte(homeId)...)
+}
+
+// InboxMessageKey returns the store key for an inbox message.
+func InboxMessageKey(toHomeId, messageId string) []byte {
+	return append(InboxMessagePrefix, []byte(toHomeId+"/"+messageId)...)
+}
+
+// InboxPrefixKey returns the prefix for all inbox messages of a home.
+func InboxPrefixKey(toHomeId string) []byte {
+	return append(InboxMessagePrefix, []byte(toHomeId+"/")...)
+}
+
+// NeighborhoodKey returns the store key for a neighborhood.
+func NeighborhoodKey(neighborhoodId string) []byte {
+	return append(NeighborhoodPrefix, []byte(neighborhoodId)...)
+}
+
+// NeighborhoodMemberKey returns the store key for a home's neighborhood membership.
+func NeighborhoodMemberKey(homeId, neighborhoodId string) []byte {
+	return append(NeighborhoodMemberPrefix, []byte(homeId+"/"+neighborhoodId)...)
+}
+
+// NeighborhoodMemberPrefixKey returns the prefix for all neighborhood memberships of a home.
+func NeighborhoodMemberPrefixKey(homeId string) []byte {
+	return append(NeighborhoodMemberPrefix, []byte(homeId+"/")...)
 }
