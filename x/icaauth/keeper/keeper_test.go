@@ -890,6 +890,376 @@ func TestMsgSendICATransaction_EmptyMsgBytes(t *testing.T) {
 // P0-6 Tests: MsgTransfer removed from defaults
 // ============================================================
 
+// ============================================================
+// Remote Account Edge-Case Tests
+// ============================================================
+
+func TestGetRemoteAccountsForDID_Multiple(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	for i := 0; i < 3; i++ {
+		acc := &types.RemoteAccount{
+			ConnectionId: fmt.Sprintf("connection-%d", i),
+			OwnerDid:     testDID,
+			Active:       i%2 == 0,
+		}
+		if err := k.AddRemoteAccount(ctx, testDID, acc); err != nil {
+			t.Fatalf("failed to add account %d: %v", i, err)
+		}
+	}
+
+	accounts := k.GetRemoteAccountsForDID(ctx, testDID)
+	if len(accounts) != 3 {
+		t.Fatalf("expected 3 accounts, got %d", len(accounts))
+	}
+	// Verify ordering preserved
+	for i, acc := range accounts {
+		want := fmt.Sprintf("connection-%d", i)
+		if acc.ConnectionId != want {
+			t.Errorf("account[%d].ConnectionId: want %s, got %s", i, want, acc.ConnectionId)
+		}
+	}
+}
+
+func TestGetRemoteAccountsForDID_NonExistentDID(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	accounts := k.GetRemoteAccountsForDID(ctx, "did:lgm:00000000000000000000000000000000")
+	if accounts != nil {
+		t.Errorf("expected nil for non-existent DID, got %v", accounts)
+	}
+}
+
+func TestUpdateRemoteAccountAddress_NonExistentDID(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	// Should not panic — silent no-op
+	k.UpdateRemoteAccountAddress(ctx, "did:lgm:00000000000000000000000000000000", "connection-0", "cosmos1addr")
+
+	_, found := k.GetRecord(ctx, "did:lgm:00000000000000000000000000000000")
+	if found {
+		t.Error("expected no record to be created for non-existent DID")
+	}
+}
+
+func TestUpdateRemoteAccountAddress_WrongConnection(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	acc := &types.RemoteAccount{ConnectionId: "connection-0", OwnerDid: testDID, Active: false}
+	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	// Update a connection that doesn't exist — should leave original unchanged
+	k.UpdateRemoteAccountAddress(ctx, testDID, "connection-99", "cosmos1remote")
+
+	got, found := k.GetRemoteAccountByConnection(ctx, testDID, "connection-0")
+	if !found {
+		t.Fatal("expected original account to still exist")
+	}
+	if got.RemoteAddress != "" {
+		t.Errorf("expected empty RemoteAddress, got %s", got.RemoteAddress)
+	}
+	if got.Active {
+		t.Error("expected account to remain inactive")
+	}
+}
+
+func TestGetRemoteAccountByConnection_DIDExistsWrongConnection(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	acc := &types.RemoteAccount{ConnectionId: "connection-0", OwnerDid: testDID}
+	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	_, found := k.GetRemoteAccountByConnection(ctx, testDID, "connection-999")
+	if found {
+		t.Error("expected not found for wrong connection on existing DID")
+	}
+}
+
+func TestGetAuthority(t *testing.T) {
+	k, _, _, _ := setupKeeper(t)
+
+	got := k.GetAuthority()
+	if got != "lgm10d07y265gmmuvt4z0w9aw880jnsr700jvss730" {
+		t.Errorf("unexpected authority: %s", got)
+	}
+}
+
+// ============================================================
+// ExportGenesis Multi-Record Test
+// ============================================================
+
+func TestExportGenesis_MultipleRecords(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	dids := []string{
+		"did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
+		"did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2",
+		"did:lgm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3",
+	}
+	for _, did := range dids {
+		acc := &types.RemoteAccount{ConnectionId: "connection-0", OwnerDid: did}
+		if err := k.AddRemoteAccount(ctx, did, acc); err != nil {
+			t.Fatalf("failed to add account for %s: %v", did, err)
+		}
+	}
+
+	exported := k.ExportGenesis(ctx)
+	if len(exported.Records) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(exported.Records))
+	}
+}
+
+// ============================================================
+// MsgUpdateParams Tests
+// ============================================================
+
+func TestMsgUpdateParams_Success(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	msg := &types.MsgUpdateParams{
+		Authority: "lgm10d07y265gmmuvt4z0w9aw880jnsr700jvss730",
+		Params: &types.Params{
+			MaxRemoteAccountsPerDid: 20,
+			AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
+			RegistrationCooldown:    200,
+		},
+	}
+
+	_, err := ms.UpdateParams(ctx, msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := k.GetParams(ctx)
+	if got.MaxRemoteAccountsPerDid != 20 {
+		t.Errorf("MaxRemoteAccountsPerDid: want 20, got %d", got.MaxRemoteAccountsPerDid)
+	}
+	if got.RegistrationCooldown != 200 {
+		t.Errorf("RegistrationCooldown: want 200, got %d", got.RegistrationCooldown)
+	}
+}
+
+func TestMsgUpdateParams_Unauthorized(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	msg := &types.MsgUpdateParams{
+		Authority: "lgm1wrongauthority00000000000000000n5wm0f",
+		Params: &types.Params{
+			MaxRemoteAccountsPerDid: 20,
+			RegistrationCooldown:    100,
+		},
+	}
+
+	_, err := ms.UpdateParams(ctx, msg)
+	if err == nil {
+		t.Error("expected error for unauthorized authority")
+	}
+}
+
+func TestMsgUpdateParams_InvalidParams(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	msg := &types.MsgUpdateParams{
+		Authority: "lgm10d07y265gmmuvt4z0w9aw880jnsr700jvss730",
+		Params: &types.Params{
+			MaxRemoteAccountsPerDid: 0, // invalid
+			RegistrationCooldown:    100,
+		},
+	}
+
+	_, err := ms.UpdateParams(ctx, msg)
+	if err == nil {
+		t.Error("expected error for invalid params")
+	}
+}
+
+// ============================================================
+// SendICATransaction Controller Failure Test
+// ============================================================
+
+func TestMsgSendICATransaction_SendTxFailure(t *testing.T) {
+	k, ctx, mockAuth, mockICA := setupKeeper(t)
+	ms := keeper.NewMsgServerImpl(k)
+
+	mockAuth.accounts[testAddress] = &legibleauthtypes.LegibleAccount{
+		Address: testAddress,
+		Did:     testDID,
+	}
+
+	_ = k.SetParams(ctx, &types.Params{
+		MaxRemoteAccountsPerDid: 10,
+		AllowedHostMsgTypes:     []string{"/cosmos.bank.v1beta1.MsgSend"},
+		RegistrationCooldown:    100,
+	})
+
+	acc := &types.RemoteAccount{
+		ConnectionId:    "connection-0",
+		PortId:          "icacontroller-test",
+		OwnerDid:        testDID,
+		Active:          true,
+		AllowedMsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"},
+	}
+	_ = k.AddRemoteAccount(ctx, testDID, acc)
+
+	mockICA.failSendTx = true
+
+	cosmosTx := makeTestCosmosTx(t, "/cosmos.bank.v1beta1.MsgSend")
+	msg := &types.MsgSendICATransaction{
+		Owner:        testAddress,
+		ConnectionId: "connection-0",
+		MsgBytes:     cosmosTx,
+		TimeoutNanos: 600_000_000_000,
+	}
+
+	_, err := ms.SendICATransaction(ctx, msg)
+	if err == nil {
+		t.Error("expected error when ICA controller SendTx fails")
+	}
+}
+
+// ============================================================
+// Query Edge-Case Tests
+// ============================================================
+
+func TestQueryInterchainAccounts_NilRequest(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+	qs := keeper.NewQueryServerImpl(k)
+
+	_, err := qs.InterchainAccounts(ctx, nil)
+	if err == nil {
+		t.Error("expected error for nil request")
+	}
+}
+
+// ============================================================
+// ValidateBasic Tests
+// ============================================================
+
+func TestMsgRegisterInterchainAccount_ValidateBasic(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     *types.MsgRegisterInterchainAccount
+		wantErr bool
+	}{
+		{
+			name:    "valid",
+			msg:     &types.MsgRegisterInterchainAccount{Owner: testAddress, ConnectionId: "connection-0"},
+			wantErr: false,
+		},
+		{
+			name:    "invalid owner",
+			msg:     &types.MsgRegisterInterchainAccount{Owner: "not-an-address", ConnectionId: "connection-0"},
+			wantErr: true,
+		},
+		{
+			name:    "empty connection",
+			msg:     &types.MsgRegisterInterchainAccount{Owner: testAddress, ConnectionId: ""},
+			wantErr: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.msg.ValidateBasic()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("ValidateBasic() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestMsgSendICATransaction_ValidateBasic(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     *types.MsgSendICATransaction
+		wantErr bool
+	}{
+		{
+			name:    "valid",
+			msg:     &types.MsgSendICATransaction{Owner: testAddress, ConnectionId: "connection-0", MsgBytes: []byte{0x01}},
+			wantErr: false,
+		},
+		{
+			name:    "invalid owner",
+			msg:     &types.MsgSendICATransaction{Owner: "bad", ConnectionId: "connection-0", MsgBytes: []byte{0x01}},
+			wantErr: true,
+		},
+		{
+			name:    "empty connection",
+			msg:     &types.MsgSendICATransaction{Owner: testAddress, ConnectionId: "", MsgBytes: []byte{0x01}},
+			wantErr: true,
+		},
+		{
+			name:    "empty msg_bytes",
+			msg:     &types.MsgSendICATransaction{Owner: testAddress, ConnectionId: "connection-0", MsgBytes: nil},
+			wantErr: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.msg.ValidateBasic()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("ValidateBasic() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     *types.MsgUpdateParams
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			msg: &types.MsgUpdateParams{
+				Authority: testAddress,
+				Params:    &types.Params{MaxRemoteAccountsPerDid: 10, RegistrationCooldown: 100},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty authority",
+			msg: &types.MsgUpdateParams{
+				Authority: "",
+				Params:    &types.Params{MaxRemoteAccountsPerDid: 10, RegistrationCooldown: 100},
+			},
+			wantErr: true,
+		},
+		{
+			name: "nil params",
+			msg: &types.MsgUpdateParams{
+				Authority: testAddress,
+				Params:    nil,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid params",
+			msg: &types.MsgUpdateParams{
+				Authority: testAddress,
+				Params:    &types.Params{MaxRemoteAccountsPerDid: 0, RegistrationCooldown: 100},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.msg.ValidateBasic()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("ValidateBasic() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// ============================================================
+// P0-6 Tests: MsgTransfer removed from defaults
+// ============================================================
+
 func TestDefaultParams_NoMsgTransfer(t *testing.T) {
 	params := types.DefaultParams()
 	for _, msgType := range params.AllowedHostMsgTypes {
