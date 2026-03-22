@@ -48,6 +48,5 @@ var (
 	BlockRewardKeyPrefix      = []byte{0x07} // {blockHeight} -> BlockRewardDistribution
 	VestingByRecipientPrefix  = []byte{0x08} // {address}/{vestingId} -> nil (index)
 	ActiveVestingPrefix       = []byte{0x09} // {vestingId} -> nil (index for active schedules)
-	BlockRewardFundBalanceKey = []byte{0x0A} // -> string (remaining fund balance in ulgm) [DEPRECATED: use TotalMintedKey]
 	TotalMintedKey            = []byte{0x0B} // -> string (total LGM minted so far in ulgm)
 )

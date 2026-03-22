@@ -14,7 +14,7 @@ message GenesisState {
 
 // Params defines the vesting_rewards module parameters.
 message Params {
-  uint64 research_share_bps              = 1; // basis points (2200 = 22%)
+  uint64 research_share_bps              = 1; // basis points on 1,000,000 scale (33300 = 3.33%)
   string research_treasury_address       = 2; // bech32 address for research fund
   string block_reward_amount             = 3; // base block reward in ulgm (bigint as string)
   uint64 empty_block_reward_rate         = 4; // basis points of reward for empty blocks (0 = none)

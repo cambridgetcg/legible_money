@@ -41,8 +41,8 @@ message CategoryConfig {
 message RewardRouting {
   string source           = 1; // reward source
   string original_amount  = 2; // original reward amount (bigint as string)
-  string research_share   = 3; // 22% to research fund (bigint as string)
-  string recipient_amount = 4; // 78% to recipient (bigint as string)
+  string research_share   = 3; // 3.33% to research fund (bigint as string)
+  string recipient_amount = 4; // 96.67% to recipient (bigint as string)
   string recipient        = 5; // bech32 recipient address
   string fact_id          = 6; // related fact
   uint64 block_number     = 7; // block height
@@ -53,7 +53,7 @@ message RewardRouting {
 message BlockRewardDistribution {
   uint64 block_height       = 1; // block number
   string producer_reward    = 2; // reward to block producer (bigint as string)
-  string research_share     = 3; // 22% to research fund (bigint as string)
+  string research_share     = 3; // 3.33% to research fund (bigint as string)
   string total_minted       = 4; // total new tokens (bigint as string)
   uint32 validator_count    = 5; // active validators
   string fund_balance_after = 6; // remaining fund balance after this block (finite fund mode only)

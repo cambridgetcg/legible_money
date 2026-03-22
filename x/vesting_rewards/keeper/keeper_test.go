@@ -1461,7 +1461,7 @@ func TestRouteFees_GasFeeIsFlat_NotProportionalToTransferAmount(t *testing.T) {
 	// on gas fee only, NOT on the transfer amount.
 	//
 	// This test proves the fee collector accumulates the SAME amount
-	// regardless of transfer size, and the 7% sweep is therefore flat.
+	// regardless of transfer size, and the 3.33% sweep is therefore flat.
 
 	feeCollectorModuleAddr := authtypes.NewModuleAddress(authtypes.FeeCollectorName)
 
@@ -1572,7 +1572,7 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 		feeCollectorModuleAddr.String(): sdk.NewCoins(sdk.NewCoin("ulgm", sdkmath.NewInt(gasFee))),
 	}
 
-	// STEP 2: RouteFees sweeps 7% of gas fee to research
+	// STEP 2: RouteFees sweeps 3.33% of gas fee to research
 	err := k.RouteFees(ctx)
 	if err != nil {
 		t.Fatalf("RouteFees failed: %v", err)
@@ -1583,7 +1583,7 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 	expectedResearchFromGas := gasFee * 33300 / 1000000 // 3.33% of 525 = 17
 
 	if researchSweep != expectedResearchFromGas {
-		t.Errorf("expected research sweep %d ulgm (7%% of gas fee), got %d", expectedResearchFromGas, researchSweep)
+		t.Errorf("expected research sweep %d ulgm (3.33%% of gas fee), got %d", expectedResearchFromGas, researchSweep)
 	}
 
 	// CRITICAL ASSERTION: The transfer amount was NEVER involved in any tax calculation
@@ -1599,7 +1599,7 @@ func TestP2PTransfer_NeverTaxedOnAmount(t *testing.T) {
 	}
 }
 
-func TestRouteFees_22_78_MathCorrectness(t *testing.T) {
+func TestRouteFees_3_33_96_67_MathCorrectness(t *testing.T) {
 	// Verify the 3.33/96.67 split math is correct across various fee amounts
 	tests := []struct {
 		name             string
