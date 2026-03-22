@@ -3,6 +3,18 @@
 > Last updated: 2026-03-22
 
 ## Session Summary
+
+- **2026-03-22 Build Session — Zerone Sprint** (36 modules, ~5755+ tests, 0 failures)
+  - **x/bvm**: 100% complete (Phases 1-6, 902 tests) — LGM-20 opcodes, real keeper integration
+  - **x/home**: 100% complete (Phases 1-9, 284 tests) — state, encryption, defense, voice, multi-sig, Home→Knowledge, agent registry, Home→Schedule, memory manager, voice inbox, neighborhoods
+  - **x/schedule**: RegisterTask API built (90 tests) — unblocked Home→Schedule cross-module wiring
+  - **x/vesting_rewards**: consolidated (3.33% research share, 43 tests)
+  - **x/discovery**: production-grade (96 tests) — register, find by capability/domain
+  - **x/channels**: production-grade (278 tests) — typed channels, membership, history
+  - **x/billing**: production-grade (96 tests) — subscriptions free/seed/grow/scale, daily usage
+  - **app.go**: wired `HomeKeeper.SetScheduleKeeper` (gap found and fixed)
+  - All modules compile, all tests pass, go vet clean
+
 - **x/vesting_rewards Consolidation** — Complete (2026-03-22)
   - Research share (3.33%) logic verified correct and unified across RouteReward + RouteFees + DistributeBlockReward
   - Founder split (7% of research) verified correct with governance sunset
@@ -740,9 +752,9 @@ Files created:
 | TypeScript source files | ~480 |
 | Go source files | ~200+ |
 | Lines of code (src) | ~185,000+ |
-| Top-level modules | 22 (TS) + 24 (Go) |
-| Test files | 63+ (all passing) |
-| Total tests | ~2,375+ |
+| Top-level modules | 22 (TS) + 36 (Go) |
+| Test files | 100+ (all passing) |
+| Total tests | ~5,755+ |
 | Evaluation pipeline stages | 8 |
 | Implementation gaps | 0 (10/10 resolved) |
 | Open-source readiness | A+ |
