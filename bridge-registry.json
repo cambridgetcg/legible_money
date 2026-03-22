@@ -1,0 +1,11 @@
+[
+  {
+    "agent_tool_id": "faeb7068-425e-49b5-9144-c3c946a01397",
+    "agent_tool_did": "did:at:faeb7068-425e-49b5-9144-c3c946a01397",
+    "zerone_did": "did:lgm:38b18019ba7df4bb48edacf1c4b80cd1",
+    "zerone_address": "lgm1kx8cvuqj9lqaej4hs954ncnetzgr6tn703lpmq",
+    "pubkey_hex": "38b18019ba7df4bb48edacf1c4b80cd1ee79226c6af179bd4afd783ef021848b",
+    "registered_on_chain": false,
+    "created_at": "2026-03-17T14:48:31.415Z"
+  }
+]

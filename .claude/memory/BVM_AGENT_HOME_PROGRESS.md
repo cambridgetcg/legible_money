@@ -103,10 +103,11 @@ Interpreter
 
 ---
 
-## Agent Home — 70% Complete
+## Agent Home — 75% Complete
 
 Core home lifecycle, guardian, key management, sessions, spending limits, treasury automation,
-and aging/maturity system all working. Missing social layer (voice, neighborhoods) and memory encryption.
+aging/maturity system, memory encryption, and defense strategy enactment all working.
+Missing social layer (voice, neighborhoods), multi-sig, and cross-module wiring.
 
 ### What's Done
 
@@ -144,8 +145,8 @@ and aging/maturity system all working. Missing social layer (voice, neighborhood
 
 | Feature | Priority | Effort | TS Reference | Description |
 |---------|----------|--------|-------------|-------------|
-| Memory encryption | **P1** | S | `home/memory.ts` | AES-256-GCM encrypt sensitive fields, SHA-512/256 integrity hash |
-| Defense strategies | **P2** | M | `home/guardian.ts` | 5 strategies (aggressive/moderate/conservative/diplomatic/delegate) — currently stored but not enacted |
+| ~~Memory encryption~~ | ~~**P1**~~ | ~~S~~ | ~~`home/memory.ts`~~ | **DONE** — AES-256-GCM encrypt/decrypt CIDs, 5 tests |
+| ~~Defense strategies~~ | ~~**P2**~~ | ~~M~~ | ~~`home/guardian.ts`~~ | **DONE** — 4 strategies enacted with rate_limit, cooldown, 2FA, whitelist, blacklist, 7 tests |
 | Multi-sig approval | **P2** | S | `home/access.ts` | M-of-N approval for operations above threshold |
 | Full memory manager | **P2** | L | `home/memory.ts` | Beliefs, relationships, contributions, milestones, FIFO eviction |
 | Agent registry | **P2** | M | `home/registry.ts` | Capabilities (7 types, 3 levels), reputation, vouch system |
@@ -213,8 +214,8 @@ x/bvm (95%) ──host_agent──→ x/home (70%)
 
 ### Phase 2: Remaining P1-P2 (next)
 
-1. **Memory encryption** — Port AES-256-GCM from TS `home/memory.ts`
-2. **Defense strategies** — Port 5 strategies from TS `home/guardian.ts` (currently stored but not enacted)
+1. ~~**Memory encryption**~~ — **DONE** (2026-03-22): AES-256-GCM in keeper.go, EncryptMemoryCID/DecryptMemoryCID, 12-byte random nonce, base64(nonce||ciphertext), 5 tests
+2. ~~**Defense strategies**~~ — **DONE** (2026-03-22): EnforceDefenseStrategy in guardian.go, 4 strategies (aggressive/moderate/conservative/diplomatic) with rate_limit, cooldown, require_2fa, whitelist, blacklist. Stateless checks first, stateful second. 7 tests
 3. **Multi-sig** — Approval flow for operations above threshold
 4. **Wire Home → Schedule** — Register guardian maintenance as scheduled process
 5. **Wire Home → Knowledge** — Track contributions when claims accepted
@@ -252,7 +253,7 @@ x/bvm (95%) ──host_agent──→ x/home (70%)
 | BVM agent host | ~10 | Complete |
 | BVM knowledge host | ~15 | Complete |
 | **BVM calls/snapshot** | **27** | **NEW — Phase 4**: snapshot CRUD, CALL/STATICCALL/DELEGATECALL, CREATE/CREATE2, gas |
-| Home keeper | **36** | **Complete** — full handler, spending limit, automation, aging coverage |
+| Home keeper | **48** | **Complete** — full handler, spending limit, automation, aging, encryption, defense coverage |
 
 ### Home Test Coverage (36 tests)
 
