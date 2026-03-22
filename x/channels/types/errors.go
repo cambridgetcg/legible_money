@@ -19,4 +19,14 @@ var (
 	ErrSpentExceedsDeposit     = errors.Register(ModuleName, 15, "spent amount exceeds deposited amount")
 	ErrChannelNotOpen          = errors.Register(ModuleName, 16, "channel is not in open status")
 	ErrNotExpired              = errors.Register(ModuleName, 17, "channel has not expired yet")
+
+	// Messaging errors
+	ErrMsgChannelNotFound  = errors.Register(ModuleName, 20, "message channel not found")
+	ErrNotMember           = errors.Register(ModuleName, 21, "sender is not a member of this channel")
+	ErrAlreadyMember       = errors.Register(ModuleName, 22, "address is already a member of this channel")
+	ErrMessageNotFound     = errors.Register(ModuleName, 23, "message not found")
+	ErrEmptyContent        = errors.Register(ModuleName, 24, "message content cannot be empty")
+	ErrAlreadyAcked        = errors.Register(ModuleName, 25, "message already acknowledged by this address")
+	ErrNotChannelCreator   = errors.Register(ModuleName, 26, "only channel creator can perform this action")
+	ErrInvalidChannelType  = errors.Register(ModuleName, 27, "invalid channel type")
 )

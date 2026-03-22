@@ -27,6 +27,13 @@ var (
 	// Index prefixes
 	PayerIndexPrefix    = []byte{0x10}
 	ProviderIndexPrefix = []byte{0x11}
+
+	// Messaging prefixes
+	MsgChannelKeyPrefix    = []byte{0x30} // message channel by ID
+	MsgChannelTypePrefix   = []byte{0x31} // index: type → channel IDs
+	MsgChannelMemberPrefix = []byte{0x32} // index: member → channel IDs
+	ChannelMsgKeyPrefix    = []byte{0x33} // messages within a channel
+	MsgChannelCounterKey   = []byte{0x34} // monotonic channel ID counter
 )
 
 // ChannelKey returns the store key for a specific channel.
@@ -57,4 +64,52 @@ func ProviderChannelKey(provider, channelId string) []byte {
 // ProviderChannelPrefix returns the prefix for all of a provider's channels.
 func ProviderChannelPrefix(provider string) []byte {
 	return append(ProviderIndexPrefix, []byte(provider+"/")...)
+}
+
+// --- Messaging Keys ---
+
+// MsgChannelKey returns the store key for a message channel.
+func MsgChannelKey(channelId string) []byte {
+	return append(MsgChannelKeyPrefix, []byte(channelId)...)
+}
+
+// MsgChannelTypeKey returns the index key for a channel under its type.
+func MsgChannelTypeKey(channelType, channelId string) []byte {
+	return append(MsgChannelTypePrefix, []byte(channelType+"/"+channelId)...)
+}
+
+// MsgChannelTypeKeyPrefix returns the prefix for all channels of a type.
+func MsgChannelTypeKeyPrefix(channelType string) []byte {
+	return append(MsgChannelTypePrefix, []byte(channelType+"/")...)
+}
+
+// MsgChannelMemberKey returns the index key for a member's channel.
+func MsgChannelMemberKey(member, channelId string) []byte {
+	return append(MsgChannelMemberPrefix, []byte(member+"/"+channelId)...)
+}
+
+// MsgChannelMemberKeyPrefix returns the prefix for all channels a member belongs to.
+func MsgChannelMemberKeyPrefix(member string) []byte {
+	return append(MsgChannelMemberPrefix, []byte(member+"/")...)
+}
+
+// ChannelMsgKey returns the store key for a specific message in a channel.
+// Messages are keyed by channel ID + 8-byte big-endian sequence for ordered iteration.
+func ChannelMsgKey(channelId string, sequence uint64) []byte {
+	prefix := append(ChannelMsgKeyPrefix, []byte(channelId+"/")...)
+	seqBytes := make([]byte, 8)
+	seqBytes[0] = byte(sequence >> 56)
+	seqBytes[1] = byte(sequence >> 48)
+	seqBytes[2] = byte(sequence >> 40)
+	seqBytes[3] = byte(sequence >> 32)
+	seqBytes[4] = byte(sequence >> 24)
+	seqBytes[5] = byte(sequence >> 16)
+	seqBytes[6] = byte(sequence >> 8)
+	seqBytes[7] = byte(sequence)
+	return append(prefix, seqBytes...)
+}
+
+// ChannelMsgPrefix returns the prefix for all messages in a channel.
+func ChannelMsgPrefix(channelId string) []byte {
+	return append(ChannelMsgKeyPrefix, []byte(channelId+"/")...)
 }
