@@ -27,4 +27,6 @@ var (
 	WatchedKeyIndexPrefix     = []byte{0x06} // {state_key}/{process_id} -> nil
 	ParamsKey                 = []byte{0x07}
 	SequenceKey               = []byte{0x08} // auto-increment counter
+	TaskKeyPrefix             = []byte{0x09} // {homeID}/{taskID} -> ScheduledTask
+	TaskByHeightIndexPrefix   = []byte{0x0A} // {block_height_be8}/{homeID}/{taskID} -> nil
 )

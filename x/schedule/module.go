@@ -126,8 +126,18 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic.
+// BeginBlock executes begin-block logic — processes due tasks.
 func (am AppModule) BeginBlock(ctx context.Context) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	currentHeight := uint64(sdkCtx.BlockHeight())
+
+	dueTasks := am.keeper.ProcessDueTasks(sdkCtx, currentHeight)
+	if len(dueTasks) > 0 {
+		am.keeper.Logger(sdkCtx).Info("tasks processed in BeginBlock",
+			"count", len(dueTasks),
+			"height", currentHeight)
+	}
+
 	return nil
 }
 
