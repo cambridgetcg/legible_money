@@ -31,6 +31,30 @@ type PartnershipInfo struct {
 	CommonPotBalance string
 }
 
+// KnowledgeKeeper defines the expected knowledge module interface.
+// Used for querying an agent's claim contributions.
+type KnowledgeKeeper interface {
+	// GetClaimsBySubmitter returns all claims submitted by a given address.
+	GetClaimsBySubmitter(ctx sdk.Context, submitter string) []ClaimInfo
+}
+
+// ClaimInfo is a minimal view of a claim for cross-module use.
+// Defined here to avoid importing x/knowledge/types (circular dep prevention).
+type ClaimInfo struct {
+	Id                string
+	Status            string
+	Domain            string
+	EpistemicCategory string
+	SubmittedAtHeight uint64
+}
+
+// ContributionEvent records a knowledge contribution tracked in a home.
+type ContributionEvent struct {
+	ClaimID     string `json:"claim_id"`
+	ClaimType   string `json:"claim_type"` // epistemic category
+	BlockHeight int64  `json:"block_height"`
+}
+
 // ComfortDimensions represents the 10-dimension comfort system for an agent home.
 // Each dimension is scored 0-100.
 type ComfortDimensions struct {

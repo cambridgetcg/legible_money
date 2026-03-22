@@ -35,6 +35,7 @@ var (
 	VoiceConfigPrefix       = []byte{0x0F} // 0x0F + homeId → VoiceConfig JSON
 	MultiSigConfigPrefix    = []byte{0x10} // 0x10 + homeId → MultiSigConfig JSON
 	PendingApprovalPrefix   = []byte{0x11} // 0x11 + approvalId → PendingApproval JSON
+	ContributionPrefix      = []byte{0x12} // 0x12 + homeId + "/" + claimId → ContributionEvent JSON
 )
 
 // ComfortDimsKey returns the store key for a home's comfort dimensions.
@@ -125,4 +126,14 @@ func MultiSigConfigKey(homeId string) []byte {
 // PendingApprovalKey returns the store key for a pending approval by ID.
 func PendingApprovalKey(approvalId string) []byte {
 	return append(PendingApprovalPrefix, []byte(approvalId)...)
+}
+
+// ContributionKey returns the store key for a contribution event.
+func ContributionKey(homeId, claimId string) []byte {
+	return append(ContributionPrefix, []byte(homeId+"/"+claimId)...)
+}
+
+// ContributionPrefixKey returns the prefix for all contributions of a home.
+func ContributionPrefixKey(homeId string) []byte {
+	return append(ContributionPrefix, []byte(homeId+"/")...)
 }

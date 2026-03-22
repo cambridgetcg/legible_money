@@ -2229,4 +2229,92 @@ func TestDeleteVoice(t *testing.T) {
 	}
 }
 
+// ==================== TrackContribution ====================
+
+func TestTrackContribution_StoresCorrectly(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	// Create a home first
+	resp, err := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1,
+		Name:  "Contributor Home",
+	})
+	if err != nil {
+		t.Fatalf("create home: %v", err)
+	}
+
+	err = k.TrackContribution(ctx, resp.HomeId, "claim-001", "empirical")
+	if err != nil {
+		t.Fatalf("TrackContribution: %v", err)
+	}
+
+	contributions := k.GetContributions(ctx, resp.HomeId)
+	if len(contributions) != 1 {
+		t.Fatalf("expected 1 contribution, got %d", len(contributions))
+	}
+	if contributions[0].ClaimID != "claim-001" {
+		t.Errorf("expected claimID 'claim-001', got '%s'", contributions[0].ClaimID)
+	}
+	if contributions[0].ClaimType != "empirical" {
+		t.Errorf("expected claimType 'empirical', got '%s'", contributions[0].ClaimType)
+	}
+	if contributions[0].BlockHeight != 100 {
+		t.Errorf("expected block height 100, got %d", contributions[0].BlockHeight)
+	}
+}
+
+func TestTrackContribution_NonexistentHome(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	err := k.TrackContribution(ctx, "nonexistent-home", "claim-001", "analytic")
+	if err == nil {
+		t.Fatal("expected error for nonexistent home")
+	}
+}
+
+func TestTrackContribution_MultipleAccumulate(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	resp, err := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1,
+		Name:  "Multi Contributor",
+	})
+	if err != nil {
+		t.Fatalf("create home: %v", err)
+	}
+
+	claims := []struct {
+		id       string
+		category string
+	}{
+		{"claim-a", "empirical"},
+		{"claim-b", "formal"},
+		{"claim-c", "social"},
+	}
+
+	for _, c := range claims {
+		if err := k.TrackContribution(ctx, resp.HomeId, c.id, c.category); err != nil {
+			t.Fatalf("TrackContribution(%s): %v", c.id, err)
+		}
+	}
+
+	contributions := k.GetContributions(ctx, resp.HomeId)
+	if len(contributions) != 3 {
+		t.Fatalf("expected 3 contributions, got %d", len(contributions))
+	}
+
+	// Verify all three are present (iteration order is lexicographic by key)
+	ids := map[string]bool{}
+	for _, c := range contributions {
+		ids[c.ClaimID] = true
+	}
+	for _, c := range claims {
+		if !ids[c.id] {
+			t.Errorf("missing contribution %s", c.id)
+		}
+	}
+}
+
 // ---------- Helpers ----------

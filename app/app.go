@@ -990,6 +990,9 @@ func NewLegibleApp(
 	// (verification, citation, falsification rewards flow through active partnerships)
 	app.KnowledgeKeeper.SetPartnershipsKeeper(NewKnowledgePartnershipsAdapter(app.PartnershipsKeeper))
 
+	// Wire home → knowledge for contribution tracking
+	app.HomeKeeper.SetKnowledgeKeeper(NewHomeKnowledgeAdapter(app.KnowledgeKeeper))
+
 	// Wire home ↔ partnerships cross-module integration
 	// (auto-link homes on partnership accept, freeze sync, spending limit deliberation)
 	app.HomeKeeper.SetPartnershipKeeper(NewHomePartnershipAdapter(app.PartnershipsKeeper))

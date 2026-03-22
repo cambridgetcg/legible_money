@@ -7,6 +7,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	hometypes "github.com/legible-money/legible/x/home/types"
+	knowledgekeeper "github.com/legible-money/legible/x/knowledge/keeper"
 	knowledgetypes "github.com/legible-money/legible/x/knowledge/types"
 	partnershipskeeper "github.com/legible-money/legible/x/partnerships/keeper"
 	partnershipstypes "github.com/legible-money/legible/x/partnerships/types"
@@ -121,6 +122,37 @@ func (a *HomePartnershipAdapter) GetPartnership(ctx sdk.Context, id string) (*ho
 // CalculateAmountTier determines the deliberation tier for an amount vs pot balance.
 func (a *HomePartnershipAdapter) CalculateAmountTier(amount string, potBalance string) string {
 	return a.keeper.CalculateAmountTier(amount, potBalance)
+}
+
+// ---------- Home → Knowledge Adapter ----------
+
+// HomeKnowledgeAdapter wraps the knowledge keeper to satisfy
+// the home module's KnowledgeKeeper interface.
+type HomeKnowledgeAdapter struct {
+	keeper knowledgekeeper.Keeper
+}
+
+// NewHomeKnowledgeAdapter creates a new adapter.
+func NewHomeKnowledgeAdapter(keeper knowledgekeeper.Keeper) *HomeKnowledgeAdapter {
+	return &HomeKnowledgeAdapter{keeper: keeper}
+}
+
+var _ hometypes.KnowledgeKeeper = (*HomeKnowledgeAdapter)(nil)
+
+// GetClaimsBySubmitter returns all claims by a submitter, converted to the home mirror type.
+func (a *HomeKnowledgeAdapter) GetClaimsBySubmitter(ctx sdk.Context, submitter string) []hometypes.ClaimInfo {
+	claims := a.keeper.GetClaimsBySubmitter(ctx, submitter)
+	result := make([]hometypes.ClaimInfo, 0, len(claims))
+	for _, c := range claims {
+		result = append(result, hometypes.ClaimInfo{
+			Id:                c.Id,
+			Status:            c.Status,
+			Domain:            c.Domain,
+			EpistemicCategory: c.EpistemicCategory,
+			SubmittedAtHeight: c.SubmittedAtHeight,
+		})
+	}
+	return result
 }
 
 // toKnowledgePartnership converts a partnerships.Partnership to the knowledge module's mirror type.

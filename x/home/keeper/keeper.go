@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -26,6 +27,7 @@ type Keeper struct {
 
 	// Cross-module keepers (set via setter to avoid circular deps)
 	partnershipKeeper types.PartnershipKeeper
+	knowledgeKeeper   types.KnowledgeKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -72,6 +74,11 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // SetPartnershipKeeper sets the partnerships module keeper reference.
 func (k *Keeper) SetPartnershipKeeper(pk types.PartnershipKeeper) {
 	k.partnershipKeeper = pk
+}
+
+// SetKnowledgeKeeper sets the knowledge module keeper reference.
+func (k *Keeper) SetKnowledgeKeeper(kk types.KnowledgeKeeper) {
+	k.knowledgeKeeper = kk
 }
 
 // GetAuthority returns the module authority address.
@@ -228,4 +235,53 @@ func (k Keeper) DecryptMemoryCID(_ sdk.Context, homeID string, encryptedCID stri
 	}
 
 	return string(plaintext), nil
+}
+
+// TrackContribution records a knowledge contribution event for a home.
+// Stores a ContributionEvent keyed by homeId + claimId.
+// No-op if the home doesn't exist.
+func (k Keeper) TrackContribution(ctx sdk.Context, homeID, claimID, claimType string) error {
+	if homeID == "" || claimID == "" {
+		return fmt.Errorf("homeID and claimID must be non-empty")
+	}
+
+	// Verify home exists
+	if _, found := k.GetHome(ctx, homeID); !found {
+		return types.ErrHomeNotFound.Wrapf("home %s not found", homeID)
+	}
+
+	event := types.ContributionEvent{
+		ClaimID:     claimID,
+		ClaimType:   claimType,
+		BlockHeight: ctx.BlockHeight(),
+	}
+
+	bz, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal contribution event: %w", err)
+	}
+
+	kvStore := k.storeService.OpenKVStore(ctx)
+	return kvStore.Set(types.ContributionKey(homeID, claimID), bz)
+}
+
+// GetContributions returns all contribution events for a home.
+func (k Keeper) GetContributions(ctx sdk.Context, homeID string) []types.ContributionEvent {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := types.ContributionPrefixKey(homeID)
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var events []types.ContributionEvent
+	for ; iter.Valid(); iter.Next() {
+		var event types.ContributionEvent
+		if err := json.Unmarshal(iter.Value(), &event); err != nil {
+			continue
+		}
+		events = append(events, event)
+	}
+	return events
 }
