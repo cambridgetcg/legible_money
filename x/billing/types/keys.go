@@ -26,4 +26,7 @@ var (
 	DomainIndexPrefix   = []byte{0x04} // {domain}/{address} -> provider address
 	QuoteSequenceKey    = []byte{0x05} // -> uint64 (next quote ID)
 	CallRecordSeqKey    = []byte{0x06} // -> uint64 (next call record ID)
+	SubscriptionPrefix  = []byte{0x07} // {projectID} -> SubscriptionRecord (JSON)
+	UsagePrefix         = []byte{0x08} // {projectID} -> UsageCounter (JSON)
+	LastResetBlockKey   = []byte{0x09} // -> uint64 (last daily reset block height)
 )

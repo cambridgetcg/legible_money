@@ -131,8 +131,22 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion returns the module's consensus version.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
-// BeginBlock executes begin-block logic. No billing logic needed at begin-block.
+// BeginBlock resets usage counters at each new day boundary (every 34272 blocks).
 func (am AppModule) BeginBlock(ctx context.Context) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	currentBlock := uint64(sdkCtx.BlockHeight())
+	lastReset := am.keeper.GetLastResetBlock(sdkCtx)
+
+	if currentBlock >= lastReset+types.BlocksPerDay {
+		count := am.keeper.ResetAllActiveUsage(sdkCtx)
+		am.keeper.SetLastResetBlock(sdkCtx, currentBlock)
+		if count > 0 {
+			am.keeper.Logger(sdkCtx).Debug("BeginBlock daily usage reset",
+				"block", currentBlock,
+				"subscriptions_reset", count,
+			)
+		}
+	}
 	return nil
 }
 
