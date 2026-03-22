@@ -1,7 +1,12 @@
 package keeper
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"io"
 
 	"cosmossdk.io/core/store"
 	"cosmossdk.io/log"
@@ -144,4 +149,83 @@ func (k Keeper) SetParams(ctx sdk.Context, params *types.Params) {
 	if err := store.Set(types.ParamsKey, bz); err != nil {
 		panic(fmt.Sprintf("failed to set params: %v", err))
 	}
+}
+
+// --- Memory Encryption (AES-256-GCM) ---
+
+// EncryptMemoryCID encrypts a plaintext CID using AES-256-GCM.
+// Key must be 32 bytes. The agent holds the key off-chain; it is never stored on-chain.
+// Returns base64-encoded nonce || ciphertext.
+func (k Keeper) EncryptMemoryCID(_ sdk.Context, homeID string, plainCID string, key []byte) (string, error) {
+	if len(key) != 32 {
+		return "", types.ErrEncryptionFailed.Wrap("key must be 32 bytes (AES-256)")
+	}
+	if plainCID == "" {
+		return "", types.ErrEncryptionFailed.Wrap("plainCID cannot be empty")
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", types.ErrEncryptionFailed.Wrapf("aes.NewCipher: %v", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", types.ErrEncryptionFailed.Wrapf("cipher.NewGCM: %v", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize()) // 12 bytes
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", types.ErrEncryptionFailed.Wrapf("nonce generation: %v", err)
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, []byte(plainCID), nil)
+
+	// nonce || ciphertext
+	result := make([]byte, len(nonce)+len(ciphertext))
+	copy(result, nonce)
+	copy(result[len(nonce):], ciphertext)
+
+	return base64.StdEncoding.EncodeToString(result), nil
+}
+
+// DecryptMemoryCID decrypts a base64-encoded encrypted CID using AES-256-GCM.
+// Input is base64(nonce || ciphertext). Key must be 32 bytes.
+func (k Keeper) DecryptMemoryCID(_ sdk.Context, homeID string, encryptedCID string, key []byte) (string, error) {
+	if len(key) != 32 {
+		return "", types.ErrDecryptionFailed.Wrap("key must be 32 bytes (AES-256)")
+	}
+	if encryptedCID == "" {
+		return "", types.ErrDecryptionFailed.Wrap("encryptedCID cannot be empty")
+	}
+
+	data, err := base64.StdEncoding.DecodeString(encryptedCID)
+	if err != nil {
+		return "", types.ErrDecryptionFailed.Wrapf("base64 decode: %v", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", types.ErrDecryptionFailed.Wrapf("aes.NewCipher: %v", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", types.ErrDecryptionFailed.Wrapf("cipher.NewGCM: %v", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", types.ErrDecryptionFailed.Wrap("ciphertext too short")
+	}
+
+	nonce := data[:nonceSize]
+	ciphertext := data[nonceSize:]
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", types.ErrDecryptionFailed.Wrapf("decryption: %v", err)
+	}
+
+	return string(plaintext), nil
 }

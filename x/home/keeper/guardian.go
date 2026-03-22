@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -273,4 +275,200 @@ func (k Keeper) CreateAlert(ctx sdk.Context, homeId string, alertType types.Aler
 		Acknowledged: false,
 	}
 	k.SetAlert(ctx, alert)
+}
+
+// --- Defense Strategy Enactment ---
+
+// defenseRules defines which enforcement mechanisms are active for a strategy.
+type defenseRules struct {
+	RateLimitPerWindow uint64
+	RateWindowBlocks   uint64
+	CooldownBlocks     uint64
+	Require2FA         bool
+	UseWhitelist       bool
+	UseBlacklist       bool
+}
+
+func defenseRulesForStrategy(strategy types.DefenseStrategy) defenseRules {
+	switch strategy {
+	case types.DefenseAggressive:
+		return defenseRules{
+			RateLimitPerWindow: 5,
+			RateWindowBlocks:   100,
+			CooldownBlocks:     10,
+			Require2FA:         true,
+			UseBlacklist:       true,
+		}
+	case types.DefenseModerate:
+		return defenseRules{
+			RateLimitPerWindow: 20,
+			RateWindowBlocks:   100,
+			CooldownBlocks:     3,
+			UseBlacklist:       true,
+		}
+	case types.DefenseConservative:
+		return defenseRules{
+			RateLimitPerWindow: 10,
+			RateWindowBlocks:   100,
+			CooldownBlocks:     5,
+			UseWhitelist:       true,
+			UseBlacklist:       true,
+		}
+	case types.DefenseDiplomatic:
+		return defenseRules{
+			UseBlacklist: true,
+		}
+	default:
+		return defenseRules{}
+	}
+}
+
+// EnforceDefenseStrategy checks that the operation is allowed under the home's
+// configured defense strategy. Returns nil if allowed.
+//
+// Enforcement mechanisms by strategy:
+//   - aggressive: rate_limit(5/100blk), cooldown(10blk), require_2fa, blacklist
+//   - moderate:   rate_limit(20/100blk), cooldown(3blk), blacklist
+//   - conservative: rate_limit(10/100blk), cooldown(5blk), whitelist, blacklist
+//   - diplomatic: blacklist only
+func (k Keeper) EnforceDefenseStrategy(ctx sdk.Context, homeID, keyID, operationType string, metadata map[string]string) error {
+	home, found := k.GetHome(ctx, homeID)
+	if !found {
+		return types.ErrHomeNotFound
+	}
+	if home.Guardian == nil || home.Guardian.DefenseStrategy == "" {
+		return nil // No guardian configured — allow
+	}
+
+	strategy := types.DefenseStrategy(home.Guardian.DefenseStrategy)
+	rules := defenseRulesForStrategy(strategy)
+
+	height := uint64(ctx.BlockHeight())
+
+	// --- Stateless checks first (no side-effects on failure) ---
+
+	// 2FA check
+	if rules.Require2FA {
+		if metadata == nil || metadata["2fa_verified"] != "true" {
+			return types.ErrDefense2FARequired
+		}
+	}
+
+	// Address-based checks
+	targetAddr := ""
+	if metadata != nil {
+		targetAddr = metadata["target_address"]
+	}
+
+	// Blacklist check
+	if rules.UseBlacklist && targetAddr != "" {
+		blacklist := k.GetDefenseList(ctx, homeID, "blacklist")
+		for _, addr := range blacklist {
+			if addr == targetAddr {
+				return types.ErrDefenseBlacklisted.Wrapf("address %s", targetAddr)
+			}
+		}
+	}
+
+	// Whitelist check (only when strategy uses whitelist AND list is non-empty)
+	if rules.UseWhitelist && targetAddr != "" {
+		whitelist := k.GetDefenseList(ctx, homeID, "whitelist")
+		if len(whitelist) > 0 {
+			allowed := false
+			for _, addr := range whitelist {
+				if addr == targetAddr {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return types.ErrDefenseNotWhitelisted.Wrapf("address %s", targetAddr)
+			}
+		}
+	}
+
+	// --- Stateful checks (increment counters / update timestamps) ---
+
+	// Rate limit check
+	if rules.RateLimitPerWindow > 0 && rules.RateWindowBlocks > 0 {
+		if err := k.checkAndIncrementRate(ctx, homeID, keyID, height, rules); err != nil {
+			return err
+		}
+	}
+
+	// Cooldown check
+	if rules.CooldownBlocks > 0 {
+		if err := k.checkAndSetCooldown(ctx, homeID, keyID, height, rules.CooldownBlocks); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// checkAndIncrementRate increments the rate counter for the current window and
+// returns ErrDefenseRateLimited if the limit is exceeded.
+func (k Keeper) checkAndIncrementRate(ctx sdk.Context, homeID, keyID string, height uint64, rules defenseRules) error {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	window := height / rules.RateWindowBlocks
+	key := types.DefenseRateKey(homeID, keyID, window)
+
+	var count uint64
+	bz, err := kvStore.Get(key)
+	if err == nil && bz != nil && len(bz) == 8 {
+		count = binary.BigEndian.Uint64(bz)
+	}
+
+	if count >= rules.RateLimitPerWindow {
+		return types.ErrDefenseRateLimited.Wrapf(
+			"key %s: %d ops in window %d (limit %d)", keyID, count, window, rules.RateLimitPerWindow)
+	}
+
+	count++
+	newBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(newBz, count)
+	_ = kvStore.Set(key, newBz)
+	return nil
+}
+
+// checkAndSetCooldown checks if the key is in a cooldown period. If not, it
+// records the current block as the last operation time.
+func (k Keeper) checkAndSetCooldown(ctx sdk.Context, homeID, keyID string, currentBlock, cooldownBlocks uint64) error {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := types.DefenseCooldownKey(homeID, keyID)
+
+	bz, err := kvStore.Get(key)
+	if err == nil && bz != nil && len(bz) == 8 {
+		lastOp := binary.BigEndian.Uint64(bz)
+		if currentBlock < lastOp+cooldownBlocks {
+			return types.ErrDefenseCooldown.Wrapf(
+				"key %s: %d blocks remaining", keyID, lastOp+cooldownBlocks-currentBlock)
+		}
+	}
+
+	newBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(newBz, currentBlock)
+	_ = kvStore.Set(key, newBz)
+	return nil
+}
+
+// GetDefenseList returns the whitelist or blacklist addresses for a home.
+func (k Keeper) GetDefenseList(ctx sdk.Context, homeID, listType string) []string {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.DefenseListKey(homeID, listType))
+	if err != nil || bz == nil {
+		return nil
+	}
+	var addresses []string
+	if err := json.Unmarshal(bz, &addresses); err != nil {
+		return nil
+	}
+	return addresses
+}
+
+// SetDefenseList stores a whitelist or blacklist for a home.
+func (k Keeper) SetDefenseList(ctx sdk.Context, homeID, listType string, addresses []string) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, _ := json.Marshal(addresses)
+	_ = kvStore.Set(types.DefenseListKey(homeID, listType), bz)
 }

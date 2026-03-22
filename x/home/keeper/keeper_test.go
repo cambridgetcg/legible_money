@@ -1,7 +1,9 @@
 package keeper_test
 
 import (
+	"crypto/rand"
 	"fmt"
+	"strings"
 	"testing"
 
 	"cosmossdk.io/log"
@@ -1694,6 +1696,335 @@ func TestDimensionNames(t *testing.T) {
 		if names[i] != name {
 			t.Errorf("dimension %d: expected %s, got %s", i, name, names[i])
 		}
+	}
+}
+
+// ==================== Memory Encryption (AES-256-GCM) ====================
+
+func TestEncryptDecryptRoundtrip(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+
+	plainCID := "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"
+	encrypted, err := k.EncryptMemoryCID(ctx, "home-1", plainCID, key)
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
+	if encrypted == "" || encrypted == plainCID {
+		t.Error("expected non-empty ciphertext different from plaintext")
+	}
+
+	decrypted, err := k.DecryptMemoryCID(ctx, "home-1", encrypted, key)
+	if err != nil {
+		t.Fatalf("decrypt failed: %v", err)
+	}
+	if decrypted != plainCID {
+		t.Errorf("roundtrip mismatch: got %s, want %s", decrypted, plainCID)
+	}
+}
+
+func TestDecryptWrongKeyFails(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	keyA := make([]byte, 32)
+	keyB := make([]byte, 32)
+	rand.Read(keyA)
+	rand.Read(keyB)
+
+	encrypted, err := k.EncryptMemoryCID(ctx, "home-1", "QmTestCID", keyA)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = k.DecryptMemoryCID(ctx, "home-1", encrypted, keyB)
+	if err == nil {
+		t.Error("expected decryption to fail with wrong key")
+	}
+}
+
+func TestDecryptTamperedCiphertextFails(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	encrypted, _ := k.EncryptMemoryCID(ctx, "home-1", "QmTestCID", key)
+
+	// Tamper with the base64 content (flip a character in the middle)
+	runes := []rune(encrypted)
+	if len(runes) > 10 {
+		if runes[10] == 'A' {
+			runes[10] = 'B'
+		} else {
+			runes[10] = 'A'
+		}
+	}
+	tampered := string(runes)
+
+	_, err := k.DecryptMemoryCID(ctx, "home-1", tampered, key)
+	if err == nil {
+		t.Error("expected decryption to fail with tampered ciphertext")
+	}
+}
+
+func TestEncryptEmptyCID(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	_, err := k.EncryptMemoryCID(ctx, "home-1", "", key)
+	if err == nil {
+		t.Error("expected error for empty CID")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected empty CID error, got: %v", err)
+	}
+}
+
+func TestEncryptInvalidKeyLength(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// nil key
+	_, err := k.EncryptMemoryCID(ctx, "home-1", "QmTest", nil)
+	if err == nil {
+		t.Error("expected error for nil key")
+	}
+
+	// 16-byte key (too short)
+	shortKey := make([]byte, 16)
+	_, err = k.EncryptMemoryCID(ctx, "home-1", "QmTest", shortKey)
+	if err == nil {
+		t.Error("expected error for 16-byte key")
+	}
+
+	// Decrypt with nil key
+	_, err = k.DecryptMemoryCID(ctx, "home-1", "dGVzdA==", nil)
+	if err == nil {
+		t.Error("expected error for nil key on decrypt")
+	}
+}
+
+// ==================== Defense Strategy Enactment ====================
+
+func TestDefenseRateLimit(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home with aggressive strategy (5 ops per 100 blocks)
+	home := &types.AgentHome{
+		HomeId:       "home-defense-1",
+		OwnerDid:     "did:lgm:defender1",
+		OwnerAddress: owner1,
+		Name:         "Defense Home",
+		Status:       string(types.HomeStatusActive),
+		Guardian:     &types.HomeGuardian{DefenseStrategy: string(types.DefenseAggressive)},
+	}
+	k.SetHome(ctx, home)
+
+	meta := map[string]string{"2fa_verified": "true"}
+
+	// First 5 calls should succeed
+	for i := 0; i < 5; i++ {
+		err := k.EnforceDefenseStrategy(ctx, "home-defense-1", "key1", "transfer", meta)
+		if err != nil {
+			t.Fatalf("call %d should have succeeded: %v", i+1, err)
+		}
+		// Advance block past cooldown (aggressive = 10 blocks)
+		ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 11)
+	}
+
+	// 6th call in same window should be rate-limited
+	err := k.EnforceDefenseStrategy(ctx, "home-defense-1", "key1", "transfer", meta)
+	if err == nil {
+		t.Error("expected rate limit error on 6th call")
+	}
+	if !strings.Contains(err.Error(), "rate limit") {
+		t.Errorf("expected rate limit error, got: %v", err)
+	}
+}
+
+func TestDefenseCooldown(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home with moderate strategy (cooldown = 3 blocks)
+	home := &types.AgentHome{
+		HomeId:       "home-defense-2",
+		OwnerDid:     "did:lgm:defender2",
+		OwnerAddress: owner1,
+		Name:         "Cooldown Home",
+		Status:       string(types.HomeStatusActive),
+		Guardian:     &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	}
+	k.SetHome(ctx, home)
+
+	// First call succeeds
+	err := k.EnforceDefenseStrategy(ctx, "home-defense-2", "key1", "transfer", nil)
+	if err != nil {
+		t.Fatalf("first call should succeed: %v", err)
+	}
+
+	// Immediate second call (same block) should fail cooldown
+	err = k.EnforceDefenseStrategy(ctx, "home-defense-2", "key1", "transfer", nil)
+	if err == nil {
+		t.Error("expected cooldown error")
+	}
+	if !strings.Contains(err.Error(), "cooldown") {
+		t.Errorf("expected cooldown error, got: %v", err)
+	}
+
+	// Advance past cooldown (3 blocks)
+	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 4)
+	err = k.EnforceDefenseStrategy(ctx, "home-defense-2", "key1", "transfer", nil)
+	if err != nil {
+		t.Fatalf("call after cooldown should succeed: %v", err)
+	}
+}
+
+func TestDefense2FA(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home with aggressive strategy (requires 2FA)
+	home := &types.AgentHome{
+		HomeId:       "home-defense-3",
+		OwnerDid:     "did:lgm:defender3",
+		OwnerAddress: owner1,
+		Name:         "2FA Home",
+		Status:       string(types.HomeStatusActive),
+		Guardian:     &types.HomeGuardian{DefenseStrategy: string(types.DefenseAggressive)},
+	}
+	k.SetHome(ctx, home)
+
+	// Without 2FA should fail
+	err := k.EnforceDefenseStrategy(ctx, "home-defense-3", "key1", "transfer", nil)
+	if err == nil {
+		t.Error("expected 2FA error")
+	}
+	if !strings.Contains(err.Error(), "2FA") {
+		t.Errorf("expected 2FA error, got: %v", err)
+	}
+
+	// With 2FA should succeed
+	meta := map[string]string{"2fa_verified": "true"}
+	err = k.EnforceDefenseStrategy(ctx, "home-defense-3", "key1", "transfer", meta)
+	if err != nil {
+		t.Fatalf("call with 2FA should succeed: %v", err)
+	}
+}
+
+func TestDefenseBlacklist(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home with moderate strategy (uses blacklist)
+	home := &types.AgentHome{
+		HomeId:       "home-defense-4",
+		OwnerDid:     "did:lgm:defender4",
+		OwnerAddress: owner1,
+		Name:         "Blacklist Home",
+		Status:       string(types.HomeStatusActive),
+		Guardian:     &types.HomeGuardian{DefenseStrategy: string(types.DefenseModerate)},
+	}
+	k.SetHome(ctx, home)
+
+	badAddr := "lgm1badactor"
+	k.SetDefenseList(ctx, "home-defense-4", "blacklist", []string{badAddr})
+
+	// Transfer to blacklisted address should fail
+	meta := map[string]string{"target_address": badAddr}
+	err := k.EnforceDefenseStrategy(ctx, "home-defense-4", "key1", "transfer", meta)
+	if err == nil {
+		t.Error("expected blacklist error")
+	}
+	if !strings.Contains(err.Error(), "blacklisted") {
+		t.Errorf("expected blacklist error, got: %v", err)
+	}
+
+	// Transfer to non-blacklisted address should succeed (advance past cooldown)
+	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 4)
+	goodMeta := map[string]string{"target_address": "lgm1goodactor"}
+	err = k.EnforceDefenseStrategy(ctx, "home-defense-4", "key1", "transfer", goodMeta)
+	if err != nil {
+		t.Fatalf("non-blacklisted transfer should succeed: %v", err)
+	}
+}
+
+func TestDefenseWhitelist(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	// Create home with conservative strategy (uses whitelist)
+	home := &types.AgentHome{
+		HomeId:       "home-defense-5",
+		OwnerDid:     "did:lgm:defender5",
+		OwnerAddress: owner1,
+		Name:         "Whitelist Home",
+		Status:       string(types.HomeStatusActive),
+		Guardian:     &types.HomeGuardian{DefenseStrategy: string(types.DefenseConservative)},
+	}
+	k.SetHome(ctx, home)
+
+	allowedAddr := "lgm1allowed"
+	k.SetDefenseList(ctx, "home-defense-5", "whitelist", []string{allowedAddr})
+
+	// Transfer to non-whitelisted address should fail
+	meta := map[string]string{"target_address": "lgm1stranger"}
+	err := k.EnforceDefenseStrategy(ctx, "home-defense-5", "key1", "transfer", meta)
+	if err == nil {
+		t.Error("expected whitelist error for non-whitelisted address")
+	}
+	if !strings.Contains(err.Error(), "not in whitelist") {
+		t.Errorf("expected whitelist error, got: %v", err)
+	}
+
+	// Transfer to whitelisted address should succeed
+	goodMeta := map[string]string{"target_address": allowedAddr}
+	// Advance past cooldown for conservative (5 blocks)
+	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 6)
+	err = k.EnforceDefenseStrategy(ctx, "home-defense-5", "key1", "transfer", goodMeta)
+	if err != nil {
+		t.Fatalf("whitelisted transfer should succeed: %v", err)
+	}
+}
+
+func TestDefenseDiplomaticAllowsMost(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	home := &types.AgentHome{
+		HomeId:       "home-defense-6",
+		OwnerDid:     "did:lgm:diplomat",
+		OwnerAddress: owner1,
+		Name:         "Diplomatic Home",
+		Status:       string(types.HomeStatusActive),
+		Guardian:     &types.HomeGuardian{DefenseStrategy: string(types.DefenseDiplomatic)},
+	}
+	k.SetHome(ctx, home)
+
+	// Rapid-fire calls should all succeed (no rate limit or cooldown)
+	for i := 0; i < 20; i++ {
+		err := k.EnforceDefenseStrategy(ctx, "home-defense-6", "key1", "transfer", nil)
+		if err != nil {
+			t.Fatalf("diplomatic call %d should succeed: %v", i+1, err)
+		}
+	}
+}
+
+func TestDefenseNoGuardianAllows(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	home := &types.AgentHome{
+		HomeId:       "home-defense-7",
+		OwnerDid:     "did:lgm:noguard",
+		OwnerAddress: owner1,
+		Name:         "No Guardian Home",
+		Status:       string(types.HomeStatusActive),
+	}
+	k.SetHome(ctx, home)
+
+	err := k.EnforceDefenseStrategy(ctx, "home-defense-7", "key1", "transfer", nil)
+	if err != nil {
+		t.Fatalf("no guardian should allow all: %v", err)
 	}
 }
 

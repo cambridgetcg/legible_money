@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 const (
 	// ModuleName defines the module name.
 	ModuleName = "home"
@@ -27,6 +29,9 @@ var (
 	EpistemicStatsPrefix  = []byte{0x09} // 0x09 + homeId → EpistemicStats JSON
 	ComfortDimsPrefix       = []byte{0x0A} // 0x0A + homeId → ComfortDimensions JSON
 	HomeByPartnershipPrefix = []byte{0x0B} // 0x0B + partnershipId → homeId (reverse index)
+	DefenseRatePrefix       = []byte{0x0C} // 0x0C + homeId/keyId/window → uint64 counter
+	DefenseCooldownPrefix   = []byte{0x0D} // 0x0D + homeId/keyId → uint64 last-op block
+	DefenseListPrefix       = []byte{0x0E} // 0x0E + homeId/listType → JSON address list
 )
 
 // ComfortDimsKey returns the store key for a home's comfort dimensions.
@@ -87,4 +92,19 @@ func EpistemicStatsKey(homeId string) []byte {
 // HomeByPartnershipKey returns the store key for the partnership→home reverse index.
 func HomeByPartnershipKey(partnershipId string) []byte {
 	return append(HomeByPartnershipPrefix, []byte(partnershipId)...)
+}
+
+// DefenseRateKey returns the store key for a rate-limit counter.
+func DefenseRateKey(homeId, keyId string, window uint64) []byte {
+	return append(DefenseRatePrefix, []byte(fmt.Sprintf("%s/%s/%d", homeId, keyId, window))...)
+}
+
+// DefenseCooldownKey returns the store key for a cooldown last-op timestamp.
+func DefenseCooldownKey(homeId, keyId string) []byte {
+	return append(DefenseCooldownPrefix, []byte(homeId+"/"+keyId)...)
+}
+
+// DefenseListKey returns the store key for a whitelist or blacklist.
+func DefenseListKey(homeId, listType string) []byte {
+	return append(DefenseListPrefix, []byte(homeId+"/"+listType)...)
 }
