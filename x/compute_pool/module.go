@@ -121,9 +121,10 @@ func (AppModule) ConsensusVersion() uint64 { return 1 }
 // Operations:
 //  1. Expire stale compute credits
 //  2. Expire unconfirmed redemption tickets
-//  3. Check provider liveness (suspend inactive)
-//  4. Apply pending price changes
-//  5. At epoch boundary: finalize epoch statistics
+//  3. Expire unassigned/overdue compute tasks
+//  4. Check provider liveness (suspend inactive)
+//  5. Apply pending price changes
+//  6. At epoch boundary: finalize epoch statistics
 func (am AppModule) BeginBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
@@ -133,13 +134,16 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 	// 2. Expire unconfirmed redemption tickets
 	am.keeper.ExpireRedemptionTickets(sdkCtx)
 
-	// 3. Check provider heartbeats, complete unbondings
+	// 3. Expire unassigned/overdue compute tasks
+	am.keeper.ExpireUnassignedTasks(sdkCtx)
+
+	// 4. Check provider heartbeats, complete unbondings
 	am.keeper.CheckProviderLiveness(sdkCtx)
 
-	// 4. Apply pending price changes
+	// 5. Apply pending price changes
 	am.keeper.ApplyPendingPriceChanges(sdkCtx)
 
-	// 5. Finalize epoch stats at epoch boundary
+	// 6. Finalize epoch stats at epoch boundary
 	am.keeper.FinalizeEpoch(sdkCtx)
 
 	return nil

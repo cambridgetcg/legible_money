@@ -363,3 +363,235 @@ func providerEpochKey(epoch uint64, provider string) []byte {
 	key = append(key, '/')
 	return append(key, []byte(provider)...)
 }
+
+// -----------------------------------------------------------------------
+// Task CRUD
+// -----------------------------------------------------------------------
+
+func taskKey(taskId uint64) []byte {
+	idBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(idBytes, taskId)
+	return append(types.TaskKeyPrefix, idBytes...)
+}
+
+func taskByRequesterKey(requesterDID string, taskId uint64) []byte {
+	idBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(idBytes, taskId)
+	key := append(append([]byte{}, types.TasksByRequesterPrefix...), []byte(requesterDID)...)
+	key = append(key, '/')
+	return append(key, idBytes...)
+}
+
+func taskByProviderKey(providerAddr string, taskId uint64) []byte {
+	idBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(idBytes, taskId)
+	key := append(append([]byte{}, types.TasksByProviderPrefix...), []byte(providerAddr)...)
+	key = append(key, '/')
+	return append(key, idBytes...)
+}
+
+// SetTask stores a compute task.
+func (k Keeper) SetTask(ctx sdk.Context, task *types.ComputeTask) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := taskKey(task.Id)
+	bz, err := json.Marshal(task)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal task: %v", err))
+	}
+	_ = kvStore.Set(key, bz)
+}
+
+// GetTask retrieves a compute task by ID.
+func (k Keeper) GetTask(ctx sdk.Context, taskId uint64) (*types.ComputeTask, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := taskKey(taskId)
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
+		return nil, false
+	}
+	var task types.ComputeTask
+	if err := json.Unmarshal(bz, &task); err != nil {
+		return nil, false
+	}
+	return &task, true
+}
+
+// GetNextTaskId returns the next task ID and increments the counter.
+func (k Keeper) GetNextTaskId(ctx sdk.Context) uint64 {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	bz, err := kvStore.Get(types.TaskSequenceKey)
+	if err != nil || bz == nil {
+		nextBz := make([]byte, 8)
+		binary.BigEndian.PutUint64(nextBz, 2)
+		_ = kvStore.Set(types.TaskSequenceKey, nextBz)
+		return 1
+	}
+	current := binary.BigEndian.Uint64(bz)
+	nextBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(nextBz, current+1)
+	_ = kvStore.Set(types.TaskSequenceKey, nextBz)
+	return current
+}
+
+// SetTaskRequesterIndex stores an index entry linking requester DID to task ID.
+func (k Keeper) SetTaskRequesterIndex(ctx sdk.Context, requesterDID string, taskId uint64) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Set(taskByRequesterKey(requesterDID, taskId), []byte{1})
+}
+
+// SetTaskProviderIndex stores an index entry linking provider address to task ID.
+func (k Keeper) SetTaskProviderIndex(ctx sdk.Context, providerAddr string, taskId uint64) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	_ = kvStore.Set(taskByProviderKey(providerAddr, taskId), []byte{1})
+}
+
+// IterateTasks iterates over all tasks. Return true from cb to stop.
+func (k Keeper) IterateTasks(ctx sdk.Context, cb func(*types.ComputeTask) bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.TaskKeyPrefix, prefixEndBytes(types.TaskKeyPrefix))
+	if err != nil {
+		return
+	}
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var task types.ComputeTask
+		if err := json.Unmarshal(iter.Value(), &task); err != nil {
+			continue
+		}
+		if cb(&task) {
+			break
+		}
+	}
+}
+
+// GetAllTasks returns all compute tasks.
+func (k Keeper) GetAllTasks(ctx sdk.Context) []*types.ComputeTask {
+	var tasks []*types.ComputeTask
+	k.IterateTasks(ctx, func(t *types.ComputeTask) bool {
+		tasks = append(tasks, t)
+		return false
+	})
+	return tasks
+}
+
+// GetTasksByRequester returns all tasks for a given requester DID.
+func (k Keeper) GetTasksByRequester(ctx sdk.Context, requesterDID string) []*types.ComputeTask {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := taskByRequesterKey(requesterDID, 0)
+	// Remove the last 8 bytes (taskId=0) to get just the prefix
+	prefix = prefix[:len(prefix)-8]
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var tasks []*types.ComputeTask
+	for ; iter.Valid(); iter.Next() {
+		keyBytes := iter.Key()
+		if len(keyBytes) < 8 {
+			continue
+		}
+		taskIdBytes := keyBytes[len(keyBytes)-8:]
+		taskId := binary.BigEndian.Uint64(taskIdBytes)
+		task, found := k.GetTask(ctx, taskId)
+		if found {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
+// GetTasksByProvider returns all tasks for a given provider address.
+func (k Keeper) GetTasksByProvider(ctx sdk.Context, providerAddr string) []*types.ComputeTask {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	prefix := taskByProviderKey(providerAddr, 0)
+	prefix = prefix[:len(prefix)-8]
+	iter, err := kvStore.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var tasks []*types.ComputeTask
+	for ; iter.Valid(); iter.Next() {
+		keyBytes := iter.Key()
+		if len(keyBytes) < 8 {
+			continue
+		}
+		taskIdBytes := keyBytes[len(keyBytes)-8:]
+		taskId := binary.BigEndian.Uint64(taskIdBytes)
+		task, found := k.GetTask(ctx, taskId)
+		if found {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
+// -----------------------------------------------------------------------
+// Agent Usage CRUD
+// -----------------------------------------------------------------------
+
+func agentUsageKey(agentDID string) []byte {
+	return append(append([]byte{}, types.AgentUsagePrefix...), []byte(agentDID)...)
+}
+
+// SetAgentUsage stores an agent's usage record.
+func (k Keeper) SetAgentUsage(ctx sdk.Context, usage *types.AgentUsageRecord) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := agentUsageKey(usage.AgentDID)
+	bz, err := json.Marshal(usage)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal agent usage: %v", err))
+	}
+	_ = kvStore.Set(key, bz)
+}
+
+// GetAgentUsage retrieves an agent's usage record.
+func (k Keeper) GetAgentUsage(ctx sdk.Context, agentDID string) (*types.AgentUsageRecord, bool) {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	key := agentUsageKey(agentDID)
+	bz, err := kvStore.Get(key)
+	if err != nil || bz == nil {
+		return nil, false
+	}
+	var usage types.AgentUsageRecord
+	if err := json.Unmarshal(bz, &usage); err != nil {
+		return nil, false
+	}
+	return &usage, true
+}
+
+// GetOrCreateAgentUsage returns existing usage or creates a new record.
+func (k Keeper) GetOrCreateAgentUsage(ctx sdk.Context, agentDID string) *types.AgentUsageRecord {
+	usage, found := k.GetAgentUsage(ctx, agentDID)
+	if found {
+		return usage
+	}
+	return &types.AgentUsageRecord{
+		AgentDID:    agentDID,
+		TotalReward: "0",
+	}
+}
+
+// GetAllAgentUsages returns all agent usage records.
+func (k Keeper) GetAllAgentUsages(ctx sdk.Context) []*types.AgentUsageRecord {
+	kvStore := k.storeService.OpenKVStore(ctx)
+	iter, err := kvStore.Iterator(types.AgentUsagePrefix, prefixEndBytes(types.AgentUsagePrefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var usages []*types.AgentUsageRecord
+	for ; iter.Valid(); iter.Next() {
+		var usage types.AgentUsageRecord
+		if err := json.Unmarshal(iter.Value(), &usage); err != nil {
+			continue
+		}
+		usages = append(usages, &usage)
+	}
+	return usages
+}

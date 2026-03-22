@@ -28,6 +28,11 @@ var (
 	ProviderEpochPrefix    = []byte{0x06} // {epoch BE64}/{address} -> ProviderEpochFlow
 	TicketSequenceKey      = []byte{0x07} // -> uint64 (next ticket ID)
 	AdjustmentFactorKey    = []byte{0x08} // -> uint64 (current CU adjustment factor in bps)
+	TaskKeyPrefix          = []byte{0x09} // {taskId BE64} -> ComputeTask
+	TaskSequenceKey        = []byte{0x0a} // -> uint64 (next task ID)
+	AgentUsagePrefix       = []byte{0x0b} // {agentDID} -> AgentUsageRecord
+	TasksByRequesterPrefix = []byte{0x0c} // {requesterDID}/{taskId BE64} -> []byte{1} (index)
+	TasksByProviderPrefix  = []byte{0x0d} // {providerAddr}/{taskId BE64} -> []byte{1} (index)
 )
 
 // Governance-tunable defaults.
@@ -121,4 +126,15 @@ const (
 	// DefaultAdjustmentFactorBps is the initial (neutral) adjustment factor.
 	// 1000000 = 1.0x (no adjustment).
 	DefaultAdjustmentFactorBps uint64 = 1000000
+
+	// ---------- Task Lifecycle Defaults ----------
+
+	// DefaultTaskExpiryBlocks is the max blocks before an unassigned task expires.
+	DefaultTaskExpiryBlocks uint64 = 500
+
+	// DefaultTaskResultExpiryBlocks is the max blocks a provider has to submit a result.
+	DefaultTaskResultExpiryBlocks uint64 = 200
+
+	// DefaultSlashOnRejectBps is the provider stake slash on rejected result (500 = 0.5%).
+	DefaultSlashOnRejectBps uint64 = 500
 )

@@ -144,3 +144,22 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		Credits:   credits,
 	}
 }
+
+// InitGenesisExtended initializes tasks and usage records from extended genesis.
+func (k Keeper) InitGenesisExtended(ctx sdk.Context, tasks []*types.ComputeTask, usages []*types.AgentUsageRecord) {
+	for _, task := range tasks {
+		k.SetTask(ctx, task)
+		k.SetTaskRequesterIndex(ctx, task.RequesterDID, task.Id)
+		if task.Provider != "" {
+			k.SetTaskProviderIndex(ctx, task.Provider, task.Id)
+		}
+	}
+	for _, usage := range usages {
+		k.SetAgentUsage(ctx, usage)
+	}
+}
+
+// ExportGenesisExtended exports tasks and usage records.
+func (k Keeper) ExportGenesisExtended(ctx sdk.Context) ([]*types.ComputeTask, []*types.AgentUsageRecord) {
+	return k.GetAllTasks(ctx), k.GetAllAgentUsages(ctx)
+}

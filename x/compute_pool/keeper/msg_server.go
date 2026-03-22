@@ -152,3 +152,83 @@ func (k msgServer) UpdateComputeParams(goCtx context.Context, msg *types.MsgUpda
 
 	return &types.MsgUpdateComputeParamsResponse{}, nil
 }
+
+// -----------------------------------------------------------------------
+// Task lifecycle message handlers
+// -----------------------------------------------------------------------
+
+// HandleSubmitTask handles task submission.
+func (k msgServer) HandleSubmitTask(ctx sdk.Context, msg *types.MsgSubmitTask) (*types.MsgSubmitTaskResponse, error) {
+	task, err := k.SubmitTask(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	k.Logger(ctx).Info("compute task submitted",
+		"task_id", task.Id,
+		"requester_did", msg.RequesterDID,
+		"service_type", msg.Spec.ServiceType,
+	)
+
+	return &types.MsgSubmitTaskResponse{TaskId: task.Id}, nil
+}
+
+// HandleAssignTask handles task assignment by a provider.
+func (k msgServer) HandleAssignTask(ctx sdk.Context, msg *types.MsgAssignTask) (*types.MsgAssignTaskResponse, error) {
+	if err := k.AssignTask(ctx, msg.Sender, msg.TaskId); err != nil {
+		return nil, err
+	}
+
+	k.Logger(ctx).Info("compute task assigned",
+		"task_id", msg.TaskId,
+		"provider", msg.Sender,
+	)
+
+	return &types.MsgAssignTaskResponse{}, nil
+}
+
+// HandleSubmitResult handles result submission by a provider.
+func (k msgServer) HandleSubmitResult(ctx sdk.Context, msg *types.MsgSubmitResult) (*types.MsgSubmitResultResponse, error) {
+	if err := k.SubmitResult(ctx, msg.Sender, msg.TaskId, msg.OutputHash, msg.ActualCU, msg.ResultMetadata); err != nil {
+		return nil, err
+	}
+
+	k.Logger(ctx).Info("compute result submitted",
+		"task_id", msg.TaskId,
+		"provider", msg.Sender,
+	)
+
+	return &types.MsgSubmitResultResponse{}, nil
+}
+
+// HandleVerifyResult handles result verification by the requester.
+func (k msgServer) HandleVerifyResult(ctx sdk.Context, msg *types.MsgVerifyResult) (*types.MsgVerifyResultResponse, error) {
+	if err := k.VerifyResult(ctx, msg.Sender, msg.TaskId, msg.Accept, msg.Reason); err != nil {
+		return nil, err
+	}
+
+	verdict := "accepted"
+	if !msg.Accept {
+		verdict = "rejected"
+	}
+	k.Logger(ctx).Info("compute result verified",
+		"task_id", msg.TaskId,
+		"verdict", verdict,
+	)
+
+	return &types.MsgVerifyResultResponse{}, nil
+}
+
+// HandleCancelTask handles task cancellation by the requester.
+func (k msgServer) HandleCancelTask(ctx sdk.Context, msg *types.MsgCancelTask) (*types.MsgCancelTaskResponse, error) {
+	if err := k.CancelTask(ctx, msg.Sender, msg.TaskId); err != nil {
+		return nil, err
+	}
+
+	k.Logger(ctx).Info("compute task cancelled",
+		"task_id", msg.TaskId,
+		"requester", msg.Sender,
+	)
+
+	return &types.MsgCancelTaskResponse{}, nil
+}

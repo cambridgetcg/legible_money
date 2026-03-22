@@ -54,6 +54,120 @@ const (
 	TicketStatusExpired   TicketStatus = "expired"
 )
 
+// TaskStatus tracks the lifecycle of a compute task.
+type TaskStatus string
+
+const (
+	TaskStatusPending       TaskStatus = "pending"        // submitted, awaiting assignment
+	TaskStatusAssigned      TaskStatus = "assigned"       // assigned to a provider
+	TaskStatusResultPending TaskStatus = "result_pending" // result submitted, awaiting verification
+	TaskStatusAccepted      TaskStatus = "accepted"       // result verified and accepted
+	TaskStatusRejected      TaskStatus = "rejected"       // result rejected
+	TaskStatusExpired       TaskStatus = "expired"        // timed out
+	TaskStatusCancelled     TaskStatus = "cancelled"      // cancelled by requester
+)
+
+// -----------------------------------------------------------------------
+// Hand-written task types (json.Marshal, not proto — per project convention)
+// -----------------------------------------------------------------------
+
+// ComputeSpec describes the compute requirements for a task.
+type ComputeSpec struct {
+	ServiceType string `json:"service_type"`           // ai_inference, gpu_compute, storage
+	Model       string `json:"model,omitempty"`        // model name for AI inference
+	InputHash   string `json:"input_hash"`             // SHA-256 hash of task input
+	MaxCU       uint64 `json:"max_cu"`                 // maximum compute units allowed
+	MaxLatencyMs uint64 `json:"max_latency_ms,omitempty"` // optional latency requirement
+}
+
+// ComputeTask represents a submitted compute job.
+type ComputeTask struct {
+	Id             uint64      `json:"id"`
+	RequesterDID   string      `json:"requester_did"`
+	RequesterAddr  string      `json:"requester_addr"`
+	Spec           ComputeSpec `json:"spec"`
+	Reward         string      `json:"reward"`           // ulgm amount escrowed
+	Status         string      `json:"status"`
+	Provider       string      `json:"provider,omitempty"`        // assigned provider address
+	OutputHash     string      `json:"output_hash,omitempty"`     // result hash from provider
+	ResultMetadata string      `json:"result_metadata,omitempty"` // optional result info
+	SubmittedAt    uint64      `json:"submitted_at"`
+	AssignedAt     uint64      `json:"assigned_at,omitempty"`
+	ResultAt       uint64      `json:"result_at,omitempty"`
+	CompletedAt    uint64      `json:"completed_at,omitempty"`
+	ExpiresAt      uint64      `json:"expires_at"`
+	ActualCU       uint64      `json:"actual_cu,omitempty"`
+}
+
+// AgentUsageRecord tracks compute units consumed per agent DID.
+type AgentUsageRecord struct {
+	AgentDID       string `json:"agent_did"`
+	TotalCU        uint64 `json:"total_cu"`
+	TotalTasks     uint64 `json:"total_tasks"`
+	TotalReward    string `json:"total_reward"`     // total ulgm spent
+	AcceptedTasks  uint64 `json:"accepted_tasks"`
+	RejectedTasks  uint64 `json:"rejected_tasks"`
+	LastActivityAt uint64 `json:"last_activity_at"`
+}
+
+// -----------------------------------------------------------------------
+// Hand-written Msg types for task lifecycle
+// -----------------------------------------------------------------------
+
+// MsgSubmitTask submits a compute task for execution.
+type MsgSubmitTask struct {
+	Sender       string      `json:"sender"`
+	RequesterDID string      `json:"requester_did"`
+	Spec         ComputeSpec `json:"spec"`
+	Reward       string      `json:"reward"` // ulgm to escrow
+}
+
+// MsgSubmitTaskResponse is the response for MsgSubmitTask.
+type MsgSubmitTaskResponse struct {
+	TaskId uint64 `json:"task_id"`
+}
+
+// MsgAssignTask assigns a pending task to a provider.
+type MsgAssignTask struct {
+	Sender   string `json:"sender"`   // provider address
+	TaskId   uint64 `json:"task_id"`
+}
+
+// MsgAssignTaskResponse is the response for MsgAssignTask.
+type MsgAssignTaskResponse struct{}
+
+// MsgSubmitResult submits a result for an assigned task.
+type MsgSubmitResult struct {
+	Sender         string `json:"sender"`          // provider address
+	TaskId         uint64 `json:"task_id"`
+	OutputHash     string `json:"output_hash"`
+	ActualCU       uint64 `json:"actual_cu"`
+	ResultMetadata string `json:"result_metadata,omitempty"`
+}
+
+// MsgSubmitResultResponse is the response for MsgSubmitResult.
+type MsgSubmitResultResponse struct{}
+
+// MsgVerifyResult accepts or rejects a task result.
+type MsgVerifyResult struct {
+	Sender string `json:"sender"` // requester address
+	TaskId uint64 `json:"task_id"`
+	Accept bool   `json:"accept"`
+	Reason string `json:"reason,omitempty"` // required if rejecting
+}
+
+// MsgVerifyResultResponse is the response for MsgVerifyResult.
+type MsgVerifyResultResponse struct{}
+
+// MsgCancelTask cancels a pending (unassigned) task.
+type MsgCancelTask struct {
+	Sender string `json:"sender"` // requester address
+	TaskId uint64 `json:"task_id"`
+}
+
+// MsgCancelTaskResponse is the response for MsgCancelTask.
+type MsgCancelTaskResponse struct{}
+
 // -----------------------------------------------------------------------
 // Proto type methods (structs defined in state.pb.go, genesis.pb.go, query.pb.go, tx.pb.go)
 // -----------------------------------------------------------------------
@@ -322,4 +436,120 @@ func (msg *MsgUpdateComputeParams) ValidateBasic() error {
 		return fmt.Errorf("params cannot be nil")
 	}
 	return msg.Params.Validate()
+}
+
+// -----------------------------------------------------------------------
+// GetSigners / ValidateBasic for hand-written task Msg types
+// -----------------------------------------------------------------------
+
+func (msg *MsgSubmitTask) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgSubmitTask) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.RequesterDID == "" {
+		return fmt.Errorf("requester_did cannot be empty")
+	}
+	if !IsValidServiceType(msg.Spec.ServiceType) {
+		return fmt.Errorf("invalid service type: %s", msg.Spec.ServiceType)
+	}
+	if msg.Spec.InputHash == "" {
+		return fmt.Errorf("input_hash cannot be empty")
+	}
+	if msg.Spec.MaxCU == 0 {
+		return fmt.Errorf("max_cu must be positive")
+	}
+	reward := new(big.Int)
+	if _, ok := reward.SetString(msg.Reward, 10); !ok || reward.Sign() <= 0 {
+		return fmt.Errorf("reward must be a positive integer")
+	}
+	return nil
+}
+
+func (msg *MsgAssignTask) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgAssignTask) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.TaskId == 0 {
+		return fmt.Errorf("task_id must be positive")
+	}
+	return nil
+}
+
+func (msg *MsgSubmitResult) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgSubmitResult) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.TaskId == 0 {
+		return fmt.Errorf("task_id must be positive")
+	}
+	if msg.OutputHash == "" {
+		return fmt.Errorf("output_hash cannot be empty")
+	}
+	if msg.ActualCU == 0 {
+		return fmt.Errorf("actual_cu must be positive")
+	}
+	return nil
+}
+
+func (msg *MsgVerifyResult) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgVerifyResult) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.TaskId == 0 {
+		return fmt.Errorf("task_id must be positive")
+	}
+	if !msg.Accept && msg.Reason == "" {
+		return fmt.Errorf("reason is required when rejecting")
+	}
+	return nil
+}
+
+func (msg *MsgCancelTask) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgCancelTask) ValidateBasic() error {
+	if msg.Sender == "" {
+		return fmt.Errorf("sender cannot be empty")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return fmt.Errorf("invalid sender address: %w", err)
+	}
+	if msg.TaskId == 0 {
+		return fmt.Errorf("task_id must be positive")
+	}
+	return nil
 }
