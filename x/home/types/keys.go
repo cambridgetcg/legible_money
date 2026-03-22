@@ -36,7 +36,29 @@ var (
 	MultiSigConfigPrefix    = []byte{0x10} // 0x10 + homeId → MultiSigConfig JSON
 	PendingApprovalPrefix   = []byte{0x11} // 0x11 + approvalId → PendingApproval JSON
 	ContributionPrefix      = []byte{0x12} // 0x12 + homeId + "/" + claimId → ContributionEvent JSON
+	CapabilityPrefix        = []byte{0x13} // 0x13 + homeId + "/" + capType → CapabilityEntry JSON
+	VouchPrefix             = []byte{0x14} // 0x14 + targetHomeId + "/" + capType + "/" + voucherHomeId → Vouch JSON
 )
+
+// CapabilityKey returns the store key for a capability entry.
+func CapabilityKey(homeId string, capType uint32) []byte {
+	return append(CapabilityPrefix, []byte(fmt.Sprintf("%s/%d", homeId, capType))...)
+}
+
+// CapabilityPrefixKey returns the prefix for all capabilities of a home.
+func CapabilityPrefixKey(homeId string) []byte {
+	return append(CapabilityPrefix, []byte(homeId+"/")...)
+}
+
+// VouchKey returns the store key for a vouch.
+func VouchKey(targetHomeId string, capType uint32, voucherHomeId string) []byte {
+	return append(VouchPrefix, []byte(fmt.Sprintf("%s/%d/%s", targetHomeId, capType, voucherHomeId))...)
+}
+
+// VouchCapPrefixKey returns the prefix for all vouches on a target+capType.
+func VouchCapPrefixKey(targetHomeId string, capType uint32) []byte {
+	return append(VouchPrefix, []byte(fmt.Sprintf("%s/%d/", targetHomeId, capType))...)
+}
 
 // ComfortDimsKey returns the store key for a home's comfort dimensions.
 func ComfortDimsKey(homeId string) []byte {

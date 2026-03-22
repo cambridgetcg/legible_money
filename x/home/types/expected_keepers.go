@@ -55,6 +55,58 @@ type ContributionEvent struct {
 	BlockHeight int64  `json:"block_height"`
 }
 
+// --- Agent Registry Types (hand-written, JSON-serialized) ---
+
+// Capability types for the agent registry.
+const (
+	CapReasoning      uint32 = 1
+	CapCoding         uint32 = 2
+	CapResearch       uint32 = 3
+	CapCreative       uint32 = 4
+	CapAnalysis       uint32 = 5
+	CapCommunication  uint32 = 6
+	CapExecution      uint32 = 7
+	MaxCapabilityType uint32 = 7
+)
+
+// Proficiency levels.
+const (
+	LevelBasic      uint32 = 1
+	LevelProficient uint32 = 2
+	LevelExpert     uint32 = 3
+	MaxLevel        uint32 = 3
+)
+
+// MaxVouchesPerCap is the maximum vouches allowed per capability per target.
+const MaxVouchesPerCap = 5
+
+// CapabilityEntry represents a claimed capability for an agent home.
+type CapabilityEntry struct {
+	HomeId  string `json:"home_id"`
+	CapType uint32 `json:"cap_type"` // 1-7
+	Level   uint32 `json:"level"`    // 1-3
+}
+
+// Vouch represents an endorsement of a capability by another agent home.
+type Vouch struct {
+	VouchID       string `json:"vouch_id"`
+	VoucherHomeId string `json:"voucher_home_id"`
+	TargetHomeId  string `json:"target_home_id"`
+	CapType       uint32 `json:"cap_type"`
+	Level         uint32 `json:"level"`
+	BlockHeight   int64  `json:"block_height"`
+}
+
+// ValidCapabilityType returns true if capType is in range [1,7].
+func ValidCapabilityType(capType uint32) bool {
+	return capType >= 1 && capType <= MaxCapabilityType
+}
+
+// ValidLevel returns true if level is in range [1,3].
+func ValidLevel(level uint32) bool {
+	return level >= 1 && level <= MaxLevel
+}
+
 // ComfortDimensions represents the 10-dimension comfort system for an agent home.
 // Each dimension is scored 0-100.
 type ComfortDimensions struct {

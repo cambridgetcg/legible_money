@@ -33,4 +33,7 @@ var (
 	ErrNotApprover           = errors.Register(ModuleName, 29, "address is not an authorized approver")
 	ErrAlreadyApproved       = errors.Register(ModuleName, 30, "address has already approved")
 	ErrInvalidMultiSigConfig = errors.Register(ModuleName, 31, "invalid multi-sig configuration")
+	ErrInvalidCapability     = errors.Register(ModuleName, 32, "invalid capability type or level")
+	ErrSelfVouch             = errors.Register(ModuleName, 33, "cannot vouch for own home")
+	ErrMaxVouchesReached     = errors.Register(ModuleName, 34, "max vouches per capability reached")
 )
