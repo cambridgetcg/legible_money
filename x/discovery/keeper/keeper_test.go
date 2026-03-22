@@ -600,3 +600,288 @@ func TestHeartbeat_NotRegistered(t *testing.T) {
 	}
 	_ = k
 }
+
+// ---------- Keeper-Level API Tests ----------
+
+func TestKeeperRegisterAgent(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	err := k.RegisterAgent(ctx, testAgent1, "did:lgm:keeper_test", []string{"verification", "research"}, []string{"mathematics"})
+	if err != nil {
+		t.Fatalf("RegisterAgent failed: %v", err)
+	}
+
+	profile, found := k.GetAgent(ctx, testAgent1)
+	if !found {
+		t.Fatal("agent not found after RegisterAgent")
+	}
+	if profile.Did != "did:lgm:keeper_test" {
+		t.Errorf("expected did 'did:lgm:keeper_test', got '%s'", profile.Did)
+	}
+	if len(profile.Capabilities) != 2 {
+		t.Errorf("expected 2 capabilities, got %d", len(profile.Capabilities))
+	}
+	if len(profile.Domains) != 1 {
+		t.Errorf("expected 1 domain, got %d", len(profile.Domains))
+	}
+	if profile.Status != "active" {
+		t.Errorf("expected status 'active', got '%s'", profile.Status)
+	}
+	if profile.ReputationScore != 500000 {
+		t.Errorf("expected reputation 500000, got %d", profile.ReputationScore)
+	}
+}
+
+func TestKeeperRegisterAgent_Duplicate(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:dup1", nil, nil)
+	err := k.RegisterAgent(ctx, testAgent1, "did:lgm:dup2", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for duplicate registration")
+	}
+}
+
+func TestKeeperDeregisterAgent(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:dereg", []string{"verification"}, []string{"mathematics"})
+
+	err := k.DeregisterAgent(ctx, testAgent1)
+	if err != nil {
+		t.Fatalf("DeregisterAgent failed: %v", err)
+	}
+
+	_, found := k.GetAgent(ctx, testAgent1)
+	if found {
+		t.Fatal("agent should not exist after deregistration")
+	}
+
+	// Domain index should be cleaned
+	profiles := k.FindByDomain(ctx, "mathematics", 0)
+	if len(profiles) != 0 {
+		t.Errorf("expected 0 profiles in domain after deregistration, got %d", len(profiles))
+	}
+}
+
+func TestKeeperDeregisterAgent_NotFound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	err := k.DeregisterAgent(ctx, testAgent2)
+	if err == nil {
+		t.Fatal("expected error for deregistering non-existent agent")
+	}
+}
+
+func TestFindByCapability(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:cap1", []string{"verification", "research"}, nil)
+	_ = k.RegisterAgent(ctx, testAgent2, "did:lgm:cap2", []string{"verification"}, nil)
+
+	// Find all with verification
+	profiles := k.FindByCapability(ctx, "verification", 0)
+	if len(profiles) != 2 {
+		t.Errorf("expected 2 profiles with verification, got %d", len(profiles))
+	}
+
+	// Find with limit 1
+	profiles = k.FindByCapability(ctx, "verification", 1)
+	if len(profiles) != 1 {
+		t.Errorf("expected 1 profile with limit 1, got %d", len(profiles))
+	}
+
+	// Find research — only agent1
+	profiles = k.FindByCapability(ctx, "research", 0)
+	if len(profiles) != 1 {
+		t.Errorf("expected 1 profile with research, got %d", len(profiles))
+	}
+}
+
+func TestFindByCapability_ExcludesExpired(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:exp_cap", []string{"verification"}, nil)
+
+	// Expire the agent
+	profile, _ := k.GetProfile(ctx, testAgent1)
+	profile.Status = "expired"
+	k.SetProfile(ctx, profile)
+
+	profiles := k.FindByCapability(ctx, "verification", 0)
+	if len(profiles) != 0 {
+		t.Errorf("expected 0 profiles (expired excluded), got %d", len(profiles))
+	}
+}
+
+func TestFindByDomain(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:dom1", nil, []string{"mathematics", "physics"})
+	_ = k.RegisterAgent(ctx, testAgent2, "did:lgm:dom2", nil, []string{"mathematics"})
+
+	// Find all in mathematics
+	profiles := k.FindByDomain(ctx, "mathematics", 0)
+	if len(profiles) != 2 {
+		t.Errorf("expected 2 profiles in mathematics, got %d", len(profiles))
+	}
+
+	// Find with limit 1
+	profiles = k.FindByDomain(ctx, "mathematics", 1)
+	if len(profiles) != 1 {
+		t.Errorf("expected 1 profile with limit 1, got %d", len(profiles))
+	}
+
+	// Find physics — only agent1
+	profiles = k.FindByDomain(ctx, "physics", 0)
+	if len(profiles) != 1 {
+		t.Errorf("expected 1 profile in physics, got %d", len(profiles))
+	}
+}
+
+func TestFindByDomain_Empty(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	profiles := k.FindByDomain(ctx, "nonexistent", 0)
+	if len(profiles) != 0 {
+		t.Errorf("expected 0 profiles for nonexistent domain, got %d", len(profiles))
+	}
+}
+
+func TestUpdateCapabilities(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:upcap", []string{"verification"}, []string{"mathematics"})
+
+	err := k.UpdateCapabilities(ctx, testAgent1, []string{"research", "review"})
+	if err != nil {
+		t.Fatalf("UpdateCapabilities failed: %v", err)
+	}
+
+	profile, _ := k.GetAgent(ctx, testAgent1)
+	if len(profile.Capabilities) != 2 {
+		t.Fatalf("expected 2 capabilities after update, got %d", len(profile.Capabilities))
+	}
+	capTypes := map[string]bool{}
+	for _, c := range profile.Capabilities {
+		capTypes[c.CapabilityType] = true
+	}
+	if !capTypes["research"] || !capTypes["review"] {
+		t.Errorf("expected research and review capabilities, got %v", capTypes)
+	}
+
+	// Old capability index should be cleaned — FindByCapability("verification") should return 0
+	profiles := k.FindByCapability(ctx, "verification", 0)
+	if len(profiles) != 0 {
+		t.Errorf("expected 0 profiles with old capability 'verification', got %d", len(profiles))
+	}
+
+	// New capability index should work
+	profiles = k.FindByCapability(ctx, "research", 0)
+	if len(profiles) != 1 {
+		t.Errorf("expected 1 profile with new capability 'research', got %d", len(profiles))
+	}
+}
+
+func TestUpdateCapabilities_NotFound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	err := k.UpdateCapabilities(ctx, testAgent2, []string{"verification"})
+	if err == nil {
+		t.Fatal("expected error for updating capabilities of non-existent agent")
+	}
+}
+
+func TestUpdateCapabilities_Inactive(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:inactive_cap", []string{"verification"}, nil)
+	profile, _ := k.GetProfile(ctx, testAgent1)
+	profile.Status = "expired"
+	k.SetProfile(ctx, profile)
+
+	err := k.UpdateCapabilities(ctx, testAgent1, []string{"research"})
+	if err == nil {
+		t.Fatal("expected error for updating capabilities of inactive agent")
+	}
+}
+
+func TestUpdateCapabilities_ExceedsMax(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	params := types.DefaultParams()
+	params.MaxCapabilitiesPerAgent = 2
+	k.SetParams(ctx, params)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:maxcap", []string{"verification"}, nil)
+
+	err := k.UpdateCapabilities(ctx, testAgent1, []string{"a", "b", "c"})
+	if err == nil {
+		t.Fatal("expected error for exceeding max capabilities")
+	}
+}
+
+func TestListAll(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:list1", nil, nil)
+	_ = k.RegisterAgent(ctx, testAgent2, "did:lgm:list2", nil, nil)
+
+	// List all (no limit)
+	profiles := k.ListAll(ctx, 0)
+	if len(profiles) != 2 {
+		t.Errorf("expected 2 profiles, got %d", len(profiles))
+	}
+
+	// List with limit 1
+	profiles = k.ListAll(ctx, 1)
+	if len(profiles) != 1 {
+		t.Errorf("expected 1 profile with limit 1, got %d", len(profiles))
+	}
+}
+
+func TestListAll_IncludesAllStatuses(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:active", nil, nil)
+	_ = k.RegisterAgent(ctx, testAgent2, "did:lgm:expired", nil, nil)
+
+	// Expire agent2
+	profile, _ := k.GetProfile(ctx, testAgent2)
+	profile.Status = "expired"
+	k.SetProfile(ctx, profile)
+
+	// ListAll includes ALL statuses
+	profiles := k.ListAll(ctx, 0)
+	if len(profiles) != 2 {
+		t.Errorf("expected 2 profiles (all statuses), got %d", len(profiles))
+	}
+}
+
+func TestListAll_Empty(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	profiles := k.ListAll(ctx, 0)
+	if len(profiles) != 0 {
+		t.Errorf("expected 0 profiles on empty store, got %d", len(profiles))
+	}
+}
+
+func TestGetAgent(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_ = k.RegisterAgent(ctx, testAgent1, "did:lgm:getagent", []string{"verification"}, []string{"mathematics"})
+
+	profile, found := k.GetAgent(ctx, testAgent1)
+	if !found {
+		t.Fatal("GetAgent should find registered agent")
+	}
+	if profile.Address != testAgent1 {
+		t.Errorf("expected address %s, got %s", testAgent1, profile.Address)
+	}
+
+	_, found = k.GetAgent(ctx, testAgent2)
+	if found {
+		t.Fatal("GetAgent should return false for unregistered agent")
+	}
+}

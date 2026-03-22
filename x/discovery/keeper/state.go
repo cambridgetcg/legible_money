@@ -164,6 +164,144 @@ func (k Keeper) GetProfilesByCapability(ctx sdk.Context, capabilityType string) 
 	return profiles
 }
 
+// ---------- Keeper-Level API (for cross-module use) ----------
+
+// RegisterAgent creates a new agent profile at the keeper level.
+// This is the programmatic API (no stake handling — that's the msg_server's job).
+func (k Keeper) RegisterAgent(ctx sdk.Context, address string, did string, capabilities []string, domains []string) error {
+	if _, found := k.GetProfile(ctx, address); found {
+		return types.ErrAgentExists
+	}
+
+	caps := make([]*types.AgentCapability, len(capabilities))
+	for i, c := range capabilities {
+		caps[i] = &types.AgentCapability{CapabilityType: c}
+	}
+
+	currentHeight := uint64(ctx.BlockHeight())
+	profile := &types.AgentProfile{
+		Address:           address,
+		Did:               did,
+		Capabilities:      caps,
+		Domains:           domains,
+		Status:            "active",
+		ReputationScore:   500000,
+		RegisteredAtBlock: currentHeight,
+		LastActiveBlock:   currentHeight,
+		Stake:             "0",
+	}
+
+	k.SetProfile(ctx, profile)
+	return nil
+}
+
+// DeregisterAgent removes an agent profile and its indexes.
+func (k Keeper) DeregisterAgent(ctx sdk.Context, address string) error {
+	profile, found := k.GetProfile(ctx, address)
+	if !found {
+		return types.ErrAgentNotFound
+	}
+	k.DeleteProfile(ctx, profile)
+	return nil
+}
+
+// GetAgent retrieves an agent profile by address.
+func (k Keeper) GetAgent(ctx sdk.Context, address string) (*types.AgentProfile, bool) {
+	return k.GetProfile(ctx, address)
+}
+
+// FindByCapability returns up to limit active profiles with the given capability.
+// If limit is 0, returns all matches.
+func (k Keeper) FindByCapability(ctx sdk.Context, capability string, limit uint64) []*types.AgentProfile {
+	store := k.storeService.OpenKVStore(ctx)
+	prefix := append(types.ByCapabilityIndexPrefix, []byte(capability+":")...)
+	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var profiles []*types.AgentProfile
+	for ; iter.Valid(); iter.Next() {
+		if limit > 0 && uint64(len(profiles)) >= limit {
+			break
+		}
+		addr := string(iter.Value())
+		profile, found := k.GetProfile(ctx, addr)
+		if found && profile.Status == "active" {
+			profiles = append(profiles, profile)
+		}
+	}
+	return profiles
+}
+
+// FindByDomain returns up to limit active profiles in the given domain.
+// If limit is 0, returns all matches.
+func (k Keeper) FindByDomain(ctx sdk.Context, domain string, limit uint64) []*types.AgentProfile {
+	store := k.storeService.OpenKVStore(ctx)
+	prefix := append(types.ByDomainIndexPrefix, []byte(domain+":")...)
+	iter, err := store.Iterator(prefix, prefixEndBytes(prefix))
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	var profiles []*types.AgentProfile
+	for ; iter.Valid(); iter.Next() {
+		if limit > 0 && uint64(len(profiles)) >= limit {
+			break
+		}
+		addr := string(iter.Value())
+		profile, found := k.GetProfile(ctx, addr)
+		if found && profile.Status == "active" {
+			profiles = append(profiles, profile)
+		}
+	}
+	return profiles
+}
+
+// UpdateCapabilities replaces an agent's capabilities list.
+func (k Keeper) UpdateCapabilities(ctx sdk.Context, address string, capabilities []string) error {
+	profile, found := k.GetProfile(ctx, address)
+	if !found {
+		return types.ErrAgentNotFound
+	}
+	if profile.Status != "active" {
+		return types.ErrAgentInactive
+	}
+
+	params := k.GetParams(ctx)
+	if uint32(len(capabilities)) > params.MaxCapabilitiesPerAgent {
+		return types.ErrMaxCapabilities
+	}
+
+	// Remove old indexes before mutation
+	k.DeleteProfile(ctx, profile)
+
+	caps := make([]*types.AgentCapability, len(capabilities))
+	for i, c := range capabilities {
+		caps[i] = &types.AgentCapability{CapabilityType: c}
+	}
+	profile.Capabilities = caps
+
+	k.SetProfile(ctx, profile)
+	return nil
+}
+
+// ListAll returns up to limit agent profiles (all statuses).
+// If limit is 0, returns all profiles.
+func (k Keeper) ListAll(ctx sdk.Context, limit uint64) []*types.AgentProfile {
+	var profiles []*types.AgentProfile
+	k.IterateProfiles(ctx, func(p *types.AgentProfile) bool {
+		profiles = append(profiles, p)
+		if limit > 0 && uint64(len(profiles)) >= limit {
+			return true
+		}
+		return false
+	})
+	return profiles
+}
+
 // ---------- Key Construction Helpers ----------
 
 func profileKey(address string) []byte {
