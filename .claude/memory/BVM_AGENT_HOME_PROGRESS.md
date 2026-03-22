@@ -4,10 +4,12 @@
 
 ---
 
-## BVM — 95% Complete
+## BVM — 100% Complete ✅ (2026-03-22)
 
 The Go BVM has a **production-grade opcode interpreter** with full host integrations.
 **Phase 4 complete (2026-02-13)**: Inter-contract calls, contract creation, and REVERT rollback all working.
+**Phase 5 complete (2026-03-22)**: LGM-20 token opcodes (0xA5-0xAC) — TOKEN_BALANCE/TRANSFER/MINT/BURN/APPROVE/ALLOWANCE/PAUSE/UNPAUSE.
+**Phase 6 complete (2026-03-22)**: Real TokensKeeper wired — stubs replaced, on-chain token state live.
 
 ### What's Done
 
