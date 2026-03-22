@@ -55,6 +55,15 @@ type ContributionEvent struct {
 	BlockHeight int64  `json:"block_height"`
 }
 
+// ScheduleKeeper defines the expected schedule module interface.
+// Used for registering recurring guardian maintenance tasks.
+type ScheduleKeeper interface {
+	// RegisterTask registers a scheduled task and returns its taskID.
+	RegisterTask(ctx sdk.Context, homeID string, taskType uint32, scheduledHeight uint64, intervalBlocks uint64, payload []byte) (string, error)
+	// CancelTask cancels a task. Returns false if not found.
+	CancelTask(ctx sdk.Context, homeID, taskID string) bool
+}
+
 // --- Agent Registry Types (hand-written, JSON-serialized) ---
 
 // Capability types for the agent registry.

@@ -38,6 +38,7 @@ var (
 	ContributionPrefix      = []byte{0x12} // 0x12 + homeId + "/" + claimId → ContributionEvent JSON
 	CapabilityPrefix        = []byte{0x13} // 0x13 + homeId + "/" + capType → CapabilityEntry JSON
 	VouchPrefix             = []byte{0x14} // 0x14 + targetHomeId + "/" + capType + "/" + voucherHomeId → Vouch JSON
+	GuardianTaskPrefix      = []byte{0x15} // 0x15 + homeId → guardian maintenance taskID (string)
 )
 
 // CapabilityKey returns the store key for a capability entry.
@@ -148,6 +149,11 @@ func MultiSigConfigKey(homeId string) []byte {
 // PendingApprovalKey returns the store key for a pending approval by ID.
 func PendingApprovalKey(approvalId string) []byte {
 	return append(PendingApprovalPrefix, []byte(approvalId)...)
+}
+
+// GuardianTaskKey returns the store key for a home's guardian maintenance taskID.
+func GuardianTaskKey(homeId string) []byte {
+	return append(GuardianTaskPrefix, []byte(homeId)...)
 }
 
 // ContributionKey returns the store key for a contribution event.

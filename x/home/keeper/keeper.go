@@ -28,6 +28,7 @@ type Keeper struct {
 	// Cross-module keepers (set via setter to avoid circular deps)
 	partnershipKeeper types.PartnershipKeeper
 	knowledgeKeeper   types.KnowledgeKeeper
+	scheduleKeeper    types.ScheduleKeeper
 
 	// Module authority (typically governance module address)
 	authority string
@@ -79,6 +80,11 @@ func (k *Keeper) SetPartnershipKeeper(pk types.PartnershipKeeper) {
 // SetKnowledgeKeeper sets the knowledge module keeper reference.
 func (k *Keeper) SetKnowledgeKeeper(kk types.KnowledgeKeeper) {
 	k.knowledgeKeeper = kk
+}
+
+// SetScheduleKeeper sets the schedule module keeper reference.
+func (k *Keeper) SetScheduleKeeper(sk types.ScheduleKeeper) {
+	k.scheduleKeeper = sk
 }
 
 // GetAuthority returns the module authority address.
