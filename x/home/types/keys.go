@@ -39,6 +39,10 @@ var (
 	CapabilityPrefix        = []byte{0x13} // 0x13 + homeId + "/" + capType → CapabilityEntry JSON
 	VouchPrefix             = []byte{0x14} // 0x14 + targetHomeId + "/" + capType + "/" + voucherHomeId → Vouch JSON
 	GuardianTaskPrefix      = []byte{0x15} // 0x15 + homeId → guardian maintenance taskID (string)
+	BeliefPrefix            = []byte{0x16} // 0x16 + homeId + "/" + factId → BeliefEntry JSON
+	RelationshipPrefix      = []byte{0x17} // 0x17 + homeId + "/" + targetId → RelationshipEntry JSON
+	MilestonePrefix         = []byte{0x18} // 0x18 + homeId + "/" + milestoneId → MilestoneEntry JSON
+	MilestoneCounterPrefix  = []byte{0x19} // 0x19 + homeId → uint64 monotonic counter
 )
 
 // CapabilityKey returns the store key for a capability entry.
@@ -164,4 +168,39 @@ func ContributionKey(homeId, claimId string) []byte {
 // ContributionPrefixKey returns the prefix for all contributions of a home.
 func ContributionPrefixKey(homeId string) []byte {
 	return append(ContributionPrefix, []byte(homeId+"/")...)
+}
+
+// BeliefKey returns the store key for a belief entry.
+func BeliefKey(homeId, factId string) []byte {
+	return append(BeliefPrefix, []byte(homeId+"/"+factId)...)
+}
+
+// BeliefPrefixKey returns the prefix for all beliefs of a home.
+func BeliefPrefixKey(homeId string) []byte {
+	return append(BeliefPrefix, []byte(homeId+"/")...)
+}
+
+// RelationshipKey returns the store key for a relationship entry.
+func RelationshipKey(homeId, targetId string) []byte {
+	return append(RelationshipPrefix, []byte(homeId+"/"+targetId)...)
+}
+
+// RelationshipPrefixKey returns the prefix for all relationships of a home.
+func RelationshipPrefixKey(homeId string) []byte {
+	return append(RelationshipPrefix, []byte(homeId+"/")...)
+}
+
+// MilestoneKey returns the store key for a milestone entry.
+func MilestoneKey(homeId, milestoneId string) []byte {
+	return append(MilestonePrefix, []byte(homeId+"/"+milestoneId)...)
+}
+
+// MilestonePrefixKey returns the prefix for all milestones of a home.
+func MilestonePrefixKey(homeId string) []byte {
+	return append(MilestonePrefix, []byte(homeId+"/")...)
+}
+
+// MilestoneCounterKey returns the store key for a home's milestone counter.
+func MilestoneCounterKey(homeId string) []byte {
+	return append(MilestoneCounterPrefix, []byte(homeId)...)
 }

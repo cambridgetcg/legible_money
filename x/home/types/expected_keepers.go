@@ -116,6 +116,51 @@ func ValidLevel(level uint32) bool {
 	return level >= 1 && level <= MaxLevel
 }
 
+// --- Memory Manager Types (hand-written, JSON-serialized) ---
+
+// Memory manager capacity limits.
+const (
+	MaxBeliefsPerHome       = 100
+	MaxRelationshipsPerHome = 50
+	MaxMilestonesPerHome    = 20
+)
+
+// Valid relationship types.
+var ValidRelationshipTypes = map[string]bool{
+	"ally":      true,
+	"neutral":   true,
+	"adversary": true,
+	"mentor":    true,
+	"student":   true,
+}
+
+// BeliefEntry represents an agent's belief about a fact.
+type BeliefEntry struct {
+	HomeID     string `json:"home_id"`
+	FactID     string `json:"fact_id"`
+	Confidence uint64 `json:"confidence"` // 0-10000 (BPS)
+	Source     string `json:"source"`
+	CreatedAt  uint64 `json:"created_at"` // block height
+}
+
+// RelationshipEntry represents a relationship between two agent homes.
+type RelationshipEntry struct {
+	HomeID    string `json:"home_id"`
+	TargetID  string `json:"target_id"`
+	RelType   string `json:"rel_type"` // ally|neutral|adversary|mentor|student
+	Strength  uint64 `json:"strength"` // 0-100
+	UpdatedAt uint64 `json:"updated_at"` // block height
+}
+
+// MilestoneEntry records a notable event in an agent's history.
+type MilestoneEntry struct {
+	HomeID      string `json:"home_id"`
+	ID          string `json:"id"`
+	Category    string `json:"category"`
+	Description string `json:"description"`
+	BlockHeight uint64 `json:"block_height"`
+}
+
 // ComfortDimensions represents the 10-dimension comfort system for an agent home.
 // Each dimension is scored 0-100.
 type ComfortDimensions struct {
