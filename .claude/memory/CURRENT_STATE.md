@@ -1,8 +1,17 @@
 # Legible Money — Current State
 
-> Last updated: 2026-02-16
+> Last updated: 2026-03-22
 
 ## Session Summary
+- **x/vesting_rewards Consolidation** — Complete (2026-03-22)
+  - Research share (3.33%) logic verified correct and unified across RouteReward + RouteFees + DistributeBlockReward
+  - Founder split (7% of research) verified correct with governance sunset
+  - Fixed stale "22%" comments in proto source + generated pb.go (leftover from old rate)
+  - Fixed stale "7%" comments in test file (confused founder share with research share)
+  - Renamed TestRouteFees_22_78_MathCorrectness → TestRouteFees_3_33_96_67_MathCorrectness
+  - Removed DEPRECATED BlockRewardFundBalanceKey (unused)
+  - All 43 tests passing, go vet clean
+
 - **W5/Phase F: Cross-Stack Golden Vectors** — Complete (2026-02-16)
   - **Ed25519 golden vectors**: Keypair, sign, verify — identical across TS + Go
   - **VRF golden vectors**: Output + gamma match cross-stack; proof encoding differs (D4: endianness)

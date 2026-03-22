@@ -218,10 +218,77 @@ func (a *vmAuthKeeperAdapter) GetSessionForDID(_ context.Context, ownerDID strin
 	return 0, caps.CanTransfer, caps.CanStake, caps.CanSubmitClaims, caps.CanVote, true
 }
 
+// didBalanceAdapter resolves DID → bech32 address via AuthKeeper, then queries BankKeeper.
+type didBalanceAdapter struct {
+	ak  types.AuthKeeper
+	bk  types.BankKeeper
+	ctx sdk.Context
+}
+
+func (a *didBalanceAdapter) GetBalanceByDID(_ context.Context, did string) *big.Int {
+	// Resolve DID to bech32 address
+	addr, found := a.ak.GetAccountDID(a.ctx, did)
+	// GetAccountDID maps address→DID; we need DID→address.
+	// Use GetAccountByDID to confirm existence, then iterate.
+	// Simpler: DID format is "did:lgm:{hex}", extract hex and derive address.
+	_ = addr
+	_ = found
+	// Walk all known accounts is expensive. Instead, check if the DID format
+	// encodes a public key hash we can convert to AccAddress.
+	// For now, use the authKeeper's GetAccountByDID which returns the account
+	// object with an address field if it satisfies the addressable interface.
+	acct, ok := a.ak.GetAccountByDID(a.ctx, did)
+	if !ok || acct == nil {
+		return nil
+	}
+	// The account object from x/auth satisfies GetAddress() string.
+	type addressable interface {
+		GetAddress() string
+	}
+	if aa, ok := acct.(addressable); ok {
+		accAddr, err := sdk.AccAddressFromBech32(aa.GetAddress())
+		if err == nil {
+			coin := a.bk.GetBalance(a.ctx, accAddr, "ulgm")
+			return coin.Amount.BigInt()
+		}
+	}
+	return nil
+}
+
+// didStakeAdapter resolves DID → validator address via AuthKeeper, then queries StakingKeeper.
+type didStakeAdapter struct {
+	ak  types.AuthKeeper
+	sk  types.StakingKeeper
+	ctx sdk.Context
+}
+
+func (a *didStakeAdapter) GetStakeByDID(_ context.Context, did string) (uint64, bool) {
+	acct, ok := a.ak.GetAccountByDID(a.ctx, did)
+	if !ok || acct == nil {
+		return 0, false
+	}
+	type addressable interface {
+		GetAddress() string
+	}
+	if aa, ok := acct.(addressable); ok {
+		return a.sk.GetValidatorStake(a.ctx, aa.GetAddress())
+	}
+	return 0, false
+}
+
 // buildHost creates a HostFunctions implementation wired to the keeper for the given context.
 func (k Keeper) buildHost(ctx sdk.Context, stateDB vm.StateDB) vm.HostFunctions {
 	adapter := &scheduleKeeperAdapter{keeper: k, ctx: ctx}
 	agent := vm.NewAgentHostWithSchedules(ctx, stateDB, adapter)
+
+	// Wire auth keeper into agent host for real identity verification
+	if k.authKeeper != nil {
+		agent.SetAuthKeeper(k.authKeeper)
+	}
+	// Wire knowledge keeper into agent host for real network confidence
+	if k.knowledgeKeeper != nil {
+		agent.SetKnowledgeKeeper(k.knowledgeKeeper)
+	}
 
 	// Wire auth into treasury host for dual key unification
 	var treasury *vm.TreasuryHost
@@ -230,6 +297,14 @@ func (k Keeper) buildHost(ctx sdk.Context, stateDB vm.StateDB) vm.HostFunctions 
 		treasury = vm.NewTreasuryHostWithAuth(stateDB, vmAuth, ctx)
 	} else {
 		treasury = vm.NewTreasuryHost(stateDB)
+	}
+
+	// Wire real balance/stake queriers into treasury host
+	if k.authKeeper != nil && k.bankKeeper != nil {
+		treasury.SetBalanceQuerier(&didBalanceAdapter{ak: k.authKeeper, bk: k.bankKeeper, ctx: ctx})
+	}
+	if k.authKeeper != nil && k.stakingKeeper != nil {
+		treasury.SetStakeQuerier(&didStakeAdapter{ak: k.authKeeper, sk: k.stakingKeeper, ctx: ctx})
 	}
 
 	knowledge := vm.NewKnowledgeHost(k.knowledgeKeeper, ctx)

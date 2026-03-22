@@ -16,9 +16,11 @@ type AgentKeeper interface {
 // AgentHost bridges BVM agent opcodes to Cosmos keeper state.
 // Agent beliefs/relationships are stored in contract state under reserved key prefixes.
 type AgentHost struct {
-	ctx         context.Context
-	stateDB     StateDB
-	schedKeeper ScheduleKeeper // nil-safe: methods degrade gracefully
+	ctx             context.Context
+	stateDB         StateDB
+	schedKeeper     ScheduleKeeper    // nil-safe: methods degrade gracefully
+	authKeeper      AgentKeeper       // nil-safe: VerifyIdentity falls back to contract state
+	knowledgeKeeper KnowledgeKeeper   // nil-safe: CompareBelief falls back to hardcoded default
 }
 
 func NewAgentHost(ctx context.Context, stateDB StateDB) *AgentHost {
@@ -28,6 +30,16 @@ func NewAgentHost(ctx context.Context, stateDB StateDB) *AgentHost {
 // NewAgentHostWithSchedules creates an AgentHost wired to persist schedules.
 func NewAgentHostWithSchedules(ctx context.Context, stateDB StateDB, sk ScheduleKeeper) *AgentHost {
 	return &AgentHost{ctx: ctx, stateDB: stateDB, schedKeeper: sk}
+}
+
+// SetAuthKeeper wires the auth keeper for identity verification.
+func (h *AgentHost) SetAuthKeeper(ak AgentKeeper) {
+	h.authKeeper = ak
+}
+
+// SetKnowledgeKeeper wires the knowledge keeper for network confidence queries.
+func (h *AgentHost) SetKnowledgeKeeper(kk KnowledgeKeeper) {
+	h.knowledgeKeeper = kk
 }
 
 // --- Agent Identity (0xE0-0xE3) ---
@@ -56,7 +68,15 @@ func (h *AgentHost) AgentHome(callerDID string) []byte {
 }
 
 func (h *AgentHost) VerifyIdentity(targetDID []byte) bool {
-	// Check if the DID is registered
+	// Prefer canonical x/auth account lookup when available.
+	if h.authKeeper != nil {
+		didStr := "did:lgm:" + hex.EncodeToString(targetDID)
+		_, found := h.authKeeper.GetAccountByDID(h.ctx, didStr)
+		if found {
+			return true
+		}
+	}
+	// Fallback: check contract-state identity registry.
 	didStr := hex.EncodeToString(targetDID)
 	key := sha256.Sum256([]byte("identity/" + didStr))
 	val := h.stateDB.GetStorage([]byte("agent_registry"), key[:])
@@ -97,11 +117,26 @@ func (h *AgentHost) SetBelief(callerDID string, factId []byte, confidence uint64
 }
 
 func (h *AgentHost) CompareBelief(callerDID string, factId []byte) int64 {
-	// Compare agent's belief with network confidence
-	// Returns positive if agent > network, negative if agent < network
+	// Compare agent's belief with network confidence.
+	// Returns positive if agent > network, negative if agent < network.
 	agentConf := h.GetBelief(callerDID, factId)
-	// Network confidence would come from knowledge keeper (simplified)
-	networkConf := uint64(500000000000000000) // 0.5 * 1e18 default
+
+	// Query real network confidence from x/knowledge when available.
+	var networkConf uint64
+	if h.knowledgeKeeper != nil {
+		factIdHex := fmt.Sprintf("%x", factId)
+		fact, found := h.knowledgeKeeper.GetFact(h.ctx, factIdHex)
+		if found && fact != nil {
+			if fd, ok := fact.(FactData); ok {
+				// Scale chain confidence (0-1,000,000) to BVM precision (1e18).
+				networkConf = fd.GetConfidence() * 1_000_000_000_000
+			}
+		}
+	}
+	if networkConf == 0 {
+		// Fallback: 0.5 * 1e18 default when keeper unavailable or fact not found.
+		networkConf = 500_000_000_000_000_000
+	}
 	return int64(agentConf) - int64(networkConf)
 }
 

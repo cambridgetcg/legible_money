@@ -17,13 +17,27 @@ type VMAuthKeeper interface {
 	GetSessionForDID(ctx context.Context, ownerDID string, blockHeight uint64) (expiresAt uint64, canTransfer, canStake, canClaims, canVote, found bool)
 }
 
+// VMBalanceQuerier provides real on-chain balance lookups by DID.
+// The adapter in msg_server.go resolves DID → bech32 address and queries x/bank.
+type VMBalanceQuerier interface {
+	GetBalanceByDID(ctx context.Context, did string) *big.Int
+}
+
+// VMStakeQuerier provides real on-chain stake lookups by DID.
+// The adapter in msg_server.go resolves DID → validator address and queries x/staking.
+type VMStakeQuerier interface {
+	GetStakeByDID(ctx context.Context, did string) (uint64, bool)
+}
+
 // TreasuryHost bridges BVM treasury/guardian/access control opcodes to contract state.
 // Treasury positions, alerts, defenses, and access keys are stored under reserved prefixes.
 // When authKeeper is non-nil, access control opcodes delegate to x/auth's canonical store.
 type TreasuryHost struct {
-	stateDB    StateDB
-	authKeeper VMAuthKeeper // nil = legacy contract-state mode
-	ctx        context.Context
+	stateDB       StateDB
+	authKeeper    VMAuthKeeper     // nil = legacy contract-state mode
+	balanceQ      VMBalanceQuerier // nil = fallback to contract state
+	stakeQ        VMStakeQuerier   // nil = fallback to contract state
+	ctx           context.Context
 }
 
 func NewTreasuryHost(stateDB StateDB) *TreasuryHost {
@@ -33,6 +47,16 @@ func NewTreasuryHost(stateDB StateDB) *TreasuryHost {
 // NewTreasuryHostWithAuth creates a TreasuryHost that delegates key management to x/auth.
 func NewTreasuryHostWithAuth(stateDB StateDB, ak VMAuthKeeper, ctx context.Context) *TreasuryHost {
 	return &TreasuryHost{stateDB: stateDB, authKeeper: ak, ctx: ctx}
+}
+
+// SetBalanceQuerier wires real on-chain balance lookups.
+func (h *TreasuryHost) SetBalanceQuerier(bq VMBalanceQuerier) {
+	h.balanceQ = bq
+}
+
+// SetStakeQuerier wires real on-chain stake lookups.
+func (h *TreasuryHost) SetStakeQuerier(sq VMStakeQuerier) {
+	h.stakeQ = sq
 }
 
 // --- Treasury (0xD0-0xD7) ---
@@ -130,7 +154,23 @@ func (h *TreasuryHost) QueryTreasury(callerDID string) (*big.Int, *big.Int, *big
 		}
 		return new(big.Int).SetBytes(val)
 	}
-	return load("available"), load("reserved"), load("staked"), load("delegated")
+
+	// Use real keepers for available (bank) and staked (staking) when wired.
+	available := load("available")
+	if h.balanceQ != nil {
+		if bal := h.balanceQ.GetBalanceByDID(h.ctx, callerDID); bal != nil {
+			available = bal
+		}
+	}
+
+	staked := load("staked")
+	if h.stakeQ != nil {
+		if s, found := h.stakeQ.GetStakeByDID(h.ctx, callerDID); found {
+			staked = new(big.Int).SetUint64(s)
+		}
+	}
+
+	return available, load("reserved"), staked, load("delegated")
 }
 
 // --- Guardian (0xD8-0xDB) ---
@@ -266,6 +306,14 @@ func (h *TreasuryHost) SelfBalance(callerDID string) *big.Int {
 	if callerDID == "" {
 		return big.NewInt(0)
 	}
+	// Prefer real on-chain balance when keeper is wired.
+	if h.balanceQ != nil {
+		bal := h.balanceQ.GetBalanceByDID(h.ctx, callerDID)
+		if bal != nil {
+			return bal
+		}
+	}
+	// Fallback: contract state.
 	key := sha256.Sum256([]byte("available/" + callerDID))
 	val := h.stateDB.GetStorage([]byte("agent_treasury"), key[:])
 	if val == nil {
@@ -278,6 +326,14 @@ func (h *TreasuryHost) SelfStake(callerDID string) *big.Int {
 	if callerDID == "" {
 		return big.NewInt(0)
 	}
+	// Prefer real on-chain stake when keeper is wired.
+	if h.stakeQ != nil {
+		stake, found := h.stakeQ.GetStakeByDID(h.ctx, callerDID)
+		if found {
+			return new(big.Int).SetUint64(stake)
+		}
+	}
+	// Fallback: contract state.
 	key := sha256.Sum256([]byte("staked/" + callerDID))
 	val := h.stateDB.GetStorage([]byte("agent_treasury"), key[:])
 	if val == nil {
