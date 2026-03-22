@@ -233,14 +233,24 @@ func (k Keeper) buildHost(ctx sdk.Context, stateDB vm.StateDB) vm.HostFunctions 
 	}
 
 	knowledge := vm.NewKnowledgeHost(k.knowledgeKeeper, ctx)
-	return &prodCompositeHost{agent: agent, treasury: treasury, kh: knowledge}
+
+	// Wire tokens keeper for LGM-20 token opcodes (0xA5-0xAC)
+	var th vm.TokenHost
+	if k.tokensKeeper != nil {
+		th = vm.NewKeeperTokenHost(k.tokensKeeper, ctx)
+	} else {
+		th = &vm.StubTokenHost{}
+	}
+
+	return &prodCompositeHost{agent: agent, treasury: treasury, kh: knowledge, th: th}
 }
 
-// prodCompositeHost combines AgentHost, TreasuryHost, and KnowledgeHost into a full vm.HostFunctions.
+// prodCompositeHost combines AgentHost, TreasuryHost, KnowledgeHost, and TokenHost into a full vm.HostFunctions.
 type prodCompositeHost struct {
 	agent    *vm.AgentHost
 	treasury *vm.TreasuryHost
 	kh       *vm.KnowledgeHost
+	th       vm.TokenHost
 }
 
 // Knowledge
@@ -395,6 +405,32 @@ func (c *prodCompositeHost) SelfReputation(callerDID string) uint64 {
 }
 func (c *prodCompositeHost) SelfAccuracy(callerDID string) uint64 {
 	return c.treasury.SelfAccuracy(callerDID)
+}
+
+// LGM-20 Token Operations (delegated to th)
+func (c *prodCompositeHost) TokenBalance(callerDID string, tokenID string, address []byte) *big.Int {
+	return c.th.TokenBalance(callerDID, tokenID, address)
+}
+func (c *prodCompositeHost) TokenTransfer(callerDID string, tokenID string, to []byte, amount *big.Int) bool {
+	return c.th.TokenTransfer(callerDID, tokenID, to, amount)
+}
+func (c *prodCompositeHost) TokenMint(callerDID string, tokenID string, to []byte, amount *big.Int) bool {
+	return c.th.TokenMint(callerDID, tokenID, to, amount)
+}
+func (c *prodCompositeHost) TokenBurn(callerDID string, tokenID string, amount *big.Int) bool {
+	return c.th.TokenBurn(callerDID, tokenID, amount)
+}
+func (c *prodCompositeHost) TokenApprove(callerDID string, tokenID string, spender []byte, amount *big.Int) bool {
+	return c.th.TokenApprove(callerDID, tokenID, spender, amount)
+}
+func (c *prodCompositeHost) TokenAllowance(callerDID string, tokenID string, spender []byte) *big.Int {
+	return c.th.TokenAllowance(callerDID, tokenID, spender)
+}
+func (c *prodCompositeHost) TokenPause(callerDID string, tokenID string) bool {
+	return c.th.TokenPause(callerDID, tokenID)
+}
+func (c *prodCompositeHost) TokenUnpause(callerDID string, tokenID string) bool {
+	return c.th.TokenUnpause(callerDID, tokenID)
 }
 
 // safeExecute wraps vm.Interpreter.Execute with panic recovery (P0-3).

@@ -24,6 +24,7 @@ type Keeper struct {
 	knowledgeKeeper types.KnowledgeKeeper
 	stakingKeeper   types.StakingKeeper
 	authKeeper      types.AuthKeeper
+	tokensKeeper    types.TokensKeeper
 }
 
 // NewKeeper creates a new bvm module Keeper.
@@ -163,4 +164,14 @@ func (k Keeper) GetStakingKeeper() types.StakingKeeper {
 // GetAuthKeeper returns the auth keeper.
 func (k Keeper) GetAuthKeeper() types.AuthKeeper {
 	return k.authKeeper
+}
+
+// SetTokensKeeper sets the tokens keeper for cross-module BVM token opcodes.
+func (k *Keeper) SetTokensKeeper(tk types.TokensKeeper) {
+	k.tokensKeeper = tk
+}
+
+// GetTokensKeeper returns the tokens keeper.
+func (k Keeper) GetTokensKeeper() types.TokensKeeper {
+	return k.tokensKeeper
 }

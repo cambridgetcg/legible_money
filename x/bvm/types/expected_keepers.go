@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -39,6 +40,19 @@ type SessionCapabilities struct {
 	CanStake        bool
 	CanSubmitClaims bool
 	CanVote         bool
+}
+
+// TokensKeeper defines the expected tokens module keeper interface for BVM opcodes.
+// Addresses are raw bytes; the adapter converts to bech32 strings internally.
+type TokensKeeper interface {
+	TokenBalance(ctx context.Context, tokenId string, holderAddr []byte) *big.Int
+	TokenTransfer(ctx context.Context, callerDID, tokenId string, toAddr []byte, amount *big.Int) bool
+	TokenMint(ctx context.Context, callerDID, tokenId string, toAddr []byte, amount *big.Int) bool
+	TokenBurn(ctx context.Context, callerDID, tokenId string, amount *big.Int) bool
+	TokenApprove(ctx context.Context, callerDID, tokenId string, spenderAddr []byte, amount *big.Int) bool
+	TokenAllowance(ctx context.Context, tokenId string, ownerAddr, spenderAddr []byte) *big.Int
+	TokenPause(ctx context.Context, callerDID, tokenId string) bool
+	TokenUnpause(ctx context.Context, callerDID, tokenId string) bool
 }
 
 // AuthKeeper defines the expected auth module keeper interface for BVM opcodes.

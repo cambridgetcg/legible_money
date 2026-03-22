@@ -1010,6 +1010,7 @@ func NewLegibleApp(
 	app.BVMKeeper.SetKnowledgeKeeper(NewBVMKnowledgeAdapter(app.KnowledgeKeeper))
 	app.BVMKeeper.SetStakingKeeper(NewBVMStakingAdapter(app.LegibleStakingKeeper))
 	app.BVMKeeper.SetAuthKeeper(NewBVMAuthAdapter(app.LegibleAuthKeeper))
+	app.BVMKeeper.SetTokensKeeper(NewBVMTokensAdapter(app.TokensKeeper))
 
 	// ---- Alignment Keeper (philosophical alignment feedback loop) ----
 	app.AlignmentKeeper = alignmentkeeper.NewKeeper(
