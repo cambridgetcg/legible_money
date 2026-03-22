@@ -33,6 +33,8 @@ var (
 	DefenseCooldownPrefix   = []byte{0x0D} // 0x0D + homeId/keyId → uint64 last-op block
 	DefenseListPrefix       = []byte{0x0E} // 0x0E + homeId/listType → JSON address list
 	VoiceConfigPrefix       = []byte{0x0F} // 0x0F + homeId → VoiceConfig JSON
+	MultiSigConfigPrefix    = []byte{0x10} // 0x10 + homeId → MultiSigConfig JSON
+	PendingApprovalPrefix   = []byte{0x11} // 0x11 + approvalId → PendingApproval JSON
 )
 
 // ComfortDimsKey returns the store key for a home's comfort dimensions.
@@ -113,4 +115,14 @@ func DefenseListKey(homeId, listType string) []byte {
 // VoiceConfigKey returns the store key for a home's voice configuration.
 func VoiceConfigKey(homeId string) []byte {
 	return append(VoiceConfigPrefix, []byte(homeId)...)
+}
+
+// MultiSigConfigKey returns the store key for a home's multi-sig configuration.
+func MultiSigConfigKey(homeId string) []byte {
+	return append(MultiSigConfigPrefix, []byte(homeId)...)
+}
+
+// PendingApprovalKey returns the store key for a pending approval by ID.
+func PendingApprovalKey(approvalId string) []byte {
+	return append(PendingApprovalPrefix, []byte(approvalId)...)
 }

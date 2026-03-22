@@ -286,6 +286,28 @@ func (m *MsgSetSpendingLimit) GetSigners() []sdk.AccAddress {
 }
 
 
+// --- Multi-Sig Approval Types (hand-written, JSON-serialized) ---
+
+// MultiSigConfig defines the M-of-N approval requirements for a home.
+type MultiSigConfig struct {
+	HomeId            string   `json:"home_id"`
+	RequiredApprovals uint32   `json:"required_approvals"`
+	Approvers         []string `json:"approvers"` // bech32 addresses authorized to approve
+	DeadlineBlocks    uint64   `json:"deadline_blocks"`
+	ThresholdAmount   string   `json:"threshold_amount"` // operations above this require multi-sig
+}
+
+// PendingApproval represents a proposed operation awaiting M-of-N approval.
+type PendingApproval struct {
+	Id              string   `json:"id"`
+	HomeId          string   `json:"home_id"`
+	OperationType   string   `json:"operation_type"`
+	PayloadHash     []byte   `json:"payload_hash"`
+	Approvals       []string `json:"approvals"` // addresses that have approved
+	CreatedAtHeight int64    `json:"created_at_height"`
+	ExpiresAtHeight int64    `json:"expires_at_height"`
+}
+
 // MsgUpdateParams is the governance message to update module params.
 type MsgUpdateParams struct {
 	Authority string  `json:"authority"`
