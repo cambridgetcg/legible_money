@@ -105,11 +105,11 @@ Interpreter
 
 ---
 
-## Agent Home — 90% Complete (2026-03-22)
+## Agent Home — 95% Complete (2026-03-22)
 
 Core home lifecycle, guardian, key management, sessions, spending limits, treasury automation,
 aging/maturity system, memory encryption, and defense strategy enactment all working.
-Phases 1-6 done: state, encryption, defense, voice, multi-sig, Home→Knowledge, agent registry (capabilities+reputation+vouches). Missing: full memory manager (P2/L), Wire Home→Schedule (blocked on x/schedule stub), voice messaging inbox (P3), neighborhoods (P3).
+Phases 1-7 done: state, encryption, defense, voice, multi-sig, Home→Knowledge, agent registry, Home→Schedule. Missing: full memory manager (P2/L), voice messaging inbox (P3), neighborhoods (P3).
 
 ### What's Done
 
