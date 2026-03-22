@@ -32,6 +32,7 @@ var (
 	DefenseRatePrefix       = []byte{0x0C} // 0x0C + homeId/keyId/window → uint64 counter
 	DefenseCooldownPrefix   = []byte{0x0D} // 0x0D + homeId/keyId → uint64 last-op block
 	DefenseListPrefix       = []byte{0x0E} // 0x0E + homeId/listType → JSON address list
+	VoiceConfigPrefix       = []byte{0x0F} // 0x0F + homeId → VoiceConfig JSON
 )
 
 // ComfortDimsKey returns the store key for a home's comfort dimensions.
@@ -107,4 +108,9 @@ func DefenseCooldownKey(homeId, keyId string) []byte {
 // DefenseListKey returns the store key for a whitelist or blacklist.
 func DefenseListKey(homeId, listType string) []byte {
 	return append(DefenseListPrefix, []byte(homeId+"/"+listType)...)
+}
+
+// VoiceConfigKey returns the store key for a home's voice configuration.
+func VoiceConfigKey(homeId string) []byte {
+	return append(VoiceConfigPrefix, []byte(homeId)...)
 }

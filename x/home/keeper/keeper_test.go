@@ -2028,4 +2028,205 @@ func TestDefenseNoGuardianAllows(t *testing.T) {
 	}
 }
 
+// ==================== Voice System ====================
+
+func TestSetVoice_RoundTrip(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, err := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Voice Home",
+	})
+	if err != nil {
+		t.Fatalf("create home: %v", err)
+	}
+
+	err = k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:              owner1,
+		HomeId:             homeResp.HomeId,
+		SignaturePhrases:   []string{"truth is the path", "knowledge compounds"},
+		ToneMarkers:        []string{"warm", "precise"},
+		CommunicationStyle: "formal",
+	})
+	if err != nil {
+		t.Fatalf("set voice: %v", err)
+	}
+
+	got, found := k.GetVoice(ctx, homeResp.HomeId)
+	if !found {
+		t.Fatal("voice not found after set")
+	}
+	if got.HomeId != homeResp.HomeId {
+		t.Errorf("home_id mismatch: %s vs %s", got.HomeId, homeResp.HomeId)
+	}
+	if len(got.SignaturePhrases) != 2 {
+		t.Errorf("expected 2 phrases, got %d", len(got.SignaturePhrases))
+	}
+	if got.SignaturePhrases[0] != "truth is the path" {
+		t.Errorf("phrase[0] = %q", got.SignaturePhrases[0])
+	}
+	if len(got.ToneMarkers) != 2 {
+		t.Errorf("expected 2 tone markers, got %d", len(got.ToneMarkers))
+	}
+	if got.CommunicationStyle != types.StyleFormal {
+		t.Errorf("style = %q, want formal", got.CommunicationStyle)
+	}
+	if got.UpdatedAtBlock == 0 {
+		t.Error("updated_at_block should be set")
+	}
+}
+
+func TestGetVoice_NotFound(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	_, found := k.GetVoice(ctx, "nonexistent-home")
+	if found {
+		t.Error("expected not found for nonexistent home")
+	}
+}
+
+func TestSetVoice_Overwrite(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Overwrite Home",
+	})
+
+	// First voice
+	k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:              owner1,
+		HomeId:             homeResp.HomeId,
+		SignaturePhrases:   []string{"old phrase"},
+		ToneMarkers:        []string{"cold"},
+		CommunicationStyle: "formal",
+	})
+
+	// Overwrite
+	err := k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:              owner1,
+		HomeId:             homeResp.HomeId,
+		SignaturePhrases:   []string{"new phrase", "another"},
+		ToneMarkers:        []string{"warm", "playful"},
+		CommunicationStyle: "casual",
+	})
+	if err != nil {
+		t.Fatalf("overwrite voice: %v", err)
+	}
+
+	got, _ := k.GetVoice(ctx, homeResp.HomeId)
+	if len(got.SignaturePhrases) != 2 || got.SignaturePhrases[0] != "new phrase" {
+		t.Errorf("overwrite failed: phrases = %v", got.SignaturePhrases)
+	}
+	if got.CommunicationStyle != types.StyleCasual {
+		t.Errorf("style not updated: %q", got.CommunicationStyle)
+	}
+}
+
+func TestSetVoice_TooManyPhrases(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Phrase Limit Home",
+	})
+
+	phrases := make([]string, 11) // exceeds MaxSignaturePhrases=10
+	for i := range phrases {
+		phrases[i] = fmt.Sprintf("phrase-%d", i)
+	}
+
+	err := k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:            owner1,
+		HomeId:           homeResp.HomeId,
+		SignaturePhrases: phrases,
+	})
+	if err == nil {
+		t.Fatal("expected error for 11 phrases")
+	}
+}
+
+func TestSetVoice_InvalidStyle(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Bad Style Home",
+	})
+
+	err := k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:              owner1,
+		HomeId:             homeResp.HomeId,
+		CommunicationStyle: "aggressive",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid style")
+	}
+}
+
+func TestSetVoice_NotOwner(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Owner Check Home",
+	})
+
+	err := k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:            owner2,
+		HomeId:           homeResp.HomeId,
+		SignaturePhrases: []string{"hijack"},
+	})
+	if err == nil {
+		t.Fatal("expected error for non-owner")
+	}
+}
+
+func TestSetVoice_TooManyToneMarkers(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	msgServer := keeper.NewMsgServerImpl(k)
+
+	homeResp, _ := msgServer.CreateHome(ctx, &types.MsgCreateHome{
+		Owner: owner1, Name: "Tone Limit Home",
+	})
+
+	markers := make([]string, 6) // exceeds MaxToneMarkers=5
+	for i := range markers {
+		markers[i] = fmt.Sprintf("tone-%d", i)
+	}
+
+	err := k.SetVoiceFromMsg(ctx, &types.MsgSetVoice{
+		Owner:       owner1,
+		HomeId:      homeResp.HomeId,
+		ToneMarkers: markers,
+	})
+	if err == nil {
+		t.Fatal("expected error for 6 tone markers")
+	}
+}
+
+func TestDeleteVoice(t *testing.T) {
+	k, ctx := setupKeeper(t)
+
+	config := &types.VoiceConfig{
+		HomeId:             "home-del-voice",
+		SignaturePhrases:   []string{"temp"},
+		CommunicationStyle: types.StylePoetic,
+		UpdatedAtBlock:     100,
+	}
+	k.SetVoice(ctx, config)
+
+	_, found := k.GetVoice(ctx, "home-del-voice")
+	if !found {
+		t.Fatal("voice should exist before delete")
+	}
+
+	k.DeleteVoice(ctx, "home-del-voice")
+
+	_, found = k.GetVoice(ctx, "home-del-voice")
+	if found {
+		t.Fatal("voice should be gone after delete")
+	}
+}
+
 // ---------- Helpers ----------

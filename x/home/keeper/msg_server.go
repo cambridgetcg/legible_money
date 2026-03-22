@@ -518,6 +518,15 @@ func (m msgServer) SetSpendingLimit(goCtx context.Context, msg *types.MsgSetSpen
 }
 
 
+// HandleSetVoice sets the voice configuration for a home. Validates ownership and config.
+func (m msgServer) HandleSetVoice(goCtx context.Context, msg *types.MsgSetVoice) (*types.MsgSetVoiceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := m.Keeper.SetVoiceFromMsg(ctx, msg); err != nil {
+		return nil, err
+	}
+	return &types.MsgSetVoiceResponse{}, nil
+}
+
 // UpdateParams handles MsgUpdateParams -- governance-gated parameter update.
 func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
 	if m.Keeper.GetAuthority() != msg.Authority {
