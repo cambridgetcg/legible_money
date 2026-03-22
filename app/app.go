@@ -996,6 +996,7 @@ func NewLegibleApp(
 	// Wire home ↔ partnerships cross-module integration
 	// (auto-link homes on partnership accept, freeze sync, spending limit deliberation)
 	app.HomeKeeper.SetPartnershipKeeper(NewHomePartnershipAdapter(app.PartnershipsKeeper))
+	app.HomeKeeper.SetScheduleKeeper(app.ScheduleKeeper)
 	app.PartnershipsKeeper.SetHomeKeeper(app.HomeKeeper)
 
 	// Wire verification hooks: staking (reputation) + qualification (domain metrics)
