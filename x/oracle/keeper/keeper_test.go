@@ -107,6 +107,31 @@ func TestSubmitPrediction_CertaintyForbidden(t *testing.T) {
 	t.Logf("PASS: certainty rejected: %v", err)
 }
 
+func TestSubmitPrediction_EntropyFloorRejectsFlashFarming(t *testing.T) {
+	ctx, k := setupTest(t)
+	height := uint64(ctx.BlockHeight())
+
+	// V1: 95% confident prediction should be rejected (entropy < 0.15 bits)
+	msg := types.MsgSubmitPrediction{
+		Submitter: testAddr(1), Claim: "near-certain trivial prediction",
+		Probability: 950_000, // 95% → entropy 0.074 bits < 0.15 threshold
+		StakeAmount: 1_000_000, ResolutionBlock: height + 50_000,
+	}
+	_, err := k.SubmitPrediction(ctx, msg)
+	if err == nil {
+		t.Error("expected entropy floor rejection for 95% prediction")
+	}
+	t.Logf("PASS: 95%% prediction rejected: %v", err)
+
+	// 85% should pass (entropy 0.234 bits > 0.15)
+	msg.Probability = 850_000
+	_, err = k.SubmitPrediction(ctx, msg)
+	if err != nil {
+		t.Errorf("expected 85%% prediction to pass, got: %v", err)
+	}
+	t.Log("PASS: 85% prediction accepted")
+}
+
 func TestResolvePrediction_Correct(t *testing.T) {
 	ctx, k := setupTest(t)
 	height := uint64(ctx.BlockHeight())
