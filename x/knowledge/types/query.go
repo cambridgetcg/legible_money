@@ -60,3 +60,42 @@ type QueryCounterFactsByDomainResponse struct {
 func (r *QueryCounterFactsByDomainResponse) Reset()         {}
 func (r *QueryCounterFactsByDomainResponse) String() string { return fmt.Sprintf("%+v", *r) }
 func (r *QueryCounterFactsByDomainResponse) ProtoMessage()  {}
+
+// ---- Provisional Challenge Query Types ----
+
+type QueryProvisionalChallengeRequest struct {
+	ChallengeId string `json:"challenge_id"`
+}
+
+func (r *QueryProvisionalChallengeRequest) Reset() {}
+func (r *QueryProvisionalChallengeRequest) String() string {
+	return fmt.Sprintf("QueryProvisionalChallenge{%s}", r.ChallengeId)
+}
+func (r *QueryProvisionalChallengeRequest) ProtoMessage() {}
+
+type QueryProvisionalChallengeResponse struct {
+	Challenge *ProvisionalChallenge `json:"challenge"`
+}
+
+func (r *QueryProvisionalChallengeResponse) Reset()         {}
+func (r *QueryProvisionalChallengeResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryProvisionalChallengeResponse) ProtoMessage()  {}
+
+type QueryChallengesByClaimRequest struct {
+	ClaimId    string `json:"claim_id"`
+	StatusFilter string `json:"status_filter,omitempty"` // "", "open", "resolved"
+}
+
+func (r *QueryChallengesByClaimRequest) Reset() {}
+func (r *QueryChallengesByClaimRequest) String() string {
+	return fmt.Sprintf("QueryChallengesByClaim{%s}", r.ClaimId)
+}
+func (r *QueryChallengesByClaimRequest) ProtoMessage() {}
+
+type QueryChallengesByClaimResponse struct {
+	Challenges []*ProvisionalChallenge `json:"challenges"`
+}
+
+func (r *QueryChallengesByClaimResponse) Reset()         {}
+func (r *QueryChallengesByClaimResponse) String() string { return fmt.Sprintf("%+v", *r) }
+func (r *QueryChallengesByClaimResponse) ProtoMessage()  {}

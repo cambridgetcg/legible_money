@@ -652,3 +652,5 @@ func NewQueryDomainProposalsCmd() *cobra.Command {
 
 	return cmd
 }
+
+// NewQueryProvisionalChallengeCmd returns the command to query a provisional challenge by ID.

@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"context"
 	"fmt"
 	"strconv"
@@ -719,4 +721,37 @@ func (q queryServer) ResearchFund(goCtx context.Context, _ *types.QueryResearchF
 		TotalDisbursed:  strconv.FormatUint(stats.TotalDisbursed, 10),
 		TotalCollected:  strconv.FormatUint(stats.TotalCollected, 10),
 	}, nil
+}
+
+// ProvisionalChallenge queries a single provisional challenge by ID.
+func (q queryServer) ProvisionalChallenge(goCtx context.Context, req *types.QueryProvisionalChallengeRequest) (*types.QueryProvisionalChallengeResponse, error) {
+	if req == nil || req.ChallengeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "challenge_id required")
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	challenge, found := q.Keeper.GetProvisionalChallenge(ctx, req.ChallengeId)
+	if !found {
+		return nil, status.Errorf(codes.NotFound, "challenge not found: %s", req.ChallengeId)
+	}
+	return &types.QueryProvisionalChallengeResponse{Challenge: &challenge}, nil
+}
+
+// ChallengesByClaim returns all provisional challenges for a given claim.
+func (q queryServer) ChallengesByClaim(goCtx context.Context, req *types.QueryChallengesByClaimRequest) (*types.QueryChallengesByClaimResponse, error) {
+	if req == nil || req.ClaimId == "" {
+		return nil, status.Error(codes.InvalidArgument, "claim_id required")
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	var challenges []*types.ProvisionalChallenge
+	q.Keeper.IterateProvisionalChallenges(ctx, func(c types.ProvisionalChallenge) bool {
+		if c.ClaimId != req.ClaimId {
+			return false
+		}
+		if req.StatusFilter == "" || c.Status == req.StatusFilter {
+			c := c // capture
+			challenges = append(challenges, &c)
+		}
+		return false
+	})
+	return &types.QueryChallengesByClaimResponse{Challenges: challenges}, nil
 }
