@@ -164,23 +164,25 @@ type TrainingExample struct {
 
 // ComputeBrierWeight returns 1000 * log2(1 + horizonDays) as integer (scaled ×1000 for precision).
 // Use this to avoid floating point in the keeper.
+// ComputeBrierWeight returns floor(log2(1+horizonDays)) * 1000, capped at 12000.
+// F1 DEFENSE (Alpha audit): unbounded log2 allows gaming with 10-year predictions.
+// Cap at 12.0 (log2(4096) ≈ years) to bound maximum horizon advantage.
 func ComputeBrierWeight(horizonDays uint64) uint64 {
 	if horizonDays == 0 {
 		return 1000
 	}
-	// Integer approximation of log2(1 + horizonDays) * 1000
-	// Using bit length as proxy: floor(log2(n)) = bits.Len64(n) - 1
-	// For precise log2: use precomputed table or iterative Newton method
-	// For now: accurate for tier boundaries, interpolate linearly within
 	val := horizonDays + 1
 	var bits uint64
 	for val > 1 {
 		val >>= 1
 		bits++
 	}
-	// bits = floor(log2(horizonDays+1)), multiply by 1000
-	// Add fractional part approximation: (original - 2^bits) / 2^bits * 1000
-	return bits * 1000
+	w := bits * 1000
+	const maxWeight = 12_000 // cap at ~12 years (log2(4096))
+	if w > maxWeight {
+		w = maxWeight
+	}
+	return w
 }
 
 // ── Aggregation with Recency Bias ────────────────────────────────────────────
@@ -203,16 +205,17 @@ func ComputeBrierWeight(horizonDays uint64) uint64 {
 
 // RecencyWeight computes 0.95^ageMonths as bps (1_000_000 = 1.0).
 // Uses integer power: (950_000/1_000_000)^ageMonths, computed iteratively.
+// RecencyWeightBps computes 0.95^ageMonths in bps (1_000_000 = 1.0).
+// F4 DEFENSE (Alpha audit): floor at 1 to prevent division-by-zero in aggregation.
 func RecencyWeightBps(ageMonths uint64) uint64 {
 	if ageMonths == 0 {
 		return 1_000_000
 	}
-	// 0.95 in bps = 950_000
 	w := uint64(1_000_000)
 	for i := uint64(0); i < ageMonths; i++ {
 		w = w * 950_000 / 1_000_000
 		if w == 0 {
-			return 1 // floor at 1 to avoid division by zero
+			return 1
 		}
 	}
 	return w
