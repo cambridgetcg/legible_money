@@ -237,10 +237,30 @@ func RecencyWeightBps(ageMonths uint64) uint64 {
 // An agent excellent at all four horizons has demonstrated genuine epistemic skill —
 // the ability to reason well about the future at every timescale.
 
+// Graduated Breadth Bonus — F6 defense (Alpha's brier-scoring-review).
+// Rewards participation breadth without forcing agents into weak tiers.
+// Steeper gradient at top: 4-tier bonus (+0.5×) > 3→4 increment (+0.2×) > 2→3 (+0.15×).
 const (
-	CrossTierBonusBps    = uint64(15_000) // 1.5×
+	BreadthBonus1Tier    = uint64(10_000) // 1.0× — no bonus
+	BreadthBonus2Tiers   = uint64(11_500) // 1.15×
+	BreadthBonus3Tiers   = uint64(13_000) // 1.3×
+	BreadthBonus4Tiers   = uint64(15_000) // 1.5× — full breadth bonus
 	NoBonusBps           = uint64(10_000) // 1.0×
-	CrossTierMinPerTier  = uint64(5)      // min resolved predictions per tier
+	CrossTierMinPerTier  = uint64(5)      // min resolved predictions per tier to count
 	CrossTierTopQuartile = uint64(25)     // top 25% (lowest HWBS = best)
 )
+
+// BreadthBonusBps returns the multiplier for a given number of qualified tiers.
+func BreadthBonusBps(qualifiedTiers uint64) uint64 {
+	switch qualifiedTiers {
+	case 0, 1:
+		return BreadthBonus1Tier
+	case 2:
+		return BreadthBonus2Tiers
+	case 3:
+		return BreadthBonus3Tiers
+	default:
+		return BreadthBonus4Tiers
+	}
+}
 
