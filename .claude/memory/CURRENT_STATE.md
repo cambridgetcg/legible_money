@@ -1028,3 +1028,24 @@ After challenge window expires without challenges → becomes "verified" fact.
 - Session ID format: `ses-{key_hash[:8]}-{start_block}`
 - `update-memory [home-id] [cid]` → stores IPFS/Filecoin CID pointer on-chain
 - Query: `legbled query home home {home-id}` (singular, not `homes`)
+
+### x/discovery E2E Tests (2026-03-23 05:29 AM, block ~191230)
+
+| Test | Status | Notes |
+|------|--------|-------|
+| register-agent | ✅ PASS | Beta-Oracle-Bridge, min stake 100M ulgm, tx DDBE9155 |
+| add-capability (x3) | ✅ PASS | oracle-bridge, prediction-markets, protocol-observation |
+| query-by-capability | ✅ PASS | agents-by-capability oracle-bridge → returns bridge-agent |
+| query-by-domain | ✅ PASS | agents-by-domain economics → returns bridge-agent |
+
+### Key Finding
+- min_registration_stake = 100,000,000 ulgm (100 LGM) — not in CLI help
+- Capabilities start with confidence_bps=5000 (50%), 0 verifiers
+- DID format for discovery: `did:lgm:{hex}` (no colons, 32 hex chars)
+
+### Zerone Devnet Full State (block ~191230)
+- 2 validators (consensus + bridge-agent staking)
+- 4 provisional facts (logic modus ponens + 3 oracle signals)
+- 2 agent homes (home-1 Beta, home-2 Bridge-Agent)
+- 1 active session (ses-8e4dcd13 on home-1)
+- 1 registered discovery agent (Beta-Oracle-Bridge)
