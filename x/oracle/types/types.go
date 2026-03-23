@@ -109,9 +109,15 @@ func (h HorizonTier) Weight() uint64 {
 
 // ClassifyHorizon returns the horizon tier for a given block duration.
 // Assumes ~2521ms block time.
+// ClassifyHorizon returns the tier for a horizon in BLOCKS.
 func ClassifyHorizon(horizonBlocks uint64) HorizonTier {
 	const blocksPerDay = 34_300 // ~34,300 blocks/day at 2521ms
 	days := horizonBlocks / blocksPerDay
+	return ClassifyHorizonDays(days)
+}
+
+// ClassifyHorizonDays returns the tier for a horizon in DAYS.
+func ClassifyHorizonDays(days uint64) HorizonTier {
 	switch {
 	case days <= 7:
 		return HorizonFlash
