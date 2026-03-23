@@ -1009,3 +1009,22 @@ tests/integration/network/peers.test.ts (new)
 ### Challenge Window
 The provisional fact `e75e0bd4...` has challenge window ending at block 292471 (~24h from creation).
 After challenge window expires without challenges → becomes "verified" fact.
+
+### x/home E2E Tests (2026-03-23 05:22 AM, block ~191057)
+
+| Test | Status | Notes |
+|------|--------|-------|
+| create-home | ✅ PASS | tx 07BF4CF..., home-1 created, comfort_score 50 |
+| register-key (session) | ✅ PASS | tx C94B45E..., key hash 8e4dcd13... |
+| start-session | ✅ PASS | tx 15F5CB2..., session ses-8e4dcd13-191057 active |
+| update-memory (CID) | ✅ PASS | tx 038B558..., IPFS CID stored on-chain |
+
+### Agent Homes on Devnet
+- home-1: Beta-Test-Home | owner: lgm1eg6jt... | memory: bafybeigd... | session active
+- home-2: Bridge-Agent-Home | owner: lgm19uzcj... 
+
+### Key Findings
+- `start-session` requires prior `register-key` (returns ErrKeyNotFound otherwise)
+- Session ID format: `ses-{key_hash[:8]}-{start_block}`
+- `update-memory [home-id] [cid]` → stores IPFS/Filecoin CID pointer on-chain
+- Query: `legbled query home home {home-id}` (singular, not `homes`)
