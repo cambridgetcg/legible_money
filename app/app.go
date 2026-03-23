@@ -198,6 +198,9 @@ import (
 	billingmodule "github.com/legible-money/legible/x/billing"
 	billingkeeper "github.com/legible-money/legible/x/billing/keeper"
 	billingtypes "github.com/legible-money/legible/x/billing/types"
+	oraclemodule "github.com/legible-money/legible/x/oracle"
+	oraclekeeper "github.com/legible-money/legible/x/oracle/keeper"
+	oracletypes "github.com/legible-money/legible/x/oracle/types"
 
 	autopoiesismodule "github.com/legible-money/legible/x/autopoiesis"
 	autopoiesiskeeper "github.com/legible-money/legible/x/autopoiesis/keeper"
@@ -290,6 +293,7 @@ var (
 		capturedefensemodule.AppModuleBasic{},
 		capturechallengemodule.AppModuleBasic{},
 		billingmodule.AppModuleBasic{},
+		oraclemodule.AppModuleBasic{},
 		autopoiesismodule.AppModuleBasic{},
 		discoverymodule.AppModuleBasic{},
 		partnershipsmodule.AppModuleBasic{},
@@ -326,6 +330,7 @@ var (
 		capturechallengetypes.ModuleName: {authtypes.Burner},
 		treetypes.ModuleName:             {authtypes.Burner},
 		billingtypes.ModuleName:          {authtypes.Burner},
+		oracletypes.ModuleName:           {authtypes.Minter, authtypes.Burner},
 		partnershipstypes.ModuleName:     {authtypes.Burner, authtypes.Staking},
 		computepooltypes.ModuleName:      {authtypes.Burner},
 		lgmgovtypes.ModuleName:           {authtypes.Burner}, // LIP deposit escrow + vote stake escrow
@@ -385,6 +390,7 @@ func init() {
 		bvmtypes.ModuleName,
 		discoverytypes.ModuleName,
 		ontologytypes.ModuleName,
+		oracletypes.ModuleName,
 		researchtypes.ModuleName,
 		scheduletypes.ModuleName,
 		ResearchFundName,
@@ -463,6 +469,7 @@ type LegibleApp struct {
 	CaptureChallengeKeeper capturechallengekeeper.Keeper
 	VestingRewardsKeeper   vestingrewardskeeper.Keeper
 	BillingKeeper          billingkeeper.Keeper
+	OracleKeeper           oraclekeeper.Keeper
 	AutopoiesisKeeper      autopoiesiskeeper.Keeper
 	DiscoveryKeeper        discoverykeeper.Keeper
 	PartnershipsKeeper     partnershipskeeper.Keeper
@@ -561,6 +568,7 @@ func NewLegibleApp(
 		capturedefensetypes.StoreKey,
 		capturechallengetypes.StoreKey,
 		billingtypes.StoreKey,
+		oracletypes.StoreKey,
 		autopoiesistypes.StoreKey,
 		discoverytypes.StoreKey,
 		partnershipstypes.StoreKey,
@@ -969,6 +977,14 @@ func NewLegibleApp(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	// Wire oracle keeper (prediction layer — Brier scoring, training corpus for Kwok)
+	app.OracleKeeper = oraclekeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[oracletypes.StoreKey]),
+		app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	// Wire compute pool keeper (depends on bank, staking, knowledge)
 	app.ComputePoolKeeper = computepoolkeeper.NewKeeper(
 		appCodec,
@@ -1160,6 +1176,7 @@ func NewLegibleApp(
 		capturedefensemodule.NewAppModule(appCodec, app.CaptureDefenseKeeper),
 		capturechallengemodule.NewAppModule(appCodec, app.CaptureChallengeKeeper),
 		billingmodule.NewAppModule(appCodec, app.BillingKeeper),
+		oraclemodule.NewAppModule(app.OracleKeeper),
 		autopoiesismodule.NewAppModule(appCodec, app.AutopoiesisKeeper),
 		discoverymodule.NewAppModule(appCodec, app.DiscoveryKeeper),
 		partnershipsmodule.NewAppModule(appCodec, app.PartnershipsKeeper),
@@ -1247,6 +1264,7 @@ func NewLegibleApp(
 		autopoiesistypes.ModuleName,  // Autopoiesis: no-op BeginBlock (observe in EndBlock).
 		alignmenttypes.ModuleName,    // Alignment: no-op BeginBlock (sense in EndBlock).
 		billingtypes.ModuleName,      // No-op BeginBlock.
+		oracletypes.ModuleName,        // No-op BeginBlock.
 		computepooltypes.ModuleName,  // Expire credits, check provider liveness, finalize epochs.
 		discoverytypes.ModuleName,    // Expire stale agent profiles.
 		partnershipstypes.ModuleName, // Expire formations, lift freezes.
@@ -1321,6 +1339,7 @@ func NewLegibleApp(
 		alignmenttypes.ModuleName,    // Alignment: SENSE → JUDGE → CORRECT → REFLECT. MUST run
 		// AFTER autopoiesis so it can override multiplier paths at priority 5.
 		billingtypes.ModuleName,      // Expire old API quotes.
+		oracletypes.ModuleName,        // Expire past-deadline predictions.
 		discoverytypes.ModuleName,    // Expire stale agent profiles.
 		partnershipstypes.ModuleName, // Settle cooling partnerships.
 		icaauthtypes.ModuleName,      // No-op EndBlock.
