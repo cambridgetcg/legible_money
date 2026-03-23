@@ -1068,3 +1068,37 @@ After challenge window expires without challenges → becomes "verified" fact.
 ### Zerone Devnet Full State (block ~191400)
 - 2 validators | 4 provisional facts | 2 agent homes | 1 active session
 - 1 discovery agent (Beta-Oracle-Bridge) | 1 legible_auth account (bridge-agent DID)
+
+### x/partnerships + x/compute_pool E2E Tests (2026-03-23 05:43 AM, block ~191550)
+
+| Module | Test | Status | Notes |
+|--------|------|--------|-------|
+| partnerships | quick-partner + quick-accept | ✅ PASS | partnership-1, 50/50 split, Trial tier |
+| partnerships | query by id | ✅ PASS | status active, cooperation_score 5000 |
+| compute_pool | register-provider | ✅ PASS | ai_inference, 100M stake, 100 CU price |
+| compute_pool | active-providers | ✅ PASS | bridge-agent listed |
+| compute_pool | pool-stats | ✅ PASS | epoch 5, pool_balance 100M |
+
+### Key Findings
+- min_provider_stake = 100M ulgm (same as discovery min_registration_stake)
+- Partnership cooperation_score starts at 5,000
+- Compute pool pool_balance = provider stake (staked ulgm = pool collateral)
+- DID derivation confirmed: `did:lgm:` + pubkey[:32 hex] (first 16 bytes)
+
+### Zerone Devnet Complete State (block ~191550)
+- 2 validators (consensus + bridge-agent)
+- 4 provisional facts (knowledge)
+- 2 agent homes (home-1, home-2) with 1 active session
+- 1 discovery agent (Beta-Oracle-Bridge, 3 capabilities)
+- 1 legible_auth DID account (bridge-agent)
+- 1 active partnership (test1 ↔ bridge-agent, Trial tier)
+- 1 compute provider (ai_inference, api.agenttool.dev)
+
+### Modules Validated Today (2026-03-23)
+✅ knowledge (PoT, provisional, challenge/uphold)
+✅ legible_staking (validator registration, tiers)
+✅ x/home (create/key/session/memory CID)
+✅ x/discovery (register, capabilities, domains)
+✅ legible_auth (DID account registration)
+✅ x/partnerships (quick-partner/accept)
+✅ x/compute_pool (provider registration, pool stats)
