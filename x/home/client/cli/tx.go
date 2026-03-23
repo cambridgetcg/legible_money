@@ -237,6 +237,17 @@ func NewStartSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start-session [home-id] [key-hash]",
 		Short: "Start a session on a home",
+		Long: `Start a session on a home using a pre-registered key hash.
+
+IMPORTANT: The key-hash must be registered first using 'register-key'.
+start-session will fail with ErrKeyNotFound if the key is not registered.
+
+The key-hash should be the SHA-256 hex digest of the session key material.
+Session ID format: ses-{key_hash[:8]}-{start_block}
+
+Example:
+  legbled tx home register-key home-1 $(echo -n "mysecretkey" | shasum -a 256 | awk '{print $1}') session --from mykey
+  legbled tx home start-session home-1 $(echo -n "mysecretkey" | shasum -a 256 | awk '{print $1}') --from mykey`,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)

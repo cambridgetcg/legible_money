@@ -48,9 +48,16 @@ a portion of the stake is slashed. If the challenge succeeds, the challenger
 receives a reward from the defender's slashed stake.
 
 Escalation tiers:
-  Tier 1 (Basic):     3 arbiters,  111 LGM bond, 2 days
-  Tier 2 (Escalated): 7 arbiters,  555 LGM bond, 4 days
-  Tier 3 (Final):     15 arbiters, 1111 LGM bond, 7 days`,
+  Tier 1 (Basic):     3 arbiters,  111,000,000 ulgm (111 LGM) bond, ~2 days
+  Tier 2 (Escalated): 7 arbiters,  555,000,000 ulgm (555 LGM) bond, ~4 days
+  Tier 3 (Final):     15 arbiters, 1,111,000,000 ulgm (1111 LGM) bond, ~7 days
+
+Arbiters are automatically assigned from active validators.
+Dispute status starts at "evidence" (not "open").
+Both challenger and defender can submit evidence during the evidence phase.
+
+Example (Tier 1):
+  legbled tx disputes initiate <fact-id> "Counter-argument reason" 111000000 --from mykey`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)

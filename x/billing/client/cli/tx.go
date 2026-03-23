@@ -38,7 +38,15 @@ func NewRegisterProviderCmd() *cobra.Command {
 		Use:   "register-provider [stake-amount] [domain1,domain2,...]",
 		Short: "Register as a knowledge API provider",
 		Long: `Register as a knowledge API provider by staking tokens and
-declaring which knowledge domains you serve.`,
+declaring which knowledge domains you serve.
+
+Minimum stake: 100,000,000 ulgm (100 LGM).
+
+Note: execute-payment requires --gas 500000 (default 200k insufficient
+due to WritePerByte overhead for fact access recording).
+
+Example:
+  legbled tx billing register-provider 100000000 logic,mathematics --from mykey`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)

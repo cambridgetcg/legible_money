@@ -40,7 +40,13 @@ func NewRegisterAgentCmd() *cobra.Command {
 		Long: `Register an agent for discovery by other agents and validators.
 
 The agent must stake tokens as registration collateral.
-Capabilities and domains can be specified with flags.`,
+Capabilities and domains can be specified with flags.
+
+Minimum stake: 100,000,000 ulgm (100 LGM). Registration fails with
+ErrInsufficientStake if stake is below this threshold.
+
+Example:
+  legbled tx discovery register-agent "MyAgent" 100000000 --domains knowledge,logic --from mykey`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)

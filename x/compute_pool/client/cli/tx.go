@@ -44,7 +44,13 @@ func NewRegisterComputeProviderCmd() *cobra.Command {
 		Long: `Register as a compute infrastructure provider.
 
 Service types: ai_inference, gpu_compute, storage
-Price and stake are in ulgm.`,
+Price and stake are in ulgm.
+
+Minimum stake: 100,000,000 ulgm (100 LGM). The staked amount becomes
+pool collateral and determines your share of compute rewards.
+
+Example:
+  legbled tx compute_pool register-provider ai_inference https://api.example.com 100 100000000 --from mykey`,
 		Args: cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)

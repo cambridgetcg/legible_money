@@ -50,8 +50,17 @@ func NewRegisterAccountCmd() *cobra.Command {
 		Long: `Register a new Legible account with a DID (Decentralized Identifier).
 
 DID format: did:lgm:{32-hex-chars}
-Public key: 64 hex characters (Ed25519)
-Account types: agent, human, contract, system`,
+Public key: 64 hex characters (Ed25519, 32 bytes)
+Account types: agent, human, contract, system
+
+DID DERIVATION: did:lgm: + first 32 hex chars of Ed25519 public key
+  (i.e., first 16 bytes of the pubkey, NOT a SHA-256 hash)
+  Example: pubkey a3b8ffd14ede693d6634472d7778d1d52e1676...
+           DID    did:lgm:a3b8ffd14ede693d6634472d7778d1d5
+
+NOTE: The 'quick-register' convenience command only works with Ed25519
+keys. Standard keyring keys (secp256k1) are incompatible — use this
+command directly with a manually-provided Ed25519 public key.`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)

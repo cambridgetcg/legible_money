@@ -53,9 +53,26 @@ provisional threshold (50%), a provisional fact is created with a challenge
 window. If it scores below the reject threshold (30%), it is rejected.
 
 Epistemic categories: analytic, formal, protocol, empirical, historical,
-                      predictive, social, replicated, computational
+                      predictive, social, replicated, computational,
+                      protocol_observation
 
-Logic zones: propositional, presburger, peano, empirical`,
+Logic zones: propositional, presburger, peano, empirical
+
+IMPORTANT: stake-amount is a plain integer (ulgm), NOT a denom-suffixed coin.
+  ✓ Correct:   legbled tx knowledge submit-claim ... 1000000
+  ✗ Wrong:     legbled tx knowledge submit-claim ... 1000000ulgm
+
+Category base scores (adversarial mode):
+  analytic/formal: 700k → provisional immediately (no evidence required)
+  protocol_observation: 750k → provisional immediately
+  empirical/historical: 500k base BUT requires evidence (-200k penalty without)
+    → 300k without evidence → "evaluated" (not provisional)
+
+Logic zone must match category:
+  analytic → propositional | empirical → empirical (default)
+  Default --logic-zone is "empirical" (incompatible with analytic/formal!)
+
+Minimum stake: 1,000 ulgm (MinClaimStakeUlgm)`,
 		Args: cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)
