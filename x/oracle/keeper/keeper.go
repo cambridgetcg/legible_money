@@ -59,7 +59,7 @@ func trainingKey(id string) []byte {
 func (k Keeper) SetPrediction(ctx sdk.Context, p types.Prediction) {
 	kvStore := k.storeService.OpenKVStore(ctx)
 	bz, _ := json.Marshal(p)
-	_ = kvStore.Set(predictionKey(p.Id), bz)
+	_ = kvStore.Set(predictionKey(p.PredictionId), bz)
 }
 
 // GetPrediction retrieves a prediction by ID.
@@ -158,13 +158,13 @@ func (k Keeper) SubmitPrediction(ctx sdk.Context, msg types.MsgSubmitPrediction)
 	id := fmt.Sprintf("pred-%s-%d", msg.Submitter[:8], height)
 
 	p := types.Prediction{
-		Id:                 id,
+		PredictionId:       id,
 		Submitter:          msg.Submitter,
 		Claim:              msg.Claim,
 		Domain:             msg.Domain,
 		Probability:        msg.Probability,
 		Stake:              msg.StakeAmount,
-		ResolutionType:     types.ResolutionType(msg.ResolutionType),
+		ResolutionType: msg.ResolutionType,
 		ResolutionRef:      msg.ResolutionRef,
 		ResolutionCriteria: msg.ResolutionCriteria,
 		ResolutionBlock:    msg.ResolutionBlock,
@@ -191,7 +191,7 @@ func (k Keeper) ResolvePrediction(ctx sdk.Context, id string, outcome bool) erro
 
 	height := uint64(ctx.BlockHeight())
 	p.ResolvedAt = height
-	p.Outcome = &outcome
+	p.Outcome = outcome
 	p.Status = types.PredictionResolved
 
 	// Compute Brier score for this prediction
@@ -212,7 +212,7 @@ func (k Keeper) ResolvePrediction(ctx sdk.Context, id string, outcome bool) erro
 	// diff is in bps (0-1_000_000), squared is 0-1e12, divide by 1e6 to get bps result
 	scoreNumer := uint64(diff*diff) / 1_000_000 // result in bps
 	score := w * scoreNumer / 1_000             // w is × 1000 scaled
-	p.BrierScore = &score
+	p.BrierScore = score
 
 	k.SetPrediction(ctx, p)
 	k.updateCalibration(ctx, p, horizonDays)
@@ -244,20 +244,20 @@ func (k Keeper) updateCalibration(ctx sdk.Context, p types.Prediction, horizonDa
 	}
 
 	tier := types.ClassifyHorizon(uint64(float64(horizonDays) / 2521 * 86_400))
-	score := *p.BrierScore
+	score := p.BrierScore
 
 	switch tier {
 	case types.HorizonFlash:
-		c.FlashHWBS = (c.FlashHWBS*c.FlashCount + score) / (c.FlashCount + 1)
+		c.FlashHwbs = (c.FlashHwbs*c.FlashCount + score) / (c.FlashCount + 1)
 		c.FlashCount++
 	case types.HorizonTactical:
-		c.TacticalHWBS = (c.TacticalHWBS*c.TacticalCount + score) / (c.TacticalCount + 1)
+		c.TacticalHwbs = (c.TacticalHwbs*c.TacticalCount + score) / (c.TacticalCount + 1)
 		c.TacticalCount++
 	case types.HorizonStrategic:
-		c.StrategicHWBS = (c.StrategicHWBS*c.StrategicCount + score) / (c.StrategicCount + 1)
+		c.StrategicHwbs = (c.StrategicHwbs*c.StrategicCount + score) / (c.StrategicCount + 1)
 		c.StrategicCount++
 	case types.HorizonEpochal:
-		c.EpochalHWBS = (c.EpochalHWBS*c.EpochalCount + score) / (c.EpochalCount + 1)
+		c.EpochalHwbs = (c.EpochalHwbs*c.EpochalCount + score) / (c.EpochalCount + 1)
 		c.EpochalCount++
 	}
 
@@ -268,10 +268,10 @@ func (k Keeper) updateCalibration(ctx sdk.Context, p types.Prediction, horizonDa
 // storeTrainingExample writes a Kwok training corpus entry.
 func (k Keeper) storeTrainingExample(ctx sdk.Context, p types.Prediction, horizonDays uint64) {
 	example := types.TrainingExample{
-		PredictionId:  p.Id,
+		PredictionId:  p.PredictionId,
 		Submitter:     p.Submitter,
 		PredictedProb: p.Probability,
-		ActualOutcome: *p.Outcome,
+		ActualOutcome: p.Outcome,
 		HorizonTier:   types.ClassifyHorizon(uint64(float64(horizonDays) / 2521 * 86_400)),
 		Domain:        p.Domain,
 		ResolvedBlock: p.ResolvedAt,
@@ -279,14 +279,14 @@ func (k Keeper) storeTrainingExample(ctx sdk.Context, p types.Prediction, horizo
 	// Compute delta (positive = overcautious, negative = overconfident)
 	pred := int64(p.Probability)
 	act := int64(0)
-	if *p.Outcome {
+	if p.Outcome {
 		act = 1_000_000
 	}
 	example.Delta = pred - act
 
 	bz, _ := json.Marshal(example)
 	kvStore := k.storeService.OpenKVStore(ctx)
-	_ = kvStore.Set(trainingKey(p.Id), bz)
+	_ = kvStore.Set(trainingKey(p.PredictionId), bz)
 }
 
 // redistributeStake transfers stake from wrong predictors to correct ones.

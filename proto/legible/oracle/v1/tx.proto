@@ -1,0 +1,48 @@
+syntax = "proto3";
+package legible.oracle.v1;
+
+option go_package = "github.com/legible-money/legible/x/oracle/types";
+
+import "cosmos/msg/v1/msg.proto";
+
+// Msg defines the oracle prediction module's transaction service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc SubmitPrediction(MsgSubmitPrediction) returns (MsgSubmitPredictionResponse);
+  rpc ResolvePrediction(MsgResolvePrediction) returns (MsgResolvePredictionResponse);
+}
+
+// MsgSubmitPrediction stakes a probabilistic claim about a future state.
+// Probability is specified in basis points (1 = 0.0001%, 1000000 = 100%).
+// Values 0 and 1000000 are forbidden — epistemic humility enforced.
+message MsgSubmitPrediction {
+  option (cosmos.msg.v1.signer) = "submitter";
+
+  string submitter            = 1;
+  string claim                = 2;  // human-readable prediction text
+  string domain               = 3;  // knowledge domain (e.g. economics.regime)
+  uint64 probability          = 4;  // bps [1, 999999]
+  uint64 stake_amount         = 5;  // ulgm
+  string resolution_type      = 6;  // on_chain | oracle | arbiter
+  string resolution_ref       = 7;  // optional: fact ID, oracle feed ID
+  string resolution_criteria  = 8;  // human-readable resolution condition
+  uint64 resolution_block     = 9;  // block height deadline for resolution
+}
+
+message MsgSubmitPredictionResponse {
+  string prediction_id = 1;
+}
+
+// MsgResolvePrediction marks a prediction resolved (governance/oracle only).
+message MsgResolvePrediction {
+  option (cosmos.msg.v1.signer) = "authority";
+
+  string authority      = 1;
+  string prediction_id  = 2;
+  bool   outcome        = 3;
+}
+
+message MsgResolvePredictionResponse {
+  uint64 brier_score = 1;  // this prediction's score in bps (lower = better)
+}

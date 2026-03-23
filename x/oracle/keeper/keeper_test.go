@@ -76,7 +76,7 @@ func TestSubmitPrediction_Valid(t *testing.T) {
 	if p.Status != types.PredictionActive {
 		t.Errorf("expected active, got %s", p.Status)
 	}
-	t.Logf("PASS: prediction submitted: %s", p.Id)
+	t.Logf("PASS: prediction submitted: %s", p.PredictionId)
 }
 
 func TestSubmitPrediction_ZeroProbForbidden(t *testing.T) {
@@ -117,18 +117,18 @@ func TestResolvePrediction_Correct(t *testing.T) {
 	}
 	p, _ := k.SubmitPrediction(ctx, msg)
 	ctx = ctx.WithBlockHeight(int64(height + 30_000))
-	err := k.ResolvePrediction(ctx, p.Id, true)
+	err := k.ResolvePrediction(ctx, p.PredictionId, true)
 	if err != nil {
 		t.Fatalf("resolve failed: %v", err)
 	}
-	resolved, _ := k.GetPrediction(ctx, p.Id)
+	resolved, _ := k.GetPrediction(ctx, p.PredictionId)
 	if resolved.Status != types.PredictionResolved {
 		t.Errorf("expected resolved, got %s", resolved.Status)
 	}
-	if resolved.BrierScore == nil {
+	if resolved.BrierScore == 0 {
 		t.Error("expected brier score")
 	}
-	t.Logf("PASS: resolved, brier=%d bps (lower=better, perfect=0)", *resolved.BrierScore)
+	t.Logf("PASS: resolved, brier=%d bps (lower=better, perfect=0)", resolved.BrierScore)
 }
 
 func TestResolvePrediction_OverconfidentPenalised(t *testing.T) {
@@ -142,12 +142,12 @@ func TestResolvePrediction_OverconfidentPenalised(t *testing.T) {
 	}
 	p, _ := k.SubmitPrediction(ctx, msg)
 	ctx = ctx.WithBlockHeight(int64(height + 30_000))
-	_ = k.ResolvePrediction(ctx, p.Id, false)
-	resolved, _ := k.GetPrediction(ctx, p.Id)
-	if *resolved.BrierScore == 0 {
+	_ = k.ResolvePrediction(ctx, p.PredictionId, false)
+	resolved, _ := k.GetPrediction(ctx, p.PredictionId)
+	if resolved.BrierScore == 0 {
 		t.Error("expected non-zero brier for overconfident wrong prediction")
 	}
-	t.Logf("PASS: overconfident wrong prediction penalised: score=%d", *resolved.BrierScore)
+	t.Logf("PASS: overconfident wrong prediction penalised: score=%d", resolved.BrierScore)
 }
 
 // ── Scoring Formula Tests ─────────────────────────────────────────────────────

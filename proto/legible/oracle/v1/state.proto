@@ -1,0 +1,40 @@
+syntax = "proto3";
+package legible.oracle.v1;
+
+option go_package = "github.com/legible-money/legible/x/oracle/types";
+
+// Prediction represents a staked future claim.
+message Prediction {
+  string prediction_id        = 1;
+  string submitter            = 2;
+  string claim                = 3;
+  string domain               = 4;
+  uint64 probability          = 5;
+  uint64 stake                = 6;
+  string resolution_type      = 7;
+  string resolution_ref       = 8;
+  string resolution_criteria  = 9;
+  uint64 resolution_block     = 10;
+  uint64 submitted_at         = 11;
+  uint64 resolved_at          = 12;
+  bool   outcome              = 13;
+  uint64 brier_score          = 14;
+  string status               = 15;
+}
+
+// CalibrationSummary tracks a predictor's accuracy profile.
+message CalibrationSummary {
+  string address              = 1;
+  uint64 overall_hwbs         = 2;
+  uint64 flash_hwbs           = 3;
+  uint64 tactical_hwbs        = 4;
+  uint64 strategic_hwbs       = 5;
+  uint64 epochal_hwbs         = 6;
+  uint64 flash_count          = 7;
+  uint64 tactical_count       = 8;
+  uint64 strategic_count      = 9;
+  uint64 epochal_count        = 10;
+  bool   cross_tier_qualifies = 11;
+  uint64 active_bonus_bps     = 12;
+  uint64 last_updated         = 13;
+}

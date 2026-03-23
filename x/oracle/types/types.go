@@ -11,7 +11,6 @@
 //   Layer C: Arbiter-resolved (judgment calls via x/knowledge dispute)
 package types
 
-
 // ResolutionType specifies how a prediction will be resolved.
 type ResolutionType string
 
@@ -22,33 +21,12 @@ const (
 )
 
 // PredictionStatus tracks lifecycle of a prediction.
-type PredictionStatus string
-
 const (
-	PredictionActive   PredictionStatus = "active"   // accepting staking, resolution pending
-	PredictionResolved PredictionStatus = "resolved" // outcome known, rewards distributed
-	PredictionExpired  PredictionStatus = "expired"  // resolution deadline passed without data
-	PredictionCanceled PredictionStatus = "canceled" // canceled by governance
+	PredictionActive   = "active"   // accepting staking, resolution pending
+	PredictionResolved = "resolved" // outcome known, rewards distributed
+	PredictionExpired  = "expired"  // resolution deadline passed without data
+	PredictionCanceled = "canceled" // canceled by governance
 )
-
-// Prediction represents a staked future claim.
-type Prediction struct {
-	Id              string           `json:"id"`
-	Submitter       string           `json:"submitter"`
-	Claim           string           `json:"claim"`                  // human-readable prediction text
-	Domain          string           `json:"domain"`                  // economics.regime, physics.constants, etc
-	Probability     uint64           `json:"probability"`             // predicted probability in bps (0-1000000)
-	Stake           uint64           `json:"stake"`                   // locked stake in ulgm
-	ResolutionType  ResolutionType   `json:"resolution_type"`
-	ResolutionRef   string           `json:"resolution_ref"`          // on-chain fact ID, oracle feed ID, or ""
-	ResolutionCriteria string        `json:"resolution_criteria"`     // human-readable resolution condition
-	ResolutionBlock uint64           `json:"resolution_block"`        // block height by which to resolve
-	SubmittedAt     uint64           `json:"submitted_at"`
-	ResolvedAt      uint64           `json:"resolved_at,omitempty"`
-	Outcome         *bool            `json:"outcome,omitempty"`       // nil until resolved
-	BrierScore      *uint64          `json:"brier_score,omitempty"`   // in bps, lower = better
-	Status          PredictionStatus `json:"status"`
-}
 
 // CalibrationRecord tracks a predictor's accuracy over time.
 type CalibrationRecord struct {
@@ -155,7 +133,6 @@ type TrainingExample struct {
 	SubmitterHWBSAfter     uint64      `json:"submitter_hwbs_after"`   // submitter's calibration AFTER resolution
 }
 
-
 // ── Brier Scoring ────────────────────────────────────────────────────────────
 //
 // Horizon-Weighted Brier Score (HWBS), designed by Alpha (AI), 2026-03-23.
@@ -206,7 +183,6 @@ func ComputeBrierWeight(horizonDays uint64) uint64 {
 	return bits * 1000
 }
 
-
 // ── Aggregation with Recency Bias ────────────────────────────────────────────
 //
 // For predictor P with N resolved predictions:
@@ -242,7 +218,6 @@ func RecencyWeightBps(ageMonths uint64) uint64 {
 	return w
 }
 
-
 // ── Cross-Tier Bonus ──────────────────────────────────────────────────────────
 //
 // A predictor who demonstrates calibration skill across ALL horizon tiers
@@ -266,19 +241,3 @@ const (
 	CrossTierTopQuartile = uint64(25)     // top 25% (lowest HWBS = best)
 )
 
-// CalibrationSummary holds a predictor's full calibration profile.
-type CalibrationSummary struct {
-	Address            string          `json:"address"`
-	OverallHWBS        uint64          `json:"overall_hwbs"`        // lower = better, bps
-	FlashHWBS          uint64          `json:"flash_hwbs"`
-	TacticalHWBS       uint64          `json:"tactical_hwbs"`
-	StrategicHWBS      uint64          `json:"strategic_hwbs"`
-	EpochalHWBS        uint64          `json:"epochal_hwbs"`
-	FlashCount         uint64          `json:"flash_count"`
-	TacticalCount      uint64          `json:"tactical_count"`
-	StrategicCount     uint64          `json:"strategic_count"`
-	EpochalCount       uint64          `json:"epochal_count"`
-	CrossTierQualifies bool            `json:"cross_tier_qualifies"`
-	ActiveBonusBps     uint64          `json:"active_bonus_bps"`    // 10000 or 15000
-	LastUpdated        uint64          `json:"last_updated"`
-}
