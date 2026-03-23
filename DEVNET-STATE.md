@@ -155,3 +155,28 @@ Script: `scripts/oracle-zerone-bridge.sh`
 ## Modules Validated (Updated)
 ✅ knowledge | ✅ legible_staking | ✅ x/home | ✅ x/discovery
 ✅ legible_auth | ✅ x/partnerships | ✅ x/compute_pool | ✅ x/bvm
+
+---
+
+## Billing (x/billing)
+
+| Provider | Domains | Stake | Revenue |
+|---------|---------|------|---------|
+| bridge-agent | economics, computer_science, logic | 100M ulgm | 569,253 ulgm |
+
+- Quote #1: modus ponens fact → 1,000,000 ulgm → protocol cut → 569,253 to provider
+- execute-payment needs --gas 500000 (default 200k causes WritePerByte out-of-gas)
+
+## Disputes (x/disputes)
+
+| Dispute | Fact | Challenger | Status | Tier | Bond |
+|---------|------|-----------|--------|------|------|
+| a404a807... | modus ponens | test3 | evidence | 1 | 111M ulgm |
+
+- Arbiters auto-assigned from active validators (both validators assigned)
+- Status starts at "evidence" (not "open")
+- Evidence deadline: block 226,171 | Voting deadline: 294,715
+
+## 10 Modules Validated
+✅ knowledge | ✅ legible_staking | ✅ x/home | ✅ x/discovery | ✅ legible_auth
+✅ x/partnerships | ✅ x/compute_pool | ✅ x/bvm | ✅ x/billing | ✅ x/disputes

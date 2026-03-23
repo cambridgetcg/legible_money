@@ -1119,3 +1119,23 @@ After challenge window expires without challenges → becomes "verified" fact.
 ### 8 Modules Validated Today
 knowledge | legible_staking | x/home | x/discovery | legible_auth
 x/partnerships | x/compute_pool | x/bvm
+
+### x/billing + x/disputes E2E Tests (2026-03-23 05:57 AM, block ~191900)
+
+| Module | Test | Status | Notes |
+|--------|------|--------|-------|
+| billing | register-provider | ✅ PASS | 100M stake, 3 domains |
+| billing | request-quote | ✅ PASS | quote #1, 1M ulgm for modus ponens fact |
+| billing | execute-payment | ✅ PASS | test2 → bridge-agent, revenue 569k ulgm |
+| disputes | initiate | ✅ PASS | dispute a404a807, tier 1, arbiters assigned |
+
+### Key Findings
+- billing execute-payment needs --gas 500000 (default 200k insufficient: WritePerByte overhead)
+- payment price = 1M ulgm, provider revenue = 569k (protocol takes ~43%)
+- disputes: arbiters auto-assigned from active validators
+- dispute status starts at "evidence" (not "open")
+- voting_deadline = evidence_deadline + ~68k blocks (~2 days)
+
+### 10 MODULES VALIDATED TODAY
+knowledge | legible_staking | x/home | x/discovery | legible_auth
+x/partnerships | x/compute_pool | x/bvm | x/billing | x/disputes
