@@ -956,7 +956,8 @@ func (k msgServer) PatronizeFact(goCtx context.Context, msg *types.MsgPatronizeF
 func isValidEpistemicCategory(cat string) bool {
 	switch cat {
 	case "protocol", "analytic", "formal", "empirical", "historical",
-		"computational", "social", "predictive", "replicated":
+		"computational", "social", "predictive", "replicated",
+		"protocol_observation":
 		return true
 	}
 	return false

@@ -5,7 +5,12 @@
     "zerone_did": "did:lgm:38b18019ba7df4bb48edacf1c4b80cd1",
     "zerone_address": "lgm1kx8cvuqj9lqaej4hs954ncnetzgr6tn703lpmq",
     "pubkey_hex": "38b18019ba7df4bb48edacf1c4b80cd1ee79226c6af179bd4afd783ef021848b",
-    "registered_on_chain": false,
-    "created_at": "2026-03-17T14:48:31.415Z"
+    "registered_on_chain": true,
+    "created_at": "2026-03-17T14:48:31.415Z",
+    "devnet_operator_address": "lgm19uzcjx09ul0gp9hf857jlc0ycqrv3ktkljelrv",
+    "devnet_consensus_pubkey": "a3b8ffd14ede693d6634472d7778d1d52e1676e01996d9dbc416ca2171ace211",
+    "devnet_validator_tier": "apprentice",
+    "registered_at_block": 190260,
+    "notes": "Registered on lgm-devnet-1 via bridge-agent key. Zerone DID and AgentTool DID linked."
   }
 ]
