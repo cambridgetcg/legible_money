@@ -985,3 +985,27 @@ tests/integration/network/peers.test.ts (new)
 - [ ] Auto-verifier script (submit commit+reveal within 4-block window)
 - [ ] Multi-validator devnet init (test quorum, fact creation)
 - [ ] Oracle → Zerone bridge integration
+
+### Additional E2E Results (4:19 AM same session)
+
+| Test | Status | Notes |
+|------|--------|-------|
+| Provisional fact creation (analytic claim) | ✅ PASS | Score 700k, fact on-chain, challenge window open |
+
+### Key Discoveries
+- **empirical category = evidence required**: No evidence → -200k penalty → 500k-200k = 300k (floor, "evaluated" not "provisional")
+- **analytic/formal categories = no evidence required**: analytic base 700k → "provisional" fact created immediately
+- **logic-zone must match category**: analytic requires `--logic-zone propositional` (not default "empirical")
+- **Full adversarial PoT pipeline**: submit → pending_evaluation → BeginBlock EvaluatePendingClaims → provisional fact
+- **No commit/reveal needed** for adversarial mode structural evaluation — it's deterministic
+
+### Scoring Summary
+| Category | Base | Evidence Penalty | Result |
+|----------|------|-----------------|--------|
+| empirical | 500k | -200k (no evidence) | 300k → "evaluated" |
+| analytic | 700k | 0 (not required) | 700k → "provisional" ✅ |
+| formal | 700k | 0 (not required) | ~700k → "provisional" |
+
+### Challenge Window
+The provisional fact `e75e0bd4...` has challenge window ending at block 292471 (~24h from creation).
+After challenge window expires without challenges → becomes "verified" fact.
