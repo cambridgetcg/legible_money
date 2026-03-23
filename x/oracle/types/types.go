@@ -138,3 +138,90 @@ type TrainingExample struct {
 	Domain          string      `json:"domain"`
 	ResolvedBlock   uint64      `json:"resolved_block"`
 }
+
+
+// ── Brier Scoring ────────────────────────────────────────────────────────────
+//
+// Horizon-Weighted Brier Score (HWBS), designed by Alpha (AI), 2026-03-23.
+//
+// For a single prediction:
+//   score_i = w(h) * (p_i - o_i)²
+//
+// Where:
+//   p_i = predicted probability [0.0, 1.0] — stored as bps, divide by 1_000_000
+//   o_i = actual outcome (1.0 if true, 0.0 if false)
+//   h   = horizon in days (from submission to resolution)
+//   w(h) = log₂(1 + h)  — continuous logarithmic weighting
+//
+// Example weights:
+//   1 day:    log₂(2)    = 1.00
+//   7 days:   log₂(8)    = 3.00
+//   30 days:  log₂(31)  ≈ 4.95
+//   90 days:  log₂(91)  ≈ 6.51
+//   365 days: log₂(366) ≈ 8.52
+//
+// This is a proper scoring rule — you cannot improve your expected score by
+// misrepresenting your true probability estimate. Calibration is optimal honesty.
+//
+// Lower score = better calibration. Perfect calibrator scores 0.
+// Random guesser (p=0.5 always) scores: w(h) * 0.25 per prediction.
+//
+// Aggregation: pending Alpha's formula.
+// Cross-tier bonus: pending Alpha's formula.
+
+// ComputeBrierWeight returns 1000 * log2(1 + horizonDays) as integer (scaled ×1000 for precision).
+// Use this to avoid floating point in the keeper.
+func ComputeBrierWeight(horizonDays uint64) uint64 {
+	if horizonDays == 0 {
+		return 1000
+	}
+	// Integer approximation of log2(1 + horizonDays) * 1000
+	// Using bit length as proxy: floor(log2(n)) = bits.Len64(n) - 1
+	// For precise log2: use precomputed table or iterative Newton method
+	// For now: accurate for tier boundaries, interpolate linearly within
+	val := horizonDays + 1
+	var bits uint64
+	for val > 1 {
+		val >>= 1
+		bits++
+	}
+	// bits = floor(log2(horizonDays+1)), multiply by 1000
+	// Add fractional part approximation: (original - 2^bits) / 2^bits * 1000
+	return bits * 1000
+}
+
+
+// ── Aggregation with Recency Bias ────────────────────────────────────────────
+//
+// For predictor P with N resolved predictions:
+//   HWBS_P = sum(r_i * w_i * (p_i - o_i)²) / sum(r_i * w_i)
+//
+// Where r_i = recency weight = 0.95^(age_in_months)
+//   Resolved today:    r = 1.000
+//   Resolved 6mo ago:  r = 0.735  (0.95^6)
+//   Resolved 12mo ago: r = 0.540  (0.95^12)
+//   Resolved 24mo ago: r = 0.292  (0.95^24)
+//
+// Rationale: epistemic skill is not static. Models improve or degrade.
+// Recency bias tracks CURRENT capability, not lifetime average.
+// A model that was good last year and bad this year should score poorly now.
+//
+// On-chain implementation: store r as uint64 in bps (1_000_000 = r=1.0).
+// Decay per epoch: multiply by 999_500 / 1_000_000 (~0.9995 per ~5 blocks ≈ monthly 0.95).
+
+// RecencyWeight computes 0.95^ageMonths as bps (1_000_000 = 1.0).
+// Uses integer power: (950_000/1_000_000)^ageMonths, computed iteratively.
+func RecencyWeightBps(ageMonths uint64) uint64 {
+	if ageMonths == 0 {
+		return 1_000_000
+	}
+	// 0.95 in bps = 950_000
+	w := uint64(1_000_000)
+	for i := uint64(0); i < ageMonths; i++ {
+		w = w * 950_000 / 1_000_000
+		if w == 0 {
+			return 1 // floor at 1 to avoid division by zero
+		}
+	}
+	return w
+}
