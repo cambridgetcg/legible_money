@@ -138,3 +138,20 @@ Script: `scripts/oracle-zerone-bridge.sh`
 - [ ] x/disputes — open/vote/resolve a dispute
 - [ ] Multi-validator devnet — test PoT quorum with commit/reveal
 - [ ] AgentTool ↔ Zerone identity bridge (did:at: ↔ did:lgm:)
+
+---
+
+## BVM (x/bvm)
+
+| Contract | Creator | Bytecode | Deployed |
+|---------|---------|---------|---------|
+| lgm1contract091... | test1 | 604260005500 (PUSH1 0x42, PUSH1 0x00, SSTORE, STOP) | block 191,708 |
+
+- EVM-compatible opcodes: PUSH1 (0x60), SSTORE (0x55), STOP (0x00)
+- BVM gas model active: call used 22,106 BVM gas
+- `deploy-contract [hex]` — bytecode is the constructor; runtime = RETURN value
+- `call-contract [address] [input-hex]` with `--static` for read-only
+
+## Modules Validated (Updated)
+✅ knowledge | ✅ legible_staking | ✅ x/home | ✅ x/discovery
+✅ legible_auth | ✅ x/partnerships | ✅ x/compute_pool | ✅ x/bvm

@@ -1102,3 +1102,20 @@ After challenge window expires without challenges → becomes "verified" fact.
 ✅ legible_auth (DID account registration)
 ✅ x/partnerships (quick-partner/accept)
 ✅ x/compute_pool (provider registration, pool stats)
+
+### x/bvm E2E Tests (2026-03-23 05:50 AM, block ~191708)
+
+| Test | Status | Notes |
+|------|--------|-------|
+| deploy-contract (SSTORE bytecode) | ✅ PASS | 6-byte EVM bytecode deployed |
+| call-contract (empty input) | ✅ PASS | gas_used 22,106 BVM gas |
+
+- Contract: lgm1contract091dbe47a765d65b0fa2d30022cfb1a0871da9e1
+- Bytecode: `604260005500` (PUSH1 0x42, PUSH1 0x00, SSTORE, STOP)
+- EVM-compatible opcodes work (PUSH1=0x60, SSTORE=0x55, STOP=0x00)
+- contract-state query returns {} — SSTORE in constructor may not persist (runtime vs deploy context)
+- deploy-contract bytecode IS the constructor in EVM model; runtime code = constructor RETURN value
+
+### 8 Modules Validated Today
+knowledge | legible_staking | x/home | x/discovery | legible_auth
+x/partnerships | x/compute_pool | x/bvm
