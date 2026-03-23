@@ -954,3 +954,34 @@ tests/integration/network/peers.test.ts (new)
 - Multi-node devnet blocked until libp2p integration complete
 - Corrected documentation to reflect actual state
 - All other layers verified as genuinely complete (real implementation, not stubs)
+
+---
+
+## Cosmos Devnet E2E Tests — 2026-03-23 (4:04 AM UTC, block ~189323)
+
+### Devnet Status
+- Chain: lgm-devnet-1 | Block: 189,323 | Running since Tue 2 PM
+- Single validator, legbled binary built from source
+- All 36 modules + ~6000 tests passing (from 2026-03-22 sprint)
+
+### E2E Test Results
+
+| Test | Status | Notes |
+|------|--------|-------|
+| Knowledge claim submit | ✅ PASS | txhash D4F2FD21..., claim evaluated, round created+completed |
+| Validator registration (custom x/staking) | ✅ PASS | txhash D6EDF127..., tier:apprentice, reputation:500000 |
+
+### Key Findings
+- `submit-claim` positional args: `[claim-text] [domain] [category] [stake-number]` (not `1000000ulgm`, just `1000000`)
+- Fee minimum: 200000ulgm (1 gas × 200000 = min fee)
+- Stake minimum: 1000 ulgm (MinClaimStakeUlgm constant)
+- `register-validator` positional: `[pubkey-hex] [self-delegation-number]` (plain number, not with denom)
+- Custom x/staking validators: separate from Cosmos SDK staking — need `legible_staking register-validator`
+- Single-validator devnet: PoT rounds complete but no quorum (4-block commit window too tight for manual ops)
+  - Claim status "evaluated" (structural_score 300000) — correct for single-validator with no commit
+  - For full PoT testing, need auto-verifier script or multi-validator setup
+
+### Outstanding Next Steps
+- [ ] Auto-verifier script (submit commit+reveal within 4-block window)
+- [ ] Multi-validator devnet init (test quorum, fact creation)
+- [ ] Oracle → Zerone bridge integration
