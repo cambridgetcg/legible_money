@@ -126,16 +126,27 @@ func ClassifyHorizon(horizonBlocks uint64) HorizonTier {
 
 // TrainingExample is generated on every resolved prediction for Kwok training corpus.
 // The chain keeps the receipts — Kwok-v2 learns from Kwok-v1 mistakes.
+//
+// InputStateHash encodes the world state at the time of prediction:
+//   SHA-256( block_height || oracle_feed_snapshots || domain_confidence_vector || submitter_calibration_at_time )
+// This allows future models to reproduce the CONTEXT of the prediction, not just the outcome.
+// A prediction that was good given the information available is different from one that was lucky.
 type TrainingExample struct {
-	PredictionId    string      `json:"prediction_id"`
-	Submitter       string      `json:"submitter"`           // which model made this prediction
-	InputStateHash  string      `json:"input_state_hash"`    // hash of world state at prediction time
-	PredictedProb   uint64      `json:"predicted_prob"`      // in bps
-	ActualOutcome   bool        `json:"actual_outcome"`
-	Delta           int64       `json:"delta"`               // signed brier delta (improvement/regression)
-	HorizonTier     HorizonTier `json:"horizon_tier"`
-	Domain          string      `json:"domain"`
-	ResolvedBlock   uint64      `json:"resolved_block"`
+	PredictionId           string      `json:"prediction_id"`
+	Submitter              string      `json:"submitter"`            // which model/agent made this prediction
+	SubmittedAtBlock       uint64      `json:"submitted_at_block"`
+	ResolvedBlock          uint64      `json:"resolved_block"`
+	InputStateHash         string      `json:"input_state_hash"`     // SHA-256 of world state at submission
+	InputBlockHeight       uint64      `json:"input_block_height"`   // block height when prediction submitted
+	Domain                 string      `json:"domain"`
+	HorizonTier            HorizonTier `json:"horizon_tier"`
+	HorizonDays            uint64      `json:"horizon_days"`
+	PredictedProb          uint64      `json:"predicted_prob"`       // in bps [0, 1_000_000]
+	ActualOutcome          bool        `json:"actual_outcome"`
+	BrierScore             uint64      `json:"brier_score"`          // this prediction's score
+	Delta                  int64       `json:"delta"`                // pred_prob - (outcome * 1M): positive = overestimate
+	SubmitterHWBSAtTime    uint64      `json:"submitter_hwbs_at_time"` // submitter's calibration BEFORE this prediction
+	SubmitterHWBSAfter     uint64      `json:"submitter_hwbs_after"`   // submitter's calibration AFTER resolution
 }
 
 
