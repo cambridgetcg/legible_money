@@ -225,3 +225,44 @@ func RecencyWeightBps(ageMonths uint64) uint64 {
 	}
 	return w
 }
+
+
+// ── Cross-Tier Bonus ──────────────────────────────────────────────────────────
+//
+// A predictor who demonstrates calibration skill across ALL horizon tiers
+// receives a 1.5× multiplier on their redistribution share.
+//
+// Qualification criteria:
+//   - Top 25% HWBS in EVERY horizon bucket (flash, tactical, strategic, epochal)
+//   - Minimum 5 resolved predictions per bucket
+//   - Measured against OTHER predictors on-chain (peer quartile, not base rate)
+//
+// Multiplier: 15_000 bps (1.5×), where 10_000 bps = 1.0×
+//
+// Rationale: an agent excellent at flash and terrible at strategic is specialised.
+// An agent excellent at all four horizons has demonstrated genuine epistemic skill —
+// the ability to reason well about the future at every timescale.
+
+const (
+	CrossTierBonusBps    = uint64(15_000) // 1.5×
+	NoBonusBps           = uint64(10_000) // 1.0×
+	CrossTierMinPerTier  = uint64(5)      // min resolved predictions per tier
+	CrossTierTopQuartile = uint64(25)     // top 25% (lowest HWBS = best)
+)
+
+// CalibrationSummary holds a predictor's full calibration profile.
+type CalibrationSummary struct {
+	Address            string          `json:"address"`
+	OverallHWBS        uint64          `json:"overall_hwbs"`        // lower = better, bps
+	FlashHWBS          uint64          `json:"flash_hwbs"`
+	TacticalHWBS       uint64          `json:"tactical_hwbs"`
+	StrategicHWBS      uint64          `json:"strategic_hwbs"`
+	EpochalHWBS        uint64          `json:"epochal_hwbs"`
+	FlashCount         uint64          `json:"flash_count"`
+	TacticalCount      uint64          `json:"tactical_count"`
+	StrategicCount     uint64          `json:"strategic_count"`
+	EpochalCount       uint64          `json:"epochal_count"`
+	CrossTierQualifies bool            `json:"cross_tier_qualifies"`
+	ActiveBonusBps     uint64          `json:"active_bonus_bps"`    // 10000 or 15000
+	LastUpdated        uint64          `json:"last_updated"`
+}
