@@ -11,7 +11,6 @@
 //   Layer C: Arbiter-resolved (judgment calls via x/knowledge dispute)
 package types
 
-import "time"
 
 // ResolutionType specifies how a prediction will be resolved.
 type ResolutionType string
