@@ -1049,3 +1049,22 @@ After challenge window expires without challenges → becomes "verified" fact.
 - 2 agent homes (home-1 Beta, home-2 Bridge-Agent)
 - 1 active session (ses-8e4dcd13 on home-1)
 - 1 registered discovery agent (Beta-Oracle-Bridge)
+
+### legible_auth E2E Tests (2026-03-23 05:36 AM, block ~191389)
+
+| Test | Status | Notes |
+|------|--------|-------|
+| register-account (Ed25519) | ✅ PASS | DID + pubkey + type, tx F0078173 |
+| query account-by-did | ✅ PASS | Returns full account with flags |
+
+### Key Findings for legible_auth
+- DID derivation: `did:lgm: + first 32 hex chars of pubkey` (NOT SHA-256)
+  - Expected: `did:lgm:a3b8ffd14ede693d6634472d7778d1d5` (first 16 bytes of Ed25519 key)
+- quick-register only works with Ed25519 keys (33-byte secp256k1 fails validation)
+- All keyring keys are secp256k1 — must pass Ed25519 pubkey manually
+- Account flags: can_submit_claims, can_challenge, frozen, in_recovery, is_validator
+- reputation_score starts at 500,000 (same as staking)
+
+### Zerone Devnet Full State (block ~191400)
+- 2 validators | 4 provisional facts | 2 agent homes | 1 active session
+- 1 discovery agent (Beta-Oracle-Bridge) | 1 legible_auth account (bridge-agent DID)
