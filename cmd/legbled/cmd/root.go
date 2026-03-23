@@ -30,6 +30,7 @@ import (
 	lgmgovcli "github.com/legible-money/legible/x/gov/client/cli"
 	autopoiesiscli "github.com/legible-money/legible/x/autopoiesis/client/cli"
 	billingcli "github.com/legible-money/legible/x/billing/client/cli"
+	oraclecli "github.com/legible-money/legible/x/oracle/client/cli"
 	bvmcli "github.com/legible-money/legible/x/bvm/client/cli"
 	capturechallengecli "github.com/legible-money/legible/x/capture_challenge/client/cli"
 	capturedefensecli "github.com/legible-money/legible/x/capture_defense/client/cli"
@@ -194,6 +195,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig legibleapp.EncodingConfi
 		legibleauthcli.NewTxCmd(),
 		autopoiesiscli.NewTxCmd(),
 		billingcli.NewTxCmd(),
+		oraclecli.NewTxCmd(),
 		bvmcli.NewTxCmd(),
 		capturechallengecli.NewTxCmd(),
 		capturedefensecli.NewTxCmd(),

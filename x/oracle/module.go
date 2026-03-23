@@ -16,6 +16,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 
+	"github.com/spf13/cobra"
+
+	cli "github.com/legible-money/legible/x/oracle/client/cli"
+
 	"github.com/legible-money/legible/x/oracle/keeper"
 	"github.com/legible-money/legible/x/oracle/types"
 )
@@ -27,7 +31,14 @@ type AppModuleBasic struct{}
 
 func (AppModuleBasic) Name() string { return types.ModuleName }
 
-func (AppModuleBasic) RegisterLegacyAminoCodec(_ *codec.LegacyAmino) {}
+func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	types.RegisterLegacyAminoCodec(cdc)
+}
+
+// GetTxCmd returns the oracle module's CLI tx commands.
+func (AppModuleBasic) GetTxCmd() *cobra.Command {
+	return cli.NewTxCmd()
+}
 
 func (AppModuleBasic) DefaultGenesis(_ codec.JSONCodec) json.RawMessage {
 	return json.RawMessage(`{}`)
@@ -66,7 +77,9 @@ func (am AppModule) EndBlock(ctx sdk.Context) error {
 }
 
 // RegisterInterfaces is a no-op for now (proto-generated tx types pending).
-func (AppModuleBasic) RegisterInterfaces(_ codectypes.InterfaceRegistry) {}
+func (AppModuleBasic) RegisterInterfaces(registry codectypes.InterfaceRegistry) {
+	types.RegisterInterfaces(registry)
+}
 
 // RegisterGRPCGatewayRoutes is a no-op (REST gateway pending).
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(_ client.Context, _ *runtime.ServeMux) {}
