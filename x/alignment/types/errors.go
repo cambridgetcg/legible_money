@@ -7,4 +7,5 @@ var (
 	ErrModuleInactive   = fmt.Errorf("alignment: module inactive")
 	ErrInvalidThreshold = fmt.Errorf("alignment: invalid threshold value")
 	ErrInvalidWeight    = fmt.Errorf("alignment: sensor weights must sum to BasisPoints")
+	ErrUnauthorized     = fmt.Errorf("alignment: unauthorized")
 )
