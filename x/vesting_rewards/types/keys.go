@@ -49,4 +49,11 @@ var (
 	VestingByRecipientPrefix  = []byte{0x08} // {address}/{vestingId} -> nil (index)
 	ActiveVestingPrefix       = []byte{0x09} // {vestingId} -> nil (index for active schedules)
 	TotalMintedKey            = []byte{0x0B} // -> string (total LGM minted so far in ulgm)
+
+	// Meter key prefixes for token consumption metering (WI-2 Dokimance).
+	MeterMintedKey  = []byte{0x10} // -> string (cumulative minted via block rewards)
+	MeterBurnedKey  = []byte{0x11} // -> string (cumulative burned)
+	MeterLockedKey  = []byte{0x12} // -> string (cumulative locked in vesting)
+	MeterRoutedKey  = []byte{0x13} // -> string (cumulative routed through research/pools)
+	MeterFeesKey    = []byte{0x14} // -> string (cumulative fees swept)
 )

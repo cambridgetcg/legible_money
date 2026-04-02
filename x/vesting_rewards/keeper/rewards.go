@@ -117,6 +117,9 @@ func (k Keeper) RouteFees(ctx sdk.Context) error {
 					"err", err,
 				)
 			}
+			// Meter: record fees swept and research routing
+			k.IncrementFees(ctx, totalAmount)
+			k.IncrementRouted(ctx, researchAmount)
 		}
 
 		// Send founder portion directly to founder address
@@ -311,6 +314,9 @@ func (k Keeper) DistributeBlockReward(
 		return dist, nil
 	}
 
+	// Meter: record minted tokens
+	k.IncrementMinted(ctx, sdkmath.NewIntFromBigInt(actualMinted))
+
 	// Route through research share (using actual minted amount)
 	routing, err := k.RouteReward(ctx, types.SourceBlockProduction, actualMinted.String(), producer, "")
 	if err != nil {
@@ -323,6 +329,13 @@ func (k Keeper) DistributeBlockReward(
 		}
 		k.SetBlockRewardDistribution(ctx, dist)
 		return dist, nil
+	}
+
+	// Meter: record research share as routed
+	researchRoutedBig := new(big.Int)
+	researchRoutedBig.SetString(routing.ResearchShare, 10)
+	if researchRoutedBig.Sign() > 0 {
+		k.IncrementRouted(ctx, sdkmath.NewIntFromBigInt(researchRoutedBig))
 	}
 
 	// Split post-research remainder between verification pool and block producer.

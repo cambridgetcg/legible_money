@@ -81,6 +81,15 @@ func (q queryServer) BlockRewardDistribution(goCtx context.Context, req *types.Q
 	}, nil
 }
 
+// TokenMeter returns cumulative token-flow counters (WI-2 Dokimance).
+// This is a keeper-level helper; it can be wired into a gRPC endpoint once
+// the proto definitions are extended. For now callers can use
+// keeper.GetMeterTotals(ctx) directly or invoke this via the query server.
+func (q queryServer) TokenMeter(goCtx context.Context) MeterTotals {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	return q.Keeper.GetMeterTotals(ctx)
+}
+
 // Params returns the module parameters and category configurations.
 func (q queryServer) Params(goCtx context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
