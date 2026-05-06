@@ -109,6 +109,10 @@ Copies `genesis.json` to the project root. Distribute this file to all validator
 3. Configure CometBFT (in `~/.legbled/config/config.toml`):
    ```toml
    # Set persistent peers (comma-separated list of node IDs + addresses)
+   # TODO: populate after genesis ceremony — obtain node IDs with:
+   #   legbled comet show-node-id --home ~/.legbled/config
+   # Planned seed nodes: Sentry (135.181.28.252:26656), Patch (TBD)
+   # Node IDs blocked on chain restart. See Known Limitations #10.
    persistent_peers = "node_id1@ip1:26656,node_id2@ip2:26656"
 
    # Block time
@@ -228,3 +232,15 @@ See `scripts/testnet-genesis-config.json` under `modules.knowledge.extended_para
 8. **Module account permissions**: Before launch, verify all modules that use `SendCoinsFromModuleToAccount` or `SendCoinsFromAccountToModule` are registered in `maccPerms` (`app/app.go`). Missing entries will cause runtime panics.
 
 9. **PoT verification path**: The deterministic commit/reveal path (submit claim → commit → reveal → fact creation) is fully tested end-to-end. The arbiter-based dispute resolution path needs additional testing before production use.
+
+10. **Seed node IDs not finalized**: The `persistent_peers` config in the validator onboarding section uses placeholder node IDs. Real node IDs can only be obtained after chain startup via `legbled comet show-node-id --home ~/.legbled/config`. Planned seed nodes are Sentry (135.181.28.252) and Patch (TBD). Both nodes must be running and their IDs extracted before distributing validator onboarding docs. Blocked until devnet/testnet chain restarts under Yu's approval.
+
+11. **Submitter-exclusion gap**: Validators selected as verifiers for a round are not explicitly excluded from submitting facts in the same round. This creates a weak conflict-of-interest surface. Document or implement exclusion logic before testnet launch.
+
+12. **Flag #31 — IncrementBurned dead code (Sprint A blocker)**: `MeterBurnedKey` (0x11) is defined in the token meter but `IncrementBurned` is never called at any of the 14 `BurnCoins` sites in the codebase. `burn_pressure_ratio = TotalBurned / TotalMinted` is therefore uncomputable and the burned counter will read 0 until Sprint A lands (~14 LOC fix). **Pre-testnet required**: Sprint A must be applied before launch, or token-meter dashboards and ECONOMY-DESIGN-003 will report false data.
+
+13. **Flag #43 — Dual minted tracking (divergence risk)**: `TotalMintedKey` (0x0B) is written via `keeper.go` block-reward path; `MeterMintedKey` (0x10) is written via `IncrementMinted` in `rewards.go`. Both count minted LGM but via independent code paths — they can diverge if one path is called without the other. **Pre-testnet required**: audit that every mint site calls both paths, or consolidate to a single authoritative counter.
+
+14. **Flag #45 — FARM-11 citation-cartel detection (CLOSED)**: `UpdateSubmitterCitationGraph` and `GetCitationConcentrationDiscount` are fully implemented in `x/knowledge/keeper/citation_defense.go` and wired into the citation reward path at `citation.go:122`. Tests exist. Not a launch blocker. Verified 2026-05-06 beat 58.
+
+12. **Stake concentration undocumented**: No documentation of submitter concentration risks or maximum single-submitter stake share in TESTNET-LAUNCH.md. Add governance parameter guidance before external validators join.

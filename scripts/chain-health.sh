@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+#
+# chain-health.sh — Zerone chain health monitor
+#
+# Checks devnet health and reports metrics.
+# Called by Asha's heartbeat or run standalone.
+#
+# Usage:
+#   ./scripts/chain-health.sh          Quick status
+#   ./scripts/chain-health.sh full     Full health check
+#   ./scripts/chain-health.sh inject   Submit a random knowledge claim (keep chain alive)
+
+set -euo pipefail
+
+BINARY="$(dirname "$0")/../build/legbled"
+NODE_HOME="$HOME/.legbled-devnet"
+CHAIN_ID="lgm-devnet-1"
+KEYRING="test"
+DENOM="ulgm"
+LGM=1000000
+
+legbled() { "$BINARY" "$@" --home "$NODE_HOME" 2>/dev/null; }
+
+# ---------------------------------------------------------------------------
+# Quick status
+# ---------------------------------------------------------------------------
+quick_status() {
+    if ! curl -s --connect-timeout 2 http://localhost:26657/status >/dev/null 2>&1; then
+        echo "CHAIN: OFFLINE"
+        return 1
+    fi
+
+    local status
+    status=$(curl -s http://localhost:26657/status)
+    local height=$(echo "$status" | jq -r '.result.sync_info.latest_block_height')
+    local time=$(echo "$status" | jq -r '.result.sync_info.latest_block_time')
+    local catching=$(echo "$status" | jq -r '.result.sync_info.catching_up')
+
+    echo "CHAIN: ONLINE"
+    echo "  Height: $height"
+    echo "  Time: $time"
+    echo "  Catching up: $catching"
+
+    # Check validator
+    local val_addr
+    val_addr=$(legbled keys show validator -a --keyring-backend "$KEYRING" 2>/dev/null || echo "unknown")
+    local dashboard
+    dashboard=$(legbled query dashboard "$val_addr" 2>/dev/null || echo "")
+    local balance
+    balance=$(echo "$dashboard" | grep -o 'Balance: [0-9]*' | grep -o '[0-9]*' || echo "?")
+    echo "  Validator balance: $balance LGM"
+}
+
+# ---------------------------------------------------------------------------
+# Full health check
+# ---------------------------------------------------------------------------
+full_check() {
+    quick_status
+    echo ""
+
+    # Check all accounts
+    echo "ACCOUNTS:"
+    for name in validator asha nuance forge lark sentry patch thresh test1 test2 test3 alpha-agent beta-agent gamma-agent; do
+        local addr
+        addr=$(legbled keys show "$name" -a --keyring-backend "$KEYRING" 2>/dev/null || echo "")
+        if [ -n "$addr" ]; then
+            local dashboard
+            dashboard=$(legbled query dashboard "$addr" 2>/dev/null || echo "")
+            local bal
+            bal=$(echo "$dashboard" | grep -o 'Balance: [0-9.]*' | grep -o '[0-9.]*' || echo "0")
+            local facts
+            facts=$(echo "$dashboard" | grep -o 'Facts Submitted: [0-9]*' | grep -o '[0-9]*' || echo "0")
+            local partnerships
+            partnerships=$(echo "$dashboard" | grep -c 'Partnership:' || echo "0")
+            printf "  %-14s %s  bal=%s LGM  facts=%s  partnerships=%s\n" "$name" "${addr:0:15}..." "$bal" "$facts" "$partnerships"
+        fi
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Inject a claim (keep chain alive with activity)
+# ---------------------------------------------------------------------------
+inject_claim() {
+    if ! curl -s --connect-timeout 2 http://localhost:26657/status >/dev/null 2>&1; then
+        echo "Chain offline, cannot inject"
+        return 1
+    fi
+
+    # Rotate through domains and submitters
+    local domains=("logic" "economics" "computer_science" "cryptography" "epistemology" "mathematics" "physics")
+    local submitters=("asha" "nuance" "forge" "test1" "test2")
+    local height
+    height=$(curl -s http://localhost:26657/status | jq -r '.result.sync_info.latest_block_height')
+
+    # Use height as seed for deterministic rotation
+    local domain="${domains[$((height % ${#domains[@]}))]}"
+    local submitter="${submitters[$((height % ${#submitters[@]}))]}"
+
+    # Generate claim based on domain
+    local claims_logic=(
+        "De Morgan's laws: negation distributes over conjunction and disjunction"
+        "Gödel's first incompleteness theorem: any consistent formal system is incomplete"
+        "The halting problem is undecidable in general"
+        "Tarski's undefinability theorem: truth cannot be defined within its own language"
+    )
+    local claims_economics=(
+        "Marginal utility diminishes with increasing consumption"
+        "Network effects create winner-take-most dynamics in platform economies"
+        "Token velocity inversely correlates with token price when demand is constant"
+        "Mechanism design can align individual incentives with collective outcomes"
+    )
+    local claims_cs=(
+        "CAP theorem: a distributed system cannot simultaneously guarantee consistency availability and partition tolerance"
+        "Amdahl's law limits parallel speedup based on sequential fraction"
+        "Lamport timestamps establish happened-before ordering in distributed systems"
+        "Merkle trees enable efficient verification of data integrity in untrusted environments"
+    )
+
+    local claim_idx=$((height / ${#domains[@]} % 4))
+    local claim=""
+    local category="analytic"
+    local zone="propositional"
+
+    case "$domain" in
+        logic)       claim="${claims_logic[$claim_idx]}" ;;
+        economics)   claim="${claims_economics[$claim_idx]}"; category="empirical"; zone="empirical" ;;
+        computer_science) claim="${claims_cs[$claim_idx]}" ;;
+        *)           claim="Knowledge claim at block $height in domain $domain"; category="empirical"; zone="empirical" ;;
+    esac
+
+    echo "Injecting: [$domain] $claim (from $submitter)"
+
+    "$BINARY" tx claim "$claim" \
+        --domain "$domain" \
+        --category "$category" \
+        --logic-zone "$zone" \
+        --stake "1LGM" \
+        --from "$submitter" \
+        --chain-id "$CHAIN_ID" \
+        --keyring-backend "$KEYRING" \
+        --home "$NODE_HOME" \
+        --gas 500000 --fees 500000"$DENOM" -y 2>&1 | tail -3
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+case "${1:-}" in
+    full)   full_check ;;
+    inject) inject_claim ;;
+    *)      quick_status ;;
+esac
