@@ -78,6 +78,7 @@ var CATEGORY_DECAY = map[string]CategoryDecayProfile{
 	"replicated":    {HalfLifeBlocks: 1_000_000, MaxConfidence: 995_000, MinConfidence: 300_000, ReverificationBonus: 20_000, RequiresReverification: true},
 	"computational":          {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
 	"protocol_observation":   {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+	"normative":              {HalfLifeBlocks: 0, MaxConfidence: 900_000, MinConfidence: 100_000, ReverificationBonus: 50_000, RequiresReverification: false},
 }
 
 // Stratum confidence ceilings (from TS ontology/types.ts STRATUM_CONFIDENCE_CEILING)
@@ -188,6 +189,7 @@ var ChallengeWindowProfile = map[string]uint64{
 	"empirical":     FastDecayChallengeMultiplier,
 	"social":        FastDecayChallengeMultiplier,
 	"predictive":    FastDecayChallengeMultiplier,
+	"normative":     SlowDecayChallengeMultiplier,
 }
 
 // IsDeterministicCategory returns true for categories where challenge resolution
@@ -225,6 +227,7 @@ var CategoryEpistemicDomain = map[string]EpistemicDomain{
 	"predictive":    EpistemicDomainObservable,
 	"social":        EpistemicDomainObservable,
 	"replicated":    EpistemicDomainObservable,
+	"normative":     EpistemicDomainDerivable,
 }
 
 // IsDerivableCategory returns true for categories where truth is derivable
@@ -727,6 +730,12 @@ const (
 	// DiversityBonusBps is a small bonus when 3+ distinct methods are declared,
 	// rewarding genuine methodological diversity.
 	DiversityBonusBps uint64 = 30_000 // 3% bonus
+
+	// MixedOmissionSurchargeBps is the penalty (basis points) applied when some
+	// but not all validators omit VerificationMethod, scaled by the omission
+	// fraction. Prevents free-riding on declared diversity or obscuring declared
+	// uniformity through selective non-declaration. (Flag #19)
+	MixedOmissionSurchargeBps uint64 = 25_000 // 2.5% max surcharge (scaled proportionally)
 )
 
 // ============ Negative Knowledge System ============
@@ -962,7 +971,8 @@ type ExtendedParams struct {
 	MinDiversityParticipants uint32 `json:"min_diversity_participants"` // default 3
 	UniformityPenaltyBps     uint64 `json:"uniformity_penalty_bps"`     // default 100000 = 10%
 	SingleMethodPenaltyBps   uint64 `json:"single_method_penalty_bps"`  // default 50000 = 5%
-	DiversityBonusBps        uint64 `json:"diversity_bonus_bps"`        // default 30000 = 3%
+	DiversityBonusBps             uint64 `json:"diversity_bonus_bps"`              // default 30000 = 3%
+	MixedOmissionSurchargeBps     uint64 `json:"mixed_omission_surcharge_bps"`     // default 25000 = 2.5% max
 
 	// Negative knowledge
 	MaxContradictionsPerAgentPerEpoch uint32 `json:"max_contradictions_per_agent_per_epoch"` // default 3
@@ -1281,6 +1291,7 @@ func DefaultCategoryDecayProfiles() map[string]CategoryDecayProfile {
 		"replicated":             {HalfLifeBlocks: 1_000_000, MaxConfidence: 995_000, MinConfidence: 300_000, ReverificationBonus: 20_000, RequiresReverification: true},
 		"computational":          {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
 		"protocol_observation":   {HalfLifeBlocks: 0, MaxConfidence: 1_000_000, MinConfidence: 0, ReverificationBonus: 0, RequiresReverification: false},
+		"normative":              {HalfLifeBlocks: 0, MaxConfidence: 900_000, MinConfidence: 100_000, ReverificationBonus: 50_000, RequiresReverification: false},
 	}
 }
 
@@ -1322,6 +1333,7 @@ func DefaultChallengeWindowMultipliers() map[string]uint64 {
 		"empirical":            FastDecayChallengeMultiplier,
 		"social":               FastDecayChallengeMultiplier,
 		"predictive":           FastDecayChallengeMultiplier,
+		"normative":            SlowDecayChallengeMultiplier,
 	}
 }
 
@@ -1776,6 +1788,15 @@ func (msg *MsgExecuteResearchProposal) ValidateBasic() error {
 		return fmt.Errorf("proposal_id cannot be empty")
 	}
 	return nil
+}
+
+// ============ FARM-11: Per-Submitter Citation Concentration ============
+
+// SubmitterCitationGraph tracks who a submitter cites and how often.
+type SubmitterCitationGraph struct {
+	Submitter   string            `json:"submitter"`
+	CitedCounts map[string]uint64 `json:"cited_counts"` // cited_submitter → count
+	TotalCites  uint64            `json:"total_cites"`
 }
 
 // Note: RegisterCodec and RegisterInterfaces are in codec.go

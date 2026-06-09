@@ -3,10 +3,12 @@ package keeper
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -56,6 +58,11 @@ func (k msgServer) SubmitClaim(goCtx context.Context, msg *types.MsgSubmitClaim)
 	if !isValidEpistemicCategory(msg.EpistemicCategory) {
 		return nil, fmt.Errorf("%w: invalid epistemic category %q",
 			types.ErrInvalidClaim, msg.EpistemicCategory)
+	}
+
+	// Validate citation anchors — reject bare labels (e.g. "ECON-013") that are not machine-resolvable
+	if err := k.validateReferences(ctx, msg.References); err != nil {
+		return nil, fmt.Errorf("%w: %v", types.ErrInvalidClaim, err)
 	}
 
 	// Validate Gödelian logic zone constraints (if ontology keeper is wired)
@@ -487,12 +494,26 @@ func (k msgServer) AddFact(goCtx context.Context, msg *types.MsgAddFact) (*types
 	contentHash := ComputeClaimContentHash(msg.ClaimText, msg.Domain, msg.EpistemicCategory)
 	factID := GenerateFactID(contentHash, fmt.Sprintf("gov:%d", height))
 
+	// Validate citation anchors — governance-added facts obey the same convention
+	if err := k.validateReferences(ctx, msg.References); err != nil {
+		return nil, fmt.Errorf("invalid reference in governance fact: %w", err)
+	}
+
+	// CONF-002 guard: governance-added facts have no verifier consensus.
+	// Cap confidence at 700_000 (70% = CalibrationNeutralRate) — governance attests
+	// presence, not certainty. Only verifier consensus can elevate above this threshold.
+	const governanceConfidenceCap = uint64(700_000)
+	govConf := msg.Confidence
+	if govConf > governanceConfidenceCap {
+		govConf = governanceConfidenceCap
+	}
+
 	fact := types.Fact{
 		Id:                   factID,
 		ClaimText:            msg.ClaimText,
 		Domain:               msg.Domain,
 		EpistemicCategory:    msg.EpistemicCategory,
-		Confidence:           msg.Confidence,
+		Confidence:           govConf,
 		Status:               "verified",
 		Submitter:            msg.Authority,
 		References:           msg.References,
@@ -502,7 +523,7 @@ func (k msgServer) AddFact(goCtx context.Context, msg *types.MsgAddFact) (*types
 		CreatedAtHeight:      height,
 		LastVerifiedHeight:   height,
 		LastConfidenceUpdate: height,
-		BaseConfidence:       msg.Confidence,
+		BaseConfidence:       govConf,
 	}
 	k.SetFact(ctx, &fact)
 
@@ -950,6 +971,43 @@ func (k msgServer) PatronizeFact(goCtx context.Context, msg *types.MsgPatronizeF
 }
 
 // ---------- Internal Helpers ----------
+
+// isValidCitationAnchor checks that a reference string conforms to the citation anchor convention.
+// Valid forms:
+//   - 64-char lowercase hex string: on-chain fact ID
+//   - "external://<namespace>:<id>": explicit external anchor
+//
+// Bare labels like "ECON-013" are rejected — they are ambiguous and not machine-resolvable.
+func isValidCitationAnchor(ref string) bool {
+	if strings.HasPrefix(ref, "external://") {
+		// Must have at least one colon after the prefix with non-empty namespace and id
+		rest := strings.TrimPrefix(ref, "external://")
+		idx := strings.Index(rest, ":")
+		return idx > 0 && idx < len(rest)-1
+	}
+	// On-chain fact ID: exactly 64 lowercase hex characters
+	if len(ref) == 64 {
+		_, err := hex.DecodeString(ref)
+		return err == nil
+	}
+	return false
+}
+
+// validateReferences checks that every reference is a valid anchor and, for on-chain
+// IDs, that the cited fact actually exists. Prevents dangling citations.
+func (k msgServer) validateReferences(ctx sdk.Context, refs []string) error {
+	for _, ref := range refs {
+		if !isValidCitationAnchor(ref) {
+			return fmt.Errorf("invalid citation anchor %q: must be a 64-char on-chain fact ID or external://<namespace>:<id>", ref)
+		}
+		if !strings.HasPrefix(ref, "external://") {
+			if _, found := k.GetFact(ctx, ref); !found {
+				return fmt.Errorf("citation target %q does not exist on-chain", ref)
+			}
+		}
+	}
+	return nil
+}
 
 // isValidEpistemicCategory checks if the category is one of the valid types.
 // Matches the TS reference: analytic, formal, protocol, empirical, historical, computational, social, predictive, replicated.

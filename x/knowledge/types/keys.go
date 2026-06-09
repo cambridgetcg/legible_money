@@ -74,4 +74,7 @@ var (
 
 	// Partnership citation credit store keys (B12-4)
 	PartnershipCitationStatsPrefix = []byte{0x2c} // partnershipId → PartnershipCitationStats (JSON)
+
+	// FARM-11: Per-submitter citation concentration (Truth Farm)
+	SubmitterCitationGraphPrefix = []byte{0x2d} // submitter → SubmitterCitationGraph (JSON)
 )

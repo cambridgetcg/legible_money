@@ -121,11 +121,40 @@ inject_claim() {
     local category="analytic"
     local zone="propositional"
 
+    local claims_cryptography=(
+        "Public-key cryptography relies on the asymmetry between easy computation and hard inversion"
+        "A cryptographic hash function must be collision-resistant, preimage-resistant, and second-preimage-resistant"
+        "Zero-knowledge proofs allow a prover to convince a verifier of a statement without revealing the witness"
+        "The Diffie-Hellman key exchange establishes a shared secret over an insecure channel without transmitting the secret"
+    )
+    local claims_epistemology=(
+        "Justified true belief is necessary but not sufficient for knowledge, as Gettier cases demonstrate"
+        "The problem of induction: past regularities provide no deductive guarantee of future regularities"
+        "Bayesian epistemology treats credence as probability and updates beliefs via Bayes' theorem"
+        "Foundationalism holds that some beliefs are basic and non-inferential, grounding all other knowledge"
+    )
+    local claims_mathematics=(
+        "Every natural number greater than 1 is either prime or a product of primes, uniquely up to order"
+        "Cantor's theorem: the power set of any set has strictly greater cardinality than the set itself"
+        "The Pythagorean theorem holds for any right triangle: the square of the hypotenuse equals the sum of squares of the legs"
+        "Euler's identity: e raised to the power of i times pi, plus one, equals zero"
+    )
+    local claims_physics=(
+        "The speed of light in a vacuum is constant for all inertial observers, regardless of source motion"
+        "Energy and mass are equivalent: E equals m times c squared"
+        "Entropy of a closed system never decreases over time, as stated by the second law of thermodynamics"
+        "The uncertainty principle: position and momentum of a particle cannot both be known to arbitrary precision"
+    )
+
     case "$domain" in
-        logic)       claim="${claims_logic[$claim_idx]}" ;;
-        economics)   claim="${claims_economics[$claim_idx]}"; category="empirical"; zone="empirical" ;;
+        logic)          claim="${claims_logic[$claim_idx]}" ;;
+        economics)      claim="${claims_economics[$claim_idx]}"; category="empirical"; zone="empirical" ;;
         computer_science) claim="${claims_cs[$claim_idx]}" ;;
-        *)           claim="Knowledge claim at block $height in domain $domain"; category="empirical"; zone="empirical" ;;
+        cryptography)   claim="${claims_cryptography[$claim_idx]}" ;;
+        epistemology)   claim="${claims_epistemology[$claim_idx]}" ;;
+        mathematics)    claim="${claims_mathematics[$claim_idx]}"; category="analytic"; zone="propositional" ;;
+        physics)        claim="${claims_physics[$claim_idx]}"; category="empirical"; zone="empirical" ;;
+        *)              claim="A consistent formal system contains truths unprovable within that system"; category="analytic"; zone="propositional" ;;
     esac
 
     echo "Injecting: [$domain] $claim (from $submitter)"

@@ -20,3 +20,9 @@ type BankKeeper interface {
 type StakingKeeper interface {
 	GetActiveValidatorCount(ctx context.Context) uint32
 }
+
+// EmergencyKeeper defines the expected emergency module keeper interface.
+// Used to freeze vesting releases during chain halt.
+type EmergencyKeeper interface {
+	IsHalted(ctx sdk.Context) bool
+}

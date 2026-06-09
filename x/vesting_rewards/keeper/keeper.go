@@ -30,6 +30,9 @@ type Keeper struct {
 	// Optional autopoiesis keeper for adaptive block reward multipliers.
 	autopoiesisKeeper types.AutopoiesisKeeper
 
+	// Optional emergency keeper for halt-aware vesting.
+	emergencyKeeper types.EmergencyKeeper
+
 	// blockTxCount is set by PreBlocker each block with the actual transaction count.
 	// Used by BeginBlocker to detect empty blocks (CometBFT DataHash is always >0).
 	blockTxCount int
@@ -72,6 +75,11 @@ func prefixEndBytes(prefix []byte) []byte {
 // SetAutopoiesisKeeper sets the autopoiesis keeper for adaptive reward multipliers.
 func (k *Keeper) SetAutopoiesisKeeper(ak types.AutopoiesisKeeper) {
 	k.autopoiesisKeeper = ak
+}
+
+// SetEmergencyKeeper sets the emergency keeper for halt-aware vesting.
+func (k *Keeper) SetEmergencyKeeper(ek types.EmergencyKeeper) {
+	k.emergencyKeeper = ek
 }
 
 // Logger returns a module-specific logger.

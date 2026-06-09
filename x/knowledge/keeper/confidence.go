@@ -260,8 +260,10 @@ func (k Keeper) calculateRewardsAndSlashes(
 	}
 	missedSlashBps := params.MissedRevealSlashBps
 	if missedSlashBps == 0 {
-		missedSlashBps = 10000 // fallback: 1% — commit-but-no-reveal must be costly
-		// enough to deter quorum manipulation (OpenClaw C-2 fix: was 100 bps / 0.01%)
+		// S4 fix (reveal-withholding vulnerability): 8% > 6% wrong-verdict slash.
+		// Rational validators must prefer revealing (even wrongly) over withholding.
+		// Prior: 1% (10000 bps) — too cheap; withholding dominated wrong reveal.
+		missedSlashBps = 80000 // 8%
 	}
 
 	for _, validatorAddr := range sortedMapKeys(round.Reveals) {
@@ -565,9 +567,12 @@ func computeMethodDiversityAdjustment(reveals map[string]*types.VerificationReve
 		}
 	}
 
-	// Legacy mode: no methods declared at all → no adjustment
+	// S4 fix (method diversity bypass): total opacity is suspicious, not neutral.
+	// A cartel can coordinate to omit all VerificationMethod fields, bypassing the
+	// 15% uniformity penalty entirely. Penalize unanimous non-declaration.
 	if declaredCount == 0 {
-		return 0
+		// All participants omitted their method — apply opacity penalty (same as single-method).
+		return -int64(ep.SingleMethodPenaltyBps)
 	}
 
 	var adjustment int64

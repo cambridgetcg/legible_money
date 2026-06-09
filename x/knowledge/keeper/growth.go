@@ -44,6 +44,20 @@ func (k Keeper) ApplyConfidenceGrowth(ctx sdk.Context, currentHeight uint64) {
 			return false
 		}
 
+		// CONF-002 guard: facts with no verifiers and no survived challenges have no
+		// epistemic backing. Their confidence must not grow beyond base_confidence.
+		// A fact verified by zero actors is structurally unanchored — growth without
+		// verification is false confidence.
+		if fact.VerifierCount == 0 && fact.SurvivedChallenges == 0 {
+			if fact.Confidence > fact.BaseConfidence {
+				// Drift has already occurred (legacy data). Clamp back to base.
+				fact.Confidence = fact.BaseConfidence
+				fact.LastConfidenceUpdate = currentHeight
+				k.SetFact(ctx, fact)
+			}
+			return false
+		}
+
 		// Calculate survival multiplier: min(3.0, 1.0 + survived * 0.5)
 		// In basis points: min(3_000_000, 1_000_000 + survived * 500_000)
 		survivalMultiplier := uint64(1_000_000) + uint64(fact.SurvivedChallenges)*500_000

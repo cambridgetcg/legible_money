@@ -157,6 +157,11 @@ func (k Keeper) CalculateReleasedAmount(
 	ctx sdk.Context,
 	schedule *types.VestingSchedule,
 ) string {
+	// Emergency halt: freeze all vesting releases
+	if k.emergencyKeeper != nil && k.emergencyKeeper.IsHalted(ctx) {
+		return "0"
+	}
+
 	height := uint64(ctx.BlockHeight())
 
 	cfg, found := k.GetCategoryConfig(ctx, types.VestingCategoryStr(schedule.Category))

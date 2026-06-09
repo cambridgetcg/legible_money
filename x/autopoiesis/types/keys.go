@@ -17,4 +17,5 @@ var (
 	DVITrackingKeyPrefix = []byte{0x07} // domain → DVIValue (consecutive negative epoch tracking)
 	FrozenKeyPrefix      = []byte{0x08} // path → frozen flag (0x01 = frozen)
 	SSIKeyPrefix         = []byte{0x09} // epoch → SSIValue (JSON)
+	DomainSSIKeyPrefix   = []byte{0x0A} // domain → DomainSSIValue (JSON)
 )

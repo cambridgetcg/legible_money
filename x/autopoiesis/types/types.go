@@ -895,3 +895,74 @@ func maxUint64(a, b uint64) uint64 {
 	}
 	return b
 }
+
+// ============ Per-Domain SSI (Truth Farm) ============
+
+const (
+	DomainCaptureMultiplier = 2 // Domain SSI > 2x global = capture alert
+
+	// Domain SSI component weights (must sum to BasisPoints)
+	DomainSSIWeightVerificationFailure = 400_000 // 40%
+	DomainSSIWeightExpirationRatio     = 350_000 // 35%
+	DomainSSIWeightParticipation       = 250_000 // 25%
+)
+
+// DomainSSIValue stores per-domain stress indicator.
+type DomainSSIValue struct {
+	Domain string `json:"domain"`
+	Value  uint64 `json:"value"` // BPS (0-1,000,000)
+}
+
+// CapturedDomain represents a domain flagged for potential capture.
+type CapturedDomain struct {
+	Domain    string `json:"domain"`
+	DomainSSI uint64 `json:"domain_ssi"`
+	GlobalSSI uint64 `json:"global_ssi"`
+	Ratio     uint64 `json:"ratio"` // domain/global * BasisPoints
+}
+
+// ComputeDomainSSI calculates stress for a single domain from its observation.
+func ComputeDomainSSI(dom DomainObservation) uint64 {
+	var score uint64
+
+	// Verification failure component (40%)
+	if dom.FactsCreated > 0 {
+		failureRatio := dom.FactsExpired * BasisPoints / dom.FactsCreated
+		if failureRatio > BasisPoints {
+			failureRatio = BasisPoints
+		}
+		score += failureRatio * DomainSSIWeightVerificationFailure / BasisPoints
+	}
+
+	// Expiration ratio component (35%)
+	totalFacts := dom.FactsCreated + dom.FactsExpired
+	if totalFacts > 0 {
+		expirationRatio := dom.FactsExpired * BasisPoints / totalFacts
+		score += expirationRatio * DomainSSIWeightExpirationRatio / BasisPoints
+	}
+
+	// Non-participation component (25%) -- low creation relative to active base
+	if dom.TotalActiveFacts > 0 {
+		// Expected creation rate: TotalActiveFacts / 100 (1% growth per epoch)
+		expected := dom.TotalActiveFacts / 100
+		if expected < 1 {
+			expected = 1
+		}
+		if dom.FactsCreated < expected {
+			// Participation shortfall
+			shortfall := (expected - dom.FactsCreated) * BasisPoints / expected
+			if shortfall > BasisPoints {
+				shortfall = BasisPoints
+			}
+			score += shortfall * DomainSSIWeightParticipation / BasisPoints
+		}
+	} else if dom.FactsCreated == 0 && dom.FactsExpired > 0 {
+		// Domain is only losing facts, not gaining -- max stress
+		score += DomainSSIWeightParticipation
+	}
+
+	if score > BasisPoints {
+		score = BasisPoints
+	}
+	return score
+}

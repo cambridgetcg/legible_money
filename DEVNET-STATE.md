@@ -1,5 +1,8 @@
 # Zerone Devnet State — 2026-03-23
 
+> **STATUS: STALE — Devnet OFFLINE since 2026-04-30. Restart target: 2026-05-15.**
+> The data below reflects the last known state before shutdown. It is NOT current state.
+
 > Chain: lgm-devnet-1 | Binary: legbled | Block: ~191,669
 > Running since: 2026-03-22 ~14:00 UTC (Tuesday 2PM)
 > Block time: ~2521ms

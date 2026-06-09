@@ -390,11 +390,11 @@ do_seed() {
 
             # Submit claim
             local result
-            result=$("$BINARY" tx claim "$claim_text" \
-                --domain "$chain_domain" \
-                --category "$category" \
+            result=$("$BINARY" tx knowledge submit-claim "$claim_text" \
+                "$chain_domain" \
+                "$category" \
+                "$stake" \
                 --logic-zone "$zone" \
-                --stake "$stake" \
                 --from "$submitter" \
                 $refs_flag \
                 $TX_FLAGS 2>&1 | tail -1) || true
@@ -435,7 +435,7 @@ do_cultivate() {
     # Query existing facts on chain
     info "Querying existing facts on chain..."
     local facts_json
-    facts_json=$(legbled query claim list-facts --limit 100 -o json 2>/dev/null || echo '{"facts":[]}')
+    facts_json=$(legbled query knowledge facts --limit 100 -o json 2>/dev/null || echo '{"facts":[]}')
 
     local fact_count
     fact_count=$(echo "$facts_json" | jq '.facts | length' 2>/dev/null || echo "0")
@@ -485,11 +485,11 @@ do_cultivate() {
         info "Cultivating from fact $fact_id via $submitter"
 
         local result
-        result=$("$BINARY" tx claim "$derivative" \
-            --domain "$fact_domain" \
-            --category "formal" \
-            --logic-zone "first_order" \
-            --stake "1LGM" \
+        result=$("$BINARY" tx knowledge submit-claim "$derivative" \
+            "$fact_domain" \
+            "formal" \
+            "$LGM" \
+            --logic-zone "propositional" \
             --refs "$fact_id" \
             --from "$submitter" \
             $TX_FLAGS 2>&1 | tail -1) || true

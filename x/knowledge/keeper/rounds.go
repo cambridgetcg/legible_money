@@ -304,13 +304,23 @@ func (k Keeper) CompleteRound(
 			// Create fact from accepted claim
 			height := uint64(ctx.BlockHeight())
 			factID := GenerateFactID(claim.Id, round.Id)
+			// CONF-002: Cannot mark a fact verified with zero participants.
+			// Zero-participant finalization produces phantom confidence signals.
+			factStatus := types.FactStatusVerified
+			factIsProvisional := false
+			if result.ParticipantCount == 0 {
+				factStatus = types.FactStatusProvisional
+				factIsProvisional = true
+			}
+
 			fact := types.Fact{
 				Id:                   factID,
 				ClaimText:            claim.ClaimText,
 				Domain:               claim.Domain,
 				EpistemicCategory:    claim.EpistemicCategory,
 				Confidence:           result.Confidence,
-				Status:               types.FactStatusVerified,
+				Status:               factStatus,
+				IsProvisional:        factIsProvisional,
 				Submitter:            claim.Submitter,
 				SubmitterDid:         claim.SubmitterDid,
 				References:           claim.References,
