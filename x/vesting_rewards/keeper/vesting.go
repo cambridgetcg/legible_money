@@ -83,6 +83,7 @@ func (k Keeper) CreateVestingSchedule(
 	}
 
 	k.SetVestingSchedule(ctx, schedule)
+	k.IncrementLocked(ctx, sdkmath.NewIntFromBigInt(totalBig))
 
 	k.Logger(ctx).Info("created vesting schedule",
 		"vesting_id", vestingId,
