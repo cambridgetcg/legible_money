@@ -20,6 +20,7 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgRegisterStratum{}, "knowledge/RegisterStratum", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "knowledge/UpdateParams", nil)
 	cdc.RegisterConcrete(&MsgUpdateExtendedParams{}, "knowledge/UpdateExtendedParams", nil)
+	cdc.RegisterConcrete(&MsgProposeResearchFund{}, "knowledge/ProposeResearchFund", nil)
 }
 
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
@@ -43,6 +44,8 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		// Hand-written (types.go) — have XXX_MessageName in proto_names.go
 		&MsgUpdateExtendedParams{},
 		&MsgChallengeProvisionalFact{},
+		// Research fund governance (tx.pb.go)
+		&MsgProposeResearchFund{},
 	)
 }
 
