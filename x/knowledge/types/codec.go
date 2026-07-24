@@ -18,6 +18,9 @@ func RegisterCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgEndorseDomainProposal{}, "knowledge/EndorseDomainProposal", nil)
 	cdc.RegisterConcrete(&MsgChallengeDomainProposal{}, "knowledge/ChallengeDomainProposal", nil)
 	cdc.RegisterConcrete(&MsgRegisterStratum{}, "knowledge/RegisterStratum", nil)
+	cdc.RegisterConcrete(&MsgProposeResearchFund{}, "knowledge/ProposeResearchFund", nil)
+	cdc.RegisterConcrete(&MsgVoteResearchProposal{}, "knowledge/VoteResearchProposal", nil)
+	cdc.RegisterConcrete(&MsgExecuteResearchProposal{}, "knowledge/ExecuteResearchProposal", nil)
 	cdc.RegisterConcrete(&MsgUpdateParams{}, "knowledge/UpdateParams", nil)
 	cdc.RegisterConcrete(&MsgUpdateExtendedParams{}, "knowledge/UpdateExtendedParams", nil)
 	cdc.RegisterConcrete(&MsgProposeResearchFund{}, "knowledge/ProposeResearchFund", nil)
@@ -40,6 +43,13 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgEndorseDomainProposal{},
 		&MsgChallengeDomainProposal{},
 		&MsgRegisterStratum{},
+		// Research funding (claim.pb.go/tx.pb.go) — all three are in
+		// Msg_ServiceDesc; ANY of them missing here makes RegisterService
+		// reject the ENTIRE knowledge Msg service at boot (it validates every
+		// method's request type and dies on the first unregistered one).
+		&MsgProposeResearchFund{},
+		&MsgVoteResearchProposal{},
+		&MsgExecuteResearchProposal{},
 		&MsgUpdateParams{},
 		// Hand-written (types.go) — have XXX_MessageName in proto_names.go
 		&MsgUpdateExtendedParams{},

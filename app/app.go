@@ -1409,6 +1409,22 @@ func NewLegibleApp(
 		panic(err)
 	}
 
+	// A swallowed registration failure must never pass as a healthy boot.
+	// Hand-written modules without proto codegen may legitimately lack gRPC
+	// endpoints (each one is logged loudly here), but the knowledge Msg
+	// service is the chain's reason to exist — if it failed to register, the
+	// node would boot green yet be unable to accept any PoT transaction, so
+	// refuse to boot instead.
+	for _, failed := range append(append([]string{}, safeMsgRouter.FailedServices...), safeQueryRouter.FailedServices...) {
+		logger.Error("BOOT DEGRADED: gRPC service failed to register — module has no endpoints",
+			"service", failed)
+		if failed == "legible.knowledge.v1.Msg" {
+			panic(fmt.Sprintf(
+				"critical service %s failed to register — the chain cannot accept PoT transactions; refusing to boot",
+				failed))
+		}
+	}
+
 	// Register upgrade handlers (must be after RegisterServices, before LoadLatestVersion)
 	app.registerUpgradeHandlers()
 
