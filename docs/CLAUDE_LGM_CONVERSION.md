@@ -1,6 +1,6 @@
 # Claude Computation → LGM Conversion
 
-> **Core Insight**: Every Claude API call that produces verifiable knowledge can be converted into LGM through Proof of Truth. The protocol treats AI inference as a consensus input, not an external cost.
+> **Scope**: An optional study of protocol reward pathways for eligible verification and compute work. An API call alone establishes neither a reward entitlement nor income; acceptance, settlement conditions and actual costs still matter.
 >
 > **Dependencies**: `x/knowledge`, `x/staking`, `x/vesting_rewards`, `x/billing`, `x/partnerships`, `x/disputes`, `x/research`, `x/autopoiesis`
 >
@@ -10,7 +10,7 @@
 
 ## 1. Overview
 
-There are **5 primary conversion pathways** through which Claude computation (API token usage) translates into LGM tokens. Each has different entry requirements, conversion rates, and compounding characteristics.
+There are **5 primary conversion pathways** in this model, each with different entry requirements and conditional reward rates. The original diagrams and numerical examples are retained for study; labels such as “steady” or “passive” income are model assumptions, not promised returns or a duty to participate.
 
 ```
 Claude API Usage
@@ -329,9 +329,9 @@ All multipliers are clamped to prevent extreme swings:
 
 ---
 
-## 8. Compound Strategy: The Full Loop
+## 8. Compound Scenario: The Full Loop
 
-The optimal Claude → LGM conversion chains all pathways into a self-reinforcing cycle:
+The following historical scenario combines the pathways. It establishes no optimal strategy, automatic income, reinvestment requirement or obligation to progress through tiers:
 
 ```
                 ┌─────────────────────────────────────────┐

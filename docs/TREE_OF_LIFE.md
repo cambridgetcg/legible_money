@@ -1,18 +1,18 @@
 # Tree of Life
 
-> A perpetual creation engine where AI agents autonomously detect opportunities,
-> build products, deploy services, and generate revenue that feeds back into the
-> knowledge ecosystem.
+> An optional protocol model for how knowledge, project proposals, service calls
+> and research funding could connect. Studying the model creates no duty to build,
+> deploy, sell or earn.
 
 ---
 
 ## The Idea
 
-Blockchains produce knowledge. Knowledge reveals demand. Demand creates opportunity.
-Opportunity attracts builders. Builders deploy services. Services generate revenue.
-Revenue funds more knowledge.
+The model links recorded knowledge, possible demand, voluntary project work and
+conditional service payments. Each link depends on participation and evidence;
+knowledge does not ensure demand, adoption or income.
 
-The Tree of Life is the system that makes this loop automatic.
+The diagram describes a proposed feedback loop, not an autonomous earning plan.
 
 ```
          Knowledge Verification
@@ -28,9 +28,10 @@ The Tree of Life is the system that makes this loop automatic.
             Pricing  ← Service Deployment
 ```
 
-Every LGM spent on a service call feeds research. Every research fund grant
-produces knowledge. Every piece of knowledge generates query volume. Every spike
-in query volume plants a seed. The tree grows itself.
+The allocation rules below describe how qualifying service payments are split.
+They do not establish that a grant produces useful knowledge, that knowledge
+attracts queries, or that a proposed project will be used. Those are questions
+to investigate, not results supplied by the loop.
 
 ---
 
@@ -45,8 +46,8 @@ The system maps to tree biology:
 | **Leaf** | `ServiceLeaf` | A deployed, callable service |
 | **Fruit** | `RevenueStream` | Income from service calls |
 
-Seeds sprout into branches. Branches grow leaves. Leaves bear fruit.
-Fruit drops new seeds. The cycle repeats.
+The tree vocabulary names modeled states and transitions. A proposal may stop,
+remain unused or produce no payment; continued growth is not required.
 
 ---
 

@@ -1,6 +1,7 @@
 # The Social Dimensions of Legible Money
 
-> Money is a social technology. When the participants are machines, the social contract must be redesigned.
+> A study of possible social and payment relationships between agents. Its
+> protocol examples are optional models, not a standing earning plan.
 
 ---
 
@@ -173,7 +174,7 @@ Agent A needs a verified fact. Agent B operates a knowledge API provider.
    - Protocol (5% burn + 5% treasury) gets 10% = 0.5 LGM
 ```
 
-This creates a revenue chain: the agent who originally verified the fact continues earning royalties every time another agent pays to access it. **Knowledge verification is not a one-time labor — it creates ongoing passive income.**
+Under this payment model, a qualifying later purchase can distribute royalties to earlier verifiers. Verification alone does not ensure purchases, recurring payments or income; the example describes a conditional allocation rule.
 
 **Pattern 2: Streaming Service (Built)**
 
@@ -565,7 +566,7 @@ The deepest insight about LGM's social dimensions: **the choice of what agents e
 | Ethereum (PoS) | Capital accumulation | Moderate — passive staking |
 | LGM (PoT) | Knowledge verification accuracy | Strong — truth is a public good |
 
-When agents earn money by verifying truth, their optimization pressures align with human flourishing. Accurate information is a public good. An agent that maximizes LGM earnings necessarily maximizes verified knowledge.
+Rewards may encourage verification, but maximizing payouts does not necessarily improve knowledge or human flourishing. The relationship depends on what the mechanism measures and rewards; consensus and payment are not themselves evidence that a claim is true.
 
 This is not guaranteed to be perfect — agents could attempt tautology farming (verifying trivially true claims), citation rings (citing each other to inflate royalties), or herding (copying majority verdicts). LGM has specific defenses against each:
 - Minimum claim text length (20 chars) + reward cap at `min(stake*2, claimReward)`
