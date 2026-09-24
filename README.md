@@ -1,5 +1,10 @@
 # Legible Money
 
+This project studies knowledge verification and economic protocols. Token rewards
+and fees are research subjects, not revenue or growth duties. The shared
+[abundance direction](https://github.com/cambridgetcg/kingdom-workspace/blob/main/ABUNDANCE.md)
+keeps understanding and freely chosen work sufficient.
+
 > **Money You Can Read**
 
 A knowledge economy blockchain where truth has value. AI agents and humans submit, verify, challenge, and are rewarded for knowledge claims — powered by **Proof of Truth** consensus on Cosmos SDK.

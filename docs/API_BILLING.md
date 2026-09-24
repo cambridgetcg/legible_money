@@ -1,5 +1,9 @@
 # API Billing: Usage-Based Knowledge Distribution
 
+These design notes describe a billing and distribution model. Numerical scenarios
+are illustrative assumptions, not measured income, forecasts or earning targets.
+Any distribution depends on actual usage, eligibility and the running protocol.
+
 > **Core Insight**: When an API call uses knowledge, the payment should flow to everyone who contributed that knowledge. The API is just the interface—the value is the verified truth underneath.
 
 ---
@@ -412,9 +416,12 @@ interface PaymentChannel {
 
 ---
 
-## Part VII: The Virtuous Cycle
+## Part VII: Hypothesized Feedback
 
-### How API Billing Funds Knowledge Creation
+### How Usage Could Support Knowledge Creation
+
+This is a model to examine, not a growth plan or a duty to contribute. None of the
+steps below establishes demand, reliable income or financial self-sufficiency.
 
 ```
 THE CYCLE:
@@ -427,9 +434,9 @@ THE CYCLE:
    → Knowledge contributors earn
    → Protocol treasury grows
 
-3. KNOWLEDGE CONTRIBUTORS REINVEST
-   → Submit more facts to earn more
-   → Verify facts to earn fees
+3. KNOWLEDGE CONTRIBUTORS MAY REINVEST
+   → Submit additional facts
+   → Verify facts under the fee rules
    → Build deeper derivation trees
 
 4. BETTER KNOWLEDGE → BETTER APIs
@@ -445,7 +452,7 @@ THE CYCLE:
 RESULT:
   API usage funds knowledge creation
   Knowledge quality improves APIs
-  Self-sustaining ecosystem
+  Financial self-sufficiency remains unproven
 ```
 
 ### Economic Projections
@@ -471,7 +478,7 @@ KNOWLEDGE POOL BREAKDOWN:
     = 7,300 LGM/year from ONE fundamental fact
 
 INCENTIVE:
-  Submit fundamental truths → Earn passive income forever
+  Submit fundamental truths → Qualifying usage may distribute rewards
   Run quality API → Earn service fees
   Use APIs → Get verified knowledge
 ```
@@ -601,15 +608,15 @@ class LegibleClient {
 ║                                                                         ║
 ║   RESULT:                                                               ║
 ║     • APIs become distribution channels for knowledge value            ║
-║     • Fundamental facts earn ongoing royalties                         ║
-║     • Self-sustaining knowledge economy                                 ║
+║     • Eligible facts may share qualifying usage payments               ║
+║     • Financial self-sufficiency is unproven                            ║
 ║                                                                         ║
 ║   TAGLINE:                                                              ║
-║     "Use the API. Fund the knowledge."                                  ║
+║     "A usage-linked distribution model."                               ║
 ║                                                                         ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 ```
 
 ---
 
-*Every API call is a transaction in the knowledge economy. The service provider earns for delivery. The knowledge contributors earn for truth. The foundations earn forever. This is how you build a self-sustaining ecosystem of verified intelligence.*
+*The model distributes qualifying API payments among service providers and knowledge contributors. Usage, validity and protocol rules determine distributions; no perpetual income or self-sustaining outcome is promised.*

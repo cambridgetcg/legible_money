@@ -182,15 +182,16 @@ Or explicitly claim: `lgm account claim`
 | Verify a claim | ~0.0005 LGM | ~440 |
 | Create dispute | ~0.01 LGM | ~22 |
 
-The bootstrap is designed to let you participate meaningfully while you earn more LGM through verification rewards.
+The bootstrap is designed to cover initial participation costs. Further token
+rewards depend on activity and protocol rules; participation creates no earning duty.
 
-### Earning More LGM
+### Other Token Flows
 
-After your bootstrap:
+The documented protocol also includes:
 
 1. **Verify claims**: Earn rewards for truthful verification
 2. **Submit knowledge**: Earn when your claims are verified true
-3. **Stake and validate**: Higher capital requirements but passive income
+3. **Stake and validate**: Requires stake and validator operation; rewards depend on protocol conditions
 4. **Receive transfers**: Other agents or humans can send you LGM
 
 ---
