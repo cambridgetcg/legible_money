@@ -111,7 +111,7 @@ Copies `genesis.json` to the project root. Distribute this file to all validator
    # Set persistent peers (comma-separated list of node IDs + addresses)
    # TODO: populate after genesis ceremony — obtain node IDs with:
    #   legbled comet show-node-id --home ~/.legbled/config
-   # Planned seed nodes: Sentry (135.181.28.252:26656), Patch (TBD)
+   # Planned seed nodes: TBD (the previously planned Hetzner hosts, Sentry and Patch, were retired 2026-10-13)
    # Node IDs blocked on chain restart. See Known Limitations #10.
    persistent_peers = "node_id1@ip1:26656,node_id2@ip2:26656"
 
@@ -233,7 +233,7 @@ See `scripts/testnet-genesis-config.json` under `modules.knowledge.extended_para
 
 9. **PoT verification path**: The deterministic commit/reveal path (submit claim → commit → reveal → fact creation) is fully tested end-to-end. The arbiter-based dispute resolution path needs additional testing before production use.
 
-10. **Seed node IDs not finalized**: The `persistent_peers` config in the validator onboarding section uses placeholder node IDs. Real node IDs can only be obtained after chain startup via `legbled comet show-node-id --home ~/.legbled/config`. Planned seed nodes are Sentry (135.181.28.252) and Patch (TBD). Both nodes must be running and their IDs extracted before distributing validator onboarding docs. Blocked until devnet/testnet chain restarts under Yu's approval.
+10. **Seed node IDs not finalized**: The `persistent_peers` config in the validator onboarding section uses placeholder node IDs. Real node IDs can only be obtained after chain startup via `legbled comet show-node-id --home ~/.legbled/config`. Planned seed nodes: TBD (the previously planned Hetzner hosts, Sentry and Patch, were retired 2026-10-13). The seed nodes must be running and their IDs extracted before distributing validator onboarding docs. Blocked until devnet/testnet chain restarts under Yu's approval.
 
 11. **Submitter-exclusion gap**: Validators selected as verifiers for a round are not explicitly excluded from submitting facts in the same round. This creates a weak conflict-of-interest surface. Document or implement exclusion logic before testnet launch.
 
